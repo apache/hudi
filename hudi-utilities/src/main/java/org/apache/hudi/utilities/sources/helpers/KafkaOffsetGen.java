@@ -45,6 +45,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.spark.sql.kafka010.KafkaOffsetRange;
 import org.apache.spark.streaming.kafka010.OffsetRange;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -64,6 +65,9 @@ import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+
+import scala.collection.JavaConverters;
+import scala.collection.Seq;
 
 import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
 import static org.apache.hudi.common.util.ConfigUtils.checkRequiredProperties;
@@ -329,6 +333,13 @@ public class KafkaOffsetGen {
       toOffsets = consumer.endOffsets(topicPartitions);
     }
     return CheckpointUtils.computeOffsetRanges(fromOffsets, toOffsets, numEvents, minPartitions);
+  }
+
+  public Seq<KafkaOffsetRange> toKafkaOffsetRanges(OffsetRange[] offsetRanges) {
+    return JavaConverters.asScalaIteratorConverter(
+        Arrays.stream(offsetRanges)
+            .map(range -> new KafkaOffsetRange(range.topicPartition(), range.fromOffset(), range.untilOffset(), scala.Option.empty())).iterator()
+    ).asScala().toSeq();
   }
   
   /**

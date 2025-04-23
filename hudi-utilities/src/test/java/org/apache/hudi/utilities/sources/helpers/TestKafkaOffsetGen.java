@@ -40,6 +40,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.spark.sql.kafka010.KafkaOffsetRange;
 import org.apache.spark.streaming.kafka010.KafkaTestUtils;
 import org.apache.spark.streaming.kafka010.OffsetRange;
 import org.junit.jupiter.api.AfterAll;
@@ -63,6 +64,8 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import scala.collection.JavaConverters;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -126,11 +129,13 @@ class TestKafkaOffsetGen {
     assertEquals(1, nextOffsetRanges.length);
     assertEquals(0, nextOffsetRanges[0].fromOffset());
     assertEquals(500, nextOffsetRanges[0].untilOffset());
+    assertKafkaOffsetRangesFromSQLLibrary(kafkaOffsetGen, nextOffsetRanges);
 
     nextOffsetRanges = kafkaOffsetGen.getNextOffsetRanges(Option.empty(), 5000, metrics);
     assertEquals(1, nextOffsetRanges.length);
     assertEquals(0, nextOffsetRanges[0].fromOffset());
     assertEquals(1000, nextOffsetRanges[0].untilOffset());
+    assertKafkaOffsetRangesFromSQLLibrary(kafkaOffsetGen, nextOffsetRanges);
   }
 
   @Test
@@ -143,6 +148,7 @@ class TestKafkaOffsetGen {
     assertEquals(1, nextOffsetRanges.length);
     assertEquals(1000, nextOffsetRanges[0].fromOffset());
     assertEquals(1000, nextOffsetRanges[0].untilOffset());
+    assertKafkaOffsetRangesFromSQLLibrary(kafkaOffsetGen, nextOffsetRanges);
   }
 
   @Test
@@ -157,6 +163,7 @@ class TestKafkaOffsetGen {
     assertEquals(1, nextOffsetRanges.length);
     assertEquals(250, nextOffsetRanges[0].fromOffset());
     assertEquals(750, nextOffsetRanges[0].untilOffset());
+    assertKafkaOffsetRangesFromSQLLibrary(kafkaOffsetGen, nextOffsetRanges);
   }
 
   @Test
@@ -171,6 +178,7 @@ class TestKafkaOffsetGen {
     assertEquals(1, nextOffsetRanges.length);
     assertEquals(0, nextOffsetRanges[0].fromOffset());
     assertEquals(500, nextOffsetRanges[0].untilOffset());
+    assertKafkaOffsetRangesFromSQLLibrary(kafkaOffsetGen, nextOffsetRanges);
   }
 
   @Test
@@ -187,6 +195,7 @@ class TestKafkaOffsetGen {
     assertEquals(250, nextOffsetRanges[1].untilOffset());
     assertEquals(0, nextOffsetRanges[2].fromOffset());
     assertEquals(249, nextOffsetRanges[2].untilOffset());
+    assertKafkaOffsetRangesFromSQLLibrary(kafkaOffsetGen, nextOffsetRanges);
   }
 
   @Test
@@ -203,6 +212,7 @@ class TestKafkaOffsetGen {
     assertEquals(400, nextOffsetRanges[0].untilOffset());
     assertEquals(249, nextOffsetRanges[1].fromOffset());
     assertEquals(399, nextOffsetRanges[1].untilOffset());
+    assertKafkaOffsetRangesFromSQLLibrary(kafkaOffsetGen, nextOffsetRanges);
 
     // try w/ 1 partition already exhausted. both partitions need to be returned as part of offset ranges
     lastCheckpointString = testTopicName + ",0:400,1:500";
@@ -217,6 +227,7 @@ class TestKafkaOffsetGen {
     assertEquals(500, nextOffsetRanges[2].fromOffset());
     assertEquals(500, nextOffsetRanges[2].untilOffset());
     assertEquals(1, nextOffsetRanges[2].partition());
+    assertKafkaOffsetRangesFromSQLLibrary(kafkaOffsetGen, nextOffsetRanges);
 
     // if there is just 1 msg to consume from just 1 partition.
     lastCheckpointString = testTopicName + ",0:499,1:500";
@@ -229,6 +240,7 @@ class TestKafkaOffsetGen {
     assertEquals(500, nextOffsetRanges[1].fromOffset());
     assertEquals(500, nextOffsetRanges[1].untilOffset());
     assertEquals(1, nextOffsetRanges[1].partition());
+    assertKafkaOffsetRangesFromSQLLibrary(kafkaOffsetGen, nextOffsetRanges);
 
     // committed offsets are not present for the consumer group
     kafkaOffsetGen = new KafkaOffsetGen(getConsumerConfigs("group", "string"));
@@ -237,6 +249,7 @@ class TestKafkaOffsetGen {
     assertEquals(500, nextOffsetRanges[0].untilOffset());
     assertEquals(500, nextOffsetRanges[1].fromOffset());
     assertEquals(500, nextOffsetRanges[1].untilOffset());
+    assertKafkaOffsetRangesFromSQLLibrary(kafkaOffsetGen, nextOffsetRanges);
   }
 
   @Test
@@ -251,6 +264,7 @@ class TestKafkaOffsetGen {
     OffsetRange[] nextOffsetRanges = kafkaOffsetGen.getNextOffsetRanges(Option.empty(), 300, metrics);
     assertEquals(0, nextOffsetRanges[0].fromOffset());
     assertEquals(300, nextOffsetRanges[0].untilOffset());
+    assertKafkaOffsetRangesFromSQLLibrary(kafkaOffsetGen, nextOffsetRanges);
 
     props.put(KafkaSourceConfig.KAFKA_SOURCE_MIN_PARTITIONS.key(), 2L);
     kafkaOffsetGen = new KafkaOffsetGen(props);
@@ -259,6 +273,7 @@ class TestKafkaOffsetGen {
     assertEquals(150, nextOffsetRanges[0].untilOffset());
     assertEquals(150, nextOffsetRanges[1].fromOffset());
     assertEquals(300, nextOffsetRanges[1].untilOffset());
+    assertKafkaOffsetRangesFromSQLLibrary(kafkaOffsetGen, nextOffsetRanges);
   }
 
   @Test
@@ -278,6 +293,7 @@ class TestKafkaOffsetGen {
     assertEquals(1, nextOffsetRanges[1].partition());
     assertEquals(0, nextOffsetRanges[1].fromOffset());
     assertEquals(150, nextOffsetRanges[1].untilOffset());
+    assertKafkaOffsetRangesFromSQLLibrary(kafkaOffsetGen, nextOffsetRanges);
 
     props.put(KafkaSourceConfig.KAFKA_SOURCE_MIN_PARTITIONS.key(), 1L);
     kafkaOffsetGen = new KafkaOffsetGen(props);
@@ -289,6 +305,7 @@ class TestKafkaOffsetGen {
     assertEquals(1, nextOffsetRanges[1].partition());
     assertEquals(0, nextOffsetRanges[1].fromOffset());
     assertEquals(150, nextOffsetRanges[1].untilOffset());
+    assertKafkaOffsetRangesFromSQLLibrary(kafkaOffsetGen, nextOffsetRanges);
 
     // minPartition more than TopicPartitions
     props.put(KafkaSourceConfig.KAFKA_SOURCE_MIN_PARTITIONS.key(), 4L);
@@ -307,6 +324,7 @@ class TestKafkaOffsetGen {
     assertEquals(1, nextOffsetRanges[3].partition());
     assertEquals(75, nextOffsetRanges[3].fromOffset());
     assertEquals(150, nextOffsetRanges[3].untilOffset());
+    assertKafkaOffsetRangesFromSQLLibrary(kafkaOffsetGen, nextOffsetRanges);
   }
 
   @Test
@@ -543,5 +561,15 @@ class TestKafkaOffsetGen {
 
     when(mock.describeConfigs(Collections.singleton(resource))).thenReturn(mockResult);
     when(mockResult.all()).thenReturn(future);
+  }
+
+  void assertKafkaOffsetRangesFromSQLLibrary(KafkaOffsetGen kafkaOffsetGen, OffsetRange[] offsetRangesFromStreaming) {
+    KafkaOffsetRange[] kafkaOffsetRangesFromSQL = JavaConverters.seqAsJavaList(kafkaOffsetGen.toKafkaOffsetRanges(offsetRangesFromStreaming)).toArray(new KafkaOffsetRange[0]);
+    assertEquals(kafkaOffsetRangesFromSQL.length, offsetRangesFromStreaming.length);
+    for (int i = 0; i < kafkaOffsetRangesFromSQL.length; i++) {
+      assertEquals(kafkaOffsetRangesFromSQL[i].topic(), offsetRangesFromStreaming[i].topic());
+      assertEquals(kafkaOffsetRangesFromSQL[i].fromOffset(), offsetRangesFromStreaming[i].fromOffset());
+      assertEquals(kafkaOffsetRangesFromSQL[i].untilOffset(), offsetRangesFromStreaming[i].untilOffset());
+    }
   }
 }

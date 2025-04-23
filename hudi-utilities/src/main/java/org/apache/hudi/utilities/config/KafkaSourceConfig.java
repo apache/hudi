@@ -138,6 +138,13 @@ public class KafkaSourceConfig extends HoodieConfig {
           + "OffsetOutOfRange exception, as it is possible that the earliest Kafka offsets may "
           + "expire soon while the job is progressing.");
 
+  public static final ConfigProperty<Boolean> USE_SPARK_SQL_CONSUMER = ConfigProperty
+      .key(PREFIX + "spark.sql.consumer.enable")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("If enabled, use spark sql kafka consumer instead of spark streaming consumer.");
+
   /**
    * Kafka reset offset strategies.
    */

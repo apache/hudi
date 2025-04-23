@@ -166,6 +166,7 @@
     <spark33.version>3.3.1</spark33.version>
     <spark34.version>3.4.1</spark34.version>
     <spark35.version>3.5.2</spark35.version>
+    <spark35.internal.version>3.5.2-onehouse-0.29</spark35.internal.version>
     <hudi.spark.module>hudi-spark3.5.x</hudi.spark.module>
     <!-- NOTE: Different Spark versions might require different number of shared
                modules being incorporated, hence we're creating multiple placeholders
@@ -1822,6 +1823,11 @@
     <repository>
       <id>confluent</id>
       <url>https://packages.confluent.io/maven/</url>
+    </repository>
+    <repository>
+      <id>codeartifact</id>
+      <name>codeartifact</name>
+      <url>https://onehouse-194159489498.d.codeartifact.us-west-2.amazonaws.com/maven/onehouse-internal/</url>
     </repository>
   </repositories>
 

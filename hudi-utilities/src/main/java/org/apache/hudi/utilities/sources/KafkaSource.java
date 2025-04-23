@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.config.KafkaSourceConfig;
 import org.apache.hudi.utilities.exception.HoodieReadFromSourceException;
@@ -31,10 +32,14 @@ import org.apache.hudi.utilities.streamer.SourceProfile;
 import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
 import org.apache.hudi.utilities.streamer.StreamContext;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
+import org.apache.spark.streaming.kafka010.KafkaUtils;
+import org.apache.spark.streaming.kafka010.LocationStrategies;
 import org.apache.spark.streaming.kafka010.OffsetRange;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,6 +51,8 @@ import static org.apache.hudi.common.util.ConfigUtils.getLongWithAltKeys;
 
 public abstract class KafkaSource<T> extends Source<T> {
   private static final Logger LOG = LoggerFactory.getLogger(KafkaSource.class);
+  // Timeout in milliseconds when polling for next batch from kafka consumer
+  private static final String DEFAULT_POLL_KAFKA_TIMEOUT_MS = "30000";
   // these are native kafka's config. do not change the config names.
   protected static final String NATIVE_KAFKA_KEY_DESERIALIZER_PROP = "key.deserializer";
   protected static final String NATIVE_KAFKA_VALUE_DESERIALIZER_PROP = "value.deserializer";
@@ -106,6 +113,31 @@ public abstract class KafkaSource<T> extends Source<T> {
           Arrays.toString(offsetRanges));
     }
     return offsetRanges;
+  }
+
+  /**
+   * Creates a Kafka RDD with the specified key-value deserialization types.
+   *
+   * @param props        Configuration properties for the Kafka source, including topic, bootstrap servers, etc.
+   * @param sparkContext Spark context used to create the RDD.
+   * @param offsetGen    Generator that provides Kafka parameters and helps map offset ranges.
+   * @param offsetRanges Kafka offset ranges to read data from.
+   *
+   * @param <K>          Type of the Kafka record key.
+   * @param <V>          Type of the Kafka record value.
+   * @return JavaRDD containing Kafka ConsumerRecord entries with deserialized key-value pairs.
+   */
+  public static <K, V> JavaRDD<ConsumerRecord<K, V>> createKafkaRDD(
+      TypedProperties props,
+      JavaSparkContext sparkContext,
+      KafkaOffsetGen offsetGen,
+      OffsetRange[] offsetRanges) {
+    if (ConfigUtils.getBooleanWithAltKeys(props, KafkaSourceConfig.USE_SPARK_SQL_CONSUMER)) {
+      long pollTimeoutMs = Long.parseLong(sparkContext.getConf().get("spark.streaming.kafka.consumer.poll.ms", DEFAULT_POLL_KAFKA_TIMEOUT_MS));
+      boolean failOnDataLoss = ConfigUtils.getBooleanWithAltKeys(props, KafkaSourceConfig.ENABLE_FAIL_ON_DATA_LOSS);
+      return org.apache.spark.sql.kafka010.KafkaUtils.createRDD(sparkContext, offsetGen.getKafkaParams(), offsetGen.toKafkaOffsetRanges(offsetRanges), pollTimeoutMs, failOnDataLoss);
+    }
+    return KafkaUtils.createRDD(sparkContext, offsetGen.getKafkaParams(), offsetRanges, LocationStrategies.PreferConsistent());
   }
 
   private InputBatch<T> toInputBatch(OffsetRange[] offsetRanges) {

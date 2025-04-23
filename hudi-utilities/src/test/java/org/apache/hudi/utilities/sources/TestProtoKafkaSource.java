@@ -56,8 +56,8 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
@@ -103,11 +103,13 @@ public class TestProtoKafkaSource extends BaseTestKafkaSource {
     return new SourceFormatAdapter(protoKafkaSource);
   }
 
-  @Test
-  public void testProtoKafkaSourceWithConfluentProtoDeserialization() {
-    final String topic = TEST_TOPIC_PREFIX + "testProtoKafkaSourceWithConfluentDeserializer_";
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testProtoKafkaSourceWithConfluentProtoDeserialization(boolean useSparkSqlKafkaConsumer) {
+    final String topic = TEST_TOPIC_PREFIX + "testProtoKafkaSourceWithConfluentDeserializer_" + UUID.randomUUID().toString().substring(0,8);
     testUtils.createTopic(topic, 2);
     TypedProperties props = createPropsForKafkaSource(topic, null, "earliest");
+    props.put(KafkaSourceConfig.USE_SPARK_SQL_CONSUMER.key(), String.valueOf(useSparkSqlKafkaConsumer));
     props.put(KAFKA_PROTO_VALUE_DESERIALIZER_CLASS.key(),
         "io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer");
     props.put("schema.registry.url", MOCK_REGISTRY_URL);
@@ -129,13 +131,19 @@ public class TestProtoKafkaSource extends BaseTestKafkaSource {
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  public void testProtoKafkaSourceWithFlattenWrappedPrimitives(boolean persistSourceRdd) {
+  @CsvSource({
+      "true, true",
+      "true, false",
+      "false, true",
+      "false, false"
+  })
+  void testProtoKafkaSourceWithFlattenWrappedPrimitives(boolean persistSourceRdd, boolean useSparkSqlKafkaConsumer) {
 
     // topic setup.
-    final String topic = TEST_TOPIC_PREFIX + "test_proto_kafka_source_flatten_persist_source_rdd_" + persistSourceRdd;
+    final String topic = TEST_TOPIC_PREFIX + "test_proto_kafka_source_flatten_persist_source_rdd_" + UUID.randomUUID().toString().substring(0,8);
     testUtils.createTopic(topic, 2);
     TypedProperties props = createPropsForKafkaSource(topic, null, "earliest");
+    props.setProperty(KafkaSourceConfig.USE_SPARK_SQL_CONSUMER.key(), String.valueOf(useSparkSqlKafkaConsumer));
     props.setProperty(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_WRAPPED_PRIMITIVES_AS_RECORDS.key(), "true");
     props.setProperty(HoodieErrorTableConfig.ERROR_TABLE_PERSIST_SOURCE_RDD.key(), Boolean.toString(persistSourceRdd));
     SchemaProvider schemaProvider = new ProtoClassBasedSchemaProvider(props, jsc());

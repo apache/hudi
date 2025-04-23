@@ -74,7 +74,9 @@ class DynamoDBBasedLockProviderBaseTest {
     Assertions.assertNotNull(e);
     if (isNull) {
       // Initialization should fail on AWS API call due to invalid setup.
-      Assertions.assertEquals(software.amazon.awssdk.core.exception.SdkClientException.class, e.getClass());
+      // GH workflow sets AWS env variables so fails with DynamoDbException.
+      Assertions.assertTrue(e instanceof software.amazon.awssdk.core.exception.SdkClientException
+          || e instanceof software.amazon.awssdk.services.dynamodb.model.DynamoDbException);
     } else {
       // Otherwise it should be anything but NPE.
       Assertions.assertNotEquals(java.lang.NullPointerException.class, e.getClass());

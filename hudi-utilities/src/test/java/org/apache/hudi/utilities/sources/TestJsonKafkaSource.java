@@ -56,7 +56,6 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -74,6 +73,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import scala.Tuple2;
 
@@ -101,7 +101,7 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
   static final URL SCHEMA_FILE_URL = TestJsonKafkaSource.class.getClassLoader().getResource("streamer-config/source_short_trip_uber.avsc");
 
   @BeforeEach
-  public void init() throws Exception {
+  void init() throws Exception {
     String schemaFilePath = Objects.requireNonNull(SCHEMA_FILE_URL).toURI().getPath();
     TypedProperties props = new TypedProperties();
     props.put("hoodie.deltastreamer.schemaprovider.source.schema.file", schemaFilePath);
@@ -132,14 +132,15 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
   }
 
   // test whether empty messages can be filtered
-  @Test
-  public void testJsonKafkaSourceFilterNullMsg() {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testJsonKafkaSourceFilterNullMsg(boolean useSparkSqlKafkaConsumer) {
     // topic setup.
-    final String topic = TEST_TOPIC_PREFIX + "testJsonKafkaSourceFilterNullMsg";
+    final String topic = TEST_TOPIC_PREFIX + "testJsonKafkaSourceFilterNullMsg" + UUID.randomUUID().toString().substring(0,8);
     testUtils.createTopic(topic, 2);
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
     TypedProperties props = createPropsForKafkaSource(topic, null, "earliest");
-
+    props.put(KafkaSourceConfig.USE_SPARK_SQL_CONSUMER.key(), String.valueOf(useSparkSqlKafkaConsumer));
     Source jsonSource = new JsonKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
     SourceFormatAdapter kafkaSource = new SourceFormatAdapter(jsonSource);
 
@@ -154,15 +155,17 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
     assertEquals(1000, fetch1.getBatch().get().count());
   }
 
-  @Test
-  public void testJsonKafkaSourceWithJsonSchemaDeserializer() {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testJsonKafkaSourceWithJsonSchemaDeserializer(boolean useSparkSqlKafkaConsumer) {
     // topic setup.
-    final String topic = TEST_TOPIC_PREFIX + "testJsonKafkaSourceWithJsonSchemaDeserializer";
+    final String topic = TEST_TOPIC_PREFIX + "testJsonKafkaSourceWithJsonSchemaDeserializer" + UUID.randomUUID().toString().substring(0,8);
     testUtils.createTopic(topic, 2);
     TypedProperties props = createPropsForKafkaSource(topic, null, "earliest");
     props.put(KAFKA_JSON_VALUE_DESERIALIZER_CLASS.key(),
         "io.confluent.kafka.serializers.json.KafkaJsonSchemaDeserializer");
     props.put("schema.registry.url", "mock://127.0.0.1:8081");
+    props.put(KafkaSourceConfig.USE_SPARK_SQL_CONSUMER.key(), String.valueOf(useSparkSqlKafkaConsumer));
 
     Source jsonSource = new JsonKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
     SourceFormatAdapter kafkaSource = new SourceFormatAdapter(jsonSource);
@@ -184,13 +187,15 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
     assertEquals(1000, fetch1.getBatch().get().count());
   }
 
-  @Test
-  public void testJsonKafkaSourceWithDefaultUpperCap() {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testJsonKafkaSourceWithDefaultUpperCap(boolean useSparkSqlKafkaConsumer) {
     // topic setup.
-    final String topic = TEST_TOPIC_PREFIX + "testJsonKafkaSourceWithDefaultUpperCap";
+    final String topic = TEST_TOPIC_PREFIX + "testJsonKafkaSourceWithDefaultUpperCap" + UUID.randomUUID().toString().substring(0,8);
     testUtils.createTopic(topic, 2);
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
     TypedProperties props = createPropsForKafkaSource(topic, Long.MAX_VALUE, "earliest");
+    props.put(KafkaSourceConfig.USE_SPARK_SQL_CONSUMER.key(), String.valueOf(useSparkSqlKafkaConsumer));
 
     Source jsonSource = new JsonKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
     SourceFormatAdapter kafkaSource = new SourceFormatAdapter(jsonSource);
@@ -211,13 +216,15 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
     assertEquals(1000, fetch2.getBatch().get().count());
   }
 
-  @Test
-  public void testJsonKafkaSourceWithConfigurableUpperCap() {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testJsonKafkaSourceWithConfigurableUpperCap(boolean useSparkSqlKafkaConsumer) {
     // topic setup.
-    final String topic = TEST_TOPIC_PREFIX + "testJsonKafkaSourceWithConfigurableUpperCap";
+    final String topic = TEST_TOPIC_PREFIX + "testJsonKafkaSourceWithConfigurableUpperCap" + UUID.randomUUID().toString().substring(0,8);
     testUtils.createTopic(topic, 2);
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
     TypedProperties props = createPropsForKafkaSource(topic, 500L, "earliest");
+    props.put(KafkaSourceConfig.USE_SPARK_SQL_CONSUMER.key(), String.valueOf(useSparkSqlKafkaConsumer));
 
     Source jsonSource = new JsonKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
     SourceFormatAdapter kafkaSource = new SourceFormatAdapter(jsonSource);
@@ -255,13 +262,15 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
     assertEquals(Option.empty(), fetch6.getBatch());
   }
 
-  @Test
-  void testJsonKafkaSourceWithEncodedDecimals() throws URISyntaxException {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testJsonKafkaSourceWithEncodedDecimals(boolean useSparkSqlKafkaConsumer) throws URISyntaxException {
     String schemaFilePath = Objects.requireNonNull(TestJsonKafkaSource.class.getClassLoader()
         .getResource("streamer-config/source_uber_encoded_decimal.json")).toURI().getPath();
-    final String topic = TEST_TOPIC_PREFIX + "testJsonKafkaSourceWithEncodedDecimals";
+    final String topic = TEST_TOPIC_PREFIX + "testJsonKafkaSourceWithEncodedDecimals" + UUID.randomUUID().toString().substring(0,8);
     testUtils.createTopic(topic, 2);
     TypedProperties props = createPropsForKafkaSource(topic, Long.MAX_VALUE, "earliest");
+    props.put(KafkaSourceConfig.USE_SPARK_SQL_CONSUMER.key(), String.valueOf(useSparkSqlKafkaConsumer));
     props.put("hoodie.deltastreamer.schemaprovider.source.schema.file", schemaFilePath);
     props.put(HoodieSchemaProviderConfig.SCHEMA_CONVERTER.key(), JsonToAvroSchemaConverter.class.getName());
     schemaProvider = new FilebasedSchemaProvider(props, jsc());
@@ -333,9 +342,9 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
-  public void testErrorEventsForDataInRowFormat(boolean persistSourceRdd) {
+  void testErrorEventsForDataInRowFormat(boolean persistSourceRdd) {
     // topic setup.
-    final String topic = TEST_TOPIC_PREFIX + "testErrorEventsForDataInRowFormat_" + persistSourceRdd;
+    final String topic = TEST_TOPIC_PREFIX + "testErrorEventsForDataInRowFormat_" + UUID.randomUUID().toString().substring(0,8);
 
     testUtils.createTopic(topic, 2);
     List<TopicPartition> topicPartitions = new ArrayList<>();
@@ -365,10 +374,11 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
     verifyRddsArePersistedAndReleased(kafkaSource.getSource(), fetch1.getBatch().get().rdd().toDebugString(), persistSourceRdd);
   }
 
-  @Test
-  void testErrorEventsForDataInRowFormatWithSanitizationEnabled() {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testErrorEventsForDataInRowFormatWithSanitizationEnabled(boolean useSparkSqlKafkaConsumer) {
     // topic setup.
-    final String topic = TEST_TOPIC_PREFIX + "testErrorEventsForDataInRowFormatWithSanitizationEnabled";
+    final String topic = TEST_TOPIC_PREFIX + "testErrorEventsForDataInRowFormatWithSanitizationEnabled" + UUID.randomUUID().toString().substring(0,8);
 
     testUtils.createTopic(topic, 2);
     List<TopicPartition> topicPartitions = new ArrayList<>();
@@ -380,6 +390,7 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
     testUtils.sendMessages(topic, new String[]{"error_event1", "error_event2"});
 
     TypedProperties props = createPropsForKafkaSource(topic, null, "earliest");
+    props.put(KafkaSourceConfig.USE_SPARK_SQL_CONSUMER.key(), String.valueOf(useSparkSqlKafkaConsumer));
     props.put(ENABLE_KAFKA_COMMIT_OFFSET.key(), "true");
     props.put(ERROR_TABLE_BASE_PATH.key(),"/tmp/qurantine_table_test/json_kafka_row_events");
     props.put(ERROR_TARGET_TABLE.key(),"json_kafka_row_events");
@@ -396,10 +407,10 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  public void testErrorEventsForDataInAvroFormat(boolean persistSourceRdd) throws IOException {
+  @CsvSource({"true,true", "true,false", "false,true", "false,false"})
+  public void testErrorEventsForDataInAvroFormat(boolean persistSourceRdd, boolean useSparkSqlKafkaConsumer) {
     // topic setup.
-    final String topic = TEST_TOPIC_PREFIX + "testErrorEventsForDataInAvroFormat_" + persistSourceRdd;
+    final String topic = TEST_TOPIC_PREFIX + "testErrorEventsForDataInAvroFormat_" + UUID.randomUUID().toString().substring(0,8);
 
     testUtils.createTopic(topic, 2);
     List<TopicPartition> topicPartitions = new ArrayList<>();
@@ -413,6 +424,7 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
     testUtils.sendMessages(topic, new String[]{"error_event1", "error_event2"});
 
     TypedProperties props = createPropsForKafkaSource(topic, null, "earliest");
+    props.put(KafkaSourceConfig.USE_SPARK_SQL_CONSUMER.key(), String.valueOf(useSparkSqlKafkaConsumer));
     props.put(ENABLE_KAFKA_COMMIT_OFFSET.key(), "true");
     props.put(ERROR_TABLE_BASE_PATH.key(),"/tmp/qurantine_table_test/json_kafka_events");
     props.put(ERROR_TARGET_TABLE.key(),"json_kafka_events");
@@ -462,15 +474,17 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
     };
   }
 
-  @Test
-  public void testAppendKafkaOffset() {
-    final String topic = TEST_TOPIC_PREFIX + "testKafkaOffsetAppend";
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testAppendKafkaOffset(boolean useSparkSqlKafkaConsumer) {
+    final String topic = TEST_TOPIC_PREFIX + "testKafkaOffsetAppend" + UUID.randomUUID().toString().substring(0,8);
     int numPartitions = 2;
     int numMessages = 30;
     testUtils.createTopic(topic, numPartitions);
     sendMessagesToKafka(topic, numMessages, numPartitions);
 
     TypedProperties props = createPropsForKafkaSource(topic, null, "earliest");
+    props.put(KafkaSourceConfig.USE_SPARK_SQL_CONSUMER.key(), String.valueOf(useSparkSqlKafkaConsumer));
     Source jsonSource = new JsonKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
     SourceFormatAdapter kafkaSource = new SourceFormatAdapter(jsonSource);
     Dataset<Row> dfNoOffsetInfo = kafkaSource.fetchNewDataInRowFormat(Option.empty(), Long.MAX_VALUE).getBatch().get().cache();
@@ -533,11 +547,13 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
     return props;
   }
 
-  @Test
-  public void testCreateSource() throws IOException {
-    final String topic = TEST_TOPIC_PREFIX + "testJsonKafkaSourceCreation";
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testCreateSource(boolean useSparkSqlKafkaConsumer) throws IOException {
+    final String topic = TEST_TOPIC_PREFIX + "testJsonKafkaSourceCreation" + UUID.randomUUID().toString().substring(0,8);
     testUtils.createTopic(topic, 2);
     TypedProperties props = createPropsForKafkaSource(topic, null, "earliest");
+    props.put(KafkaSourceConfig.USE_SPARK_SQL_CONSUMER.key(), String.valueOf(useSparkSqlKafkaConsumer));
     Source jsonKafkaSource = UtilHelpers.createSource(JsonKafkaSource.class.getName(), props, jsc(), spark(), metrics, new DefaultStreamContext(schemaProvider, sourceProfile));
     assertEquals(Source.SourceType.JSON, jsonKafkaSource.getSourceType());
   }

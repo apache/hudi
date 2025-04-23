@@ -84,7 +84,6 @@ import java.util.List;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -552,7 +551,9 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
       setUpMORTestTable();
     }
     lockProperties.setProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY, "3000");
-
+    lockProperties.put("hoodie.datasource.write.precombine.field", "timestamp");
+    lockProperties.put("hoodie.datasource.write.recordkey.field", "_row_key");
+    lockProperties.put("hoodie.datasource.write.operation", WriteOperationType.UPSERT.value());
     HoodieWriteConfig writeConfig = getConfigBuilder()
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
@@ -566,63 +567,21 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
             .withConflictResolutionStrategy(resolutionStrategy)
             .build()).withAutoCommit(false).withProperties(lockProperties).build();
 
-    // Create the first commit
-    createCommitWithInserts(writeConfig, getHoodieWriteClient(writeConfig), "000", "001", 200, true);
-
-    final int threadCount = 2;
-    final ExecutorService executors = Executors.newFixedThreadPool(2);
     final SparkRDDWriteClient client1 = getHoodieWriteClient(writeConfig);
     final SparkRDDWriteClient client2 = getHoodieWriteClient(writeConfig);
 
-    final CyclicBarrier cyclicBarrier = new CyclicBarrier(threadCount);
-    final AtomicBoolean writer1Completed = new AtomicBoolean(false);
-    final AtomicBoolean writer2Completed = new AtomicBoolean(false);
+    // Create the first commit
+    String commitFirst = HoodieActiveTimeline.createNewInstantTime();
+    List<HoodieRecord> records = dataGen.generateInserts(commitFirst, 20);
+    List<HoodieRecord> recordsInSinglePartition = records.stream().collect(Collectors.groupingBy(HoodieRecord::getPartitionPath)).values().stream().findFirst().get();
+    completeCommit(client1, commitFirst, startCommitAndWriteData(client1, commitFirst, records));
 
-    Future future1 = executors.submit(() -> {
-      try {
-        final String nextCommitTime = HoodieActiveTimeline.createNewInstantTime();
-        final JavaRDD<WriteStatus> writeStatusList = startCommitForUpdate(writeConfig, client1, nextCommitTime, 100);
-
-        // Wait for the 2nd writer to start the commit
-        cyclicBarrier.await(60, TimeUnit.SECONDS);
-
-        // Commit the update before the 2nd writer
-        assertDoesNotThrow(() -> {
-          client1.commit(nextCommitTime, writeStatusList);
-        });
-
-        // Signal the 2nd writer to go ahead for his commit
-        cyclicBarrier.await(60, TimeUnit.SECONDS);
-        writer1Completed.set(true);
-      } catch (Exception e) {
-        writer1Completed.set(false);
-      }
-    });
-
-    Future future2 = executors.submit(() -> {
-      try {
-        final String nextCommitTime = HoodieActiveTimeline.createNewInstantTime();
-
-        // Wait for the 1st writer to make progress with the commit
-        cyclicBarrier.await(60, TimeUnit.SECONDS);
-        final JavaRDD<WriteStatus> writeStatusList = startCommitForUpdate(writeConfig, client2, nextCommitTime, 100);
-
-        // Wait for the 1st writer to complete the commit
-        cyclicBarrier.await(60, TimeUnit.SECONDS);
-        assertThrows(HoodieWriteConflictException.class, () -> {
-          client2.commit(nextCommitTime, writeStatusList);
-        });
-        writer2Completed.set(true);
-      } catch (Exception e) {
-        writer2Completed.set(false);
-      }
-    });
-
-    future1.get();
-    future2.get();
-
-    // both should have been completed successfully. I mean, we already assert for conflict for writer2 at L155.
-    assertTrue(writer1Completed.get() && writer2Completed.get());
+    final String nextCommitTime1 = HoodieActiveTimeline.createNewInstantTime();
+    final List<WriteStatus> writeStatusList1 = startCommitAndWriteData(client1, nextCommitTime1, dataGen.generateUpdates(nextCommitTime1, recordsInSinglePartition));
+    final String nextCommitTime2 = HoodieActiveTimeline.createNewInstantTime();
+    final List<WriteStatus> writeStatusList2 = startCommitAndWriteData(client2, nextCommitTime2, dataGen.generateUpdates(nextCommitTime2, recordsInSinglePartition));
+    assertDoesNotThrow(() -> completeCommit(client1, nextCommitTime1, writeStatusList1));
+    assertThrows(HoodieWriteConflictException.class, () -> completeCommit(client2, nextCommitTime2, writeStatusList2));
     client1.close();
     client2.close();
   }
@@ -1193,6 +1152,15 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     HoodieCommitMetadata metadata = new HoodieCommitMetadata();
     metadata.setOperationType(WriteOperationType.UPSERT);
     client.createMetaClient(true).getActiveTimeline().transitionRequestedToInflight(requested, Option.of(metadata));
+  }
+
+  private List<WriteStatus> startCommitAndWriteData(SparkRDDWriteClient writeClient, String instantTime, List<HoodieRecord> records) {
+    writeClient.startCommitWithTime(instantTime);
+    return writeClient.upsert(jsc.parallelize(records), instantTime).collect();
+  }
+
+  private void completeCommit(SparkRDDWriteClient writeClient, String instantTime, List<WriteStatus> writeStatuses) {
+    writeClient.commit(instantTime, jsc.parallelize(writeStatuses));
   }
 
   private void createCommitWithUpserts(HoodieWriteConfig cfg, SparkRDDWriteClient client, String prevCommit,
