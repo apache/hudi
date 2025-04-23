@@ -166,9 +166,9 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
       file.partitionValues match {
         // Snapshot or incremental queries.
         case fileSliceMapping: HoodiePartitionFileSliceMapping =>
-          val filegroupName = FSUtils.getFileIdFromFilePath(sparkAdapter
+          val fileGroupName = FSUtils.getFileIdFromFilePath(sparkAdapter
             .getSparkPartitionedFileUtils.getPathFromPartitionedFile(file))
-          fileSliceMapping.getSlice(filegroupName) match {
+          fileSliceMapping.getSlice(fileGroupName) match {
             case Some(fileSlice) if !isCount && (requiredSchema.nonEmpty || fileSlice.getLogFiles.findAny().isPresent) =>
               val readerContext = new SparkFileFormatInternalRowReaderContext(parquetFileReader.value, filters, requiredFilters, storageConf)
               val metaClient: HoodieTableMetaClient = HoodieTableMetaClient
@@ -176,8 +176,13 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
               val props = metaClient.getTableConfig.getProps
               options.foreach(kv => props.setProperty(kv._1, kv._2))
               props.put(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(), String.valueOf(maxMemoryPerCompaction))
+              val baseFileLength = if (fileSlice.getBaseFile.isPresent) {
+                fileSlice.getBaseFile.get.getFileSize
+              } else {
+                0
+              }
               val reader = new HoodieFileGroupReader[InternalRow](readerContext, new HoodieHadoopStorage(metaClient.getBasePath, storageConf), tablePath, queryTimestamp,
-                fileSlice, dataAvroSchema, requestedAvroSchema, internalSchemaOpt, metaClient, props, file.start, file.length, shouldUseRecordPosition, false)
+                fileSlice, dataAvroSchema, requestedAvroSchema, internalSchemaOpt, metaClient, props, file.start, baseFileLength, shouldUseRecordPosition, false)
               reader.initRecordIterators()
               // Append partition values to rows and project to output schema
               appendPartitionAndProject(
