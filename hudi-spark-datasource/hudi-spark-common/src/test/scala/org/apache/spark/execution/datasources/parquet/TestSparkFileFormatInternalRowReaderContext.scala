@@ -26,8 +26,8 @@ import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.read.PositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME
 import org.apache.hudi.keygen.CustomKeyGenerator
-import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.keygen.constant.KeyGeneratorType
+import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 
 import org.apache.avro.SchemaBuilder
 import org.apache.spark.sql.catalyst.InternalRow
