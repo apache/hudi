@@ -381,10 +381,18 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> ENABLE_METADATA_INDEX_PARTITION_STATS = ConfigProperty
       .key(METADATA_PREFIX + ".index.partition.stats.enable")
-      .defaultValue(true)
+      // The defaultValue(false) here is the initial default, but it's overridden later based on
+      // column stats setting.
+      .defaultValue(false)
       .sinceVersion("1.0.0")
       .withDocumentation("Enable aggregating stats for each column at the storage partition level. "
-          + "The default value of this configuration depends on column stats index is enabled.");
+          + "Enabling this can improve query performance by leveraging partition and column stats "
+          + "for (partition) filtering. "
+          + "Important: The default value for this configuration is dynamically set based on the "
+          + "effective value of " + ENABLE_METADATA_INDEX_COLUMN_STATS.key() + ". If column stats "
+          + "index is enabled (default for Spark engine), partition stats indexing will also be "
+          + "enabled by default. Conversely, if column stats indexing is disabled (default for "
+          + "Flink and Java engines), partition stats indexing will also be disabled by default.");
 
   public static final ConfigProperty<Integer> METADATA_INDEX_PARTITION_STATS_FILE_GROUP_COUNT = ConfigProperty
       .key(METADATA_PREFIX + ".index.partition.stats.file.group.count")
