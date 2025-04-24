@@ -100,16 +100,6 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
     this.orderingVal = Integer.valueOf(jsonRecordMap.getOrDefault("number", 0L).toString());
   }
 
-  public RawTripTestPayload(String jsonData, String keyField) throws IOException {
-    this.jsonDataCompressed = compressData(jsonData);
-    this.dataSize = jsonData.length();
-    Map<String, Object> jsonRecordMap = OBJECT_MAPPER.readValue(jsonData, Map.class);
-    this.rowKey = jsonRecordMap.get(keyField).toString();
-    this.partitionPath = (String) jsonRecordMap.get("partition_path");
-    this.isDeleted = false;
-    this.orderingVal = Integer.valueOf(jsonRecordMap.getOrDefault("number", 0L).toString());
-  }
-
   public RawTripTestPayload(GenericRecord record, Comparable orderingVal) {
     this.orderingVal = orderingVal;
     try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
