@@ -631,7 +631,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
 
       emitCommitMetrics(instantTime, result.getCommitMetadata().get(), hoodieTable.getMetaClient().getCommitActionType());
     }
-    return result.getAllWriteStatuses();
+    return result.getAllWriteStatuses() != null ? result.getAllWriteStatuses() : result.getDataTableWriteStatuses();
   }
 
   /**
@@ -1078,7 +1078,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
           instantTime));
     }
 
-    Option<HoodieTableMetadataWriter> metadataWriterOpt = avoidOptimizedWrites ? Option.empty() : getMetadataWriter(instantTime, metaClient);
+    Option<HoodieTableMetadataWriter> metadataWriterOpt = avoidOptimizedWrites ? Option.empty() :
+        (config.getOptimizedWritesEnabled(metaClient.getTableConfig().getTableVersion()) ? getMetadataWriter(instantTime, metaClient) : Option.empty());
     if (metadataWriterOpt.isPresent()) {
       metadataWriterOpt.get().startCommit(instantTime);
     }

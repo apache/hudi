@@ -631,6 +631,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
 
       Function3<List<WriteStatus>, HoodieJavaWriteClient, List<HoodieKey>, String> deleteFn = HoodieJavaWriteClient::delete;
       List<WriteStatus> result = deleteFn.apply(client, deleteRecords, newCommitTime);
+      client.commit(newCommitTime, result);
       return getWriteStatusAndVerifyDeleteOperation(newCommitTime, prevCommitTime, initCommitTime, assertForCommit, expRecordsInThisCommit, expTotalRecords,
           filterForCommitTimeWithAssert, result, timelineFactory, instantGenerator);
     }
@@ -713,9 +714,9 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
     List<WriteStatus> result = writeFn.apply(client, records, newCommitTime);
     assertNoWriteErrors(result);
 
-    if (doCommit) {
-      client.commit(newCommitTime, result);
-    }
+    //if (doCommit) {
+    client.commit(newCommitTime, result);
+    //}
     // check the partition metadata is written out
     assertPartitionMetadataForRecords(basePath, records, storage);
 

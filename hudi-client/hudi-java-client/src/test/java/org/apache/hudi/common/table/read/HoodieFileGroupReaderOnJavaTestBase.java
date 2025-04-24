@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -36,9 +37,12 @@ import org.apache.hudi.testutils.HoodieJavaClientTestHarness;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 
 public abstract class HoodieFileGroupReaderOnJavaTestBase<T> extends TestHoodieFileGroupReaderBase<T> {
 
@@ -96,9 +100,9 @@ public abstract class HoodieFileGroupReaderOnJavaTestBase<T> extends TestHoodieF
       List<HoodieRecord> recordsCopy = new ArrayList<>(recordList.size());
       recordList.forEach(hoodieRecord -> recordsCopy.add(new HoodieAvroRecord<>(hoodieRecord.getKey(), (HoodieRecordPayload) hoodieRecord.getData())));
       if (operation.toLowerCase().equals("insert")) {
-        writeClient.insert(recordsCopy, instantTime);
+        writeClient.commit(instantTime, writeClient.insert(recordsCopy, instantTime), Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap());
       } else {
-        writeClient.upsert(recordsCopy, instantTime);
+        writeClient.commit(instantTime, writeClient.upsert(recordsCopy, instantTime), Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap());
       }
     }
   }

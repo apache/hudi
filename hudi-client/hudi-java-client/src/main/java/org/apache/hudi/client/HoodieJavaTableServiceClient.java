@@ -51,7 +51,7 @@ public class HoodieJavaTableServiceClient<T> extends BaseHoodieTableServiceClien
 
   @Override
   protected Pair<List<HoodieWriteStat>, List<HoodieWriteStat>> processAndFetchHoodieWriteStats(HoodieWriteMetadata<List<WriteStatus>> writeMetadata) {
-    List<Pair<Boolean, HoodieWriteStat>> writeStats = writeMetadata.getDataTableWriteStatuses().stream().map(writeStatus ->
+    List<Pair<Boolean, HoodieWriteStat>> writeStats = writeMetadata.getAllWriteStatuses().stream().map(writeStatus ->
         Pair.of(writeStatus.isMetadataTable(), writeStatus.getStat())).collect(Collectors.toList());
     List<HoodieWriteStat> dataTableWriteStats = writeStats.stream().filter(entry -> !entry.getKey()).map(Pair::getValue).collect(Collectors.toList());
     List<HoodieWriteStat> mdtWriteStats = writeStats.stream().filter(Pair::getKey).map(Pair::getValue).collect(Collectors.toList());
