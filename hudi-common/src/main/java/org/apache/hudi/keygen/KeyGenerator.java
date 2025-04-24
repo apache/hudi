@@ -27,6 +27,7 @@ import org.apache.hudi.exception.HoodieKeyException;
 
 import org.apache.avro.generic.GenericRecord;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.function.BiFunction;
 
@@ -71,11 +72,11 @@ public abstract class KeyGenerator implements KeyGeneratorInterface {
    */
   public static String constructRecordKey(String[] recordKeyFields, BiFunction<String, Integer, String> recordValueFunction) {
     if (recordKeyFields.length == 1) {
-      Object recordKeyValue = recordValueFunction.apply(recordKeyFields[0], 0);
+      String recordKeyValue = recordValueFunction.apply(recordKeyFields[0], 0);
       if (recordKeyValue == null) {
         throw new HoodieKeyException("recordKey cannot be null");
       }
-      return recordKeyValue.toString();
+      return recordKeyValue;
     }
     boolean keyIsNullEmpty = true;
     StringBuilder recordKey = new StringBuilder();
@@ -96,7 +97,7 @@ public abstract class KeyGenerator implements KeyGeneratorInterface {
     }
     if (keyIsNullEmpty) {
       throw new HoodieKeyException("recordKey values: \"" + recordKey + "\" for fields: "
-          + recordKeyFields + " cannot be entirely null or empty.");
+          + Arrays.toString(recordKeyFields) + " cannot be entirely null or empty.");
     }
     return recordKey.toString();
   }
