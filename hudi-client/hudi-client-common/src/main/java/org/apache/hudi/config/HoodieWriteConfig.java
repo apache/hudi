@@ -3720,7 +3720,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     private boolean getDefaultForOptimizedWriteDag(EngineType engineType) {
       switch (engineType) {
         case SPARK:
-          return true;
+          return false;
         case FLINK:
         case JAVA:
           return false;
