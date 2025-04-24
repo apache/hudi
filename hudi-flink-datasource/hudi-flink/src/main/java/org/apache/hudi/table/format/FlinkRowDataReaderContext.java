@@ -39,7 +39,6 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieValidationException;
-import org.apache.hudi.sink.bulk.RowDataKeyGen;
 import org.apache.hudi.source.ExpressionPredicates.Predicate;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -59,7 +58,6 @@ import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
 
 import java.io.IOException;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
@@ -74,7 +72,6 @@ import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
  * log files with Flink parquet reader.
  */
 public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
-  private final Map<Schema, RowDataKeyGen> keyGenCache;
   private final List<Predicate> predicates;
   private final Supplier<InternalSchemaManager> internalSchemaManager;
   private RowDataSerializer rowDataSerializer;
@@ -89,7 +86,6 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
     this.internalSchemaManager = internalSchemaManager;
     this.predicates = predicates;
     this.utcTimezone = getStorageConfiguration().getBoolean(FlinkOptions.READ_UTC_TIMEZONE.key(), FlinkOptions.READ_UTC_TIMEZONE.defaultValue());
-    keyGenCache = metaFieldsPopulated ? null : new HashMap<>(); // only allocate map if required
   }
 
   @Override
