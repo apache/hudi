@@ -337,7 +337,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     val schema: Schema = buildMultiLevelSchema
     val innerRow = InternalRow.fromSeq(Seq(UTF8String.fromString("nested_value"), UTF8String.fromString(""), null))
     val row = InternalRow.fromSeq(Seq(innerRow, UTF8String.fromString("value2")))
-    assertEquals("nested_value", sparkReaderContext.getValue(row, schema, "outer1.field1"))
+    assertEquals("nested_value", sparkReaderContext.getValue(row, schema, "outer1.field1").toString)
   }
 
   private def buildMultiLevelSchema = {
