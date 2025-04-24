@@ -120,7 +120,8 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     this.recordMerger = config.getRecordMerger();
     this.writeStatus = (WriteStatus) ReflectionUtils.loadClass(config.getWriteStatusClassName(),
         hoodieTable.shouldTrackSuccessRecords(), config.getWriteStatusFailureFraction(), hoodieTable.isMetadataTable());
-    if (config.isMetadataColumnStatsIndexEnabled()) {
+    // TODO: Add operation type check - `&& WriteOperationType.optimizedWriteDagSupported(writeOperationType)`
+    if (config.isMetadataColumnStatsIndexEnabled() && config.getOptimizedWritesEnabled(hoodieTable.getMetaClient().getTableConfig().getTableVersion())) {
       this.colStatsEnabled = true;
       Set<String> columnsToIndexSet = new HashSet<>(HoodieTableMetadataUtil
           .getColumnsToIndex(hoodieTable.getMetaClient().getTableConfig(),
