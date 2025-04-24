@@ -252,9 +252,9 @@ public abstract class HoodieReaderContext<T> implements Closeable {
   }
 
   /**
-   * Constructs a new {@link HoodieRecord} based on the record of engine-specific type and metadata for merging.
+   * Constructs a new {@link HoodieRecord} based on the given buffered record {@link BufferedRecord}.
    *
-   * @param bufferedRecord buffer record
+   * @param bufferedRecord  The {@link BufferedRecord} object with engine-specific row
    * @return A new instance of {@link HoodieRecord}.
    */
   public abstract HoodieRecord<T> constructHoodieRecord(BufferedRecord<T> bufferedRecord);
@@ -268,7 +268,7 @@ public abstract class HoodieReaderContext<T> implements Closeable {
   public abstract T seal(T record);
 
   /**
-   * Convert engine specific row into binary format.
+   * Converts engine specific row into binary format.
    *
    * @param avroSchema The avro schema of the row
    * @param record     The engine row
@@ -278,10 +278,11 @@ public abstract class HoodieReaderContext<T> implements Closeable {
   public abstract T toBinaryRow(Schema avroSchema, T record);
 
   /**
-   * Gets the schema encoded in the metadata map
+   * Gets the schema encoded in the buffered record {@code BufferedRecord}.
    *
-   * @param record buffered record
-   * @return the avro schema if it is encoded in the metadata map, else null
+   * @param record {@link BufferedRecord} object with engine-specific type
+   *
+   * @return The avro schema if it is encoded in the metadata map, else null
    */
   public Schema getSchemaFromBufferRecord(BufferedRecord<T> record) {
     return decodeAvroSchema(record.getSchemaId());

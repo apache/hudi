@@ -353,7 +353,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
         case EVENT_TIME_ORDERING:
         case CUSTOM:
         default:
-          if (existingRecord.isHardDelete()) {
+          if (existingRecord.isCommitTimeOrderingDelete()) {
             return Option.empty();
           }
           Comparable existingOrderingVal = existingRecord.getOrderingValue();
@@ -449,12 +449,12 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
         case COMMIT_TIME_ORDERING:
           return Pair.of(newerRecord.isDelete(), newerRecord.getRecord());
         case EVENT_TIME_ORDERING:
-          if (newerRecord.isHardDelete()) {
+          if (newerRecord.isCommitTimeOrderingDelete()) {
             return Pair.of(true, newerRecord.getRecord());
           }
           Comparable newOrderingValue = newerRecord.getOrderingValue();
           Comparable oldOrderingValue = olderRecord.getOrderingValue();
-          if (!olderRecord.isHardDelete()
+          if (!olderRecord.isCommitTimeOrderingDelete()
               && oldOrderingValue.compareTo(newOrderingValue) > 0) {
             return Pair.of(olderRecord.isDelete(), olderRecord.getRecord());
           }
@@ -517,7 +517,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
    * Decides whether to keep the incoming record with ordering value comparison.
    */
   private boolean shouldKeepNewerRecord(BufferedRecord<T> oldRecord, BufferedRecord<T> newRecord) {
-    if (newRecord.isHardDelete()) {
+    if (newRecord.isCommitTimeOrderingDelete()) {
       // handle records coming from DELETE statements(the orderingVal is constant 0)
       return true;
     }

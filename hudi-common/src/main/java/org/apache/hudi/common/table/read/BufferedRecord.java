@@ -35,6 +35,8 @@ import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 
 /**
  * Buffered Record used by file group reader.
+ *
+ * @param <T> The type of the engine specific row.
  */
 public class BufferedRecord<T> implements Serializable {
   private final String recordKey;
@@ -95,7 +97,7 @@ public class BufferedRecord<T> implements Serializable {
     return isDelete;
   }
 
-  public boolean isHardDelete() {
+  public boolean isCommitTimeOrderingDelete() {
     return isDelete && getOrderingValue().equals(DEFAULT_ORDERING_VALUE);
   }
 
