@@ -47,8 +47,9 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 import java.util.function.UnaryOperator;
-import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
@@ -65,10 +66,9 @@ import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIEL
  *            and {@code RowData} in Flink.
  */
 public abstract class HoodieReaderContext<T> {
-
   private final StorageConfiguration<?> storageConfiguration;
   protected final boolean metaFieldsPopulated;
-  private final List<String> recordKeyFields;
+  private final BiFunction<T, Schema, String> recordKeyExtractor;
   private FileGroupReaderSchemaHandler<T> schemaHandler = null;
   private String tablePath = null;
   private String latestCommitTime = null;
@@ -85,8 +85,8 @@ public abstract class HoodieReaderContext<T> {
                                 HoodieTableConfig tableConfig) {
     this.storageConfiguration = storageConfiguration;
     this.metaFieldsPopulated = tableConfig.populateMetaFields();
-    this.recordKeyFields = metaFieldsPopulated ? null : tableConfig.getRecordKeyFields().map(Arrays::asList)
-        .orElseThrow(() -> new IllegalArgumentException("No record keys specified and meta fields are not populated"));
+    this.recordKeyExtractor = metaFieldsPopulated ? metadataKeyExtractor() : virtualKeyExtractor(tableConfig.getRecordKeyFields().map(Arrays::asList)
+        .orElseThrow(() -> new IllegalArgumentException("No record keys specified and meta fields are not populated")));
   }
 
   // Getter and Setter for schemaHandler
@@ -258,22 +258,24 @@ public abstract class HoodieReaderContext<T> {
    * @return The record key in String.
    */
   public String getRecordKey(T record, Schema schema) {
-    if (metaFieldsPopulated) {
-      Object val = getValue(record, schema, RECORD_KEY_METADATA_FIELD);
-      return val.toString();
-    }
-    return constructRecordKey(record, schema);
+    return recordKeyExtractor.apply(record, schema);
   }
 
-  private String constructRecordKey(T record, Schema schema) {
-    List<Object> recordKeyValues = recordKeyFields.stream().map(recordKeyField -> {
-      try {
-        return getValue(record, schema, recordKeyField);
-      } catch (HoodieException e) {
-        throw new HoodieKeyException("Record key field '" + recordKeyField + "' does not exist in the input record");
-      }
-    }).collect(Collectors.toList());
-    return KeyGenerator.constructRecordKey(recordKeyFields, recordKeyValues);
+  private BiFunction<T, Schema, String> metadataKeyExtractor() {
+    return (record, schema) -> getValue(record, schema, RECORD_KEY_METADATA_FIELD).toString();
+  }
+
+  private BiFunction<T, Schema, String> virtualKeyExtractor(List<String> recordKeyFields) {
+    return (record, schema) -> {
+      Function<String, Object> valueFunction = recordKeyField -> {
+        try {
+          return getValue(record, schema, recordKeyField);
+        } catch (HoodieException e) {
+          throw new HoodieKeyException("Record key field '" + recordKeyField + "' does not exist in the input record");
+        }
+      };
+      return KeyGenerator.constructRecordKey(recordKeyFields, valueFunction);
+    };
   }
 
   /**

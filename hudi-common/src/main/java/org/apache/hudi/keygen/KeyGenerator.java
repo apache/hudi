@@ -28,6 +28,7 @@ import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.avro.generic.GenericRecord;
 
 import java.util.List;
+import java.util.function.Function;
 
 /**
  * Abstract class to extend for plugging in extraction of {@link HoodieKey} from an Avro record.
@@ -62,18 +63,19 @@ public abstract class KeyGenerator implements KeyGeneratorInterface {
         + "Please override this method in your custom key generator.");
   }
 
-  public static String constructRecordKey(List<String> recordKeyFields, List<Object> recordKeyValues) {
+  public static String constructRecordKey(List<String> recordKeyFields, Function<String, Object> recordKeyValueFunction) {
     if (recordKeyFields.size() == 1) {
-      if (recordKeyValues.get(0) == null) {
+      Object recordKeyValue = recordKeyValueFunction.apply(recordKeyFields.get(0));
+      if (recordKeyValue == null) {
         throw new HoodieKeyException("recordKey cannot be null");
       }
-      return recordKeyValues.get(0).toString();
+      return recordKeyValue.toString();
     }
     boolean keyIsNullEmpty = true;
     StringBuilder recordKey = new StringBuilder();
     for (int i = 0; i < recordKeyFields.size(); i++) {
       String recordKeyField = recordKeyFields.get(i);
-      Object recordKeyValue = recordKeyValues.get(i);
+      Object recordKeyValue = recordKeyValueFunction.apply(recordKeyField);
       if (recordKeyValue == null) {
         recordKey.append(recordKeyField).append(DEFAULT_COLUMN_VALUE_SEPARATOR).append(NULL_RECORDKEY_PLACEHOLDER);
       } else if (recordKeyValue.toString().isEmpty()) {

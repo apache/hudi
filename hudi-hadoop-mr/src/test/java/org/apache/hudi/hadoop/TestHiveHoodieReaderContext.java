@@ -47,9 +47,7 @@ class TestHiveHoodieReaderContext {
 
   @Test
   void getRecordKeyWithSingleKey() {
-    JobConf jobConf = new JobConf(storageConfiguration.unwrapAs(Configuration.class));
-    jobConf.set("columns", "field_1,field_2,field_3,datestr");
-    jobConf.set("columns.types", "string,string,struct<nested_field:string>,string");
+    JobConf jobConf = getJobConf();
 
     Schema schema = getBaseSchema();
     ObjectInspectorCache objectInspectorCache = new ObjectInspectorCache(schema, jobConf);
@@ -64,9 +62,7 @@ class TestHiveHoodieReaderContext {
 
   @Test
   void getRecordKeyWithMultipleKeys() {
-    JobConf jobConf = new JobConf(storageConfiguration.unwrapAs(Configuration.class));
-    jobConf.set("columns", "field_1,field_2,field_3,datestr");
-    jobConf.set("columns.types", "string,string,struct<nested_field:string>,string");
+    JobConf jobConf = getJobConf();
 
     Schema schema = getBaseSchema();
     ObjectInspectorCache objectInspectorCache = new ObjectInspectorCache(schema, jobConf);
@@ -77,6 +73,27 @@ class TestHiveHoodieReaderContext {
     ArrayWritable row = new ArrayWritable(Writable.class, new Writable[]{new Text("value1"), new Text("value2"), new ArrayWritable(new String[]{"value3"})});
 
     assertEquals("field_1:value1,field_3.nested_field:value3", avroReaderContext.getRecordKey(row, getBaseSchema()));
+  }
+
+  @Test
+  void getNestedField() {
+    JobConf jobConf = getJobConf();
+
+    Schema schema = getBaseSchema();
+    ObjectInspectorCache objectInspectorCache = new ObjectInspectorCache(schema, jobConf);
+
+    when(tableConfig.populateMetaFields()).thenReturn(true);
+    HiveHoodieReaderContext avroReaderContext = new HiveHoodieReaderContext(readerCreator, Collections.emptyList(), objectInspectorCache, storageConfiguration, tableConfig);
+    ArrayWritable row = new ArrayWritable(Writable.class, new Writable[]{new Text("value1"), new Text("value2"), new ArrayWritable(new String[]{"value3"})});
+
+    assertEquals("value3", avroReaderContext.getValue(row, getBaseSchema(), "field_3.nested_field").toString());
+  }
+
+  private JobConf getJobConf() {
+    JobConf jobConf = new JobConf(storageConfiguration.unwrapAs(Configuration.class));
+    jobConf.set("columns", "field_1,field_2,field_3,datestr");
+    jobConf.set("columns.types", "string,string,struct<nested_field:string>,string");
+    return jobConf;
   }
 
   private static Schema getBaseSchema() {

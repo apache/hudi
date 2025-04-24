@@ -157,6 +157,14 @@ class TestHoodieAvroReaderContext {
   }
 
   @Test
+  void getNestedField() {
+    when(tableConfig.populateMetaFields()).thenReturn(true);
+    HoodieAvroReaderContext avroReaderContext = new HoodieAvroReaderContext(storageConfig, tableConfig);
+    IndexedRecord indexedRecord = createBaseRecord("compound", "field2", 3.2);
+    assertEquals(3.2, avroReaderContext.getValue(indexedRecord, BASE_SCHEMA, "base_field_3.nested_field"));
+  }
+
+  @Test
   void getRecordKeyWithSingleKey() {
     when(tableConfig.populateMetaFields()).thenReturn(false);
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[]{"skeleton_field_1"}));
@@ -193,8 +201,7 @@ class TestHoodieAvroReaderContext {
 
   private HoodieAvroReaderContext getReaderContextWithMetaFields() {
     when(tableConfig.populateMetaFields()).thenReturn(true);
-    HoodieAvroReaderContext avroReaderContext = new HoodieAvroReaderContext(storageConfig, tableConfig);
-    return avroReaderContext;
+    return new HoodieAvroReaderContext(storageConfig, tableConfig);
   }
 
   private static Schema getSkeletonSchema() {

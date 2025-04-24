@@ -320,6 +320,27 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     when(tableConfig.getRecordKeyFields).thenReturn(HOption.of(Array("outer1.field1", "outer1.field2", "outer1.field3")))
     val storageConf = Mockito.mock(classOf[StorageConfiguration[_]])
     val sparkReaderContext = new SparkFileFormatInternalRowReaderContext(reader, Seq.empty, Seq.empty, storageConf, tableConfig)
+    val schema: _root_.org.apache.avro.Schema = buildMultiLevelSchema
+    val key = "outer1.field1:compound,outer1.field2:__empty__,outer1.field3:__null__"
+    val innerRow = InternalRow.fromSeq(Seq(UTF8String.fromString("compound"), UTF8String.fromString(""), null))
+    val row = InternalRow.fromSeq(Seq(innerRow, UTF8String.fromString("value2")))
+    assertEquals(key, sparkReaderContext.getRecordKey(row, schema))
+  }
+
+  @Test
+  def getNestedValue(): Unit = {
+    val reader = Mockito.mock(classOf[SparkParquetReader])
+    val tableConfig = Mockito.mock(classOf[HoodieTableConfig])
+    when(tableConfig.populateMetaFields()).thenReturn(true)
+    val storageConf = Mockito.mock(classOf[StorageConfiguration[_]])
+    val sparkReaderContext = new SparkFileFormatInternalRowReaderContext(reader, Seq.empty, Seq.empty, storageConf, tableConfig)
+    val schema: Schema = buildMultiLevelSchema
+    val innerRow = InternalRow.fromSeq(Seq(UTF8String.fromString("nested_value"), UTF8String.fromString(""), null))
+    val row = InternalRow.fromSeq(Seq(innerRow, UTF8String.fromString("value2")))
+    assertEquals("nested_value", sparkReaderContext.getValue(row, schema, "outer1.field1"))
+  }
+
+  private def buildMultiLevelSchema = {
     val innerSchema = SchemaBuilder.builder()
       .record("inner")
       .fields()
@@ -332,10 +353,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
       new Schema.Field("outer1", innerSchema, null, null),
       new Schema.Field("outer2", Schema.create(Schema.Type.STRING), null, null)
     ))
-    val key = "outer1.field1:compound,outer1.field2:__empty__,outer1.field3:__null__"
-    val innerRow = InternalRow.fromSeq(Seq(UTF8String.fromString("compound"), UTF8String.fromString(""), null))
-    val row = InternalRow.fromSeq(Seq(innerRow, UTF8String.fromString("value2")))
-    assertEquals(key, sparkReaderContext.getRecordKey(row, schema))
+    schema
   }
 }
 

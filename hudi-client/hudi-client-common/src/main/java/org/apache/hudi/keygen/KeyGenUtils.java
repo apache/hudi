@@ -39,6 +39,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.keygen.KeyGenerator.DEFAULT_COLUMN_VALUE_SEPARATOR;
@@ -217,14 +218,14 @@ public class KeyGenUtils {
   }
 
   public static String getRecordKey(GenericRecord record, List<String> recordKeyFields, boolean consistentLogicalTimestampEnabled) {
-    List<Object> recordKeyValues = recordKeyFields.stream().map(recordKeyField -> {
+    Function<String, Object> valueFunction = recordKeyField -> {
       try {
         return HoodieAvroUtils.getNestedFieldValAsString(record, recordKeyField, false, consistentLogicalTimestampEnabled);
       } catch (HoodieException e) {
         throw new HoodieKeyException("Record key field '" + recordKeyField + "' does not exist in the input record");
       }
-    }).collect(Collectors.toList());
-    return constructRecordKey(recordKeyFields, recordKeyValues);
+    };
+    return constructRecordKey(recordKeyFields, valueFunction);
   }
 
   public static String getRecordPartitionPath(GenericRecord record, List<String> partitionPathFields,
