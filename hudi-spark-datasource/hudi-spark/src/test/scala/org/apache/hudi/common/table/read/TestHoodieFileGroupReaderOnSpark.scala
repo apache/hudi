@@ -292,11 +292,11 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
   }
 
   @Test
-  def getRecordKeyWithKeyGen(): Unit = {
+  def getRecordKeySingleKey(): Unit = {
     val reader = Mockito.mock(classOf[SparkParquetReader])
     val tableConfig = Mockito.mock(classOf[HoodieTableConfig])
     when(tableConfig.populateMetaFields()).thenReturn(false)
-    when(tableConfig.getKeyGeneratorClassName).thenReturn(classOf[CustomKeyGenerator].getName)
+    when(tableConfig.getRecordKeyFields).thenReturn(HOption.of(Array("field1")))
     val storageConf = Mockito.mock(classOf[StorageConfiguration[_]])
     val props = new TypedProperties
     props.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), "field1,field2")
@@ -308,8 +308,34 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
       .requiredString("field1")
       .optionalString("field2")
       .endRecord()
-    val key = "field1:compound,field2:key"
-    val row = InternalRow.fromSeq(Seq(UTF8String.fromString("compound"), UTF8String.fromString("key")))
+    val key = "key"
+    val row = InternalRow.fromSeq(Seq(UTF8String.fromString(key), UTF8String.fromString("other")))
+    assertEquals(key, sparkReaderContext.getRecordKey(row, schema))
+  }
+
+  @Test
+  def getRecordKeyWithMultipleKeys(): Unit = {
+    val reader = Mockito.mock(classOf[SparkParquetReader])
+    val tableConfig = Mockito.mock(classOf[HoodieTableConfig])
+    when(tableConfig.populateMetaFields()).thenReturn(false)
+    when(tableConfig.getRecordKeyFields).thenReturn(HOption.of(Array("outer1.field1", "outer1.field2", "outer1.field3")))
+    val storageConf = Mockito.mock(classOf[StorageConfiguration[_]])
+    val sparkReaderContext = new SparkFileFormatInternalRowReaderContext(reader, Seq.empty, Seq.empty, storageConf, tableConfig)
+    val innerSchema = SchemaBuilder.builder()
+      .record("inner")
+      .fields()
+      .requiredString("field1")
+      .optionalString("field2")
+      .optionalString("field3")
+      .endRecord()
+    val schema = Schema.createRecord("outer", null, null, false);
+    schema.setFields(util.Arrays.asList(
+      new Schema.Field("outer1", innerSchema, null, null),
+      new Schema.Field("outer2", Schema.create(Schema.Type.STRING), null, null)
+    ))
+    val key = "outer1.field1:compound,outer1.field2:__empty__,outer1.field3:__null__"
+    val innerRow = InternalRow.fromSeq(Seq(UTF8String.fromString("compound"), UTF8String.fromString(""), null))
+    val row = InternalRow.fromSeq(Seq(innerRow, UTF8String.fromString("value2")))
     assertEquals(key, sparkReaderContext.getRecordKey(row, schema))
   }
 }

@@ -29,12 +29,10 @@ import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
-import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
-import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FileSystem;
 import org.junit.jupiter.api.AfterAll;
@@ -46,7 +44,6 @@ import java.util.Properties;
 import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELDS;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
-import static org.apache.hudi.common.testutils.reader.HoodieFileSliceTestUtils.ROW_KEY;
 
 public class HoodieFileGroupReaderTestHarness extends HoodieCommonTestHarness {
   protected static final String PARTITION_PATH = "any-partition-path";
@@ -154,21 +151,5 @@ public class HoodieFileGroupReaderTestHarness extends HoodieCommonTestHarness {
 
     fileGroupReader.initRecordIterators();
     return fileGroupReader.getClosableIterator();
-  }
-
-  protected static class TestKeyGenerator extends BaseKeyGenerator {
-    public TestKeyGenerator() {
-      super(new TypedProperties());
-    }
-
-    @Override
-    public String getRecordKey(GenericRecord record) {
-      return record.get(ROW_KEY).toString();
-    }
-
-    @Override
-    public String getPartitionPath(GenericRecord record) {
-      return "";
-    }
   }
 }

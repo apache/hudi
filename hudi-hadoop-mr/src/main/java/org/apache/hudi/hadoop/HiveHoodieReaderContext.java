@@ -100,7 +100,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
                                     ObjectInspectorCache objectInspectorCache,
                                     StorageConfiguration<?> storageConfiguration,
                                     HoodieTableConfig tableConfig) {
-    super(storageConfiguration, tableConfig.populateMetaFields());
+    super(storageConfiguration, tableConfig);
     this.readerCreator = readerCreator;
     this.partitionCols = partitionCols;
     this.partitionColSet = new HashSet<>(this.partitionCols);
@@ -201,11 +201,6 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
         }
         return mergerClass;
     }
-  }
-
-  @Override
-  protected String getVirtualRecordKey(ArrayWritable record, Schema schema) {
-    return getValue(record, schema, recordKeyField).toString();
   }
 
   @Override

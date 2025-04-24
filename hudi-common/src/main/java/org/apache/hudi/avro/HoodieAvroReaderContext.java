@@ -37,8 +37,6 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.io.storage.HoodieIOFactory;
-import org.apache.hudi.keygen.BaseKeyGenerator;
-import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
@@ -64,32 +62,12 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  */
 public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> {
   private final String payloadClass;
-  private final BaseKeyGenerator keyGenerator;
 
   public HoodieAvroReaderContext(
       StorageConfiguration<?> storageConfiguration,
       HoodieTableConfig tableConfig) {
-    super(storageConfiguration, tableConfig.populateMetaFields());
+    super(storageConfiguration, tableConfig);
     this.payloadClass = tableConfig.getPayloadClass();
-    this.keyGenerator = metaFieldsPopulated ? null : buildKeyGenerator(tableConfig);
-  }
-
-  public HoodieAvroReaderContext(
-      StorageConfiguration<?> storageConfiguration,
-      HoodieTableConfig tableConfig,
-      BaseKeyGenerator keyGenerator) {
-    super(storageConfiguration, tableConfig.populateMetaFields());
-    this.payloadClass = tableConfig.getPayloadClass();
-    this.keyGenerator = keyGenerator;
-  }
-
-  @Override
-  protected String getKeyGenClass(HoodieTableConfig tableConfig) {
-    String keyGeneratorClassName = tableConfig.getKeyGeneratorClassName();
-    if (keyGeneratorClassName == null) {
-      return tableConfig.isTablePartitioned() ? KeyGeneratorType.SIMPLE_AVRO.getClassName() : KeyGeneratorType.NON_PARTITION_AVRO.getClassName();
-    }
-    return KeyGeneratorType.fromClassName(keyGeneratorClassName).getAvroImplementation().getClassName();
   }
 
   @Override
@@ -141,11 +119,6 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
   @Override
   public Object getValue(IndexedRecord record, Schema schema, String fieldName) {
     return getFieldValueFromIndexedRecord(record, schema, fieldName);
-  }
-
-  @Override
-  protected String getVirtualRecordKey(IndexedRecord record, Schema schema) {
-    return keyGenerator.getRecordKey((GenericRecord) record);
   }
 
   @Override
@@ -220,14 +193,22 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
   private Object getFieldValueFromIndexedRecord(
       IndexedRecord record,
       Schema recordSchema,
-      String fieldName
-  ) {
-    Schema.Field field = recordSchema.getField(fieldName);
-    if (field == null) {
-      return null;
+      String fieldName) {
+    Schema currentSchema = recordSchema;
+    IndexedRecord currentRecord = record;
+    String[] path = fieldName.split("\\.");
+    for (int i = 0; i < path.length; i++) {
+      Schema.Field field = currentSchema.getField(path[i]);
+      if (field == null) {
+        return null;
+      }
+      if (i == path.length - 1) {
+        return currentRecord.get(field.pos());
+      }
+      currentSchema = field.schema();
+      currentRecord = (IndexedRecord) currentRecord.get(field.pos());
     }
-    int pos = field.pos();
-    return record.get(pos);
+    return null;
   }
 
   /**

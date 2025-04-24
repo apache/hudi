@@ -20,17 +20,15 @@
 package org.apache.hudi.common.engine;
 
 import org.apache.hudi.common.config.RecordMergeMode;
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.util.LocalAvroSchemaCache;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
-import org.apache.hudi.keygen.BaseKeyGenerator;
-import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
@@ -50,8 +48,6 @@ import java.util.function.UnaryOperator;
 
 import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
-import static org.apache.hudi.common.table.HoodieTableConfig.PARTITION_FIELDS;
-import static org.apache.hudi.common.table.HoodieTableConfig.RECORDKEY_FIELDS;
 
 /**
  * An abstract reader context class for {@code HoodieFileGroupReader} to use, containing APIs for
@@ -65,8 +61,14 @@ import static org.apache.hudi.common.table.HoodieTableConfig.RECORDKEY_FIELDS;
  *            and {@code RowData} in Flink.
  */
 public abstract class HoodieReaderContext<T> {
+  private static final String NULL_RECORDKEY_PLACEHOLDER = "__null__";
+  private static final String EMPTY_RECORDKEY_PLACEHOLDER = "__empty__";
+  private static final String DEFAULT_COLUMN_VALUE_SEPARATOR = ":";
+  private static final String DEFAULT_RECORD_KEY_PARTS_SEPARATOR = ",";
+
   private final StorageConfiguration<?> storageConfiguration;
   protected final boolean metaFieldsPopulated;
+  private final String[] recordKeyFields;
   private FileGroupReaderSchemaHandler<T> schemaHandler = null;
   private String tablePath = null;
   private String latestCommitTime = null;
@@ -80,22 +82,10 @@ public abstract class HoodieReaderContext<T> {
   private final LocalAvroSchemaCache localAvroSchemaCache = LocalAvroSchemaCache.getInstance();
 
   protected HoodieReaderContext(StorageConfiguration<?> storageConfiguration,
-                                boolean metaFieldsPopulated) {
+                                HoodieTableConfig tableConfig) {
     this.storageConfiguration = storageConfiguration;
-    this.metaFieldsPopulated = metaFieldsPopulated;
-  }
-
-  protected BaseKeyGenerator buildKeyGenerator(HoodieTableConfig tableConfig) {
-    // Write out the properties from the table config into the required properties for generating the KeyGenerator
-    TypedProperties properties = new TypedProperties();
-    properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), tableConfig.getProps().getOrDefault(RECORDKEY_FIELDS.key(), ""));
-    String partitionFields = tableConfig.getProps().getOrDefault(PARTITION_FIELDS.key(), "").toString();
-    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), partitionFields);
-    return (BaseKeyGenerator) ReflectionUtils.loadClass(getKeyGenClass(tableConfig), properties);
-  }
-
-  protected String getKeyGenClass(HoodieTableConfig tableConfig) {
-    return tableConfig.getKeyGeneratorClassName();
+    this.metaFieldsPopulated = tableConfig.populateMetaFields();
+    this.recordKeyFields = metaFieldsPopulated ? null : tableConfig.getRecordKeyFields().orElseThrow(() -> new IllegalArgumentException("No record keys specified and meta fields are not populated"));
   }
 
   // Getter and Setter for schemaHandler
@@ -241,7 +231,7 @@ public abstract class HoodieReaderContext<T> {
    *
    * @param record    The record in engine-specific type.
    * @param schema    The Avro schema of the record.
-   * @param fieldName The field name.
+   * @param fieldName The field name. A dot separated string if a nested field.
    * @return The field value.
    */
   public abstract Object getValue(T record, Schema schema, String fieldName);
@@ -271,17 +261,42 @@ public abstract class HoodieReaderContext<T> {
       Object val = getValue(record, schema, RECORD_KEY_METADATA_FIELD);
       return val.toString();
     }
-    return getVirtualRecordKey(record, schema);
+    return constructRecordKey(record, schema);
   }
 
-  /**
-   * Computes the record key using the key generator specified for this table.
-   * This method should only be used when the record key metadata field is not populated because it is more expensive.
-   * @param record The record in engine-specific type.
-   * @param schema The Avro schema of the record.
-   * @return The computed record key in String.
-   */
-  protected abstract String getVirtualRecordKey(T record, Schema schema);
+  // Adapted from KeyGenUtils
+  private String constructRecordKey(T record, Schema schema) {
+    if (recordKeyFields.length == 1) {
+      return getValue(record, schema, recordKeyFields[0]).toString();
+    }
+    boolean keyIsNullEmpty = true;
+    StringBuilder recordKey = new StringBuilder();
+    for (int i = 0; i < recordKeyFields.length; i++) {
+      String recordKeyField = recordKeyFields[i];
+      Object recordKeyValue;
+      try {
+        recordKeyValue = getValue(record, schema, recordKeyField);
+      } catch (HoodieException e) {
+        throw new HoodieKeyException("Record key field '" + recordKeyField + "' does not exist in the input record");
+      }
+      if (recordKeyValue == null) {
+        recordKey.append(recordKeyField).append(DEFAULT_COLUMN_VALUE_SEPARATOR).append(NULL_RECORDKEY_PLACEHOLDER);
+      } else if (recordKeyValue.toString().isEmpty()) {
+        recordKey.append(recordKeyField).append(DEFAULT_COLUMN_VALUE_SEPARATOR).append(EMPTY_RECORDKEY_PLACEHOLDER);
+      } else {
+        recordKey.append(recordKeyField).append(DEFAULT_COLUMN_VALUE_SEPARATOR).append(recordKeyValue);
+        keyIsNullEmpty = false;
+      }
+      if (i != recordKeyFields.length - 1) {
+        recordKey.append(DEFAULT_RECORD_KEY_PARTS_SEPARATOR);
+      }
+    }
+    if (keyIsNullEmpty) {
+      throw new HoodieKeyException("recordKey values: \"" + recordKey + "\" for fields: "
+          + recordKeyFields + " cannot be entirely null or empty.");
+    }
+    return recordKey.toString();
+  }
 
   /**
    * Gets the ordering value in particular type.

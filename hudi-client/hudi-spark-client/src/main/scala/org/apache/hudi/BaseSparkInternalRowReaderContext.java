@@ -31,8 +31,6 @@ import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.keygen.BuiltinKeyGenerator;
-import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.avro.Schema;
@@ -56,12 +54,10 @@ import static org.apache.spark.sql.HoodieInternalRowUtils.getCachedSchema;
  * Subclasses need to implement {@link #getFileRecordIterator} with the reader logic.
  */
 public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderContext<InternalRow> {
-  private final BuiltinKeyGenerator keyGenerator;
 
   protected BaseSparkInternalRowReaderContext(StorageConfiguration<?> storageConfig,
                                               HoodieTableConfig tableConfig) {
-    super(storageConfig, tableConfig.populateMetaFields());
-    this.keyGenerator = metaFieldsPopulated ? null : (BuiltinKeyGenerator) buildKeyGenerator(tableConfig);
+    super(storageConfig, tableConfig);
   }
 
   @Override
@@ -88,23 +84,8 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
   }
 
   @Override
-  public String getKeyGenClass(HoodieTableConfig tableConfig) {
-    String keyGeneratorClassName = tableConfig.getKeyGeneratorClassName();
-    if (keyGeneratorClassName == null) {
-      return tableConfig.isTablePartitioned() ? KeyGeneratorType.SIMPLE.getClassName() : KeyGeneratorType.NON_PARTITION.getClassName();
-    }
-    return keyGeneratorClassName;
-  }
-
-  @Override
   public Object getValue(InternalRow row, Schema schema, String fieldName) {
     return getFieldValueFromInternalRow(row, schema, fieldName);
-  }
-
-  @Override
-  protected String getVirtualRecordKey(InternalRow record, Schema schema) {
-    StructType structType = getCachedSchema(schema);
-    return keyGenerator.getRecordKey(record, structType).toString();
   }
 
   @Override

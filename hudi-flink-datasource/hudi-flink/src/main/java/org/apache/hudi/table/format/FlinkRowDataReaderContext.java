@@ -52,7 +52,6 @@ import org.apache.hudi.util.SchemaEvolvingRowDataProjection;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.utils.JoinedRowData;
 import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
@@ -86,7 +85,7 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
       Supplier<InternalSchemaManager> internalSchemaManager,
       List<Predicate> predicates,
       HoodieTableConfig tableConfig) {
-    super(storageConfiguration, tableConfig.populateMetaFields());
+    super(storageConfiguration, tableConfig);
     this.internalSchemaManager = internalSchemaManager;
     this.predicates = predicates;
     this.utcTimezone = getStorageConfiguration().getBoolean(FlinkOptions.READ_UTC_TIMEZONE.key(), FlinkOptions.READ_UTC_TIMEZONE.defaultValue());
@@ -145,14 +144,6 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
     } else {
       return fieldQueryContext.getFieldGetter().getFieldOrNull(record);
     }
-  }
-
-  @Override
-  protected String getVirtualRecordKey(RowData record, Schema providedSchema) {
-    return keyGenCache.computeIfAbsent(providedSchema, schema -> {
-      RowType rowType = (RowType) RowDataAvroQueryContexts.fromAvroSchema(schema).getRowType().getLogicalType();
-      return RowDataKeyGen.instance(getStorageConfiguration().unwrapAs(Configuration.class), rowType);
-    }).getRecordKey(record);
   }
 
   @Override

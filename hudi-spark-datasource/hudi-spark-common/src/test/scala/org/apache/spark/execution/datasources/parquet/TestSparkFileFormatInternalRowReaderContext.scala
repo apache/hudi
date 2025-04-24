@@ -99,17 +99,4 @@ class TestSparkFileFormatInternalRowReaderContext extends SparkClientFunctionalT
     assertEquals(UTF8String.fromString(stringValue),
       sparkReaderContext.convertValueToEngineType(UTF8String.fromString(stringValue)))
   }
-
-  @ParameterizedTest
-  @ValueSource(booleans = Array(false, true))
-  def getKeyGeneratorClassDefaults(isPartitioned: Boolean): Unit = {
-    val reader = Mockito.mock(classOf[SparkParquetReader])
-    val tableConfig = Mockito.mock(classOf[HoodieTableConfig])
-    when(tableConfig.populateMetaFields).thenReturn(true)
-    when(tableConfig.isTablePartitioned).thenReturn(isPartitioned)
-    when(tableConfig.getKeyGeneratorClassName).thenReturn(null)
-    val sparkReaderContext = new SparkFileFormatInternalRowReaderContext(reader, Seq.empty, Seq.empty, storageConf(), tableConfig)
-    if (isPartitioned) assertEquals(KeyGeneratorType.SIMPLE.getClassName, sparkReaderContext.getKeyGenClass(tableConfig))
-    else assertEquals(KeyGeneratorType.NON_PARTITION.getClassName, sparkReaderContext.getKeyGenClass(tableConfig))
-  }
 }
