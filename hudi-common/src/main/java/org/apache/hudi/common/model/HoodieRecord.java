@@ -158,7 +158,7 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
    */
   protected Option<Map<String, String>> metaData;
 
-  private transient Comparable<?> orderingValue;
+  protected transient Comparable<?> orderingValue;
 
   public HoodieRecord(HoodieKey key, T data) {
     this(key, data, null, Option.empty());
