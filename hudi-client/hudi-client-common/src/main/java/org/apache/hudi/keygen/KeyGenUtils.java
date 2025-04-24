@@ -218,7 +218,7 @@ public class KeyGenUtils {
   }
 
   public static String getRecordKey(GenericRecord record, List<String> recordKeyFields, boolean consistentLogicalTimestampEnabled) {
-    BiFunction<String, Integer, Object> valueFunction = (recordKeyField, index) -> {
+    BiFunction<String, Integer, String> valueFunction = (recordKeyField, index) -> {
       try {
         return HoodieAvroUtils.getNestedFieldValAsString(record, recordKeyField, false, consistentLogicalTimestampEnabled);
       } catch (HoodieException e) {

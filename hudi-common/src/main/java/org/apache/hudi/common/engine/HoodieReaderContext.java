@@ -262,9 +262,10 @@ public abstract class HoodieReaderContext<T> {
 
   private BiFunction<T, Schema, String> virtualKeyExtractor(String[] recordKeyFields) {
     return (record, schema) -> {
-      BiFunction<String, Integer, Object> valueFunction = (recordKeyField, index) -> {
+      BiFunction<String, Integer, String> valueFunction = (recordKeyField, index) -> {
         try {
-          return getValue(record, schema, recordKeyField);
+          Object result = getValue(record, schema, recordKeyField);
+          return result != null ? result.toString() : null;
         } catch (HoodieException e) {
           throw new HoodieKeyException("Record key field '" + recordKeyField + "' does not exist in the input record");
         }

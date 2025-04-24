@@ -69,7 +69,7 @@ public abstract class KeyGenerator implements KeyGeneratorInterface {
    * @param recordValueFunction takes the record key field name and the index of the field in the record key fields and outputs a value
    * @return the record key
    */
-  public static String constructRecordKey(String[] recordKeyFields, BiFunction<String, Integer, Object> recordValueFunction) {
+  public static String constructRecordKey(String[] recordKeyFields, BiFunction<String, Integer, String> recordValueFunction) {
     if (recordKeyFields.length == 1) {
       Object recordKeyValue = recordValueFunction.apply(recordKeyFields[0], 0);
       if (recordKeyValue == null) {
@@ -81,10 +81,10 @@ public abstract class KeyGenerator implements KeyGeneratorInterface {
     StringBuilder recordKey = new StringBuilder();
     for (int i = 0; i < recordKeyFields.length; i++) {
       String recordKeyField = recordKeyFields[i];
-      Object recordKeyValue = recordValueFunction.apply(recordKeyField, i);
+      String recordKeyValue = recordValueFunction.apply(recordKeyField, i);
       if (recordKeyValue == null) {
         recordKey.append(recordKeyField).append(DEFAULT_COLUMN_VALUE_SEPARATOR).append(NULL_RECORDKEY_PLACEHOLDER);
-      } else if (recordKeyValue.toString().isEmpty()) {
+      } else if (recordKeyValue.isEmpty()) {
         recordKey.append(recordKeyField).append(DEFAULT_COLUMN_VALUE_SEPARATOR).append(EMPTY_RECORDKEY_PLACEHOLDER);
       } else {
         recordKey.append(recordKeyField).append(DEFAULT_COLUMN_VALUE_SEPARATOR).append(recordKeyValue);
