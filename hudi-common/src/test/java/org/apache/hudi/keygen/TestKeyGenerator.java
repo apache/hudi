@@ -45,7 +45,7 @@ class TestKeyGenerator {
 
   @ParameterizedTest
   @MethodSource
-  void testKeyConstruction(String[] keys, List<Object> values, String expected) {
+  void testKeyConstruction(String[] keys, List<String> values, String expected) {
     assertEquals(expected, KeyGenerator.constructRecordKey(keys, (key, index) -> values.get(index)));
   }
 
