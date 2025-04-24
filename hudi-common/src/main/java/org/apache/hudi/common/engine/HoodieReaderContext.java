@@ -65,7 +65,6 @@ import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIEL
  */
 public abstract class HoodieReaderContext<T> {
   private final StorageConfiguration<?> storageConfiguration;
-  protected final boolean metaFieldsPopulated;
   private final BiFunction<T, Schema, String> recordKeyExtractor;
   private FileGroupReaderSchemaHandler<T> schemaHandler = null;
   private String tablePath = null;
@@ -82,8 +81,7 @@ public abstract class HoodieReaderContext<T> {
   protected HoodieReaderContext(StorageConfiguration<?> storageConfiguration,
                                 HoodieTableConfig tableConfig) {
     this.storageConfiguration = storageConfiguration;
-    this.metaFieldsPopulated = tableConfig.populateMetaFields();
-    this.recordKeyExtractor = metaFieldsPopulated ? metadataKeyExtractor() : virtualKeyExtractor(tableConfig.getRecordKeyFields()
+    this.recordKeyExtractor = tableConfig.populateMetaFields() ? metadataKeyExtractor() : virtualKeyExtractor(tableConfig.getRecordKeyFields()
         .orElseThrow(() -> new IllegalArgumentException("No record keys specified and meta fields are not populated")));
   }
 
