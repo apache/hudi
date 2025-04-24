@@ -349,7 +349,10 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
 
   protected HoodieWriteMetadata<T> writeToMetadata(HoodieWriteMetadata<T> writeMetadata, String compactionInstantTime,
                                                    Option<HoodieTableMetadataWriter> metadataWriterOpt) {
-    writeMetadata.setAllWriteStatuses(writeMetadata.getDataTableWriteStatuses());
+    if (writeMetadata.getAllWriteStatuses() == null) {
+      writeMetadata.setAllWriteStatuses(writeMetadata.getDataTableWriteStatuses());
+    }
+    //writeMetadata.setAllWriteStatuses(writeMetadata.getAllWriteStatuses() != null writeMetadata.getDataTableWriteStatuses());
     return writeMetadata;
   }
 
