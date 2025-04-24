@@ -69,7 +69,7 @@ public abstract class BaseDatasetBulkInsertCommitActionExecutor implements Seria
 
   protected void preExecute() {
     table.validateInsertSchema();
-    writeClient.startCommitWithTime(instantTime, getCommitActionType());
+    writeClient.startCommitWithTime(instantTime, getCommitActionType(), true);
     writeClient.preWrite(instantTime, getWriteOperationType(), table.getMetaClient());
   }
 

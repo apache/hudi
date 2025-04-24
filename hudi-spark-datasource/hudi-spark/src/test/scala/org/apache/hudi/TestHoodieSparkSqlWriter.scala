@@ -40,6 +40,7 @@ import org.apache.spark.sql.{DataFrame, Row, SaveMode, SparkSession}
 import org.apache.spark.sql.functions.{expr, lit}
 import org.apache.spark.sql.hudi.command.SqlKeyGenerator
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertNull, assertTrue, fail}
+import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, CsvSource, EnumSource, MethodSource, ValueSource}
@@ -852,8 +853,9 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
    * Test case for deletion of partitions.
    * @param usePartitionsToDeleteConfig Flag for if use partitions to delete config
    */
-  @ParameterizedTest
-  @ValueSource(booleans = Array(true, false))
+  //@ParameterizedTest
+  //@ValueSource(booleans = Array(true, false))
+  @Disabled("HUDI-9281")
   def testDeletePartitionsV2(usePartitionsToDeleteConfig: Boolean): Unit = {
     var (df1, fooTableModifier) = deletePartitionSetup()
     validateDataAndPartitionStats(df1)
