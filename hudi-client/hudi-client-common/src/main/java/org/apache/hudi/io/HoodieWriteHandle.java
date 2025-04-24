@@ -121,8 +121,11 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     this.writeStatus = (WriteStatus) ReflectionUtils.loadClass(config.getWriteStatusClassName(),
         hoodieTable.shouldTrackSuccessRecords(), config.getWriteStatusFailureFraction(), hoodieTable.isMetadataTable());
     // TODO: Add operation type check - `&& WriteOperationType.optimizedWriteDagSupported(writeOperationType)`
-    if (config.isMetadataColumnStatsIndexEnabled() && config.getOptimizedWritesEnabled(hoodieTable.getMetaClient().getTableConfig().getTableVersion())) {
-      this.colStatsEnabled = true;
+    if (config.isMetadataColumnStatsIndexEnabled()) {
+      if (config.getOptimizedWritesEnabled(hoodieTable.getMetaClient().getTableConfig().getTableVersion())) {
+        // Disabled as it was added as part of optimised writes
+        this.colStatsEnabled = true;
+      }
       Set<String> columnsToIndexSet = new HashSet<>(HoodieTableMetadataUtil
           .getColumnsToIndex(hoodieTable.getMetaClient().getTableConfig(),
               config.getMetadataConfig(), Lazy.eagerly(Option.of(writeSchemaWithMetaFields)),
