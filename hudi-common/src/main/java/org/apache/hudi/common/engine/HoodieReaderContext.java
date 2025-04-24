@@ -46,7 +46,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.BiFunction;
-import java.util.function.Function;
 import java.util.function.UnaryOperator;
 
 import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
@@ -263,7 +262,7 @@ public abstract class HoodieReaderContext<T> {
 
   private BiFunction<T, Schema, String> virtualKeyExtractor(String[] recordKeyFields) {
     return (record, schema) -> {
-      Function<String, Object> valueFunction = recordKeyField -> {
+      BiFunction<String, Integer, Object> valueFunction = (recordKeyField, index) -> {
         try {
           return getValue(record, schema, recordKeyField);
         } catch (HoodieException e) {

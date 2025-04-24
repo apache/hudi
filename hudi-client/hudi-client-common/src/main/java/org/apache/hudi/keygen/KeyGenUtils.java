@@ -39,7 +39,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.function.Function;
+import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.keygen.KeyGenerator.DEFAULT_COLUMN_VALUE_SEPARATOR;
@@ -218,7 +218,7 @@ public class KeyGenUtils {
   }
 
   public static String getRecordKey(GenericRecord record, List<String> recordKeyFields, boolean consistentLogicalTimestampEnabled) {
-    Function<String, Object> valueFunction = recordKeyField -> {
+    BiFunction<String, Integer, Object> valueFunction = (recordKeyField, index) -> {
       try {
         return HoodieAvroUtils.getNestedFieldValAsString(record, recordKeyField, false, consistentLogicalTimestampEnabled);
       } catch (HoodieException e) {

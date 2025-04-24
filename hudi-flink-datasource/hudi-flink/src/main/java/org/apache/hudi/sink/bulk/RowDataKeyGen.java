@@ -40,7 +40,6 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH;
 import static org.apache.hudi.common.util.PartitionPathEncodeUtils.escapePathName;
@@ -167,9 +166,8 @@ public class RowDataKeyGen implements Serializable {
   }
 
   private static String getRecordKey(Object[] keyValues, String[] keyFields, boolean consistentLogicalTimestampEnabled) {
-    AtomicInteger index = new AtomicInteger(0);
     return KeyGenerator.constructRecordKey(keyFields,
-        key -> StringUtils.objToString(getTimestampValue(consistentLogicalTimestampEnabled, keyValues[index.getAndIncrement()])));
+        (key, index) -> StringUtils.objToString(getTimestampValue(consistentLogicalTimestampEnabled, keyValues[index])));
   }
 
   private static Object getTimestampValue(boolean consistentLogicalTimestampEnabled, Object value) {

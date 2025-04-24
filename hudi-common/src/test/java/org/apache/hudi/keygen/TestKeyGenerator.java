@@ -29,7 +29,6 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -47,13 +46,12 @@ class TestKeyGenerator {
   @ParameterizedTest
   @MethodSource
   void testKeyConstruction(String[] keys, List<Object> values, String expected) {
-    AtomicInteger index = new AtomicInteger(0);
-    assertEquals(expected, KeyGenerator.constructRecordKey(keys, key -> values.get(index.getAndIncrement())));
+    assertEquals(expected, KeyGenerator.constructRecordKey(keys, (key, index) -> values.get(index)));
   }
 
   @Test
   void testKeyConstructionWithOnlyNulls() {
-    assertThrows(HoodieKeyException.class, () -> KeyGenerator.constructRecordKey(new String[]{"key1"}, key -> null));
-    assertThrows(HoodieKeyException.class, () -> KeyGenerator.constructRecordKey(new String[]{"key1", "key2"}, key -> null));
+    assertThrows(HoodieKeyException.class, () -> KeyGenerator.constructRecordKey(new String[]{"key1"}, (key, index) -> null));
+    assertThrows(HoodieKeyException.class, () -> KeyGenerator.constructRecordKey(new String[]{"key1", "key2"}, (key, index) -> null));
   }
 }

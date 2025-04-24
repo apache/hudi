@@ -28,7 +28,7 @@ import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.avro.generic.GenericRecord;
 
 import java.util.List;
-import java.util.function.Function;
+import java.util.function.BiFunction;
 
 /**
  * Abstract class to extend for plugging in extraction of {@link HoodieKey} from an Avro record.
@@ -63,9 +63,15 @@ public abstract class KeyGenerator implements KeyGeneratorInterface {
         + "Please override this method in your custom key generator.");
   }
 
-  public static String constructRecordKey(String[] recordKeyFields, Function<String, Object> recordKeyValueFunction) {
+  /**
+   * Constructs the record key from the given record key fields and the function to get the value of each field.
+   * @param recordKeyFields the record key field names
+   * @param recordValueFunction takes the record key field name and the index of the field in the record key fields and outputs a value
+   * @return the record key
+   */
+  public static String constructRecordKey(String[] recordKeyFields, BiFunction<String, Integer, Object> recordValueFunction) {
     if (recordKeyFields.length == 1) {
-      Object recordKeyValue = recordKeyValueFunction.apply(recordKeyFields[0]);
+      Object recordKeyValue = recordValueFunction.apply(recordKeyFields[0], 0);
       if (recordKeyValue == null) {
         throw new HoodieKeyException("recordKey cannot be null");
       }
@@ -75,7 +81,7 @@ public abstract class KeyGenerator implements KeyGeneratorInterface {
     StringBuilder recordKey = new StringBuilder();
     for (int i = 0; i < recordKeyFields.length; i++) {
       String recordKeyField = recordKeyFields[i];
-      Object recordKeyValue = recordKeyValueFunction.apply(recordKeyField);
+      Object recordKeyValue = recordValueFunction.apply(recordKeyField, i);
       if (recordKeyValue == null) {
         recordKey.append(recordKeyField).append(DEFAULT_COLUMN_VALUE_SEPARATOR).append(NULL_RECORDKEY_PLACEHOLDER);
       } else if (recordKeyValue.toString().isEmpty()) {
