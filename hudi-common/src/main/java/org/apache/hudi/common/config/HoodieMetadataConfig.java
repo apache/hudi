@@ -411,7 +411,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> SECONDARY_INDEX_ENABLE_PROP = ConfigProperty
       .key(METADATA_PREFIX + ".index.secondary.enable")
-      .defaultValue(false)
+      .defaultValue(true)
       .sinceVersion("1.0.0")
       .withDocumentation("Enable secondary index within the metadata table. "
           + " When this configuration property is enabled (`true`), the Hudi writer automatically "
@@ -940,7 +940,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     public HoodieMetadataConfig build() {
       metadataConfig.setDefaultValue(ENABLE, getDefaultMetadataEnable(engineType));
       metadataConfig.setDefaultValue(ENABLE_METADATA_INDEX_COLUMN_STATS, getDefaultColStatsEnable(engineType));
-      metadataConfig.setDefaultValue(ENABLE_METADATA_INDEX_PARTITION_STATS, false);
+      metadataConfig.setDefaultValue(ENABLE_METADATA_INDEX_PARTITION_STATS, metadataConfig.isColumnStatsIndexEnabled());
       metadataConfig.setDefaultValue(SECONDARY_INDEX_ENABLE_PROP, getDefaultSecondaryIndexEnable(engineType));
       // fix me: disable when schema on read is enabled.
       metadataConfig.setDefaults(HoodieMetadataConfig.class.getName());
@@ -962,7 +962,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     private boolean getDefaultColStatsEnable(EngineType engineType) {
       switch (engineType) {
         case SPARK:
-          return false;
+          return true;
         case FLINK:
         case JAVA:
           return false; // HUDI-8814
@@ -975,7 +975,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       switch (engineType) {
         case SPARK:
         case JAVA:
-          return false;
+          return true;
         case FLINK:
           return false;
         default:
