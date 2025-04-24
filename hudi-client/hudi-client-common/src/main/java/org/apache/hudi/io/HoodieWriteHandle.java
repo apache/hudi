@@ -26,7 +26,6 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
-import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -44,7 +43,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -63,7 +61,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -336,14 +333,14 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
   protected void attachColStats(HoodieWriteStat stat, List<HoodieRecord> recordList, List<Pair<String, Schema>> fieldsToIndex,
                                 Schema writeSchemaWithMetaFields) {
     // populate col stats if required
-    try {
+    /*try {
       Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataMap =
           HoodieTableMetadataUtil.collectColumnRangeMetadata(recordList, fieldsToIndex, stat.getPath(), writeSchemaWithMetaFields, hoodieTable.getStorageConf());
       stat.putRecordsStats(columnRangeMetadataMap);
       deflateAllRecords(recordList);
     } catch (HoodieException e) {
       throw new HoodieMetadataException("Failed to generate col stats for file " + stat.getPath(), e);
-    }
+    }*/
   }
 
   protected void deflateAllRecords(List<HoodieRecord> records) {
