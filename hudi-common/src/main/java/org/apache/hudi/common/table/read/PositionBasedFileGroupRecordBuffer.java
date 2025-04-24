@@ -237,7 +237,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
     if (logRecordInfo != null) {
       BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(baseRecord, readerSchema, readerContext, orderingFieldName, false);
       isDeleteAndRecord = merge(bufferedRecord, logRecordInfo);
-      if (isDeleteAndRecord != null && !isDeleteAndRecord.getLeft()) {
+      if (!isDeleteAndRecord.getLeft()) {
         resultRecord = isDeleteAndRecord.getRight();
         readStats.incrementNumUpdates();
       } else {

@@ -232,8 +232,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
    *
    * @param newRecord                  The new incoming record
    * @param existingRecord             The existing record
-   * @return The pair of the record that needs to be updated with and its metadata,
-   * returns empty to skip the update.
+   * @return the {@link BufferedRecord} that needs to be updated, returns empty to skip the update.
    */
   protected Option<BufferedRecord<T>> doProcessNextDataRecord(BufferedRecord<T> newRecord, BufferedRecord<T> existingRecord)
       throws IOException {
@@ -272,18 +271,18 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
             return Option.empty();
           case CUSTOM:
           default:
+            if (existingRecord.isDelete() || newRecord.isDelete()) {
+              if (shouldKeepNewerRecord(existingRecord, newRecord)) {
+                // IMPORTANT:
+                // this is needed when the fallback HoodieAvroRecordMerger got used, the merger would
+                // return Option.empty when the old payload data is empty(a delete) and ignores its ordering value directly.
+                return Option.of(newRecord);
+              } else {
+                return Option.empty();
+              }
+            }
             // Merge and store the combined record
             if (payloadClass.isPresent()) {
-              if (existingRecord.isDelete() || newRecord.isDelete()) {
-                if (shouldKeepNewerRecord(existingRecord, newRecord)) {
-                  // IMPORTANT:
-                  // this is needed when the fallback HoodieAvroRecordMerger got used, the merger would
-                  // return Option.empty when the old payload data is empty(a delete) and ignores its ordering value directly.
-                  return Option.of(newRecord);
-                } else {
-                  return Option.empty();
-                }
-              }
               Option<Pair<HoodieRecord, Schema>> combinedRecordAndSchemaOpt = getMergedRecord(existingRecord, newRecord);
               if (combinedRecordAndSchemaOpt.isPresent()) {
                 T combinedRecordData = readerContext.convertAvroRecord((IndexedRecord) combinedRecordAndSchemaOpt.get().getLeft().getData());
@@ -295,16 +294,6 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
               }
               return Option.empty();
             } else {
-              if (existingRecord.isDelete() || newRecord.isDelete()) {
-                // IMPORTANT:
-                // this is needed when the fallback HoodieAvroRecordMerger got used, the merger would
-                // return Option.empty when the old payload data is empty(a delete) and ignores its ordering value directly.
-                if (shouldKeepNewerRecord(existingRecord, newRecord)) {
-                  return Option.of(newRecord);
-                } else {
-                  return Option.empty();
-                }
-              }
               Option<Pair<HoodieRecord, Schema>> combinedRecordAndSchemaOpt = recordMerger.get().merge(
                   readerContext.constructHoodieRecord(existingRecord),
                   readerContext.getSchemaFromBufferRecord(existingRecord),
@@ -340,7 +329,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
    * Merge a delete record with another record (data, or delete).
    *
    * @param deleteRecord               The delete record
-   * @param existingRecord             The existing record metadata pair
+   * @param existingRecord             The existing {@link BufferedRecord}
    *
    * @return The option of new delete record that needs to be updated with.
    */
@@ -420,9 +409,9 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   /**
    * Merge two records using the configured record merger.
    *
-   * @param olderRecord
-   * @param newerRecord
-   * @return
+   * @param olderRecord  old {@link BufferedRecord}
+   * @param newerRecord  newer {@link BufferedRecord}
+   * @return a value pair, left is boolean value `isDelete`, and right is engine row.
    * @throws IOException
    */
   protected Pair<Boolean, T> merge(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) throws IOException {
@@ -443,7 +432,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
         }
         return Pair.of(false, (T) hoodieRecord.getData());
       }
-      return null;
+      return Pair.of(true, null);
     } else {
       switch (recordMergeMode) {
         case COMMIT_TIME_ORDERING:
@@ -484,7 +473,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
               }
               return Pair.of(false, readerContext.convertAvroRecord(indexedRecord));
             }
-            return null;
+            return Pair.of(true, null);
           } else {
             if (olderRecord.isDelete() || newerRecord.isDelete()) {
               if (shouldKeepNewerRecord(olderRecord, newerRecord)) {
@@ -507,7 +496,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
               }
               return Pair.of(false, (T) hoodieRecord.getData());
             }
-            return null;
+            return Pair.of(true, null);
           }
       }
     }
@@ -564,7 +553,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
     if (logRecordInfo != null) {
       BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(baseRecord, readerSchema, readerContext, orderingFieldName, false);
       Pair<Boolean, T> isDeleteAndRecord = merge(bufferedRecord, logRecordInfo);
-      if (isDeleteAndRecord != null && !isDeleteAndRecord.getLeft()) {
+      if (!isDeleteAndRecord.getLeft()) {
         // Updates
         nextRecord = readerContext.seal(isDeleteAndRecord.getRight());
         readStats.incrementNumUpdates();
@@ -590,7 +579,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
     while (logRecordIterator.hasNext()) {
       BufferedRecord<T> nextRecordInfo = logRecordIterator.next();
       if (!nextRecordInfo.isDelete()) {
-        nextRecord = readerContext.seal(nextRecordInfo.getRecord());
+        nextRecord = nextRecordInfo.getRecord();
         readStats.incrementNumInserts();
         return true;
       } else {
