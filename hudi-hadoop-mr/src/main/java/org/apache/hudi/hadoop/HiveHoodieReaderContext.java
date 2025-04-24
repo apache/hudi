@@ -92,10 +92,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   private final List<String> partitionCols;
   private final Set<String> partitionColSet;
 
-  private final String recordKeyField;
-
   protected HiveHoodieReaderContext(HoodieFileGroupReaderBasedRecordReader.HiveReaderCreator readerCreator,
-                                    String recordKeyField,
                                     List<String> partitionCols,
                                     ObjectInspectorCache objectInspectorCache,
                                     StorageConfiguration<?> storageConfiguration,
@@ -104,7 +101,6 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     this.readerCreator = readerCreator;
     this.partitionCols = partitionCols;
     this.partitionColSet = new HashSet<>(this.partitionCols);
-    this.recordKeyField = recordKeyField;
     this.objectInspectorCache = objectInspectorCache;
     this.columnTypeMap = objectInspectorCache.getColumnTypeMap();
   }

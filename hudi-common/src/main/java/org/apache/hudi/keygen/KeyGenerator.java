@@ -23,6 +23,7 @@ import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.exception.HoodieKeyException;
 
 import org.apache.avro.generic.GenericRecord;
 
@@ -33,6 +34,10 @@ import java.util.List;
  */
 @PublicAPIClass(maturity = ApiMaturityLevel.STABLE)
 public abstract class KeyGenerator implements KeyGeneratorInterface {
+  public static final String NULL_RECORDKEY_PLACEHOLDER = "__null__";
+  public static final String EMPTY_RECORDKEY_PLACEHOLDER = "__empty__";
+  public static final String DEFAULT_COLUMN_VALUE_SEPARATOR = ":";
+  public static final String DEFAULT_RECORD_KEY_PARTS_SEPARATOR = ",";
 
   protected final TypedProperties config;
 
@@ -55,5 +60,36 @@ public abstract class KeyGenerator implements KeyGeneratorInterface {
   public List<String> getRecordKeyFieldNames() {
     throw new UnsupportedOperationException("Bootstrap not supported for key generator. "
         + "Please override this method in your custom key generator.");
+  }
+
+  public static String constructRecordKey(List<String> recordKeyFields, List<Object> recordKeyValues) {
+    if (recordKeyFields.size() == 1) {
+      if (recordKeyValues.get(0) == null) {
+        throw new HoodieKeyException("recordKey cannot be null");
+      }
+      return recordKeyValues.get(0).toString();
+    }
+    boolean keyIsNullEmpty = true;
+    StringBuilder recordKey = new StringBuilder();
+    for (int i = 0; i < recordKeyFields.size(); i++) {
+      String recordKeyField = recordKeyFields.get(i);
+      Object recordKeyValue = recordKeyValues.get(i);
+      if (recordKeyValue == null) {
+        recordKey.append(recordKeyField).append(DEFAULT_COLUMN_VALUE_SEPARATOR).append(NULL_RECORDKEY_PLACEHOLDER);
+      } else if (recordKeyValue.toString().isEmpty()) {
+        recordKey.append(recordKeyField).append(DEFAULT_COLUMN_VALUE_SEPARATOR).append(EMPTY_RECORDKEY_PLACEHOLDER);
+      } else {
+        recordKey.append(recordKeyField).append(DEFAULT_COLUMN_VALUE_SEPARATOR).append(recordKeyValue);
+        keyIsNullEmpty = false;
+      }
+      if (i != recordKeyFields.size() - 1) {
+        recordKey.append(DEFAULT_RECORD_KEY_PARTS_SEPARATOR);
+      }
+    }
+    if (keyIsNullEmpty) {
+      throw new HoodieKeyException("recordKey values: \"" + recordKey + "\" for fields: "
+          + recordKeyFields + " cannot be entirely null or empty.");
+    }
+    return recordKey.toString();
   }
 }

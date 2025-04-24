@@ -202,11 +202,12 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       if (field == null) {
         return null;
       }
+      Object value = currentRecord.get(field.pos());
       if (i == path.length - 1) {
-        return currentRecord.get(field.pos());
+        return value;
       }
       currentSchema = field.schema();
-      currentRecord = (IndexedRecord) currentRecord.get(field.pos());
+      currentRecord = (IndexedRecord) value;
     }
     return null;
   }
