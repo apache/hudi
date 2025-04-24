@@ -355,7 +355,9 @@ public class  HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       // deflate record payload after recording success. This will help users access payload as a
       // part of marking
       // record successful.
-      newRecord.deflate();
+      if (!colStatsEnabled) {
+        newRecord.deflate();
+      }
       return true;
     } catch (Exception e) {
       LOG.error("Error writing record  " + newRecord, e);
