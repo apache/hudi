@@ -24,6 +24,7 @@ import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
@@ -90,9 +91,11 @@ public class HoodieMetadataWriteUtils {
   public static HoodieWriteConfig createMetadataWriteConfig(
       HoodieWriteConfig writeConfig, HoodieTableVersion datatableVesion) {
     String tableName = writeConfig.getTableName() + METADATA_TABLE_NAME_SUFFIX;
-    WriteConcurrencyMode concurrencyMode = datatableVesion.greaterThanOrEquals(HoodieTableVersion.EIGHT) ? WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL : WriteConcurrencyMode.SINGLE_WRITER;
-    HoodieLockConfig lockConfig = datatableVesion.greaterThanOrEquals(HoodieTableVersion.EIGHT) ? HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class).build() :
-        HoodieLockConfig.newBuilder().build();
+    boolean isSparkEngine = writeConfig.getEngineType() == EngineType.SPARK;
+    WriteConcurrencyMode concurrencyMode = (isSparkEngine && datatableVesion.greaterThanOrEquals(HoodieTableVersion.EIGHT))
+        ? WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL : WriteConcurrencyMode.SINGLE_WRITER;
+    HoodieLockConfig lockConfig = (isSparkEngine && datatableVesion.greaterThanOrEquals(HoodieTableVersion.EIGHT))
+        ? HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class).build() : HoodieLockConfig.newBuilder().build();
 
     final long maxLogFileSizeBytes = writeConfig.getMetadataConfig().getMaxLogFileSize();
     // Borrow the cleaner policy from the main table and adjust the cleaner policy based on the main table's cleaner policy
