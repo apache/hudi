@@ -648,7 +648,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       if (isPreCommitRequired()) {
         preCommit(replaceCommitMetadata);
       }
-      if (!metadataWriterOpt.isPresent()) {
+      if (!metadataWriterOpt.isPresent() && config.getOptimizedWritesEnabled(table.getMetaClient().getTableConfig().getTableVersion())) {
         // with auto commit disabled flow, user may not have reference to metadata writer. So, lets fetch the metadata writer instance once.
         metadataWriterOpt = getMetadataWriterFunc.apply(clusteringCommitTime, table.getMetaClient());
         // if metadata table is enabled, this will return a valid instance, if not, will return Option.empty.

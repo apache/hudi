@@ -273,6 +273,15 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
                              Option<Map<String, String>> extraMetadata,
                              String commitActionType, Map<String, List<String>> partitionToReplaceFileIds,
                              Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc) {
+    return commitStats(instantTime, dataTableStats, mdtStats, extraMetadata, commitActionType, partitionToReplaceFileIds, extraPreCommitFunc,
+        false);
+  }
+
+  public boolean commitStats(String instantTime, List<HoodieWriteStat> dataTableStats, List<HoodieWriteStat> mdtStats,
+                             Option<Map<String, String>> extraMetadata,
+                             String commitActionType, Map<String, List<String>> partitionToReplaceFileIds,
+                             Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc,
+                             boolean avoidOptimizedWrites) {
     // Skip the empty commit if not allowed
     if (!config.allowEmptyCommit() && dataTableStats.isEmpty()) {
       return true;
@@ -297,7 +306,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         extraPreCommitFunc.get().accept(table.getMetaClient(), metadata);
       }
 
-      commit(table, commitActionType, instantTime, metadata, dataTableStats, mdtStats, operationType);
+      commit(table, commitActionType, instantTime, metadata, dataTableStats, mdtStats, operationType, avoidOptimizedWrites);
       postCommit(table, metadata, instantTime, extraMetadata);
       LOG.info("Committed " + instantTime);
     } catch (IOException e) {
@@ -326,7 +335,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   }
 
   protected void commit(HoodieTable table, String commitActionType, String instantTime, HoodieCommitMetadata metadata,
-                            List<HoodieWriteStat> dataTablestats, List<HoodieWriteStat> mdtStats, WriteOperationType writeOperationType) throws IOException {
+                            List<HoodieWriteStat> dataTablestats, List<HoodieWriteStat> mdtStats, WriteOperationType writeOperationType,
+                        boolean avoidOptimizedWrites) throws IOException {
     LOG.info("Committing " + instantTime + " action " + commitActionType);
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
     // Finalize write
@@ -338,7 +348,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     }
     // generate Completion time
     String completionTime = activeTimeline.createCompletionTime();
-    boolean optimizedWrite = config.getOptimizedWritesEnabled(table.getMetaClient().getTableConfig().getTableVersion()) && WriteOperationType.optimizedWriteDagSupported(writeOperationType);
+    boolean optimizedWrite = !avoidOptimizedWrites && config.getOptimizedWritesEnabled(table.getMetaClient().getTableConfig().getTableVersion())
+        && WriteOperationType.optimizedWriteDagSupported(writeOperationType);
     // update Metadata table
     if (optimizedWrite && metadataWriterMap.containsKey(instantTime) && metadataWriterMap.get(instantTime).isPresent()) {
       HoodieTableMetadataWriter metadataWriter = metadataWriterMap.get(instantTime).get();
@@ -1005,31 +1016,42 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   public String startCommit(String actionType, HoodieTableMetaClient metaClient) {
     String instantTime = createNewInstantTime();
-    startCommitWithTime(instantTime, actionType, metaClient);
+    startCommitWithTime(instantTime, actionType, metaClient, false);
     return instantTime;
+  }
+
+  public void startCommitWithTime(String instantTime) {
+    startCommitWithTime(instantTime, false);
   }
 
   /**
    * Provides a new commit time for a write operation (insert/update/delete/insert_overwrite/insert_overwrite_table) without specified action.
    * @param instantTime Instant time to be generated
    */
-  public void startCommitWithTime(String instantTime) {
+  public void startCommitWithTime(String instantTime, boolean avoidOptimizedWrites) {
     HoodieTableMetaClient metaClient = createMetaClient(true);
-    startCommitWithTime(instantTime, metaClient.getCommitActionType(), metaClient);
+    startCommitWithTime(instantTime, metaClient.getCommitActionType(), metaClient, avoidOptimizedWrites);
   }
 
   /**
    * Completes a new commit time for a write operation (insert/update/delete/insert_overwrite/insert_overwrite_table) with specified action.
    */
   public void startCommitWithTime(String instantTime, String actionType) {
+    startCommitWithTime(instantTime, actionType, false);
+  }
+
+  /**
+   * Completes a new commit time for a write operation (insert/update/delete/insert_overwrite/insert_overwrite_table) with specified action.
+   */
+  public void startCommitWithTime(String instantTime, String actionType, boolean avoidOptimizedWrites) {
     HoodieTableMetaClient metaClient = createMetaClient(true);
-    startCommitWithTime(instantTime, actionType, metaClient);
+    startCommitWithTime(instantTime, actionType, metaClient, avoidOptimizedWrites);
   }
 
   /**
    * Starts a new commit time for a write operation (insert/update/delete) with specified action.
    */
-  private void startCommitWithTime(String instantTime, String actionType, HoodieTableMetaClient metaClient) {
+  private void startCommitWithTime(String instantTime, String actionType, HoodieTableMetaClient metaClient, boolean avoidOptimizedWrites) {
     if (needsUpgrade(metaClient)) {
       // unclear what instant to use, since upgrade does have a given instant.
       executeUsingTxnManager(Option.empty(), () -> tryUpgrade(metaClient, Option.empty()));
@@ -1056,7 +1078,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
           instantTime));
     }
 
-    Option<HoodieTableMetadataWriter> metadataWriterOpt = getMetadataWriter(instantTime, metaClient);
+    Option<HoodieTableMetadataWriter> metadataWriterOpt = avoidOptimizedWrites ? Option.empty() : getMetadataWriter(instantTime, metaClient);
     if (metadataWriterOpt.isPresent()) {
       metadataWriterOpt.get().startCommit(instantTime);
     }
@@ -1703,7 +1725,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     Schema schema = AvroInternalSchemaConverter.convert(newSchema, getAvroRecordQualifiedName(config.getTableName()));
     String commitActionType = CommitUtils.getCommitActionType(WriteOperationType.ALTER_SCHEMA, metaClient.getTableType());
     String instantTime = createNewInstantTime();
-    startCommitWithTime(instantTime, commitActionType, metaClient);
+    startCommitWithTime(instantTime, commitActionType, metaClient, false);
     config.setSchema(schema.toString());
     HoodieActiveTimeline timeLine = metaClient.getActiveTimeline();
     HoodieInstant requested = metaClient.createNewInstant(State.REQUESTED, commitActionType, instantTime);
