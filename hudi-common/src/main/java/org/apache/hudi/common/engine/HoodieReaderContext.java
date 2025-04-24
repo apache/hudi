@@ -42,10 +42,8 @@ import org.apache.avro.generic.IndexedRecord;
 import javax.annotation.Nullable;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -85,7 +83,7 @@ public abstract class HoodieReaderContext<T> {
                                 HoodieTableConfig tableConfig) {
     this.storageConfiguration = storageConfiguration;
     this.metaFieldsPopulated = tableConfig.populateMetaFields();
-    this.recordKeyExtractor = metaFieldsPopulated ? metadataKeyExtractor() : virtualKeyExtractor(tableConfig.getRecordKeyFields().map(Arrays::asList)
+    this.recordKeyExtractor = metaFieldsPopulated ? metadataKeyExtractor() : virtualKeyExtractor(tableConfig.getRecordKeyFields()
         .orElseThrow(() -> new IllegalArgumentException("No record keys specified and meta fields are not populated")));
   }
 
@@ -265,7 +263,7 @@ public abstract class HoodieReaderContext<T> {
     return (record, schema) -> getValue(record, schema, RECORD_KEY_METADATA_FIELD).toString();
   }
 
-  private BiFunction<T, Schema, String> virtualKeyExtractor(List<String> recordKeyFields) {
+  private BiFunction<T, Schema, String> virtualKeyExtractor(String[] recordKeyFields) {
     return (record, schema) -> {
       Function<String, Object> valueFunction = recordKeyField -> {
         try {

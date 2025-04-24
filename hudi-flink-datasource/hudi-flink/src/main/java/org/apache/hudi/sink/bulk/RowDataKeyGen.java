@@ -168,7 +168,8 @@ public class RowDataKeyGen implements Serializable {
 
   private static String getRecordKey(Object[] keyValues, String[] keyFields, boolean consistentLogicalTimestampEnabled) {
     AtomicInteger index = new AtomicInteger(0);
-    return KeyGenerator.constructRecordKey(Arrays.asList(keyFields), key -> getTimestampValue(consistentLogicalTimestampEnabled, keyValues[index.getAndIncrement()]));
+    return KeyGenerator.constructRecordKey(keyFields,
+        key -> StringUtils.objToString(getTimestampValue(consistentLogicalTimestampEnabled, keyValues[index.getAndIncrement()])));
   }
 
   private static Object getTimestampValue(boolean consistentLogicalTimestampEnabled, Object value) {

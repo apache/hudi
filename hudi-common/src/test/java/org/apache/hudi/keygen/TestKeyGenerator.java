@@ -38,22 +38,22 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 class TestKeyGenerator {
   private static Stream<Arguments> testKeyConstruction() {
     return Stream.of(
-        Arguments.of(Collections.singletonList("key1"), Collections.singletonList("value1"), "value1"),
-        Arguments.of(Arrays.asList("key1", "key2"), Arrays.asList("value1", "value2"), "key1:value1,key2:value2"),
-        Arguments.of(Arrays.asList("key1", "key2"), Arrays.asList("value1", ""), "key1:value1,key2:__empty__"),
-        Arguments.of(Arrays.asList("key1", "key2"), Arrays.asList(null, "value2"), "key1:__null__,key2:value2"));
+        Arguments.of(new String[]{"key1"}, Collections.singletonList("value1"), "value1"),
+        Arguments.of(new String[]{"key1", "key2"}, Arrays.asList("value1", "value2"), "key1:value1,key2:value2"),
+        Arguments.of(new String[]{"key1", "key2"}, Arrays.asList("value1", ""), "key1:value1,key2:__empty__"),
+        Arguments.of(new String[]{"key1", "key2"}, Arrays.asList(null, "value2"), "key1:__null__,key2:value2"));
   }
 
   @ParameterizedTest
   @MethodSource
-  void testKeyConstruction(List<String> keys, List<Object> values, String expected) {
+  void testKeyConstruction(String[] keys, List<Object> values, String expected) {
     AtomicInteger index = new AtomicInteger(0);
     assertEquals(expected, KeyGenerator.constructRecordKey(keys, key -> values.get(index.getAndIncrement())));
   }
 
   @Test
   void testKeyConstructionWithOnlyNulls() {
-    assertThrows(HoodieKeyException.class, () -> KeyGenerator.constructRecordKey(Collections.singletonList("key1"), key -> null));
-    assertThrows(HoodieKeyException.class, () -> KeyGenerator.constructRecordKey(Arrays.asList("key1", "key2"), key -> null));
+    assertThrows(HoodieKeyException.class, () -> KeyGenerator.constructRecordKey(new String[]{"key1"}, key -> null));
+    assertThrows(HoodieKeyException.class, () -> KeyGenerator.constructRecordKey(new String[]{"key1", "key2"}, key -> null));
   }
 }

@@ -63,9 +63,9 @@ public abstract class KeyGenerator implements KeyGeneratorInterface {
         + "Please override this method in your custom key generator.");
   }
 
-  public static String constructRecordKey(List<String> recordKeyFields, Function<String, Object> recordKeyValueFunction) {
-    if (recordKeyFields.size() == 1) {
-      Object recordKeyValue = recordKeyValueFunction.apply(recordKeyFields.get(0));
+  public static String constructRecordKey(String[] recordKeyFields, Function<String, Object> recordKeyValueFunction) {
+    if (recordKeyFields.length == 1) {
+      Object recordKeyValue = recordKeyValueFunction.apply(recordKeyFields[0]);
       if (recordKeyValue == null) {
         throw new HoodieKeyException("recordKey cannot be null");
       }
@@ -73,8 +73,8 @@ public abstract class KeyGenerator implements KeyGeneratorInterface {
     }
     boolean keyIsNullEmpty = true;
     StringBuilder recordKey = new StringBuilder();
-    for (int i = 0; i < recordKeyFields.size(); i++) {
-      String recordKeyField = recordKeyFields.get(i);
+    for (int i = 0; i < recordKeyFields.length; i++) {
+      String recordKeyField = recordKeyFields[i];
       Object recordKeyValue = recordKeyValueFunction.apply(recordKeyField);
       if (recordKeyValue == null) {
         recordKey.append(recordKeyField).append(DEFAULT_COLUMN_VALUE_SEPARATOR).append(NULL_RECORDKEY_PLACEHOLDER);
@@ -84,7 +84,7 @@ public abstract class KeyGenerator implements KeyGeneratorInterface {
         recordKey.append(recordKeyField).append(DEFAULT_COLUMN_VALUE_SEPARATOR).append(recordKeyValue);
         keyIsNullEmpty = false;
       }
-      if (i != recordKeyFields.size() - 1) {
+      if (i != recordKeyFields.length - 1) {
         recordKey.append(DEFAULT_RECORD_KEY_PARTS_SEPARATOR);
       }
     }

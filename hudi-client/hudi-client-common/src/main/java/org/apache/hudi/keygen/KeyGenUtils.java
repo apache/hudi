@@ -225,7 +225,7 @@ public class KeyGenUtils {
         throw new HoodieKeyException("Record key field '" + recordKeyField + "' does not exist in the input record");
       }
     };
-    return constructRecordKey(recordKeyFields, valueFunction);
+    return constructRecordKey(recordKeyFields.toArray(new String[]{}), valueFunction);
   }
 
   public static String getRecordPartitionPath(GenericRecord record, List<String> partitionPathFields,
