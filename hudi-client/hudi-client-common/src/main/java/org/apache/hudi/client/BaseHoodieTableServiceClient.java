@@ -341,7 +341,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     HoodieWriteMetadata<T> writeMetadata = table.compact(context, compactionInstantTime);
     HoodieWriteMetadata<T> processedWriteMetadata = writeToMetadata(writeMetadata, compactionInstantTime, metadataWriterOpt);
     HoodieWriteMetadata<O> compactionWriteMetadata = convertToOutputMetadata(processedWriteMetadata);
-    if (shouldComplete && (config.getOptimizedWritesEnabled(table.getMetaClient().getTableConfig().getTableVersion()) || compactionWriteMetadata.getCommitMetadata().isPresent())) {
+    if (shouldComplete || (config.getOptimizedWritesEnabled(table.getMetaClient().getTableConfig().getTableVersion()) || compactionWriteMetadata.getCommitMetadata().isPresent())) {
       commitCompaction(compactionInstantTime, compactionWriteMetadata, Option.of(table), metadataWriterOpt);
     }
     return compactionWriteMetadata;
@@ -545,7 +545,10 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     clusteringTimer = metrics.getClusteringCtx();
     LOG.info("Starting clustering at {} for table {}", clusteringInstant, table.getConfig().getBasePath());
     // start commit in MDT if enabled
-    Option<HoodieTableMetadataWriter> metadataWriterOpt = getMetadataWriterFunc.apply(clusteringInstant, table.getMetaClient());
+    Option<HoodieTableMetadataWriter> metadataWriterOpt = Option.empty();
+    if (config.getOptimizedWritesEnabled(table.getMetaClient().getTableConfig().getTableVersion())) {
+      metadataWriterOpt = getMetadataWriterFunc.apply(clusteringInstant, table.getMetaClient());
+    }
     if (metadataWriterOpt.isPresent()) {
       metadataWriterOpt.get().reInitWriteClient();
       metadataWriterOpt.get().startCommit(clusteringInstant);
