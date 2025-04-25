@@ -26,6 +26,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -37,6 +38,7 @@ import org.apache.hudi.utils.TestSQL;
 import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.TableEnvironment;
 import org.apache.flink.table.api.internal.TableEnvironmentImpl;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -45,6 +47,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -54,6 +57,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertLinesMatch;
 
 /**
  * Integration test cases for {@link BucketStreamWriteFunction}.
@@ -111,6 +115,18 @@ public class ITTestBucketStreamWrite {
     }
   }
 
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testBucketWriteRestrictInsert(boolean isCow) {
+    String tablePath = tempFile.getAbsolutePath();
+    Map<String, String> customOptions = new HashMap<>();
+    customOptions.put(FlinkOptions.OPERATION.key(), "insert");
+    HoodieNotSupportedException ex =
+        Assertions.assertThrows(HoodieNotSupportedException.class, () -> doWrite(tablePath, isCow, 2, customOptions));
+    assertLinesMatch(Collections.singletonList("Bucket index supports only upsert operation. Please, use upsert operation or switch to another index type."),
+        Collections.singletonList(ex.getMessage()));
+  }
+
   private static void doDeleteCommit(String tablePath) throws Exception {
     // create metaClient
     HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(tablePath);
@@ -145,12 +161,20 @@ public class ITTestBucketStreamWrite {
     });
   }
 
-  private static void doWrite(String path, boolean isCow, int bucketNum)
+  private static void doWrite(String path, boolean isCow, int bucketNum) throws ExecutionException, InterruptedException {
+    doWrite(path, isCow, bucketNum, null);
+  }
+
+  private static void doWrite(String path, boolean isCow, int bucketNum, Map<String, String> customOptions)
       throws InterruptedException, ExecutionException {
     EnvironmentSettings settings = EnvironmentSettings.newInstance().inBatchMode().build();
     TableEnvironment tableEnv = TableEnvironmentImpl.create(settings);
     Map<String, String> options = new HashMap<>();
     options.put(FlinkOptions.PATH.key(), path);
+
+    if (null != customOptions) {
+      options.putAll(customOptions);
+    }
 
     // use bucket index
     options.put(FlinkOptions.TABLE_TYPE.key(), isCow ? FlinkOptions.TABLE_TYPE_COPY_ON_WRITE : FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
