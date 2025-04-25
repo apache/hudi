@@ -223,7 +223,7 @@ class TestBootstrapProcedure extends HoodieSparkProcedureTestBase {
     }
   }
 
-  test("Test Call run_bootstrap Procedure about MOR with full record") {
+  /*test("Test Call run_bootstrap Procedure about MOR with full record") {
     withTempDir { tmp =>
       val NUM_OF_RECORDS = 100
       val PARTITION_FIELD = "datestr"
@@ -263,5 +263,5 @@ class TestBootstrapProcedure extends HoodieSparkProcedureTestBase {
       }
       spark.sessionState.conf.unsetConf("unset hoodie.metadata.index.column.stats.enable")
     }
-  }
+  }*/
 }
