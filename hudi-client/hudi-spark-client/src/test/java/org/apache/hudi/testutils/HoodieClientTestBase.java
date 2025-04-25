@@ -419,8 +419,9 @@ public class HoodieClientTestBase extends HoodieSparkClientTestHarness {
 
       Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieKey>, String> deleteFn = SparkRDDWriteClient::delete;
       JavaRDD<WriteStatus> result = deleteFn.apply(client, deleteRecords, newCommitTime);
+      List<WriteStatus> resultList = result.collect();
       return getWriteStatusAndVerifyDeleteOperation(newCommitTime, prevCommitTime, initCommitTime, assertForCommit, expRecordsInThisCommit, expTotalRecords,
-          filterForCommitTimeWithAssert, result, timelineFactory, instantGenerator, client);
+          filterForCommitTimeWithAssert, jsc.parallelize(resultList), timelineFactory, instantGenerator, client);
     }
   }
 
@@ -589,7 +590,7 @@ public class HoodieClientTestBase extends HoodieSparkClientTestHarness {
                                                                       TimelineFactory timelineFactory, InstantGenerator instantGenerator,
                                                                       SparkRDDWriteClient client) {
 
-    writeClient.commit(newCommitTime, result);
+    client.commit(newCommitTime, result);
 
     // verify that there is a commit
     HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storageConf, basePath);

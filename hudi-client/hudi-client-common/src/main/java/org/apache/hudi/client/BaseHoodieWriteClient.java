@@ -337,7 +337,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   protected void commit(HoodieTable table, String commitActionType, String instantTime, HoodieCommitMetadata metadata,
                             List<HoodieWriteStat> dataTablestats, List<HoodieWriteStat> mdtStats, WriteOperationType writeOperationType,
                         boolean avoidOptimizedWrites) throws IOException {
-      LOG.info("Committing {} action {}", instantTime, commitActionType);
+    LOG.info("Committing {} action {}", instantTime, commitActionType);
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
     // Finalize write
     finalizeWrite(table, instantTime, dataTablestats);

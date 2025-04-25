@@ -116,7 +116,7 @@ public class SparkRDDWriteClient<T> extends
   }
 
   protected Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstantTimestamp, HoodieTableMetaClient metaClient) {
-    if (!metaClient.getTableConfig().getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
+    if (!metaClient.getTableConfig().getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT) || this.metadataWriterMap == null) {
       return Option.empty();
     }
 
