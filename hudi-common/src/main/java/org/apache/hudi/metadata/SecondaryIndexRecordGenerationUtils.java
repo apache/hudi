@@ -190,7 +190,6 @@ public class SecondaryIndexRecordGenerationUtils {
       }
     }
     return recordKeyToSecondaryKey;
-
   }
 
   private static HoodieFileSliceReader getFileSliceReader(
