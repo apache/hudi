@@ -978,13 +978,13 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     Future future1 = executor.submit(() -> {
       final int numRecords = 100;
       assertDoesNotThrow(() -> {
-        writeStatus1.set(createCommitWithInserts(cfg, client1, "001", commitTime2, numRecords, false));
+        writeStatus1.set(createCommitWithInserts(cfg, client1, "001", commitTime2, numRecords, false, true));
       });
     });
     Future future2 = executor.submit(() -> {
       final int numRecords = 100;
       assertDoesNotThrow(() -> {
-        writeStatus2.set(createCommitWithInserts(cfg, client2, "001", commitTime3, numRecords, false));
+        writeStatus2.set(createCommitWithInserts(cfg, client2, "001", commitTime3, numRecords, false, true));
         client2.getHeartbeatClient().stop(commitTime3);
       });
     });
@@ -1306,8 +1306,8 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     writeClient.startCommitWithTime(commitTime);
     countDownLatch.countDown();
     countDownLatch.await();
-    JavaRDD<WriteStatus> statusJavaRDD = writeFn.apply(writeClient, records, commitTime);
-    statusJavaRDD.collect();
+    List<WriteStatus> statuses = writeFn.apply(writeClient, records, commitTime).collect();
+    writeClient.commit(commitTime, jsc.parallelize(statuses));
   }
 
   private void createCommitWithInsertsForPartition(HoodieWriteConfig cfg, SparkRDDWriteClient client,
@@ -1320,13 +1320,19 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
   private JavaRDD<WriteStatus> createCommitWithInserts(HoodieWriteConfig cfg, SparkRDDWriteClient client,
                                                        String prevCommitTime, String newCommitTime, int numRecords,
                                                        boolean doCommit) throws Exception {
+    return createCommitWithInserts(cfg, client, prevCommitTime, newCommitTime, numRecords, doCommit, false);
+  }
+
+  private JavaRDD<WriteStatus> createCommitWithInserts(HoodieWriteConfig cfg, SparkRDDWriteClient client,
+                                                       String prevCommitTime, String newCommitTime, int numRecords,
+                                                       boolean doCommit, boolean leaveInflight) throws Exception {
     // Finish first base commit
-    JavaRDD<WriteStatus> result = insertFirstBatch(cfg, client, newCommitTime, prevCommitTime, numRecords, SparkRDDWriteClient::bulkInsert,
-        false, false, numRecords, true, INSTANT_GENERATOR, true);
-    if (doCommit) {
-      assertTrue(client.commit(newCommitTime, result), "Commit should succeed");
+    List<WriteStatus> result = insertFirstBatch(cfg, client, newCommitTime, prevCommitTime, numRecords, SparkRDDWriteClient::bulkInsert,
+        false, false, numRecords, true, INSTANT_GENERATOR, true).collect();
+    if (!leaveInflight) {
+      assertTrue(client.commit(newCommitTime, jsc.parallelize(result)), "Commit should succeed");
     }
-    return result;
+    return jsc.parallelize(result);
   }
 
   private static void startSchemaEvolutionTransaction(HoodieTableMetaClient metaClient, SparkRDDWriteClient client, String nextCommitTime2, HoodieTableType tableType) throws IOException {
