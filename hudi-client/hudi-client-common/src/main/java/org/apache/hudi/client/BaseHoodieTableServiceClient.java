@@ -353,7 +353,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     HoodieWriteMetadata<T> writeMetadata = table.compact(context, compactionInstantTime);
     HoodieWriteMetadata<T> processedWriteMetadata = writeToMetadata(writeMetadata, compactionInstantTime, metadataWriterOpt);
     HoodieWriteMetadata<O> compactionWriteMetadata = convertToOutputMetadata(processedWriteMetadata);
-    if (shouldComplete || (config.getOptimizedWritesEnabled(table.getMetaClient().getTableConfig().getTableVersion()) || compactionWriteMetadata.getCommitMetadata().isPresent())) {
+    if (shouldComplete) {
       commitCompaction(compactionInstantTime, compactionWriteMetadata, Option.of(table), metadataWriterOpt);
     }
     return compactionWriteMetadata;
