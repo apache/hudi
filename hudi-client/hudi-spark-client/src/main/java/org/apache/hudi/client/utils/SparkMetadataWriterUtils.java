@@ -59,6 +59,7 @@ import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+import org.apache.hudi.metadata.index.ExpressionIndexRecordGenerator;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.JavaScalaConverters;
 
@@ -297,24 +298,27 @@ public class SparkMetadataWriterUtils {
   /**
    * Generates expression index records
    *
-   * @param partitionFilePathAndSizeTriplet Triplet of file path, file size and partition name to which file belongs
-   * @param indexDefinition                 Hoodie Index Definition for the expression index for which records need to be generated
-   * @param metaClient                      Hoodie Table Meta Client
-   * @param parallelism                     Parallelism to use for engine operations
-   * @param readerSchema                    Schema of reader
-   * @param instantTime                     Instant time
-   * @param engineContext                   HoodieEngineContext
-   * @param dataWriteConfig                 Write Config for the data table
-   * @param metadataWriteConfig             Write config for the metadata table
-   * @param partitionRecordsFunctionOpt     Function used to generate partition stat records for the EI. It takes the column range metadata generated for the provided partition files as input
-   *                                        and uses those to generate the final partition stats
-   * @return ExpressionIndexComputationMetadata containing both EI column stat records and partition stat records if partitionRecordsFunctionOpt is provided
+   * @param filesToIndex                Triplet of file path, file size and partition name to which file belongs
+   * @param indexDefinition             Hoodie Index Definition for the expression index for which records need to be generated
+   * @param metaClient                  Hoodie Table Meta Client
+   * @param parallelism                 Parallelism to use for engine operations
+   * @param readerSchema                Schema of reader
+   * @param instantTime                 Instant time
+   * @param engineContext               HoodieEngineContext
+   * @param dataWriteConfig             Write Config for the data table
+   * @param metadataWriteConfig         Write config for the metadata table
+   * @param partitionRecordsFunctionOpt Function used to generate partition stat records for the EI.
+   *                                    It takes the column range metadata generated for the provided partition files as input
+   *                                    and uses those to generate the final partition stats
+   * @return ExpressionIndexComputationMetadata containing both EI column stat records
+   * and partition stat records if partitionRecordsFunctionOpt is provided
    */
-  @SuppressWarnings("checkstyle:LineLength")
-  public static ExpressionIndexComputationMetadata getExprIndexRecords(List<Pair<String, Pair<String, Long>>> partitionFilePathAndSizeTriplet, HoodieIndexDefinition indexDefinition,
-                                                                       HoodieTableMetaClient metaClient, int parallelism, Schema readerSchema, String instantTime,
-                                                                       HoodieEngineContext engineContext, HoodieWriteConfig dataWriteConfig, HoodieWriteConfig metadataWriteConfig,
-                                                                       Option<Function<HoodiePairData<String, HoodieColumnRangeMetadata<Comparable>>, HoodieData<HoodieRecord>>> partitionRecordsFunctionOpt) {
+  public static ExpressionIndexComputationMetadata getExprIndexRecords(
+      List<ExpressionIndexRecordGenerator.FileToIndex> filesToIndex,
+      HoodieIndexDefinition indexDefinition,
+      HoodieTableMetaClient metaClient, int parallelism, Schema readerSchema, String instantTime,
+      HoodieEngineContext engineContext, HoodieWriteConfig dataWriteConfig, HoodieWriteConfig metadataWriteConfig,
+      Option<Function<HoodiePairData<String, HoodieColumnRangeMetadata<Comparable>>, HoodieData<HoodieRecord>>> partitionRecordsFunctionOpt) {
     HoodieSparkEngineContext sparkEngineContext = (HoodieSparkEngineContext) engineContext;
     if (indexDefinition.getSourceFields().isEmpty()) {
       // In case there are no columns to index, bail
@@ -328,8 +332,8 @@ public class SparkMetadataWriterUtils {
     SQLContext sqlContext = sparkEngineContext.getSqlContext();
 
     // Read records and append expression index metadata to every row
-    HoodieData<Row> rowData = sparkEngineContext.parallelize(partitionFilePathAndSizeTriplet, parallelism)
-        .flatMap((SerializableFunction<Pair<String, Pair<String, Long>>, Iterator<Row>>) entry ->
+    HoodieData<Row> rowData = sparkEngineContext.parallelize(filesToIndex, parallelism)
+        .flatMap((SerializableFunction<ExpressionIndexRecordGenerator.FileToIndex, Iterator<Row>>) entry ->
             getExpressionIndexRecordsIterator(metaClient, readerSchema, dataWriteConfig, entry, sqlContext));
 
     // Generate dataset with expression index metadata
@@ -354,16 +358,20 @@ public class SparkMetadataWriterUtils {
     }
   }
 
-  private static Iterator<Row> getExpressionIndexRecordsIterator(HoodieTableMetaClient metaClient, Schema readerSchema, HoodieWriteConfig dataWriteConfig,
-                                                                 Pair<String, Pair<String, Long>> entry, SQLContext sqlContext) {
-    String partition = entry.getKey();
-    Pair<String, Long> filePathSizePair = entry.getValue();
-    String filePath = filePathSizePair.getKey();
-    String relativeFilePath = FSUtils.getRelativePartitionPath(metaClient.getBasePath(), new StoragePath(filePath));
-    long fileSize = filePathSizePair.getValue();
-    List<Row> rowsForFilePath = readRecordsAsRows(new StoragePath[] {new StoragePath(filePath)}, sqlContext, metaClient, readerSchema, dataWriteConfig,
+  private static Iterator<Row> getExpressionIndexRecordsIterator(HoodieTableMetaClient metaClient, Schema readerSchema,
+                                                                 HoodieWriteConfig dataWriteConfig,
+                                                                 ExpressionIndexRecordGenerator.FileToIndex fileToIndex,
+                                                                 SQLContext sqlContext) {
+    String partition = fileToIndex.partition();
+    String filePath = fileToIndex.path();
+    String relativeFilePath = FSUtils.getRelativePartitionPath(
+        metaClient.getBasePath(), new StoragePath(filePath));
+    List<Row> rowsForFilePath = readRecordsAsRows(
+        new StoragePath[] {new StoragePath(filePath)},
+        sqlContext, metaClient, readerSchema, dataWriteConfig,
         FSUtils.isBaseFile(new StoragePath(filePath.substring(filePath.lastIndexOf("/") + 1))));
-    List<Row> rowsWithIndexMetadata = getRowsWithExpressionIndexMetadata(rowsForFilePath, partition, relativeFilePath, fileSize);
+    List<Row> rowsWithIndexMetadata = getRowsWithExpressionIndexMetadata(
+        rowsForFilePath, partition, relativeFilePath, fileToIndex.size());
     return rowsWithIndexMetadata.iterator();
   }
 

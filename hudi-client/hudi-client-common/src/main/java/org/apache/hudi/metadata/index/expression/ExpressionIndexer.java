@@ -104,29 +104,29 @@ public class ExpressionIndexer implements Indexer {
         "Expression Index definition is not present for index " + indexName);
     List<Pair<String, FileSlice>> partitionFileSlicePairs = getPartitionFileSlicePairs(
         dataTableMetaClient, metadata, fsView.get());
-    List<Pair<String, Pair<String, Long>>> partitionFilePathSizeTriplet = new ArrayList<>();
+    List<ExpressionIndexRecordGenerator.FileToIndex> filesToIndex = new ArrayList<>();
     partitionFileSlicePairs.forEach(entry -> {
       if (entry.getValue().getBaseFile().isPresent()) {
-        partitionFilePathSizeTriplet.add(Pair.of(entry.getKey(), Pair.of(entry.getValue().getBaseFile().get().getPath(),
-            entry.getValue().getBaseFile().get().getFileLen())));
+        filesToIndex.add(ExpressionIndexRecordGenerator.FileToIndex.of(
+            entry.getKey(), entry.getValue().getBaseFile().get().getPath(),
+            entry.getValue().getBaseFile().get().getFileLen()));
       }
       entry.getValue().getLogFiles().forEach(hoodieLogFile -> {
         if (entry.getValue().getLogFiles().count() > 0) {
-          entry.getValue().getLogFiles().forEach(logfile -> {
-            partitionFilePathSizeTriplet.add(
-                Pair.of(entry.getKey(), Pair.of(logfile.getPath().toString(), logfile.getFileSize())));
-          });
+          entry.getValue().getLogFiles().forEach(logfile ->
+              filesToIndex.add(ExpressionIndexRecordGenerator.FileToIndex.of(
+                  entry.getKey(), logfile.getPath().toString(), logfile.getFileSize())));
         }
       });
     });
 
     int numFileGroup = dataTableWriteConfig.getMetadataConfig().getExpressionIndexFileGroupCount();
-    int parallelism = Math.min(partitionFilePathSizeTriplet.size(),
+    int parallelism = Math.min(filesToIndex.size(),
         dataTableWriteConfig.getMetadataConfig().getExpressionIndexParallelism());
     Schema readerSchema = getProjectedSchemaForExpressionIndex(indexDefinition, dataTableMetaClient);
     return InitialIndexData.of(numFileGroup,
         indexHelper.generate(
-            partitionFilePathSizeTriplet, indexDefinition, dataTableMetaClient,
+            filesToIndex, indexDefinition, dataTableMetaClient,
             parallelism,
             readerSchema, engineContext.getStorageConf(), instantTimeForPartition));
   }
