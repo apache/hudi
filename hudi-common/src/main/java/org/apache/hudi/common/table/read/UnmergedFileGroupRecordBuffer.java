@@ -39,7 +39,6 @@ import org.apache.avro.Schema;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Iterator;
-import java.util.Map;
 
 public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
   // Used to order the records in the record map.
@@ -69,14 +68,14 @@ public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
 
     // Output records based on the index to preserve the order.
     if (!records.isEmpty()) {
-      Pair<Option<T>, Map<String, Object>> nextRecordInfo = records.remove(getIndex++);
+      BufferedRecord<T> nextRecordInfo = records.remove(getIndex++);
 
       if (nextRecordInfo == null) {
         throw new HoodieException("Row index should be continuous!");
       }
 
-      if (nextRecordInfo.getLeft().isPresent()) {
-        nextRecord = nextRecordInfo.getKey().get();
+      if (!nextRecordInfo.isDelete()) {
+        nextRecord = nextRecordInfo.getRecord();
       } else {
         throw new IllegalStateException("No deletes should exist in unmerged reading mode");
       }
@@ -87,7 +86,7 @@ public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
   }
 
   @Override
-  public Iterator<Pair<Option<T>, Map<String, Object>>> getLogRecordIterator() {
+  public Iterator<BufferedRecord<T>> getLogRecordIterator() {
     return records.values().iterator();
   }
 
@@ -109,16 +108,15 @@ public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
     try (ClosableIterator<T> recordIterator = recordsIteratorSchemaPair.getLeft()) {
       while (recordIterator.hasNext()) {
         T nextRecord = recordIterator.next();
-        Map<String, Object> metadata = readerContext.generateMetadataForRecord(
-            nextRecord, schema);
-        processNextDataRecord(nextRecord, metadata, putIndex++);
+        BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(nextRecord, schema, readerContext, orderingFieldName, false);
+        processNextDataRecord(bufferedRecord, putIndex++);
       }
     }
   }
 
   @Override
-  public void processNextDataRecord(T record, Map<String, Object> metadata, Serializable index) {
-    records.put(index, Pair.of(Option.ofNullable(readerContext.seal(record)), metadata));
+  public void processNextDataRecord(BufferedRecord<T> record, Serializable index) {
+    records.put(index, record.toBinary(readerContext));
   }
 
   @Override
@@ -129,9 +127,7 @@ public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
   @Override
   public void processNextDeletedRecord(DeleteRecord deleteRecord, Serializable index) {
     // never used for now
-    records.put(index, Pair.of(Option.empty(), readerContext.generateMetadataForRecord(
-        deleteRecord.getRecordKey(), deleteRecord.getPartitionPath(),
-        getOrderingValue(readerContext, deleteRecord))));
+    records.put(index, BufferedRecord.forDeleteRecord(deleteRecord, getOrderingValue(readerContext, deleteRecord)));
   }
 
   @Override

@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -107,22 +108,19 @@ public class HoodieTestReaderContext extends HoodieReaderContext<IndexedRecord> 
   }
 
   @Override
-  public HoodieRecord constructHoodieRecord(
-      Option<IndexedRecord> recordOpt,
-      Map<String, Object> metadataMap
-  ) {
+  public HoodieRecord<IndexedRecord> constructHoodieRecord(BufferedRecord<IndexedRecord> bufferedRecord) {
     String appliedPayloadClass =
         payloadClass.isPresent()
             ? payloadClass.get()
             : DefaultHoodieRecordPayload.class.getName();
-    if (!recordOpt.isPresent()) {
+    if (bufferedRecord.isDelete()) {
       return SpillableMapUtils.generateEmptyPayload(
-          (String) metadataMap.get(INTERNAL_META_RECORD_KEY),
-          (String) metadataMap.get(INTERNAL_META_PARTITION_PATH),
-          (Comparable<?>) metadataMap.get(INTERNAL_META_ORDERING_FIELD),
+          bufferedRecord.getRecordKey(),
+          null,
+          (Comparable<?>) bufferedRecord.getOrderingValue(),
           appliedPayloadClass);
     }
-    return new HoodieAvroIndexedRecord(recordOpt.get());
+    return new HoodieAvroIndexedRecord(bufferedRecord.getRecord());
   }
 
   @Override
@@ -133,6 +131,11 @@ public class HoodieTestReaderContext extends HoodieReaderContext<IndexedRecord> 
       builder.set(field, record.get(field.pos()));
     }
     return builder.build();
+  }
+
+  @Override
+  public IndexedRecord toBinaryRow(Schema schema, IndexedRecord record) {
+    return record;
   }
 
   @Override
