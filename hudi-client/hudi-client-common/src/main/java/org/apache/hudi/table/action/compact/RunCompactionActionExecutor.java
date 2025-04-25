@@ -131,8 +131,7 @@ public class RunCompactionActionExecutor<T> extends
       throw new HoodieCompactionException("Could not compact " + config.getBasePath(), e);
     }
 
-    LOG.info("Compaction completed. Instant time: {}.", instantTime);
-    metrics.emitCompactionCompleted();
+    //LOG.info("Compaction completed. Instant time: {}.", instantTime);
     return compactionWriteMetadata;
   }
 }
