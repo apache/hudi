@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.HoodieFileReader;
@@ -32,13 +33,12 @@ import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.avro.Schema;
 
 import java.io.IOException;
-import java.util.Iterator;
 import java.util.Map;
 import java.util.Properties;
 
 public class HoodieFileSliceReader<T> extends LogFileIterator<T> {
   private final Option<HoodieFileReader> baseFileReader;
-  private final Option<Iterator<HoodieRecord>> baseFileIterator;
+  private final Option<ClosableIterator<HoodieRecord>> baseFileIterator;
   private final Schema schema;
   private final Properties props;
 
@@ -49,7 +49,7 @@ public class HoodieFileSliceReader<T> extends LogFileIterator<T> {
   HoodieRecordMerger merger;
 
   public HoodieFileSliceReader(Option<HoodieFileReader> baseFileReader,
-                                   HoodieMergedLogRecordScanner scanner, Schema schema, String preCombineField, HoodieRecordMerger merger,
+                               HoodieMergedLogRecordScanner scanner, Schema schema, String preCombineField, HoodieRecordMerger merger,
                                Properties props, Option<Pair<String, String>> simpleKeyGenFieldsOpt, Option<BaseKeyGenerator> keyGeneratorOpt) throws IOException {
     super(scanner);
     this.baseFileReader = baseFileReader;
@@ -102,6 +102,9 @@ public class HoodieFileSliceReader<T> extends LogFileIterator<T> {
   @Override
   public void close() {
     super.close();
+    if (baseFileIterator.isPresent()) {
+      baseFileIterator.get().close();
+    }
     if (baseFileReader.isPresent()) {
       baseFileReader.get().close();
     }
