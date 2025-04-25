@@ -25,13 +25,11 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.util.{CompactionUtils, HoodieTimer, Option => HOption}
 import org.apache.hudi.config.HoodieLockConfig
 import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.metadata.HoodieTableMetadataWriter
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types._
 
-import java.util.Collections
 import java.util.function.Supplier
 
 import scala.collection.JavaConverters._
@@ -122,8 +120,6 @@ class RunCompactionProcedure extends BaseProcedure with ProcedureBuilder with Sp
           val writeResponse = client.compact(compactionInstant)
           client.commitCompaction(compactionInstant, writeResponse, HOption.empty())
           handleResponse(writeResponse.getCommitMetadata.get())
-          val emptyOpt : org.apache.hudi.common.util.Option[HoodieTableMetadataWriter[_, _]] = org.apache.hudi.common.util.Option.empty()
-          client.commitCompaction(compactionInstant, writeResponse, HOption.empty(), emptyOpt)
         }
         logInfo(s"Finish Run compaction at instants: [${filteredPendingCompactionInstants.mkString(",")}]," +
           s" spend: ${timer.endTimer()}ms")
