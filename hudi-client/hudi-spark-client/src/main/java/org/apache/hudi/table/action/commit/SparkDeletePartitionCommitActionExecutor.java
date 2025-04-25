@@ -90,7 +90,7 @@ public class SparkDeletePartitionCommitActionExecutor<T>
       this.saveWorkloadProfileMetadataToInflight(
           new WorkloadProfile(Pair.of(new HashMap<>(), new WorkloadStat())),
           instantTime);
-      this.runPrecommitValidation(result);
+      completeCommit(result);
       return result;
     } catch (Exception e) {
       throw new HoodieDeletePartitionException("Failed to drop partitions for commit time " + instantTime, e);
