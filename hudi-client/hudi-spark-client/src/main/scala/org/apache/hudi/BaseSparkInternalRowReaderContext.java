@@ -140,11 +140,7 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
       for (int i = 0; i < partitionFieldNames.length; i++) {
         int index = to.getField(partitionFieldNames[i]).pos();
         Object partitionValue = partitionValues[i];
-        if (partitionValue instanceof String) {
-          // Spark reads String field values as UTF8String.
-          partitionValue = UTF8String.fromString((String) partitionValue);
-        }
-        partitionValuesByIndex.put(index, partitionValue);
+        partitionValuesByIndex.put(index, convertValueToEngineType((Comparable) partitionValue));
       }
     }
     Function1<InternalRow, UnsafeRow> unsafeRowWriter =

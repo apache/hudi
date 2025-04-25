@@ -75,6 +75,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
@@ -245,6 +246,9 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
                                                                Object[] partitionValues) {
     int skeletonLen = skeletonRequiredSchema.getFields().size();
     int dataLen = dataRequiredSchema.getFields().size();
+    int[] partitionFieldPositions = partitionFields.isPresent() ? IntStream.range(0, partitionFields.get().length)
+        .map(i -> dataRequiredSchema.getField(partitionFields.get()[i]).pos()).toArray() : new int[0];
+    Writable[] convertedPartitionValues = Arrays.stream(partitionValues).map(value -> (Writable) convertValueToEngineType((Comparable) value)).toArray(Writable[]::new);
     return new ClosableIterator<ArrayWritable>() {
 
       private final ArrayWritable returnWritable = new ArrayWritable(Writable.class);
@@ -261,6 +265,9 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
       public ArrayWritable next() {
         Writable[] skeletonWritable = skeletonFileIterator.next().get();
         Writable[] dataWritable = dataFileIterator.next().get();
+        for (int i = 0; i < partitionFieldPositions.length; i++) {
+          dataWritable[partitionFieldPositions[i]] = convertedPartitionValues[i];
+        }
         Writable[] mergedWritable = new Writable[skeletonLen + dataLen];
         System.arraycopy(skeletonWritable, 0, mergedWritable, 0, skeletonLen);
         System.arraycopy(dataWritable, 0, mergedWritable, skeletonLen, dataLen);
