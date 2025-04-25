@@ -27,8 +27,6 @@ import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.util.LocalAvroSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -263,12 +261,8 @@ public abstract class HoodieReaderContext<T> {
   private BiFunction<T, Schema, String> virtualKeyExtractor(String[] recordKeyFields) {
     return (record, schema) -> {
       BiFunction<String, Integer, String> valueFunction = (recordKeyField, index) -> {
-        try {
-          Object result = getValue(record, schema, recordKeyField);
-          return result != null ? result.toString() : null;
-        } catch (HoodieException e) {
-          throw new HoodieKeyException("Record key field '" + recordKeyField + "' does not exist in the input record");
-        }
+        Object result = getValue(record, schema, recordKeyField);
+        return result != null ? result.toString() : null;
       };
       return KeyGenerator.constructRecordKey(recordKeyFields, valueFunction);
     };
