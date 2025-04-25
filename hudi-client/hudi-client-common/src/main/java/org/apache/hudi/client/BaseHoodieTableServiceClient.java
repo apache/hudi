@@ -246,10 +246,22 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     }
     logCompactionTimer = metrics.getLogCompactionCtx();
     WriteMarkersFactory.get(config.getMarkersType(), table, logCompactionInstantTime);
+    // start commit in MDT if enabled
+    Option<HoodieTableMetadataWriter> metadataWriterOpt = Option.empty();
+    if (config.getOptimizedWritesEnabled(table.getMetaClient().getTableConfig().getTableVersion())) {
+      metadataWriterOpt = getMetadataWriterFunc.apply(logCompactionInstantTime, table.getMetaClient());
+    }
+    if (metadataWriterOpt.isPresent()) {
+      metadataWriterOpt.get().reInitWriteClient();
+      metadataWriterOpt.get().startCommit(logCompactionInstantTime);
+    }
+
     HoodieWriteMetadata<T> writeMetadata = table.logCompact(context, logCompactionInstantTime);
-    HoodieWriteMetadata<O> logCompactionMetadata = convertToOutputMetadata(writeMetadata);
-    if (shouldComplete && logCompactionMetadata.getCommitMetadata().isPresent()) {
-      completeLogCompaction(logCompactionMetadata.getCommitMetadata().get(), table, logCompactionInstantTime);
+    HoodieWriteMetadata<T> processedWriteMetadata = writeToMetadata(writeMetadata, logCompactionInstantTime, metadataWriterOpt);
+    HoodieWriteMetadata<O> logCompactionMetadata = convertToOutputMetadata(processedWriteMetadata);
+    if (shouldComplete || (config.getOptimizedWritesEnabled(table.getMetaClient().getTableConfig().getTableVersion())
+        || logCompactionMetadata.getCommitMetadata().isPresent())) {
+      commitLogCompaction(logCompactionInstantTime, logCompactionMetadata, Option.of(table), metadataWriterOpt);
     }
     return logCompactionMetadata;
   }
@@ -431,6 +443,32 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     LOG.info("Compacted successfully on commit {}", compactionCommitTime);
   }
 
+  public void commitLogCompaction(String compactionInstantTime, HoodieWriteMetadata<O> compactionWriteMetadata, Option<HoodieTable> tableOpt,
+                               Option<HoodieTableMetadataWriter> metadataWriterOpt) {
+    // dereferencing the write dag for log compaction for the first time.
+    Pair<List<HoodieWriteStat>, List<HoodieWriteStat>> dataTableAndMetadataTableHoodieWriteStats = processAndFetchHoodieWriteStats(compactionWriteMetadata);
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata(true);
+    for (HoodieWriteStat stat : dataTableAndMetadataTableHoodieWriteStats.getKey()) {
+      commitMetadata.addWriteStat(stat.getPartitionPath(), stat);
+    }
+    commitMetadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, config.getSchema());
+    HoodieTable table = tableOpt.orElseGet(() -> createTable(config, context.getStorageConf()));
+    Pair<Option<String>, Option<String>> schemaPair = InternalSchemaCache
+        .getInternalSchemaAndAvroSchemaForClusteringAndCompaction(table.getMetaClient(), compactionInstantTime);
+
+    if (schemaPair.getLeft().isPresent()) {
+      commitMetadata.addMetadata(SerDeHelper.LATEST_SCHEMA, schemaPair.getLeft().get());
+      commitMetadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, schemaPair.getRight().get());
+    }
+    // Setting operationType, which is compact.
+    commitMetadata.setOperationType(WriteOperationType.LOG_COMPACT);
+    compactionWriteMetadata.setCommitted(true); // todo: can we set it to true?
+    compactionWriteMetadata.setCommitMetadata(Option.of(commitMetadata));
+    metrics.emitCompactionCompleted();
+    LOG.info("Compaction completed. Instant time: {}.", compactionInstantTime);
+    completeLogCompaction(commitMetadata, table, compactionInstantTime, dataTableAndMetadataTableHoodieWriteStats.getValue(), metadataWriterOpt);
+  }
+  
   /**
    * Schedules a new log compaction instant.
    *
@@ -464,7 +502,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
   /**
    * Commit Log Compaction and track metrics.
    */
-  protected void completeLogCompaction(HoodieCommitMetadata metadata, HoodieTable table, String logCompactionCommitTime) {
+  protected void completeLogCompaction(HoodieCommitMetadata metadata, HoodieTable table, String logCompactionCommitTime,
+                                       List<HoodieWriteStat> partialMdtHoodieWriteStats, Option<HoodieTableMetadataWriter> metadataWriterOpt) {
     this.context.setJobStatus(this.getClass().getSimpleName(), "Collect log compaction write status and commit compaction");
     List<HoodieWriteStat> writeStats = metadata.getWriteStats();
     handleWriteErrors(writeStats, TableServiceType.LOG_COMPACT);
@@ -475,7 +514,19 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       preCommit(metadata);
       finalizeWrite(table, logCompactionCommitTime, writeStats);
       // commit to data table after committing to metadata table.
-      writeTableMetadata(table, logCompactionCommitTime, metadata);
+      if (!metadataWriterOpt.isPresent() && config.getOptimizedWritesEnabled(table.getMetaClient().getTableConfig().getTableVersion())) {
+        // with auto commit disabled flow, user may not have reference to metadata writer. So, lets fetch the metadata writer instance once.
+        metadataWriterOpt = getMetadataWriterFunc.apply(logCompactionCommitTime, table.getMetaClient());
+        // if metadata table is enabled, this will return a valid instance, if not, will return Option.empty.
+      }
+      if (metadataWriterOpt.isPresent()) {
+        metadataWriterOpt.get().writeToFilesPartitionAndCommit(logCompactionCommitTime, context, partialMdtHoodieWriteStats, metadata);
+        cleanUpMetadataWriterInstance.apply(logCompactionCommitTime);
+      } else {
+        // legacy write DAG
+        writeTableMetadata(table, logCompactionCommitTime, metadata);
+      }
+
       LOG.info("Committing Log Compaction {}", logCompactionCommitTime);
       LOG.debug("Log Compaction {} finished with result {}", logCompactionCommitTime, metadata);
       CompactHelpers.getInstance().completeInflightLogCompaction(table, logCompactionCommitTime, metadata);
