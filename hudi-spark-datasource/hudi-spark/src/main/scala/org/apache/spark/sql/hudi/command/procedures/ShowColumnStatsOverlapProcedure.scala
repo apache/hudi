@@ -265,7 +265,7 @@ class ShowColumnStatsOverlapProcedure extends BaseProcedure with ProcedureBuilde
     val maxInstant = metaClient.createNewInstantTime()
     val instants = timeline.getInstants.iterator().asScala.filter(_.requestedTime < maxInstant)
 
-    val filteredTimeline = metaClient.getTimelineLayout.getTimelineFactory.createDefaultTimeline(
+    val filteredTimeline = metaClient.getTableFormat.getTimelineFactory.createDefaultTimeline(
       new java.util.ArrayList[HoodieInstant](instants.toList.asJava).stream(),
       metaClient.getActiveTimeline.getInstantReader)
 

@@ -324,6 +324,7 @@ class HoodieSparkSqlWriterInternal {
           .setRecordMergeStrategyId(recordMergeStrategyId)
           .setRecordMergeMode(RecordMergeMode.getValue(hoodieConfig.getString(HoodieWriteConfig.RECORD_MERGE_MODE)))
           .setMultipleBaseFileFormatsEnabled(hoodieConfig.getBoolean(HoodieTableConfig.MULTIPLE_BASE_FILE_FORMATS_ENABLE))
+          .setPluggableTableFormatClass(hoodieConfig.getStringOrDefault(HoodieTableConfig.SUPPLEMENTARY_TABLE_FORMAT_CLASS_NAME))
           .initTable(HadoopFSUtils.getStorageConfWithCopy(sparkContext.hadoopConfiguration), path)
       }
 

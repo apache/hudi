@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.table;
 
+import org.apache.hudi.common.PluggableTableFormat;
+import org.apache.hudi.common.HudiPluggableTableFormat;
 import org.apache.hudi.common.bootstrap.index.hfile.HFileBootstrapIndex;
 import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
@@ -198,7 +200,17 @@ public class HoodieTableConfig extends HoodieConfig {
       .key("hoodie.timeline.layout.version")
       .noDefaultValue()
       .withDocumentation("Version of timeline used, by the table.");
-  
+
+  public static final ConfigProperty<String> SUPPLEMENTARY_TABLE_FORMAT_CLASS_NAME = ConfigProperty
+      .key("hoodie.table.supplementary.format.class.name")
+      .defaultValue(HudiPluggableTableFormat.class.getName())
+      .withDocumentation("Supplementary format name used when writing to the table.");
+
+  public static final ConfigProperty<String> SUPPLEMENTARY_TABLE_FORMAT_VERSION = ConfigProperty
+      .key("hoodie.table.supplementary.format.version")
+      .noDefaultValue()
+      .withDocumentation("Supplementary format version used when writing to the table.");
+
   public static final ConfigProperty<RecordMergeMode> RECORD_MERGE_MODE = ConfigProperty
       .key("hoodie.record.merge.mode")
       .defaultValue((RecordMergeMode) null,
@@ -580,6 +592,9 @@ public class HoodieTableConfig extends HoodieConfig {
       hoodieConfig.setDefaultValue(TYPE);
       hoodieConfig.setDefaultValue(TIMELINE_HISTORY_PATH);
       hoodieConfig.setDefaultValue(TIMELINE_PATH);
+      if (hoodieConfig.contains(SUPPLEMENTARY_TABLE_FORMAT_CLASS_NAME)) {
+        hoodieConfig.setDefaultValue(SUPPLEMENTARY_TABLE_FORMAT_VERSION);
+      }
       if (!hoodieConfig.contains(TIMELINE_LAYOUT_VERSION)) {
         // Use latest Version as default unless forced by client
         hoodieConfig.setValue(TIMELINE_LAYOUT_VERSION, TimelineLayoutVersion.CURR_VERSION.toString());
@@ -718,6 +733,15 @@ public class HoodieTableConfig extends HoodieConfig {
     return contains(TIMELINE_LAYOUT_VERSION)
         ? Option.of(new TimelineLayoutVersion(getInt(TIMELINE_LAYOUT_VERSION)))
         : Option.empty();
+  }
+
+  public PluggableTableFormat getPluggableTableFormat(TimelineLayoutVersion layoutVersion) {
+    if (contains(SUPPLEMENTARY_TABLE_FORMAT_CLASS_NAME)) {
+      ReflectionUtils.loadClass(getSupplementaryTableFormatClassName(),
+          new Class[] {TimelineLayoutVersion.class},
+          new Object[] {layoutVersion});
+    }
+    return new HudiPluggableTableFormat(layoutVersion);
   }
 
   /**
@@ -982,6 +1006,14 @@ public class HoodieTableConfig extends HoodieConfig {
    */
   public String getTimelinePath() {
     return getStringOrDefault(TIMELINE_PATH);
+  }
+
+  public String getSupplementaryTableFormatClassName() {
+    return getString(SUPPLEMENTARY_TABLE_FORMAT_CLASS_NAME);
+  }
+
+  public String getSupplementaryTableFormatVersion() {
+    return getStringOrDefault(SUPPLEMENTARY_TABLE_FORMAT_VERSION);
   }
 
   /**
