@@ -25,6 +25,7 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -342,8 +343,8 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
 
       HoodieWriteMetadata result = compact(writeClient, compactionInstant);
 
-      assertTrue(result.getWriteStats().isPresent());
-      List<HoodieWriteStat> stats = (List<HoodieWriteStat>) result.getWriteStats().get();
+      assertTrue(!((HoodieCommitMetadata) result.getCommitMetadata().get()).getWriteStats().isEmpty());
+      List<HoodieWriteStat> stats = ((HoodieCommitMetadata) result.getCommitMetadata().get()).getWriteStats();
       assertEquals(expectedCompactedPartition.size(), stats.size());
       expectedCompactedPartition.forEach(expectedPartition -> {
         assertTrue(stats.stream().anyMatch(stat -> stat.getPartitionPath().contentEquals(expectedPartition)));
@@ -473,8 +474,8 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
    * Verify that all partition paths are present in the HoodieWriteMetadata result.
    */
   private void verifyCompaction(HoodieWriteMetadata compactionMetadata, long expectedTotalLogRecords) {
-    assertTrue(compactionMetadata.getWriteStats().isPresent());
-    List<HoodieWriteStat> stats = (List<HoodieWriteStat>) compactionMetadata.getWriteStats().get();
+    assertTrue(!((HoodieCommitMetadata) compactionMetadata.getCommitMetadata().get()).getWriteStats().isEmpty());
+    List<HoodieWriteStat> stats = ((HoodieCommitMetadata) compactionMetadata.getCommitMetadata().get()).getWriteStats();
     assertEquals(dataGen.getPartitionPaths().length, stats.size());
     for (String partitionPath : dataGen.getPartitionPaths()) {
       assertTrue(stats.stream().anyMatch(stat -> stat.getPartitionPath().contentEquals(partitionPath)));

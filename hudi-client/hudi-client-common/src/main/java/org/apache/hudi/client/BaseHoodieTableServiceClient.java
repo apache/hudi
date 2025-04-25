@@ -341,7 +341,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     HoodieWriteMetadata<T> writeMetadata = table.compact(context, compactionInstantTime);
     HoodieWriteMetadata<T> processedWriteMetadata = writeToMetadata(writeMetadata, compactionInstantTime, metadataWriterOpt);
     HoodieWriteMetadata<O> compactionWriteMetadata = convertToOutputMetadata(processedWriteMetadata);
-    if (shouldComplete || (config.getOptimizedWritesEnabled(table.getMetaClient().getTableConfig().getTableVersion()) || compactionWriteMetadata.getCommitMetadata().isPresent())) {
+    if (shouldComplete && (config.getOptimizedWritesEnabled(table.getMetaClient().getTableConfig().getTableVersion()) || compactionWriteMetadata.getCommitMetadata().isPresent())) {
       commitCompaction(compactionInstantTime, compactionWriteMetadata, Option.of(table), metadataWriterOpt);
     }
     return compactionWriteMetadata;
@@ -379,9 +379,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     commitMetadata.setOperationType(WriteOperationType.COMPACT);
     compactionWriteMetadata.setCommitted(true); // todo: can we set it to true?
     compactionWriteMetadata.setCommitMetadata(Option.of(commitMetadata));
-
-    LOG.info("Compaction completed. Instant time: {}.", compactionInstantTime);
     metrics.emitCompactionCompleted();
+    LOG.info("Compaction completed. Instant time: {}.", compactionInstantTime);
     completeCompaction(commitMetadata, table, compactionInstantTime, dataTableAndMetadataTableHoodieWriteStats.getValue(), metadataWriterOpt);
   }
 
