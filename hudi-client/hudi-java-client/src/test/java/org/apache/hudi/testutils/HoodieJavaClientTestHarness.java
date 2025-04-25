@@ -254,7 +254,11 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
 
   @Override
   protected HoodieJavaWriteClient getHoodieWriteClient(HoodieWriteConfig cfg) {
-    if (null != writeClient) {
+    return getHoodieWriteClient(cfg, true);
+  }
+
+  public HoodieJavaWriteClient getHoodieWriteClient(HoodieWriteConfig cfg, boolean shouldCloseOlderClient) {
+    if (null != writeClient && shouldCloseOlderClient) {
       writeClient.close();
       writeClient = null;
     }

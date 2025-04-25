@@ -111,7 +111,7 @@ public class HoodieDeleteHelper<T, R> extends
         deleteExecutor.saveWorkloadProfileMetadataToInflight(new WorkloadProfile(Pair.of(new HashMap<>(), new WorkloadStat())), instantTime);
         result = new HoodieWriteMetadata<>();
         result.setDataTableWriteStatuses(context.emptyHoodieData());
-        deleteExecutor.commitOnAutoCommit(result);
+        deleteExecutor.runPrecommitValidation(result);
       }
       return result;
     } catch (Throwable e) {

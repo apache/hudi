@@ -287,7 +287,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
   protected void updateIndexAndCommitIfNeeded(HoodieData<WriteStatus> writeStatusRDD, HoodieWriteMetadata<HoodieData<WriteStatus>> result) {
     updateIndex(writeStatusRDD, result);
     result.setPartitionToReplaceFileIds(getPartitionToReplacedFileIds(result));
-    commitOnAutoCommit(result);
+    runPrecommitValidation(result);
   }
 
   @Override
