@@ -22,7 +22,6 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -171,7 +170,8 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
     // Schedule and execute compaction.
     Option<String> compactionTimeStamp = client.scheduleCompaction(Option.empty());
     assertTrue(compactionTimeStamp.isPresent());
-    client.compact(compactionTimeStamp.get());
+    HoodieWriteMetadata result = client.compact(compactionTimeStamp.get());
+    client.commitCompaction(compactionTimeStamp.get(), result, Option.empty());
 
     prevCommitTime = compactionTimeStamp.get();
     for (int i = 0; i < 2; i++) {
@@ -188,8 +188,8 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
     // Schedule and execute compaction.
     Option<String> logCompactionTimeStamp = client.scheduleLogCompaction(Option.empty());
     assertTrue(logCompactionTimeStamp.isPresent());
-    client.logCompact(logCompactionTimeStamp.get());
-
+    result = client.logCompact(logCompactionTimeStamp.get());
+    client.completeLogCompaction(logCompactionTimeStamp.get(), result, Option.empty());
     // Verify all the records.
     assertDataInMORTable(config, lastCommitBeforeLogCompaction, logCompactionTimeStamp.get(),
         storageConf, Arrays.asList(dataGen.getPartitionPaths()));
@@ -232,7 +232,8 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
     // Schedule and execute compaction.
     Option<String> timeStamp = client.scheduleLogCompaction(Option.empty());
     assertTrue(timeStamp.isPresent());
-    client.logCompact(timeStamp.get());
+    HoodieWriteMetadata result = client.logCompact(timeStamp.get());
+    client.completeLogCompaction(timeStamp.get(), result, Option.empty());
     // Verify all the records.
     assertDataInMORTable(config, lastCommitBeforeLogCompaction, timeStamp.get(),
         storageConf, Arrays.asList(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH));
@@ -337,7 +338,8 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
     // Schedule and execute compaction. Here, second file slice gets added.
     Option<String> compactionTimeStamp = client.scheduleCompaction(Option.empty());
     assertTrue(compactionTimeStamp.isPresent());
-    client.compact(compactionTimeStamp.get());
+    HoodieWriteMetadata result = client.compact(compactionTimeStamp.get());
+    client.commitCompaction(compactionTimeStamp.get(), result, Option.empty());
     String prevCommitTime = compactionTimeStamp.get();
 
     // First upsert on  second file slice.
@@ -428,7 +430,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
       logCompactionTimeStamp = lcClient.scheduleLogCompaction(Option.empty());
       assertTrue(logCompactionTimeStamp.isPresent());
       HoodieWriteMetadata metadata = lcClient.logCompact(logCompactionTimeStamp.get());
-      lcClient.commitLogCompaction(logCompactionTimeStamp.get(), (HoodieCommitMetadata) metadata.getCommitMetadata().get(), Option.empty());
+      lcClient.completeLogCompaction(logCompactionTimeStamp.get(), metadata, Option.empty());
       assertDataInMORTable(config, prevCommitTime, logCompactionTimeStamp.get(), storageConf, Arrays.asList(dataGen.getPartitionPaths()));
     }
   }
@@ -507,7 +509,8 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
           // Schedule compaction.
           Option<String> compactionTimeStamp = client.scheduleCompaction(Option.empty());
           assertTrue(compactionTimeStamp.isPresent());
-          client.compact(compactionTimeStamp.get());
+          HoodieWriteMetadata result = client.compact(compactionTimeStamp.get());
+          client.commitCompaction(compactionTimeStamp.get(), result, Option.empty());
           prevCommitTime = compactionTimeStamp.get();
         }
 
@@ -520,7 +523,8 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
         Option<String> logCompactionTimeStamp = lcWriteClient.scheduleLogCompaction(Option.empty());
         if (logCompactionTimeStamp.isPresent()) {
           logCompactionInstantTimes.add(logCompactionTimeStamp.get());
-          lcWriteClient.logCompact(logCompactionTimeStamp.get());
+          HoodieWriteMetadata result = lcWriteClient.logCompact(logCompactionTimeStamp.get());
+          lcWriteClient.completeLogCompaction(logCompactionTimeStamp.get(), result, Option.empty());
           prevCommitTime = logCompactionTimeStamp.get();
         }
       }
