@@ -429,9 +429,9 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     String instantTimeForPartition = generateUniqueInstantTime(initializationTime);
     String partitionTypeName = partitionType.name();
     LOG.info("Initializing MDT partition {} at instant {}", partitionTypeName, instantTimeForPartition);
-    Pair<Integer, HoodieData<HoodieRecord>> fileGroupCountAndRecordsPair;
+    Indexer.InitialIndexData initialIndexData;
     try {
-      fileGroupCountAndRecordsPair = indexer.build(
+      initialIndexData = indexer.build(
           partitionInfoList, partitionToFilesMap, initializationTime,
           Lazy.lazily(this::getMetadataView), metadata, instantTimeForPartition);
     } catch (Exception e) {
@@ -443,23 +443,20 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       throw new HoodieMetadataException(errMsg, e);
     }
 
-    if (LOG.isInfoEnabled()) {
-      LOG.info("Initializing {} index with {} mappings", partitionTypeName, fileGroupCountAndRecordsPair.getKey());
-    }
+    final int numFileGroup = initialIndexData.numFileGroup();
+    LOG.info("Initializing {} index with {} file groups", partitionTypeName, numFileGroup);
     HoodieTimer partitionInitTimer = HoodieTimer.start();
 
     // Generate the file groups
-    final int fileGroupCount = fileGroupCountAndRecordsPair.getKey();
-    if (fileGroupCount <= 0) {
+    if (numFileGroup <= 0) {
       LOG.info("Skip building {} index in metadata table", partitionTypeName);
       return;
     }
     String partitionName = indexer.getPartitionName();
-    initializeFileGroups(dataMetaClient, partitionType, instantTimeForPartition, fileGroupCount, partitionName);
+    initializeFileGroups(dataMetaClient, partitionType, instantTimeForPartition, numFileGroup, partitionName);
 
     // Perform the commit using bulkCommit
-    HoodieData<HoodieRecord> records = fileGroupCountAndRecordsPair.getValue();
-    bulkCommit(instantTimeForPartition, partitionName, records, fileGroupCount);
+    bulkCommit(instantTimeForPartition, partitionName, initialIndexData.records(), numFileGroup);
     indexer.updateTableConfig();
     dataMetaClient.getTableConfig().setMetadataPartitionState(dataMetaClient, partitionName, true);
     // initialize the metadata reader again so the MDT partition can be read after initialization

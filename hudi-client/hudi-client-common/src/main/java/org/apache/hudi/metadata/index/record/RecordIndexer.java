@@ -80,7 +80,7 @@ public class RecordIndexer implements Indexer {
   }
 
   @Override
-  public Pair<Integer, HoodieData<HoodieRecord>> build(
+  public InitialIndexData build(
       List<HoodieTableMetadataUtil.DirectoryInfo> partitionInfoList,
       Map<String, Map<String, Long>> partitionToFilesMap,
       String createInstantTime,
@@ -138,15 +138,15 @@ public class RecordIndexer implements Indexer {
     final long recordCount = records.count();
 
     // Initialize the file groups
-    final int fileGroupCount = HoodieTableMetadataUtil.estimateFileGroupCount(
+    final int numFileGroup = HoodieTableMetadataUtil.estimateFileGroupCount(
         RECORD_INDEX, recordCount, RECORD_INDEX_AVERAGE_RECORD_SIZE,
         dataTableWriteConfig.getRecordIndexMinFileGroupCount(),
         dataTableWriteConfig.getRecordIndexMaxFileGroupCount(),
         dataTableWriteConfig.getRecordIndexGrowthFactor(),
         dataTableWriteConfig.getRecordIndexMaxFileGroupSizeBytes());
 
-    LOG.info("Initializing record index with {} mappings and {} file groups.", recordCount, fileGroupCount);
-    return Pair.of(fileGroupCount, records);
+    LOG.info("Initializing record index with {} mappings and {} file groups.", recordCount, numFileGroup);
+    return InitialIndexData.of(numFileGroup, records);
   }
 
   /**

@@ -22,7 +22,6 @@ package org.apache.hudi.metadata.index;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.util.Lazy;
@@ -34,7 +33,7 @@ import java.util.Map;
 public interface Indexer {
   String getPartitionName();
 
-  Pair<Integer, HoodieData<HoodieRecord>> build(
+  InitialIndexData build(
       List<HoodieTableMetadataUtil.DirectoryInfo> partitionInfoList,
       Map<String, Map<String, Long>> partitionToFilesMap,
       String createInstantTime,
@@ -44,5 +43,29 @@ public interface Indexer {
 
   default void updateTableConfig() {
     // No index-specific table config update by default
+  }
+
+  class InitialIndexData {
+    private final int numFileGroup;
+    private final HoodieData<HoodieRecord> records;
+
+    private InitialIndexData(int numFileGroup,
+                             HoodieData<HoodieRecord> records) {
+      this.numFileGroup = numFileGroup;
+      this.records = records;
+    }
+
+    public static InitialIndexData of(int numFileGroup,
+                                      HoodieData<HoodieRecord> initialRecords) {
+      return new InitialIndexData(numFileGroup, initialRecords);
+    }
+
+    public int numFileGroup() {
+      return numFileGroup;
+    }
+
+    public HoodieData<HoodieRecord> records() {
+      return records;
+    }
   }
 }

@@ -26,7 +26,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
@@ -68,7 +67,7 @@ public class PartitionStatsIndexer implements Indexer {
   }
 
   @Override
-  public Pair<Integer, HoodieData<HoodieRecord>> build(
+  public InitialIndexData build(
       List<HoodieTableMetadataUtil.DirectoryInfo> partitionInfoList,
       Map<String, Map<String, Long>> partitionToFilesMap,
       String createInstantTime,
@@ -80,14 +79,14 @@ public class PartitionStatsIndexer implements Indexer {
       LOG.warn("Skipping partition stats initialization as column stats index is not enabled. Please enable {}",
           HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key());
       // TODO(yihua): avoid null and use a different way to indicate skipping
-      return Pair.of(-1, null);
+      return InitialIndexData.of(-1, null);
     }
     HoodieData<HoodieRecord> records =
         HoodieTableMetadataUtil.convertFilesToPartitionStatsRecords(engineContext,
             getPartitionFileSlicePairs(dataTableMetaClient, metadata, fsView.get()),
             dataTableWriteConfig.getMetadataConfig(),
             dataTableMetaClient, Option.empty(), Option.of(dataTableWriteConfig.getRecordMerger().getRecordType()));
-    final int fileGroupCount = dataTableWriteConfig.getMetadataConfig().getPartitionStatsIndexFileGroupCount();
-    return Pair.of(fileGroupCount, records);
+    final int numFileGroup = dataTableWriteConfig.getMetadataConfig().getPartitionStatsIndexFileGroupCount();
+    return InitialIndexData.of(numFileGroup, records);
   }
 }

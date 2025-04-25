@@ -24,7 +24,6 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
@@ -62,7 +61,7 @@ public class BloomFiltersIndexer implements Indexer {
   }
 
   @Override
-  public Pair<Integer, HoodieData<HoodieRecord>> build(
+  public InitialIndexData build(
       List<HoodieTableMetadataUtil.DirectoryInfo> partitionInfoList,
       Map<String, Map<String, Long>> partitionToFilesMap,
       String createInstantTime,
@@ -73,7 +72,7 @@ public class BloomFiltersIndexer implements Indexer {
         engineContext, Collections.emptyMap(), partitionToFilesMap, createInstantTime, dataTableMetaClient,
         dataTableWriteConfig.getBloomIndexParallelism(), dataTableWriteConfig.getBloomFilterType());
 
-    final int fileGroupCount = dataTableWriteConfig.getMetadataConfig().getBloomFilterIndexFileGroupCount();
-    return Pair.of(fileGroupCount, records);
+    return InitialIndexData.of(
+        dataTableWriteConfig.getMetadataConfig().getBloomFilterIndexFileGroupCount(), records);
   }
 }

@@ -26,7 +26,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
@@ -74,7 +73,7 @@ public class ColumnStatsIndexer implements Indexer {
   }
 
   @Override
-  public Pair<Integer, HoodieData<HoodieRecord>> build(
+  public InitialIndexData build(
       List<HoodieTableMetadataUtil.DirectoryInfo> partitionInfoList,
       Map<String, Map<String, Long>> partitionToFilesMap,
       String createInstantTime,
@@ -82,14 +81,14 @@ public class ColumnStatsIndexer implements Indexer {
       HoodieBackedTableMetadata metadata,
       String instantTimeForPartition) throws IOException {
 
-    final int fileGroupCount = dataTableWriteConfig.getMetadataConfig().getColumnStatsIndexFileGroupCount();
+    final int numFileGroup = dataTableWriteConfig.getMetadataConfig().getColumnStatsIndexFileGroupCount();
     if (partitionToFilesMap.isEmpty()) {
-      return Pair.of(fileGroupCount, engineContext.emptyHoodieData());
+      return InitialIndexData.of(numFileGroup, engineContext.emptyHoodieData());
     }
 
     if (columnsToIndex.get().isEmpty()) {
       // this can only happen if meta fields are disabled and cols to index is not explicitly overridden.
-      return Pair.of(fileGroupCount, engineContext.emptyHoodieData());
+      return InitialIndexData.of(numFileGroup, engineContext.emptyHoodieData());
     }
 
     LOG.info("Indexing {} columns for column stats index", columnsToIndex.get().size());
@@ -102,7 +101,7 @@ public class ColumnStatsIndexer implements Indexer {
         dataTableWriteConfig.getMetadataConfig().getMaxReaderBufferSize(),
         columnsToIndex.get());
 
-    return Pair.of(fileGroupCount, records);
+    return InitialIndexData.of(numFileGroup, records);
   }
 
   @Override
