@@ -32,15 +32,15 @@ import org.apache.avro.Schema;
 
 import java.util.List;
 
-public class FlinkIndexHelper implements EngineIndexHelper {
-  
+public class JavaExpressionIndexRecordGenerator implements ExpressionIndexRecordGenerator {
+
   @Override
   public EngineType getEngineType() {
-    return EngineType.FLINK;
+    return EngineType.JAVA;
   }
 
   @Override
-  public HoodieData<HoodieRecord> getExpressionIndexRecords(
+  public HoodieData<HoodieRecord> generate(
       List<Pair<String, Pair<String, Long>>> partitionFilePathAndSizeTriplet,
       HoodieIndexDefinition indexDefinition,
       HoodieTableMetaClient metaClient,
@@ -48,6 +48,6 @@ public class FlinkIndexHelper implements EngineIndexHelper {
       Schema readerSchema,
       StorageConfiguration<?> storageConf,
       String instantTime) {
-    throw new HoodieNotSupportedException("Flink engine does not support building expression index yet.");
+    throw new HoodieNotSupportedException("Java engine does not support building expression index yet.");
   }
 }

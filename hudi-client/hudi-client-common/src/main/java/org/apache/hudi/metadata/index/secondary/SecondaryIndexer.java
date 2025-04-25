@@ -31,7 +31,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
-import org.apache.hudi.metadata.index.EngineIndexHelper;
+import org.apache.hudi.metadata.index.ExpressionIndexRecordGenerator;
 import org.apache.hudi.metadata.index.Indexer;
 import org.apache.hudi.util.Lazy;
 
@@ -56,13 +56,13 @@ public class SecondaryIndexer implements Indexer {
   private final HoodieEngineContext engineContext;
   private final HoodieWriteConfig dataTableWriteConfig;
   private final HoodieTableMetaClient dataTableMetaClient;
-  private final EngineIndexHelper indexHelper;
+  private final ExpressionIndexRecordGenerator indexHelper;
   private final Lazy<Set<String>> secondaryIndexPartitionsToInit;
 
   public SecondaryIndexer(HoodieEngineContext engineContext,
                           HoodieWriteConfig dataTableWriteConfig,
                           HoodieTableMetaClient dataTableMetaClient,
-                          EngineIndexHelper indexHelper) {
+                          ExpressionIndexRecordGenerator indexHelper) {
     this.engineContext = engineContext;
     this.dataTableWriteConfig = dataTableWriteConfig;
     this.dataTableMetaClient = dataTableMetaClient;

@@ -34,7 +34,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
-import org.apache.hudi.metadata.index.FlinkIndexHelper;
+import org.apache.hudi.metadata.index.FlinkExpressionIndexRecordGenerator;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieFlinkTable;
@@ -83,7 +83,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
                                        HoodieEngineContext engineContext,
                                        Option<String> inFlightInstantTimestamp) {
     super(storageConf, writeConfig, failedWritesCleaningPolicy, engineContext,
-        new FlinkIndexHelper(), inFlightInstantTimestamp);
+        new FlinkExpressionIndexRecordGenerator(), inFlightInstantTimestamp);
   }
 
   @Override

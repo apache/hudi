@@ -47,7 +47,7 @@ public class IndexerFactory {
                                         HoodieWriteConfig dataTableWriteConfig,
                                         HoodieTableMetaClient dataTableMetaClient,
                                         HoodieTable table,
-                                        EngineIndexHelper indexHelper) {
+                                        ExpressionIndexRecordGenerator indexHelper) {
     switch (partitionType) {
       case BLOOM_FILTERS:
         return new BloomFiltersIndexer(
@@ -83,7 +83,7 @@ public class IndexerFactory {
       HoodieWriteConfig dataTableWriteConfig,
       HoodieTableMetaClient metaClient,
       HoodieTable table,
-      EngineIndexHelper indexHelper) {
+      ExpressionIndexRecordGenerator indexHelper) {
     if (!dataTableWriteConfig.getMetadataConfig().isEnabled()) {
       return Collections.emptyMap();
     }
