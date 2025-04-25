@@ -21,12 +21,15 @@ package org.apache.hudi.hadoop;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.HoodieFileGroupReaderOnJavaTestBase;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.hadoop.utils.ObjectInspectorCache;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -43,9 +46,11 @@ import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.mapred.JobConf;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Disabled;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.hadoop.HoodieFileGroupReaderBasedRecordReader.getRecordKeyField;
@@ -85,6 +90,11 @@ public class TestHoodieFileGroupReaderOnHive extends HoodieFileGroupReaderOnJava
   }
 
   @Override
+  @Disabled("HUDI-8773: Support bootstrap table testing at the file group reader layer in Hive")
+  public void testReadFileGroupInBootstrapMergeOnReadTable(RecordMergeMode recordMergeMode, String logDataBlockFormat) throws Exception {
+  }
+
+  @Override
   public StorageConfiguration<?> getStorageConf() {
     return storageConf;
   }
@@ -97,6 +107,13 @@ public class TestHoodieFileGroupReaderOnHive extends HoodieFileGroupReaderOnJava
     return new HiveHoodieReaderContext(readerCreator, getRecordKeyField(metaClient),
         getStoredPartitionFieldNames(new JobConf(storageConf.unwrapAs(Configuration.class)), avroSchema),
         new ObjectInspectorCache(avroSchema, jobConf), storageConf);
+  }
+
+  @Override
+  public void bootstrapTable(List<HoodieRecord> recordList,
+                             Map<String, String> writeConfigs) {
+    throw new HoodieNotSupportedException(
+        "HUDI-8773: Not supporting bootstrap table testing at the file group reader layer in Hive yet.");
   }
 
   @Override

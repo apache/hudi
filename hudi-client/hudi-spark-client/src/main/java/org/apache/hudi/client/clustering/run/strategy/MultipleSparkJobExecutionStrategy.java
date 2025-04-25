@@ -35,6 +35,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.ClusteringOperation;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -371,8 +372,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
     List<ClusteringOperation> clusteringOps = clusteringGroup.getSlices().stream()
         .map(ClusteringOperation::create).collect(Collectors.toList());
     boolean canUseFileGroupReaderBasedClustering = getWriteConfig().getBooleanOrDefault(HoodieReaderConfig.FILE_GROUP_READER_ENABLED)
-        && getWriteConfig().getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS)
-        && clusteringOps.stream().allMatch(slice -> StringUtils.isNullOrEmpty(slice.getBootstrapFilePath()));
+        && getWriteConfig().getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
 
     if (canUseFileGroupReaderBasedClustering) {
       return readRecordsForGroupAsRowWithFileGroupReader(jsc, instantTime, tableSchemaWithMetaFields, clusteringOps);
@@ -474,7 +474,10 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
             getHoodieTable().getMetaClient().getStorage().newInstance(new StoragePath(basePath), readerContext.getStorageConfiguration()),
             basePath, instantTime, fileSlice, readerSchema, readerSchema, internalSchemaOption,
             getHoodieTable().getMetaClient(), getHoodieTable().getMetaClient().getTableConfig().getProps(),
-            0, Long.MAX_VALUE, usePosition, false);
+            // The clustering plan does not contain the length of the bootstrap data or skeleton
+            // files, so we set -1 as the file length for the file group reader to fetch the
+            // length from the file system
+            0, -1, usePosition, false);
         fileGroupReader.initRecordIterators();
         // read records from the FG reader
         return fileGroupReader.getClosableIterator();
@@ -491,7 +494,14 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
   private FileSlice clusteringOperation2FileSlice(String basePath, ClusteringOperation clusteringOperation) {
     String partitionPath = clusteringOperation.getPartitionPath();
     boolean baseFileExists = !StringUtils.isNullOrEmpty(clusteringOperation.getDataFilePath());
-    HoodieBaseFile baseFile = baseFileExists ? new HoodieBaseFile(new StoragePath(basePath, clusteringOperation.getDataFilePath()).toString()) : null;
+    HoodieBaseFile baseFile = null;
+    if (baseFileExists) {
+      String baseFilePath = new StoragePath(basePath, clusteringOperation.getDataFilePath()).toString();
+      baseFile = (StringUtils.isNullOrEmpty(clusteringOperation.getBootstrapFilePath())
+          ? new HoodieBaseFile(baseFilePath)
+          : new HoodieBaseFile(baseFilePath, new BaseFile(new StoragePath(
+          basePath, clusteringOperation.getBootstrapFilePath()).toString())));
+    }
     List<HoodieLogFile> logFiles = clusteringOperation.getDeltaFilePaths().stream().map(p ->
             new HoodieLogFile(new StoragePath(FSUtils.constructAbsolutePath(
                 basePath, partitionPath), p)))

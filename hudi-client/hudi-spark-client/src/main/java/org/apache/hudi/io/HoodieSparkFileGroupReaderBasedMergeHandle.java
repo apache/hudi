@@ -95,7 +95,11 @@ public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends Base
         storage.newInstance(hoodieTable.getMetaClient().getBasePath(), readerContext.getStorageConfiguration()),
         hoodieTable.getMetaClient().getBasePath().toString(), instantTime, fileSlice,
         writeSchemaWithMetaFields, writeSchemaWithMetaFields, internalSchemaOption,
-        hoodieTable.getMetaClient(), props, 0, Long.MAX_VALUE, usePosition, false)) {
+        hoodieTable.getMetaClient(), props, 0,
+        // The compaction plan does not contain the length of the bootstrap data or skeleton
+        // files, so we set -1 as the file length for the file group reader to fetch the
+        // length from the file system
+        -1, usePosition, false)) {
       fileGroupReader.initRecordIterators();
       // Reads the records from the file slice
       try (HoodieFileGroupReaderIterator<InternalRow> recordIterator
