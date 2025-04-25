@@ -1255,14 +1255,23 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
                                   Option<Map<String, String>> extraMetadata) {
     HoodieTable table = createTable(config);
     extraMetadata.ifPresent(m -> m.forEach(metadata::addMetadata));
-    completeLogCompaction(metadata, table, logCompactionInstantTime);
+    tableServiceClient.completeLogCompaction(metadata, table, logCompactionInstantTime, Collections.emptyList(), Option.empty());
   }
 
   /**
    * Commit Log Compaction and track metrics.
    */
   protected void completeLogCompaction(HoodieCommitMetadata metadata, HoodieTable table, String logCompactionCommitTime) {
-    tableServiceClient.completeLogCompaction(metadata, table, logCompactionCommitTime);
+    tableServiceClient.completeLogCompaction(metadata, table, logCompactionCommitTime, Collections.emptyList(), Option.empty());
+  }
+
+  public void completeLogCompaction(String compactionInstantTime, HoodieWriteMetadata<O> compactionWriteMetadata, Option<HoodieTable> tableOpt) {
+    this.completeLogCompaction(compactionInstantTime, compactionWriteMetadata, tableOpt, Option.empty());
+  }
+
+  public void completeLogCompaction(String compactionInstantTime, HoodieWriteMetadata<O> compactionWriteMetadata, Option<HoodieTable> tableOpt,
+                               Option<HoodieTableMetadataWriter> metadataWriterOpt) {
+    tableServiceClient.commitLogCompaction(compactionInstantTime, compactionWriteMetadata, tableOpt, metadataWriterOpt);
   }
 
   /**
