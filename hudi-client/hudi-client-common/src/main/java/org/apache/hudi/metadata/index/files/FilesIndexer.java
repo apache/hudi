@@ -24,7 +24,6 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
@@ -57,7 +56,7 @@ public class FilesIndexer implements Indexer {
   }
 
   @Override
-  public Pair<Integer, HoodieData<HoodieRecord>> build(
+  public InitialIndexData build(
       List<HoodieTableMetadataUtil.DirectoryInfo> partitionInfoList,
       Map<String, Map<String, Long>> partitionToFilesMap,
       String createInstantTime,
@@ -65,7 +64,7 @@ public class FilesIndexer implements Indexer {
       HoodieBackedTableMetadata metadata,
       String instantTimeForPartition) throws IOException {
     // FILES partition uses a single file group
-    final int fileGroupCount = 1;
+    final int numFileGroup = 1;
 
     List<String> partitions = partitionInfoList.stream()
         .map(p -> HoodieTableMetadataUtil.getPartitionIdentifierForFilesPartition(p.getRelativePath()))
@@ -78,7 +77,7 @@ public class FilesIndexer implements Indexer {
     HoodieRecord record = HoodieMetadataPayload.createPartitionListRecord(partitions);
     HoodieData<HoodieRecord> allPartitionsRecord = engineContext.parallelize(Collections.singletonList(record), 1);
     if (partitionInfoList.isEmpty()) {
-      return Pair.of(fileGroupCount, allPartitionsRecord);
+      return InitialIndexData.of(numFileGroup, allPartitionsRecord);
     }
 
     // Records which save the file listing of each partition
@@ -91,6 +90,6 @@ public class FilesIndexer implements Indexer {
         });
     ValidationUtils.checkState(fileListRecords.count() == partitions.size());
 
-    return Pair.of(fileGroupCount, allPartitionsRecord.union(fileListRecords));
+    return InitialIndexData.of(numFileGroup, allPartitionsRecord.union(fileListRecords));
   }
 }

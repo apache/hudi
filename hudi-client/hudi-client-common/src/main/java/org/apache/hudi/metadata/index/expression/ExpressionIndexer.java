@@ -20,11 +20,9 @@
 package org.apache.hudi.metadata.index.expression;
 
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
-import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -82,7 +80,7 @@ public class ExpressionIndexer implements Indexer {
   }
 
   @Override
-  public Pair<Integer, HoodieData<HoodieRecord>> build(
+  public InitialIndexData build(
       List<HoodieTableMetadataUtil.DirectoryInfo> partitionInfoList,
       Map<String, Map<String, Long>> partitionToFilesMap,
       String createInstantTime,
@@ -97,7 +95,7 @@ public class ExpressionIndexer implements Indexer {
             expressionIndexPartitionsToInit.get());
       }
       // TODO(yihua): avoid null and use a different way to indicate skipping
-      return Pair.of(-1, null);
+      return InitialIndexData.of(-1, null);
     }
     String indexName = expressionIndexPartitionsToInit.get().iterator().next();
 
@@ -122,11 +120,11 @@ public class ExpressionIndexer implements Indexer {
       });
     });
 
-    int fileGroupCount = dataTableWriteConfig.getMetadataConfig().getExpressionIndexFileGroupCount();
+    int numFileGroup = dataTableWriteConfig.getMetadataConfig().getExpressionIndexFileGroupCount();
     int parallelism = Math.min(partitionFilePathSizeTriplet.size(),
         dataTableWriteConfig.getMetadataConfig().getExpressionIndexParallelism());
     Schema readerSchema = getProjectedSchemaForExpressionIndex(indexDefinition, dataTableMetaClient);
-    return Pair.of(fileGroupCount,
+    return InitialIndexData.of(numFileGroup,
         indexHelper.getExpressionIndexRecords(
             partitionFilePathSizeTriplet, indexDefinition, dataTableMetaClient,
             parallelism,

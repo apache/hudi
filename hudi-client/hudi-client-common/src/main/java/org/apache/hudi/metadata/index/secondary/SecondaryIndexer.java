@@ -78,7 +78,7 @@ public class SecondaryIndexer implements Indexer {
   }
 
   @Override
-  public Pair<Integer, HoodieData<HoodieRecord>> build(
+  public InitialIndexData build(
       List<HoodieTableMetadataUtil.DirectoryInfo> partitionInfoList,
       Map<String, Map<String, Long>> partitionToFilesMap,
       String createInstantTime,
@@ -93,7 +93,7 @@ public class SecondaryIndexer implements Indexer {
 
       }
       // TODO(yihua): avoid null and use a different way to indicate skipping
-      return Pair.of(-1, null);
+      return InitialIndexData.of(-1, null);
     }
     String indexName = secondaryIndexPartitionsToInit.get().iterator().next();
 
@@ -114,13 +114,13 @@ public class SecondaryIndexer implements Indexer {
         indexDefinition);
 
     // Initialize the file groups - using the same estimation logic as that of record index
-    final int fileGroupCount = HoodieTableMetadataUtil.estimateFileGroupCount(
+    final int numFileGroup = HoodieTableMetadataUtil.estimateFileGroupCount(
         RECORD_INDEX, records.count(), RECORD_INDEX_AVERAGE_RECORD_SIZE,
         dataTableWriteConfig.getRecordIndexMinFileGroupCount(),
         dataTableWriteConfig.getRecordIndexMaxFileGroupCount(),
         dataTableWriteConfig.getRecordIndexGrowthFactor(),
         dataTableWriteConfig.getRecordIndexMaxFileGroupSizeBytes());
 
-    return Pair.of(fileGroupCount, records);
+    return InitialIndexData.of(numFileGroup, records);
   }
 }
