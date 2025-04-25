@@ -28,7 +28,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.index.expression.HoodieSparkExpressionIndex;
@@ -65,7 +64,7 @@ public class SparkExpressionIndexRecordGenerator implements ExpressionIndexRecor
 
   @Override
   public HoodieData<HoodieRecord> generate(
-      List<Pair<String, Pair<String, Long>>> partitionFilePathAndSizeTriplet, HoodieIndexDefinition indexDefinition,
+      List<FileToIndex> filesToIndex, HoodieIndexDefinition indexDefinition,
       HoodieTableMetaClient metaClient, int parallelism, Schema readerSchema, StorageConfiguration<?> storageConf,
       String instantTime) {
     if (metaClient.getTableConfig().getTableVersion().lesserThan(HoodieTableVersion.EIGHT)) {
@@ -73,7 +72,7 @@ public class SparkExpressionIndexRecordGenerator implements ExpressionIndexRecor
     }
 
     HoodieSparkExpressionIndex.ExpressionIndexComputationMetadata expressionIndexComputationMetadata =
-        SparkMetadataWriterUtils.getExprIndexRecords(partitionFilePathAndSizeTriplet, indexDefinition,
+        SparkMetadataWriterUtils.getExprIndexRecords(filesToIndex, indexDefinition,
             metaClient, parallelism, readerSchema, instantTime, engineContext, dataTableWriteConfig,
             metadataTableWriteConfig,
             Option.of(rangeMetadata ->

@@ -24,7 +24,6 @@ import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.avro.Schema;
@@ -37,20 +36,48 @@ public interface ExpressionIndexRecordGenerator {
   /**
    * Generates expression index records
    *
-   * @param partitionFilePathAndSizeTriplet Triplet of file path, file size and partition name to which file belongs
-   * @param indexDefinition                 Hoodie Index Definition for the expression index for which records need to be generated
-   * @param metaClient                      Hoodie Table Meta Client
-   * @param parallelism                     Parallelism to use for engine operations
-   * @param readerSchema                    Schema of reader
-   * @param storageConf                     Storage Config
-   * @param instantTime                     Instant time
+   * @param filesToIndex    Triplet of file path, file size and partition name to which file belongs
+   * @param indexDefinition Hoodie Index Definition for the expression index for which records need to be generated
+   * @param metaClient      Hoodie Table Meta Client
+   * @param parallelism     Parallelism to use for engine operations
+   * @param readerSchema    Schema of reader
+   * @param storageConf     Storage Config
+   * @param instantTime     Instant time
    * @return HoodieData wrapper of expression index HoodieRecords
    */
   HoodieData<HoodieRecord> generate(
-      List<Pair<String, Pair<String, Long>>> partitionFilePathAndSizeTriplet,
+      List<FileToIndex> filesToIndex,
       HoodieIndexDefinition indexDefinition,
       HoodieTableMetaClient metaClient,
       int parallelism, Schema readerSchema,
       StorageConfiguration<?> storageConf,
       String instantTime);
+
+  class FileToIndex {
+    private final String partition;
+    private final String path;
+    private final long size;
+
+    private FileToIndex(String partition, String path, long size) {
+      this.partition = partition;
+      this.path = path;
+      this.size = size;
+    }
+
+    public static FileToIndex of(String partition, String path, long size) {
+      return new FileToIndex(partition, path, size);
+    }
+
+    public String partition() {
+      return partition;
+    }
+
+    public String path() {
+      return path;
+    }
+
+    public long size() {
+      return size;
+    }
+  }
 }

@@ -37,11 +37,11 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.index.HoodieSparkIndexClient;
 import org.apache.hudi.index.expression.HoodieSparkExpressionIndex;
+import org.apache.hudi.metadata.index.ExpressionIndexRecordGenerator;
 import org.apache.hudi.metadata.index.SparkExpressionIndexRecordGenerator;
 import org.apache.hudi.metrics.DistributedRegistry;
 import org.apache.hudi.metrics.MetricsReporterType;
@@ -192,9 +192,13 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     }
 
     // Step 1: Generate partition name, file path and size triplets from the newly created files in the commit metadata
-    List<Pair<String, Pair<String, Long>>> partitionFilePathPairs = new ArrayList<>();
-    commitMetadata.getPartitionToWriteStats().forEach((dataPartition, writeStats) -> writeStats.forEach(writeStat -> partitionFilePathPairs.add(
-        Pair.of(writeStat.getPartitionPath(), Pair.of(new StoragePath(dataMetaClient.getBasePath(), writeStat.getPath()).toString(), writeStat.getFileSizeInBytes())))));
+    List<ExpressionIndexRecordGenerator.FileToIndex> partitionFilePathPairs = new ArrayList<>();
+    commitMetadata.getPartitionToWriteStats().forEach((dataPartition, writeStats) ->
+        writeStats.forEach(writeStat -> partitionFilePathPairs.add(
+            ExpressionIndexRecordGenerator.FileToIndex.of(
+                writeStat.getPartitionPath(),
+                new StoragePath(dataMetaClient.getBasePath(), writeStat.getPath()).toString(),
+                writeStat.getFileSizeInBytes()))));
     int parallelism = Math.min(partitionFilePathPairs.size(), dataWriteConfig.getMetadataConfig().getExpressionIndexParallelism());
     Schema readerSchema = getProjectedSchemaForExpressionIndex(indexDefinition, dataMetaClient);
     // Step 2: Compute the expression index column stat and partition stat records for these newly created files

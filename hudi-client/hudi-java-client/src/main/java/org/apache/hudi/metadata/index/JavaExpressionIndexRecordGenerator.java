@@ -24,7 +24,6 @@ import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.storage.StorageConfiguration;
 
@@ -41,7 +40,7 @@ public class JavaExpressionIndexRecordGenerator implements ExpressionIndexRecord
 
   @Override
   public HoodieData<HoodieRecord> generate(
-      List<Pair<String, Pair<String, Long>>> partitionFilePathAndSizeTriplet,
+      List<FileToIndex> filesToIndex,
       HoodieIndexDefinition indexDefinition,
       HoodieTableMetaClient metaClient,
       int parallelism,
