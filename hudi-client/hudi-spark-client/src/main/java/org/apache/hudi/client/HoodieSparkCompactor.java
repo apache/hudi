@@ -43,7 +43,7 @@ public class HoodieSparkCompactor<T> extends BaseCompactor<T,
   public void compact(String instantTime) {
     LOG.info("Compactor executing compaction {}", instantTime);
     SparkRDDWriteClient<T> writeClient = (SparkRDDWriteClient<T>) compactionClient;
-    HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = writeClient.compact(instantTime);
+    HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = writeClient.compact(instantTime, true);
     // TODO fix auto commit enabled and disabled flow
 
     // to fix. siva.
