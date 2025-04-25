@@ -56,8 +56,6 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieTableFileSystemView.class);
 
-  //TODO: [HUDI-6249] change the maps below to implement ConcurrentMap
-  
   // mapping from partition paths to file groups contained within them
   protected Map<String, List<HoodieFileGroup>> partitionToFileGroupsMap;
 
@@ -320,13 +318,13 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
    * this.
    */
   @Override
-  Stream<HoodieFileGroup> fetchAllStoredFileGroups(String partition) {
+  protected Stream<HoodieFileGroup> fetchAllStoredFileGroups(String partition) {
     List<HoodieFileGroup> fileGroups = partitionToFileGroupsMap.get(partition);
     if (fileGroups == null || fileGroups.isEmpty()) {
       LOG.warn("Partition: {} is not available in store", partition);
       return Stream.empty();
     }
-    return new ArrayList<>(partitionToFileGroupsMap.get(partition)).stream();
+    return new ArrayList<>(fileGroups).stream();
   }
 
   public Stream<HoodieFileGroup> getAllFileGroups() {
@@ -398,12 +396,17 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
 
   @Override
   protected boolean isPartitionAvailableInStore(String partitionPath) {
-    return partitionToFileGroupsMap.containsKey(partitionPath);
+    readLock.lock();
+    try {
+      return partitionToFileGroupsMap.containsKey(partitionPath);
+    } finally {
+      readLock.unlock();
+    }
   }
 
   @Override
   protected void storePartitionView(String partitionPath, List<HoodieFileGroup> fileGroups) {
-    LOG.debug("Adding file-groups for partition :" + partitionPath + ", #FileGroups=" + fileGroups.size());
+    LOG.debug("Adding file-groups for partition:{}, #FileGroups={}", partitionPath, fileGroups.size());
     List<HoodieFileGroup> newList = new ArrayList<>(fileGroups);
     partitionToFileGroupsMap.put(partitionPath, newList);
   }

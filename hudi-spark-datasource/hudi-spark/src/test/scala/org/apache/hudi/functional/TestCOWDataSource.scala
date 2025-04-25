@@ -674,16 +674,16 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       thread.setName(x + "00_THREAD")
       thread.start()
     }
-    countDownLatch.await(1, TimeUnit.MINUTES)
+    assertTrue(countDownLatch.await(5, TimeUnit.MINUTES), "Writes failed to complete in 5 minutes");
 
     val snapshotDF2 = spark.read.format("org.apache.hudi").load(basePath)
     if (numRetries > 0) {
-      assertEquals(snapshotDF2.count(), 3000)
-      assertEquals(HoodieDataSourceHelpers.listCommitsSince(storage, basePath, "000").size(), 3)
+      assertEquals(3000, snapshotDF2.count())
+      assertEquals(3, HoodieDataSourceHelpers.listCommitsSince(storage, basePath, "000").size())
     } else {
       // only one among two threads will succeed and hence 2000
-      assertEquals(snapshotDF2.count(), 2000)
-      assertEquals(HoodieDataSourceHelpers.listCommitsSince(storage, basePath, "000").size(), 2)
+      assertEquals(2000, snapshotDF2.count())
+      assertEquals(2, HoodieDataSourceHelpers.listCommitsSince(storage, basePath, "000").size())
     }
   }
 

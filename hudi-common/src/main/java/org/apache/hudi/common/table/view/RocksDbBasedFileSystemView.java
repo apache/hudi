@@ -269,9 +269,14 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
 
   @Override
   protected boolean isPartitionAvailableInStore(String partitionPath) {
-    String lookupKey = schemaHelper.getKeyForPartitionLookup(partitionPath);
-    Serializable obj = rocksDB.get(schemaHelper.getColFamilyForStoredPartitions(), lookupKey);
-    return obj != null;
+    readLock.lock();
+    try {
+      String lookupKey = schemaHelper.getKeyForPartitionLookup(partitionPath);
+      Serializable obj = rocksDB.get(schemaHelper.getColFamilyForStoredPartitions(), lookupKey);
+      return obj != null;
+    } finally {
+      readLock.unlock();
+    }
   }
 
   @Override
@@ -450,13 +455,13 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
   }
 
   @Override
-  Stream<HoodieFileGroup> fetchAllStoredFileGroups(String partitionPath) {
+  protected Stream<HoodieFileGroup> fetchAllStoredFileGroups(String partitionPath) {
     return getFileGroups(rocksDB.<FileSlice>prefixSearch(schemaHelper.getColFamilyForView(),
         schemaHelper.getPrefixForSliceViewByPartition(partitionPath)).map(Pair::getValue));
   }
 
   @Override
-  Stream<HoodieFileGroup> fetchAllStoredFileGroups() {
+  protected Stream<HoodieFileGroup> fetchAllStoredFileGroups() {
     return getFileGroups(
         rocksDB.<FileSlice>prefixSearch(schemaHelper.getColFamilyForView(), schemaHelper.getPrefixForSliceView())
             .map(Pair::getValue));
