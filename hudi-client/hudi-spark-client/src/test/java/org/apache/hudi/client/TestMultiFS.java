@@ -127,7 +127,7 @@ public class TestMultiFS extends HoodieSparkClientTestHarness {
 
 
     try (SparkRDDWriteClient hdfsWriteClient = getHoodieWriteClient(cfg);
-         SparkRDDWriteClient localWriteClient = getHoodieWriteClient(localConfig)) {
+         SparkRDDWriteClient localWriteClient = getHoodieWriteClient(localConfig, false)) {
 
       // Write generated data to hdfs (only inserts)
       String readCommitTime = hdfsWriteClient.startCommit();

@@ -28,7 +28,9 @@ import org.apache.hudi.client.bootstrap.HoodieSparkBootstrapSchemaProvider;
 import org.apache.hudi.client.bootstrap.selector.BootstrapModeSelector;
 import org.apache.hudi.client.bootstrap.translator.BootstrapPartitionPathTranslator;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.client.utils.SparkValidatorUtils;
+import org.apache.hudi.client.utils.TransactionUtils;
 import org.apache.hudi.common.bootstrap.index.BootstrapIndex;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
@@ -103,6 +105,13 @@ public class SparkBootstrapCommitActionExecutor<T>
         WriteOperationType.BOOTSTRAP,
         extraMetadata);
     bootstrapSourceStorage = HoodieStorageUtils.getStorage(config.getBootstrapSourceBasePath(), storageConf);
+    this.txnManagerOption = Option.of(new TransactionManager(config, table.getStorage()));
+    if (this.txnManagerOption.isPresent() && this.txnManagerOption.get().isLockRequired()) {
+      // these txn metadata are only needed for auto commit when optimistic concurrent control is also enabled
+      this.lastCompletedTxn = TransactionUtils.getLastCompletedTxnInstantAndMetadata(table.getMetaClient());
+      this.pendingInflightAndRequestedInstants = TransactionUtils.getInflightAndRequestedInstants(table.getMetaClient());
+      this.pendingInflightAndRequestedInstants.remove(instantTime);
+    }
   }
 
   private void validate() {
@@ -178,7 +187,7 @@ public class SparkBootstrapCommitActionExecutor<T>
     HoodieData<WriteStatus> statuses = table.getIndex().updateLocation(writeStatuses, context, table);
     result.setIndexUpdateDuration(Duration.between(indexStartTime, Instant.now()));
     result.setDataTableWriteStatuses(statuses);
-    commitOnAutoCommit(result);
+    completeCommit(result);
   }
 
   @Override
@@ -254,6 +263,9 @@ public class SparkBootstrapCommitActionExecutor<T>
     // Setup correct schema and run bulk insert.
     Option<HoodieWriteMetadata<HoodieData<WriteStatus>>> writeMetadataOption =
         Option.of(getBulkInsertActionExecutor(HoodieJavaRDD.of(inputRecordsRDD)).execute());
+    if (writeMetadataOption.isPresent()) {
+      completeCommit(writeMetadataOption.get());
+    }
 
     // Delete the marker directory for the instant
     WriteMarkersFactory.get(config.getMarkersType(), table, bootstrapInstantTime)
