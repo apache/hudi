@@ -120,6 +120,7 @@ class RunCompactionProcedure extends BaseProcedure with ProcedureBuilder with Sp
         val timer = HoodieTimer.start
         filteredPendingCompactionInstants.foreach { compactionInstant =>
           val writeResponse = client.compact(compactionInstant)
+          client.commitCompaction(compactionInstant, writeResponse, HOption.empty())
           handleResponse(writeResponse.getCommitMetadata.get())
           val emptyOpt : org.apache.hudi.common.util.Option[HoodieTableMetadataWriter[_, _]] = org.apache.hudi.common.util.Option.empty()
           client.commitCompaction(compactionInstant, writeResponse, HOption.empty(), emptyOpt)
