@@ -4,10 +4,64 @@
         <title>Apache Hudi: User-Facing Analytics</title>
         <link>https://hudi.apache.org/cn/blog</link>
         <description>Apache Hudi Blog</description>
-        <lastBuildDate>Wed, 02 Apr 2025 00:00:00 GMT</lastBuildDate>
+        <lastBuildDate>Mon, 14 Apr 2025 00:00:00 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
         <language>cn</language>
+        <item>
+            <title><![CDATA[How Doris + Hudi Turned the Impossible Into the Everyday]]></title>
+            <link>https://hudi.apache.org/cn/blog/2025/04/14/doris-hudi-making-impossible-possible</link>
+            <guid>https://hudi.apache.org/cn/blog/2025/04/14/doris-hudi-making-impossible-possible</guid>
+            <pubDate>Mon, 14 Apr 2025 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://dzone.com/articles/doris-hudi-making-impossible-possible">here</a></span>]]></content:encoded>
+            <category>blog</category>
+            <category>Apache Hudi</category>
+            <category>Apache Doris</category>
+            <category>use-case</category>
+            <category>federated querying</category>
+            <category>dzone</category>
+        </item>
+        <item>
+            <title><![CDATA[Why Walmart Chose Apache Hudi for Their Lakehouse]]></title>
+            <link>https://hudi.apache.org/cn/blog/2025/04/09/why-walmart-chose-apache-hudi-for-their-lakehouse</link>
+            <guid>https://hudi.apache.org/cn/blog/2025/04/09/why-walmart-chose-apache-hudi-for-their-lakehouse</guid>
+            <pubDate>Wed, 09 Apr 2025 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://blog.det.life/why-walmart-chose-apache-hudi-for-their-lakehouse-c0a3574db0ba">here</a></span>]]></content:encoded>
+            <category>blog</category>
+            <category>Apache Hudi</category>
+            <category>use-case</category>
+            <category>det</category>
+        </item>
+        <item>
+            <title><![CDATA[ From Swamp to Stream: How Apache Hudi Transforms the Modern Data Lake]]></title>
+            <link>https://hudi.apache.org/cn/blog/2025/04/06/from-swamp-to-stream-how-apache-hudi-transforms-the-modern-data-lake</link>
+            <guid>https://hudi.apache.org/cn/blog/2025/04/06/from-swamp-to-stream-how-apache-hudi-transforms-the-modern-data-lake</guid>
+            <pubDate>Sun, 06 Apr 2025 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://medium.com/aimonks/from-swamp-to-stream-how-apache-hudi-transforms-the-modern-data-lake-8a938f517ea1">here</a></span>]]></content:encoded>
+            <category>blog</category>
+            <category>Apache Hudi</category>
+            <category>real-time datalake</category>
+            <category>incremental processing</category>
+            <category>upserts</category>
+            <category>medium</category>
+        </item>
+        <item>
+            <title><![CDATA[Integrating Apache Doris and Hudi for Data Querying and Migration]]></title>
+            <link>https://hudi.apache.org/cn/blog/2025/04/03/integrate-apache-doris-hudi-data-querying-migration</link>
+            <guid>https://hudi.apache.org/cn/blog/2025/04/03/integrate-apache-doris-hudi-data-querying-migration</guid>
+            <pubDate>Thu, 03 Apr 2025 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://dzone.com/articles/integrate-apache-doris-hudi-data-querying-migration">here</a></span>]]></content:encoded>
+            <category>blog</category>
+            <category>Apache Hudi</category>
+            <category>Apache Doris</category>
+            <category>real-time query</category>
+            <category>how-to</category>
+            <category>dzone</category>
+        </item>
         <item>
             <title><![CDATA[Introducing Secondary Index in Apache Hudi Lakehouse Platform]]></title>
             <link>https://hudi.apache.org/cn/blog/2025/04/02/secondary-index</link>
@@ -616,163 +670,6 @@ The details for the implementation is provided here  - <a href="https://hudi.apa
             <category>apache hudi</category>
             <category>hudi 1.0.0</category>
             <category>infoq</category>
-        </item>
-        <item>
-            <title><![CDATA[Out of the box Key Generators in Apache Hudi]]></title>
-            <link>https://hudi.apache.org/cn/blog/2025/01/15/outofbox-key-generators-in-hudi</link>
-            <guid>https://hudi.apache.org/cn/blog/2025/01/15/outofbox-key-generators-in-hudi</guid>
-            <pubDate>Wed, 15 Jan 2025 00:00:00 GMT</pubDate>
-            <description><![CDATA[Introduction]]></description>
-            <content:encoded><![CDATA[<h2 class="anchor anchorWithStickyNavbar_LWe7" id="introduction">Introduction<a href="https://hudi.apache.org/cn/blog/2025/01/15/outofbox-key-generators-in-hudi#introduction" class="hash-link" aria-label="Direct link to heading" title="Direct link to heading">​</a></h2>
-<p>The goal of Apache Hudi is to bring database-like features to data lakes. This addresses the main shortcoming of traditional data lakes: the inability to easily perform row-level updates or deletions.By integrating database-like management capabilities into data lakes, Hudi revolutionizes how it handles and processes large volumes of data, enabling out-of-the-box upserts and deletes that facilitate efficient record level updating and deletion.
-One of Hudi's key innovations is the ability for users to explicitly define a Record Key, similar to a unique key in traditional databases, along with a Partition Key that aligns with the data lake paradigm. These two keys make the <a href="https://github.com/apache/hudi/blob/master/hudi-common/src/main/java/org/apache/hudi/common/model/HoodieKey.java" target="_blank" rel="noopener noreferrer">HoodieKey</a> that aligns with the data lake paradigm. These two keys make the HoodieKey which is similar to the primary key which uniquely defines each row. This enables hudi to do the upsert based on Hoodiekey. The upsert operation works by utilizing the HoodieKey to locate the exact file group where the data associated with that key resides.  When a new record is ingested into the Hudi table, the system first derives  the HoodieKey of the incoming record based on the unique key and partitioning schema configured. This key is used to determine which file group (a logical grouping of files) the record should be associated with which is usually achieved via an <a href="https://hudi.apache.org/docs/indexes" target="_blank" rel="noopener noreferrer">indexing</a> mechanism.
-In this blog, we will explore the concept of Key Generators in Apache Hudi, how they enhance data management, and their role in enabling efficient data operations in modern data lakes.</p>
-<h2 class="anchor anchorWithStickyNavbar_LWe7" id="challenge">Challenge<a href="https://hudi.apache.org/cn/blog/2025/01/15/outofbox-key-generators-in-hudi#challenge" class="hash-link" aria-label="Direct link to heading" title="Direct link to heading">​</a></h2>
-<p>The biggest challenge in defining the record key and partition key on a table is  the columns in input data does not naturally lend itself to being used as a primary key or partition key directly. In the realm of databases, we often have below cases -</p>
-<ul>
-<li>Need to have multiple fields that serve as primary key commonly known as composite keys in the database.</li>
-<li>It is necessary to preprocess the data to derive a specific field that can serve as a primary key before loading it into the database.</li>
-<li>Sometimes we have to generate unique ids also. Common use case is surrogate key.</li>
-</ul>
-<p>Similarly, for partition columns also in datalakes, most of the time the raw field can’t be used as a partition key.</p>
-<ul>
-<li>Partition columns often have time grain like month level or year level partition but input data mostly contain timestamp and date.</li>
-<li>Nested primary keys are very common, and necessitates multiple partition columns.</li>
-</ul>
-<h2 class="anchor anchorWithStickyNavbar_LWe7" id="approaches-to-handling-this-in-data-pipelines">Approaches to Handling this in Data Pipelines<a href="https://hudi.apache.org/cn/blog/2025/01/15/outofbox-key-generators-in-hudi#approaches-to-handling-this-in-data-pipelines" class="hash-link" aria-label="Direct link to heading" title="Direct link to heading">​</a></h2>
-<p>Data Lake and Lakehouse technologies typically address such scenarios by preprocessing the data. For example, if date-based partitioning is required and a timestamp column is available, the data must be processed using Spark SQL date functions to extract relevant components (e.g., year, month, day). These derived columns are then used for partitioning. However, this process can become cumbersome at scale, especially when multiple data streams are writing to the same Hudi table. The same extraction logic needs to be applied to all streams, and any table maintenance activities (such as bootstrapping or backfilling) also require this logic to be reapplied. This repetition is error-prone and can lead to data consistency issues if the logic is incorrectly applied.
-Hudi addresses these challenges with a built-in solution: key generators. These can be configured at the table level, eliminating the need to repeatedly apply the same logic. With key generators, Hudi automatically handles the conversion process every time, ensuring consistency and reducing the risk of errors.</p>
-<h2 class="anchor anchorWithStickyNavbar_LWe7" id="what-are-key-generators-in-apache-hudi">What are Key Generators in Apache Hudi<a href="https://hudi.apache.org/cn/blog/2025/01/15/outofbox-key-generators-in-hudi#what-are-key-generators-in-apache-hudi" class="hash-link" aria-label="Direct link to heading" title="Direct link to heading">​</a></h2>
-<p><a href="https://hudi.apache.org/docs/key_generation" target="_blank" rel="noopener noreferrer">Key generators</a> in Apache Hudi are essential components responsible for creating record keys and partition keys for records within a dataset. Hudi uses key generators to extract the Hudi record key, which is a combination of the record key and the partition key, from the incoming record fields. This process allows Hudi to efficiently prepare the hoodie key on which updates can occur. During upserts, Hudi identifies the file group that contains the specified hoodie key using an index and updates the corresponding file group accordingly.
-Hudi offers several built-in key generator implementations that cover common use cases, such as generating record keys based on fields from the input data. However, to provide flexibility and support for more complex use cases, Hudi also offers a pluggable interface. This allows users to implement custom key generators tailored to their specific requirements.
-To create a custom key generator, you can extend the <a href="https://github.com/apache/hudi/blob/master/hudi-common/src/main/java/org/apache/hudi/keygen/BaseKeyGenerator.java" target="_blank" rel="noopener noreferrer">BaseKeyGenerator</a> class which itself extends the <a href="https://github.com/apache/hudi/blob/master/hudi-common/src/main/java/org/apache/hudi/keygen/KeyGenerator.java" target="_blank" rel="noopener noreferrer">KeyGenerator</a>  class and implement methods such as getRecordKey and getPartitionKey. This enables you to define the specific logic required for calculating record and partition keys tailored to your dataset's requirements. Additionally, Hudi includes a variety of built-in key generators that address many common scenarios discussed in the previous section, streamlining the process of key generation for users.
-The key generator is configured at the table level and stored in the hoodie.properties file, which resides within the .hoodie directory. This file contains all the table-level configurations, including the key generation settings. Once a table is created with a particular key generator we can’t change it. It can be set using the configuration hoodie.datasource.write.keygenerator.class</p>
-<h2 class="anchor anchorWithStickyNavbar_LWe7" id="out-of-the-box-key-generators">Out of the Box Key Generators<a href="https://hudi.apache.org/cn/blog/2025/01/15/outofbox-key-generators-in-hudi#out-of-the-box-key-generators" class="hash-link" aria-label="Direct link to heading" title="Direct link to heading">​</a></h2>
-<h3 class="anchor anchorWithStickyNavbar_LWe7" id="simplekeygenerator">SimpleKeyGenerator<a href="https://hudi.apache.org/cn/blog/2025/01/15/outofbox-key-generators-in-hudi#simplekeygenerator" class="hash-link" aria-label="Direct link to heading" title="Direct link to heading">​</a></h3>
-<p>The SimpleKeyGenerator is a basic key generator used in Apache Hudi when direct fields from the input dataset can serve as both the record key and partition key. It maps a specific column in the DataFrame to the record key and another column to the partition path. This widely-used generator interprets values as-is from the DataFrame and converts them to strings, making it ideal for straightforward data structures.
-Please note that this is the default key generator for the partitioned datasets.</p>
-<div class="language-shell codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#F8F8F2;--prism-background-color:#282A36"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-shell codeBlock_bY9V thin-scrollbar" style="color:#F8F8F2;background-color:#282A36"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#F8F8F2"><span class="token plain">{</span><br></span><span class="token-line" style="color:#F8F8F2"><span class="token plain">  "hoodie.datasource.write.recordkey.field": "id",</span><br></span><span class="token-line" style="color:#F8F8F2"><span class="token plain">  "hoodie.datasource.write.partitionpath.field": "date",</span><br></span><span class="token-line" style="color:#F8F8F2"><span class="token plain">  "hoodie.datasource.write.keygenerator.class": "org.apache.hudi.keygen.SimpleKeyGenerator"</span><br></span><span class="token-line" style="color:#F8F8F2"><span class="token plain">}</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div>
-<h3 class="anchor anchorWithStickyNavbar_LWe7" id="nonpartitionedkeygenerator">NonpartitionedKeyGenerator<a href="https://hudi.apache.org/cn/blog/2025/01/15/outofbox-key-generators-in-hudi#nonpartitionedkeygenerator" class="hash-link" aria-label="Direct link to heading" title="Direct link to heading">​</a></h3>
-<p>The NonpartitionedKeyGenerator is a key generator in Apache Hudi designed specifically for non-partitioned datasets. Unlike the SimpleKeyGenerator, which uses a field to determine the partition path for the data, the NonpartitionedKeyGenerator does not assign a partition key to the records. Instead, it returns an empty string as the partition key for all records. This is because the dataset is non-partitioned, meaning all records are stored in a single partition.</p>
-<div class="language-shell codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#F8F8F2;--prism-background-color:#282A36"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-shell codeBlock_bY9V thin-scrollbar" style="color:#F8F8F2;background-color:#282A36"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#F8F8F2"><span class="token plain">{</span><br></span><span class="token-line" style="color:#F8F8F2"><span class="token plain">  "hoodie.datasource.write.recordkey.field": "id",</span><br></span><span class="token-line" style="color:#F8F8F2"><span class="token plain">  "hoodie.datasource.write.keygenerator.class": "org.apache.hudi.keygen.NonpartitionedKeyGenerator"</span><br></span><span class="token-line" style="color:#F8F8F2"><span class="token plain">}</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div>
-<h3 class="anchor anchorWithStickyNavbar_LWe7" id="complexkeygenerator">ComplexKeyGenerator<a href="https://hudi.apache.org/cn/blog/2025/01/15/outofbox-key-generators-in-hudi#complexkeygenerator" class="hash-link" aria-label="Direct link to heading" title="Direct link to heading">​</a></h3>
-<p>This key generator is used when multiple fields are used to create the record key or partition key. We can provide the comma separated list of the columns. In the output, the hoodie record key is generated using the format key1<!-- -->:value1<!-- -->,key2<!-- -->:value2<!-- -->. If any one of the partition key or record key contains multiple fields, then we have to use ComplexKeyGenerator.</p>
-<div class="language-shell codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#F8F8F2;--prism-background-color:#282A36"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-shell codeBlock_bY9V thin-scrollbar" style="color:#F8F8F2;background-color:#282A36"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#F8F8F2"><span class="token plain">{</span><br></span><span class="token-line" style="color:#F8F8F2"><span class="token plain">  "hoodie.datasource.write.keygenerator.class" : "org.apache.hudi.keygen.ComplexKeyGenerator",</span><br></span><span class="token-line" style="color:#F8F8F2"><span class="token plain">  "hoodie.datasource.write.recordkey.field" = "key1,key2",</span><br></span><span class="token-line" style="color:#F8F8F2"><span class="token plain">  "hoodie.datasource.write.partitionpath.field" = "country,state,city"</span><br></span><span class="token-line" style="color:#F8F8F2"><span class="token plain">}</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div>
-<h3 class="anchor anchorWithStickyNavbar_LWe7" id="timestampbasedkeygenerator">TimestampBasedKeygenerator<a href="https://hudi.apache.org/cn/blog/2025/01/15/outofbox-key-generators-in-hudi#timestampbasedkeygenerator" class="hash-link" aria-label="Direct link to heading" title="Direct link to heading">​</a></h3>
-<p>The TimestampBasedKeyGenerator allows you to generate partition keys based on timestamp fields in your data. This is especially useful when you want to partition your data by date, month, or year, depending on your use case. The key generator can transform timestamps into different formats, enabling you to create partitions that suit your analytical needs.</p>
-<p>Relevant Configurations</p>
-<ul>
-<li>
-<p><strong>hoodie.datasource.write.keygenerator.class</strong>
-To use this key generator, The key gen class should be <code>org.apache.hudi.keygen.TimestampBasedKeyGenerator</code></p>
-</li>
-<li>
-<p><strong>hoodie.deltastreamer.keygen.timebased.timestamp.type</strong>
-This config determines the nature of the value of input. Below can be the possible values for this -
-<strong>DATE_STRING</strong>: Use this when the input value is in string format.</p>
-<ul>
-<li>
-<p>MIXED: This option allows for a combination of formats.</p>
-</li>
-<li>
-<p>UNIX_TIMESTAMP: Select this when the input value is in epoch timestamp format (long type) measured in seconds.</p>
-</li>
-<li>
-<p>EPOCHMILLISECONDS: Use this when the input value is in epoch timestamp format (long type) measured in milliseconds.</p>
-</li>
-<li>
-<p>SCALAR: This option is for epoch timestamp values (long type) where you can specify any time unit.</p>
-</li>
-</ul>
-</li>
-<li>
-<p><strong>hoodie.deltastreamer.keygen.timebased.timestamp.scalar.time.unit</strong>
-When using the SCALAR timestamp type, you can define the unit of the epoch time. Valid options include NANOSECONDS, MICROSECONDS, MILLISECONDS, SECONDS, MINUTES, HOURS, DAYS</p>
-</li>
-<li>
-<p><strong>hoodie.keygen.timebased.input.dateformat</strong>
-When the timestamp type is DATE_STRING or MIXED, this config can be defined to specify the date format in which the field is coming in input.</p>
-</li>
-<li>
-<p><strong>hoodie.keygen.timebased.output.dateformat</strong>
-When the timestamp type is set to DATE_STRING or MIXED, this configuration defines the desired date format for the output field. It allows you to specify how the date should be formatted when it is generated or output.</p>
-</li>
-<li>
-<p><strong>hoodie.deltastreamer.keygen.timebased.input.timezone</strong>
-This setting specifies the timezone for the input date field derived from the raw data. The default value is UTC.</p>
-</li>
-<li>
-<p><strong>hoodie.deltastreamer.keygen.timebased.output.timezone</strong>
-This setting defines the timezone for the output date field that will be used to populate the partition column. The default value is UTC.</p>
-</li>
-</ul>
-<h4 class="anchor anchorWithStickyNavbar_LWe7" id="common-use-cases">Common Use Cases<a href="https://hudi.apache.org/cn/blog/2025/01/15/outofbox-key-generators-in-hudi#common-use-cases" class="hash-link" aria-label="Direct link to heading" title="Direct link to heading">​</a></h4>
-<ul>
-<li>Data Contains Timestamp Field and We Want Date Level Partitions
-In this scenario, you have a dataset with a timestamp field, and you want to partition the data by the date (i.e., year-month-day).</li>
-</ul>
-<div class="language-shell codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#F8F8F2;--prism-background-color:#282A36"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-shell codeBlock_bY9V thin-scrollbar" style="color:#F8F8F2;background-color:#282A36"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#F8F8F2"><span class="token plain">{</span><br></span><span class="token-line" style="color:#F8F8F2"><span class="token plain">  "hoodie.datasource.write.keygenerator.class":     "org.apache.hudi.keygen.TimestampBasedKeyGenerator",</span><br></span><span class="token-line" style="color:#F8F8F2"><span class="token plain">  "hoodie.deltastreamer.keygen.timebased.timestamp.type": "DATE_STRING",</span><br></span><span class="token-line" style="color:#F8F8F2"><span class="token plain">  "hoodie.keygen.timebased.input.dateformat":"yyyy-MM-dd'T'HH:mm:ss.SSSSSSZ",</span><br></span><span class="token-line" style="color:#F8F8F2"><span class="token plain">  "hoodie.keygen.timebased.output.dateformat":"yyyy-MM-dd",</span><br></span><span class="token-line" style="color:#F8F8F2"><span class="token plain">  "hoodie.datasource.write.partitionpath.field": "event_time"</span><br></span><span class="token-line" style="color:#F8F8F2"><span class="token plain">}</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div>
-<ul>
-<li>Data Contains Date Field but We Want to Have Month or Year Level Partitions
-Here, you have a dataset with a date field, but you want to create partitions at a higher granularity, such as by month or year.</li>
-</ul>
-<div class="language-shell codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#F8F8F2;--prism-background-color:#282A36"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-shell codeBlock_bY9V thin-scrollbar" style="color:#F8F8F2;background-color:#282A36"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#F8F8F2"><span class="token plain">{</span><br></span><span class="token-line" style="color:#F8F8F2"><span class="token plain">  "hoodie.datasource.write.keygenerator.class":     "org.apache.hudi.keygen.TimestampBasedKeyGenerator",</span><br></span><span class="token-line" style="color:#F8F8F2"><span class="token plain">  "hoodie.deltastreamer.keygen.timebased.timestamp.type": "DATE_STRING",</span><br></span><span class="token-line" style="color:#F8F8F2"><span class="token plain">  "hoodie.keygen.timebased.input.dateformat":"yyyy-MM-dd",</span><br></span><span class="token-line" style="color:#F8F8F2"><span class="token plain">  "hoodie.keygen.timebased.output.dateformat":"yyyyMM",</span><br></span><span class="token-line" style="color:#F8F8F2"><span class="token plain">  "hoodie.datasource.write.partitionpath.field": "event_date"</span><br></span><span class="token-line" style="color:#F8F8F2"><span class="token plain">}</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div>
-<p>In the example above, if we have an input with a date column named event_date in the format 'yyyy-MM-dd', the configurations will convert this format to a monthly level in the format 'yyyyMM' and use it as the partition column.</p>
-<p>We can refer <a href="https://hudi.apache.org/docs/0.10.0/key_generation/#timestampbasedkeygenerator" target="_blank" rel="noopener noreferrer">TimestampBasedKeyGenerator</a> for more examples</p>
-<h3 class="anchor anchorWithStickyNavbar_LWe7" id="customkeygenerator">CustomKeyGenerator<a href="https://hudi.apache.org/cn/blog/2025/01/15/outofbox-key-generators-in-hudi#customkeygenerator" class="hash-link" aria-label="Direct link to heading" title="Direct link to heading">​</a></h3>
-<p>In typical use cases, using the same key generator for both the record key and the partition key often does not meet the requirements. For such scenarios, a Custom Key Generator is particularly useful, as it allows for the use of different key generators for different fields.
-A common use case arises when the partition key consists of multiple fields, and you also need to extract date or month-level partitions from a timestamp field. In these situations, it is essential to utilize both the TimestampBasedKeyGenerator and the ComplexKeyGenerator. However, since you cannot specify two different key generator classes simultaneously, the CustomKeyGenerator serves as an effective solution. We can configure it as list of comma separated fields with the key generator separated by colon. Example - key1<!-- -->:Timestamp<!-- -->,key2<!-- -->:SIMPLE<!-- -->,key3<!-- -->:SIMPLE<!-- -->
-When we pass the partition column, we can also provide which key generator to use. The configurations below enable you to use SimpleKeyGenerator to extract the country field and TimestampBasedKeygenerator to transform the event_date field to use only month level partitions.</p>
-<div class="language-shell codeBlockContainer_Ckt0 theme-code-block" style="--prism-color:#F8F8F2;--prism-background-color:#282A36"><div class="codeBlockContent_biex"><pre tabindex="0" class="prism-code language-shell codeBlock_bY9V thin-scrollbar" style="color:#F8F8F2;background-color:#282A36"><code class="codeBlockLines_e6Vv"><span class="token-line" style="color:#F8F8F2"><span class="token plain">{</span><br></span><span class="token-line" style="color:#F8F8F2"><span class="token plain">  "hoodie.datasource.write.keygenerator.class":     "org.apache.hudi.keygen.TimestampBasedKeyGenerator",</span><br></span><span class="token-line" style="color:#F8F8F2"><span class="token plain">  "hoodie.deltastreamer.keygen.timebased.timestamp.type": "DATE_STRING",</span><br></span><span class="token-line" style="color:#F8F8F2"><span class="token plain">  "hoodie.keygen.timebased.input.dateformat":"yyyy-MM-dd",</span><br></span><span class="token-line" style="color:#F8F8F2"><span class="token plain">  "hoodie.keygen.timebased.output.dateformat":"yyyyMM",</span><br></span><span class="token-line" style="color:#F8F8F2"><span class="token plain">  "hoodie.datasource.write.partitionpath.field": "country:SIMPLE,event_date:TIMESTAMP"</span><br></span><span class="token-line" style="color:#F8F8F2"><span class="token plain">}</span><br></span></code></pre><div class="buttonGroup__atx"><button type="button" aria-label="Copy code to clipboard" title="Copy" class="clean-btn"><span class="copyButtonIcons_eSgA" aria-hidden="true"><svg viewBox="0 0 24 24" class="copyButtonIcon_y97N"><path fill="currentColor" d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"></path></svg><svg viewBox="0 0 24 24" class="copyButtonSuccessIcon_LjdS"><path fill="currentColor" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"></path></svg></span></button></div></div></div>
-<h2 class="anchor anchorWithStickyNavbar_LWe7" id="conclusion">Conclusion<a href="https://hudi.apache.org/cn/blog/2025/01/15/outofbox-key-generators-in-hudi#conclusion" class="hash-link" aria-label="Direct link to heading" title="Direct link to heading">​</a></h2>
-<p>Key generators in Hudi are vital components that enable efficient record identification, partitioning, and data operations in large datasets. Whether you're performing upserts, deletes, or managing time-series data, choosing the right key generator ensures that Hudi can handle the data efficiently, while aligning with your business logic. By addressing challenges like composite keys, timestamp-based partitioning, and complex use cases, Apache Hudi revolutionizes how data lakes handle evolving data, providing database-like management capabilities that are scalable and flexible.</p>]]></content:encoded>
-            <category>Data Lake</category>
-            <category>Data Lakehouse</category>
-            <category>Apache Hudi</category>
-            <category>Key Generators</category>
-            <category>partition</category>
-        </item>
-        <item>
-            <title><![CDATA[Apache Iceberg vs Delta Lake vs Apache Hudi]]></title>
-            <link>https://hudi.apache.org/cn/blog/2025/01/09/apache-iceberg-vs-delta-lake-vs-apache-hudi</link>
-            <guid>https://hudi.apache.org/cn/blog/2025/01/09/apache-iceberg-vs-delta-lake-vs-apache-hudi</guid>
-            <pubDate>Thu, 09 Jan 2025 00:00:00 GMT</pubDate>
-            <description><![CDATA[Redirecting... please wait!!]]></description>
-            <content:encoded><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://medium.com/@algodaysindia/apache-iceberg-vs-delta-lake-vs-apache-hudi-f987fee8dbe1">here</a></span>]]></content:encoded>
-            <category>blog</category>
-            <category>apache hudi</category>
-            <category>apache iceberg</category>
-            <category>delta lake</category>
-            <category>comparison</category>
-            <category>medium</category>
-        </item>
-        <item>
-            <title><![CDATA[The Future of Data Lakehouses: A Fireside Chat with Vinoth Chandar - Founder CEO Onehouse & PMC Chair of Apache Hudi]]></title>
-            <link>https://hudi.apache.org/cn/blog/2025/01/08/the-future-of-data-lakehouses-a-fireside</link>
-            <guid>https://hudi.apache.org/cn/blog/2025/01/08/the-future-of-data-lakehouses-a-fireside</guid>
-            <pubDate>Wed, 08 Jan 2025 00:00:00 GMT</pubDate>
-            <description><![CDATA[Redirecting... please wait!!]]></description>
-            <content:encoded><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://www.dataengineeringweekly.com/p/the-future-of-data-lakehouses-a-fireside">here</a></span>]]></content:encoded>
-            <category>blog</category>
-            <category>apache hudi</category>
-            <category>data lakehouse</category>
-            <category>lakehouse</category>
-            <category>dataengineeringweekly</category>
-        </item>
-        <item>
-            <title><![CDATA[How to Use the New Hudi Streamer with Hudi 1.0.0 on EMR Serverless 7.5.0 | Hands-on Labs]]></title>
-            <link>https://hudi.apache.org/cn/blog/2025/01/05/how-use-new-hudi-streamer-100-emr-serverless-750-hands-on</link>
-            <guid>https://hudi.apache.org/cn/blog/2025/01/05/how-use-new-hudi-streamer-100-emr-serverless-750-hands-on</guid>
-            <pubDate>Sun, 05 Jan 2025 00:00:00 GMT</pubDate>
-            <description><![CDATA[Redirecting... please wait!!]]></description>
-            <content:encoded><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://www.linkedin.com/pulse/how-use-new-hudi-streamer-100-emr-serverless-750-hands-on-soumil-shah-fxrae/">here</a></span>]]></content:encoded>
-            <category>blog</category>
-            <category>how-to</category>
-            <category>apache hudi</category>
-            <category>hudi 1.0.0</category>
-            <category>hudi streamer</category>
-            <category>amazon emr</category>
-            <category>linkedin</category>
         </item>
     </channel>
 </rss>
