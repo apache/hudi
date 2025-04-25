@@ -82,11 +82,6 @@ public class HoodieTTLJob {
     }
   }
 
-  private HoodieWriteConfig getHoodieClientConfig() {
-    return HoodieWriteConfig.newBuilder().combineInput(true, true).withPath(cfg.basePath).withAutoCommit(true)
-        .withProps(props).build();
-  }
-
   public static class Config implements Serializable {
     @Parameter(names = {"--base-path", "-sp"}, description = "Base path for the table", required = true)
     public String basePath = null;

@@ -668,17 +668,6 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     return false;
   }
 
-  /**
-   * Delete expired partition by config.
-   *
-   * @param instantTime Instant Time for the action
-   * @return HoodieWriteMetadata
-   */
-  public HoodieWriteMetadata<T> managePartitionTTL(String instantTime) {
-    HoodieTable<?, I, ?, T> table = createTable(config, context.getStorageConf());
-    return table.managePartitionTTL(context, instantTime);
-  }
-
   protected abstract HoodieWriteMetadata<O> convertToOutputMetadata(HoodieWriteMetadata<T> writeMetadata);
 
   protected abstract HoodieData<WriteStatus> convertToWriteStatus(HoodieWriteMetadata<T> writeMetadata);
