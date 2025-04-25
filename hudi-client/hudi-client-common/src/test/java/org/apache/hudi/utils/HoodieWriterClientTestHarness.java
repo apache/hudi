@@ -1183,54 +1183,50 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
    */
   protected void testUpsertsInternal(Function3<Object, BaseHoodieWriteClient, Object, String> writeFn, boolean populateMetaFields, boolean isPrepped,
                                      SupportsUpgradeDowngrade upgradeDowngrade) throws Exception {
-    metaClient = createMetaClient();
-    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY).withRollbackUsingMarkers(true).withAutoCommit(false)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).withMetadataIndexColumnStats(true).withColumnStatsIndexForColumns("driver,rider")
-            .withMetadataIndexColumnStatsFileGroupCount(1)
-            .withEnableRecordIndex(true).withRecordIndexFileGroupCount(4,4).build())
-        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.RECORD_INDEX).build());
 
-    addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
-    // Force using older timeline layout
-    HoodieTableMetaClient.newTableBuilder()
+    metaClient.getStorage().deleteDirectory(new StoragePath(basePath));
+
+    metaClient = HoodieTableMetaClient.newTableBuilder()
         .fromMetaClient(metaClient)
         .setTableVersion(6)
         .setPopulateMetaFields(populateMetaFields)
         .initTable(metaClient.getStorageConf().newInstance(), metaClient.getBasePath());
+
+    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY).withRollbackUsingMarkers(true).withAutoCommit(false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).withMetadataIndexColumnStats(true).withColumnStatsIndexForColumns("driver,rider")
+            .withMetadataIndexColumnStatsFileGroupCount(1).build())
+        .withWriteTableVersion(6);
+
+    addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     metaClient = HoodieTestUtils.createMetaClient(storageConf, new StoragePath(basePath), HoodieTableVersion.SIX);
 
     HoodieWriteConfig config = cfgBuilder.build();
     BaseHoodieWriteClient client = getHoodieWriteClient(config);
 
     // Write 1 (only inserts)
-    String initCommitTime = client.createNewInstantTime();
-    Thread.sleep(10);
-    String newCommitTime1 = client.createNewInstantTime();
+    String newCommitTime = "001";
+    String initCommitTime = "000";
     int numRecords = 200;
-    castInsertFirstBatch(config, client, newCommitTime1, initCommitTime, numRecords, BaseHoodieWriteClient::insert,
+    castInsertFirstBatch(config, client, newCommitTime, initCommitTime, numRecords, BaseHoodieWriteClient::insert,
         isPrepped, true, numRecords, populateMetaFields, metaClient.getInstantGenerator());
 
     // Write 2 (updates)
-    String prevCommitTime = newCommitTime1;
-    String newCommitTime2 = client.createNewInstantTime();
+    String prevCommitTime = newCommitTime;
+    newCommitTime = "004";
     numRecords = 100;
-    String commitTimeBetweenPrevAndNew = newCommitTime1;
-    castUpdateBatch(config, client, newCommitTime2, prevCommitTime,
+    String commitTimeBetweenPrevAndNew = "002";
+    castUpdateBatch(config, client, newCommitTime, prevCommitTime,
         Option.of(Arrays.asList(commitTimeBetweenPrevAndNew)), initCommitTime, numRecords, writeFn, isPrepped, true,
         numRecords, 200, 2, populateMetaFields, metaClient.getInstantGenerator());
 
     // Delete 1
-    prevCommitTime = newCommitTime2;
-    String newCommitTime3 = client.createNewInstantTime();
+    prevCommitTime = newCommitTime;
+    newCommitTime = "005";
     numRecords = 50;
 
-    castDeleteBatch(config, client, newCommitTime3, prevCommitTime, initCommitTime, numRecords, isPrepped, true,
+    castDeleteBatch(config, client, newCommitTime, prevCommitTime, initCommitTime, numRecords, isPrepped, true,
         0, 150, config.populateMetaFields(), metaClient.getTimelineLayout().getTimelineFactory(),
         metaClient.getInstantGenerator());
-    /*=======
-    castDeleteBatch(config, client, newCommitTime3, prevCommitTime, initCommitTime, numRecords, isPrepped, true,
-        0, 150, config.populateMetaFields());
-    >>>>>>> 81addb3a684 (Adding optimized writes to MDT)*/
 
     // Now perform an upgrade and perform a restore operation
     HoodieWriteConfig newConfig = getConfigBuilder().withProps(config.getProps()).withWriteTableVersion(HoodieTableVersion.EIGHT.versionCode()).build();
@@ -1250,11 +1246,11 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     assertTheEntireDatasetHasAllRecordsStill(200);
 
     // Perform Delete again on upgraded dataset.
-    prevCommitTime = newCommitTime3;
-    newCommitTime3 = "006";
+    prevCommitTime = newCommitTime;
+    newCommitTime = "006";
     numRecords = 50;
 
-    castDeleteBatch(newConfig, client, newCommitTime3, prevCommitTime, initCommitTime, numRecords, isPrepped, true, 0, 150,
+    castDeleteBatch(newConfig, client, newCommitTime, prevCommitTime, initCommitTime, numRecords, isPrepped, true, 0, 150,
         metaClient.getTimelineLayout().getTimelineFactory(), metaClient.getInstantGenerator());
 
     checkTimelineForUpsertsInternal(metaClient);

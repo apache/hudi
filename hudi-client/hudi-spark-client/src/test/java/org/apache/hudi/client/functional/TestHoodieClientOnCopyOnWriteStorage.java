@@ -443,11 +443,9 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Test Upsert API.
    */
-  //@ParameterizedTest
-  //@MethodSource("populateMetaFieldsParams")
-  @Test
-  public void testUpserts() throws Exception {
-    boolean populateMetaFields = true;
+  @ParameterizedTest
+  @MethodSource("populateMetaFieldsParams")
+  public void testUpserts(boolean populateMetaFields) throws Exception {
     testUpsertsInternal((writeClient, recordRDD, instantTime) -> writeClient.upsert(recordRDD, instantTime), populateMetaFields, false, SparkUpgradeDowngradeHelper.getInstance());
   }
 
