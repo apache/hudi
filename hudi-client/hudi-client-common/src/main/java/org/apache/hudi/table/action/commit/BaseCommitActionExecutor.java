@@ -52,6 +52,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieCommitException;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.table.HoodieTable;
@@ -193,7 +194,8 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
     runPrecommitValidators(result);
     if (config.shouldAutoCommit()) {
       LOG.info("Auto commit enabled: Committing " + instantTime);
-      autoCommit(result);
+      throw new HoodieException("Auto commit support not supported");
+      //autoCommit(result);
     } else {
       LOG.info("Auto commit disabled for " + instantTime);
     }
