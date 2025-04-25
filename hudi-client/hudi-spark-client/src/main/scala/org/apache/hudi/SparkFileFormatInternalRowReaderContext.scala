@@ -22,15 +22,18 @@ package org.apache.hudi
 import org.apache.hudi.SparkFileFormatInternalRowReaderContext.{filterIsSafeForBootstrap, getAppliedRequiredSchema}
 import org.apache.hudi.avro.{AvroSchemaUtils, HoodieAvroUtils}
 import org.apache.hudi.avro.AvroSchemaUtils.isNullable
+import org.apache.hudi.BaseSparkInternalRowReaderContext.addPartitionFields
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.read.PositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME
+import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.collection.{CachingIterator, ClosableIterator}
 import org.apache.hudi.io.storage.{HoodieSparkFileReaderFactory, HoodieSparkParquetReader}
 import org.apache.hudi.storage.{HoodieStorage, StorageConfiguration, StoragePath}
 import org.apache.hudi.util.CloseableInternalRowIterator
+
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericRecord, IndexedRecord}
 import org.apache.hadoop.conf.Configuration
@@ -145,15 +148,19 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
   override def mergeBootstrapReaders(skeletonFileIterator: ClosableIterator[InternalRow],
                                      skeletonRequiredSchema: Schema,
                                      dataFileIterator: ClosableIterator[InternalRow],
-                                     dataRequiredSchema: Schema): ClosableIterator[InternalRow] = {
+                                     dataRequiredSchema: Schema,
+                                     partitionFields: HOption[Array[String]],
+                                     partitionValues: Array[AnyRef]): ClosableIterator[InternalRow] = {
     doBootstrapMerge(skeletonFileIterator.asInstanceOf[ClosableIterator[Any]], skeletonRequiredSchema,
-      dataFileIterator.asInstanceOf[ClosableIterator[Any]], dataRequiredSchema)
+      dataFileIterator.asInstanceOf[ClosableIterator[Any]], dataRequiredSchema, partitionFields, partitionValues)
   }
 
   private def doBootstrapMerge(skeletonFileIterator: ClosableIterator[Any],
                                skeletonRequiredSchema: Schema,
                                dataFileIterator: ClosableIterator[Any],
-                               dataRequiredSchema: Schema): ClosableIterator[InternalRow] = {
+                               dataRequiredSchema: Schema,
+                               partitionFields: HOption[Array[String]],
+                               partitionValues: Array[AnyRef]): ClosableIterator[InternalRow] = {
     if (supportsParquetRowIndex()) {
       assert(AvroSchemaUtils.containsFieldInSchema(skeletonRequiredSchema, ROW_INDEX_TEMPORARY_COLUMN_NAME))
       assert(AvroSchemaUtils.containsFieldInSchema(dataRequiredSchema, ROW_INDEX_TEMPORARY_COLUMN_NAME))
@@ -165,10 +172,10 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
 
       //If we need to do position based merging with log files we will leave the row index column at the end
       val dataProjection = if (getHasLogFiles && getShouldMergeUseRecordPosition) {
-        getIdentityProjection
+        getBootstrapProjection(dataRequiredSchema, dataRequiredSchema, partitionFields, partitionValues)
       } else {
-        projectRecord(dataRequiredSchema,
-          HoodieAvroUtils.removeFields(dataRequiredSchema, rowIndexColumn))
+        getBootstrapProjection(dataRequiredSchema,
+          HoodieAvroUtils.removeFields(dataRequiredSchema, rowIndexColumn), partitionFields, partitionValues)
       }
 
       //row index will always be the last column

@@ -195,7 +195,9 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
       ClosableIterator<RowData> skeletonFileIterator,
       Schema skeletonRequiredSchema,
       ClosableIterator<RowData> dataFileIterator,
-      Schema dataRequiredSchema) {
+      Schema dataRequiredSchema,
+      Option<String[]> partitionFields,
+      Object[] partitionValues) {
     return new ClosableIterator<RowData>() {
       final JoinedRowData joinedRow = new JoinedRowData();
       @Override

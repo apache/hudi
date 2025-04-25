@@ -21,6 +21,7 @@ package org.apache.hudi.avro;
 
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -79,7 +80,7 @@ class TestHoodieAvroReaderContext {
     ClosableIterator<IndexedRecord> baseIterator = ClosableIterator.wrap(Arrays.asList(baseRecord1, baseRecord2, baseRecord3).iterator());
 
     List<IndexedRecord> actual = new ArrayList<>();
-    try (ClosableIterator<IndexedRecord> iter = avroReaderContext.mergeBootstrapReaders(skeletonIterator, LIMITED_SKELETON_SCHEMA, baseIterator, LIMITED_BASE_SCHEMA)) {
+    try (ClosableIterator<IndexedRecord> iter = avroReaderContext.mergeBootstrapReaders(skeletonIterator, LIMITED_SKELETON_SCHEMA, baseIterator, LIMITED_BASE_SCHEMA, Option.empty(), new Object[0])) {
       iter.forEachRemaining(actual::add);
     }
     assertEquals(Arrays.asList(expectedRecord1, expectedRecord2, expectedRecord3), actual);
@@ -105,7 +106,7 @@ class TestHoodieAvroReaderContext {
     ClosableIterator<IndexedRecord> baseIterator = ClosableIterator.wrap(Arrays.asList(baseRecord1, baseRecord2, baseRecord3).iterator());
 
     List<IndexedRecord> actual = new ArrayList<>();
-    try (ClosableIterator<IndexedRecord> iter = avroReaderContext.mergeBootstrapReaders(skeletonIterator, SKELETON_SCHEMA, baseIterator, BASE_SCHEMA)) {
+    try (ClosableIterator<IndexedRecord> iter = avroReaderContext.mergeBootstrapReaders(skeletonIterator, SKELETON_SCHEMA, baseIterator, BASE_SCHEMA, Option.empty(), new Object[0])) {
       iter.forEachRemaining(actual::add);
     }
     assertEquals(Arrays.asList(expectedRecord1, expectedRecord2, expectedRecord3), actual);
@@ -116,7 +117,7 @@ class TestHoodieAvroReaderContext {
     HoodieAvroReaderContext avroReaderContext = getReaderContextWithMetaFields();
     List<IndexedRecord> actual = new ArrayList<>();
     try (ClosableIterator<IndexedRecord> iter = avroReaderContext.mergeBootstrapReaders(ClosableIterator.wrap(Collections.emptyIterator()), SKELETON_SCHEMA,
-        ClosableIterator.wrap(Collections.emptyIterator()), BASE_SCHEMA)) {
+        ClosableIterator.wrap(Collections.emptyIterator()), BASE_SCHEMA, Option.empty(), new Object[0])) {
       iter.forEachRemaining(actual::add);
     }
     assertEquals(Collections.emptyList(), actual);
@@ -136,7 +137,7 @@ class TestHoodieAvroReaderContext {
 
     List<IndexedRecord> actual = new ArrayList<>();
     assertThrows(IllegalStateException.class, () -> {
-      try (ClosableIterator<IndexedRecord> iter = avroReaderContext.mergeBootstrapReaders(skeletonIterator, SKELETON_SCHEMA, baseIterator, BASE_SCHEMA)) {
+      try (ClosableIterator<IndexedRecord> iter = avroReaderContext.mergeBootstrapReaders(skeletonIterator, SKELETON_SCHEMA, baseIterator, BASE_SCHEMA, Option.empty(), new Object[0])) {
         iter.forEachRemaining(actual::add);
       }
     });

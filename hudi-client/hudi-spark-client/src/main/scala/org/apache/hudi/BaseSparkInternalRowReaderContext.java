@@ -40,6 +40,8 @@ import org.apache.spark.sql.catalyst.expressions.UnsafeRow;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.unsafe.types.UTF8String;
 
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.function.UnaryOperator;
 
@@ -127,13 +129,27 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
   @Override
   public UnaryOperator<InternalRow> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns) {
     Function1<InternalRow, UnsafeRow> unsafeRowWriter =
-        HoodieInternalRowUtils.getCachedUnsafeRowWriter(getCachedSchema(from), getCachedSchema(to), renamedColumns);
+        HoodieInternalRowUtils.getCachedUnsafeRowWriter(getCachedSchema(from), getCachedSchema(to), renamedColumns, Collections.emptyMap());
     return row -> (InternalRow) unsafeRowWriter.apply(row);
-
   }
 
-  protected UnaryOperator<InternalRow> getIdentityProjection() {
-    return row -> row;
+  protected UnaryOperator<InternalRow> getBootstrapProjection(Schema from, Schema to, Option<String[]> partitionFields, Object[] partitionValues) {
+    Map<Integer, Object> partitionValuesByIndex = new HashMap<>();
+    if (partitionFields.isPresent()) {
+      String[] partitionFieldNames = partitionFields.get();
+      for (int i = 0; i < partitionFieldNames.length; i++) {
+        int index = to.getField(partitionFieldNames[i]).pos();
+        Object partitionValue = partitionValues[i];
+        if (partitionValue instanceof String) {
+          // Spark reads String field values as UTF8String.
+          partitionValue = UTF8String.fromString((String) partitionValue);
+        }
+        partitionValuesByIndex.put(index, partitionValue);
+      }
+    }
+    Function1<InternalRow, UnsafeRow> unsafeRowWriter =
+        HoodieInternalRowUtils.getCachedUnsafeRowWriter(getCachedSchema(from), getCachedSchema(to), Collections.emptyMap(), partitionValuesByIndex);
+    return row -> (InternalRow) unsafeRowWriter.apply(row);
   }
 
   @Override
@@ -145,5 +161,18 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
       return UTF8String.fromString((String) value);
     }
     return value;
+  }
+
+  protected static UnaryOperator<InternalRow> addPartitionFields(Schema schema, String[] partitionFields, Object[] partitionValues) {
+    int[] fieldIndexes = new int[partitionFields.length];
+    for (int i = 0; i < partitionFields.length; i++) {
+      fieldIndexes[i] = schema.getField(partitionFields[i]).pos();
+    }
+    return row -> {
+      for (int i = 0; i < partitionValues.length; i++) {
+        row.update(fieldIndexes[i], partitionValues[i]);
+      }
+      return row;
+    };
   }
 }

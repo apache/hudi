@@ -240,7 +240,9 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   public ClosableIterator<ArrayWritable> mergeBootstrapReaders(ClosableIterator<ArrayWritable> skeletonFileIterator,
                                                                Schema skeletonRequiredSchema,
                                                                ClosableIterator<ArrayWritable> dataFileIterator,
-                                                               Schema dataRequiredSchema) {
+                                                               Schema dataRequiredSchema,
+                                                               Option<String[]> partitionFields,
+                                                               Object[] partitionValues) {
     int skeletonLen = skeletonRequiredSchema.getFields().size();
     int dataLen = dataRequiredSchema.getFields().size();
     return new ClosableIterator<ArrayWritable>() {

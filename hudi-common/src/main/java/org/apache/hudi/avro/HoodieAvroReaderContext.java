@@ -182,7 +182,9 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
   public ClosableIterator<IndexedRecord> mergeBootstrapReaders(ClosableIterator<IndexedRecord> skeletonFileIterator,
                                                                Schema skeletonRequiredSchema,
                                                                ClosableIterator<IndexedRecord> dataFileIterator,
-                                                               Schema dataRequiredSchema) {
+                                                               Schema dataRequiredSchema,
+                                                               Option<String[]> partitionFields,
+                                                               Object[] partitionValues) {
     return new BootstrapIterator(skeletonFileIterator, skeletonRequiredSchema, dataFileIterator, dataRequiredSchema);
   }
 

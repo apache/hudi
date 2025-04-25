@@ -44,13 +44,14 @@ import scala.collection.mutable.ArrayBuffer
 object HoodieInternalRowUtils {
 
   private type RenamedColumnMap = JMap[String, String]
+  private type UpdatedColumnMap = JMap[Integer, Object]
   private type UnsafeRowWriter = InternalRow => UnsafeRow
 
   // NOTE: [[UnsafeProjection]] objects cache have to stay [[ThreadLocal]] since these are not thread-safe
-  private val unsafeWriterThreadLocal: ThreadLocal[mutable.HashMap[(StructType, StructType, RenamedColumnMap), UnsafeRowWriter]] =
-    ThreadLocal.withInitial(new Supplier[mutable.HashMap[(StructType, StructType, RenamedColumnMap), UnsafeRowWriter]] {
-      override def get(): mutable.HashMap[(StructType, StructType, RenamedColumnMap), UnsafeRowWriter] =
-        new mutable.HashMap[(StructType, StructType, RenamedColumnMap), UnsafeRowWriter]
+  private val unsafeWriterThreadLocal: ThreadLocal[mutable.HashMap[(StructType, StructType, RenamedColumnMap, UpdatedColumnMap), UnsafeRowWriter]] =
+    ThreadLocal.withInitial(new Supplier[mutable.HashMap[(StructType, StructType, RenamedColumnMap, UpdatedColumnMap), UnsafeRowWriter]] {
+      override def get(): mutable.HashMap[(StructType, StructType, RenamedColumnMap, UpdatedColumnMap), UnsafeRowWriter] =
+        new mutable.HashMap[(StructType, StructType, RenamedColumnMap, UpdatedColumnMap), UnsafeRowWriter]
     })
 
   // NOTE: [[UnsafeRowWriter]] objects cache have to stay [[ThreadLocal]] since these are not thread-safe
@@ -88,9 +89,11 @@ object HoodieInternalRowUtils {
    *   <li>Handling (field) renames</li>
    * </ul>
    */
-  def getCachedUnsafeRowWriter(from: StructType, to: StructType, renamedColumnsMap: JMap[String, String] = JCollections.emptyMap()): UnsafeRowWriter = {
+  def getCachedUnsafeRowWriter(from: StructType, to: StructType,
+                               renamedColumnsMap: JMap[String, String] = JCollections.emptyMap(),
+                               updatedValuesMap: JMap[Integer, Object] = JCollections.emptyMap()): UnsafeRowWriter = {
     unsafeWriterThreadLocal.get()
-      .getOrElseUpdate((from, to, renamedColumnsMap), genUnsafeRowWriter(from, to, renamedColumnsMap))
+      .getOrElseUpdate((from, to, renamedColumnsMap, updatedValuesMap), genUnsafeRowWriter(from, to, renamedColumnsMap, updatedValuesMap))
   }
 
   def getCachedPosList(structType: StructType, field: String): Option[NestedFieldPath] = {
@@ -128,7 +131,8 @@ object HoodieInternalRowUtils {
 
   private[sql] def genUnsafeRowWriter(prevSchema: StructType,
                                       newSchema: StructType,
-                                      renamedColumnsMap: JMap[String, String]): UnsafeRowWriter = {
+                                      renamedColumnsMap: JMap[String, String],
+                                      updatedValuesMap: JMap[Integer, Object]): UnsafeRowWriter = {
     val writer = newWriterRenaming(prevSchema, newSchema, renamedColumnsMap, new JArrayDeque[String]())
     val unsafeProjection = generateUnsafeProjection(newSchema, newSchema)
     val phonyUpdater = new CatalystDataUpdater {
@@ -140,6 +144,7 @@ object HoodieInternalRowUtils {
 
     oldRow => {
       writer(phonyUpdater, 0, oldRow)
+      updatedValuesMap.forEach((index, value) => phonyUpdater.value.update(index, value))
       unsafeProjection(phonyUpdater.value)
     }
   }

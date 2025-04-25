@@ -359,7 +359,9 @@ public abstract class HoodieReaderContext<T> {
   public abstract ClosableIterator<T> mergeBootstrapReaders(ClosableIterator<T> skeletonFileIterator,
                                                             Schema skeletonRequiredSchema,
                                                             ClosableIterator<T> dataFileIterator,
-                                                            Schema dataRequiredSchema);
+                                                            Schema dataRequiredSchema,
+                                                            Option<String[]> partitionFields,
+                                                            Object[] partitionValues);
 
   /**
    * Creates a function that will reorder records of schema "from" to schema of "to"

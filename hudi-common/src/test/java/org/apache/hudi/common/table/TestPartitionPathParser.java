@@ -46,7 +46,8 @@ class TestPartitionPathParser {
         Arguments.of("value1/2025/01/03", new String[]{"string_field","date_field"}, new Object[]{"value1", Date.valueOf("2025-01-03")}),
         Arguments.of("2025/01/03/value1", new String[]{"date_field", "string_field"}, new Object[]{Date.valueOf("2025-01-03"), "value1"}),
         Arguments.of("string_field=value1/year=2020/month=08/day=28/hour=01", new String[]{"string_field", "timestamp_field"}, new Object[]{"value1", new Timestamp(1598594400000L)}),
-        Arguments.of("year=2020/month=08/day=28/hour=01/string_field=value1", new String[]{"timestamp_field", "string_field"}, new Object[]{new Timestamp(1598594400000L), "value1"})
+        Arguments.of("year=2020/month=08/day=28/hour=01/string_field=value1", new String[]{"timestamp_field", "string_field"}, new Object[]{new Timestamp(1598594400000L), "value1"}),
+        Arguments.of("", null, new Object[]{})
     );
   }
 
@@ -57,7 +58,7 @@ class TestPartitionPathParser {
     Schema schema = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"TestRecord\",\"fields\":[{\"name\":\"string_field\",\"type\":[\"null\", \"string\"]},"
         + "{\"name\":\"date_field\",\"type\": {\"type\":\"int\",\"logicalType\": \"date\"}},{\"name\":\"timestamp_field\",\"type\": {\"type\":\"long\",\"logicalType\": \"timestamp-millis\"}}]}");
 
-    Object[] result = parser.getPartitionFieldVals(Option.of(partitionFields), partitionPath, schema);
+    Object[] result = parser.getPartitionFieldVals(Option.ofNullable(partitionFields), partitionPath, schema);
     assertEquals(expectedValues.length, result.length);
     for (int i = 0; i < expectedValues.length; i++) {
       assertEquals(expectedValues[i], result[i]);
