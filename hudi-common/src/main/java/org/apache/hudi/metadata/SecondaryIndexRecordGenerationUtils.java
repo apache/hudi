@@ -176,19 +176,21 @@ public class SecondaryIndexRecordGenerationUtils {
                                                                 Option<StoragePath> dataFilePath,
                                                                 HoodieIndexDefinition indexDefinition,
                                                                 String instantTime) throws Exception {
-    HoodieFileSliceReader fileSliceReader =
-        getFileSliceReader(metaClient, engineType, logFilePaths, tableSchema, partition, dataFilePath, instantTime);
-    // Collect the records from the iterator in a map by record key to secondary key
     Map<String, String> recordKeyToSecondaryKey = new HashMap<>();
-    while (fileSliceReader.hasNext()) {
-      HoodieRecord record = (HoodieRecord) fileSliceReader.next();
-      String secondaryKey = getSecondaryKey(record, tableSchema, indexDefinition);
-      if (secondaryKey != null) {
-        // no delete records here
-        recordKeyToSecondaryKey.put(record.getRecordKey(tableSchema, HoodieRecord.RECORD_KEY_METADATA_FIELD), secondaryKey);
+    try (HoodieFileSliceReader fileSliceReader =
+             getFileSliceReader(metaClient, engineType, logFilePaths, tableSchema, partition, dataFilePath, instantTime)) {
+      // Collect the records from the iterator in a map by record key to secondary key
+      while (fileSliceReader.hasNext()) {
+        HoodieRecord record = (HoodieRecord) fileSliceReader.next();
+        String secondaryKey = getSecondaryKey(record, tableSchema, indexDefinition);
+        if (secondaryKey != null) {
+          // no delete records here
+          recordKeyToSecondaryKey.put(record.getRecordKey(tableSchema, HoodieRecord.RECORD_KEY_METADATA_FIELD), secondaryKey);
+        }
       }
     }
     return recordKeyToSecondaryKey;
+
   }
 
   private static HoodieFileSliceReader getFileSliceReader(
@@ -274,6 +276,7 @@ public class SecondaryIndexRecordGenerationUtils {
       } else {
         readerSchema = tableSchema;
       }
+      // TODO: add task completion listener to close the file readers
       return createSecondaryIndexGenerator(metaClient, engineType, logFilePaths, readerSchema, partition, dataFilePath, indexDefinition,
           metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().map(HoodieInstant::requestedTime).orElse(""));
     });
@@ -285,14 +288,14 @@ public class SecondaryIndexRecordGenerationUtils {
                                                                               Option<StoragePath> dataFilePath,
                                                                               HoodieIndexDefinition indexDefinition,
                                                                               String instantTime) throws Exception {
-    ClosableIterator<HoodieRecord> fileSliceIterator = ClosableIterator.wrap(
-        getFileSliceReader(metaClient, engineType, logFilePaths, tableSchema, partition, dataFilePath, instantTime));
     return new ClosableIterator<HoodieRecord>() {
+      private final HoodieFileSliceReader<HoodieRecord> fileSliceReader = getFileSliceReader(
+          metaClient, engineType, logFilePaths, tableSchema, partition, dataFilePath, instantTime);
       private HoodieRecord nextValidRecord;
 
       @Override
       public void close() {
-        fileSliceIterator.close();
+        fileSliceReader.close();
       }
 
       @Override
@@ -309,8 +312,8 @@ public class SecondaryIndexRecordGenerationUtils {
         // NOTE: Delete record should not happen when initializing the secondary index i.e. when called from readSecondaryKeysFromFileSlices,
         // because from that call, we get the merged records as of some committed instant. So, delete records must have been filtered out.
         // Loop to find the next valid record or exhaust the iterator.
-        while (fileSliceIterator.hasNext()) {
-          HoodieRecord record = fileSliceIterator.next();
+        while (fileSliceReader.hasNext()) {
+          HoodieRecord record = fileSliceReader.next();
           String secondaryKey = getSecondaryKey(record);
           if (secondaryKey != null) {
             nextValidRecord = createSecondaryIndexRecord(

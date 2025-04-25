@@ -37,14 +37,14 @@ import java.util.Map;
 import java.util.Properties;
 
 public class HoodieFileSliceReader<T> extends LogFileIterator<T> {
-  private Option<Iterator<HoodieRecord>> baseFileIterator;
-  private HoodieMergedLogRecordScanner scanner;
-  private Schema schema;
-  private Properties props;
+  private final Option<HoodieFileReader> baseFileReader;
+  private final Option<Iterator<HoodieRecord>> baseFileIterator;
+  private final Schema schema;
+  private final Properties props;
 
-  private TypedProperties payloadProps = new TypedProperties();
-  private Option<Pair<String, String>> simpleKeyGenFieldsOpt;
-  private Option<BaseKeyGenerator> keyGeneratorOpt;
+  private final TypedProperties payloadProps = new TypedProperties();
+  private final Option<Pair<String, String>> simpleKeyGenFieldsOpt;
+  private final Option<BaseKeyGenerator> keyGeneratorOpt;
   Map<String, HoodieRecord> records;
   HoodieRecordMerger merger;
 
@@ -52,12 +52,12 @@ public class HoodieFileSliceReader<T> extends LogFileIterator<T> {
                                    HoodieMergedLogRecordScanner scanner, Schema schema, String preCombineField, HoodieRecordMerger merger,
                                Properties props, Option<Pair<String, String>> simpleKeyGenFieldsOpt, Option<BaseKeyGenerator> keyGeneratorOpt) throws IOException {
     super(scanner);
+    this.baseFileReader = baseFileReader;
     if (baseFileReader.isPresent()) {
       this.baseFileIterator = Option.of(baseFileReader.get().getRecordIterator(schema));
     } else {
       this.baseFileIterator = Option.empty();
     }
-    this.scanner = scanner;
     this.schema = schema;
     this.merger = merger;
     if (preCombineField != null) {
@@ -66,7 +66,7 @@ public class HoodieFileSliceReader<T> extends LogFileIterator<T> {
     this.props = props;
     this.simpleKeyGenFieldsOpt = simpleKeyGenFieldsOpt;
     this.keyGeneratorOpt = keyGeneratorOpt;
-    this.records = scanner.getRecords();
+    this.records = this.scanner.getRecords();
   }
 
   private boolean hasNextInternal() {
@@ -99,4 +99,11 @@ public class HoodieFileSliceReader<T> extends LogFileIterator<T> {
     return hasNextInternal();
   }
 
+  @Override
+  public void close() {
+    super.close();
+    if (baseFileReader.isPresent()) {
+      baseFileReader.get().close();
+    }
+  }
 }
