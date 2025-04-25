@@ -66,7 +66,7 @@ import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.DirectoryInfo;
-import org.apache.hudi.metadata.index.EngineIndexHelper;
+import org.apache.hudi.metadata.index.ExpressionIndexRecordGenerator;
 import org.apache.hudi.metadata.index.Indexer;
 import org.apache.hudi.metadata.index.IndexerFactory;
 import org.apache.hudi.storage.HoodieStorage;
@@ -143,7 +143,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   protected StorageConfiguration<?> storageConf;
   protected final transient HoodieEngineContext engineContext;
   protected final transient Map<MetadataPartitionType, Indexer> enabledIndexBuilderMap;
-  protected final transient EngineIndexHelper indexHelper;
+  protected final transient ExpressionIndexRecordGenerator indexHelper;
   // Is the MDT bootstrapped and ready to be read from
   boolean initialized = false;
   private HoodieTableFileSystemView metadataView;
@@ -161,7 +161,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
                                             HoodieWriteConfig writeConfig,
                                             HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                             HoodieEngineContext engineContext,
-                                            EngineIndexHelper indexHelper,
+                                            ExpressionIndexRecordGenerator indexHelper,
                                             Option<String> inflightInstantTimestamp) {
     this.dataWriteConfig = writeConfig;
     this.engineContext = engineContext;

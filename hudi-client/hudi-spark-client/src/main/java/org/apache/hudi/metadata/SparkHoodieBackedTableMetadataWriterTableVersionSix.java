@@ -35,7 +35,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.index.HoodieSparkIndexClient;
-import org.apache.hudi.metadata.index.SparkIndexHelper;
+import org.apache.hudi.metadata.index.SparkExpressionIndexRecordGenerator;
 import org.apache.hudi.metrics.DistributedRegistry;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -86,7 +86,7 @@ public class SparkHoodieBackedTableMetadataWriterTableVersionSix extends HoodieB
                                        HoodieEngineContext engineContext,
                                        Option<String> inflightInstantTimestamp) {
     super(hadoopConf, writeConfig, failedWritesCleaningPolicy, engineContext,
-        new SparkIndexHelper(engineContext, writeConfig, createMetadataWriteConfig(writeConfig,
+        new SparkExpressionIndexRecordGenerator(engineContext, writeConfig, createMetadataWriteConfig(writeConfig,
             failedWritesCleaningPolicy)),
         inflightInstantTimestamp);
   }

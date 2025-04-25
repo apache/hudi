@@ -43,16 +43,16 @@ import java.util.List;
 
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
 
-public class SparkIndexHelper implements EngineIndexHelper {
+public class SparkExpressionIndexRecordGenerator implements ExpressionIndexRecordGenerator {
 
-  private static final Logger LOG = LoggerFactory.getLogger(SparkIndexHelper.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SparkExpressionIndexRecordGenerator.class);
   private final HoodieEngineContext engineContext;
   private final HoodieWriteConfig dataTableWriteConfig;
   private final HoodieWriteConfig metadataTableWriteConfig;
 
-  public SparkIndexHelper(HoodieEngineContext engineContext,
-                          HoodieWriteConfig dataTableWriteConfig,
-                          HoodieWriteConfig metadataTableWriteConfig) {
+  public SparkExpressionIndexRecordGenerator(HoodieEngineContext engineContext,
+                                             HoodieWriteConfig dataTableWriteConfig,
+                                             HoodieWriteConfig metadataTableWriteConfig) {
     this.engineContext = engineContext;
     this.dataTableWriteConfig = dataTableWriteConfig;
     this.metadataTableWriteConfig = metadataTableWriteConfig;
@@ -64,7 +64,7 @@ public class SparkIndexHelper implements EngineIndexHelper {
   }
 
   @Override
-  public HoodieData<HoodieRecord> getExpressionIndexRecords(
+  public HoodieData<HoodieRecord> generate(
       List<Pair<String, Pair<String, Long>>> partitionFilePathAndSizeTriplet, HoodieIndexDefinition indexDefinition,
       HoodieTableMetaClient metaClient, int parallelism, Schema readerSchema, StorageConfiguration<?> storageConf,
       String instantTime) {
