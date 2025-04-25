@@ -276,7 +276,6 @@ public class SecondaryIndexRecordGenerationUtils {
       } else {
         readerSchema = tableSchema;
       }
-      // TODO: add task completion listener to close the file readers
       return createSecondaryIndexGenerator(metaClient, engineType, logFilePaths, readerSchema, partition, dataFilePath, indexDefinition,
           metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().map(HoodieInstant::requestedTime).orElse(""));
     });
