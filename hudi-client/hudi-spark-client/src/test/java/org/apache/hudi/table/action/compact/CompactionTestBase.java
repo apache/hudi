@@ -197,11 +197,7 @@ public class CompactionTestBase extends HoodieClientTestBase {
                                  HoodieWriteConfig cfg, int expectedNumRecs, boolean hasDeltaCommitAfterPendingCompaction) throws IOException {
 
     HoodieWriteMetadata<?> compactionMetadata = client.compact(compactionInstantTime);
-    if (!cfg.shouldAutoCommit()) {
-      if (compactionMetadata.getCommitMetadata().isPresent()) {
-        client.commitCompaction(compactionInstantTime, compactionMetadata, Option.empty(), Option.empty());
-      }
-    }
+    client.commitCompaction(compactionInstantTime, compactionMetadata, Option.empty(), Option.empty());
     assertFalse(WriteMarkersFactory.get(cfg.getMarkersType(), table, compactionInstantTime).doesMarkerDirExist());
     List<FileSlice> fileSliceList = getCurrentLatestFileSlices(table);
     assertTrue(fileSliceList.stream().findAny().isPresent(), "Ensure latest file-slices are not empty");
@@ -234,7 +230,7 @@ public class CompactionTestBase extends HoodieClientTestBase {
   protected void executeCompactionWithReplacedFiles(String compactionInstantTime, SparkRDDWriteClient client, HoodieTable table,
                                    HoodieWriteConfig cfg, String[] partitions, Set<HoodieFileGroupId> replacedFileIds) throws IOException {
 
-    client.compact(compactionInstantTime);
+    client.commitCompaction(compactionInstantTime, client.compact(compactionInstantTime), Option.of(table));
     List<FileSlice> fileSliceList = getCurrentLatestFileSlices(table);
     assertTrue(fileSliceList.stream().findAny().isPresent(), "Ensure latest file-slices are not empty");
     assertFalse(fileSliceList.stream()
