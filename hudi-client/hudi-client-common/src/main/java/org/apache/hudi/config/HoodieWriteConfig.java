@@ -484,6 +484,13 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Controls whether a write operation should auto commit. This can be turned off to perform inspection"
           + " of the uncommitted write before deciding to commit.");
 
+  public static final ConfigProperty<String> INTERNAL_AUTO_COMMIT_ENABLE = ConfigProperty
+      .key("hoodie.internal.auto.commit")
+      .defaultValue("false")
+      .markAdvanced()
+      .withDocumentation("Controls whether a write operation should auto commit. This can be turned off to perform inspection"
+          + " of the uncommitted write before deciding to commit.");
+
   public static final ConfigProperty<String> WRITE_STATUS_CLASS_NAME = ConfigProperty
       .key("hoodie.writestatus.class")
       .defaultValue(WriteStatus.class.getName())
@@ -1436,6 +1443,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public Boolean shouldAutoCommit() {
     return false;
+  }
+
+  public Boolean shouldInternalAutoCommit() {
+    return getBooleanOrDefault(INTERNAL_AUTO_COMMIT_ENABLE);
   }
 
   public boolean shouldUseExternalSchemaTransformation() {
@@ -3306,6 +3317,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withAutoCommit(boolean autoCommit) {
       writeConfig.setValue(AUTO_COMMIT_ENABLE, String.valueOf(autoCommit));
+      return this;
+    }
+
+    public Builder withInternalAutoCommit(boolean autoCommit) {
+      writeConfig.setValue(INTERNAL_AUTO_COMMIT_ENABLE, String.valueOf(autoCommit));
       return this;
     }
 
