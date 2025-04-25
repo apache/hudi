@@ -759,7 +759,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     // default second granularity instant ID
     String secondGranularityInstant = "20210101120101123";
     Date defaultSecsGranularityDate = TimelineUtils.parseDateFromInstantTime(secondGranularityInstant);
-    System.out.println(defaultSecsGranularityDate.getTime());
+    assertEquals(1609502461123L, defaultSecsGranularityDate.getTime());
   }
 
   @Test

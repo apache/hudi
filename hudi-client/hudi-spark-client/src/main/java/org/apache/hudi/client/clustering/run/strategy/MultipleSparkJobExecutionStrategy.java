@@ -325,7 +325,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
     return HoodieJavaRDD.of(jsc.parallelize(clusteringOps, readParallelism).mapPartitions(clusteringOpsPartition -> {
       List<Supplier<ClosableIterator<HoodieRecord<T>>>> suppliers = new ArrayList<>();
       long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(new SparkTaskContextSupplier(), getWriteConfig());
-      LOG.info("MaxMemoryPerCompaction run as part of clustering => " + maxMemoryPerCompaction);
+      LOG.info("MaxMemoryPerCompaction run as part of clustering => {}", maxMemoryPerCompaction);
       Option<BaseKeyGenerator> keyGeneratorOpt = HoodieSparkKeyGeneratorFactory.createBaseKeyGenerator(writeConfig);
       clusteringOpsPartition.forEachRemaining(clusteringOp -> {
         Supplier<ClosableIterator<HoodieRecord<T>>> iteratorSupplier = () -> {

@@ -209,11 +209,9 @@ public class HoodieIndexUtils {
         HoodieTimer timer = HoodieTimer.start();
         Set<Pair<String, Long>> fileRowKeys = fileReader.filterRowKeys(candidateRecordKeys.stream().collect(Collectors.toSet()));
         foundRecordKeys.addAll(fileRowKeys);
-        LOG.info(String.format("Checked keys against file %s, in %d ms. #candidates (%d) #found (%d)", filePath,
-            timer.endTimer(), candidateRecordKeys.size(), foundRecordKeys.size()));
-        if (LOG.isDebugEnabled()) {
-          LOG.debug("Keys matching for file " + filePath + " => " + foundRecordKeys);
-        }
+        LOG.info("Checked keys against file {}, in {} ms. #candidates ({}) #found ({})", filePath,
+            timer.endTimer(), candidateRecordKeys.size(), foundRecordKeys.size());
+        LOG.debug("Keys matching for file {} => {}", filePath, foundRecordKeys);
       }
     } catch (Exception e) {
       throw new HoodieIndexException("Error checking candidate keys against file.", e);

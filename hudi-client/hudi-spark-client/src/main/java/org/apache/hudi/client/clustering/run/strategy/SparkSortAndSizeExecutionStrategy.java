@@ -64,7 +64,7 @@ public class SparkSortAndSizeExecutionStrategy<T>
                                                                    List<HoodieFileGroupId> fileGroupIdList,
                                                                    boolean shouldPreserveHoodieMetadata,
                                                                    Map<String, String> extraMetadata) {
-    LOG.info("Starting clustering for a group, parallelism:" + numOutputGroups + " commit:" + instantTime);
+    LOG.info("Starting clustering for a group, parallelism:{} commit:{}", numOutputGroups, instantTime);
     HoodieWriteConfig newConfig = HoodieWriteConfig.newBuilder()
         .withBulkInsertParallelism(numOutputGroups)
         .withProps(getWriteConfig().getProps()).build();
@@ -87,7 +87,7 @@ public class SparkSortAndSizeExecutionStrategy<T>
                                                                  final List<HoodieFileGroupId> fileGroupIdList,
                                                                  final boolean shouldPreserveHoodieMetadata,
                                                                  final Map<String, String> extraMetadata) {
-    LOG.info("Starting clustering for a group, parallelism:" + numOutputGroups + " commit:" + instantTime);
+    LOG.info("Starting clustering for a group, parallelism:{} commit:{}", numOutputGroups, instantTime);
 
     HoodieWriteConfig newConfig = HoodieWriteConfig.newBuilder()
         .withBulkInsertParallelism(numOutputGroups)

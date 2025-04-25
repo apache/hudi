@@ -209,11 +209,13 @@ public class HoodieSyncConfig extends HoodieConfig {
 
   public HoodieSyncConfig(Properties props, Configuration hadoopConf) {
     super(props);
-    LOG.debug("Passed in properties:\n" + props.entrySet()
-        .stream()
-        .sorted(Comparator.comparing(e -> e.getKey().toString()))
-        .map(e -> e.getKey() + "=" + e.getValue())
-        .collect(Collectors.joining("\n")));
+    if (LOG.isDebugEnabled()) {
+      LOG.debug("Passed in properties:\n" + props.entrySet()
+          .stream()
+          .sorted(Comparator.comparing(e -> e.getKey().toString()))
+          .map(e -> e.getKey() + "=" + e.getValue())
+          .collect(Collectors.joining("\n")));
+    }
     setDefaults(HoodieSyncConfig.class.getName());
     this.hadoopConf = hadoopConf;
     this.metricsConfig = HoodieMetricsConfig.newBuilder().fromProperties(props).build();

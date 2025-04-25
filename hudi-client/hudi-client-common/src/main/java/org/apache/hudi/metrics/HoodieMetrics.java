@@ -360,8 +360,8 @@ public class HoodieMetrics {
 
   public void updateFinalizeWriteMetrics(long durationInMs, long numFilesFinalized) {
     if (config.isMetricsOn()) {
-      LOG.info(String.format("Sending finalize write metrics (%s=%d, %s=%d)", DURATION_STR, durationInMs,
-          FINALIZED_FILES_NUM_STR, numFilesFinalized));
+      LOG.debug("Sending finalize write metrics ({}={}, {}={})", DURATION_STR, durationInMs,
+          FINALIZED_FILES_NUM_STR, numFilesFinalized);
       metrics.registerGauge(getMetricsName(FINALIZE_ACTION, DURATION_STR), durationInMs);
       metrics.registerGauge(getMetricsName(FINALIZE_ACTION, FINALIZED_FILES_NUM_STR), numFilesFinalized);
     }
@@ -369,14 +369,14 @@ public class HoodieMetrics {
 
   public void updateIndexMetrics(final String action, final long durationInMs) {
     if (config.isMetricsOn()) {
-      LOG.info(String.format("Sending index metrics (%s.%s, %d)", action, DURATION_STR, durationInMs));
+      LOG.debug("Sending index metrics ({}.{}, {})", action, DURATION_STR, durationInMs);
       metrics.registerGauge(getMetricsName(INDEX_ACTION, String.format("%s.%s", action, DURATION_STR)), durationInMs);
     }
   }
 
   public void updateSourceReadAndIndexMetrics(final String action, final long durationInMs) {
     if (config.isMetricsOn()) {
-      LOG.info(String.format("Sending %s metrics (%s.duration, %d)", SOURCE_READ_AND_INDEX_ACTION, action, durationInMs));
+      LOG.debug("Sending {} metrics ({}.duration, {})", SOURCE_READ_AND_INDEX_ACTION, action, durationInMs);
       metrics.registerGauge(getMetricsName(SOURCE_READ_AND_INDEX_ACTION, String.format("%s.duration", action)), durationInMs);
     }
   }

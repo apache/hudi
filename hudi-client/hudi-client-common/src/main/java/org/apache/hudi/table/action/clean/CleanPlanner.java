@@ -366,7 +366,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
     if (policy != HoodieCleaningPolicy.KEEP_LATEST_COMMITS && policy != HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS) {
       throw new IllegalArgumentException("getFilesToCleanKeepingLatestCommits can only be used for KEEP_LATEST_COMMITS or KEEP_LATEST_BY_HOURS");
     }
-    LOG.info("Cleaning " + partitionPath + ", retaining latest " + commitsRetained + " commits. ");
+    LOG.info("Cleaning {}, retaining latest {} commits.", partitionPath, commitsRetained);
     List<CleanFileInfo> deletePaths = new ArrayList<>();
 
     // Collect all the datafiles savepointed by all the savepoints
@@ -541,9 +541,9 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
     } else {
       throw new IllegalArgumentException("Unknown cleaning policy : " + policy.name());
     }
-    LOG.info(deletePaths.getValue().size() + " patterns used to delete in partition path:" + partitionPath);
+    LOG.info("{} patterns used to delete in partition path:{}", deletePaths.getValue().size(), partitionPath);
     if (deletePaths.getKey()) {
-      LOG.info("Partition " + partitionPath + " to be deleted");
+      LOG.info("Partition {} to be deleted", partitionPath);
     }
     return deletePaths;
   }

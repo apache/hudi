@@ -75,7 +75,7 @@ public class PreferWriterConflictResolutionStrategy
         .findInstantsModifiedAfterByCompletionTime(currentInstant.requestedTime())
         .getInstantsOrderedByCompletionTime()
         .collect(Collectors.toList());
-    LOG.info(String.format("Instants that may have conflict with %s are %s", currentInstant, completedCommitsInstants));
+    LOG.info("Instants that may have conflict with {} are {}", currentInstant, completedCommitsInstants);
     return completedCommitsInstants.stream();
   }
 
@@ -105,7 +105,7 @@ public class PreferWriterConflictResolutionStrategy
     List<HoodieInstant> instantsToConsider = Stream.concat(completedCommitsStream, inflightIngestionCommitsStream)
         .sorted(Comparator.comparing(o -> o.getCompletionTime()))
         .collect(Collectors.toList());
-    LOG.info(String.format("Instants that may have conflict with %s are %s", currentInstant, instantsToConsider));
+    LOG.info("Instants that may have conflict with {} are {}", currentInstant, instantsToConsider);
     return instantsToConsider.stream();
   }
 
