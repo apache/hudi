@@ -818,8 +818,6 @@ public class StreamSync implements Serializable, Closeable {
       Option<JavaRDD<WriteStatus>> errorTableWriteStatusRDDOpt = Option.empty();
       if (errorTableWriter.isPresent() && isErrorTableWriteUnificationEnabled) {
         errorTableWriteStatusRDDOpt = errorTableWriter.map(w -> w.upsert(errorTableInstantTime, instantTime, getLatestCommittedInstant()));
-        JavaRDD<WriteStatus> finalWriteStatusRDD = writeStatusRDD;
-        writeStatusRDD = errorTableWriteStatusRDDOpt.map(errorTableWriteStatus -> errorTableWriteStatus.union(finalWriteStatusRDD)).orElse(writeStatusRDD);
       }
 
       Map<String, String> checkpointCommitMetadata = extractCheckpointMetadata(inputBatch, props, writeClient.getConfig().getWriteVersion().versionCode(), cfg);
@@ -1354,8 +1352,15 @@ public class StreamSync implements Serializable, Closeable {
     }
 
     @Override
-    public boolean processWriteStatuses(long totalRecords, long totalErroredRecords, List<LeanWriteStatus> leanWriteStatuses) {
+    public boolean processWriteStatuses(long tableTotalRecords, long tableTotalErroredRecords, List<LeanWriteStatus> leanWriteStatuses) {
 
+      long totalRecords = tableTotalRecords;
+      long totalErroredRecords = tableTotalErroredRecords;
+      // TODO: Remove flag isErrorTableWriteUnificationEnabled, should not be required anymore
+      if (isErrorTableWriteUnificationEnabled) {
+        totalRecords += errorTableWriteStatusRDDOpt.map(status -> status.mapToDouble(WriteStatus::getTotalRecords).sum().longValue()).orElse(0L);
+        totalErroredRecords += errorTableWriteStatusRDDOpt.map(status -> status.mapToDouble(WriteStatus::getTotalErrorRecords).sum().longValue()).orElse(0L);
+      }
       long totalSuccessfulRecords = totalRecords - totalErroredRecords;
       this.totalSuccessfulRecords.set(totalSuccessfulRecords);
       LOG.info("instantTime={}, totalRecords={}, totalErrorRecords={}, totalSuccessfulRecords={}",
