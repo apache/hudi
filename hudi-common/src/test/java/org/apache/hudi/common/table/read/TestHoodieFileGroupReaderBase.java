@@ -52,6 +52,7 @@ import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.avro.Schema;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -178,6 +179,39 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
           getStorageConf(), getBasePath(), dataGen.getPartitionPaths(), false, 2, recordMergeMode,
           allRecords, CollectionUtils.combine(initialRecords, updates));
     }
+  }
+
+  @Test
+  public void testReadFileGroupInBootstrapMergeOnReadTable() throws Exception {
+    Map<String, String> writeConfigs = new HashMap<>(getCommonConfigs(RecordMergeMode.EVENT_TIME_ORDERING, true));
+    writeConfigs.put(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "avro");
+    writeConfigs.put("hoodie.bootstrap.base.path", tempDir.toAbsolutePath() + "/bootstrap_table");
+    writeConfigs.put("hoodie.datasource.write.hive_style_partitioning", "true");
+    writeConfigs.put(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "false");
+    writeConfigs.put(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), "false");
+
+    String[] partitionPaths = {"2025-01-01", "2025-01-02"};
+    try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(
+        0xDEEF, partitionPaths, new HashMap<>())) {
+      // Bootstrap operation; reading one file group containing a skeleton base file
+      // and a bootstrap file
+      bootstrapTable(dataGen.generateInserts("001", 100), writeConfigs);
+
+      // Upsert; reading one file group containing a skeleton base file, a bootstrap file
+      // and a log file
+      commitToTable(dataGen.generateUpdates("002", 30), UPSERT.value(), writeConfigs);
+
+      // Upsert; reading one file group containing a skeleton base file, a boostrap file
+      // and two log files
+      commitToTable(dataGen.generateUpdates("003", 20), UPSERT.value(), writeConfigs);
+      String basePath = this.getClass().getResource("file-group-reader/bootstrap_table").getPath();
+      validateOutputFromFileGroupReader(getStorageConf(), basePath, partitionPaths, true, 2, )
+    }
+  }
+
+  protected void bootstrapTable(List<HoodieRecord> recordList,
+                                Map<String, String> writeConfigs) {
+    throw new RuntimeException("BOO");
   }
 
   @ParameterizedTest
