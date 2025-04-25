@@ -367,7 +367,8 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
       JavaRDD<HoodieRecord> recordsRDD = jsc().parallelize(records, 1);
-      writeClient.insert(recordsRDD, newCommitTime).collect();
+      List<WriteStatus> statuses = writeClient.insert(recordsRDD, newCommitTime).collect();
+      writeClient.commit(newCommitTime, jsc().parallelize(statuses), Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap());
 
       // Update all the 100 records
       newCommitTime = "101";
@@ -378,7 +379,8 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       JavaRDD<HoodieRecord> updatedTaggedRecordsRDD = readClient.tagLocation(updatedRecordsRDD);
 
       writeClient.startCommitWithTime(newCommitTime);
-      writeClient.upsertPreppedRecords(updatedTaggedRecordsRDD, newCommitTime).collect();
+      statuses = writeClient.upsertPreppedRecords(updatedTaggedRecordsRDD, newCommitTime).collect();
+      writeClient.commit(newCommitTime, jsc().parallelize(statuses), Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap());
 
       // Write them to corresponding avro logfiles
       metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -408,6 +410,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
         // Do a compaction
         String compactionInstantTime = writeClient.scheduleCompaction(Option.empty()).get().toString();
         HoodieWriteMetadata<JavaRDD<WriteStatus>> result = writeClient.compact(compactionInstantTime);
+        writeClient.commitCompaction(compactionInstantTime, result, Option.of(table));
 
         // Verify that recently written compacted data file has no log file
         metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -473,8 +476,8 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
       JavaRDD<HoodieRecord> recordsRDD = jsc().parallelize(records, 1);
-      writeClient.insert(recordsRDD, newCommitTime).collect();
-
+      List<WriteStatus> statuses = writeClient.insert(recordsRDD, newCommitTime).collect();
+      writeClient.commit(newCommitTime, jsc().parallelize(statuses), Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap());
       // Update all the 100 records
       newCommitTime = "101";
       List<HoodieRecord> updatedRecords = dataGen.generateUpdates(newCommitTime, records);
@@ -484,13 +487,13 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       JavaRDD<HoodieRecord> updatedTaggedRecordsRDD = readClient.tagLocation(updatedRecordsRDD);
 
       writeClient.startCommitWithTime(newCommitTime);
-      writeClient.upsertPreppedRecords(updatedTaggedRecordsRDD, newCommitTime).collect();
-
+      statuses = writeClient.upsertPreppedRecords(updatedTaggedRecordsRDD, newCommitTime).collect();
+      writeClient.commit(newCommitTime, jsc().parallelize(statuses), Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap());
 
       newCommitTime = "102";
       writeClient.startCommitWithTime(newCommitTime);
-      writeClient.upsertPreppedRecords(updatedTaggedRecordsRDD, newCommitTime).collect();
-
+      statuses = writeClient.upsertPreppedRecords(updatedTaggedRecordsRDD, newCommitTime).collect();
+      writeClient.commit(newCommitTime, jsc().parallelize(statuses), Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap());
 
       // Write them to corresponding avro logfiles
       metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -520,7 +523,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
         // Do a log compaction
         String logCompactionInstantTime = writeClient.scheduleLogCompaction(Option.empty()).get().toString();
         HoodieWriteMetadata<JavaRDD<WriteStatus>> result = writeClient.logCompact(logCompactionInstantTime);
-        writeClient.commitLogCompaction(logCompactionInstantTime, result.getCommitMetadata().get(), Option.empty());
+        writeClient.completeLogCompaction(logCompactionInstantTime, result, Option.empty());
 
         // Verify that recently written compacted data file has no log file
         metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -706,7 +709,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       instantTime = "002";
       client.scheduleCompactionAtInstant(instantTime, Option.of(metadata.getExtraMetadata()));
       HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client.compact(instantTime);
-      client.commitCompaction(instantTime, compactionMetadata, Option.empty(), Option.empty());
+      client.commitCompaction(instantTime, compactionMetadata, Option.of(table), Option.empty());
 
       // Read from commit file
       table = HoodieSparkTable.create(cfg, context());
