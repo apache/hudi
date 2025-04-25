@@ -87,7 +87,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
   protected final WriteOperationType operationType;
   protected final TaskContextSupplier taskContextSupplier;
 
-  protected Option<TransactionManager> txnManagerOption = Option.empty();
+  protected Option<TransactionManager> txnManagerOption;
   protected Option<Pair<HoodieInstant, Map<String, String>>> lastCompletedTxn = Option.empty();
   protected Set<String> pendingInflightAndRequestedInstants = Collections.emptySet();
 
@@ -98,7 +98,8 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
     this.operationType = operationType;
     this.extraMetadata = extraMetadata;
     this.taskContextSupplier = context.getTaskContextSupplier();
-    // TODO : Remove this once we refactor and move out autoCommit method from here, since the TxnManager is held in {@link BaseHoodieWriteClient}.
+    this.txnManagerOption = config.shouldInternalAutoCommit()
+        ? Option.of(new TransactionManager(config, table.getStorage())) : Option.empty();
     if (!table.getStorageLayout().writeOperationSupported(operationType)) {
       throw new UnsupportedOperationException("Executor " + this.getClass().getSimpleName()
           + " is not compatible with table layout " + table.getStorageLayout().getClass().getSimpleName());
