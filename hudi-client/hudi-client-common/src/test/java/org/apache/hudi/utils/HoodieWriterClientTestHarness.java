@@ -148,6 +148,8 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
 
   protected abstract BaseHoodieWriteClient getHoodieWriteClient(HoodieWriteConfig cfg);
 
+  protected abstract BaseHoodieWriteClient getHoodieWriteClient(HoodieWriteConfig cfg, boolean shouldCloseOlderClient);
+
   protected void addConfigsForPopulateMetaFields(HoodieWriteConfig.Builder configBuilder, boolean populateMetaFields,
                                                  boolean isMetadataTable) {
     if (!populateMetaFields) {
@@ -642,7 +644,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
   }
 
   protected List<WriteStatus> writeAndVerifyBatch(BaseHoodieWriteClient client, List<HoodieRecord> inserts, String commitTime, boolean populateMetaFields) throws IOException {
-    return writeAndVerifyBatch(client, inserts, commitTime, populateMetaFields, false);
+    return writeAndVerifyBatch(client, inserts, commitTime, populateMetaFields, true);
   }
 
   /**
@@ -666,12 +668,12 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     dataGen = new HoodieTestDataGenerator(new String[] {partitionPath});
     String commitTime1 = client.createNewInstantTime();
     List<HoodieRecord> records1 = dataGen.generateInserts(commitTime1, 200);
-    List<WriteStatus> statuses1 = writeAndVerifyBatch(client, records1, commitTime1, populateMetaFields, failInlineClustering);
+    List<WriteStatus> statuses1 = writeAndVerifyBatch(client, records1, commitTime1, populateMetaFields, true);
     Set<HoodieFileGroupId> fileIds1 = getFileGroupIdsFromWriteStatus(statuses1);
 
     String commitTime2 = client.createNewInstantTime();
     List<HoodieRecord> records2 = dataGen.generateInserts(commitTime2, 200);
-    List<WriteStatus> statuses2 = writeAndVerifyBatch(client, records2, commitTime2, populateMetaFields, failInlineClustering);
+    List<WriteStatus> statuses2 = writeAndVerifyBatch(client, records2, commitTime2, populateMetaFields, true);
     client.close();
     Set<HoodieFileGroupId> fileIds2 = getFileGroupIdsFromWriteStatus(statuses2);
     Set<HoodieFileGroupId> fileIdsUnion = new HashSet<>(fileIds1);
@@ -875,6 +877,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     // create config to not update small files.
     HoodieWriteConfig config = getSmallInsertWriteConfig(2000, TRIP_EXAMPLE_SCHEMA, 10, false, populateMetaFields,
             populateMetaFields ? props : getPropertiesForKeyGen());
+    config.setValue(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY, HoodieFailedWritesCleaningPolicy.EAGER.name());
     return insertTwoBatches(getHoodieWriteClient(config), (BaseHoodieWriteClient) createBrokenClusteringClientFn.apply(config), populateMetaFields, partitionPath, failInlineClustering);
   }
 
@@ -1144,7 +1147,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
         generateWrapRecordsFn(isPrepped, hoodieWriteConfig, dataGen::generateUniqueUpdates);
 
     castWriteBatch(client, newCommitTime, prevCommitTime, Option.of(Arrays.asList(commitTimeBetweenPrevAndNew)), initCommitTime, numRecords, recordGenFunction,
-        BaseHoodieWriteClient::insert, true, numRecords, 300, 2, false, populateMetaFields, instantGenerator);
+        BaseHoodieWriteClient::insert, true, numRecords, 300, 2, true, populateMetaFields, instantGenerator);
   }
 
   protected void testHoodieConcatHandleOnDupInserts(boolean isPrepped, InstantGenerator instantGenerator) throws Exception {
@@ -1172,7 +1175,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
 
     castWriteBatch(client, newCommitTime, prevCommitTime, Option.of(commitTimesBetweenPrevAndNew), initCommitTime,
         secondInsertRecords, recordGenFunction, BaseHoodieWriteClient::insert, true, secondInsertRecords,
-        firstInsertRecords + secondInsertRecords, 2, false, config.populateMetaFields(), instantGenerator);
+        firstInsertRecords + secondInsertRecords, 2, true, config.populateMetaFields(), instantGenerator);
   }
 
   /**
@@ -1285,7 +1288,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
 
     castWriteBatch(client, newCommitTime, initCommitTime, Option.empty(), initCommitTime,
         // unused as genFn uses hard-coded number of inserts/updates/deletes
-        -1, recordGenFunction, BaseHoodieWriteClient::upsert, true, 200, 200, 1, false, true, INSTANT_GENERATOR);
+        -1, recordGenFunction, BaseHoodieWriteClient::upsert, true, 200, 200, 1, true, true, INSTANT_GENERATOR);
 
     /**
      * Write 2 (deletes+writes).
@@ -1295,7 +1298,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     recordGenFunction = secondBatchGenFn.apply(newCommitTime, numRecordsInSecondBatch, recordsInFirstBatch);
 
     castWriteBatch(client, newCommitTime, prevCommitTime, Option.empty(), initCommitTime, numRecordsInSecondBatch, recordGenFunction,
-        BaseHoodieWriteClient::upsert, true, expRecordsInSecondBatch, expTotalRecords, 2, false, true, INSTANT_GENERATOR);
+        BaseHoodieWriteClient::upsert, true, expRecordsInSecondBatch, expTotalRecords, 2, true, true, INSTANT_GENERATOR);
   }
 
   protected void testRollbackFailedCommits(boolean populateMetaFields) throws Exception {
@@ -1461,7 +1464,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     Future<Object> commit4 = service.submit(() -> castWriteBatch(getHoodieWriteClient(getParallelWritingWriteConfig(cleaningPolicy, populateMetaFields)),
         "500", "400", Option.of(Arrays.asList("500")), "500", 100, dataGen::generateInserts,
         BaseHoodieWriteClient::bulkInsert, false, 100, 100, 0, true, INSTANT_GENERATOR));
-    Future<HoodieCleanMetadata> clean1 = service.submit(() -> getHoodieWriteClient(getParallelWritingWriteConfig(cleaningPolicy, populateMetaFields)).clean());
+    Future<HoodieCleanMetadata> clean1 = service.submit(() -> getHoodieWriteClient(getParallelWritingWriteConfig(cleaningPolicy, populateMetaFields), false).clean());
     commit4.get();
     clean1.get();
     client.close();
