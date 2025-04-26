@@ -31,6 +31,7 @@ import java.nio.charset.StandardCharsets;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
 
@@ -160,7 +161,7 @@ public class PartitionPathParser {
     if (fieldSchema.getLogicalType() instanceof LogicalTypes.Date) {
       return Date.valueOf(time.toLocalDate());
     }
-    return Timestamp.valueOf(time);
+    return Timestamp.from(time.toInstant(ZoneOffset.UTC));
   }
 
   private static boolean isTimeBasedLogicalType(LogicalType logicalType) {

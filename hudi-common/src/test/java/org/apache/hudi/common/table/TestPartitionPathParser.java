@@ -37,16 +37,16 @@ class TestPartitionPathParser {
 
   private static Stream<Arguments> partitionPathCases() {
     return Stream.of(
-        Arguments.of("2025/01/03/16", new String[]{"timestamp_field"}, new Object[]{new Timestamp(1735941600000L)}),
-        Arguments.of("2025-01-03-16", new String[]{"timestamp_field"}, new Object[]{new Timestamp(1735941600000L)}),
-        Arguments.of("timestamp_field=2025-01-03-16", new String[]{"timestamp_field"}, new Object[]{new Timestamp(1735941600000L)}),
+        Arguments.of("2025/01/03/22", new String[]{"timestamp_field"}, new Object[]{new Timestamp(1735941600000L)}),
+        Arguments.of("2025-01-03-22", new String[]{"timestamp_field"}, new Object[]{new Timestamp(1735941600000L)}),
+        Arguments.of("timestamp_field=2025-01-03-22", new String[]{"timestamp_field"}, new Object[]{new Timestamp(1735941600000L)}),
         Arguments.of("2025/01/03", new String[]{"date_field"}, new Object[]{Date.valueOf("2025-01-03")}),
         Arguments.of("2025/01", new String[]{"date_field"}, new Object[]{Date.valueOf("2025-01-01")}),
         Arguments.of("2025", new String[]{"date_field"}, new Object[]{Date.valueOf("2025-01-01")}),
         Arguments.of("value1/2025/01/03", new String[]{"string_field","date_field"}, new Object[]{"value1", Date.valueOf("2025-01-03")}),
         Arguments.of("2025/01/03/value1", new String[]{"date_field", "string_field"}, new Object[]{Date.valueOf("2025-01-03"), "value1"}),
-        Arguments.of("string_field=value1/year=2020/month=08/day=28/hour=01", new String[]{"string_field", "timestamp_field"}, new Object[]{"value1", new Timestamp(1598594400000L)}),
-        Arguments.of("year=2020/month=08/day=28/hour=01/string_field=value1", new String[]{"timestamp_field", "string_field"}, new Object[]{new Timestamp(1598594400000L), "value1"}),
+        Arguments.of("string_field=value1/year=2020/month=08/day=28/hour=06", new String[]{"string_field", "timestamp_field"}, new Object[]{"value1", new Timestamp(1598594400000L)}),
+        Arguments.of("year=2020/month=08/day=28/hour=06/string_field=value1", new String[]{"timestamp_field", "string_field"}, new Object[]{new Timestamp(1598594400000L), "value1"}),
         Arguments.of("", null, new Object[]{})
     );
   }
