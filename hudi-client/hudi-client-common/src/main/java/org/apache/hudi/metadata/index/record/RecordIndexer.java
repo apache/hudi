@@ -100,8 +100,8 @@ public class RecordIndexer implements Indexer {
             .map(basefile -> Pair.of(partition, basefile)).collect(Collectors.toList()));
       }
 
-      LOG.info("Initializing record index from " + partitionBaseFilePairs.size() + " base files in "
-          + partitions.size() + " partitions");
+      LOG.info("Initializing record index from {} base files in {} partitions",
+          partitionBaseFilePairs.size(), partitions.size());
 
       // Collect record keys from the files in parallel
       records = readRecordKeysFromBaseFiles(
@@ -122,8 +122,8 @@ public class RecordIndexer implements Indexer {
             .forEach(fs -> partitionFileSlicePairs.add(Pair.of(partition, fs)));
       }
 
-      LOG.info("Initializing record index from " + partitionFileSlicePairs.size() + " file slices in "
-          + partitions.size() + " partitions");
+      LOG.info("Initializing record index from {} file slices in {} partitions",
+          partitionFileSlicePairs.size(), partitions.size());
       records = readRecordKeysFromFileSliceSnapshot(
           engineContext,
           partitionFileSlicePairs,

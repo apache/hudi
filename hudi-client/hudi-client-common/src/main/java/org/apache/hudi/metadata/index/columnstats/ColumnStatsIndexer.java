@@ -115,7 +115,7 @@ public class ColumnStatsIndexer implements Indexer {
         .withSourceFields(columnsToIndex.get())
         .withIndexOptions(Collections.EMPTY_MAP)
         .build();
-    LOG.info("Registering Or Updating the index " + PARTITION_NAME_COLUMN_STATS);
+    LOG.info("Registering Or Updating the index {}", PARTITION_NAME_COLUMN_STATS);
     register(dataTableMetaClient, indexDefinition);
   }
 }
