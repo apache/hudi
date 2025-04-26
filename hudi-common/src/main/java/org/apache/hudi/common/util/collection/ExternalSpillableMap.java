@@ -38,7 +38,9 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -88,10 +90,20 @@ public class ExternalSpillableMap<T extends Serializable, R> implements Map<T, R
   // Serializer for the values
   private final CustomSerializer<R> valueSerializer;
   private final String loggingContext;
+  // Locks used if instance requires thread safety (used by multiple threads)
+  private final boolean requiresThreadSafety;
+  private final ReentrantReadWriteLock.ReadLock readLock;
+  private final ReentrantReadWriteLock.WriteLock writeLock;
 
   public ExternalSpillableMap(long maxInMemorySizeInBytes, String baseFilePath, SizeEstimator<T> keySizeEstimator,
                               SizeEstimator<R> valueSizeEstimator, DiskMapType diskMapType, CustomSerializer<R> valueSerializer,
                               boolean isCompressionEnabled, String loggingContext) throws IOException {
+    this(maxInMemorySizeInBytes, baseFilePath, keySizeEstimator, valueSizeEstimator, diskMapType, valueSerializer, isCompressionEnabled, loggingContext, false);
+  }
+
+  public ExternalSpillableMap(long maxInMemorySizeInBytes, String baseFilePath, SizeEstimator<T> keySizeEstimator,
+                              SizeEstimator<R> valueSizeEstimator, DiskMapType diskMapType, CustomSerializer<R> valueSerializer,
+                              boolean isCompressionEnabled, String loggingContext, boolean requiresThreadSafety) {
     this.inMemoryMap = new HashMap<>();
     this.baseFilePath = baseFilePath;
     this.maxInMemorySizeInBytes = (long) Math.floor(maxInMemorySizeInBytes * SIZING_FACTOR_FOR_IN_MEMORY_MAP);
@@ -102,7 +114,22 @@ public class ExternalSpillableMap<T extends Serializable, R> implements Map<T, R
     this.isCompressionEnabled = isCompressionEnabled;
     this.valueSerializer = valueSerializer;
     this.loggingContext = loggingContext;
+    this.requiresThreadSafety = requiresThreadSafety;
+    if (requiresThreadSafety) {
+      ReentrantReadWriteLock globalLock = new ReentrantReadWriteLock();
+      readLock = globalLock.readLock();
+      writeLock = globalLock.writeLock();
+    } else {
+      readLock = null;
+      writeLock = null;
+    }
     LOG.debug("Initializing ExternalSpillableMap with baseFilePath = {}, maxInMemorySizeInBytes = {}, diskMapType = {}", maxInMemorySizeInBytes, baseFilePath, diskMapType);
+  }
+
+  public static <K extends Serializable, V> ExternalSpillableMap<K, V> createThreadSafeInstance(long maxInMemorySizeInBytes, String baseFilePath, SizeEstimator<K> keySizeEstimator,
+                                                                           SizeEstimator<V> valueSizeEstimator, DiskMapType diskMapType, CustomSerializer<V> valueSerializer,
+                                                                           boolean isCompressionEnabled, String loggingContext) {
+    return new ExternalSpillableMap<>(maxInMemorySizeInBytes, baseFilePath, keySizeEstimator, valueSizeEstimator, diskMapType, valueSerializer, isCompressionEnabled, loggingContext, true);
   }
 
   private void initDiskBasedMap() {
@@ -131,6 +158,16 @@ public class ExternalSpillableMap<T extends Serializable, R> implements Map<T, R
    */
   @Override
   public Iterator<R> iterator() {
+    if (requiresThreadSafety) {
+      // eagerly read data
+      acquireReadLock();
+      try {
+        return diskBasedMap == null ? new ArrayList<>(inMemoryMap.values()).iterator()
+            : Stream.concat(inMemoryMap.values().stream(), diskBasedMap.values().stream()).collect(Collectors.toList()).iterator();
+      } finally {
+        releaseReadLock();
+      }
+    }
     return diskBasedMap == null ? inMemoryMap.values().iterator() : new IteratorWrapper<>(inMemoryMap.values().iterator(), diskBasedMap.iterator());
   }
 
@@ -139,6 +176,17 @@ public class ExternalSpillableMap<T extends Serializable, R> implements Map<T, R
    */
   @Override
   public Iterator<R> iterator(Predicate<T> filter) {
+    if (requiresThreadSafety) {
+      // eagerly read data
+      acquireReadLock();
+      try {
+        return diskBasedMap == null ? inMemoryMap.entrySet().stream().filter(entry -> filter.test(entry.getKey())).map(Map.Entry::getValue).collect(Collectors.toList()).iterator()
+            : Stream.concat(inMemoryMap.entrySet().stream(), diskBasedMap.entrySet().stream()).filter(entry -> filter.test(entry.getKey()))
+            .map(Entry::getValue).collect(Collectors.toList()).iterator();
+      } finally {
+        releaseReadLock();
+      }
+    }
     return diskBasedMap == null ? inMemoryMapIterator(filter) : new IteratorWrapper<>(inMemoryMapIterator(filter), diskBasedMap.iterator(filter));
   }
 
@@ -184,21 +232,32 @@ public class ExternalSpillableMap<T extends Serializable, R> implements Map<T, R
 
   @Override
   public boolean isEmpty() {
-    return inMemoryMap.isEmpty() && getDiskBasedMapNumEntries() == 0;
+    acquireReadLock();
+    try {
+      return inMemoryMap.isEmpty() && getDiskBasedMapNumEntries() == 0;
+    } finally {
+      releaseReadLock();
+    }
   }
 
   @Override
   public boolean containsKey(Object key) {
-    return inMemoryMap.containsKey(key) || inDiskContainsKey(key);
+    acquireReadLock();
+    try {
+      return inMemoryMap.containsKey(key) || inDiskContainsKey(key);
+    } finally {
+      releaseReadLock();
+    }
   }
 
   @Override
   public boolean containsValue(Object value) {
-    return inMemoryMap.containsValue(value) || (diskBasedMap != null && diskBasedMap.containsValue(value));
-  }
-
-  private boolean inMemoryContainsKey(Object key) {
-    return inMemoryMap.containsKey(key);
+    acquireReadLock();
+    try {
+      return inMemoryMap.containsValue(value) || (diskBasedMap != null && diskBasedMap.containsValue(value));
+    } finally {
+      releaseReadLock();
+    }
   }
 
   private boolean inDiskContainsKey(Object key) {
@@ -207,56 +266,71 @@ public class ExternalSpillableMap<T extends Serializable, R> implements Map<T, R
 
   @Override
   public R get(Object key) {
-    if (inMemoryMap.containsKey(key)) {
-      return inMemoryMap.get(key);
-    } else if (inDiskContainsKey(key)) {
-      return diskBasedMap.get(key);
+    acquireReadLock();
+    try {
+      if (inMemoryMap.containsKey(key)) {
+        return inMemoryMap.get(key);
+      } else if (inDiskContainsKey(key)) {
+        return diskBasedMap.get(key);
+      }
+      return null;
+    } finally {
+      releaseReadLock();
     }
-    return null;
   }
 
   @Override
   public R put(T key, R value) {
-    if (this.estimatedPayloadSize == 0) {
-      // At first, use the sizeEstimate of a record being inserted into the spillable map.
-      // Note, the converter may over-estimate the size of a record in the JVM
-      this.estimatedPayloadSize = keySizeEstimator.sizeEstimate(key) + valueSizeEstimator.sizeEstimate(value);
-    } else if (this.inMemoryMap.size() % NUMBER_OF_RECORDS_TO_ESTIMATE_PAYLOAD_SIZE == 0) {
-      this.estimatedPayloadSize = (long) (this.estimatedPayloadSize * 0.9 + (keySizeEstimator.sizeEstimate(key) + valueSizeEstimator.sizeEstimate(value)) * 0.1);
-      this.currentInMemoryMapSize = this.inMemoryMap.size() * this.estimatedPayloadSize;
-      if (this.inMemoryMap.size() / NUMBER_OF_RECORDS_TO_ESTIMATE_PAYLOAD_SIZE == 1) {
-        LOG.info("{} : Updated Estimated Payload size {}", loggingContext, this.estimatedPayloadSize);
+    acquireWriteLock();
+    try {
+      if (this.estimatedPayloadSize == 0) {
+        // At first, use the sizeEstimate of a record being inserted into the spillable map.
+        // Note, the converter may over-estimate the size of a record in the JVM
+        this.estimatedPayloadSize = keySizeEstimator.sizeEstimate(key) + valueSizeEstimator.sizeEstimate(value);
+      } else if (this.inMemoryMap.size() % NUMBER_OF_RECORDS_TO_ESTIMATE_PAYLOAD_SIZE == 0) {
+        this.estimatedPayloadSize = (long) (this.estimatedPayloadSize * 0.9 + (keySizeEstimator.sizeEstimate(key) + valueSizeEstimator.sizeEstimate(value)) * 0.1);
+        this.currentInMemoryMapSize = this.inMemoryMap.size() * this.estimatedPayloadSize;
+        if (this.inMemoryMap.size() / NUMBER_OF_RECORDS_TO_ESTIMATE_PAYLOAD_SIZE == 1) {
+          LOG.info("{} : Updated Estimated Payload size {}", loggingContext, this.estimatedPayloadSize);
+        }
       }
-    }
 
-    if (this.inMemoryMap.containsKey(key)) {
-      this.inMemoryMap.put(key, value);
-    } else if (this.currentInMemoryMapSize < this.maxInMemorySizeInBytes) {
-      this.currentInMemoryMapSize += this.estimatedPayloadSize;
-      // Remove the old version of the record from disk first to avoid data duplication.
-      if (inDiskContainsKey(key)) {
-        diskBasedMap.remove(key);
+      if (this.inMemoryMap.containsKey(key)) {
+        this.inMemoryMap.put(key, value);
+      } else if (this.currentInMemoryMapSize < this.maxInMemorySizeInBytes) {
+        this.currentInMemoryMapSize += this.estimatedPayloadSize;
+        // Remove the old version of the record from disk first to avoid data duplication.
+        if (inDiskContainsKey(key)) {
+          diskBasedMap.remove(key);
+        }
+        this.inMemoryMap.put(key, value);
+      } else {
+        if (diskBasedMap == null) {
+          initDiskBasedMap();
+        }
+        diskBasedMap.put(key, value);
       }
-      this.inMemoryMap.put(key, value);
-    } else {
-      if (diskBasedMap == null) {
-        initDiskBasedMap();
-      }
-      diskBasedMap.put(key, value);
+      return value;
+    } finally {
+      releaseWriteLock();
     }
-    return value;
   }
 
   @Override
   public R remove(Object key) {
-    // NOTE : getDiskBasedMap().remove does not delete the data from disk
-    if (inMemoryMap.containsKey(key)) {
-      currentInMemoryMapSize -= estimatedPayloadSize;
-      return inMemoryMap.remove(key);
-    } else if (inDiskContainsKey(key)) {
-      return diskBasedMap.remove(key);
+    acquireWriteLock();
+    try {
+      // NOTE : getDiskBasedMap().remove does not delete the data from disk
+      if (inMemoryMap.containsKey(key)) {
+        currentInMemoryMapSize -= estimatedPayloadSize;
+        return inMemoryMap.remove(key);
+      } else if (inDiskContainsKey(key)) {
+        return diskBasedMap.remove(key);
+      }
+      return null;
+    } finally {
+      releaseWriteLock();
     }
-    return null;
   }
 
   @Override
@@ -268,11 +342,16 @@ public class ExternalSpillableMap<T extends Serializable, R> implements Map<T, R
 
   @Override
   public void clear() {
-    inMemoryMap.clear();
-    if (diskBasedMap != null) {
-      diskBasedMap.clear();
+    acquireWriteLock();
+    try {
+      inMemoryMap.clear();
+      if (diskBasedMap != null) {
+        diskBasedMap.clear();
+      }
+      currentInMemoryMapSize = 0L;
+    } finally {
+      releaseWriteLock();
     }
-    currentInMemoryMapSize = 0L;
   }
 
   public void close() {
@@ -291,48 +370,56 @@ public class ExternalSpillableMap<T extends Serializable, R> implements Map<T, R
 
   @Override
   public Set<T> keySet() {
-    if (diskBasedMap == null) {
-      return inMemoryMap.keySet();
+    acquireReadLock();
+    try {
+      if (diskBasedMap == null) {
+        return inMemoryMap.keySet();
+      }
+      Set<T> keySet = new HashSet<>(inMemoryMap.size() + diskBasedMap.size());
+      keySet.addAll(inMemoryMap.keySet());
+      keySet.addAll(diskBasedMap.keySet());
+      return keySet;
+    } finally {
+      releaseReadLock();
     }
-    Set<T> keySet = new HashSet<>(inMemoryMap.size() + diskBasedMap.size());
-    keySet.addAll(inMemoryMap.keySet());
-    keySet.addAll(diskBasedMap.keySet());
-    return keySet;
   }
 
   @Override
   public Collection<R> values() {
-    if (diskBasedMap == null) {
-      return inMemoryMap.values();
+    acquireReadLock();
+    try {
+      if (diskBasedMap == null) {
+        return inMemoryMap.values();
+      }
+      List<R> result = new ArrayList<>(inMemoryMap.size() + diskBasedMap.size());
+      result.addAll(inMemoryMap.values());
+      Iterator<R> iterator = diskBasedMap.iterator();
+      while (iterator.hasNext()) {
+        result.add(iterator.next());
+      }
+      return result;
+    } finally {
+      releaseReadLock();
     }
-    List<R> result = new ArrayList<>(inMemoryMap.size() + diskBasedMap.size());
-    result.addAll(inMemoryMap.values());
-    Iterator<R> iterator = diskBasedMap.iterator();
-    while (iterator.hasNext()) {
-      result.add(iterator.next());
-    }
-    return result;
-  }
-
-  public Stream<R> valueStream() {
-    if (diskBasedMap == null) {
-      return inMemoryMap.values().stream();
-    }
-    return Stream.concat(inMemoryMap.values().stream(), diskBasedMap.valueStream());
   }
 
   @Override
   public Set<Entry<T, R>> entrySet() {
-    if (diskBasedMap == null) {
-      return inMemoryMap.entrySet();
-    }
-    Set<Entry<T, R>> inMemory = inMemoryMap.entrySet();
-    Set<Entry<T, R>> onDisk = diskBasedMap.entrySet();
+    acquireReadLock();
+    try {
+      if (diskBasedMap == null) {
+        return inMemoryMap.entrySet();
+      }
+      Set<Entry<T, R>> inMemory = inMemoryMap.entrySet();
+      Set<Entry<T, R>> onDisk = diskBasedMap.entrySet();
 
-    Set<Entry<T, R>> entrySet = new HashSet<>(inMemory.size() + onDisk.size());
-    entrySet.addAll(inMemory);
-    entrySet.addAll(onDisk);
-    return entrySet;
+      Set<Entry<T, R>> entrySet = new HashSet<>(inMemory.size() + onDisk.size());
+      entrySet.addAll(inMemory);
+      entrySet.addAll(onDisk);
+      return entrySet;
+    } finally {
+      releaseReadLock();
+    }
   }
 
   /**
@@ -373,6 +460,30 @@ public class ExternalSpillableMap<T extends Serializable, R> implements Map<T, R
         return inMemoryIterator.next();
       }
       return diskLazyFileIterator.next();
+    }
+  }
+
+  private void acquireReadLock() {
+    if (requiresThreadSafety) {
+      readLock.lock();
+    }
+  }
+
+  private void releaseReadLock() {
+    if (requiresThreadSafety) {
+      readLock.unlock();
+    }
+  }
+
+  private void acquireWriteLock() {
+    if (requiresThreadSafety) {
+      writeLock.lock();
+    }
+  }
+
+  private void releaseWriteLock() {
+    if (requiresThreadSafety) {
+      writeLock.unlock();
     }
   }
 }
