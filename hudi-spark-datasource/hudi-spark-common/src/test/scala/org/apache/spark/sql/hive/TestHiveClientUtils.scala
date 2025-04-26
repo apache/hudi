@@ -24,7 +24,7 @@ import org.apache.spark.sql.hive.test.{TestHive, TestHiveContext}
 import org.apache.spark.sql.internal.StaticSQLConf.CATALOG_IMPLEMENTATION
 import org.junit.Assume
 import org.junit.jupiter.api.TestInstance.Lifecycle
-import org.junit.jupiter.api.{BeforeAll, Test, TestInstance}
+import org.junit.jupiter.api.{AfterAll, BeforeAll, Test, TestInstance}
 
 @TestInstance(Lifecycle.PER_CLASS)
 class TestHiveClientUtils {
@@ -48,5 +48,13 @@ class TestHiveClientUtils {
   def reuseHiveClientFromSparkSession(): Unit = {
     assert(spark.sparkContext.conf.get(CATALOG_IMPLEMENTATION) == "hive")
     assert(HiveClientUtils.getSingletonClientForMetadata(spark) == hiveClient)
+  }
+
+  @AfterAll
+  def tearDown(): Unit = {
+    if (spark != null) {
+      spark.stop()
+      spark = null
+    }
   }
 }

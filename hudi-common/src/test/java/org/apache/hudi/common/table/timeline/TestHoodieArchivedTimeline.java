@@ -32,6 +32,7 @@ import org.apache.hudi.common.model.HoodieArchivedLogFile;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRollingStatMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -43,10 +44,12 @@ import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2Migrati
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -64,6 +67,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -730,5 +734,40 @@ public class TestHoodieArchivedTimeline extends HoodieCommonTestHarness {
     // Do not archive Rolling Stats, cannot set to null since AVRO will throw null pointer
     avroMetaData.getExtraMetadata().put(HoodieRollingStatMetadata.ROLLING_STAT_METADATA_KEY, "");
     return avroMetaData;
+  }
+
+  @Test
+  void shouldReadArchivedFileFrom2025AndValidateContent() {
+    Path path = new Path(TestHoodieArchivedTimeline.class
+        .getResource("/archivecommits/.commits_.archive.681_1-0-1").getPath());
+
+    assertDoesNotThrow(() -> readAndValidateArchivedFile(path, metaClient.getFs()));
+  }
+
+  @Test
+  void shouldReadArchivedFileFrom2022AndValidateContent() {
+    Path path = new Path(TestHoodieArchivedTimeline.class
+        .getResource("/archivecommits/.commits_.archive.1_1-0-1").getPath());
+
+    assertDoesNotThrow(() -> readAndValidateArchivedFile(path, metaClient.getFs()));
+  }
+
+  void readAndValidateArchivedFile(Path path, FileSystem fs) throws IOException {
+    try (HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(
+        fs, new HoodieLogFile(path), HoodieArchivedMetaEntry.getClassSchema())) {
+
+      while (reader.hasNext()) {
+        HoodieLogBlock block = reader.next();
+        if (block instanceof HoodieAvroDataBlock) {
+          HoodieAvroDataBlock avroBlock = (HoodieAvroDataBlock) block;
+          try (ClosableIterator<HoodieRecord<IndexedRecord>> itr =
+                   avroBlock.getRecordIterator(HoodieRecord.HoodieRecordType.AVRO)) {
+            if (itr.hasNext()) {
+              itr.next(); // just consume one record to verify decoding works
+            }
+          }
+        }
+      }
+    }
   }
 }
