@@ -19,6 +19,7 @@
 
 package org.apache.hudi.metadata.index.columnstats;
 
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
@@ -26,6 +27,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Tuple3;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
@@ -43,6 +45,8 @@ import java.util.Map;
 
 import static org.apache.hudi.index.HoodieIndexUtils.register;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.fetchPartitionFileInfoTriplets;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getColumnStatsRecords;
 import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
 
 public class ColumnStatsIndexer implements Indexer {
@@ -94,7 +98,7 @@ public class ColumnStatsIndexer implements Indexer {
     LOG.info("Indexing {} columns for column stats index", columnsToIndex.get().size());
 
     // during initialization, we need stats for base and log files.
-    HoodieData<HoodieRecord> records = HoodieTableMetadataUtil.convertFilesToColumnStatsRecords(
+    HoodieData<HoodieRecord> records = convertFilesToColumnStatsRecords(
         engineContext, Collections.emptyMap(), partitionToFilesMap, dataTableMetaClient,
         dataTableWriteConfig.getMetadataConfig(),
         dataTableWriteConfig.getColumnStatsIndexParallelism(),
@@ -117,5 +121,34 @@ public class ColumnStatsIndexer implements Indexer {
         .build();
     LOG.info("Registering Or Updating the index {}", PARTITION_NAME_COLUMN_STATS);
     register(dataTableMetaClient, indexDefinition);
+  }
+
+  /**
+   * Convert added and deleted action metadata to column stats index records.
+   */
+  public static HoodieData<HoodieRecord> convertFilesToColumnStatsRecords(HoodieEngineContext engineContext,
+                                                                          Map<String, List<String>> partitionToDeletedFiles,
+                                                                          Map<String, Map<String, Long>> partitionToAppendedFiles,
+                                                                          HoodieTableMetaClient dataMetaClient,
+                                                                          HoodieMetadataConfig metadataConfig,
+                                                                          int columnStatsIndexParallelism,
+                                                                          int maxReaderBufferSize,
+                                                                          List<String> columnsToIndex) {
+    if ((partitionToAppendedFiles.isEmpty() && partitionToDeletedFiles.isEmpty())) {
+      return engineContext.emptyHoodieData();
+    }
+    LOG.info("Indexing {} columns for column stats index", columnsToIndex.size());
+
+    // Create the tuple (partition, filename, isDeleted) to handle both deletes and appends
+    final List<Tuple3<String, String, Boolean>> partitionFileFlagTupleList = fetchPartitionFileInfoTriplets(partitionToDeletedFiles, partitionToAppendedFiles);
+
+    // Create records MDT
+    int parallelism = Math.max(Math.min(partitionFileFlagTupleList.size(), columnStatsIndexParallelism), 1);
+    return engineContext.parallelize(partitionFileFlagTupleList, parallelism).flatMap(partitionFileFlagTuple -> {
+      final String partitionPath = partitionFileFlagTuple.f0;
+      final String filename = partitionFileFlagTuple.f1;
+      final boolean isDeleted = partitionFileFlagTuple.f2;
+      return getColumnStatsRecords(partitionPath, filename, dataMetaClient, columnsToIndex, isDeleted, maxReaderBufferSize).iterator();
+    });
   }
 }
