@@ -1209,92 +1209,7 @@ public class HoodieTableMetadataUtil {
     return EMPTY_PARTITION_NAME.equals(relativePartitionPath) ? NON_PARTITIONED_NAME : relativePartitionPath;
   }
 
-  /**
-   * Convert added and deleted files metadata to bloom filter index records.
-   */
-  public static HoodieData<HoodieRecord> convertFilesToBloomFilterRecords(HoodieEngineContext engineContext,
-                                                                          Map<String, List<String>> partitionToDeletedFiles,
-                                                                          Map<String, Map<String, Long>> partitionToAppendedFiles,
-                                                                          String instantTime,
-                                                                          HoodieTableMetaClient dataMetaClient,
-                                                                          int bloomIndexParallelism,
-                                                                          String bloomFilterType) {
-    // Create the tuple (partition, filename, isDeleted) to handle both deletes and appends
-    final List<Tuple3<String, String, Boolean>> partitionFileFlagTupleList = fetchPartitionFileInfoTriplets(partitionToDeletedFiles, partitionToAppendedFiles);
-
-    // Create records MDT
-    int parallelism = Math.max(Math.min(partitionFileFlagTupleList.size(), bloomIndexParallelism), 1);
-    return engineContext.parallelize(partitionFileFlagTupleList, parallelism).flatMap(partitionFileFlagTuple -> {
-      final String partitionName = partitionFileFlagTuple.f0;
-      final String filename = partitionFileFlagTuple.f1;
-      final boolean isDeleted = partitionFileFlagTuple.f2;
-      if (!FSUtils.isBaseFile(new StoragePath(filename))) {
-        LOG.warn("Ignoring file {} as it is not a base file", filename);
-        return Stream.<HoodieRecord>empty().iterator();
-      }
-
-      // Read the bloom filter from the base file if the file is being added
-      ByteBuffer bloomFilterBuffer = ByteBuffer.allocate(0);
-      if (!isDeleted) {
-        final String pathWithPartition = partitionName + "/" + filename;
-        final StoragePath addedFilePath = new StoragePath(dataMetaClient.getBasePath(), pathWithPartition);
-        bloomFilterBuffer = readBloomFilter(dataMetaClient.getStorage(), addedFilePath);
-
-        // If reading the bloom filter failed then do not add a record for this file
-        if (bloomFilterBuffer == null) {
-          LOG.error("Failed to read bloom filter from {}", addedFilePath);
-          return Stream.<HoodieRecord>empty().iterator();
-        }
-      }
-
-      return Stream.<HoodieRecord>of(HoodieMetadataPayload.createBloomFilterMetadataRecord(
-              partitionName, filename, instantTime, bloomFilterType, bloomFilterBuffer, partitionFileFlagTuple.f2))
-          .iterator();
-    });
-  }
-
-  /**
-   * Convert added and deleted action metadata to column stats index records.
-   */
-  public static HoodieData<HoodieRecord> convertFilesToColumnStatsRecords(HoodieEngineContext engineContext,
-                                                                          Map<String, List<String>> partitionToDeletedFiles,
-                                                                          Map<String, Map<String, Long>> partitionToAppendedFiles,
-                                                                          HoodieTableMetaClient dataMetaClient,
-                                                                          HoodieMetadataConfig metadataConfig,
-                                                                          int columnStatsIndexParallelism,
-                                                                          int maxReaderBufferSize,
-                                                                          List<String> columnsToIndex) {
-    if ((partitionToAppendedFiles.isEmpty() && partitionToDeletedFiles.isEmpty())) {
-      return engineContext.emptyHoodieData();
-    }
-    LOG.info("Indexing {} columns for column stats index", columnsToIndex.size());
-
-    // Create the tuple (partition, filename, isDeleted) to handle both deletes and appends
-    final List<Tuple3<String, String, Boolean>> partitionFileFlagTupleList = fetchPartitionFileInfoTriplets(partitionToDeletedFiles, partitionToAppendedFiles);
-
-    // Create records MDT
-    int parallelism = Math.max(Math.min(partitionFileFlagTupleList.size(), columnStatsIndexParallelism), 1);
-    return engineContext.parallelize(partitionFileFlagTupleList, parallelism).flatMap(partitionFileFlagTuple -> {
-      final String partitionPath = partitionFileFlagTuple.f0;
-      final String filename = partitionFileFlagTuple.f1;
-      final boolean isDeleted = partitionFileFlagTuple.f2;
-      return getColumnStatsRecords(partitionPath, filename, dataMetaClient, columnsToIndex, isDeleted, maxReaderBufferSize).iterator();
-    });
-  }
-
-  private static ByteBuffer readBloomFilter(HoodieStorage storage, StoragePath filePath) throws IOException {
-    HoodieConfig hoodieConfig = getReaderConfigs(storage.getConf());
-    try (HoodieFileReader fileReader = HoodieIOFactory.getIOFactory(storage).getReaderFactory(HoodieRecordType.AVRO)
-        .getFileReader(hoodieConfig, filePath)) {
-      final BloomFilter fileBloomFilter = fileReader.readBloomFilter();
-      if (fileBloomFilter == null) {
-        return null;
-      }
-      return ByteBuffer.wrap(getUTF8Bytes(fileBloomFilter.serializeToString()));
-    }
-  }
-
-  private static List<Tuple3<String, String, Boolean>> fetchPartitionFileInfoTriplets(
+  public static List<Tuple3<String, String, Boolean>> fetchPartitionFileInfoTriplets(
       Map<String, List<String>> partitionToDeletedFiles,
       Map<String, Map<String, Long>> partitionToAppendedFiles) {
     // Total number of files which are added or deleted
@@ -1614,7 +1529,7 @@ public class HoodieTableMetadataUtil {
     return getColumnStatsRecords(partitionPath, fileName, datasetMetaClient, columnsToIndex, isDeleted, -1);
   }
 
-  private static Stream<HoodieRecord> getColumnStatsRecords(String partitionPath,
+  public static Stream<HoodieRecord> getColumnStatsRecords(String partitionPath,
                                                             String fileName,
                                                             HoodieTableMetaClient datasetMetaClient,
                                                             List<String> columnsToIndex,

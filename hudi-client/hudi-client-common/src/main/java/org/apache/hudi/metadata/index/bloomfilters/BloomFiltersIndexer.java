@@ -19,25 +19,39 @@
 
 package org.apache.hudi.metadata.index.bloomfilters;
 
+import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.common.util.collection.Tuple3;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.io.storage.HoodieFileReader;
+import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
+import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.index.Indexer;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.Lazy;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 
+import static org.apache.hudi.common.util.ConfigUtils.getReaderConfigs;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.fetchPartitionFileInfoTriplets;
 import static org.apache.hudi.metadata.MetadataPartitionType.BLOOM_FILTERS;
 
 public class BloomFiltersIndexer implements Indexer {
@@ -68,11 +82,67 @@ public class BloomFiltersIndexer implements Indexer {
       Lazy<HoodieTableFileSystemView> fsView,
       HoodieBackedTableMetadata metadata,
       String instantTimeForPartition) throws IOException {
-    HoodieData<HoodieRecord> records = HoodieTableMetadataUtil.convertFilesToBloomFilterRecords(
+    HoodieData<HoodieRecord> records = convertFilesToBloomFilterRecords(
         engineContext, Collections.emptyMap(), partitionToFilesMap, createInstantTime, dataTableMetaClient,
         dataTableWriteConfig.getBloomIndexParallelism(), dataTableWriteConfig.getBloomFilterType());
 
     return InitialIndexData.of(
         dataTableWriteConfig.getMetadataConfig().getBloomFilterIndexFileGroupCount(), records);
+  }
+
+  /**
+   * Convert added and deleted files metadata to bloom filter index records.
+   */
+  public static HoodieData<HoodieRecord> convertFilesToBloomFilterRecords(HoodieEngineContext engineContext,
+                                                                          Map<String, List<String>> partitionToDeletedFiles,
+                                                                          Map<String, Map<String, Long>> partitionToAppendedFiles,
+                                                                          String instantTime,
+                                                                          HoodieTableMetaClient dataMetaClient,
+                                                                          int bloomIndexParallelism,
+                                                                          String bloomFilterType) {
+    // Create the tuple (partition, filename, isDeleted) to handle both deletes and appends
+    final List<Tuple3<String, String, Boolean>> partitionFileFlagTupleList = fetchPartitionFileInfoTriplets(partitionToDeletedFiles, partitionToAppendedFiles);
+
+    // Create records MDT
+    int parallelism = Math.max(Math.min(partitionFileFlagTupleList.size(), bloomIndexParallelism), 1);
+    return engineContext.parallelize(partitionFileFlagTupleList, parallelism).flatMap(partitionFileFlagTuple -> {
+      final String partitionName = partitionFileFlagTuple.f0;
+      final String filename = partitionFileFlagTuple.f1;
+      final boolean isDeleted = partitionFileFlagTuple.f2;
+      if (!FSUtils.isBaseFile(new StoragePath(filename))) {
+        LOG.warn("Ignoring file {} as it is not a base file", filename);
+        return Stream.<HoodieRecord>empty().iterator();
+      }
+
+      // Read the bloom filter from the base file if the file is being added
+      ByteBuffer bloomFilterBuffer = ByteBuffer.allocate(0);
+      if (!isDeleted) {
+        final String pathWithPartition = partitionName + "/" + filename;
+        final StoragePath addedFilePath = new StoragePath(dataMetaClient.getBasePath(), pathWithPartition);
+        bloomFilterBuffer = readBloomFilter(dataMetaClient.getStorage(), addedFilePath);
+
+        // If reading the bloom filter failed then do not add a record for this file
+        if (bloomFilterBuffer == null) {
+          LOG.error("Failed to read bloom filter from {}", addedFilePath);
+          return Stream.<HoodieRecord>empty().iterator();
+        }
+      }
+
+      return Stream.<HoodieRecord>of(HoodieMetadataPayload.createBloomFilterMetadataRecord(
+              partitionName, filename, instantTime, bloomFilterType, bloomFilterBuffer, partitionFileFlagTuple.f2))
+          .iterator();
+    });
+  }
+
+  private static ByteBuffer readBloomFilter(HoodieStorage storage, StoragePath filePath) throws IOException {
+    HoodieConfig hoodieConfig = getReaderConfigs(storage.getConf());
+    try (HoodieFileReader fileReader = HoodieIOFactory.getIOFactory(storage).getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
+        .getFileReader(hoodieConfig, filePath)) {
+      final BloomFilter fileBloomFilter = fileReader.readBloomFilter();
+      if (fileBloomFilter == null) {
+        return null;
+      }
+      return ByteBuffer.wrap(getUTF8Bytes(fileBloomFilter.serializeToString()));
+    }
   }
 }
