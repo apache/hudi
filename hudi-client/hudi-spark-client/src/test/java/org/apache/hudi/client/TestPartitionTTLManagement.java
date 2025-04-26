@@ -40,7 +40,6 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Paths;
@@ -144,7 +143,6 @@ public class TestPartitionTTLManagement extends HoodieClientTestBase {
     }
   }
 
-  @Disabled
   @Test
   public void testInlinePartitionTTL() {
     final HoodieWriteConfig cfg = getConfigBuilder(true)
