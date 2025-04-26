@@ -59,7 +59,6 @@ import org.apache.spark.sql.SparkSession;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -79,7 +78,6 @@ import static org.apache.hudi.utilities.multitable.MultiTableServiceUtils.Consta
  * Tests for HoodieMultiTableServicesMain
  * @see HoodieMultiTableServicesMain
  */
-@Disabled("HUDI-9281")
 class TestHoodieMultiTableServicesMain extends HoodieCommonTestHarness implements SparkProvider {
 
   private static final Logger LOG = LoggerFactory.getLogger(TestHoodieMultiTableServicesMain.class);
@@ -247,6 +245,7 @@ class TestHoodieMultiTableServicesMain extends HoodieCommonTestHarness implement
     JavaRDD<WriteStatus> result = writeClient.upsert(jsc.parallelize(records, 8), instant);
     List<WriteStatus> statuses = result.collect();
     assertNoWriteErrors(statuses);
+    writeClient.commit(instant, result);
   }
 
   private HoodieWriteConfig.Builder getWriteConfigBuilder(StoragePath basePath, String tableName) {

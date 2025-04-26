@@ -1301,7 +1301,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param logCompactionInstantTime Compaction Instant Time
    * @return Collection of Write Status
    */
-  protected HoodieWriteMetadata<O> logCompact(String logCompactionInstantTime, boolean shouldComplete) {
+  public HoodieWriteMetadata<O> logCompact(String logCompactionInstantTime, boolean shouldComplete) {
     HoodieTable table = createTable(config);
     preWrite(logCompactionInstantTime, WriteOperationType.LOG_COMPACT, table.getMetaClient());
     return tableServiceClient.logCompact(logCompactionInstantTime, shouldComplete);
