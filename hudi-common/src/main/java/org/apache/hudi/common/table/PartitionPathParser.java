@@ -42,8 +42,8 @@ public class PartitionPathParser {
   private static final String SLASH = "/";
 
   public Object[] getPartitionFieldVals(Option<String[]> partitionFields,
-                                               String partitionPath,
-                                               Schema writerSchema) {
+                                        String partitionPath,
+                                        Schema writerSchema) {
     if (!partitionFields.isPresent()) {
       return new Object[0];
     }
@@ -60,7 +60,8 @@ public class PartitionPathParser {
     for (int i = 0; i < partitionFields.length; i++) {
       String partitionField = partitionFields[i];
       Schema.Field field = schema.getField(partitionField);
-      Schema fieldSchema = resolveNullableSchema(field.schema());
+      // if the field is not present in the schema, we assume it is a string
+      Schema fieldSchema = field == null ? Schema.create(Schema.Type.STRING) : resolveNullableSchema(field.schema());
       LogicalType logicalType = fieldSchema.getLogicalType();
       if (isTimeBasedLogicalType(logicalType)) {
         if (hasDateField) {
