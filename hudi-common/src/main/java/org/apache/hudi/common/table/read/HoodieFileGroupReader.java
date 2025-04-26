@@ -250,7 +250,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
             values.add(partitionValues[i]);
           }
         }
-        filteredPartitionPathFields = Option.of(fields.toArray(new String[0]));
+        filteredPartitionPathFields = fields.isEmpty() ? Option.empty() : Option.of(fields.toArray(new String[0]));
         filteredPartitionValues = values.toArray(new Object[0]);
       }
       return readerContext.mergeBootstrapReaders(skeletonFileIterator.get().getLeft(), skeletonFileIterator.get().getRight(),
