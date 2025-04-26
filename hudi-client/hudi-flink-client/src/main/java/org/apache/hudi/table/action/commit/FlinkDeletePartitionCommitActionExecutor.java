@@ -93,7 +93,9 @@ public class FlinkDeletePartitionCommitActionExecutor<T extends HoodieRecordPayl
       this.saveWorkloadProfileMetadataToInflight(
           new WorkloadProfile(Pair.of(new HashMap<>(), new WorkloadStat())),
           instantTime);
-      this.runPrecommitValidation(result);
+      if (config.shouldInternalAutoCommit()) {
+        completeCommit(result);
+      }
       return result;
     } catch (Exception e) {
       throw new HoodieDeletePartitionException("Failed to drop partitions for commit time " + instantTime, e);
