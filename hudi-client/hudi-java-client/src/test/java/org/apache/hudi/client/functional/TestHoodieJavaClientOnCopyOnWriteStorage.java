@@ -49,7 +49,6 @@ import org.apache.hudi.table.upgrade.JavaUpgradeDowngradeHelper;
 import org.apache.hudi.testutils.HoodieJavaClientTestHarness;
 
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -69,7 +68,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 
 @SuppressWarnings("unchecked")
-@Disabled("HUDI-9281")
 public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTestHarness {
 
   private static Stream<Arguments> rollbackAfterConsistencyCheckFailureParams() {
@@ -131,7 +129,7 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
 
     return writeBatch((HoodieJavaWriteClient) client, newCommitTime, prevCommitTime, commitTimesBetweenPrevAndNew, initCommitTime, numRecordsInThisCommit, recordGenFunction,
         (writeClient, records, commitTime) -> (List<WriteStatus>) writeFn.apply(writeClient, records, commitTime), assertForCommit, expRecordsInThisCommit, expTotalRecords,
-        expTotalCommits, false, filterForCommitTimeWithAssert, instantGenerator);
+        expTotalCommits, true, filterForCommitTimeWithAssert, instantGenerator);
   }
 
   @Override
