@@ -284,6 +284,7 @@ public class HoodieFlinkCopyOnWriteTable<T>
 
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> deletePartitions(HoodieEngineContext context, String instantTime, List<String> partitions) {
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withProperties(this.config.getProps()).withInternalAutoCommit(true).build();
     return new FlinkDeletePartitionCommitActionExecutor<>(context, config, this, instantTime, partitions).execute();
   }
 
