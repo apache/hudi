@@ -733,3 +733,7 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 --- [2025-04-23 16:04:29] [release-v1.115.0] ---
 [ENG-25571][INTERNAL] Integrate kafka createRDD from spark-sql-kafka-0-10 (#1338)
 [AUDIT-1071]: Changelog for release-v1.113.0 (#1339)
+
+--- [2025-04-26 06:54:51] [release-v1.116.0] ---
+[ENG-26001][INTERNAL] Fix Archived Metadata Invalid Schema issue (#1337)
+[AUDIT-1071]: Changelog for release-v1.115.0 (#1341)
