@@ -1201,7 +1201,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   /**
    * Commit Compaction and track metrics.
    */
-  protected void completeCompaction(HoodieCommitMetadata metadata, HoodieTable table, String compactionCommitTime,
+  public void completeCompaction(HoodieCommitMetadata metadata, HoodieTable table, String compactionCommitTime,
                                     List<HoodieWriteStat> partialMdtHoodieWriteStats,
                                     Option<HoodieTableMetadataWriter> metadataWriterOpt) {
     tableServiceClient.completeCompaction(metadata, table, compactionCommitTime, partialMdtHoodieWriteStats, metadataWriterOpt);
