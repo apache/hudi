@@ -76,7 +76,6 @@ import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIEL
 public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
   private final List<Predicate> predicates;
   private final Supplier<InternalSchemaManager> internalSchemaManager;
-  private RowDataSerializer rowDataSerializer;
   private final boolean utcTimezone;
 
   public FlinkRowDataReaderContext(
@@ -153,10 +152,11 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
     HoodieKey hoodieKey = new HoodieKey(bufferedRecord.getRecordKey(), null);
     // delete record
     if (bufferedRecord.isDelete()) {
-      Comparable orderingValue = bufferedRecord.getOrderingValue();
-      return new HoodieEmptyRecord<>(hoodieKey, HoodieOperation.DELETE, orderingValue, HoodieRecord.HoodieRecordType.FLINK);
+      return new HoodieEmptyRecord<>(hoodieKey, HoodieOperation.DELETE, bufferedRecord.getOrderingValue(), HoodieRecord.HoodieRecordType.FLINK);
     }
-    return new HoodieFlinkRecord(hoodieKey, bufferedRecord.getRecord());
+    RowData rowData = bufferedRecord.getRecord();
+    HoodieOperation operation = HoodieOperation.fromValue(rowData.getRowKind().toByteValue());
+    return new HoodieFlinkRecord(hoodieKey, operation, bufferedRecord.getOrderingValue(), rowData);
   }
 
   @Override
@@ -174,12 +174,10 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
 
   @Override
   public RowData seal(RowData rowData) {
-    if (rowDataSerializer == null) {
-      RowType requiredRowType = (RowType) RowDataAvroQueryContexts.fromAvroSchema(getSchemaHandler().getRequiredSchema()).getRowType().getLogicalType();
-      rowDataSerializer = new RowDataSerializer(requiredRowType);
+    if (rowData instanceof BinaryRowData) {
+      return ((BinaryRowData) rowData).copy();
     }
-    // copy is unnecessary if there is no caching in subsequent processing.
-    return rowDataSerializer.copy(rowData);
+    return rowData;
   }
 
   @Override
@@ -187,10 +185,7 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
     if (record instanceof BinaryRowData) {
       return record;
     }
-    if (rowDataSerializer == null) {
-      RowType requiredRowType = (RowType) RowDataAvroQueryContexts.fromAvroSchema(getSchemaHandler().getRequiredSchema()).getRowType().getLogicalType();
-      rowDataSerializer = new RowDataSerializer(requiredRowType);
-    }
+    RowDataSerializer rowDataSerializer = RowDataAvroQueryContexts.getRowDataSerializer(avroSchema);
     return rowDataSerializer.toBinaryRow(record);
   }
 

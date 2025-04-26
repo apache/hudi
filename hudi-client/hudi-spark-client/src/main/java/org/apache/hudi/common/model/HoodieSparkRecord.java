@@ -89,8 +89,6 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
    */
   private final transient StructType schema;
 
-  private transient Comparable<?> orderingValue;
-
   public HoodieSparkRecord(UnsafeRow data) {
     this(data, null);
   }
