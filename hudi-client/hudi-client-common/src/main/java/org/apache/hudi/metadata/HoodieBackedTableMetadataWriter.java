@@ -143,7 +143,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   protected StorageConfiguration<?> storageConf;
   protected final transient HoodieEngineContext engineContext;
   protected final transient Map<MetadataPartitionType, Indexer> enabledIndexBuilderMap;
-  protected final transient ExpressionIndexRecordGenerator indexHelper;
+  protected final transient ExpressionIndexRecordGenerator expressionIndexRecordGenerator;
   // Is the MDT bootstrapped and ready to be read from
   boolean initialized = false;
   private HoodieTableFileSystemView metadataView;
@@ -161,7 +161,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
                                             HoodieWriteConfig writeConfig,
                                             HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                             HoodieEngineContext engineContext,
-                                            ExpressionIndexRecordGenerator indexHelper,
+                                            ExpressionIndexRecordGenerator expressionIndexRecordGenerator,
                                             Option<String> inflightInstantTimestamp) {
     this.dataWriteConfig = writeConfig;
     this.engineContext = engineContext;
@@ -173,8 +173,8 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     this.enabledIndexBuilderMap =
         IndexerFactory.getEnabledIndexBuilderMap(
             engineContext, dataWriteConfig, dataMetaClient, getTable(dataWriteConfig, dataMetaClient),
-            indexHelper);
-    this.indexHelper = indexHelper;
+            expressionIndexRecordGenerator);
+    this.expressionIndexRecordGenerator = expressionIndexRecordGenerator;
     if (writeConfig.isMetadataTableEnabled()) {
       this.metadataWriteConfig = createMetadataWriteConfig(writeConfig, failedWritesCleaningPolicy);
       try {
@@ -275,7 +275,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
               type -> IndexerFactory.getIndexBuilder(
                   type, engineContext, dataWriteConfig, dataMetaClient,
                   // TODO(yihua): Revisit this to make sure we don't recreate table instance
-                  getTable(dataWriteConfig, dataMetaClient), indexHelper))), inflightInstantTimestamp)) {
+                  getTable(dataWriteConfig, dataMetaClient), expressionIndexRecordGenerator))), inflightInstantTimestamp)) {
         LOG.error("Failed to initialize MDT from filesystem");
         return false;
       }
