@@ -279,10 +279,6 @@ public class TestHoodieFileSystemViews extends HoodieClientTestBase {
     }
     List<HoodieLogFile> logFiles1 = fileSlice1.getLogFiles().collect(Collectors.toList());
     List<HoodieLogFile> logFiles2 = fileSlice2.getLogFiles().collect(Collectors.toList());
-    if (logFiles2.size() != logFiles1.size()) {
-      System.out.println("adfads");
-    }
-    assertEquals(logFiles1.size(), logFiles2.size());
     if (logFiles1.size() != logFiles2.size()) {
       if (!commitMetadataOpt.isPresent()) {
         throw new HoodieException("Log files out of sync. ");
@@ -300,8 +296,8 @@ public class TestHoodieFileSystemViews extends HoodieClientTestBase {
       }
     }
     int counter = 0;
-    for (HoodieLogFile logFile1 : logFiles1) {
-      HoodieLogFile logFile2 = logFiles2.get(counter++);
+    for (HoodieLogFile logFile2 : logFiles2) {
+      HoodieLogFile logFile1 = logFiles1.get(counter++);
       assertLogFileEquality(logFile1, logFile2);
     }
   }
