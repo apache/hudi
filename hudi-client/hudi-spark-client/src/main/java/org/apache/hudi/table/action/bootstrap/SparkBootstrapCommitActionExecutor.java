@@ -261,11 +261,12 @@ public class SparkBootstrapCommitActionExecutor<T>
     table.getActiveTimeline().createNewInstant(requested);
 
     // Setup correct schema and run bulk insert.
+    HoodieWriteConfig writeConfig = new HoodieWriteConfig.Builder()
+        .withProps(config.getProps())
+        .withSchema(bootstrapSchema).withInternalAutoCommit(true).build();
+
     Option<HoodieWriteMetadata<HoodieData<WriteStatus>>> writeMetadataOption =
-        Option.of(getBulkInsertActionExecutor(HoodieJavaRDD.of(inputRecordsRDD)).execute());
-    if (writeMetadataOption.isPresent()) {
-      completeCommit(writeMetadataOption.get());
-    }
+        Option.of(getBulkInsertActionExecutor(HoodieJavaRDD.of(inputRecordsRDD), writeConfig).execute());
 
     // Delete the marker directory for the instant
     WriteMarkersFactory.get(config.getMarkersType(), table, bootstrapInstantTime)
@@ -274,9 +275,8 @@ public class SparkBootstrapCommitActionExecutor<T>
     return writeMetadataOption;
   }
 
-  protected BaseSparkCommitActionExecutor<T> getBulkInsertActionExecutor(HoodieData<HoodieRecord> inputRecordsRDD) {
-    return new SparkBulkInsertCommitActionExecutor((HoodieSparkEngineContext) context, new HoodieWriteConfig.Builder().withProps(config.getProps())
-        .withSchema(bootstrapSchema).build(), table, HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS,
+  protected BaseSparkCommitActionExecutor<T> getBulkInsertActionExecutor(HoodieData<HoodieRecord> inputRecordsRDD, HoodieWriteConfig writeConfig) {
+    return new SparkBulkInsertCommitActionExecutor((HoodieSparkEngineContext) context, writeConfig, table, HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS,
         inputRecordsRDD, Option.empty(), extraMetadata);
   }
 
