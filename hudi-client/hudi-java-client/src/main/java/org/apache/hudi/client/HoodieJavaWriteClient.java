@@ -60,21 +60,12 @@ public class HoodieJavaWriteClient<T> extends
         new Functions.Function2<String, HoodieTableMetaClient, Option<HoodieTableMetadataWriter>>() {
           @Override
           public Option<HoodieTableMetadataWriter> apply(String val1, HoodieTableMetaClient metaClient) {
-            return getMetadataWriter(val1, metaClient);
+            return Option.empty();
           }
         }, new Functions.Function1<String, Void>() {
           @Override
           public Void apply(String val1) {
-            if (metadataWriterMap.containsKey(val1)) {
-              if (metadataWriterMap.get(val1).isPresent()) {
-                try {
-                  metadataWriterMap.get(val1).get().close();
-                } catch (Exception e) {
-                  throw new HoodieException("Failed to close MetadataWriter for " + val1);
-                }
-              }
-              metadataWriterMap.remove(val1);
-            }
+            // no op
             return null;
           }
         });
@@ -94,21 +85,12 @@ public class HoodieJavaWriteClient<T> extends
         new Functions.Function2<String, HoodieTableMetaClient, Option<HoodieTableMetadataWriter>>() {
             @Override
               public Option<HoodieTableMetadataWriter> apply(String val1, HoodieTableMetaClient metaClient) {
-                return getMetadataWriter(val1, metaClient);
+                return Option.empty();
               }
             }, new Functions.Function1<String, Void>() {
               @Override
               public Void apply(String val1) {
-                if (metadataWriterMap.containsKey(val1)) {
-                  if (metadataWriterMap.get(val1).isPresent()) {
-                    try {
-                      metadataWriterMap.get(val1).get().close();
-                    } catch (Exception e) {
-                      throw new HoodieException("Failed to close MetadataWriter for " + val1);
-                    }
-                  }
-                  metadataWriterMap.remove(val1);
-                }
+                // no op
                 return null;
               }
             });

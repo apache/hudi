@@ -662,6 +662,17 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
         writeFn, assertForCommit, expRecordsInThisCommit, expTotalRecords, expTotalCommits, doCommit, true, partition, instantGenerator);
   }
 
+  public List<WriteStatus> writeBatch(HoodieJavaWriteClient client, String newCommitTime, String prevCommitTime,
+                                      Option<List<String>> commitTimesBetweenPrevAndNew, String initCommitTime, int numRecordsInThisCommit,
+                                      Function2<List<HoodieRecord>, String, Integer> recordGenFunction,
+                                      Function3<List<WriteStatus>, HoodieJavaWriteClient, List<HoodieRecord>, String> writeFn,
+                                      boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords, int expTotalCommits, boolean doCommit,
+                                      boolean filterForCommitTimeWithAssert, InstantGenerator instantGenerator) throws Exception {
+    return writeBatch(client, newCommitTime, prevCommitTime, commitTimesBetweenPrevAndNew, initCommitTime, numRecordsInThisCommit,
+        recordGenFunction, writeFn, assertForCommit, expRecordsInThisCommit, expTotalRecords, expTotalCommits,
+        doCommit, filterForCommitTimeWithAssert, instantGenerator, false);
+  }
+
   /**
    * Helper to insert/upsert batch of records and do regular assertions on the state after successful completion.
    *
@@ -685,12 +696,13 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
                                       Function2<List<HoodieRecord>, String, Integer> recordGenFunction,
                                       Function3<List<WriteStatus>, HoodieJavaWriteClient, List<HoodieRecord>, String> writeFn,
                                       boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords, int expTotalCommits, boolean doCommit,
-                                      boolean filterForCommitTimeWithAssert, InstantGenerator instantGenerator) throws Exception {
+                                      boolean filterForCommitTimeWithAssert, InstantGenerator instantGenerator,
+                                      boolean leaveInflightCommit) throws Exception {
 
     List<HoodieRecord> records = recordGenFunction.apply(newCommitTime, numRecordsInThisCommit);
     return writeBatchHelper(client, newCommitTime, prevCommitTime, commitTimesBetweenPrevAndNew, initCommitTime,
         numRecordsInThisCommit, records, writeFn, assertForCommit, expRecordsInThisCommit, expTotalRecords,
-        expTotalCommits, doCommit, filterForCommitTimeWithAssert, instantGenerator);
+        expTotalCommits, doCommit, filterForCommitTimeWithAssert, instantGenerator, leaveInflightCommit);
   }
 
   public List<WriteStatus> writeBatch(HoodieJavaWriteClient client, String newCommitTime, String prevCommitTime,
@@ -713,13 +725,25 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
                                              Function3<List<WriteStatus>, HoodieJavaWriteClient, List<HoodieRecord>, String> writeFn,
                                              boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords,
                                              int expTotalCommits, boolean doCommit, boolean filterForCommitTimeWithAssert, InstantGenerator instantGenerator) throws IOException {
+    return writeBatchHelper(client, newCommitTime, prevCommitTime, commitTimesBetweenPrevAndNew, initCommitTime,
+        numRecordsInThisCommit, records, writeFn, assertForCommit, expRecordsInThisCommit, expTotalRecords, expTotalCommits,
+        doCommit, filterForCommitTimeWithAssert, instantGenerator, false);
+  }
+
+  private List<WriteStatus> writeBatchHelper(HoodieJavaWriteClient client, String newCommitTime, String prevCommitTime,
+                                             Option<List<String>> commitTimesBetweenPrevAndNew, String initCommitTime,
+                                             int numRecordsInThisCommit, List<HoodieRecord> records,
+                                             Function3<List<WriteStatus>, HoodieJavaWriteClient, List<HoodieRecord>, String> writeFn,
+                                             boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords,
+                                             int expTotalCommits, boolean doCommit, boolean filterForCommitTimeWithAssert, InstantGenerator instantGenerator,
+                                             boolean leaveInflightCommit) throws IOException {
     // Write 1 (only inserts)
     client.startCommitWithTime(newCommitTime);
 
     List<WriteStatus> result = writeFn.apply(client, records, newCommitTime);
     assertNoWriteErrors(result);
 
-    if (doCommit) {
+    if (!leaveInflightCommit) {
       client.commit(newCommitTime, result);
     }
     // check the partition metadata is written out

@@ -877,7 +877,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     // create config to not update small files.
     HoodieWriteConfig config = getSmallInsertWriteConfig(2000, TRIP_EXAMPLE_SCHEMA, 10, false, populateMetaFields,
             populateMetaFields ? props : getPropertiesForKeyGen());
-    config.setValue(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY, HoodieFailedWritesCleaningPolicy.EAGER.name());
+    //config.setValue(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY, HoodieFailedWritesCleaningPolicy.EAGER.name());
     return insertTwoBatches(getHoodieWriteClient(config), (BaseHoodieWriteClient) createBrokenClusteringClientFn.apply(config), populateMetaFields, partitionPath, failInlineClustering);
   }
 
