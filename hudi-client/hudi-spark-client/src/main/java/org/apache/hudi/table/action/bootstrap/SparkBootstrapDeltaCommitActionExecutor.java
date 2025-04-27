@@ -40,12 +40,10 @@ public class SparkBootstrapDeltaCommitActionExecutor<T>
   }
 
   @Override
-  protected BaseSparkCommitActionExecutor<T> getBulkInsertActionExecutor(HoodieData<HoodieRecord> inputRecordsRDD) {
+  protected BaseSparkCommitActionExecutor<T> getBulkInsertActionExecutor(HoodieData<HoodieRecord> inputRecordsRDD, HoodieWriteConfig writeConfig) {
     return new SparkBulkInsertDeltaCommitActionExecutor(
         (HoodieSparkEngineContext) context,
-        new HoodieWriteConfig.Builder()
-            .withProps(config.getProps())
-            .withSchema(bootstrapSchema).build(),
+        writeConfig,
         table,
         HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS,
         inputRecordsRDD,
