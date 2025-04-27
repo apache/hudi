@@ -186,9 +186,6 @@ public class HoodieClientTestUtils {
       // Go over the commit metadata, and obtain the new files that need to be read.
       HashMap<String, String> fileIdToFullPath = getLatestFileIDsToFullPath(basePath, commitTimeline, commitsToReturn);
       String[] paths = fileIdToFullPath.values().toArray(new String[fileIdToFullPath.size()]);
-      if (paths == null || paths.length == 0) {
-        System.out.println("adsf");
-      }
       if (paths[0].endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
         Dataset<Row> rows = sqlContext.read().parquet(paths);
         if (lastCommitTimeOpt.isPresent()) {
