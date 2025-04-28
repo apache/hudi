@@ -113,7 +113,7 @@ public class JavaDeleteHelper<R> extends
         deleteExecutor.saveWorkloadProfileMetadataToInflight(new WorkloadProfile(Pair.of(new HashMap<>(), new WorkloadStat())), instantTime);
         result = new HoodieWriteMetadata<>();
         result.setDataTableWriteStatuses(Collections.EMPTY_LIST);
-        deleteExecutor.runPrecommitValidation(result);
+        deleteExecutor.completeCommit(result);
       }
       return result;
     } catch (Throwable e) {
