@@ -302,7 +302,7 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
     result.setIndexUpdateDuration(Duration.between(indexStartTime, Instant.now()));
     result.setDataTableWriteStatuses(statuses);
     result.setPartitionToReplaceFileIds(getPartitionToReplacedFileIds(result));
-    runPrecommitValidation(result);
+    completeCommit(result);
   }
 
   @Override
