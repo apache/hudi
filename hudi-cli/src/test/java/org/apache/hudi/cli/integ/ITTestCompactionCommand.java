@@ -284,7 +284,6 @@ public class ITTestCompactionCommand extends HoodieCLIIntegrationTestBase {
 
     // Create the write client to write some records in
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(basePath)
-        .withAutoCommit(false)
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .withDeleteParallelism(2).forTable(tableName)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build()).build();

@@ -164,7 +164,7 @@ public class ITTestSavepointsCommand extends HoodieCLIIntegrationTestBase {
     StoragePath metadataTableBasePath =
         new StoragePath(HoodieTableMetadata.getMetadataTableBasePath(HoodieCLI.basePath));
     // then bootstrap metadata table at instant 104
-    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withAutoCommit(false).withPath(HoodieCLI.basePath)
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath(HoodieCLI.basePath)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build()).build();
     SparkHoodieBackedTableMetadataWriter.create(HoodieCLI.conf, writeConfig, new HoodieSparkEngineContext(jsc)).close();
 

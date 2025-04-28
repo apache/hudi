@@ -184,7 +184,6 @@ public class ITTestTableCommand extends HoodieCLIIntegrationTestBase {
 
     // Create the write client to write some records in
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(tablePath)
-        .withAutoCommit(false)
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
         .withParallelism(2, 2)
         .withDeleteParallelism(2)
