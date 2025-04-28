@@ -39,6 +39,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -73,12 +74,7 @@ public class SecondaryIndexer implements Indexer {
   }
 
   @Override
-  public String getPartitionName() {
-    return secondaryIndexPartitionsToInit.get().iterator().next();
-  }
-
-  @Override
-  public InitialIndexData build(
+  public List<InitialIndexPartitionData> build(
       List<HoodieTableMetadataUtil.DirectoryInfo> partitionInfoList,
       Map<String, Map<String, Long>> partitionToFilesMap,
       String createInstantTime,
@@ -92,8 +88,7 @@ public class SecondaryIndexer implements Indexer {
             secondaryIndexPartitionsToInit.get());
 
       }
-      // TODO(yihua): avoid null and use a different way to indicate skipping
-      return InitialIndexData.of(-1, null);
+      return Collections.emptyList();
     }
     String indexName = secondaryIndexPartitionsToInit.get().iterator().next();
 
@@ -121,6 +116,7 @@ public class SecondaryIndexer implements Indexer {
         dataTableWriteConfig.getRecordIndexGrowthFactor(),
         dataTableWriteConfig.getRecordIndexMaxFileGroupSizeBytes());
 
-    return InitialIndexData.of(numFileGroup, records);
+    return Collections.singletonList(InitialIndexPartitionData.of(
+        numFileGroup, secondaryIndexPartitionsToInit.get().iterator().next(), records));
   }
 }

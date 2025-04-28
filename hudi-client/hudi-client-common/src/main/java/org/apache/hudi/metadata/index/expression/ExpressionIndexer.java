@@ -40,6 +40,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -75,12 +76,7 @@ public class ExpressionIndexer implements Indexer {
   }
 
   @Override
-  public String getPartitionName() {
-    return expressionIndexPartitionsToInit.get().iterator().next();
-  }
-
-  @Override
-  public InitialIndexData build(
+  public List<InitialIndexPartitionData> build(
       List<HoodieTableMetadataUtil.DirectoryInfo> partitionInfoList,
       Map<String, Map<String, Long>> partitionToFilesMap,
       String createInstantTime,
@@ -94,8 +90,7 @@ public class ExpressionIndexer implements Indexer {
                 + "bootstrap at a time is supported for now. Provided: {}",
             expressionIndexPartitionsToInit.get());
       }
-      // TODO(yihua): avoid null and use a different way to indicate skipping
-      return InitialIndexData.of(-1, null);
+      return Collections.emptyList();
     }
     String indexName = expressionIndexPartitionsToInit.get().iterator().next();
 
@@ -124,11 +119,12 @@ public class ExpressionIndexer implements Indexer {
     int parallelism = Math.min(filesToIndex.size(),
         dataTableWriteConfig.getMetadataConfig().getExpressionIndexParallelism());
     Schema readerSchema = getProjectedSchemaForExpressionIndex(indexDefinition, dataTableMetaClient);
-    return InitialIndexData.of(numFileGroup,
+    return Collections.singletonList(InitialIndexPartitionData.of(numFileGroup,
+        expressionIndexPartitionsToInit.get().iterator().next(),
         indexHelper.generate(
             filesToIndex, indexDefinition, dataTableMetaClient,
             parallelism,
-            readerSchema, engineContext.getStorageConf(), instantTimeForPartition));
+            readerSchema, engineContext.getStorageConf(), instantTimeForPartition)));
   }
 
   public static Set<String> getExpressionIndexPartitionsToInit(HoodieMetadataConfig metadataConfig,

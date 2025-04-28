@@ -51,12 +51,7 @@ public class FilesIndexer implements Indexer {
   }
 
   @Override
-  public String getPartitionName() {
-    return FILES.getPartitionPath();
-  }
-
-  @Override
-  public InitialIndexData build(
+  public List<InitialIndexPartitionData> build(
       List<HoodieTableMetadataUtil.DirectoryInfo> partitionInfoList,
       Map<String, Map<String, Long>> partitionToFilesMap,
       String createInstantTime,
@@ -77,7 +72,8 @@ public class FilesIndexer implements Indexer {
     HoodieRecord record = HoodieMetadataPayload.createPartitionListRecord(partitions);
     HoodieData<HoodieRecord> allPartitionsRecord = engineContext.parallelize(Collections.singletonList(record), 1);
     if (partitionInfoList.isEmpty()) {
-      return InitialIndexData.of(numFileGroup, allPartitionsRecord);
+      return Collections.singletonList(InitialIndexPartitionData.of(
+          numFileGroup, FILES.getPartitionPath(), allPartitionsRecord));
     }
 
     // Records which save the file listing of each partition
@@ -90,6 +86,7 @@ public class FilesIndexer implements Indexer {
         });
     ValidationUtils.checkState(fileListRecords.count() == partitions.size());
 
-    return InitialIndexData.of(numFileGroup, allPartitionsRecord.union(fileListRecords));
+    return Collections.singletonList(InitialIndexPartitionData.of(
+        numFileGroup, FILES.getPartitionPath(), allPartitionsRecord.union(fileListRecords)));
   }
 }

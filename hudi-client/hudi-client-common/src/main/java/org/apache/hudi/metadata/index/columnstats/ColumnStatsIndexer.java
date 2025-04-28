@@ -72,12 +72,7 @@ public class ColumnStatsIndexer implements Indexer {
   }
 
   @Override
-  public String getPartitionName() {
-    return COLUMN_STATS.getPartitionPath();
-  }
-
-  @Override
-  public InitialIndexData build(
+  public List<InitialIndexPartitionData> build(
       List<HoodieTableMetadataUtil.DirectoryInfo> partitionInfoList,
       Map<String, Map<String, Long>> partitionToFilesMap,
       String createInstantTime,
@@ -86,13 +81,16 @@ public class ColumnStatsIndexer implements Indexer {
       String instantTimeForPartition) throws IOException {
 
     final int numFileGroup = dataTableWriteConfig.getMetadataConfig().getColumnStatsIndexFileGroupCount();
+    // TODO(yihua): Revisit to see to return -1
     if (partitionToFilesMap.isEmpty()) {
-      return InitialIndexData.of(numFileGroup, engineContext.emptyHoodieData());
+      return Collections.singletonList(InitialIndexPartitionData.of(
+          numFileGroup, COLUMN_STATS.getPartitionPath(), engineContext.emptyHoodieData()));
     }
 
     if (columnsToIndex.get().isEmpty()) {
       // this can only happen if meta fields are disabled and cols to index is not explicitly overridden.
-      return InitialIndexData.of(numFileGroup, engineContext.emptyHoodieData());
+      return Collections.singletonList(InitialIndexPartitionData.of(
+          numFileGroup, COLUMN_STATS.getPartitionPath(), engineContext.emptyHoodieData()));
     }
 
     LOG.info("Indexing {} columns for column stats index", columnsToIndex.get().size());
@@ -105,7 +103,8 @@ public class ColumnStatsIndexer implements Indexer {
         dataTableWriteConfig.getMetadataConfig().getMaxReaderBufferSize(),
         columnsToIndex.get());
 
-    return InitialIndexData.of(numFileGroup, records);
+    return Collections.singletonList(InitialIndexPartitionData.of(
+        numFileGroup, COLUMN_STATS.getPartitionPath(), records));
   }
 
   @Override

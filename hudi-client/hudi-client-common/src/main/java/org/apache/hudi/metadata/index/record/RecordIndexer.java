@@ -44,6 +44,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -75,12 +76,7 @@ public class RecordIndexer implements Indexer {
   }
 
   @Override
-  public String getPartitionName() {
-    return RECORD_INDEX.getPartitionPath();
-  }
-
-  @Override
-  public InitialIndexData build(
+  public List<InitialIndexPartitionData> build(
       List<HoodieTableMetadataUtil.DirectoryInfo> partitionInfoList,
       Map<String, Map<String, Long>> partitionToFilesMap,
       String createInstantTime,
@@ -146,7 +142,8 @@ public class RecordIndexer implements Indexer {
         dataTableWriteConfig.getRecordIndexMaxFileGroupSizeBytes());
 
     LOG.info("Initializing record index with {} mappings and {} file groups.", recordCount, numFileGroup);
-    return InitialIndexData.of(numFileGroup, records);
+    return Collections.singletonList(InitialIndexPartitionData.of(
+        numFileGroup, RECORD_INDEX.getPartitionPath(), records));
   }
 
   /**

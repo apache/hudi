@@ -37,6 +37,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -62,12 +63,7 @@ public class PartitionStatsIndexer implements Indexer {
   }
 
   @Override
-  public String getPartitionName() {
-    return PARTITION_STATS.getPartitionPath();
-  }
-
-  @Override
-  public InitialIndexData build(
+  public List<InitialIndexPartitionData> build(
       List<HoodieTableMetadataUtil.DirectoryInfo> partitionInfoList,
       Map<String, Map<String, Long>> partitionToFilesMap,
       String createInstantTime,
@@ -78,8 +74,7 @@ public class PartitionStatsIndexer implements Indexer {
     if (!dataTableWriteConfig.isMetadataColumnStatsIndexEnabled()) {
       LOG.warn("Skipping partition stats initialization as column stats index is not enabled. Please enable {}",
           HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key());
-      // TODO(yihua): avoid null and use a different way to indicate skipping
-      return InitialIndexData.of(-1, null);
+      return Collections.emptyList();
     }
     HoodieData<HoodieRecord> records =
         HoodieTableMetadataUtil.convertFilesToPartitionStatsRecords(engineContext,
@@ -87,6 +82,7 @@ public class PartitionStatsIndexer implements Indexer {
             dataTableWriteConfig.getMetadataConfig(),
             dataTableMetaClient, Option.empty(), Option.of(dataTableWriteConfig.getRecordMerger().getRecordType()));
     final int numFileGroup = dataTableWriteConfig.getMetadataConfig().getPartitionStatsIndexFileGroupCount();
-    return InitialIndexData.of(numFileGroup, records);
+    return Collections.singletonList(InitialIndexPartitionData.of(
+        numFileGroup, PARTITION_STATS.getPartitionPath(), records));
   }
 }

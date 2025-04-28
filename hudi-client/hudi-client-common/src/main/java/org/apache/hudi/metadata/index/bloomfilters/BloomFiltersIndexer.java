@@ -70,12 +70,7 @@ public class BloomFiltersIndexer implements Indexer {
   }
 
   @Override
-  public String getPartitionName() {
-    return BLOOM_FILTERS.getPartitionPath();
-  }
-
-  @Override
-  public InitialIndexData build(
+  public List<InitialIndexPartitionData> build(
       List<HoodieTableMetadataUtil.DirectoryInfo> partitionInfoList,
       Map<String, Map<String, Long>> partitionToFilesMap,
       String createInstantTime,
@@ -86,8 +81,9 @@ public class BloomFiltersIndexer implements Indexer {
         engineContext, Collections.emptyMap(), partitionToFilesMap, createInstantTime, dataTableMetaClient,
         dataTableWriteConfig.getBloomIndexParallelism(), dataTableWriteConfig.getBloomFilterType());
 
-    return InitialIndexData.of(
-        dataTableWriteConfig.getMetadataConfig().getBloomFilterIndexFileGroupCount(), records);
+    return Collections.singletonList(InitialIndexPartitionData.of(
+        dataTableWriteConfig.getMetadataConfig().getBloomFilterIndexFileGroupCount(),
+        BLOOM_FILTERS.getPartitionPath(), records));
   }
 
   /**
