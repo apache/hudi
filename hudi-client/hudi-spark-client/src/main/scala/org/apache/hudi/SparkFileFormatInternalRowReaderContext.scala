@@ -229,6 +229,7 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
         }
       }
     } else {
+      val dataProjection = getBootstrapProjection(dataRequiredSchema, dataRequiredSchema, partitionFields, partitionValues)
       new ClosableIterator[Any] {
         val combinedRow = new JoinedRow()
 
@@ -256,7 +257,7 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
               sparkAdapter.makeColumnarBatch(vecs, s.numRows())
             case (_: ColumnarBatch, _: InternalRow) => throw new IllegalStateException("InternalRow ColumnVector mismatch")
             case (_: InternalRow, _: ColumnarBatch) => throw new IllegalStateException("InternalRow ColumnVector mismatch")
-            case (s: InternalRow, d: InternalRow) => combinedRow(s, d)
+            case (s: InternalRow, d: InternalRow) => combinedRow(s, dataProjection.apply(d))
           }
         }
 

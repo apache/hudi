@@ -65,7 +65,6 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.BufferedOutputStream;
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.Serializable;
 import java.net.URI;
@@ -487,7 +486,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
         }
         byte[] buffer = new byte[10000];
         file.getParentFile().mkdirs();
-        try (BufferedOutputStream out = new BufferedOutputStream(new FileOutputStream(file))) {
+        try (BufferedOutputStream out = new BufferedOutputStream(Files.newOutputStream(file.toPath()))) {
           int count;
           while ((count = zip.read(buffer)) != -1) {
             out.write(buffer, 0, count);

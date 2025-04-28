@@ -266,7 +266,9 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
         Writable[] skeletonWritable = skeletonFileIterator.next().get();
         Writable[] dataWritable = dataFileIterator.next().get();
         for (int i = 0; i < partitionFieldPositions.length; i++) {
-          dataWritable[partitionFieldPositions[i]] = convertedPartitionValues[i];
+          if (dataWritable[partitionFieldPositions[i]] == null) {
+            dataWritable[partitionFieldPositions[i]] = convertedPartitionValues[i];
+          }
         }
         Writable[] mergedWritable = new Writable[skeletonLen + dataLen];
         System.arraycopy(skeletonWritable, 0, mergedWritable, 0, skeletonLen);
