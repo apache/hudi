@@ -37,7 +37,6 @@ import org.apache.hudi.metadata.JavaHoodieBackedTableMetadataWriter;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import java.io.IOException;
-import java.util.Collections;
 import java.util.List;
 
 public abstract class HoodieJavaTable<T>
@@ -71,13 +70,7 @@ public abstract class HoodieJavaTable<T>
 
   public static HoodieWriteMetadata<List<WriteStatus>> convertMetadata(
       HoodieWriteMetadata<HoodieData<WriteStatus>> metadata) {
-    HoodieWriteMetadata<List<WriteStatus>> convertedMetadata = metadata.clone(convertHoodieDataToList(metadata.getAllWriteStatuses()));
-    convertedMetadata.setDataTableWriteStatuses(convertHoodieDataToList(metadata.getDataTableWriteStatuses()));
-    return convertedMetadata;
-  }
-
-  private static List<WriteStatus> convertHoodieDataToList(HoodieData<WriteStatus> hoodieData) {
-    return Option.ofNullable(hoodieData).map(HoodieData::collectAsList).orElse(Collections.emptyList());
+    return metadata.clone(metadata.getWriteStatuses().collectAsList());
   }
 
   @Override

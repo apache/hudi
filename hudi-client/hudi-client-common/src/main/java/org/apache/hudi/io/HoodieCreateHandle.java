@@ -164,9 +164,7 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       // deflate record payload after recording success. This will help users access payload as a
       // part of marking
       // record successful.
-      if (!colStatsEnabled) {
-        record.deflate();
-      }
+      record.deflate();
     } catch (Throwable t) {
       // Not throwing exception from here, since we don't want to fail the entire job
       // for a single record
@@ -208,7 +206,6 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
    */
   @Override
   public List<WriteStatus> close() {
-
     LOG.info("Closing the file " + writeStatus.getFileId() + " as we are done with all the records " + recordsWritten);
     try {
       if (isClosed()) {
@@ -258,9 +255,5 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     RuntimeStats runtimeStats = new RuntimeStats();
     runtimeStats.setTotalCreateTime(timer.endTimer());
     stat.setRuntimeStats(runtimeStats);
-
-    if (colStatsEnabled) {
-      attachColStats(stat, recordList, fieldsToIndex, writeSchemaWithMetaFields);
-    }
   }
 }

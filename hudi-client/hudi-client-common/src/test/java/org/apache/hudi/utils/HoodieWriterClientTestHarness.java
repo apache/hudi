@@ -827,12 +827,10 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     String clusteringCommitTime = client.scheduleClustering(Option.empty()).get().toString();
     HoodieWriteMetadata<List<WriteStatus>> clusterMetadata = transformWriteMetadataFn.apply(client.cluster(clusteringCommitTime, completeClustering));
     if (config.populateMetaFields()) {
-      verifyRecordsWrittenWithPreservedMetadata(new HashSet<>(allRecords.getRight()), allRecords.getLeft(),
-          clusterMetadata.getAllWriteStatuses().stream().filter(writeStatus -> !writeStatus.isMetadataTable()).collect(Collectors.toList()));
+      verifyRecordsWrittenWithPreservedMetadata(new HashSet<>(allRecords.getRight()), allRecords.getLeft(), clusterMetadata.getWriteStatuses());
     } else {
-      verifyRecordsWritten(clusteringCommitTime, populateMetaFields, allRecords.getLeft(),
-          clusterMetadata.getAllWriteStatuses().stream().filter(writeStatus -> !writeStatus.isMetadataTable()).collect(
-              Collectors.toList()), config, createKeyGeneratorFn.apply(config));
+      verifyRecordsWritten(clusteringCommitTime, populateMetaFields, allRecords.getLeft(), clusterMetadata.getWriteStatuses(),
+              config, createKeyGeneratorFn.apply(config));
     }
     return clusterMetadata;
   }
@@ -859,7 +857,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
       String clusteringCommitTime = createMetaClient().reloadActiveTimeline().getCompletedReplaceTimeline()
               .getReverseOrderedInstants().findFirst().get().requestedTime();
       verifyRecordsWritten(clusteringCommitTime, populateMetaFields, allRecords.getLeft().getLeft(),
-              clusterMetadata.getAllWriteStatuses().stream().filter(writeStatus -> !writeStatus.isMetadataTable()).collect(Collectors.toList()), config, createKeyGeneratorFn.apply(config));
+              clusterMetadata.getWriteStatuses(), config, createKeyGeneratorFn.apply(config));
     }
   }
 
@@ -877,7 +875,6 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     // create config to not update small files.
     HoodieWriteConfig config = getSmallInsertWriteConfig(2000, TRIP_EXAMPLE_SCHEMA, 10, false, populateMetaFields,
             populateMetaFields ? props : getPropertiesForKeyGen());
-    //config.setValue(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY, HoodieFailedWritesCleaningPolicy.EAGER.name());
     return insertTwoBatches(getHoodieWriteClient(config), (BaseHoodieWriteClient) createBrokenClusteringClientFn.apply(config), populateMetaFields, partitionPath, failInlineClustering);
   }
 

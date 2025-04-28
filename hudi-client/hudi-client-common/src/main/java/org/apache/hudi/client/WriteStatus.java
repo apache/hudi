@@ -55,13 +55,12 @@ public class WriteStatus implements Serializable {
   private static final long serialVersionUID = 1L;
   private static final long RANDOM_SEED = 9038412832L;
 
-  protected HashMap<HoodieKey, Throwable> errors = new HashMap<>();
+  private final HashMap<HoodieKey, Throwable> errors = new HashMap<>();
 
   private final List<HoodieRecordDelegate> writtenRecordDelegates = new ArrayList<>();
 
-  protected List<Pair<HoodieRecordDelegate, Throwable>> failedRecords = new ArrayList<>();
+  private final List<Pair<HoodieRecordDelegate, Throwable>> failedRecords = new ArrayList<>();
 
-  private boolean isMetadataTable;
   private Throwable globalError = null;
 
   private String fileId = null;
@@ -77,15 +76,10 @@ public class WriteStatus implements Serializable {
   private final boolean trackSuccessRecords;
   private final transient Random random;
 
-  public WriteStatus(Boolean trackSuccessRecords, Double failureFraction, Boolean isMetadataTable) {
+  public WriteStatus(Boolean trackSuccessRecords, Double failureFraction) {
     this.trackSuccessRecords = trackSuccessRecords;
     this.failureFraction = failureFraction;
     this.random = new Random(RANDOM_SEED);
-    this.isMetadataTable = isMetadataTable;
-  }
-
-  public WriteStatus(Boolean trackSuccessRecords, Double failureFraction) {
-    this(trackSuccessRecords, failureFraction, false);
   }
 
   public WriteStatus() {
@@ -263,19 +257,9 @@ public class WriteStatus implements Serializable {
     return trackSuccessRecords;
   }
 
-  public void setIsMetadata(boolean isMetadataTable) {
-    this.isMetadataTable = isMetadataTable;
-  }
-
-  public boolean isMetadataTable() {
-    return isMetadataTable;
-  }
-
   @Override
   public String toString() {
-    return "WriteStatus {"
-        + "isMetadata=" + isMetadataTable
-        + ", fileId=" + fileId
+    return "WriteStatus {" + "fileId=" + fileId
         + ", writeStat=" + stat
         + ", globalError='" + globalError + '\''
         + ", hasErrors='" + hasErrors() + '\''

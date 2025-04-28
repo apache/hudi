@@ -38,7 +38,6 @@ import org.apache.hudi.metadata.FlinkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
-import java.util.Collections;
 import java.util.List;
 
 /**
@@ -84,13 +83,7 @@ public abstract class HoodieFlinkTable<T>
 
   public static HoodieWriteMetadata<List<WriteStatus>> convertMetadata(
       HoodieWriteMetadata<HoodieData<WriteStatus>> metadata) {
-    HoodieWriteMetadata<List<WriteStatus>> convertedMetadata = metadata.clone(convertHoodieDataToList(metadata.getAllWriteStatuses()));
-    convertedMetadata.setDataTableWriteStatuses(convertHoodieDataToList(metadata.getDataTableWriteStatuses()));
-    return convertedMetadata;
-  }
-
-  private static List<WriteStatus> convertHoodieDataToList(HoodieData<WriteStatus> hoodieData) {
-    return Option.ofNullable(hoodieData).map(HoodieData::collectAsList).orElse(Collections.emptyList());
+    return metadata.clone(metadata.getWriteStatuses().collectAsList());
   }
 
   @Override

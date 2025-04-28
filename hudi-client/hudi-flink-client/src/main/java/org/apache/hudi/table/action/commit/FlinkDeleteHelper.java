@@ -113,7 +113,7 @@ public class FlinkDeleteHelper<R> extends
         // if entire set of keys are non existent
         deleteExecutor.saveWorkloadProfileMetadataToInflight(new WorkloadProfile(Pair.of(new HashMap<>(), new WorkloadStat())), instantTime);
         result = new HoodieWriteMetadata<>();
-        result.setDataTableWriteStatuses(Collections.EMPTY_LIST);
+        result.setWriteStatuses(Collections.EMPTY_LIST);
         deleteExecutor.completeCommit(result);
       }
       return result;

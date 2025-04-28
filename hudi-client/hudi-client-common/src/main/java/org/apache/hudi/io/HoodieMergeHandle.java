@@ -68,7 +68,6 @@ import java.util.NoSuchElementException;
 import java.util.Properties;
 import java.util.Set;
 
-@SuppressWarnings("Duplicates")
 /**
  * Handle to merge incoming records to those in storage.
  * <p>
@@ -97,8 +96,9 @@ import java.util.Set;
  *
  * </p>
  */
+@SuppressWarnings("Duplicates")
 @NotThreadSafe
-public class  HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O> {
+public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O> {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieMergeHandle.class);
 
@@ -355,9 +355,7 @@ public class  HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       // deflate record payload after recording success. This will help users access payload as a
       // part of marking
       // record successful.
-      if (!colStatsEnabled) {
-        newRecord.deflate();
-      }
+      newRecord.deflate();
       return true;
     } catch (Exception e) {
       LOG.error("Error writing record  " + newRecord, e);
@@ -489,9 +487,6 @@ public class  HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       RuntimeStats runtimeStats = new RuntimeStats();
       runtimeStats.setTotalUpsertTime(timer.endTimer());
       stat.setRuntimeStats(runtimeStats);
-      if (colStatsEnabled) {
-        attachColStats(stat, recordList, fieldsToIndex, writeSchemaWithMetaFields);
-      }
 
       performMergeDataValidationCheck(writeStatus);
 

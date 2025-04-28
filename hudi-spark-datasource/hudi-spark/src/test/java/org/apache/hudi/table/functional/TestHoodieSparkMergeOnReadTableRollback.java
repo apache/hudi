@@ -1014,7 +1014,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
       // Do a compaction
       newCommitTime = writeClient.scheduleCompaction(Option.empty()).get().toString();
       HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = writeClient.compact(newCommitTime);
-      statuses = compactionMetadata.getDataTableWriteStatuses();
+      statuses = compactionMetadata.getWriteStatuses();
       // Ensure all log files have been compacted into base files
       String extension = table.getBaseFileExtension();
       Collection<List<HoodieWriteStat>> stats = compactionMetadata.getCommitMetadata().get().getPartitionToWriteStats().values();

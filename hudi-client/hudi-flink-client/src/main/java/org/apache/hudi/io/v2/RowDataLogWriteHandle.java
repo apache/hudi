@@ -128,7 +128,7 @@ public class RowDataLogWriteHandle<T, I, K, O>
                 .filter(e -> columnsToIndexSet.contains(e.getKey()))
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
       }
-      //stat.putRecordsStats(columnRangeMetadata);
+      stat.putRecordsStats(columnRangeMetadata);
     }
     resetWriteCounts();
     assert stat.getRuntimeStats() != null;

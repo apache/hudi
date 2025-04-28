@@ -276,16 +276,12 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
   protected Stream<HoodieBaseFile> insertRecordsToMORTable(HoodieTableMetaClient metaClient, List<HoodieRecord> records,
                                                  SparkRDDWriteClient client, HoodieWriteConfig cfg, String commitTime,
                                                            boolean doExplicitCommit) throws IOException {
-    //HoodieTableMetaClient reloadedMetaClient = HoodieTableMetaClient.reload(metaClient);
-
     JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
     JavaRDD<WriteStatus> statusesRdd = client.insert(writeRecords, commitTime);
     List<WriteStatus> statuses = statusesRdd.collect();
     assertNoWriteErrors(statuses);
-    //if (doExplicitCommit) {
     client.commit(commitTime, jsc().parallelize(statuses));
 
-    //}
     HoodieTableMetaClient reloadedMetaClient = HoodieTableMetaClient.reload(metaClient);
     assertFileSizesEqual(statuses, status -> FSUtils.getFileSize(
         reloadedMetaClient.getStorage(),

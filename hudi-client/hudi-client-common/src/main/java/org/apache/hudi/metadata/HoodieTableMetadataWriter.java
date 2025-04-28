@@ -22,12 +22,9 @@ import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieIndexPartitionInfo;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.client.BaseHoodieWriteClient;
-import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.data.HoodieData;
-import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
 
@@ -39,12 +36,6 @@ import java.util.List;
  * Interface that supports updating metadata for a given table, as actions complete.
  */
 public interface HoodieTableMetadataWriter<I,O> extends Serializable, AutoCloseable {
-
-  void startCommit(String instantTime);
-
-  HoodieData<WriteStatus> prepareAndWriteToMDT(HoodieData<WriteStatus> writeStatus, String instantTime);
-
-  void writeToFilesPartitionAndCommit(String instantTime, HoodieEngineContext context, List<HoodieWriteStat> partialMdtWriteStats, HoodieCommitMetadata commitMetadata);
 
   /**
    * Builds the given metadata partitions to create index.
@@ -128,6 +119,4 @@ public interface HoodieTableMetadataWriter<I,O> extends Serializable, AutoClosea
   }
 
   BaseHoodieWriteClient<?, I, ?, O> getWriteClient();
-
-  BaseHoodieWriteClient<?, I, ?, O> reInitWriteClient();
 }

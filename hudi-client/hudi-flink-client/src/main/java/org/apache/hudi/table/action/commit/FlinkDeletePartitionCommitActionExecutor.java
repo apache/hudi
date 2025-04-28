@@ -74,7 +74,7 @@ public class FlinkDeletePartitionCommitActionExecutor<T extends HoodieRecordPayl
       HoodieWriteMetadata<List<WriteStatus>> result = new HoodieWriteMetadata<>();
       result.setPartitionToReplaceFileIds(partitionToReplaceFileIds);
       result.setIndexUpdateDuration(Duration.ofMillis(timer.endTimer()));
-      result.setDataTableWriteStatuses(Collections.emptyList());
+      result.setWriteStatuses(Collections.emptyList());
 
       // created requested
       HoodieInstant dropPartitionsInstant =

@@ -20,28 +20,23 @@ package org.apache.hudi.metadata;
 
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.client.FailOnFirstErrorWriteStatus;
-import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
-import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieRecordMerger;
-import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
-import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
@@ -85,17 +80,12 @@ public class HoodieMetadataWriteUtils {
    * Create a {@code HoodieWriteConfig} to use for the Metadata Table.
    *
    * @param writeConfig                {@code HoodieWriteConfig} of the main dataset writer
-   * @param datatableVesion HoodieTableVersion
+   * @param failedWritesCleaningPolicy Cleaning policy on failed writes
    */
   @VisibleForTesting
   public static HoodieWriteConfig createMetadataWriteConfig(
-      HoodieWriteConfig writeConfig, HoodieTableVersion datatableVesion) {
+      HoodieWriteConfig writeConfig, HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy) {
     String tableName = writeConfig.getTableName() + METADATA_TABLE_NAME_SUFFIX;
-    boolean isSparkEngine = writeConfig.getEngineType() == EngineType.SPARK;
-    WriteConcurrencyMode concurrencyMode = (isSparkEngine && datatableVesion.greaterThanOrEquals(HoodieTableVersion.EIGHT))
-        ? WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL : WriteConcurrencyMode.SINGLE_WRITER;
-    HoodieLockConfig lockConfig = (isSparkEngine && datatableVesion.greaterThanOrEquals(HoodieTableVersion.EIGHT))
-        ? HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class).build() : HoodieLockConfig.newBuilder().build();
 
     final long maxLogFileSizeBytes = writeConfig.getMetadataConfig().getMaxLogFileSize();
     // Borrow the cleaner policy from the main table and adjust the cleaner policy based on the main table's cleaner policy
@@ -104,7 +94,7 @@ public class HoodieMetadataWriteUtils {
         .withAsyncClean(DEFAULT_METADATA_ASYNC_CLEAN)
         .withAutoClean(false)
         .withCleanerParallelism(MDT_DEFAULT_PARALLELISM)
-        .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
+        .withFailedWritesCleaningPolicy(failedWritesCleaningPolicy)
         .withCleanerPolicy(dataTableCleaningPolicy);
 
     if (HoodieCleaningPolicy.KEEP_LATEST_COMMITS.equals(dataTableCleaningPolicy)) {
@@ -177,17 +167,12 @@ public class HoodieMetadataWriteUtils {
         .withPayloadConfig(HoodiePayloadConfig.newBuilder()
             .withPayloadClass(HoodieMetadataPayload.class.getCanonicalName()).build())
         .withRecordMergeImplClasses(HoodieAvroRecordMerger.class.getCanonicalName())
-        .withWriteConcurrencyMode(concurrencyMode)
-        // need to fix to re-use the same lock configuration as data table.
-        .withLockConfig(lockConfig)
         .withWriteRecordPositionsEnabled(false);
 
     // RecordKey properties are needed for the metadata table records
     final Properties properties = new Properties();
     properties.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), RECORD_KEY_FIELD_NAME);
     properties.put("hoodie.datasource.write.recordkey.field", RECORD_KEY_FIELD_NAME);
-    properties.put(HoodieTableConfig.TYPE.key(), HoodieTableType.MERGE_ON_READ.name());
-
     if (nonEmpty(writeConfig.getMetricReporterMetricsNamePrefix())) {
       properties.put(HoodieMetricsConfig.METRICS_REPORTER_PREFIX.key(),
           writeConfig.getMetricReporterMetricsNamePrefix() + METADATA_TABLE_NAME_SUFFIX);

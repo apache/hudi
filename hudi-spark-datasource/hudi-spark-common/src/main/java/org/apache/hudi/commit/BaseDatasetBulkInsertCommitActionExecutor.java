@@ -69,7 +69,7 @@ public abstract class BaseDatasetBulkInsertCommitActionExecutor implements Seria
 
   protected void preExecute() {
     table.validateInsertSchema();
-    writeClient.startCommitWithTime(instantTime, getCommitActionType(), true);
+    writeClient.startCommitWithTime(instantTime, getCommitActionType());
     writeClient.preWrite(instantTime, getWriteOperationType(), table.getMetaClient());
   }
 
@@ -85,7 +85,7 @@ public abstract class BaseDatasetBulkInsertCommitActionExecutor implements Seria
       // cache writeStatusRDD, so that all actions before this are not triggered again for future
       statuses.persist(writeConfig.getString(WRITE_STATUS_STORAGE_LEVEL_VALUE), writeClient.getEngineContext(), HoodieData.HoodieDataCacheKey.of(writeConfig.getBasePath(), instantTime));
       HoodieWriteMetadata<JavaRDD<WriteStatus>> hoodieWriteMetadata = new HoodieWriteMetadata<>();
-      hoodieWriteMetadata.setDataTableWriteStatuses(HoodieJavaRDD.getJavaRDD(statuses));
+      hoodieWriteMetadata.setWriteStatuses(HoodieJavaRDD.getJavaRDD(statuses));
       hoodieWriteMetadata.setPartitionToReplaceFileIds(getPartitionToReplacedFileIds(statuses));
       return hoodieWriteMetadata;
     }).orElseGet(HoodieWriteMetadata::new);
@@ -107,7 +107,7 @@ public abstract class BaseDatasetBulkInsertCommitActionExecutor implements Seria
     HoodieWriteMetadata<JavaRDD<WriteStatus>> result = buildHoodieWriteMetadata(doExecute(hoodieDF, bulkInsertPartitionerRows.arePartitionRecordsSorted()));
     afterExecute(result);
 
-    return new HoodieWriteResult(result.getDataTableWriteStatuses(), result.getPartitionToReplaceFileIds());
+    return new HoodieWriteResult(result.getWriteStatuses(), result.getPartitionToReplaceFileIds());
   }
 
   public abstract WriteOperationType getWriteOperationType();

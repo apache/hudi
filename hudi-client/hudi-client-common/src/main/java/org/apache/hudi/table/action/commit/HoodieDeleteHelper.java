@@ -103,14 +103,13 @@ public class HoodieDeleteHelper<T, R> extends
       HoodieData<HoodieRecord<T>> taggedValidRecords = taggedRecords.filter(HoodieRecord::isCurrentLocationKnown);
       HoodieWriteMetadata<HoodieData<WriteStatus>> result;
       if (!taggedValidRecords.isEmpty()) {
-        // to fix.
         result = deleteExecutor.execute(taggedValidRecords, Option.of(sourceReadAndIndexTimer));
         result.setIndexLookupDuration(tagLocationDuration);
       } else {
         // if entire set of keys are non existent
         deleteExecutor.saveWorkloadProfileMetadataToInflight(new WorkloadProfile(Pair.of(new HashMap<>(), new WorkloadStat())), instantTime);
         result = new HoodieWriteMetadata<>();
-        result.setDataTableWriteStatuses(context.emptyHoodieData());
+        result.setWriteStatuses(context.emptyHoodieData());
         deleteExecutor.completeCommit(result);
       }
       return result;

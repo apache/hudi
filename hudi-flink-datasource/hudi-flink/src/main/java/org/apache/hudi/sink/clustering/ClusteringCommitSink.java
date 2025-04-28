@@ -201,7 +201,7 @@ public class ClusteringCommitSink extends CleanFunction<ClusteringCommitEvent> {
     }
 
     HoodieWriteMetadata<List<WriteStatus>> writeMetadata = new HoodieWriteMetadata<>();
-    writeMetadata.setDataTableWriteStatuses(statuses);
+    writeMetadata.setWriteStatuses(statuses);
     writeMetadata.setWriteStats(statuses.stream().map(WriteStatus::getStat).collect(Collectors.toList()));
     writeMetadata.setPartitionToReplaceFileIds(getPartitionToReplacedFileIds(clusteringPlan, writeMetadata));
     validateWriteResult(clusteringPlan, instant, writeMetadata);
@@ -238,7 +238,7 @@ public class ClusteringCommitSink extends CleanFunction<ClusteringCommitEvent> {
    * We can also make these validations in BaseCommitActionExecutor to reuse pre-commit hooks for multiple actions.
    */
   private static void validateWriteResult(HoodieClusteringPlan clusteringPlan, String instantTime, HoodieWriteMetadata<List<WriteStatus>> writeMetadata) {
-    if (writeMetadata.getDataTableWriteStatuses().isEmpty()) {
+    if (writeMetadata.getWriteStatuses().isEmpty()) {
       throw new HoodieClusteringException("Clustering plan produced 0 WriteStatus for " + instantTime
           + " #groups: " + clusteringPlan.getInputGroups().size() + " expected at least "
           + clusteringPlan.getInputGroups().stream().mapToInt(HoodieClusteringGroup::getNumOutputFileGroups).sum()

@@ -31,11 +31,7 @@ public class BootstrapWriteStatus extends WriteStatus {
   private BootstrapFileMapping sourceFileMapping;
 
   public BootstrapWriteStatus(Boolean trackSuccessRecords, Double failureFraction) {
-    this(trackSuccessRecords, failureFraction, false);
-  }
-
-  public BootstrapWriteStatus(Boolean trackSuccessRecords, Double failureFraction, Boolean isMetadataTable) {
-    super(trackSuccessRecords, failureFraction, isMetadataTable);
+    super(trackSuccessRecords, failureFraction);
   }
 
   public BootstrapFileMapping getBootstrapSourceFileMapping() {

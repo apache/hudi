@@ -119,7 +119,6 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
   private HoodieWriteConfig.Builder makeHoodieClientConfigBuilder() {
     // Prepare the AvroParquetIO
     return HoodieWriteConfig.newBuilder()
-        .withAutoCommit(true)
         .withEngineType(EngineType.JAVA)
         .withPath(basePath)
         .withSchema(SCHEMA.toString());
@@ -470,7 +469,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
     final List<HoodieRecord> inputRecords = generateTestRecordsForBulkInsert();
     JavaBulkInsertCommitActionExecutor bulkInsertExecutor = new JavaBulkInsertCommitActionExecutor(
         context, config, table, instantTime, inputRecords, Option.empty());
-    List<WriteStatus> returnedStatuses = (List<WriteStatus>)bulkInsertExecutor.execute().getDataTableWriteStatuses();
+    List<WriteStatus> returnedStatuses = (List<WriteStatus>)bulkInsertExecutor.execute().getWriteStatuses();
     verifyStatusResult(returnedStatuses, generateExpectedPartitionNumRecords(inputRecords));
   }
 

@@ -22,8 +22,10 @@ import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CompactionUtils;
@@ -32,6 +34,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCompactionException;
+import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.HoodieCompactionHandler;
 import org.apache.hudi.table.HoodieTable;
@@ -40,6 +43,8 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.List;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
@@ -105,10 +110,7 @@ public class RunCompactionActionExecutor<T> extends
 
       compactor.maybePersist(statuses, context, config, instantTime);
       context.setJobStatus(this.getClass().getSimpleName(), "Preparing compaction metadata: " + config.getTableName());
-
-      // we are triggering the dag here.
-      // thinking if we can keep the RDD<WriteStatus> as is and dereference it in BaseHoodieTableServiceClient just before complete Compaction.
-      /*List<HoodieWriteStat> updateStatusMap = statuses.map(WriteStatus::getStat).collectAsList();
+      List<HoodieWriteStat> updateStatusMap = statuses.map(WriteStatus::getStat).collectAsList();
       HoodieCommitMetadata metadata = new HoodieCommitMetadata(true);
       for (HoodieWriteStat stat : updateStatusMap) {
         metadata.addWriteStat(stat.getPartitionPath(), stat);
@@ -120,18 +122,16 @@ public class RunCompactionActionExecutor<T> extends
       }
       // Setting operationType, which is compact.
       metadata.setOperationType(operationType);
-      compactionMetadata.setDataTableWriteStatuses(statuses);
-      compactionMetadata.setCommitted(false);
-      compactionMetadata.setCommitMetadata(Option.of(metadata));
-      compactionMetadata.setWriteStats(updateStatusMap);*/
-
-      compactionWriteMetadata.setDataTableWriteStatuses(statuses);
+      compactionWriteMetadata.setWriteStatuses(statuses);
       compactionWriteMetadata.setCommitted(false);
+      compactionWriteMetadata.setCommitMetadata(Option.of(metadata));
+      compactionWriteMetadata.setWriteStats(updateStatusMap);
     } catch (Exception e) {
       throw new HoodieCompactionException("Could not compact " + config.getBasePath(), e);
     }
 
-    //LOG.info("Compaction completed. Instant time: {}.", instantTime);
+    LOG.info("Compaction completed. Instant time: {}.", instantTime);
+    metrics.emitCompactionCompleted();
     return compactionWriteMetadata;
   }
 }

@@ -21,7 +21,6 @@ package org.apache.hudi.metadata;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
-import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 
@@ -42,8 +41,8 @@ public class TestHoodieMetadataWriteUtils {
         .withAutoCommit(false)
         .build();
 
-    HoodieWriteConfig metadataWriteConfig1 = HoodieMetadataWriteUtils.createMetadataWriteConfig(writeConfig1, HoodieTableVersion.current());
-    assertEquals(HoodieFailedWritesCleaningPolicy.LAZY, metadataWriteConfig1.getFailedWritesCleanPolicy());
+    HoodieWriteConfig metadataWriteConfig1 = HoodieMetadataWriteUtils.createMetadataWriteConfig(writeConfig1, HoodieFailedWritesCleaningPolicy.EAGER);
+    assertEquals(HoodieFailedWritesCleaningPolicy.EAGER, metadataWriteConfig1.getFailedWritesCleanPolicy());
     assertEquals(HoodieCleaningPolicy.KEEP_LATEST_COMMITS, metadataWriteConfig1.getCleanerPolicy());
     // default value already greater than data cleaner commits retained * 1.2
     assertEquals(HoodieMetadataConfig.DEFAULT_METADATA_CLEANER_COMMITS_RETAINED, metadataWriteConfig1.getCleanerCommitsRetained());
@@ -58,8 +57,8 @@ public class TestHoodieMetadataWriteUtils {
             .retainCommits(20).build())
         .withAutoCommit(false)
         .build();
-    HoodieWriteConfig metadataWriteConfig2 = HoodieMetadataWriteUtils.createMetadataWriteConfig(writeConfig2, HoodieTableVersion.current());
-    assertEquals(HoodieFailedWritesCleaningPolicy.LAZY, metadataWriteConfig2.getFailedWritesCleanPolicy());
+    HoodieWriteConfig metadataWriteConfig2 = HoodieMetadataWriteUtils.createMetadataWriteConfig(writeConfig2, HoodieFailedWritesCleaningPolicy.EAGER);
+    assertEquals(HoodieFailedWritesCleaningPolicy.EAGER, metadataWriteConfig2.getFailedWritesCleanPolicy());
     assertEquals(HoodieCleaningPolicy.KEEP_LATEST_COMMITS, metadataWriteConfig2.getCleanerPolicy());
     // data cleaner commits retained * 1.2 is greater than default
     assertEquals(24, metadataWriteConfig2.getCleanerCommitsRetained());

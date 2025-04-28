@@ -165,7 +165,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
       JavaRDD<WriteStatus> writeStatusRDD = engineContext.union(writeStatuses);
 
       HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata = new HoodieWriteMetadata<>();
-      writeMetadata.setDataTableWriteStatuses(HoodieJavaRDD.of(writeStatusRDD));
+      writeMetadata.setWriteStatuses(HoodieJavaRDD.of(writeStatusRDD));
       return writeMetadata;
     } finally {
       clusteringExecutorService.shutdown();

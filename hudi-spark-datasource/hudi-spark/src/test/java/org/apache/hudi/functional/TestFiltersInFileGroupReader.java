@@ -27,7 +27,6 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SaveMode;
 import org.apache.spark.sql.internal.SQLConf;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -39,7 +38,6 @@ import java.util.Map;
  * Ensure that parquet filters are not being pushed down when they shouldn't be
  */
 @Tag("functional")
-@Disabled("HUDI-9281")
 public class TestFiltersInFileGroupReader extends TestBootstrapReadBase {
 
   @ParameterizedTest

@@ -27,7 +27,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.execution.FlinkLazyInsertIterable;
@@ -131,7 +130,7 @@ public abstract class BaseFlinkCommitActionExecutor<T> extends
       List<WriteStatus> statuses,
       HoodieWriteMetadata<List<WriteStatus>> result) {
     // No need to update the index because the update happens before the write.
-    result.setDataTableWriteStatuses(statuses);
+    result.setWriteStatuses(statuses);
     result.setIndexUpdateDuration(Duration.ZERO);
   }
 
@@ -142,11 +141,11 @@ public abstract class BaseFlinkCommitActionExecutor<T> extends
 
   @Override
   protected void commit(HoodieWriteMetadata<List<WriteStatus>> result) {
-    commit(result, result.getDataTableWriteStatuses().stream().map(WriteStatus::getStat).collect(Collectors.toList()));
+    commit(result, result.getWriteStatuses().stream().map(WriteStatus::getStat).collect(Collectors.toList()));
   }
 
   protected void setCommitMetadata(HoodieWriteMetadata<List<WriteStatus>> result) {
-    result.setCommitMetadata(Option.of(CommitUtils.buildMetadata(result.getDataTableWriteStatuses().stream().map(WriteStatus::getStat).collect(Collectors.toList()),
+    result.setCommitMetadata(Option.of(CommitUtils.buildMetadata(result.getWriteStatuses().stream().map(WriteStatus::getStat).collect(Collectors.toList()),
         result.getPartitionToReplaceFileIds(),
         extraMetadata, operationType, getSchemaToStoreInCommit(), getCommitActionType())));
   }

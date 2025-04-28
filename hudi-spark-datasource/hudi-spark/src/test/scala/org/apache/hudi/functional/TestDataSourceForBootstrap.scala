@@ -34,7 +34,7 @@ import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.{DataFrame, Dataset, Row, SaveMode, SparkSession}
 import org.apache.spark.sql.functions.{col, lit}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.io.TempDir
 import org.junit.jupiter.params.ParameterizedTest
@@ -170,7 +170,6 @@ class TestDataSourceForBootstrap {
     verifyIncrementalViewResult(commitInstantTime1, commitInstantTime2, commitCompletionTime1, isPartitioned = false, isHiveStylePartitioned = true)
   }
 
-  @Disabled
   @ParameterizedTest
   @CsvSource(value = Array(
     "org.apache.hudi.client.bootstrap.selector.MetadataOnlyBootstrapModeSelector,AVRO",
@@ -551,7 +550,6 @@ class TestDataSourceForBootstrap {
     assertEquals(0, hoodieROViewDF3.filter(s"timestamp == $updateTimestamp").count())
   }
 
-  @Disabled
   @Test
   def testFullBootstrapCOWPartitioned(): Unit = {
     val timestamp = Instant.now.toEpochMilli
