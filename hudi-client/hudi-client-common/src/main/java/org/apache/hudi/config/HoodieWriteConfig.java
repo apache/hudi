@@ -477,13 +477,6 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Write status objects hold metadata about a write (stats, errors), that is not yet committed to storage. "
           + "This controls the how that information is cached for inspection by clients. We rarely expect this to be changed.");
 
-  public static final ConfigProperty<String> AUTO_COMMIT_ENABLE = ConfigProperty
-      .key("hoodie.auto.commit")
-      .defaultValue("false")
-      .markAdvanced()
-      .withDocumentation("Controls whether a write operation should auto commit. This can be turned off to perform inspection"
-          + " of the uncommitted write before deciding to commit.");
-
   public static final ConfigProperty<String> INTERNAL_AUTO_COMMIT_ENABLE = ConfigProperty
       .key("hoodie.internal.auto.commit")
       .defaultValue("false")
@@ -1049,16 +1042,6 @@ public class HoodieWriteConfig extends HoodieConfig {
   @Deprecated
   public static final String DEFAULT_WRITE_STATUS_STORAGE_LEVEL = WRITE_STATUS_STORAGE_LEVEL_VALUE.defaultValue();
   /**
-   * @deprecated Use {@link #AUTO_COMMIT_ENABLE} and its methods instead
-   */
-  @Deprecated
-  public static final String HOODIE_AUTO_COMMIT_PROP = AUTO_COMMIT_ENABLE.key();
-  /**
-   * @deprecated Use {@link #AUTO_COMMIT_ENABLE} and its methods instead
-   */
-  @Deprecated
-  public static final String DEFAULT_HOODIE_AUTO_COMMIT = AUTO_COMMIT_ENABLE.defaultValue();
-  /**
    * @deprecated Use {@link #WRITE_STATUS_CLASS_NAME} and its methods instead
    */
   @Deprecated
@@ -1431,10 +1414,6 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean isConsistentLogicalTimestampEnabled() {
     return getBooleanOrDefault(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED);
-  }
-
-  public Boolean shouldAutoCommit() {
-    return false;
   }
 
   public Boolean shouldInternalAutoCommit() {
@@ -3296,11 +3275,6 @@ public class HoodieWriteConfig extends HoodieConfig {
     public Builder withTTLConfig(HoodieTTLConfig ttlConfig) {
       writeConfig.getProps().putAll(ttlConfig.getProps());
       isTTLConfigSet = true;
-      return this;
-    }
-
-    public Builder withAutoCommit(boolean autoCommit) {
-      writeConfig.setValue(AUTO_COMMIT_ENABLE, String.valueOf(autoCommit));
       return this;
     }
 

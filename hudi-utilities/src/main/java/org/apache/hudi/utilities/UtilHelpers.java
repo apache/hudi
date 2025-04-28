@@ -397,7 +397,6 @@ public class UtilHelpers {
         .orElse(HoodieCompactionConfig.newBuilder().withInlineCompaction(false).build());
     HoodieWriteConfig config =
         HoodieWriteConfig.newBuilder().withPath(basePath)
-            .withAutoCommit(false)
             .withParallelism(parallelism, parallelism)
             .withBulkInsertParallelism(parallelism)
             .withDeleteParallelism(parallelism)
