@@ -208,9 +208,7 @@ public class HoodieRealtimeRecordReaderUtils {
           if (record.getSchema().getField(field.name()) != null) {
             fieldValue = record.get(field.name());
           } else {
-            if (LOG.isDebugEnabled()) {
-              LOG.debug("Field:" + field.name() + "not found in Schema:" + schema);
-            }
+            LOG.debug("Field: {} not found in Schema: {}", field.name(), schema);
           }
           recordValues[recordValueIndex++] = avroToArrayWritable(fieldValue, field.schema(), supportTimestamp);
         }

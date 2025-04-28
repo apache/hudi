@@ -289,9 +289,8 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
                                    HoodieWriteConfig writeConfig,
                                    CompactionOperation operation,
                                    String instantTime,
-                                   HoodieReaderContext<T> hoodieReaderContext) throws IOException {
-    return compactionHandler.compactUsingFileGroupReader(instantTime, operation,
-        writeConfig, hoodieReaderContext);
+                                   HoodieReaderContext hoodieReaderContext) throws IOException {
+    return compactionHandler.compactUsingFileGroupReader(instantTime, operation, writeConfig, hoodieReaderContext);
   }
 
   public String getMaxInstantTime(HoodieTableMetaClient metaClient) {

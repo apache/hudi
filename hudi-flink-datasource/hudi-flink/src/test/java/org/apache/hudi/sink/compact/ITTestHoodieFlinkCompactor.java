@@ -21,6 +21,7 @@ package org.apache.hudi.sink.compact;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -57,6 +58,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -72,6 +75,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -114,8 +118,8 @@ public class ITTestHoodieFlinkCompactor {
   File tempFile;
 
   @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  public void testHoodieFlinkCompactor(boolean enableChangelog) throws Exception {
+  @MethodSource("changedlogAndLogBlockParams")
+  public void testHoodieFlinkCompactor(boolean enableChangelog, String logBlockFormat) throws Exception {
     // Create hoodie table and insert into data.
     EnvironmentSettings settings = EnvironmentSettings.newInstance().inBatchMode().build();
     TableEnvironment tableEnv = TableEnvironmentImpl.create(settings);
@@ -126,6 +130,7 @@ public class ITTestHoodieFlinkCompactor {
     options.put(FlinkOptions.COMPACTION_ASYNC_ENABLED.key(), "false");
     options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
     options.put(FlinkOptions.TABLE_TYPE.key(), "MERGE_ON_READ");
+    options.put(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), logBlockFormat);
     options.put(FlinkOptions.CHANGELOG_ENABLED.key(), enableChangelog + "");
     String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options);
     tableEnv.executeSql(hoodieTableDDL);
@@ -146,6 +151,9 @@ public class ITTestHoodieFlinkCompactor {
 
     // set the table name
     conf.setString(FlinkOptions.TABLE_NAME, metaClient.getTableConfig().getTableName());
+
+    // set the partition fields
+    CompactionUtil.setPartitionField(conf, metaClient);
 
     // set table schema
     CompactionUtil.setAvroSchema(conf, metaClient);
@@ -520,5 +528,18 @@ public class ITTestHoodieFlinkCompactor {
     Option<String> compactionInstant = writeClient.scheduleCompaction(Option.empty());
     assertTrue(compactionInstant.isPresent(), "The compaction plan should be scheduled");
     return compactionInstant.get();
+  }
+
+  /**
+   * Return test params => (enableChangelog, log block format).
+   */
+  private static Stream<Arguments> changedlogAndLogBlockParams() {
+    Object[][] data =
+        new Object[][] {
+            {true, "parquet"},
+            {true, "avro"},
+            {false, "parquet"},
+            {false, "avro"}};
+    return Stream.of(data).map(Arguments::of);
   }
 }

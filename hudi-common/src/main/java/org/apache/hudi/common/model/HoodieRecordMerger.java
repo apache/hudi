@@ -53,6 +53,9 @@ public interface HoodieRecordMerger extends Serializable {
   // Always chooses the most recently written record
   String COMMIT_TIME_BASED_MERGE_STRATEGY_UUID = "ce9acb64-bde0-424c-9b91-f6ebba25356d";
 
+  // Uses customized merge strategy to merge records
+  String CUSTOM_MERGE_STRATEGY_UUID = "1897ef5f-18bc-4557-939c-9d6a8afd1519";
+
   // Use avro payload to merge records
   String PAYLOAD_BASED_MERGE_STRATEGY_UUID = "00000000-0000-0000-0000-000000000000";
 

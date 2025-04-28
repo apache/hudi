@@ -231,8 +231,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
                 Map<String, HoodieRecord<HoodieMetadataPayload>> mergedRecords =
                     readFromBaseAndMergeWithLogRecords(baseFileReader, sortedKeyPrefixes, fullKeys, logRecords, timings, partitionName);
 
-                LOG.debug("Metadata read for {} keys took [baseFileRead, logMerge] {} ms",
-                    sortedKeyPrefixes.size(), timings);
+                LOG.debug("Metadata read for {} keys took [baseFileRead, logMerge] {} ms", sortedKeyPrefixes.size(), timings);
 
                 return mergedRecords.values().iterator();
               } catch (IOException ioe) {

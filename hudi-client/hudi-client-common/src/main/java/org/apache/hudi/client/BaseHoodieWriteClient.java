@@ -225,7 +225,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     if (!config.allowEmptyCommit() && stats.isEmpty()) {
       return true;
     }
-    LOG.info("Committing " + instantTime + " action " + commitActionType);
+    LOG.info("Committing {} action {}", instantTime, commitActionType);
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieTable table = createTable(config);
     HoodieCommitMetadata metadata = CommitMetadataResolverFactory.get(
@@ -245,7 +245,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       }
       commit(table, commitActionType, instantTime, metadata, stats);
       postCommit(table, metadata, instantTime, extraMetadata);
-      LOG.info("Committed " + instantTime);
+      LOG.info("Committed {}", instantTime);
     } catch (IOException e) {
       throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime, e);
     } finally {
@@ -273,7 +273,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
 
   protected void commit(HoodieTable table, String commitActionType, String instantTime, HoodieCommitMetadata metadata,
                         List<HoodieWriteStat> stats) throws IOException {
-    LOG.info("Committing " + instantTime + " action " + commitActionType);
+    LOG.info("Committing {} action {}", instantTime, commitActionType);
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
     // Finalize write
     finalizeWrite(table, instantTime, stats);
@@ -664,7 +664,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     }
 
     String latestCommit = table.getCompletedCommitsTimeline().lastInstant().get().requestedTime();
-    LOG.info("Savepointing latest commit " + latestCommit);
+    LOG.info("Savepointing latest commit {}", latestCommit);
     savepoint(latestCommit, user, comment);
   }
 
@@ -697,7 +697,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     }
 
     String savepointTime = savePointTimeline.lastInstant().get().requestedTime();
-    LOG.info("Deleting latest savepoint time " + savepointTime);
+    LOG.info("Deleting latest savepoint time {}", savepointTime);
     deleteSavepoint(savepointTime);
   }
 
@@ -723,7 +723,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     }
 
     String savepointTime = savePointTimeline.lastInstant().get().requestedTime();
-    LOG.info("Restoring to latest savepoint time " + savepointTime);
+    LOG.info("Restoring to latest savepoint time {}", savepointTime);
     restoreToSavepoint(savepointTime);
   }
 
@@ -750,8 +750,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         boolean deleteMDT = false;
         if (oldestMdtCompaction.isPresent()) {
           if (LESSER_THAN_OR_EQUALS.test(savepointTime, oldestMdtCompaction.get().requestedTime())) {
-            LOG.warn(String.format("Deleting MDT during restore to %s as the savepoint is older than oldest compaction %s on MDT",
-                savepointTime, oldestMdtCompaction.get().requestedTime()));
+            LOG.warn("Deleting MDT during restore to {} as the savepoint is older than oldest compaction {} on MDT",
+                savepointTime, oldestMdtCompaction.get().requestedTime());
             deleteMDT = true;
           }
         }
@@ -761,8 +761,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         if (!deleteMDT) {
           HoodieInstant syncedInstant = mdtMetaClient.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, savepointTime);
           if (mdtMetaClient.getCommitsTimeline().isBeforeTimelineStarts(syncedInstant.requestedTime())) {
-            LOG.warn(String.format("Deleting MDT during restore to %s as the savepoint is older than the MDT timeline %s",
-                savepointTime, mdtMetaClient.getCommitsTimeline().firstInstant().get().requestedTime()));
+            LOG.warn("Deleting MDT during restore to {} as the savepoint is older than the MDT timeline {}",
+                savepointTime, mdtMetaClient.getCommitsTimeline().firstInstant().get().requestedTime());
             deleteMDT = true;
           }
         }
@@ -807,7 +807,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param savepointToRestoreTimestamp savepoint instant time to which restoration is requested
    */
   public HoodieRestoreMetadata restoreToInstant(final String savepointToRestoreTimestamp, boolean initialMetadataTableIfNecessary) throws HoodieRestoreException {
-    LOG.info("Begin restore to instant " + savepointToRestoreTimestamp);
+    LOG.info("Begin restore to instant {}", savepointToRestoreTimestamp);
     Timer.Context timerContext = metrics.getRollbackCtx();
     try {
       HoodieTable<T, I, K, O> table = initTable(WriteOperationType.UNKNOWN, Option.empty(), initialMetadataTableIfNecessary);

@@ -172,7 +172,7 @@ public class FileIOUtils {
       // If the path does not exist, create it first
       if (!storage.exists(fullPath)) {
         if (storage.createNewFile(fullPath)) {
-          LOG.info("Created a new file in meta path: " + fullPath);
+          LOG.info("Created a new file in meta path: {}", fullPath);
         } else {
           throw new HoodieIOException("Failed to create file " + fullPath);
         }
@@ -184,7 +184,7 @@ public class FileIOUtils {
         }
       }
     } catch (IOException e) {
-      LOG.warn("Failed to create file " + fullPath, e);
+      LOG.warn("Failed to create file {}", fullPath, e);
       if (!ignoreIOE) {
         throw new HoodieIOException("Failed to create file " + fullPath, e);
       }
@@ -244,7 +244,7 @@ public class FileIOUtils {
     try (InputStream is = storage.open(detailPath)) {
       return Option.of(FileIOUtils.readAsByteArray(is));
     } catch (IOException e) {
-      LOG.warn("Could not read commit details from " + detailPath, e);
+      LOG.warn("Could not read commit details from {}", detailPath, e);
       if (!ignoreIOE) {
         throw new HoodieIOException("Could not read commit details from " + detailPath, e);
       }

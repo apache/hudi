@@ -57,8 +57,8 @@ public interface HoodieFileGroupRecordBuffer<T> {
   /**
    * Process a next record in a log data block.
    *
-   * @param record
-   * @param index
+   * @param record Buffered record
+   * @param index  Record key or position
    * @throws Exception
    */
   void processNextLogRecord(BufferedRecord<T> record, Serializable index) throws IOException;

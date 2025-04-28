@@ -100,15 +100,15 @@ public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
     try (ClosableIterator<T> recordIterator = recordsIteratorSchemaPair.getLeft()) {
       while (recordIterator.hasNext()) {
         T nextRecord = recordIterator.next();
-        processNextLogRecord(BufferedRecord.forRecordWithContext(nextRecord, schema, readerContext, orderingFieldName, false), putIndex++);
+        BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(nextRecord, schema, readerContext, orderingFieldName, false);
+        processNextLogRecord(bufferedRecord, putIndex++);
       }
     }
   }
 
   @Override
   public void processNextLogRecord(BufferedRecord<T> record, Serializable index) {
-    record.sealRecord(readerContext);
-    records.put(index, record);
+    records.put(index, record.toBinary(readerContext));
   }
 
   @Override

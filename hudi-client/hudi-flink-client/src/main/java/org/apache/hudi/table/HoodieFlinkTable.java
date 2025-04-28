@@ -45,7 +45,7 @@ import java.util.List;
  */
 public abstract class HoodieFlinkTable<T>
     extends HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>>
-    implements ExplicitWriteHandleTable<T> {
+    implements ExplicitWriteHandleTable<T>, HoodieCompactionHandler<T> {
 
   protected HoodieFlinkTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
     super(config, context, metaClient);

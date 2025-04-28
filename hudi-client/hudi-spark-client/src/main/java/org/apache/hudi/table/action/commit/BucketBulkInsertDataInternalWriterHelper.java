@@ -112,7 +112,7 @@ public class BucketBulkInsertDataInternalWriterHelper extends BulkInsertDataInte
         close();
       }
       String partitionPath = String.valueOf(fileId.getLeft());
-      LOG.info("Creating new file for partition path " + partitionPath);
+      LOG.info("Creating new file for partition path {}", partitionPath);
       HoodieRowCreateHandle rowCreateHandle = new HoodieRowCreateHandle(hoodieTable, writeConfig, partitionPath, getNextBucketFileId(bucketId),
           instantTime, taskPartitionId, taskId, taskEpochId, structType, shouldPreserveHoodieMetadata);
       handles.put(fileId, rowCreateHandle);
@@ -123,7 +123,7 @@ public class BucketBulkInsertDataInternalWriterHelper extends BulkInsertDataInte
   @Override
   public void close() throws IOException {
     for (HoodieRowCreateHandle handle : handles.values()) {
-      LOG.info("Closing bulk insert file " + handle.getFileName());
+      LOG.info("Closing bulk insert file {}", handle.getFileName());
       writeStatusList.add(handle.close());
     }
     handles.clear();

@@ -60,6 +60,12 @@ object HoodieInternalRowUtils {
         new mutable.HashMap[(StructType, StructType), UnsafeProjection]
     })
 
+  private val identicalUnsafeProjectionThreadLocal: ThreadLocal[mutable.HashMap[Schema, UnsafeProjection]] =
+    ThreadLocal.withInitial(new Supplier[mutable.HashMap[Schema, UnsafeProjection]] {
+      override def get(): mutable.HashMap[Schema, UnsafeProjection] =
+        new mutable.HashMap[Schema, UnsafeProjection]
+    })
+
   private val schemaMap = new ConcurrentHashMap[Schema, StructType]
   private val orderPosListMap = new ConcurrentHashMap[(StructType, String), Option[NestedFieldPath]]
 
@@ -73,6 +79,14 @@ object HoodieInternalRowUtils {
   def getCachedUnsafeProjection(from: StructType, to: StructType): UnsafeProjection = {
     unsafeProjectionThreadLocal.get()
       .getOrElseUpdate((from, to), generateUnsafeProjection(from, to))
+  }
+
+  /**
+   * Provides cached instance of [[UnsafeProjection]] to project Java object based [[InternalRow]] to [[UnsafeRow]].
+   */
+  def getCachedUnsafeProjection(schema: Schema): UnsafeProjection = {
+    identicalUnsafeProjectionThreadLocal.get()
+      .getOrElseUpdate(schema, UnsafeProjection.create(getCachedSchema(schema)))
   }
 
   /**

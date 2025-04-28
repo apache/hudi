@@ -62,8 +62,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_ORDERING_FIELD;
-import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_RECORD_KEY;
 import static org.apache.hudi.common.model.WriteOperationType.INSERT;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.createMetaClient;
@@ -204,9 +202,9 @@ public class TestPositionBasedFileGroupRecordBuffer extends TestHoodieFileGroupR
     if (sameBaseInstantTime) {
       // If the log block's base instant time of record positions match the base file
       // to merge, the log records are stored based on the position
-      assertNotNull(buffer.getLogRecords().get(0L).getRight().get(INTERNAL_META_RECORD_KEY),
+      assertNotNull(buffer.getLogRecords().get(0L).getRecordKey(),
           "the record key is set up for fallback handling");
-      assertNotNull(buffer.getLogRecords().get(0L).getRight().get(INTERNAL_META_ORDERING_FIELD),
+      assertNotNull(buffer.getLogRecords().get(0L).getOrderingValue(),
           "the ordering value is set up for fallback handling");
     } else {
       // If the log block's base instant time of record positions does not match the
@@ -222,7 +220,7 @@ public class TestPositionBasedFileGroupRecordBuffer extends TestHoodieFileGroupR
     HoodieDeleteBlock deleteBlock = getDeleteBlockWithPositions(baseFileInstantTime);
     buffer.processDeleteBlock(deleteBlock);
     assertEquals(50, buffer.getLogRecords().size());
-    assertNotNull(buffer.getLogRecords().get(0L).getRight().get(INTERNAL_META_RECORD_KEY));
+    assertNotNull(buffer.getLogRecords().get(0L).getRecordKey());
   }
 
   @Test

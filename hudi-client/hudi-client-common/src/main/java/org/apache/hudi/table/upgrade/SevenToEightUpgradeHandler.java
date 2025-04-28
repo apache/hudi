@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.BootstrapIndexType;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
+import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
@@ -240,6 +241,7 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
   static boolean isCustomPayloadClass(String payloadClass) {
     return !StringUtils.isNullOrEmpty(payloadClass)
         && !payloadClass.equals(DefaultHoodieRecordPayload.class.getName())
+        && !payloadClass.equals(EventTimeAvroPayload.class.getName())
         && !payloadClass.equals(OverwriteWithLatestAvroPayload.class.getName());
   }
 

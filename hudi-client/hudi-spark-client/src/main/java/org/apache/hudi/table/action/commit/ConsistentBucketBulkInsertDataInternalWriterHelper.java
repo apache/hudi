@@ -111,7 +111,7 @@ public class ConsistentBucketBulkInsertDataInternalWriterHelper extends BucketBu
   @Override
   public void close() throws IOException {
     if (handle != null) {
-      LOG.info("Closing bulk insert file " + handle.getFileName());
+      LOG.info("Closing bulk insert file {}", handle.getFileName());
       writeStatusList.add(handle.close());
       handle = null;
     }

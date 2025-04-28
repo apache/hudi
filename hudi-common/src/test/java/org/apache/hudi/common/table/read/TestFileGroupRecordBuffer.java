@@ -39,23 +39,25 @@ import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
+import java.io.IOException;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
 import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
-import static org.apache.hudi.common.model.HoodieRecord.HOODIE_IS_DELETED_FIELD;
 import static org.apache.hudi.common.table.read.FileGroupRecordBuffer.getOrderingValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -78,10 +80,9 @@ class TestFileGroupRecordBuffer {
       + "]"
       + "}";
   private Schema schema = new Schema.Parser().parse(schemaString);
-  private final HoodieReaderContext<IndexedRecord> readerContext = mock(HoodieReaderContext.class);
+  private final HoodieReaderContext readerContext = mock(HoodieReaderContext.class);
   private final FileGroupReaderSchemaHandler schemaHandler =
       mock(FileGroupReaderSchemaHandler.class);
-  private final EngineBasedMerger<IndexedRecord> merger = mock(EngineBasedMerger.class);
   private HoodieTableMetaClient hoodieTableMetaClient = mock(HoodieTableMetaClient.class);
   private Option<String> partitionNameOverrideOpt = Option.empty();
   private Option<String[]> partitionPathFieldOpt = Option.empty();
@@ -284,30 +285,28 @@ class TestFileGroupRecordBuffer {
 
     when(schemaHandler.getCustomDeleteMarkerKeyValue())
         .thenReturn(Option.of(Pair.of(customDeleteKey, customDeleteValue)));
-    KeyBasedFileGroupRecordBuffer<IndexedRecord> keyBasedBuffer =
+    KeyBasedFileGroupRecordBuffer keyBasedBuffer =
         new KeyBasedFileGroupRecordBuffer(
             readerContext,
             hoodieTableMetaClient,
+            RecordMergeMode.COMMIT_TIME_ORDERING,
             partitionNameOverrideOpt,
             partitionPathFieldOpt,
             props,
-            readStats,
-            Option.empty(),
-            merger);
+            readStats);
     when(readerContext.getValue(any(), any(), any())).thenReturn(null);
     assertFalse(keyBasedBuffer.isCustomDeleteRecord(record));
 
     props.setProperty(DELETE_KEY, customDeleteKey);
     props.setProperty(DELETE_MARKER, customDeleteValue);
-    keyBasedBuffer = new KeyBasedFileGroupRecordBuffer<>(
+    keyBasedBuffer = new KeyBasedFileGroupRecordBuffer(
             readerContext,
             hoodieTableMetaClient,
+            RecordMergeMode.COMMIT_TIME_ORDERING,
             partitionNameOverrideOpt,
             partitionPathFieldOpt,
             props,
-            readStats,
-            Option.empty(),
-            merger);
+            readStats);
     when(readerContext.getValue(any(), any(), any())).thenReturn("i");
     assertFalse(keyBasedBuffer.isCustomDeleteRecord(record));
     when(readerContext.getValue(any(), any(), any())).thenReturn("d");
@@ -315,22 +314,38 @@ class TestFileGroupRecordBuffer {
   }
 
   @Test
-  void testIsBuiltInDeleteRecord() {
+  void testProcessCustomDeleteRecord() throws IOException {
     String customDeleteKey = "op";
     String customDeleteValue = "d";
     when(schemaHandler.getCustomDeleteMarkerKeyValue())
         .thenReturn(Option.of(Pair.of(customDeleteKey, customDeleteValue)));
     when(schemaHandler.hasBuiltInDelete()).thenReturn(true);
-    KeyBasedFileGroupRecordBuffer<IndexedRecord> keyBasedBuffer =
-        new KeyBasedFileGroupRecordBuffer<>(
+    KeyBasedFileGroupRecordBuffer keyBasedBuffer =
+        new KeyBasedFileGroupRecordBuffer(
             readerContext,
             hoodieTableMetaClient,
+            RecordMergeMode.COMMIT_TIME_ORDERING,
             partitionNameOverrideOpt,
             partitionPathFieldOpt,
             props,
-            readStats,
-            Option.empty(),
-            merger);
+            readStats);
+
+    // CASE 1: With custom delete marker.
+    GenericRecord record = new GenericData.Record(schema);
+    record.put("id", "12345");
+    record.put("ts", System.currentTimeMillis());
+    record.put("op", "d");
+    record.put("_hoodie_is_deleted", false);
+    when(readerContext.getOrderingValue(any(), any(), any())).thenReturn(1);
+    when(readerContext.convertValueToEngineType(any())).thenReturn(1);
+    BufferedRecord<GenericRecord> bufferedRecord = BufferedRecord.forRecordWithContext(record, schema, readerContext, Option.of("ts"), true);
+
+    keyBasedBuffer.processNextDataRecord(bufferedRecord, "12345");
+    Map<Serializable, BufferedRecord<GenericRecord>> records = keyBasedBuffer.getLogRecords();
+    assertEquals(1, records.size());
+    BufferedRecord<GenericRecord> deleteRecord = records.get("12345");
+    assertNull(deleteRecord.getRecordKey(), "The record key metadata field is missing");
+    assertEquals(1, deleteRecord.getOrderingValue());
 
     // CASE 2: With _hoodie_is_deleted is true.
     GenericRecord anotherRecord = new GenericData.Record(schema);
@@ -338,9 +353,13 @@ class TestFileGroupRecordBuffer {
     anotherRecord.put("ts", System.currentTimeMillis());
     anotherRecord.put("op", "i");
     anotherRecord.put("_hoodie_is_deleted", true);
+    bufferedRecord = BufferedRecord.forRecordWithContext(anotherRecord, schema, readerContext, Option.of("ts"), true);
 
-    when(readerContext.getValue(anotherRecord, schema, HOODIE_IS_DELETED_FIELD)).thenReturn("true");
-    when(readerContext.castToBoolean("true")).thenReturn(true);
-    assertTrue(keyBasedBuffer.isBuiltInDeleteRecord(anotherRecord));
+    keyBasedBuffer.processNextDataRecord(bufferedRecord, "54321");
+    records = keyBasedBuffer.getLogRecords();
+    assertEquals(2, records.size());
+    deleteRecord = records.get("54321");
+    assertNull(deleteRecord.getRecordKey(), "The record key metadata field is missing");
+    assertEquals(1, deleteRecord.getOrderingValue());
   }
 }

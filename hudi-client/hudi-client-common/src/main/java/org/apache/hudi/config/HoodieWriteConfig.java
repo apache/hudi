@@ -3595,9 +3595,9 @@ public class HoodieWriteConfig extends HoodieConfig {
         // Override the configs for metadata table
         writeConfig.setValue(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(),
             InProcessLockProvider.class.getName());
-        LOG.info(String.format("Automatically set %s=%s since user has not set the "
+        LOG.info("Automatically set {}={} since user has not set the "
                 + "lock provider for single writer with async table services",
-            HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(), InProcessLockProvider.class.getName()));
+            HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(), InProcessLockProvider.class.getName());
       }
 
       // We check if "hoodie.clean.failed.writes.policy"
@@ -3607,10 +3607,10 @@ public class HoodieWriteConfig extends HoodieConfig {
         // In this case, we assume that the user takes care of setting the lock provider used
         writeConfig.setValue(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key(),
             HoodieFailedWritesCleaningPolicy.LAZY.name());
-        LOG.info(String.format("Automatically set %s=%s since %s is used",
+        LOG.info("Automatically set {}={} since {} is used",
             HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key(),
             HoodieFailedWritesCleaningPolicy.LAZY.name(),
-            writeConcurrencyMode.name()));
+            writeConcurrencyMode.name());
       }
     }
 

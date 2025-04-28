@@ -131,7 +131,6 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
 
         long recordPosition = recordPositions.get(recordIndex++);
         T evolvedNextRecord = schemaTransformerWithEvolvedSchema.getLeft().apply(nextRecord);
-
         boolean isDelete = isBuiltInDeleteRecord(evolvedNextRecord) || isCustomDeleteRecord(evolvedNextRecord);
         BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(evolvedNextRecord, schema, readerContext, orderingFieldName, isDelete);
         processNextLogRecord(bufferedRecord, recordPosition);
@@ -146,7 +145,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
     for (Serializable position : positions) {
       BufferedRecord<T> entry = records.get(position);
       String recordKey = entry.getRecordKey();
-      if (entry.getRecord() != null || recordKey != null) {
+      if (!entry.isDelete() || recordKey != null) {
 
         records.put(recordKey, entry);
         records.remove(position);

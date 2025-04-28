@@ -315,8 +315,8 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
         if (acceptFile(dir) && enumerateNestedFiles) {
           length += addFilesInDir(dir.getPath(), files, logExcludedFiles);
         } else {
-          if (logExcludedFiles && LOG.isDebugEnabled()) {
-            LOG.debug("Directory " + dir.getPath().toString() + " did not pass the file-filter and is excluded.");
+          if (logExcludedFiles) {
+            LOG.debug("Directory {} did not pass the file-filter and is excluded.", dir.getPath());
           }
         }
       } else {
@@ -325,8 +325,8 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
           length += dir.getLen();
           testForUnsplittable(dir);
         } else {
-          if (logExcludedFiles && LOG.isDebugEnabled()) {
-            LOG.debug("Directory " + dir.getPath().toString() + " did not pass the file-filter and is excluded.");
+          if (logExcludedFiles) {
+            LOG.debug("Directory {} did not pass the file-filter and is excluded.", dir.getPath());
           }
         }
       }

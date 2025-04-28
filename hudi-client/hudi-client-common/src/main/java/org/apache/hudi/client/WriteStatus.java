@@ -140,7 +140,7 @@ public class WriteStatus implements Serializable {
       stat.setMinEventTime(eventTime);
       stat.setMaxEventTime(eventTime);
     } catch (DateTimeException | IllegalArgumentException e) {
-      LOG.debug(String.format("Fail to parse event time value: %s", eventTimeVal), e);
+      LOG.debug("Fail to parse event time value: {}", eventTimeVal, e);
     }
   }
 

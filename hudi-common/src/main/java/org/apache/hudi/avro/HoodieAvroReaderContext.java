@@ -163,13 +163,22 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
   @Override
   public HoodieRecord<IndexedRecord> constructHoodieRecord(BufferedRecord<IndexedRecord> bufferedRecord) {
     if (bufferedRecord.isDelete()) {
-      return SpillableMapUtils.generateEmptyPayload(bufferedRecord.getRecordKey(), "", bufferedRecord.getOrderingValue(), payloadClass);
+      return SpillableMapUtils.generateEmptyPayload(
+          bufferedRecord.getRecordKey(),
+          null,
+          bufferedRecord.getOrderingValue(),
+          payloadClass);
     }
     return new HoodieAvroIndexedRecord(bufferedRecord.getRecord());
   }
 
   @Override
   public IndexedRecord seal(IndexedRecord record) {
+    return record;
+  }
+
+  @Override
+  public IndexedRecord toBinaryRow(Schema avroSchema, IndexedRecord record) {
     return record;
   }
 

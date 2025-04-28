@@ -224,18 +224,24 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
 
   @Override
   public HoodieRecord<ArrayWritable> constructHoodieRecord(BufferedRecord<ArrayWritable> bufferedRecord) {
-    HoodieKey key = new HoodieKey(bufferedRecord.getRecordKey(), "");
-    if (bufferedRecord.getRecord() == null) {
-      return new HoodieEmptyRecord<>(key, HoodieRecord.HoodieRecordType.HIVE);
+    if (bufferedRecord.isDelete()) {
+      return new HoodieEmptyRecord<>(
+          new HoodieKey(bufferedRecord.getRecordKey(), null),
+          HoodieRecord.HoodieRecordType.HIVE);
     }
-    Schema schema = decodeAvroSchema(bufferedRecord.getSchemaId());
+    Schema schema = getSchemaFromBufferRecord(bufferedRecord);
     ArrayWritable writable = bufferedRecord.getRecord();
-    return new HoodieHiveRecord(key, writable, schema, objectInspectorCache);
+    return new HoodieHiveRecord(new HoodieKey(bufferedRecord.getRecordKey(), null), writable, schema, objectInspectorCache);
   }
 
   @Override
   public ArrayWritable seal(ArrayWritable record) {
     return new ArrayWritable(Writable.class, Arrays.copyOf(record.get(), record.get().length));
+  }
+
+  @Override
+  public ArrayWritable toBinaryRow(Schema schema, ArrayWritable record) {
+    return record;
   }
 
   @Override

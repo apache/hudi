@@ -165,7 +165,12 @@ public class InternalSchemaMerger {
     String finalFieldName = useColNameFromFileSchema ? nameFromFileSchema : nameFromQuerySchema;
     Type typeFromFileSchema = fieldFromFileSchema.type();
     if (!useColNameFromFileSchema) {
-      renamedFields.put(nameFromQuerySchema, nameFromFileSchema);
+      // use full name here to prevent conflicts for composite types
+      // e.g., origin schema: ROW<f_row: ROW<f1 STRING, f2 BIGINT>, f3 STRING>, and perform
+      // schema change: 1) rename `f_row.f1` to `f_row.f_str`; 2) rename `f3` to `f_str`.
+      // If we do not use full name as map key for `renamedFields`, name changes for `f_row.f_1` will
+      // be override in `renamedFields`, and get the unexpected final name mapping (`f_str` -> `f3`).
+      renamedFields.put(querySchema.findFullName(fieldId), nameFromFileSchema);
     }
     // Current design mechanism guarantees nestedType change is not allowed, so no need to consider.
     if (newType.isNestedType()) {

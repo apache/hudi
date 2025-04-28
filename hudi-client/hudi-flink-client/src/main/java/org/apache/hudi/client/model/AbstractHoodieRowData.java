@@ -19,6 +19,7 @@
 package org.apache.hudi.client.model;
 
 import org.apache.hudi.common.model.HoodieOperation;
+import org.apache.hudi.common.util.ValidationUtils;
 
 import org.apache.flink.table.data.ArrayData;
 import org.apache.flink.table.data.DecimalData;
@@ -57,6 +58,11 @@ public abstract class AbstractHoodieRowData implements RowData {
       metaColumns[5] = HoodieOperation.fromValue(row.getRowKind().toByteValue()).getName();
     }
     this.row = row;
+  }
+
+  public void updateMetaField(int pos, String value) {
+    ValidationUtils.checkArgument(pos < metaColumnsNum, "Invalid position for metadata field: " + pos);
+    metaColumns[pos] = value;
   }
 
   @Override
@@ -155,7 +161,7 @@ public abstract class AbstractHoodieRowData implements RowData {
     return row.getMap(rebaseOrdinal(ordinal));
   }
 
-  private String getMetaColumnVal(int ordinal) {
+  protected String getMetaColumnVal(int ordinal) {
     return this.metaColumns[ordinal];
   }
 
