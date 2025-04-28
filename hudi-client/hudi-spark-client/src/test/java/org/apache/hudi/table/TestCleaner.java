@@ -73,8 +73,6 @@ import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
-import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.index.SparkHoodieIndexFactory;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.storage.StoragePath;
@@ -161,17 +159,8 @@ public class TestCleaner extends HoodieCleanerTestBase {
     // Should have 100 records in table (check using Index), all in locations marked at commit
     HoodieTable table = HoodieSparkTable.create(client.getConfig(), context, metaClient);
 
-    if (client.getConfig().shouldAutoCommit()) {
-      assertFalse(table.getCompletedCommitsTimeline().empty());
-    }
     // We no longer write empty cleaner plans when there is nothing to be cleaned.
     assertTrue(table.getCompletedCleanTimeline().empty());
-
-    if (client.getConfig().shouldAutoCommit()) {
-      HoodieIndex index = SparkHoodieIndexFactory.createIndex(client.getConfig());
-      List<HoodieRecord> taggedRecords = tagLocation(index, context, context.getJavaSparkContext().parallelize(records, PARALLELISM), table).collect();
-      checkTaggedRecords(taggedRecords, newCommitTime);
-    }
     return Pair.of(newCommitTime, statuses);
   }
 
@@ -228,7 +217,6 @@ public class TestCleaner extends HoodieCleanerTestBase {
       throws Exception {
     int maxVersions = 3; // keep upto 3 versions for each file
     HoodieWriteConfig cfg = getConfigBuilder()
-        .withAutoCommit(false)
         .withHeartbeatIntervalInMs(3000)
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
@@ -513,7 +501,6 @@ public class TestCleaner extends HoodieCleanerTestBase {
       throws Exception {
     int maxCommits = 3; // keep upto 3 commits from the past
     HoodieWriteConfig cfg = getConfigBuilder()
-        .withAutoCommit(false)
         .withHeartbeatIntervalInMs(3000)
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)

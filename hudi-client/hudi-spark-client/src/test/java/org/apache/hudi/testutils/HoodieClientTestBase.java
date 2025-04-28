@@ -638,7 +638,6 @@ public class HoodieClientTestBase extends HoodieSparkClientTestHarness {
   @SuppressWarnings("rawtypes, unchecked")
   protected void insertBatchWithoutCommit(String newCommitTime, int numRecords) {
     HoodieWriteConfig hoodieWriteConfig = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY)
-        .withAutoCommit(false) // disable auto commit
         .withRollbackUsingMarkers(true)
         .build();
 
@@ -662,7 +661,6 @@ public class HoodieClientTestBase extends HoodieSparkClientTestHarness {
   @SuppressWarnings("rawtypes, unchecked")
   protected void updateBatchWithoutCommit(String newCommitTime, List<HoodieRecord> baseRecordsToUpdate) throws IOException {
     HoodieWriteConfig hoodieWriteConfig = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY)
-        .withAutoCommit(false) // disable auto commit
         .withRollbackUsingMarkers(true)
         .withHeartbeatTolerableMisses(0)
         .build();

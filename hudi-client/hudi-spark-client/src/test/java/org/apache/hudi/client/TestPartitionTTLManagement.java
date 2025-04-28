@@ -59,7 +59,6 @@ public class TestPartitionTTLManagement extends HoodieClientTestBase {
     return HoodieWriteConfig.newBuilder().withPath(basePath)
         .withSchema(TRIP_EXAMPLE_SCHEMA)
         .withParallelism(2, 2)
-        .withAutoCommit(autoCommit)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().build())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024 * 1024)
             .withInlineCompaction(false).withMaxNumDeltaCommitsBeforeCompaction(1).build())

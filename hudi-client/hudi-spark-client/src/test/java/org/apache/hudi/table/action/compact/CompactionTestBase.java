@@ -78,7 +78,6 @@ public class CompactionTestBase extends HoodieClientTestBase {
     return HoodieWriteConfig.newBuilder().withPath(basePath)
         .withSchema(TRIP_EXAMPLE_SCHEMA)
         .withParallelism(2, 2)
-        .withAutoCommit(autoCommit)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().build())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024 * 1024)
             .withInlineCompaction(false).withMaxNumDeltaCommitsBeforeCompaction(1).build())
@@ -134,9 +133,8 @@ public class CompactionTestBase extends HoodieClientTestBase {
       JavaRDD<WriteStatus> statuses = client.upsert(writeRecords, firstInstant);
       List<WriteStatus> statusList = statuses.collect();
 
-      if (!cfg.shouldAutoCommit()) {
-        client.commit(firstInstant, statuses);
-      }
+
+      client.commit(firstInstant, jsc.parallelize(statusList));
       assertNoWriteErrors(statusList);
       metaClient = createMetaClient(cfg.getBasePath());
       HoodieTable hoodieTable = getHoodieTable(metaClient, cfg);
@@ -261,13 +259,13 @@ public class CompactionTestBase extends HoodieClientTestBase {
     JavaRDD<WriteStatus> statuses = client.upsert(writeRecords, instantTime);
     List<WriteStatus> statusList = statuses.collect();
     assertNoWriteErrors(statusList);
-    if (!cfg.shouldAutoCommit() && !skipCommit) {
+    if (!skipCommit) {
       client.commit(instantTime, statuses);
     }
 
     Option<HoodieInstant> deltaCommit =
         metaClient.getActiveTimeline().reload().getDeltaCommitTimeline().filterCompletedInstants().lastInstant();
-    if (skipCommit && !cfg.shouldAutoCommit()) {
+    if (skipCommit) {
       assertTrue(deltaCommit.get().requestedTime().compareTo(instantTime) < 0,
           "Delta commit should not be latest instant");
     } else {

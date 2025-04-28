@@ -1416,6 +1416,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBooleanOrDefault(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED);
   }
 
+  public Boolean shouldAutoCommit() {
+    return false;
+  }
+
   public Boolean shouldInternalAutoCommit() {
     return getBooleanOrDefault(INTERNAL_AUTO_COMMIT_ENABLE);
   }
@@ -3275,6 +3279,11 @@ public class HoodieWriteConfig extends HoodieConfig {
     public Builder withTTLConfig(HoodieTTLConfig ttlConfig) {
       writeConfig.getProps().putAll(ttlConfig.getProps());
       isTTLConfigSet = true;
+      return this;
+    }
+
+    public Builder withAutoCommit(boolean autoCommit) {
+      // to fix. remove this method
       return this;
     }
 

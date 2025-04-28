@@ -197,7 +197,7 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
   }
 
   private void testCopyOnWriteRollback(boolean useFileListingMetadata) throws Exception {
-    HoodieWriteConfig writeConfig = getConfigBuilder().withRollbackUsingMarkers(true).withAutoCommit(false)
+    HoodieWriteConfig writeConfig = getConfigBuilder().withRollbackUsingMarkers(true)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(useFileListingMetadata).build())
         .withPath(basePath).build();
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
@@ -222,7 +222,7 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
     tableType = HoodieTableType.MERGE_ON_READ;
     setUp();
 
-    HoodieWriteConfig writeConfig = getConfigBuilder().withRollbackUsingMarkers(true).withAutoCommit(false)
+    HoodieWriteConfig writeConfig = getConfigBuilder().withRollbackUsingMarkers(true)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(useFileListingMetadata).build())
         .withPath(basePath).build();
 

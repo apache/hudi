@@ -325,7 +325,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   @Test
   public void testPreCommitValidatorsOnInsert() throws Exception {
     int numRecords = 200;
-    HoodieWriteConfig config = getConfigBuilder().withAutoCommit(false)
+    HoodieWriteConfig config = getConfigBuilder()
         .withPreCommitValidatorConfig(createPreCommitValidatorConfig(200)).build();
     try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
       Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieRecord>, String> writeFn = (writeClient, recordRDD, instantTime) ->
@@ -1028,7 +1028,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
             false, SqlQueryEqualityPreCommitValidator.class.getName(), COUNT_SQL_QUERY_FOR_VALIDATION, "");
 
     // trigger another partial commit, followed by valid commit. rollback of partial commit should succeed.
-    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder().withAutoCommit(false);
+    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder();
     SparkRDDWriteClient client = getHoodieWriteClient(cfgBuilder.build());
     String commitTime1 = client.createNewInstantTime();
     insertBatchRecords(client, commitTime1, 200, 1, 2, SparkRDDWriteClient::upsert, true).getLeft();
@@ -1535,7 +1535,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
   @Test
   public void testMultiOperationsPerCommit() throws IOException {
-    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder().withAutoCommit(false)
+    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder()
         .withAllowMultiWriteOnSameInstant(true);
     addConfigsForPopulateMetaFields(cfgBuilder, true);
     HoodieWriteConfig cfg = cfgBuilder.build();
@@ -1569,7 +1569,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     properties.setProperty(FILESYSTEM_LOCK_PATH_PROP_KEY, basePath + "/.hoodie/.locks");
     HoodieLockConfig lockConfig = createLockConfig(new PreferWriterConflictResolutionStrategy());
     HoodieCleanConfig cleanConfig = createCleanConfig(HoodieFailedWritesCleaningPolicy.LAZY, false);
-    HoodieWriteConfig insertWriteConfig = getConfigBuilder().withAutoCommit(false)
+    HoodieWriteConfig insertWriteConfig = getConfigBuilder()
         .withCleanConfig(cleanConfig)
         .withLockConfig(lockConfig)
         .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
@@ -1593,7 +1593,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         2, true, INSTANT_GENERATOR, true);
 
     // Schedule and execute a clustering plan on the same partition. During conflict resolution the commit should fail.
-    HoodieWriteConfig clusteringWriteConfig = getConfigBuilder().withAutoCommit(false)
+    HoodieWriteConfig clusteringWriteConfig = getConfigBuilder()
         .withCleanConfig(cleanConfig)
         .withClusteringConfig(createClusteringBuilder(true, 1).build())
         .withPreCommitValidatorConfig(createPreCommitValidatorConfig(200))
@@ -1625,7 +1625,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     Properties properties = getDisabledRowWriterProperties();
     properties.setProperty(FILESYSTEM_LOCK_PATH_PROP_KEY, basePath + "/.hoodie/.locks");
     HoodieCleanConfig cleanConfig = createCleanConfig(HoodieFailedWritesCleaningPolicy.LAZY, false);
-    HoodieWriteConfig insertWriteConfig = getConfigBuilder().withAutoCommit(false)
+    HoodieWriteConfig insertWriteConfig = getConfigBuilder()
         .withCleanConfig(cleanConfig)
         .withLockConfig(createLockConfig(new PreferWriterConflictResolutionStrategy()))
         .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
@@ -1652,7 +1652,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     // Since it is harder to test corner cases where the ingestion writer is at dedupe step right before the inflight file creation
     // and clustering commit is just about to complete, using the default conflict resolutions strategy only for clustering job
     // To create a successful commit.
-    HoodieWriteConfig clusteringWriteConfig = getConfigBuilder().withAutoCommit(false)
+    HoodieWriteConfig clusteringWriteConfig = getConfigBuilder()
         .withCleanConfig(cleanConfig)
         .withClusteringConfig(createClusteringBuilder(true, 1).build())
         .withPreCommitValidatorConfig(createPreCommitValidatorConfig(200))

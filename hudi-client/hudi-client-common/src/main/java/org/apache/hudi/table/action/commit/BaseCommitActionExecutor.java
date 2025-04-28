@@ -310,16 +310,14 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
     HoodieData<WriteStatus> writeStatusList = writeMetadata.getWriteStatuses();
     HoodieData<WriteStatus> statuses = updateIndex(writeStatusList, writeMetadata);
     statuses.persist(config.getString(WRITE_STATUS_STORAGE_LEVEL_VALUE), context, HoodieData.HoodieDataCacheKey.of(config.getBasePath(), instantTime));
-    // triggers clustering.
-    writeMetadata.setWriteStats(statuses.map(WriteStatus::getStat).collectAsList());
+
+    writeMetadata.setWriteStatuses(statuses);
     writeMetadata.setPartitionToReplaceFileIds(getPartitionToReplacedFileIds(clusteringPlan, writeMetadata));
-    completeCommit(writeMetadata);
-    if (!writeMetadata.getCommitMetadata().isPresent()) {
-      LOG.info("Found empty commit metadata for clustering with instant time " + instantTime);
-      HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(writeMetadata.getWriteStats().get(), writeMetadata.getPartitionToReplaceFileIds(),
-          extraMetadata, operationType, schema.get().toString(), getCommitActionType());
-      writeMetadata.setCommitMetadata(Option.of(commitMetadata));
-    }
+    // Create HoodieCommitMetadata w/ all required info except HoodieWriteStats which will be populated later when dag is triggered.
+    HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(Collections.emptyList(), writeMetadata.getPartitionToReplaceFileIds(),
+        extraMetadata, operationType, schema.get().toString(), getCommitActionType());
+    writeMetadata.setCommitMetadata(Option.of(commitMetadata));
+
     return writeMetadata;
   }
 
