@@ -65,6 +65,6 @@ public class TestParquetReaderIterator {
     // no more entries to iterate on
     assertFalse(iterator.hasNext());
     assertThrows(HoodieException.class, iterator::next, "should throw an exception since there is only 1 record");
-    verify(reader, times(3)).close();
+    verify(reader, times(1)).close();
   }
 }

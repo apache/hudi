@@ -80,12 +80,7 @@ public class OrcReaderIterator<T> implements ClosableIterator<T> {
       if (this.next == null) {
         this.next = (T) readRecordFromBatch();
       }
-      boolean hasNext = this.next != null;
-      if (!hasNext) {
-        // eagerly close
-        close();
-      }
-      return hasNext;
+      return this.next != null;
     } catch (IOException io) {
       throw new HoodieIOException("unable to read next record from ORC file ", io);
     }
