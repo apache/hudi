@@ -22,6 +22,7 @@ package org.apache.hudi.metadata.index;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.util.Lazy;
@@ -31,9 +32,7 @@ import java.util.List;
 import java.util.Map;
 
 public interface Indexer {
-  String getPartitionName();
-
-  InitialIndexData build(
+  List<InitialIndexPartitionData> build(
       List<HoodieTableMetadataUtil.DirectoryInfo> partitionInfoList,
       Map<String, Map<String, Long>> partitionToFilesMap,
       String createInstantTime,
@@ -45,27 +44,57 @@ public interface Indexer {
     // No index-specific table config update by default
   }
 
-  class InitialIndexData {
-    private final int numFileGroup;
+  class IndexPartitionData {
+    private final String partitionName;
     private final HoodieData<HoodieRecord> records;
 
-    private InitialIndexData(int numFileGroup,
-                             HoodieData<HoodieRecord> records) {
-      this.numFileGroup = numFileGroup;
+    private IndexPartitionData(String partitionName, HoodieData<HoodieRecord> records) {
+      this.partitionName = partitionName;
       this.records = records;
     }
 
-    public static InitialIndexData of(int numFileGroup,
-                                      HoodieData<HoodieRecord> initialRecords) {
-      return new InitialIndexData(numFileGroup, initialRecords);
+    public static IndexPartitionData of(String partitionName, HoodieData<HoodieRecord> records) {
+      return new IndexPartitionData(partitionName, records);
+    }
+
+    public String partitionName() {
+      return partitionName;
+    }
+
+    public HoodieData<HoodieRecord> records() {
+      return records;
+    }
+  }
+
+  class InitialIndexPartitionData {
+    private final int numFileGroup;
+    private final IndexPartitionData partitionedRecords;
+
+    private InitialIndexPartitionData(int numFileGroup,
+                                      String partitionName,
+                                      HoodieData<HoodieRecord> records) {
+      this.numFileGroup = numFileGroup;
+      this.partitionedRecords = IndexPartitionData.of(partitionName, records);
+    }
+
+    public static InitialIndexPartitionData of(int numFileGroup,
+                                               String partitionName,
+                                               HoodieData<HoodieRecord> records) {
+      ValidationUtils.checkArgument(numFileGroup > 0,
+          "The number of file groups of the index data should be positive");
+      return new InitialIndexPartitionData(numFileGroup, partitionName, records);
     }
 
     public int numFileGroup() {
       return numFileGroup;
     }
 
+    public String partitionName() {
+      return partitionedRecords.partitionName();
+    }
+
     public HoodieData<HoodieRecord> records() {
-      return records;
+      return partitionedRecords.records();
     }
   }
 }
