@@ -61,6 +61,11 @@ See https://github.com/GoogleCloudPlatform/cloud-opensource-java/wiki/The-Google
       <artifactId>hudi-sync-common</artifactId>
       <version>${project.version}</version>
     </dependency>
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-client-common</artifactId>
+      <version>${project.version}</version>
+    </dependency>
 
     <dependency>
       <groupId>com.google.cloud</groupId>
@@ -82,6 +87,11 @@ See https://github.com/GoogleCloudPlatform/cloud-opensource-java/wiki/The-Google
       <groupId>com.google.cloud.bigdataoss</groupId>
       <artifactId>gcs-connector</artifactId>
       <version>${gcs.connector.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>com.google.cloud</groupId>
+      <artifactId>google-cloud-storage</artifactId>
     </dependency>
 
     <dependency>
@@ -135,6 +145,13 @@ See https://github.com/GoogleCloudPlatform/cloud-opensource-java/wiki/The-Google
       <scope>test</scope>
       <type>test-jar</type>
     </dependency>
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-client-common</artifactId>
+      <version>${project.version}</version>
+      <classifier>tests</classifier>
+      <scope>test</scope>
+    </dependency>
     <!-- Kryo -->
     <dependency>
       <groupId>com.esotericsoftware</groupId>
@@ -142,6 +159,11 @@ See https://github.com/GoogleCloudPlatform/cloud-opensource-java/wiki/The-Google
       <scope>test</scope>
     </dependency>
 
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>testcontainers</artifactId>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <build>
