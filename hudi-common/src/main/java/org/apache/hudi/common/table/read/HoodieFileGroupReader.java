@@ -34,7 +34,6 @@ import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordReader;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.CachingIterator;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.EmptyIterator;
@@ -158,29 +157,19 @@ public final class HoodieFileGroupReader<T> implements Closeable {
                                                               boolean isSkipMerge,
                                                               boolean shouldUseRecordPosition,
                                                               HoodieReadStats readStats) {
-    Option<String> orderingFieldName = recordMergeMode == RecordMergeMode.COMMIT_TIME_ORDERING
-        ? Option.empty()
-        : Option.ofNullable(ConfigUtils.getOrderingField(props))
-        .or(() -> {
-          String preCombineField = hoodieTableMetaClient.getTableConfig().getPreCombineField();
-          if (StringUtils.isNullOrEmpty(preCombineField)) {
-            return Option.empty();
-          }
-          return Option.of(preCombineField);
-        });
-    EngineBasedMerger<T> merger = new EngineBasedMerger<>(readerContext, recordMergeMode, hoodieTableMetaClient.getTableConfig(), props, orderingFieldName);
+    EngineBasedMerger<T> merger = new EngineBasedMerger<>(readerContext, recordMergeMode, hoodieTableMetaClient.getTableConfig(), props);
     if (hasNoLogFiles) {
       return null;
     } else if (isSkipMerge) {
       return new UnmergedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, Option.empty(), Option.empty(), props, readStats, orderingFieldName, merger);
+          readerContext, hoodieTableMetaClient, recordMergeMode, Option.empty(), Option.empty(), props, readStats, merger);
     } else if (shouldUseRecordPosition && baseFileOption.isPresent()) {
       return new PositionBasedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, Option.empty(),
-          Option.empty(), baseFileOption.get().getCommitTime(), props, readStats, orderingFieldName, merger);
+          readerContext, hoodieTableMetaClient, recordMergeMode, Option.empty(),
+          Option.empty(), baseFileOption.get().getCommitTime(), props, readStats, merger);
     } else {
       return new KeyBasedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, Option.empty(), Option.empty(), props, readStats, orderingFieldName, merger);
+          readerContext, hoodieTableMetaClient, recordMergeMode, Option.empty(), Option.empty(), props, readStats, merger);
     }
   }
 

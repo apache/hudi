@@ -49,10 +49,9 @@ public class EngineBasedMerger<T> {
   private final Option<HoodieRecordMerger> recordMerger;
   private final Option<String> payloadClass;
   private final Schema readerSchema;
-  private final Option<String> orderingFieldName;
   private final TypedProperties props;
 
-  public EngineBasedMerger(HoodieReaderContext<T> readerContext, RecordMergeMode recordMergeMode, HoodieTableConfig tableConfig, TypedProperties props, Option<String> orderingFieldName) {
+  public EngineBasedMerger(HoodieReaderContext<T> readerContext, RecordMergeMode recordMergeMode, HoodieTableConfig tableConfig, TypedProperties props) {
     this.readerContext = readerContext;
     this.readerSchema = AvroSchemaCache.intern(readerContext.getSchemaHandler().getRequiredSchema());
     this.recordMergeMode = recordMergeMode;
@@ -62,7 +61,6 @@ public class EngineBasedMerger<T> {
     } else {
       this.payloadClass = Option.empty();
     }
-    this.orderingFieldName = orderingFieldName;
     this.props = props;
   }
 
@@ -83,53 +81,61 @@ public class EngineBasedMerger<T> {
       //  and use the record merge mode to control how to merge partial updates
       Option<Pair<HoodieRecord, Schema>> mergedRecord = recordMerger.get().partialMerge(
           readerContext.constructHoodieRecord(older),
-          readerContext.decodeAvroSchema(older.getSchemaId()),
+          readerContext.getSchemaFromBufferRecord(older),
           readerContext.constructHoodieRecord(newer),
-          readerContext.decodeAvroSchema(newer.getSchemaId()),
+          readerContext.getSchemaFromBufferRecord(newer),
           readerSchema,
           props);
 
-      // TODO schema rewriting?
       return mergedRecord.map(combinedRecordAndSchema -> {
         HoodieRecord<T> combinedRecord = combinedRecordAndSchema.getLeft();
+        if (!combinedRecordAndSchema.getRight().equals(readerSchema)) {
+          combinedRecord = combinedRecord.rewriteRecordWithNewSchema(mergedRecord.get().getRight(), null, readerSchema);
+        }
         // If pre-combine returns existing record, no need to update it
         if (combinedRecord.getData() != olderOption.orElse(null)) {
-          return BufferedRecord.forRecordWithContext(combinedRecord.getData(), combinedRecordAndSchema.getRight(), readerContext, orderingFieldName, false);
+          return BufferedRecord.forRecordWithContext(combinedRecord, combinedRecordAndSchema.getRight(), readerContext, props);
         }
         return older;
-      }).orElseGet(newer::asDeleteRecord);
+      }).orElseGet(() -> getLatestAsDeleteRecord(newer, older));
     } else {
       switch (recordMergeMode) {
         case COMMIT_TIME_ORDERING:
           return newer;
         case EVENT_TIME_ORDERING:
-          if (newer.isCommitTimeOrderingDelete()) {
-            return newer;
-          }
-          if (older.isCommitTimeOrderingDelete()) {
-            return older;
-          }
-          Comparable newOrderingValue = newer.getOrderingValue();
-          Comparable oldOrderingValue = olderOption.get().getOrderingValue();
-          return oldOrderingValue.compareTo(newOrderingValue) > 0 ? older : newer;
+          return getNewerRecordWithEventTimeOrdering(newer, older);
         case CUSTOM:
         default:
           if (payloadClass.isPresent()) {
             Option<Pair<HoodieRecord, Schema>> mergedRecord = getMergedRecord(older, newer);
             return mergedRecord.map(combinedRecordAndSchema -> {
-              T record = readerContext.convertAvroRecord((IndexedRecord) combinedRecordAndSchema.getLeft());
-              return BufferedRecord.forRecordWithContext(record, combinedRecordAndSchema.getRight(), readerContext, orderingFieldName, false);
-            }).orElseGet(newer::asDeleteRecord); // todo should this be older record if it was previously a delete?
+              T record = readerContext.convertAvroRecord((IndexedRecord) combinedRecordAndSchema.getLeft()
+                  .rewriteRecordWithNewSchema(mergedRecord.get().getRight(), null, readerSchema));
+              return BufferedRecord.forConvertedRecord(record, combinedRecordAndSchema.getLeft(), combinedRecordAndSchema.getRight(), readerContext, props);
+            }).orElseGet(() -> getLatestAsDeleteRecord(newer, older));
           } else {
             Option<Pair<HoodieRecord, Schema>> mergedRecord = recordMerger.get().merge(
-                readerContext.constructHoodieRecord(older), readerContext.decodeAvroSchema(older.getSchemaId()),
-                readerContext.constructHoodieRecord(newer), readerContext.decodeAvroSchema(newer.getSchemaId()), props);
+                readerContext.constructHoodieRecord(older), readerContext.getSchemaFromBufferRecord(older),
+                readerContext.constructHoodieRecord(newer), readerContext.getSchemaFromBufferRecord(newer), props);
             return mergedRecord.map(combinedRecordAndSchema ->
-                BufferedRecord.forRecordWithContext((T) combinedRecordAndSchema.getLeft().getData(), combinedRecordAndSchema.getRight(), readerContext, orderingFieldName, false))
-                .orElseGet(newer::asDeleteRecord);
+                BufferedRecord.forRecordWithContext((HoodieRecord<T>) combinedRecordAndSchema.getLeft().rewriteRecordWithNewSchema(mergedRecord.get().getRight(), null, readerSchema),
+                    combinedRecordAndSchema.getRight(), readerContext, props))
+                .orElseGet(() -> getLatestAsDeleteRecord(newer, older));
           }
       }
     }
+  }
+
+  private static <T> BufferedRecord<T> getNewerRecordWithEventTimeOrdering(BufferedRecord<T> newer, BufferedRecord<T> older) {
+    if (newer.isCommitTimeOrderingDelete()) {
+      return newer;
+    }
+    if (older.isCommitTimeOrderingDelete()) {
+      return older;
+    }
+    Comparable newOrderingValue = newer.getOrderingValue();
+    Comparable oldOrderingValue = older.getOrderingValue();
+    return oldOrderingValue.compareTo(newOrderingValue) > 0 ? older : newer;
   }
 
   private Option<Pair<HoodieRecord, Schema>> getMergedRecord(BufferedRecord<T> older, BufferedRecord<T> newer) throws IOException {
@@ -138,16 +144,16 @@ public class EngineBasedMerger<T> {
     HoodieRecord oldHoodieRecord = constructHoodieAvroRecord(readerContext, older);
     HoodieRecord newHoodieRecord = constructHoodieAvroRecord(readerContext, newer);
     Option<Pair<HoodieRecord, Schema>> mergedRecord = recordMerger.get().merge(
-        oldHoodieRecord, getSchemaForAvroPayloadMerge(oldHoodieRecord, older.getSchemaId()),
-        newHoodieRecord, getSchemaForAvroPayloadMerge(newHoodieRecord, newer.getSchemaId()), props);
+        oldHoodieRecord, getSchemaForAvroPayloadMerge(oldHoodieRecord, older),
+        newHoodieRecord, getSchemaForAvroPayloadMerge(newHoodieRecord, newer), props);
     return mergedRecord;
   }
 
-  private Schema getSchemaForAvroPayloadMerge(HoodieRecord record, Integer schemaId) throws IOException {
+  private Schema getSchemaForAvroPayloadMerge(HoodieRecord record, BufferedRecord<T> bufferedRecord) throws IOException {
     if (record.isDelete(readerSchema, props)) {
       return readerSchema;
     }
-    return readerContext.decodeAvroSchema(schemaId);
+    return readerContext.getSchemaFromBufferRecord(bufferedRecord);
   }
 
   /**
@@ -160,9 +166,13 @@ public class EngineBasedMerger<T> {
   private HoodieRecord constructHoodieAvroRecord(HoodieReaderContext<T> readerContext, BufferedRecord<T> bufferedRecord) {
     GenericRecord record = null;
     if (bufferedRecord.getRecord() != null) {
-      Schema recordSchema = readerContext.decodeAvroSchema(bufferedRecord.getSchemaId());
+      Schema recordSchema = readerContext.getSchemaFromBufferRecord(bufferedRecord);
       record = readerContext.convertToAvroRecord(bufferedRecord.getRecord(), recordSchema);
     }
     return new HoodieAvroRecord<>(HoodieRecordUtils.loadPayload(payloadClass.get(), record, bufferedRecord.getOrderingValue()));
+  }
+
+  private BufferedRecord<T> getLatestAsDeleteRecord(BufferedRecord<T> newer, BufferedRecord<T> older) {
+    return getNewerRecordWithEventTimeOrdering(newer, older).asDeleteRecord();
   }
 }
