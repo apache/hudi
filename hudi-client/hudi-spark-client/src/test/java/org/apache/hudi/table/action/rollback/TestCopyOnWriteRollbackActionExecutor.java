@@ -437,13 +437,13 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
         DEFAULT_THIRD_PARTITION_PATH});
     writeBatch(writeClient, firstCommit, "000", Option.of(Arrays.asList("000")), "000",
         numRecords, dataGen::generateInserts, SparkRDDWriteClient::insert, true, numRecords, numRecords,
-        1, true, INSTANT_GENERATOR);
+        1, INSTANT_GENERATOR);
 
     // Create second commit.
     String secondCommit = writeClient.createNewInstantTime();
     writeBatch(writeClient, secondCommit, firstCommit, Option.of(Arrays.asList(firstCommit)), "000", 100,
         dataGen::generateInserts, SparkRDDWriteClient::insert, true, 100, 300,
-        2, true, INSTANT_GENERATOR);
+        2, INSTANT_GENERATOR);
 
     // Create completed clustering commit
     Properties properties = new Properties();

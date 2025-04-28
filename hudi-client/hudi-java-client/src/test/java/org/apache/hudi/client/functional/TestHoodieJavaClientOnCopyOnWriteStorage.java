@@ -111,11 +111,11 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
                                   Option<List<String>> commitTimesBetweenPrevAndNew, String initCommitTime, int numRecordsInThisCommit,
                                   Function2<List<HoodieRecord>, String, Integer> recordGenFunction,
                                   Function3<Object, BaseHoodieWriteClient, Object, String> writeFn,
-                                  boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords, int expTotalCommits, boolean doCommit,
+                                  boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords, int expTotalCommits,
                                   boolean filterForCommitTimeWithAssert, InstantGenerator instantGenerator, boolean leaveInflightCommit) throws Exception {
     return writeBatch((HoodieJavaWriteClient) client, newCommitTime, prevCommitTime, commitTimesBetweenPrevAndNew, initCommitTime, numRecordsInThisCommit, recordGenFunction,
         (writeClient, records, commitTime) -> (List<WriteStatus>) writeFn.apply(writeClient, records, commitTime),
-        assertForCommit, expRecordsInThisCommit, expTotalRecords, expTotalCommits, doCommit, filterForCommitTimeWithAssert, instantGenerator, leaveInflightCommit);
+        assertForCommit, expRecordsInThisCommit, expTotalRecords, expTotalCommits, filterForCommitTimeWithAssert, instantGenerator, leaveInflightCommit);
   }
 
   @Override
@@ -129,7 +129,7 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
 
     return writeBatch((HoodieJavaWriteClient) client, newCommitTime, prevCommitTime, commitTimesBetweenPrevAndNew, initCommitTime, numRecordsInThisCommit, recordGenFunction,
         (writeClient, records, commitTime) -> (List<WriteStatus>) writeFn.apply(writeClient, records, commitTime), assertForCommit, expRecordsInThisCommit, expTotalRecords,
-        expTotalCommits, true, filterForCommitTimeWithAssert, instantGenerator);
+        expTotalCommits, filterForCommitTimeWithAssert, instantGenerator);
   }
 
   @Override
