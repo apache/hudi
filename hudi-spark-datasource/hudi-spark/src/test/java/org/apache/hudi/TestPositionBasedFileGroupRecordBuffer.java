@@ -40,7 +40,6 @@ import org.apache.hudi.common.table.read.PositionBasedSchemaHandler;
 import org.apache.hudi.common.table.read.TestHoodieFileGroupReaderOnSpark;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
-import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
@@ -133,8 +132,7 @@ public class TestPositionBasedFileGroupRecordBuffer extends TestHoodieFileGroupR
       writeConfigs.put(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key(), HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID);
     }
     readStats = new HoodieReadStats();
-    Option<String> orderingFieldName = Option.ofNullable(ConfigUtils.getOrderingField(TypedProperties.fromMap(writeConfigs)));
-    EngineBasedMerger<InternalRow> merger = new EngineBasedMerger<>(ctx, mergeMode, metaClient.getTableConfig(), props, orderingFieldName);
+    EngineBasedMerger<InternalRow> merger = new EngineBasedMerger<>(ctx, mergeMode, metaClient.getTableConfig(), props);
     buffer = new PositionBasedFileGroupRecordBuffer<>(
         ctx,
         metaClient,
