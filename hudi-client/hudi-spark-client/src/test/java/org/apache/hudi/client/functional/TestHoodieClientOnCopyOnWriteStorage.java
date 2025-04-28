@@ -239,11 +239,11 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
                                   Option<List<String>> commitTimesBetweenPrevAndNew, String initCommitTime, int numRecordsInThisCommit,
                                   Function2<List<HoodieRecord>, String, Integer> recordGenFunction,
                                   Function3<Object, BaseHoodieWriteClient, Object, String> writeFn,
-                                  boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords, int expTotalCommits, boolean doCommit,
+                                  boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords, int expTotalCommits,
                                   boolean filterForCommitTimeWithAssert, InstantGenerator instantGenerator, boolean leaveInflightCommit) throws Exception {
     return writeBatch((SparkRDDWriteClient) client, newCommitTime, prevCommitTime, commitTimesBetweenPrevAndNew, initCommitTime, numRecordsInThisCommit, recordGenFunction,
         (writeClient, records, commitTime) -> (JavaRDD<WriteStatus>) writeFn.apply(writeClient, records, commitTime),
-        assertForCommit, expRecordsInThisCommit, expTotalRecords, expTotalCommits, doCommit, filterForCommitTimeWithAssert, instantGenerator, leaveInflightCommit);
+        assertForCommit, expRecordsInThisCommit, expTotalRecords, expTotalCommits, filterForCommitTimeWithAssert, instantGenerator, leaveInflightCommit);
   }
 
   @Override
@@ -257,7 +257,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
     return writeBatch((SparkRDDWriteClient) client, newCommitTime, prevCommitTime, commitTimesBetweenPrevAndNew, initCommitTime, numRecordsInThisCommit, recordGenFunction,
         (writeClient, records, commitTime) -> (JavaRDD<WriteStatus>) writeFn.apply(writeClient, records, commitTime), assertForCommit, expRecordsInThisCommit, expTotalRecords,
-        expTotalCommits, false, filterForCommitTimeWithAssert, instantGenerator);
+        expTotalCommits, filterForCommitTimeWithAssert, instantGenerator);
   }
 
   @Override
@@ -1584,13 +1584,13 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[] {partitionStr});
     writeBatch(client, firstCommit, "000", Option.of(Arrays.asList("000")), "000",
         numRecords, dataGenerator::generateInserts, SparkRDDWriteClient::insert, true, numRecords, numRecords,
-        1, true, INSTANT_GENERATOR);
+        1, INSTANT_GENERATOR);
 
     // Do an upsert operation without autocommit.
     String inflightCommit = client.createNewInstantTime();
     writeBatch(client, inflightCommit, firstCommit, Option.of(Arrays.asList("000")), "000",
         100, dataGenerator::generateUniqueUpdates, SparkRDDWriteClient::upsert, false, 0, 200,
-        2, false, true, INSTANT_GENERATOR, true);
+        2, true, INSTANT_GENERATOR, true);
 
     // Schedule and execute a clustering plan on the same partition. During conflict resolution the commit should fail.
     HoodieWriteConfig clusteringWriteConfig = getConfigBuilder().withAutoCommit(false)
@@ -1640,13 +1640,13 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[] {partitionStr});
     writeBatch(client, firstCommit, "000", Option.of(Arrays.asList("000")), "000",
         numRecords, dataGenerator::generateInserts, SparkRDDWriteClient::insert, true, numRecords, numRecords,
-        1, true, INSTANT_GENERATOR);
+        1, INSTANT_GENERATOR);
 
     // Create and temporarily block a lower timestamp for ingestion.
     String inflightCommit = client.createNewInstantTime();
     JavaRDD<WriteStatus> ingestionResult = writeBatch(client, inflightCommit, firstCommit, Option.of(Arrays.asList("000")), "000",
         100, dataGenerator::generateUniqueUpdates, SparkRDDWriteClient::upsert, false, 0, 200,
-        2, false, true, INSTANT_GENERATOR, true);
+        2, true, INSTANT_GENERATOR, true);
 
     // Schedule and execute a clustering plan on the same partition. During conflict resolution the commit should fail.
     // Since it is harder to test corner cases where the ingestion writer is at dedupe step right before the inflight file creation
