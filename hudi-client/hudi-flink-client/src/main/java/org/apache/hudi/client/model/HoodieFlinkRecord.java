@@ -43,7 +43,6 @@ import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.data.utils.JoinedRowData;
 
 import java.io.ByteArrayOutputStream;
-import java.util.Collections;
 import java.util.Map;
 import java.util.Properties;
 
@@ -169,7 +168,7 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
     String[] metaVals = new String[HoodieRecord.HOODIE_META_COLUMNS.size()];
     metaVals[ordinal] = value;
     boolean withOperation = recordSchema.getField(OPERATION_METADATA_FIELD) != null;
-    RowData rowData = new HoodieRowDataWithPartialMetaFields(metaVals, Collections.singleton(ordinal), getData(), withOperation);
+    RowData rowData = new HoodieRowDataWithUpdatedMetaField(metaVals, ordinal, getData(), withOperation);
     return new HoodieFlinkRecord(getKey(), getOperation(), orderingValue, rowData);
   }
 

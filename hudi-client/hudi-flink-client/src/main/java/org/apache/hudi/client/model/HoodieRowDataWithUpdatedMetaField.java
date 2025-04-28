@@ -21,28 +21,26 @@ package org.apache.hudi.client.model;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
 
-import java.util.Set;
-
 /**
  * RowData implementation for Hoodie Row. It wraps an {@link RowData} and keeps meta columns locally,
- * but the meta columns array may contain partial meta fields, e.g., only contain `FILENAME_METADATA_FIELD`
+ * but the meta columns array only contains one updated meta field, e.g., updated `FILENAME_METADATA_FIELD`
  * for base file writing during compaction.
  */
-public class HoodieRowDataWithPartialMetaFields extends HoodieRowDataWithMetaFields {
-  private final Set<Integer> partialMetaOrdinals;
+public class HoodieRowDataWithUpdatedMetaField extends HoodieRowDataWithMetaFields {
+  private final int updatedMetaOrdinal;
 
-  public HoodieRowDataWithPartialMetaFields(
+  public HoodieRowDataWithUpdatedMetaField(
       String[] metaVals,
-      Set<Integer> partialMetaOrdinals,
+      int updatedMetaOrdinal,
       RowData row,
       boolean withOperation) {
     super(metaVals[0], metaVals[1], metaVals[2], metaVals[3], metaVals[4], row, withOperation);
-    this.partialMetaOrdinals = partialMetaOrdinals;
+    this.updatedMetaOrdinal = updatedMetaOrdinal;
   }
 
   @Override
   public boolean isNullAt(int ordinal) {
-    if (partialMetaOrdinals.contains(ordinal)) {
+    if (updatedMetaOrdinal == ordinal) {
       return null == getMetaColumnVal(ordinal);
     } else {
       return row.isNullAt(rebaseOrdinal(ordinal));
@@ -51,7 +49,7 @@ public class HoodieRowDataWithPartialMetaFields extends HoodieRowDataWithMetaFie
 
   @Override
   public StringData getString(int ordinal) {
-    if (partialMetaOrdinals.contains(ordinal)) {
+    if (updatedMetaOrdinal == ordinal) {
       return StringData.fromString(getMetaColumnVal(ordinal));
     }
     return row.getString(rebaseOrdinal(ordinal));
