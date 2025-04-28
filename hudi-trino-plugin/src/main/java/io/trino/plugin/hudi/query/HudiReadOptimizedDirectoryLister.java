@@ -61,10 +61,10 @@ public class HudiReadOptimizedDirectoryLister
             List<String> hivePartitionNames,
             boolean ignoreAbsentPartitions)
     {
-        this.fileSystemView = fileListingBasedFileSystemView(
-                new HoodieLocalEngineContext(metaClient.getStorageConf()),
+        this.fileSystemView = new HoodieTableFileSystemView(
                 metaClient,
-                metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants());
+                metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(),
+                ignoreAbsentPartitions);
         this.partitionColumns = hiveTable.getPartitionColumns();
         this.allPartitionInfoMap = hivePartitionNames.stream()
                 .collect(Collectors.toMap(
