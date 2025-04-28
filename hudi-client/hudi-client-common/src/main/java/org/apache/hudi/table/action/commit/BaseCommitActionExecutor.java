@@ -185,9 +185,13 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
   }
 
   protected void completeCommit(HoodieWriteMetadata result) {
+    completeCommit(result, false);
+  }
+
+  protected void completeCommit(HoodieWriteMetadata result, boolean overrideCompleteCommit) {
     // validate commit action before committing result
     runPrecommitValidation(result);
-    if (config.shouldInternalAutoCommit()) {
+    if (config.shouldInternalAutoCommit() || overrideCompleteCommit) {
       if (!this.txnManagerOption.isPresent()) {
         this.txnManagerOption = Option.of(new TransactionManager(config, table.getStorage()));
       }
