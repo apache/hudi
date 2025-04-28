@@ -202,7 +202,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
       params.put(TYPE.key(), HoodieTableType.MERGE_ON_READ.name());
       metaClient = HoodieTestUtils.init(storageConf, basePath, HoodieTableType.MERGE_ON_READ);
     }
-    HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).withRollbackUsingMarkers(false).withProps(params).build();
+    HoodieWriteConfig cfg = getConfigBuilder().withRollbackUsingMarkers(false).withProps(params).build();
     SparkRDDWriteClient client = getHoodieWriteClient(cfg);
 
     // prepare data. Make 2 commits, in which 2nd is not committed.
@@ -267,7 +267,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
       params.put(TYPE.key(), HoodieTableType.MERGE_ON_READ.name());
       metaClient = HoodieTestUtils.init(storageConf, basePath, HoodieTableType.MERGE_ON_READ);
     }
-    HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).withRollbackUsingMarkers(false).withProps(params).build();
+    HoodieWriteConfig cfg = getConfigBuilder().withRollbackUsingMarkers(false).withProps(params).build();
     SparkRDDWriteClient client = getHoodieWriteClient(cfg);
     // Write inserts
     doInsert(client);
@@ -301,7 +301,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
       metaClient = HoodieTestUtils.init(storageConf, basePath, HoodieTableType.MERGE_ON_READ);
     }
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder()
-        .withAutoCommit(false).withRollbackUsingMarkers(false).withProps(params);
+        .withRollbackUsingMarkers(false).withProps(params);
     if (keyGeneratorClass.isPresent()) {
       cfgBuilder.withKeyGenerator(keyGeneratorClass.get());
     }
@@ -339,7 +339,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     // init config, table and client.
     Map<String, String> params = new HashMap<>();
     addNewTableParamsToProps(params);
-    HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).withRollbackUsingMarkers(false).withProps(params).build();
+    HoodieWriteConfig cfg = getConfigBuilder().withRollbackUsingMarkers(false).withProps(params).build();
 
     // write inserts
     SparkRDDWriteClient client = getHoodieWriteClient(cfg);
@@ -408,7 +408,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
 
     initMetaClient(getTableType(), properties);
     // init config, table and client.
-    HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(true).withRollbackUsingMarkers(false).withWriteTableVersion(6)
+    HoodieWriteConfig cfg = getConfigBuilder().withRollbackUsingMarkers(false).withWriteTableVersion(6)
         .doSkipDefaultPartitionValidation(skipDefaultPartitionValidation).withProps(params).build();
     SparkRDDWriteClient client = getHoodieWriteClient(cfg);
     // Write inserts
@@ -606,7 +606,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
       params.put(TYPE.key(), HoodieTableType.MERGE_ON_READ.name());
       metaClient = HoodieTestUtils.init(storageConf, basePath, HoodieTableType.MERGE_ON_READ);
     }
-    HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).withRollbackUsingMarkers(true)
+    HoodieWriteConfig cfg = getConfigBuilder().withRollbackUsingMarkers(true)
         .withWriteTableVersion(6)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(enableMetadataTable).build())
         .withMarkersType(markerType.name()).withProps(params).build();
@@ -808,7 +808,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     if (tableType == HoodieTableType.MERGE_ON_READ) {
       params.put(TYPE.key(), HoodieTableType.MERGE_ON_READ.name());
     }
-    HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).withRollbackUsingMarkers(enableMarkedBasedRollback).withProps(params).build();
+    HoodieWriteConfig cfg = getConfigBuilder().withRollbackUsingMarkers(enableMarkedBasedRollback).withProps(params).build();
     SparkRDDWriteClient client = getHoodieWriteClient(cfg);
 
     client.startCommitWithTime(newCommitTime);

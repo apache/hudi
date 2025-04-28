@@ -329,7 +329,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
 
   public void commitCompaction(String compactionInstantTime, HoodieWriteMetadata<O> compactionWriteMetadata, Option<HoodieTable> tableOpt) {
     // dereferencing the write dag for compaction for the first time.
-    List<HoodieWriteStat> writeStats = compactionWriteMetadata.getWriteStats().get();
+    List<HoodieWriteStat> writeStats = processAndFetchHoodieWriteStats(compactionWriteMetadata);
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata(true);
     for (HoodieWriteStat stat : writeStats) {
       commitMetadata.addWriteStat(stat.getPartitionPath(), stat);
@@ -343,14 +343,17 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       commitMetadata.addMetadata(SerDeHelper.LATEST_SCHEMA, schemaPair.getLeft().get());
       commitMetadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, schemaPair.getRight().get());
     }
-    // Setting operationType, which is compact.
+
     commitMetadata.setOperationType(WriteOperationType.COMPACT);
-    compactionWriteMetadata.setCommitted(true); // todo: can we set it to true?
+    compactionWriteMetadata.setCommitted(true);
     compactionWriteMetadata.setCommitMetadata(Option.of(commitMetadata));
     metrics.emitCompactionCompleted();
     LOG.info("Compaction completed. Instant time: {}.", compactionInstantTime);
+
     completeCompaction(commitMetadata, table, compactionInstantTime);
   }
+
+  protected abstract List<HoodieWriteStat> processAndFetchHoodieWriteStats(HoodieWriteMetadata<O> writeMetadata);
 
   /**
    * Commit Compaction and track metrics.
@@ -384,9 +387,9 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     LOG.info("Compacted successfully on commit {}", compactionCommitTime);
   }
 
-  public void commitLogCompaction(String compactionInstantTime, HoodieWriteMetadata<O> compactionWriteMetadata, Option<HoodieTable> tableOpt) {
+  public void commitLogCompaction(String compactionInstantTime, HoodieWriteMetadata<O> writeMetadata, Option<HoodieTable> tableOpt) {
     // dereferencing the write dag for log compaction for the first time.
-    List<HoodieWriteStat> writeStats = compactionWriteMetadata.getWriteStats().get();
+    List<HoodieWriteStat> writeStats = processAndFetchHoodieWriteStats(writeMetadata);
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata(true);
     for (HoodieWriteStat stat : writeStats) {
       commitMetadata.addWriteStat(stat.getPartitionPath(), stat);
@@ -402,10 +405,10 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     }
     // Setting operationType, which is compact.
     commitMetadata.setOperationType(WriteOperationType.LOG_COMPACT);
-    compactionWriteMetadata.setCommitted(true); // todo: can we set it to true?
-    compactionWriteMetadata.setCommitMetadata(Option.of(commitMetadata));
+    writeMetadata.setCommitted(true);
+    writeMetadata.setCommitMetadata(Option.of(commitMetadata));
     metrics.emitCompactionCompleted();
-    LOG.info("Compaction completed. Instant time: {}.", compactionInstantTime);
+    LOG.info("Log Compaction completed. Instant time: {}.", compactionInstantTime);
     completeLogCompaction(commitMetadata, table, compactionInstantTime);
   }
   
@@ -527,14 +530,6 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     HoodieWriteMetadata<T> writeMetadata = table.cluster(context, clusteringInstant);
     HoodieWriteMetadata<O> clusteringMetadata = convertToOutputMetadata(writeMetadata);
 
-    // Publish file creation metrics for clustering.
-    if (config.isMetricsOn()) {
-      clusteringMetadata.getWriteStats()
-          .ifPresent(hoodieWriteStats -> hoodieWriteStats.stream()
-              .filter(hoodieWriteStat -> hoodieWriteStat.getRuntimeStats() != null)
-              .map(hoodieWriteStat -> hoodieWriteStat.getRuntimeStats().getTotalCreateTime())
-              .forEach(metrics::updateClusteringFileCreationMetrics));
-    }
 
     // TODO : Where is shouldComplete used ?
     if (shouldComplete) {
@@ -560,8 +555,24 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
   private void completeClustering(HoodieWriteMetadata<O> clusteringWriteMetadata,
                                   HoodieTable table,
                                   String clusteringCommitTime) {
+    List<HoodieWriteStat> writeStats = processAndFetchHoodieWriteStats(clusteringWriteMetadata);
+    clusteringWriteMetadata.setWriteStats(writeStats);
+
     HoodieReplaceCommitMetadata replaceCommitMetadata = (HoodieReplaceCommitMetadata) clusteringWriteMetadata.getCommitMetadata().get();
-    List<HoodieWriteStat> writeStats = replaceCommitMetadata.getWriteStats();
+    for (HoodieWriteStat writeStat: writeStats) {
+      replaceCommitMetadata.addWriteStat(writeStat.getPartitionPath(), writeStat);
+    }
+    clusteringWriteMetadata.setCommitMetadata(Option.of(replaceCommitMetadata));
+
+    // Publish file creation metrics for clustering.
+    if (config.isMetricsOn()) {
+      clusteringWriteMetadata.getWriteStats()
+          .ifPresent(hoodieWriteStats -> hoodieWriteStats.stream()
+              .filter(hoodieWriteStat -> hoodieWriteStat.getRuntimeStats() != null)
+              .map(hoodieWriteStat -> hoodieWriteStat.getRuntimeStats().getTotalCreateTime())
+              .forEach(metrics::updateClusteringFileCreationMetrics));
+    }
+
     handleWriteErrors(writeStats, TableServiceType.CLUSTER);
     final HoodieInstant clusteringInstant = ClusteringUtils.getInflightClusteringInstant(clusteringCommitTime,
         table.getActiveTimeline(), table.getMetaClient().getInstantGenerator()).get();

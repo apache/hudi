@@ -98,7 +98,7 @@ public class TestSimpleTransactionDirectMarkerBasedDetectionStrategyWithZKLockPr
         .withEarlyConflictDetectionEnable(true)
         .withEarlyConflictDetectionStrategy(SimpleTransactionDirectMarkerBasedDetectionStrategy.class.getName())
         .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(ZookeeperBasedLockProvider.class).build())
-        .withAutoCommit(false).withProperties(properties)
+        .withProperties(properties)
         .build();
   }
 
