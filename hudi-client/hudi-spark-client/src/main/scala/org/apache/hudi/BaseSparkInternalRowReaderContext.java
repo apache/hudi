@@ -29,6 +29,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -37,6 +38,7 @@ import org.apache.avro.Schema;
 import org.apache.spark.sql.HoodieInternalRowUtils;
 import org.apache.spark.sql.HoodieUnsafeRowUtils;
 import org.apache.spark.sql.catalyst.InternalRow;
+import org.apache.spark.sql.catalyst.expressions.UnsafeProjection;
 import org.apache.spark.sql.catalyst.expressions.UnsafeRow;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.unsafe.types.UTF8String;
@@ -89,23 +91,30 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
   }
 
   @Override
-  public HoodieRecord<InternalRow> constructHoodieRecord(Option<InternalRow> rowOption,
-                                                         Map<String, Object> metadataMap) {
-    if (!rowOption.isPresent()) {
+  public HoodieRecord<InternalRow> constructHoodieRecord(BufferedRecord<InternalRow> bufferedRecord) {
+    if (bufferedRecord.isDelete()) {
       return new HoodieEmptyRecord<>(
-          new HoodieKey((String) metadataMap.get(INTERNAL_META_RECORD_KEY),
-              (String) metadataMap.get(INTERNAL_META_PARTITION_PATH)),
+          new HoodieKey(bufferedRecord.getRecordKey(), null),
           HoodieRecord.HoodieRecordType.SPARK);
     }
 
-    Schema schema = getSchemaFromMetadata(metadataMap);
-    InternalRow row = rowOption.get();
+    Schema schema = getSchemaFromBufferRecord(bufferedRecord);
+    InternalRow row = bufferedRecord.getRecord();
     return new HoodieSparkRecord(row, HoodieInternalRowUtils.getCachedSchema(schema));
   }
 
   @Override
   public InternalRow seal(InternalRow internalRow) {
     return internalRow.copy();
+  }
+
+  @Override
+  public InternalRow toBinaryRow(Schema schema, InternalRow internalRow) {
+    if (internalRow instanceof UnsafeRow) {
+      return internalRow;
+    }
+    final UnsafeProjection unsafeProjection = HoodieInternalRowUtils.getCachedUnsafeProjection(schema);
+    return unsafeProjection.apply(internalRow);
   }
 
   private Object getFieldValueFromInternalRow(InternalRow row, Schema recordSchema, String fieldName) {

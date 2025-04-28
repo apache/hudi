@@ -341,9 +341,9 @@ public abstract class BaseHoodieLogRecordReader<T> {
                   }
                   if (targetInstantForCommandBlock.contentEquals(block.getLogBlockHeader().get(INSTANT_TIME))) {
                     // rollback older data block or delete block
-                    LOG.info(String.format(
-                        "Rolling back an older log block read from %s with instantTime %s",
-                        logFile.getPath(), targetInstantForCommandBlock));
+                    LOG.info(
+                        "Rolling back an older log block read from {} with instantTime {}",
+                        logFile.getPath(), targetInstantForCommandBlock);
                     return false;
                   }
                   return true;

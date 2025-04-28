@@ -194,8 +194,6 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
 
     ListingBasedRollbackStrategy rollbackStrategy = new ListingBasedRollbackStrategy(table, context, table.getConfig(), rollbackInstant, false);
     List<HoodieRollbackRequest> rollBackRequests = rollbackStrategy.getRollbackRequests(needRollBackInstant);
-    rollBackRequests.forEach(entry -> System.out.println(" " + entry.getPartitionPath() + ", " + entry.getFileId() + " "
-        + Arrays.toString(entry.getFilesToBeDeleted().toArray())));
 
     HoodieRollbackRequest rollbackRequest = rollBackRequests.stream().filter(entry -> entry.getPartitionPath().equals(DEFAULT_FIRST_PARTITION_PATH)).findFirst().get();
 
@@ -203,14 +201,11 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
     MockitoAnnotations.initMocks(this);
 
     // mock to throw exception when fs.exists() is invoked
-    System.out.println("Fs.exists() call for " + rollbackRequest.getFilesToBeDeleted().get(0).toString());
     Mockito.when(fs.exists(any()))
         .thenThrow(new IOException("Failing exists call for " + rollbackRequest.getFilesToBeDeleted().get(0)));
 
     rollbackStrategy = new ListingBasedRollbackStrategy(table, context, cfg, rollbackInstant, false);
     List<HoodieRollbackRequest> rollBackRequestsUpdated = rollbackStrategy.getRollbackRequests(needRollBackInstant);
-    rollBackRequestsUpdated.forEach(entry -> System.out.println(" " + entry.getPartitionPath() + ", " + entry.getFileId() + " "
-        + Arrays.toString(entry.getFilesToBeDeleted().toArray())));
 
     assertEquals(rollBackRequests, rollBackRequestsUpdated);
   }

@@ -175,7 +175,7 @@ public class HoodieSinkTask extends SinkTask {
           LOG.debug("Closing data writer due to task start failure.");
           worker.stop();
         } catch (Throwable t) {
-          LOG.debug(String.format("Error closing and stopping data writer: %s", t.getMessage()), t);
+          LOG.warn("Error closing and stopping data writer", t);
         }
       }
     }

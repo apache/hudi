@@ -96,7 +96,7 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   }
 
   @Override
-  public Comparable<?> getOrderingValue(Schema recordSchema, Properties props) {
+  public Comparable<?> doGetOrderingValue(Schema recordSchema, Properties props) {
     return this.getData().getOrderingValue();
   }
 

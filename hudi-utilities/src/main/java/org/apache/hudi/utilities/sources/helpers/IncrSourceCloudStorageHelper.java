@@ -77,7 +77,7 @@ public class IncrSourceCloudStorageHelper {
           getStringWithAltKeys(props, SPARK_DATASOURCE_OPTIONS)), e);
     }
 
-    LOG.info(String.format("sparkOptions loaded: %s", sparkOptionsMap));
+    LOG.info("SparkOptions loaded: {}", sparkOptionsMap);
 
     return dataFrameReader.options(sparkOptionsMap);
   }

@@ -999,7 +999,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
         boolean different = serdeProperties.entrySet().stream().anyMatch(e ->
                 !existingSerdeProperties.containsKey(e.getKey()) || !existingSerdeProperties.get(e.getKey()).equals(e.getValue()));
         if (!different) {
-          LOG.debug("Table " + tableName + " serdeProperties already up to date, skip update serde properties.");
+          LOG.debug("Table {} serdeProperties already up to date, skip update serde properties.", tableName);
           return false;
         }
       }

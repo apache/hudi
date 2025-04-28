@@ -158,6 +158,8 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
    */
   protected Option<Map<String, String>> metaData;
 
+  protected transient Comparable<?> orderingValue;
+
   public HoodieRecord(HoodieKey key, T data) {
     this(key, data, null, Option.empty());
   }
@@ -211,7 +213,28 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     return operation;
   }
 
-  public abstract Comparable<?> getOrderingValue(Schema recordSchema, Properties props);
+  /**
+   * Get ordering value for the record from the cached variable, or extracting from the record if not cached.
+   *
+   * @param recordSchema Avro schema for the record
+   * @param props Properties containing the necessary configurations
+   * @return The ordering value for the record
+   */
+  public Comparable<?> getOrderingValue(Schema recordSchema, Properties props) {
+    if (orderingValue == null) {
+      orderingValue = doGetOrderingValue(recordSchema, props);
+    }
+    return orderingValue;
+  }
+
+  /**
+   * Extracting the ordering value from the record.
+   *
+   * @param recordSchema Avro schema for the record
+   * @param props Properties containing the necessary configurations
+   * @return The ordering value for the record
+   */
+  protected abstract Comparable<?> doGetOrderingValue(Schema recordSchema, Properties props);
 
   public T getData() {
     if (data == null) {

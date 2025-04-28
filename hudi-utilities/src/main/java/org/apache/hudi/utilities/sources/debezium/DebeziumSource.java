@@ -126,8 +126,8 @@ public abstract class DebeziumSource extends RowSource {
     try {
       String schemaStr = schemaRegistryProvider.fetchSchemaFromRegistry(getStringWithAltKeys(props, HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL));
       Dataset<Row> dataset = toDataset(offsetRanges, offsetGen, schemaStr);
-      LOG.info(String.format("Spark schema of Kafka Payload for topic %s:\n%s", offsetGen.getTopicName(), dataset.schema().treeString()));
-      LOG.info(String.format("New checkpoint string: %s", CheckpointUtils.offsetsToStr(offsetRanges)));
+      LOG.info("Spark schema of Kafka Payload for topic {}:\n{}", offsetGen.getTopicName(), dataset.schema().treeString());
+      LOG.info("New checkpoint string: {}", CheckpointUtils.offsetsToStr(offsetRanges));
       return Pair.of(Option.of(dataset),
               new StreamerCheckpointV2(overrideCheckpointStr.isEmpty() ? CheckpointUtils.offsetsToStr(offsetRanges) : overrideCheckpointStr));
     } catch (Exception e) {

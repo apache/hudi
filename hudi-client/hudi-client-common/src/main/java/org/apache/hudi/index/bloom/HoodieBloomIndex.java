@@ -93,7 +93,7 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
     }
     if (LOG.isDebugEnabled()) {
       long totalTaggedRecords = keyFilenamePairs.count();
-      LOG.debug("Number of update records (ones tagged with a fileID): " + totalTaggedRecords);
+      LOG.debug("Number of update records (ones tagged with a fileID): {}", totalTaggedRecords);
     }
 
     // Step 3: Tag the incoming records, as inserts or updates, by joining with existing record keys

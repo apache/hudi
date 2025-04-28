@@ -56,6 +56,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -83,6 +85,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 @SuppressWarnings({"SqlDialectInspection", "SqlNoDataSourceInspection"})
 @ExtendWith(FlinkMiniCluster.class)
 public class ITTestSchemaEvolution {
+  private static final Logger LOG = LoggerFactory.getLogger(ITTestSchemaEvolution.class);
 
   @TempDir File tempFile;
   private StreamTableEnvironment tEnv;
@@ -515,12 +518,12 @@ public class ITTestSchemaEvolution {
 
     for (String expectedItem : expected) {
       if (!actual.contains(expectedItem)) {
-        System.out.println("Not in actual: " + expectedItem);
+        LOG.info("Not in actual: {}", expectedItem);
       }
     }
     for (String actualItem : actual) {
       if (!expected.contains(actualItem)) {
-        System.out.println("Not in expected: " + actualItem);
+        LOG.info("Not in expected: {}", actualItem);
       }
     }
     assertEquals(expected, actual);

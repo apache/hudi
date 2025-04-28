@@ -73,7 +73,7 @@ public class HoodieKeyLookupHandle<T, I, K, O> extends HoodieReadHandle<T, I, K,
     } catch (IOException e) {
       throw new HoodieIndexException(String.format("Error reading bloom filter from %s", getPartitionPathFileIDPair()), e);
     }
-    LOG.info(String.format("Read bloom filter from %s in %d ms", partitionPathFileIDPair, timer.endTimer()));
+    LOG.info("Read bloom filter from {} in {} ms", partitionPathFileIDPair, timer.endTimer());
     return bloomFilter;
   }
 
@@ -83,9 +83,7 @@ public class HoodieKeyLookupHandle<T, I, K, O> extends HoodieReadHandle<T, I, K,
   public void addKey(String recordKey) {
     // check record key against bloom filter of current file & add to possible keys if needed
     if (bloomFilter.mightContain(recordKey)) {
-      if (LOG.isDebugEnabled()) {
-        LOG.debug("Record key " + recordKey + " matches bloom filter in  " + partitionPathFileIDPair);
-      }
+      LOG.debug("Record key {} matches bloom filter in {}", recordKey, partitionPathFileIDPair);
       candidateRecordKeys.add(recordKey);
     }
     totalKeysChecked++;
@@ -95,16 +93,13 @@ public class HoodieKeyLookupHandle<T, I, K, O> extends HoodieReadHandle<T, I, K,
    * Of all the keys, that were added, return a list of keys that were actually found in the file group.
    */
   public HoodieKeyLookupResult getLookupResult() {
-    if (LOG.isDebugEnabled()) {
-      LOG.debug("#The candidate row keys for " + partitionPathFileIDPair + " => " + candidateRecordKeys);
-    }
+    LOG.debug("#The candidate row keys for {} => {}", partitionPathFileIDPair, candidateRecordKeys);
 
     HoodieBaseFile baseFile = getLatestBaseFile();
     List<Pair<String, Long>> matchingKeysAndPositions = HoodieIndexUtils.filterKeysFromFile(
         baseFile.getStoragePath(), candidateRecordKeys, hoodieTable.getStorage());
-    LOG.info(
-        String.format("Total records (%d), bloom filter candidates (%d)/fp(%d), actual matches (%d)", totalKeysChecked,
-            candidateRecordKeys.size(), candidateRecordKeys.size() - matchingKeysAndPositions.size(), matchingKeysAndPositions.size()));
+    LOG.info("Total records ({}), bloom filter candidates ({})/fp({}), actual matches ({})", totalKeysChecked,
+            candidateRecordKeys.size(), candidateRecordKeys.size() - matchingKeysAndPositions.size(), matchingKeysAndPositions.size());
     return new HoodieKeyLookupResult(partitionPathFileIDPair.getRight(), partitionPathFileIDPair.getLeft(),
         baseFile.getCommitTime(), matchingKeysAndPositions);
   }

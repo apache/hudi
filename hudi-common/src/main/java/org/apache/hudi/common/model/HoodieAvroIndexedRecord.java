@@ -203,7 +203,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   }
 
   @Override
-  public Comparable<?> getOrderingValue(Schema recordSchema, Properties props) {
+  public Comparable<?> doGetOrderingValue(Schema recordSchema, Properties props) {
     String orderingField = ConfigUtils.getOrderingField(props);
     if (isNullOrEmpty(orderingField)) {
       return DEFAULT_ORDERING_VALUE;

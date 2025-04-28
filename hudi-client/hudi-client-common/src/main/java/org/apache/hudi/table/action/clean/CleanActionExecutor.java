@@ -74,18 +74,18 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
 
   private static Boolean deleteFileAndGetResult(HoodieStorage storage, String deletePathStr) throws IOException {
     StoragePath deletePath = new StoragePath(deletePathStr);
-    LOG.debug("Working on delete path :" + deletePath);
+    LOG.debug("Working on delete path: {}", deletePath);
     try {
       boolean deleteResult = storage.getPathInfo(deletePath).isDirectory()
           ? storage.deleteDirectory(deletePath)
           : storage.deleteFile(deletePath);
       if (deleteResult) {
-        LOG.debug("Cleaned file at path :" + deletePath);
+        LOG.debug("Cleaned file at path: {}", deletePath);
       } else {
         if (storage.exists(deletePath)) {
           throw new HoodieIOException("Failed to delete path during clean execution " + deletePath);
         } else {
-          LOG.debug("Already cleaned up file at path :" + deletePath);
+          LOG.debug("Already cleaned up file at path: {}", deletePath);
         }
       }
       return deleteResult;

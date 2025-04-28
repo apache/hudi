@@ -20,6 +20,7 @@ package org.apache.hudi.util;
 
 import org.apache.avro.Schema;
 import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
@@ -38,6 +39,9 @@ import java.util.function.Function;
  */
 public class RowDataAvroQueryContexts {
   private static final Map<Schema, RowDataQueryContext> QUERY_CONTEXT_MAP = new ConcurrentHashMap<>();
+
+  // BinaryRowWriter in RowDataSerializer are reused, and it's not thread-safe.
+  private static final ThreadLocal<Map<Schema, RowDataSerializer>> ROWDATA_SERIALIZER_CACHE = ThreadLocal.withInitial(HashMap::new);
 
   public static RowDataQueryContext fromAvroSchema(Schema avroSchema) {
     return fromAvroSchema(avroSchema, true);
@@ -59,6 +63,13 @@ public class RowDataAvroQueryContexts {
       RowDataToAvroConverter rowDataToAvroConverter = RowDataToAvroConverters.createConverter(rowType, utcTimezone);
       AvroToRowDataConverter avroToRowDataConverter = AvroToRowDataConverters.createRowConverter(rowType, utcTimezone);
       return RowDataQueryContext.create(dataType, contextMap, fieldGetters, rowDataToAvroConverter, avroToRowDataConverter);
+    });
+  }
+
+  public static RowDataSerializer getRowDataSerializer(Schema avroSchema) {
+    return ROWDATA_SERIALIZER_CACHE.get().computeIfAbsent(avroSchema, schema -> {
+      RowType rowType = (RowType) fromAvroSchema(schema).getRowType().getLogicalType();
+      return new RowDataSerializer(rowType);
     });
   }
 

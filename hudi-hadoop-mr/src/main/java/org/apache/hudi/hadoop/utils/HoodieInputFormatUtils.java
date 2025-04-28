@@ -226,8 +226,8 @@ public class HoodieInputFormatUtils {
           .findInstantsBefore(pendingCompactionInstant.get().requestedTime());
       int numCommitsFilteredByCompaction = commitsAndCompactionTimeline.getCommitsTimeline().countInstants()
           - instantsTimeline.getCommitsTimeline().countInstants();
-      LOG.info("Earliest pending compaction instant is: " + pendingCompactionInstant.get().requestedTime()
-          + " skipping " + numCommitsFilteredByCompaction + " commits");
+      LOG.info("Earliest pending compaction instant is: {} skipping {} commits",
+          pendingCompactionInstant.get().requestedTime(), numCommitsFilteredByCompaction);
 
       return instantsTimeline;
     } else {
@@ -338,7 +338,7 @@ public class HoodieInputFormatUtils {
     String lastIncrementalTs = HoodieHiveUtils.readStartCommitTime(job, tableName);
     // Total number of commits to return in this batch. Set this to -1 to get all the commits.
     Integer maxCommits = HoodieHiveUtils.readMaxCommits(job, tableName);
-    LOG.info("Last Incremental timestamp was set as " + lastIncrementalTs);
+    LOG.info("Last Incremental timestamp was set as {}", lastIncrementalTs);
     return timeline.findInstantsAfter(lastIncrementalTs, maxCommits);
   }
 
@@ -386,7 +386,7 @@ public class HoodieInputFormatUtils {
         }
       }
     }
-    LOG.info("Reading hoodie metadata from path " + baseDir.toString());
+    LOG.info("Reading hoodie metadata from path {}", baseDir);
     return HoodieTableMetaClient.builder()
         .setConf(storage.getConf().newInstance()).setBasePath(baseDir.toString()).build();
   }
@@ -427,11 +427,11 @@ public class HoodieInputFormatUtils {
     List<HoodieBaseFile> filteredFiles = roView.getLatestBaseFilesInRange(commitsList).collect(Collectors.toList());
     List<FileStatus> returns = new ArrayList<>();
     for (HoodieBaseFile filteredFile : filteredFiles) {
-      LOG.debug("Processing incremental hoodie file - " + filteredFile.getPath());
+      LOG.debug("Processing incremental hoodie file - {}", filteredFile.getPath());
       filteredFile = refreshFileStatus(job.getConfiguration(), filteredFile);
       returns.add(getFileStatus(filteredFile));
     }
-    LOG.info("Total paths to process after hoodie incremental filter " + filteredFiles.size());
+    LOG.info("Total paths to process after hoodie incremental filter {}", filteredFiles.size());
     return returns;
   }
 
@@ -474,7 +474,7 @@ public class HoodieInputFormatUtils {
     try {
       if (dataFile.getFileSize() == 0) {
         HoodieStorage storage = HoodieStorageUtils.getStorage(dataPath, HadoopFSUtils.getStorageConf(conf));
-        LOG.info("Refreshing file status " + dataFile.getPath());
+        LOG.info("Refreshing file status {}", dataFile.getPath());
         return new HoodieBaseFile(storage.getPathInfo(dataPath),
             dataFile.getBootstrapBaseFile().orElse(null));
       }

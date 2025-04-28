@@ -70,9 +70,6 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_ORDERING_FIELD;
-import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_PARTITION_PATH;
-import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_RECORD_KEY;
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.model.WriteOperationType.INSERT;
 import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
@@ -200,27 +197,19 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       List<T> records = readRecordsFromFileGroup(getStorageConf(), getBasePath(), metaClient, fileSlices,
           avroSchema, RecordMergeMode.COMMIT_TIME_ORDERING, false);
       HoodieReaderContext<T> readerContext = getHoodieReaderContext(getBasePath(), avroSchema, getStorageConf(), metaClient);
-      Comparable orderingFieldValue = "100";
       for (Boolean isCompressionEnabled : new boolean[] {true, false}) {
-        try (ExternalSpillableMap<Serializable, Pair<Option<T>, Map<String, Object>>> spillableMap =
+        try (ExternalSpillableMap<Serializable, BufferedRecord<T>> spillableMap =
                  new ExternalSpillableMap<>(16L, baseMapPath, new DefaultSizeEstimator(),
                      new HoodieRecordSizeEstimator(avroSchema), diskMapType, new DefaultSerializer<>(), isCompressionEnabled, getClass().getSimpleName())) {
           Long position = 0L;
           for (T record : records) {
             String recordKey = readerContext.getRecordKey(record, avroSchema);
             //test key based
-            spillableMap.put(recordKey,
-                Pair.of(
-                    Option.ofNullable(readerContext.seal(record)),
-                    readerContext.generateMetadataForRecord(record, avroSchema)));
+            BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(record, avroSchema, readerContext, Option.of("timestamp"), false);
+            spillableMap.put(recordKey, bufferedRecord.toBinary(readerContext));
 
             //test position based
-            spillableMap.put(position++,
-                Pair.of(
-                    Option.ofNullable(readerContext.seal(record)),
-                    readerContext.generateMetadataForRecord(
-                        recordKey, dataGen.getPartitionPaths()[0],
-                        readerContext.convertValueToEngineType(orderingFieldValue))));
+            spillableMap.put(position++, bufferedRecord.toBinary(readerContext));
           }
 
           assertEquals(records.size() * 2, spillableMap.size());
@@ -228,20 +217,18 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
           position = 0L;
           for (T record : records) {
             String recordKey = readerContext.getRecordKey(record, avroSchema);
-            Pair<Option<T>, Map<String, Object>> keyBased = spillableMap.get(recordKey);
+            BufferedRecord<T> keyBased = spillableMap.get(recordKey);
             assertNotNull(keyBased);
-            Pair<Option<T>, Map<String, Object>> positionBased = spillableMap.get(position++);
+            BufferedRecord<T> positionBased = spillableMap.get(position++);
             assertNotNull(positionBased);
-            assertRecordsEqual(avroSchema, record, keyBased.getLeft().get());
-            assertRecordsEqual(avroSchema, record, positionBased.getLeft().get());
-            assertEquals(keyBased.getRight().get(INTERNAL_META_RECORD_KEY), recordKey);
-            assertEquals(positionBased.getRight().get(INTERNAL_META_RECORD_KEY), recordKey);
-            assertEquals(avroSchema, readerContext.getSchemaFromMetadata(keyBased.getRight()));
-            assertEquals(dataGen.getPartitionPaths()[0], positionBased.getRight().get(INTERNAL_META_PARTITION_PATH));
-            assertEquals(readerContext.convertValueToEngineType(orderingFieldValue),
-                positionBased.getRight().get(INTERNAL_META_ORDERING_FIELD));
+            assertRecordsEqual(avroSchema, record, keyBased.getRecord());
+            assertRecordsEqual(avroSchema, record, positionBased.getRecord());
+            assertEquals(keyBased.getRecordKey(), recordKey);
+            assertEquals(positionBased.getRecordKey(), recordKey);
+            assertEquals(avroSchema, readerContext.getSchemaFromBufferRecord(keyBased));
+            // generate field value is hardcoded as 0 for ordering field: timestamp, see HoodieTestDataGenerator#generateRandomValue
+            assertEquals(readerContext.convertValueToEngineType(0L), positionBased.getOrderingValue());
           }
-
         }
       }
     }

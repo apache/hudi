@@ -138,8 +138,8 @@ public class HoodieWriteCommitKafkaCallback implements HoodieWriteCommitCallback
     @Override
     public void onCompletion(RecordMetadata metadata, Exception exception) {
       if (null != metadata) {
-        LOG.info(String.format("message offset=%s partition=%s timestamp=%s topic=%s",
-                metadata.offset(), metadata.partition(), metadata.timestamp(), metadata.topic()));
+        LOG.info("message offset={} partition={} timestamp={} topic={}",
+                metadata.offset(), metadata.partition(), metadata.timestamp(), metadata.topic());
       }
       if (null != exception) {
         LOG.error("Send kafka callback msg failed : ", exception);

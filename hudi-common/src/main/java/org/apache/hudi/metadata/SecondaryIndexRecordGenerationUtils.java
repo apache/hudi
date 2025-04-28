@@ -230,7 +230,7 @@ public class SecondaryIndexRecordGenerationUtils {
         return HoodieAvroUtils.getNestedFieldValAsString(genericRecord, secondaryKeyFields, true, false);
       }
     } catch (IOException e) {
-      LOG.debug("Failed to fetch secondary key for record key " + record.getKey().toString());
+      LOG.debug("Failed to fetch secondary key for record key {}", record.getKey());
     }
     return null;
   }
