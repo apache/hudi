@@ -246,9 +246,8 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
       BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(baseRecord, readerSchema, readerContext, orderingFieldName, false);
       BufferedRecord<T> merged = merger.merge(Option.of(bufferedRecord), Option.ofNullable(logRecordInfo), enablePartialMerging);
       if (!merged.isDelete()) {
-        merged.sealRecord(readerContext);
         // Updates
-        nextRecord = merged.getRecord();
+        nextRecord = readerContext.seal(merged.getRecord());
         readStats.incrementNumUpdates();
         return true;
       } else {
