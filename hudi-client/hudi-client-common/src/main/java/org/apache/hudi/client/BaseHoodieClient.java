@@ -31,7 +31,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.TimeGenerator;
 import org.apache.hudi.common.table.timeline.TimeGenerators;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
-import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -55,9 +54,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Abstract class taking care of holding common member variables (FileSystem, SparkContext, HoodieConfigs) Also, manages
@@ -78,7 +75,6 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
   protected final TransactionManager txnManager;
   private final TimeGenerator timeGenerator;
 
-
   /**
    * Timeline Server has the same lifetime as that of Client. Any operations done on the same timeline service will be
    * able to take advantage of the cached file-system view. New completed actions will be synced automatically in an
@@ -86,7 +82,6 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
    */
   private transient Option<EmbeddedTimelineService> timelineServer;
   private final boolean shouldStopTimelineServer;
-  protected Map<String, Option<HoodieTableMetadataWriter>> metadataWriterMap = new ConcurrentHashMap<>();
 
   protected BaseHoodieClient(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
     this(context, clientConfig, Option.empty());
@@ -119,20 +114,6 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
   @Override
   public void close() {
     stopEmbeddedServerView(true);
-    // close all metadata writer instances
-    if (metadataWriterMap != null) {
-      metadataWriterMap.entrySet().forEach(entry -> {
-        if (entry.getValue().isPresent()) {
-          try {
-            entry.getValue().get().close();
-          } catch (Exception e) {
-            throw new HoodieException("Failing to close metadata writer instance for " + entry.getKey(), e);
-          }
-        }
-      });
-      metadataWriterMap.clear();
-      metadataWriterMap = null;
-    }
     this.context.setJobStatus("", "");
     this.heartbeatClient.close();
     this.txnManager.close();
@@ -279,18 +260,6 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
     } catch (HoodieIOException ioe) {
       throw new HoodieCommitException("Failed to complete commit " + instantTime + " due to finalize errors.", ioe);
     }
-  }
-
-  class GetMetadataWriterFunc implements Functions.Function2<String, HoodieTableMetaClient, Option<HoodieTableMetadataWriter>> {
-
-    @Override
-    public Option<HoodieTableMetadataWriter> apply(String triggeringInstantTimestamp, HoodieTableMetaClient metaClient) {
-      return getMetadataWriter(triggeringInstantTimestamp, metaClient);
-    }
-  }
-
-  Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstantTimestamp, HoodieTableMetaClient metaClient) {
-    throw new HoodieException("Each engine's write client is expected to implement this method");
   }
 
   /**

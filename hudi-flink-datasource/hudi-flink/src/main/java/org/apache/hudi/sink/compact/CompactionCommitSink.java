@@ -23,7 +23,6 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.util.CompactionUtils;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metrics.FlinkCompactionMetrics;
@@ -40,7 +39,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -199,7 +197,7 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
         table, instant, HoodieListData.eager(statuses), writeClient.getConfig().getSchema());
 
     // commit the compaction
-    this.writeClient.completeCompaction(metadata, table, instant, Collections.emptyList(), Option.empty());
+    this.writeClient.completeCompaction(metadata, table, instant);
 
     this.compactionMetrics.updateCommitMetrics(instant, metadata);
     this.compactionMetrics.markCompactionCompleted();

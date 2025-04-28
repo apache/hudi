@@ -426,9 +426,8 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     testHoodieClientBasicMultiWriterWithEarlyConflictDetection(tableType, MarkerType.DIRECT.name(), earlyConflictDetectionStrategy);
   }
 
-  //@ParameterizedTest
-  //@MethodSource("configParamsTimelineServerBased")
-  // to fix.
+  @ParameterizedTest
+  @MethodSource("configParamsTimelineServerBased")
   public void testHoodieClientBasicMultiWriterWithEarlyConflictDetectionTimelineServerBased(String tableType, String earlyConflictDetectionStrategy) throws Exception {
     testHoodieClientBasicMultiWriterWithEarlyConflictDetection(tableType, MarkerType.TIMELINE_SERVER_BASED.name(), earlyConflictDetectionStrategy);
   }
@@ -901,7 +900,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
       if (tableType == HoodieTableType.MERGE_ON_READ) {
         assertDoesNotThrow(() -> {
           HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client2.compact(pendingCompactionTime);
-          client2.commitCompaction(pendingCompactionTime, compactionMetadata, Option.empty(), Option.empty());
+          client2.commitCompaction(pendingCompactionTime, compactionMetadata, Option.empty());
           validInstants.add(pendingCompactionTime);
         });
       }

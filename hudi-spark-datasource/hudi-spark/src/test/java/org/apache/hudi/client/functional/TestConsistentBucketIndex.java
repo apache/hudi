@@ -205,7 +205,7 @@ public class TestConsistentBucketIndex extends HoodieSparkClientTestHarness {
     writeData(writeClient.createNewInstantTime(), 200, true);
     Assertions.assertEquals(400, readRecordsNum(dataGen.getPartitionPaths(), populateMetaFields));
     HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = writeClient.compact(compactionTime);
-    writeClient.commitCompaction(compactionTime, compactionMetadata, Option.empty(), Option.empty());
+    writeClient.commitCompaction(compactionTime, compactionMetadata, Option.empty());
     Assertions.assertEquals(400, readRecordsNum(dataGen.getPartitionPaths(), populateMetaFields));
   }
 

@@ -54,7 +54,7 @@ public class JavaExecuteClusteringCommitActionExecutor<T>
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> execute() {
     HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata = executeClustering(clusteringPlan);
-    List<WriteStatus> transformedWriteStatuses = writeMetadata.getDataTableWriteStatuses().collectAsList();
+    List<WriteStatus> transformedWriteStatuses = writeMetadata.getWriteStatuses().collectAsList();
     return writeMetadata.clone(transformedWriteStatuses);
   }
 

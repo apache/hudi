@@ -21,7 +21,6 @@ package org.apache.hudi.integ.testsuite;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -171,8 +170,7 @@ public class HoodieInlineTestSuiteWriter extends HoodieTestSuiteWriter {
       }
       if (instantTime.isPresent()) {
         HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = writeClient.compact(instantTime.get());
-        writeClient.commitCompaction(instantTime.get(), compactionMetadata, Option.empty());
-        return compactionMetadata.getAllWriteStatuses();
+        return compactionMetadata.getWriteStatuses();
       } else {
         return null;
       }
@@ -235,9 +233,7 @@ public class HoodieInlineTestSuiteWriter extends HoodieTestSuiteWriter {
       }
       HoodieSparkTable<HoodieRecordPayload> table = HoodieSparkTable.create(writeClient.getConfig(), writeClient.getEngineContext());
       HoodieCommitMetadata metadata = CompactHelpers.getInstance().createCompactionMetadata(table, instantTime.get(), HoodieJavaRDD.of(records), writeClient.getConfig().getSchema());
-      HoodieWriteMetadata<HoodieData<WriteStatus>> compactionWriteMetadata = new HoodieWriteMetadata<>();
-      compactionWriteMetadata.setAllWriteStatuses(HoodieJavaRDD.of(records));
-      writeClient.commitCompaction(instantTime.get(), compactionWriteMetadata, Option.of(table));
+      writeClient.commitCompaction(instantTime.get(), metadata, Option.of(extraMetadata));
     }
   }
 }

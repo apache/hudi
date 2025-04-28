@@ -23,15 +23,9 @@ import org.apache.hudi.client.utils.SparkReleaseResources;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieWriteStat;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
-import org.apache.hudi.metadata.HoodieTableMetadata;
-import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
@@ -39,53 +33,16 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import org.apache.spark.api.java.JavaRDD;
 
-import java.util.List;
-import java.util.stream.Collectors;
-
 public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<HoodieData<HoodieRecord<T>>, HoodieData<WriteStatus>, JavaRDD<WriteStatus>> {
-
   protected SparkRDDTableServiceClient(HoodieEngineContext context,
                                        HoodieWriteConfig clientConfig,
-                                       Option<EmbeddedTimelineService> timelineService,
-                                       Functions.Function2<String, HoodieTableMetaClient, Option<HoodieTableMetadataWriter>> getMetadataWriterFunc,
-                                       Functions.Function1<String, Void> cleanUpMetadataWriterInstance) {
-    super(context, clientConfig, timelineService, getMetadataWriterFunc, cleanUpMetadataWriterInstance);
+                                       Option<EmbeddedTimelineService> timelineService) {
+    super(context, clientConfig, timelineService);
   }
 
   @Override
   protected HoodieWriteMetadata<JavaRDD<WriteStatus>> convertToOutputMetadata(HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata) {
-    return writeMetadata.clone(HoodieJavaRDD.getJavaRDD(writeMetadata.getDataTableWriteStatuses() != null ? writeMetadata.getDataTableWriteStatuses() : writeMetadata.getAllWriteStatuses()));
-  }
-
-  @Override
-  protected HoodieWriteMetadata<HoodieData<WriteStatus>> writeToMetadata(HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata, String compactionInstantTime,
-                                                                         Option<HoodieTableMetadataWriter> metadataWriterOpt) {
-    if (metadataWriterOpt.isPresent()) { // write to metadata table if enabled
-      HoodieData<WriteStatus> mdtWriteStatuses = metadataWriterOpt.get().prepareAndWriteToMDT((HoodieData<WriteStatus>) writeMetadata.getDataTableWriteStatuses(), compactionInstantTime);
-      writeMetadata.setAllWriteStatuses(((HoodieData<WriteStatus>) writeMetadata.getDataTableWriteStatuses()).union(mdtWriteStatuses));
-      return writeMetadata;
-    } else {
-      return super.writeToMetadata(writeMetadata, compactionInstantTime, metadataWriterOpt);
-    }
-  }
-
-  @Override
-  protected Pair<List<HoodieWriteStat>, List<HoodieWriteStat>> processAndFetchHoodieWriteStats(HoodieWriteMetadata<JavaRDD<WriteStatus>> tableServiceWriteMetadata) {
-    List<Pair<Boolean, HoodieWriteStat>> writeStats = tableServiceWriteMetadata.getAllWriteStatuses().map(writeStatus ->
-        Pair.of(writeStatus.isMetadataTable(), writeStatus.getStat())).collect();
-    List<HoodieWriteStat> dataTableWriteStats = writeStats.stream().filter(entry -> !entry.getKey()).map(Pair::getValue).collect(Collectors.toList());
-    List<HoodieWriteStat> mdtWriteStats = writeStats.stream().filter(Pair::getKey).map(Pair::getValue).collect(Collectors.toList());
-    if (HoodieTableMetadata.isMetadataTable(config.getBasePath())) {
-      dataTableWriteStats.clear();
-      dataTableWriteStats.addAll(mdtWriteStats);
-      mdtWriteStats.clear();
-    }
-    return Pair.of(dataTableWriteStats, mdtWriteStats);
-  }
-
-  @Override
-  protected HoodieData<WriteStatus> convertToWriteStatus(HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata) {
-    return writeMetadata.getDataTableWriteStatuses();
+    return writeMetadata.clone(HoodieJavaRDD.getJavaRDD(writeMetadata.getWriteStatuses()));
   }
 
   @Override
@@ -96,10 +53,5 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
   @Override
   protected void releaseResources(String instantTime) {
     SparkReleaseResources.releaseCachedData(context, config, basePath, instantTime);
-  }
-
-  @Override
-  Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstantTimestamp, HoodieTableMetaClient metaClient) {
-    return getMetadataWriterFunc.apply(triggeringInstantTimestamp, metaClient);
   }
 }

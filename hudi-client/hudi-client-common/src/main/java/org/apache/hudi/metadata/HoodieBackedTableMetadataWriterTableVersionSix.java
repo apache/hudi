@@ -271,7 +271,7 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I, O> exten
     } else if (writeClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty())) {
       LOG.info("Compaction is scheduled for timestamp {}", compactionInstantTime);
       HoodieWriteMetadata<O> compactionWriteMetadata = writeClient.compact(compactionInstantTime);
-      writeClient.commitCompaction(compactionInstantTime, compactionWriteMetadata, Option.empty(), Option.empty());
+      writeClient.commitCompaction(compactionInstantTime, compactionWriteMetadata, Option.empty());
     } else if (metadataWriteConfig.isLogCompactionEnabled()) {
       // Schedule and execute log compaction with suffixes based on the same instant time. This ensures that any future
       // delta commits synced over will not have an instant time lesser than the last completed instant on the

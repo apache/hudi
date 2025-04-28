@@ -106,16 +106,11 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
     }
   }
 
-  public HoodieWriteMetadata<O> execute(I inputRecords) {
-    return this.execute(inputRecords, Option.empty(), true, false, Collections.emptyList());
-  }
+  public abstract HoodieWriteMetadata<O> execute(I inputRecords);
 
   public HoodieWriteMetadata<O> execute(I inputRecords, Option<HoodieTimer> sourceReadAndIndexTimer) {
     return this.execute(inputRecords);
   }
-
-  public abstract HoodieWriteMetadata<O> execute(I inputRecords, Option<HoodieTimer> sourceReadAndIndexTimer, boolean saveWorkloadProfileToInflight, boolean writesToMetadata,
-                                        List<Pair<String, String>> mdtPartitionPathFileGroupIdList);
 
   /**
    * Save the workload profile in an intermediate file (here re-using commit files) This is useful when performing
@@ -123,7 +118,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
    * are unknown across batches Inserts (which are new parquet files) are rolled back based on commit time. // TODO :
    * Create a new WorkloadProfile metadata file instead of using HoodieCommitMetadata
    */
-  protected void saveWorkloadProfileMetadataToInflight(WorkloadProfile profile, String instantTime)
+  void saveWorkloadProfileMetadataToInflight(WorkloadProfile profile, String instantTime)
       throws HoodieCommitException {
     try {
       HoodieCommitMetadata metadata = new HoodieCommitMetadata();
@@ -315,7 +310,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
             ReflectionUtils.loadClass(config.getClusteringExecutionStrategyClass(),
                 new Class<?>[] {HoodieTable.class, HoodieEngineContext.class, HoodieWriteConfig.class}, table, context, config))
         .performClustering(clusteringPlan, schema.get(), instantTime);
-    HoodieData<WriteStatus> writeStatusList = writeMetadata.getDataTableWriteStatuses();
+    HoodieData<WriteStatus> writeStatusList = writeMetadata.getWriteStatuses();
     HoodieData<WriteStatus> statuses = updateIndex(writeStatusList, writeMetadata);
     statuses.persist(config.getString(WRITE_STATUS_STORAGE_LEVEL_VALUE), context, HoodieData.HoodieDataCacheKey.of(config.getBasePath(), instantTime));
     // triggers clustering.
@@ -336,7 +331,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
     // Update the index back
     HoodieData<WriteStatus> statuses = table.getIndex().updateLocation(writeStatuses, context, table, instantTime);
     result.setIndexUpdateDuration(Duration.between(indexStartTime, Instant.now()));
-    result.setDataTableWriteStatuses(statuses);
+    result.setWriteStatuses(statuses);
     return statuses;
   }
 
@@ -357,7 +352,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
    * We can also make these validations in BaseCommitActionExecutor to reuse pre-commit hooks for multiple actions.
    */
   private void validateWriteResult(HoodieClusteringPlan clusteringPlan, HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata) {
-    if (writeMetadata.getDataTableWriteStatuses().isEmpty()) {
+    if (writeMetadata.getWriteStatuses().isEmpty()) {
       throw new HoodieClusteringException("Clustering plan produced 0 WriteStatus for " + instantTime
           + " #groups: " + clusteringPlan.getInputGroups().size() + " expected at least "
           + clusteringPlan.getInputGroups().stream().mapToInt(HoodieClusteringGroup::getNumOutputFileGroups).sum()

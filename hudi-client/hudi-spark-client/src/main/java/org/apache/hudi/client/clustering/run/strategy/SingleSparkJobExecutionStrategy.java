@@ -79,7 +79,7 @@ public abstract class SingleSparkJobExecutionStrategy<T>
           serializableSchema, taskContextSupplier, instantTime);
     }).flatMap(List::iterator);
     HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata = new HoodieWriteMetadata<>();
-    writeMetadata.setDataTableWriteStatuses(writeStatus);
+    writeMetadata.setWriteStatuses(writeStatus);
     return writeMetadata;
   }
 

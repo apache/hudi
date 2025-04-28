@@ -132,7 +132,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
     Option<String> timeStamp = client.scheduleCompaction(Option.empty());
     assertTrue(timeStamp.isPresent());
     HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionWriteMetadata = client.compact(timeStamp.get());
-    client.commitCompaction(timeStamp.get(), compactionWriteMetadata, Option.empty(), Option.empty());
+    client.commitCompaction(timeStamp.get(), compactionWriteMetadata, Option.empty());
 
     // Verify all the records.
     metaClient.reloadActiveTimeline();

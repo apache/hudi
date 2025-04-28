@@ -181,8 +181,4 @@ public enum WriteOperationType {
   public static boolean isCompactionOrClustering(WriteOperationType operationType) {
     return operationType == COMPACT || operationType == CLUSTER;
   }
-
-  public static boolean optimizedWriteDagSupported(WriteOperationType writeOperationType) {
-    return (isInsert(writeOperationType) || isChangingRecords(writeOperationType) || isCompactionOrClustering(writeOperationType));
-  }
 }

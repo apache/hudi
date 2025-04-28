@@ -86,7 +86,7 @@ public class JavaUpsertPreppedDeltaCommitActionExecutor<T> extends BaseJavaDelta
       if (insertedRecords.size() > 0) {
         HoodieWriteMetadata<List<WriteStatus>> insertResult = JavaBulkInsertHelper.newInstance()
             .bulkInsert(insertedRecords, instantTime, table, config, this, false, Option.empty());
-        allWriteStatuses.addAll(insertResult.getDataTableWriteStatuses());
+        allWriteStatuses.addAll(insertResult.getWriteStatuses());
       }
     } catch (Throwable e) {
       if (e instanceof HoodieUpsertException) {

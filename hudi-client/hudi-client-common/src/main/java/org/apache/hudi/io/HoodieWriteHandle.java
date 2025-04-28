@@ -30,7 +30,6 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordMerger;
-import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -39,17 +38,14 @@ import org.apache.hudi.common.table.log.LogFileCreationCallback;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
-import org.apache.hudi.util.Lazy;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
@@ -57,12 +53,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 
@@ -91,9 +83,6 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
   protected final boolean schemaOnReadEnabled;
 
   private boolean closed = false;
-  protected List<HoodieRecord> recordList = new ArrayList<>();
-  protected boolean colStatsEnabled = false;
-  protected List<Pair<String, Schema>> fieldsToIndex = new ArrayList<>();
 
   public HoodieWriteHandle(HoodieWriteConfig config, String instantTime, String partitionPath,
                            String fileId, HoodieTable<T, I, K, O> hoodieTable, TaskContextSupplier taskContextSupplier) {
@@ -116,20 +105,7 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     this.schemaOnReadEnabled = !isNullOrEmpty(hoodieTable.getConfig().getInternalSchema());
     this.recordMerger = config.getRecordMerger();
     this.writeStatus = (WriteStatus) ReflectionUtils.loadClass(config.getWriteStatusClassName(),
-        hoodieTable.shouldTrackSuccessRecords(), config.getWriteStatusFailureFraction(), hoodieTable.isMetadataTable());
-    // TODO: Add operation type check - `&& WriteOperationType.optimizedWriteDagSupported(writeOperationType)`
-    if (config.isMetadataColumnStatsIndexEnabled()) {
-      if (config.getOptimizedWritesEnabled(hoodieTable.getMetaClient().getTableConfig().getTableVersion())) {
-        // Disabled as it was added as part of optimised writes
-        this.colStatsEnabled = true;
-      }
-      Set<String> columnsToIndexSet = new HashSet<>(HoodieTableMetadataUtil
-          .getColumnsToIndex(hoodieTable.getMetaClient().getTableConfig(),
-              config.getMetadataConfig(), Lazy.eagerly(Option.of(writeSchemaWithMetaFields)),
-              Option.of(this.recordMerger.getRecordType())).keySet());
-      fieldsToIndex = columnsToIndexSet.stream()
-          .map(fieldName -> HoodieAvroUtils.getSchemaForField(writeSchemaWithMetaFields, fieldName)).collect(Collectors.toList());
-    }
+        hoodieTable.shouldTrackSuccessRecords(), config.getWriteStatusFailureFraction());
   }
 
   /**
@@ -328,22 +304,5 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
       LOG.error("Fail to get indexRecord from " + record, e);
       return Option.empty();
     }
-  }
-
-  protected void attachColStats(HoodieWriteStat stat, List<HoodieRecord> recordList, List<Pair<String, Schema>> fieldsToIndex,
-                                Schema writeSchemaWithMetaFields) {
-    // populate col stats if required
-    /*try {
-      Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataMap =
-          HoodieTableMetadataUtil.collectColumnRangeMetadata(recordList, fieldsToIndex, stat.getPath(), writeSchemaWithMetaFields, hoodieTable.getStorageConf());
-      stat.putRecordsStats(columnRangeMetadataMap);
-      deflateAllRecords(recordList);
-    } catch (HoodieException e) {
-      throw new HoodieMetadataException("Failed to generate col stats for file " + stat.getPath(), e);
-    }*/
-  }
-
-  protected void deflateAllRecords(List<HoodieRecord> records) {
-    records.forEach(record -> record.deflate());
   }
 }

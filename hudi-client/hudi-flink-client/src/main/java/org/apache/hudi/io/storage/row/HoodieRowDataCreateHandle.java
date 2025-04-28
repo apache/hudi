@@ -97,7 +97,7 @@ public class HoodieRowDataCreateHandle implements Serializable {
     this.path = makeNewPath(partitionPath);
 
     this.writeStatus = new WriteStatus(table.shouldTrackSuccessRecords(),
-        writeConfig.getWriteStatusFailureFraction(), table.isMetadataTable());
+        writeConfig.getWriteStatusFailureFraction());
     writeStatus.setPartitionPath(partitionPath);
     writeStatus.setFileId(fileId);
     writeStatus.setStat(new HoodieWriteStat());

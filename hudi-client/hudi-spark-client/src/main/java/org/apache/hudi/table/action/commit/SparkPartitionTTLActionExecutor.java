@@ -51,7 +51,7 @@ public class SparkPartitionTTLActionExecutor<T>
   public HoodieWriteMetadata<HoodieData<WriteStatus>> execute() {
     HoodieWriteMetadata<HoodieData<WriteStatus>> emptyResult = new HoodieWriteMetadata<>();
     emptyResult.setPartitionToReplaceFileIds(Collections.emptyMap());
-    emptyResult.setDataTableWriteStatuses(context.emptyHoodieData());
+    emptyResult.setWriteStatuses(context.emptyHoodieData());
     try {
       PartitionTTLStrategy strategy = HoodiePartitionTTLStrategyFactory.createStrategy(table, config.getProps(), instantTime);
       List<String> expiredPartitions = strategy.getExpiredPartitionPaths();

@@ -340,7 +340,7 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
         .build();
 
     try (SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig)) {
-      JavaRDD<WriteStatus> statuses = (JavaRDD<WriteStatus>) client.compact(compactionInstantTime).getDataTableWriteStatuses();
+      JavaRDD<WriteStatus> statuses = (JavaRDD<WriteStatus>) client.compact(compactionInstantTime).getWriteStatuses();
       assertNoWriteErrors(statuses.collect());
     }
   }
