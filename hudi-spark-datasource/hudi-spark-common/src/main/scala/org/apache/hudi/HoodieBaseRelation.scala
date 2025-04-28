@@ -94,7 +94,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
                                   val metaClient: HoodieTableMetaClient,
                                   val optParams: Map[String, String],
                                   private val schemaSpec: Option[StructType],
-                                  private val prunedDataSchema: Option[StructType])
+                                  private val prunedDataSchema: Option[StructType],
+                                  private val fileIndexOpt: Option[HoodieFileIndex] = None)
   extends BaseRelation
     with FileRelation
     with PrunedFilteredScan
@@ -255,9 +256,9 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
    * this variable itself is _lazy_ (and have to stay that way) which guarantees that it's not initialized, until
    * it's actually accessed
    */
-  lazy val fileIndex: HoodieFileIndex =
+  lazy val fileIndex: HoodieFileIndex = fileIndexOpt.getOrElse(
     HoodieFileIndex(sparkSession, metaClient, Some(tableStructSchema), optParams,
-      FileStatusCache.getOrCreate(sparkSession), shouldIncludeLogFiles())
+      FileStatusCache.getOrCreate(sparkSession), shouldIncludeLogFiles()))
 
   lazy val tableState: HoodieTableState = {
     val recordMergerImpls = ConfigUtils.split2List(getConfigValue(HoodieWriteConfig.RECORD_MERGER_IMPLS)).asScala.toList

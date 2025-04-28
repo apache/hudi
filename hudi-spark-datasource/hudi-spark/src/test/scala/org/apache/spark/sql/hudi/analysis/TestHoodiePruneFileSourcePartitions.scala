@@ -18,7 +18,7 @@
 package org.apache.spark.sql.hudi.analysis
 
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
-import org.apache.hudi.ScalaAssertionSupport
+import org.apache.hudi.{DataSourceReadOptions, ScalaAssertionSupport}
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.hudi.util.JFunction
 import org.apache.spark.sql.catalyst.TableIdentifier
@@ -55,10 +55,12 @@ class TestHoodiePruneFileSourcePartitions extends HoodieClientTestBase with Scal
 
   @ParameterizedTest
   @CsvSource(value = Array(
-    "cow,true", "cow,false",
-    "mor,true", "mor,false"
+    "cow,true,true", "cow,true,false",
+    "cow,false,true", "cow,false,false",
+    "mor,true,true", "mor,true,false",
+    "mor,false,true", "mor,false,false"
   ))
-  def testPartitionFiltersPushDown(tableType: String, partitioned: Boolean): Unit = {
+  def testPartitionFiltersPushDown(tableType: String, partitioned: Boolean, readOptimized: Boolean): Unit = {
     spark.sql(
       s"""
          |CREATE TABLE $tableName (
@@ -85,12 +87,20 @@ class TestHoodiePruneFileSourcePartitions extends HoodieClientTestBase with Scal
          |  (3, 'a3', 30, 3000, "2021-01-07")
          """.stripMargin)
 
-    Seq("eager", "lazy").foreach { listingModeOverride =>
+    Seq(("eager", true), ("lazy", false)).foreach { pair =>
+      var listingModeOverride = pair._1
+      var isMorBaseFileOnlyReadOptimized = pair._2
       // We need to refresh the table to make sure Spark is re-processing the query every time
       // instead of serving already cached value
       spark.sessionState.catalog.invalidateAllCachedTables()
 
       spark.sql(s"SET hoodie.datasource.read.file.index.listing.mode=$listingModeOverride")
+      var queryMode = readOptimized match {
+        case true => DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL
+        case false => DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL
+      }
+      spark.sql(s"SET hoodie.datasource.query.type=$queryMode")
+      spark.sql(s"SET hoodie.datasource.read.optimized.mor.with.all.base.file.only.slice.enable=$isMorBaseFileOnlyReadOptimized")
 
       val df = spark.sql(s"SELECT * FROM $tableName WHERE partition = '2021-01-05'")
       val optimizedPlan = df.queryExecution.optimizedPlan
@@ -130,9 +140,9 @@ class TestHoodiePruneFileSourcePartitions extends HoodieClientTestBase with Scal
 
           if (partitioned) {
             val executionPlan = df.queryExecution.executedPlan
-            val expectedPhysicalPlanPartitionFiltersClause = tableType match {
-              case "cow" => s"PartitionFilters: [isnotnull($attr), ($attr = 2021-01-05)]"
-              case "mor" => s"PushedFilters: [IsNotNull(partition), EqualTo(partition,2021-01-05)]"
+            val expectedPhysicalPlanPartitionFiltersClause = (tableType, readOptimized, isMorBaseFileOnlyReadOptimized) match {
+              case ("mor", false, false) => s"PushedFilters: [IsNotNull(partition), EqualTo(partition,2021-01-05)]"
+              case _ => s"PartitionFilters: [isnotnull($attr), ($attr = 2021-01-05)]"
             }
 
             Assertions.assertTrue(executionPlan.toString().contains(expectedPhysicalPlanPartitionFiltersClause))

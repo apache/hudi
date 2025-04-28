@@ -476,6 +476,8 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
     } else {
       assertEquals(writePartitionFields, metaClient.getTableConfig.getPartitionFieldProp)
     }
+    // TODO: Unified time conversion for mor and cow
+    spark.sql(s"SET hoodie.datasource.read.optimized.mor.with.all.base.file.only.slice.enable=false")
   }
 
   private def createTableWithSql(tableName: String,
