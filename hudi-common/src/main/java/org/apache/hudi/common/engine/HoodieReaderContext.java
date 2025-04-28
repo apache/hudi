@@ -335,8 +335,7 @@ public abstract class HoodieReaderContext<T> {
     }
 
     Object value = getValue(record, schema, orderingFieldName.get());
-    Comparable finalOrderingVal = value != null ? convertValueToEngineType((Comparable) value) : DEFAULT_ORDERING_VALUE;
-    return finalOrderingVal;
+    return value != null ? convertValueToEngineType((Comparable) value) : DEFAULT_ORDERING_VALUE;
   }
 
   /**

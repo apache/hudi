@@ -43,7 +43,7 @@ import java.util.Objects;
 
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
 
-class EngineBasedMerger<T> {
+public class EngineBasedMerger<T> {
   private final HoodieReaderContext<T> readerContext;
   private final RecordMergeMode recordMergeMode;
   private final Option<HoodieRecordMerger> recordMerger;
@@ -52,7 +52,7 @@ class EngineBasedMerger<T> {
   private final Option<String> orderingFieldName;
   private final TypedProperties props;
 
-  EngineBasedMerger(HoodieReaderContext<T> readerContext, RecordMergeMode recordMergeMode, HoodieTableConfig tableConfig, TypedProperties props, Option<String> orderingFieldName) {
+  public EngineBasedMerger(HoodieReaderContext<T> readerContext, RecordMergeMode recordMergeMode, HoodieTableConfig tableConfig, TypedProperties props, Option<String> orderingFieldName) {
     this.readerContext = readerContext;
     this.readerSchema = AvroSchemaCache.intern(readerContext.getSchemaHandler().getRequiredSchema());
     this.recordMergeMode = recordMergeMode;
@@ -103,18 +103,15 @@ class EngineBasedMerger<T> {
         case COMMIT_TIME_ORDERING:
           return newer;
         case EVENT_TIME_ORDERING:
-          if (newer.isHardDelete()) {
+          if (newer.isCommitTimeOrderingDelete()) {
             return newer;
           }
-          if (older.isHardDelete()) {
+          if (older.isCommitTimeOrderingDelete()) {
             return older;
           }
           Comparable newOrderingValue = newer.getOrderingValue();
           Comparable oldOrderingValue = olderOption.get().getOrderingValue();
-          if (oldOrderingValue.compareTo(newOrderingValue) > 0) {
-            return older;
-          }
-          return newer;
+          return oldOrderingValue.compareTo(newOrderingValue) > 0 ? older : newer;
         case CUSTOM:
         default:
           if (payloadClass.isPresent()) {
