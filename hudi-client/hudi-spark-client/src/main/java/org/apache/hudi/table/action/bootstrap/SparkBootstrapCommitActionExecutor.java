@@ -187,7 +187,7 @@ public class SparkBootstrapCommitActionExecutor<T>
     HoodieData<WriteStatus> statuses = table.getIndex().updateLocation(writeStatuses, context, table);
     result.setIndexUpdateDuration(Duration.between(indexStartTime, Instant.now()));
     result.setDataTableWriteStatuses(statuses);
-    completeCommit(result);
+    completeCommit(result, true);
   }
 
   @Override
