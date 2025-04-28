@@ -182,17 +182,20 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
   protected void runPrecommitValidation(HoodieWriteMetadata result) {
     // validate commit action before committing result
     runPrecommitValidators(result);
-    LOG.info("Auto commit disabled for " + instantTime);
   }
 
   protected void completeCommit(HoodieWriteMetadata result) {
-    if (!this.txnManagerOption.isPresent()) {
-      this.txnManagerOption = Option.of(new TransactionManager(config, table.getStorage()));
-    }
     // validate commit action before committing result
     runPrecommitValidation(result);
-    autoCommit(result);
-    LOG.info("Completing commit for " + instantTime);
+    if (config.shouldInternalAutoCommit()) {
+      if (!this.txnManagerOption.isPresent()) {
+        this.txnManagerOption = Option.of(new TransactionManager(config, table.getStorage()));
+      }
+      autoCommit(result);
+      LOG.info("Completing commit for " + instantTime);
+    } else {
+      LOG.debug("Auto commit disabled for " + instantTime);
+    }
   }
 
   protected void autoCommit(HoodieWriteMetadata<O> result) {
@@ -314,7 +317,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
     // triggers clustering.
     writeMetadata.setWriteStats(statuses.map(WriteStatus::getStat).collectAsList());
     writeMetadata.setPartitionToReplaceFileIds(getPartitionToReplacedFileIds(clusteringPlan, writeMetadata));
-    runPrecommitValidation(writeMetadata);
+    completeCommit(writeMetadata);
     if (!writeMetadata.getCommitMetadata().isPresent()) {
       LOG.info("Found empty commit metadata for clustering with instant time " + instantTime);
       HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(writeMetadata.getWriteStats().get(), writeMetadata.getPartitionToReplaceFileIds(),
