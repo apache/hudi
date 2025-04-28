@@ -296,9 +296,6 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
     ClusteringUtils.transitionClusteringOrReplaceRequestedToInflight(instant, Option.empty(), table.getActiveTimeline());
     table.getMetaClient().reloadActiveTimeline();
 
-    // Disable auto commit. Strategy is only expected to write data in new files.
-    config.setValue(HoodieWriteConfig.AUTO_COMMIT_ENABLE, Boolean.FALSE.toString());
-
     Option<Schema> schema;
     try {
       schema = new TableSchemaResolver(table.getMetaClient()).getTableAvroSchemaIfPresent(false);

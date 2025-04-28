@@ -1092,7 +1092,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     if (shouldDelegateToTableServiceManager(config, ActionType.compaction)) {
       throw new UnsupportedOperationException("Compaction should be delegated to table service manager instead of direct run.");
     }
-    return compact(compactionInstantTime, config.shouldAutoCommit());
+    return compact(compactionInstantTime, false);
   }
 
   /**
@@ -1131,7 +1131,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @return Collection of WriteStatus to inspect errors and counts
    */
   public HoodieWriteMetadata<O> logCompact(String logCompactionInstantTime) {
-    return logCompact(logCompactionInstantTime, config.shouldAutoCommit());
+    return logCompact(logCompactionInstantTime, false);
   }
 
   /**

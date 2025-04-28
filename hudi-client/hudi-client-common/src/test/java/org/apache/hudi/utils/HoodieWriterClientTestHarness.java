@@ -240,7 +240,6 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
   public HoodieWriteConfig.Builder getConfigBuilder(String schemaStr, HoodieIndex.IndexType indexType,
                                                     HoodieFailedWritesCleaningPolicy cleaningPolicy) {
     HoodieWriteConfig.Builder builder = HoodieWriteConfig.newBuilder().withPath(basePath)
-        .withAutoCommit(false)
         .withParallelism(2, 2).withBulkInsertParallelism(2).withFinalizeWriteParallelism(2).withDeleteParallelism(2)
         .withTimelineLayoutVersion(TimelineLayoutVersion.CURR_VERSION)
         .withWriteStatusClass(MetadataMergeWriteStatus.class)
@@ -367,12 +366,12 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
       properties = getPropertiesForKeyGen();
     }
 
-    return !enableOptimisticConsistencyGuard ? getConfigBuilder().withRollbackUsingMarkers(rollbackUsingMarkers).withAutoCommit(false)
+    return !enableOptimisticConsistencyGuard ? getConfigBuilder().withRollbackUsingMarkers(rollbackUsingMarkers)
             .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true)
                     .withMaxConsistencyCheckIntervalMs(1).withInitialConsistencyCheckIntervalMs(1)
                     .withEnableOptimisticConsistencyGuard(enableOptimisticConsistencyGuard).build())
             .build() :
-            getConfigBuilder().withRollbackUsingMarkers(rollbackUsingMarkers).withAutoCommit(false)
+            getConfigBuilder().withRollbackUsingMarkers(rollbackUsingMarkers)
                     .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder()
                             .withConsistencyCheckEnabled(true)
                             .withEnableOptimisticConsistencyGuard(enableOptimisticConsistencyGuard)
@@ -381,10 +380,10 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
   }
 
   protected HoodieWriteConfig getConsistencyCheckWriteConfig(boolean enableOptimisticConsistencyGuard) {
-    return !enableOptimisticConsistencyGuard ? (getConfigBuilder().withAutoCommit(false)
+    return !enableOptimisticConsistencyGuard ? (getConfigBuilder()
             .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true)
                     .withMaxConsistencyCheckIntervalMs(1).withInitialConsistencyCheckIntervalMs(1).withEnableOptimisticConsistencyGuard(enableOptimisticConsistencyGuard).build())
-            .build()) : (getConfigBuilder().withAutoCommit(false)
+            .build()) : (getConfigBuilder()
             .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true)
                     .withEnableOptimisticConsistencyGuard(enableOptimisticConsistencyGuard)
                     .withOptimisticConsistencyGuardSleepTimeMs(1).build())
@@ -407,7 +406,6 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
             .withHeartbeatIntervalInMs(3 * 1000)
             .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
                     .withRemoteServerPort(timelineServicePort).build())
-            .withAutoCommit(false)
             .withLockConfig(HoodieLockConfig.newBuilder()
                     .withLockProvider(InProcessLockProvider.class)
                     .build())
@@ -522,7 +520,6 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
                             .hfileMaxFileSize(dataGen.getEstimatedFileSizeInBytes(200))
                             .parquetMaxFileSize(dataGen.getEstimatedFileSizeInBytes(200)).build())
             .withMergeAllowDuplicateOnInserts(mergeAllowDuplicateInserts)
-        .withAutoCommit(false)
             .build();
   }
 
@@ -755,7 +752,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
                                                     Function transformInputFn, Function transformOutputFn) throws Exception {
     HoodieTableMetaClient metaClient = createMetaClient();
     String instantTime = "000";
-    HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder()
+    HoodieWriteConfig cfg = getConfigBuilder().withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder()
             .withEnableOptimisticConsistencyGuard(enableOptimisticConsistencyGuard).build()).build();
     BaseHoodieWriteClient client = getHoodieWriteClient(cfg);
     client.setOperationType(WriteOperationType.UPSERT);
@@ -817,7 +814,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
             .withPrecommitValidatorSingleResultSqlQueries(sqlQueryForSingleResultValidation)
             .build();
 
-    HoodieWriteConfig config = getConfigBuilder().withAutoCommit(false)
+    HoodieWriteConfig config = getConfigBuilder()
             .withPreCommitValidatorConfig(validatorConfig)
             .withProps(populateMetaFields ? new Properties() : getPropertiesForKeyGen())
             .withClusteringConfig(clusteringConfig).build();
@@ -841,7 +838,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
                                 Function<HoodieWriteMetadata, HoodieWriteMetadata<List<WriteStatus>>> transformWriteMetadataFn,
                                 Function<HoodieWriteConfig, KeyGenerator> createKeyGeneratorFn) {
 
-    HoodieWriteConfig config = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY).withAutoCommit(false)
+    HoodieWriteConfig config = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY)
             .withClusteringConfig(clusteringConfig)
             .withProps(getPropertiesForKeyGen()).build();
     HoodieWriteMetadata<List<WriteStatus>> clusterMetadata =
@@ -879,7 +876,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
   }
 
   protected void testCommitWritesRelativePaths(Function transformInputFn) throws Exception {
-    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder().withAutoCommit(false);
+    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder();
     addConfigsForPopulateMetaFields(cfgBuilder, true);
     try (BaseHoodieWriteClient client = getHoodieWriteClient(cfgBuilder.build())) {
       HoodieTableMetaClient metaClient = createMetaClient();
@@ -911,7 +908,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
   }
 
   protected void testMetadataStatsOnCommit(boolean populateMetaFields, Function transformInputFn) throws Exception {
-    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder().withAutoCommit(false);
+    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder();
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     HoodieWriteConfig cfg = cfgBuilder.build();
     BaseHoodieWriteClient client = getHoodieWriteClient(cfg);
@@ -995,7 +992,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
   protected void testInlineScheduleClustering(Function createBrokenClusteringClientFn, HoodieClusteringConfig clusteringConfig,
                                               Function transformInputFn, Function transformOutputFn) throws IOException {
     testInsertTwoBatches(true, createBrokenClusteringClientFn);
-    HoodieWriteConfig config = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY).withAutoCommit(false)
+    HoodieWriteConfig config = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY)
         .withClusteringConfig(clusteringConfig)
         .withProps(getPropertiesForKeyGen()).build();
     dataGen = new HoodieTestDataGenerator(new String[] {"2015/03/16"});
@@ -1009,7 +1006,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     String partitionPath = "2015/03/16";
     testInsertTwoBatches(true, partitionPath, createBrokenClusteringClientFn);
     // Trigger clustering
-    HoodieWriteConfig config = getConfigBuilder().withEmbeddedTimelineServerEnabled(false).withAutoCommit(false)
+    HoodieWriteConfig config = getConfigBuilder().withEmbeddedTimelineServerEnabled(false)
         .withClusteringConfig(clusteringConfig).build();
     generateInsertsAndCommit(config, transformInputFn, transformOutputFn);
     verifyClusteredFilesWithReplaceCommitMetadata(partitionPath);
@@ -1066,7 +1063,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
    */
   protected void testAutoCommit(Function3<Object, BaseHoodieWriteClient, Object, String> writeFn,
                               boolean isPrepped, boolean populateMetaFields, InstantGenerator instantGenerator) throws Exception {
-    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder().withAutoCommit(false); // Set autoCommit false
+    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder();
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     try (BaseHoodieWriteClient client = getHoodieWriteClient(cfgBuilder.build())) {
       String prevCommitTime = "000";
@@ -1192,7 +1189,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
         .setPopulateMetaFields(populateMetaFields)
         .initTable(metaClient.getStorageConf().newInstance(), metaClient.getBasePath());
 
-    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY).withRollbackUsingMarkers(true).withAutoCommit(false)
+    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY).withRollbackUsingMarkers(true)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).withMetadataIndexColumnStats(true).withColumnStatsIndexForColumns("driver,rider")
             .withMetadataIndexColumnStatsFileGroupCount(1).build())
         .withWriteTableVersion(6);

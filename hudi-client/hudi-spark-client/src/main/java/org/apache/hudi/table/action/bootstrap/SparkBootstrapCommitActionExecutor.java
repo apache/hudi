@@ -96,7 +96,6 @@ public class SparkBootstrapCommitActionExecutor<T>
         context,
         new HoodieWriteConfig.Builder()
             .withProps(config.getProps())
-            .withAutoCommit(true)
             .withWriteStatusClass(BootstrapWriteStatus.class)
             .withBulkInsertParallelism(config.getBootstrapParallelism()).build(),
         table,
