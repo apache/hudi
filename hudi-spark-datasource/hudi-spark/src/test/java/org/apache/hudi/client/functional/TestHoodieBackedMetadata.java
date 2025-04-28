@@ -3167,7 +3167,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       client.startCommitWithTime(newCommitTime);
       client.bulkInsert(jsc.parallelize(records, 1), newCommitTime).collect();
 
-      HoodieTableMetadata tableMetadata = metadata(client);
+      HoodieTableMetadata tableMetadata = metadata(client, metaClient.getStorage());
       List<String> metadataPartitions = tableMetadata.getAllPartitionPaths();
       List<Pair<String, String>> partitionNameFileNameList = new ArrayList<>();
       for (String metadataPartition : metadataPartitions) {
