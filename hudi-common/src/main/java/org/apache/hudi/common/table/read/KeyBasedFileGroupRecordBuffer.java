@@ -24,7 +24,6 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DeleteRecord;
-import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.KeySpec;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
@@ -40,9 +39,6 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Iterator;
-import java.util.Map;
-
-import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_RECORD_KEY;
 
 /**
  * A buffer that is used to store log records by {@link org.apache.hudi.common.table.log.HoodieMergedLogRecordReader}
@@ -82,31 +78,20 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
     try (ClosableIterator<T> recordIterator = recordsIteratorSchemaPair.getLeft()) {
       while (recordIterator.hasNext()) {
         T nextRecord = recordIterator.next();
-        Map<String, Object> metadata = readerContext.generateMetadataForRecord(
-            nextRecord, schema);
-        String recordKey = (String) metadata.get(HoodieReaderContext.INTERNAL_META_RECORD_KEY);
-
-        if (isBuiltInDeleteRecord(nextRecord) || isCustomDeleteRecord(nextRecord)) {
-          processDeleteRecord(nextRecord, metadata);
-        } else {
-          processNextDataRecord(nextRecord, metadata, recordKey);
-        }
+        boolean isDelete = isBuiltInDeleteRecord(nextRecord) || isCustomDeleteRecord(nextRecord);
+        BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(nextRecord, schema, readerContext, orderingFieldName, isDelete);
+        processNextDataRecord(bufferedRecord, bufferedRecord.getRecordKey());
       }
     }
   }
 
   @Override
-  public void processNextDataRecord(T record, Map<String, Object> metadata, Serializable recordKey) throws IOException {
-    Pair<Option<T>, Map<String, Object>> existingRecordMetadataPair = records.get(recordKey);
-    Option<Pair<Option<T>, Map<String, Object>>> mergedRecordAndMetadata =
-        doProcessNextDataRecord(record, metadata, existingRecordMetadataPair);
+  public void processNextDataRecord(BufferedRecord<T> record, Serializable recordKey) throws IOException {
+    BufferedRecord<T> existingRecord = records.get(recordKey);
+    Option<BufferedRecord<T>> bufferRecord = doProcessNextDataRecord(record, existingRecord);
 
-    if (mergedRecordAndMetadata.isPresent()) {
-      records.put(recordKey, Pair.of(
-          mergedRecordAndMetadata.get().getLeft().isPresent()
-              ? Option.ofNullable(readerContext.seal(mergedRecordAndMetadata.get().getLeft().get()))
-              : Option.empty(),
-          mergedRecordAndMetadata.get().getRight()));
+    if (bufferRecord.isPresent()) {
+      records.put(recordKey, bufferRecord.get().toBinary(readerContext));
     }
   }
 
@@ -115,34 +100,18 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
     Iterator<DeleteRecord> it = Arrays.stream(deleteBlock.getRecordsToDelete()).iterator();
     while (it.hasNext()) {
       DeleteRecord record = it.next();
-      String recordKey = record.getRecordKey();
-      processNextDeletedRecord(record, recordKey);
+      processNextDeletedRecord(record, record.getRecordKey());
     }
   }
 
   @Override
   public void processNextDeletedRecord(DeleteRecord deleteRecord, Serializable recordKey) {
-    Pair<Option<T>, Map<String, Object>> existingRecordMetadataPair = records.get(recordKey);
-    Option<DeleteRecord> recordOpt = doProcessNextDeletedRecord(deleteRecord, existingRecordMetadataPair);
+    BufferedRecord<T> existingRecord = records.get(recordKey);
+    Option<DeleteRecord> recordOpt = doProcessNextDeletedRecord(deleteRecord, existingRecord);
     if (recordOpt.isPresent()) {
-      records.put(recordKey, Pair.of(Option.empty(), readerContext.generateMetadataForRecord(
-          (String) recordKey, recordOpt.get().getPartitionPath(),
-          getOrderingValue(readerContext, recordOpt.get()))));
+      Comparable orderingValue = getOrderingValue(readerContext, recordOpt.get());
+      records.put(recordKey, BufferedRecord.forDeleteRecord(deleteRecord, orderingValue));
     }
-  }
-
-  protected void processDeleteRecord(T record, Map<String, Object> metadata) {
-    DeleteRecord deleteRecord = DeleteRecord.create(
-        new HoodieKey(
-            (String) metadata.get(INTERNAL_META_RECORD_KEY),
-            // The partition path of the delete record is set to null because it is not
-            // used, and the delete record is never surfaced from the file group reader
-            null),
-        readerContext.getOrderingValue(
-            Option.of(record), metadata, readerSchema, orderingFieldName));
-    processNextDeletedRecord(
-        deleteRecord,
-        (String) metadata.get(INTERNAL_META_RECORD_KEY));
   }
 
   @Override
@@ -152,7 +121,7 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
 
   protected boolean hasNextBaseRecord(T baseRecord) throws IOException {
     String recordKey = readerContext.getRecordKey(baseRecord, readerSchema);
-    Pair<Option<T>, Map<String, Object>> logRecordInfo = records.remove(recordKey);
+    BufferedRecord<T> logRecordInfo = records.remove(recordKey);
     return hasNextBaseRecord(baseRecord, logRecordInfo);
   }
 

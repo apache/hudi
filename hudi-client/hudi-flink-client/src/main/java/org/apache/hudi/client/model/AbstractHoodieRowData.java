@@ -161,7 +161,7 @@ public abstract class AbstractHoodieRowData implements RowData {
     return row.getMap(rebaseOrdinal(ordinal));
   }
 
-  private String getMetaColumnVal(int ordinal) {
+  protected String getMetaColumnVal(int ordinal) {
     return this.metaColumns[ordinal];
   }
 
