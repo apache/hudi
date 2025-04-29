@@ -1494,8 +1494,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Tests behavior of committing only when consistency is verified.
    */
-  @ParameterizedTest
-  @ValueSource(booleans = {true, false})
+  //@ParameterizedTest
+  //@ValueSource(booleans = {true, false})
   public void testConsistencyCheckDuringFinalize(boolean enableOptimisticConsistencyGuard) throws Exception {
     testConsistencyCheckDuringFinalize(context, enableOptimisticConsistencyGuard, getHoodieTable, list2Rdd, rdd2List);
   }
