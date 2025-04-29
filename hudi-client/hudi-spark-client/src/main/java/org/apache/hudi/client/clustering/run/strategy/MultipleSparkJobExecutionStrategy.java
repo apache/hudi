@@ -55,6 +55,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.data.CloseableIteratorListener;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieException;
@@ -335,7 +336,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
         };
         suppliers.add(iteratorSupplier);
       });
-      return new LazyConcatenatingIterator<>(suppliers);
+      return CloseableIteratorListener.addListener(new LazyConcatenatingIterator<>(suppliers));
     }));
   }
 
@@ -357,7 +358,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
             iteratorGettersForPartition.add(recordIteratorGetter);
           });
 
-          return new LazyConcatenatingIterator<>(iteratorGettersForPartition);
+          return CloseableIteratorListener.addListener(new LazyConcatenatingIterator<>(iteratorGettersForPartition));
         }));
   }
 
@@ -477,7 +478,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
             0, Long.MAX_VALUE, usePosition, false);
         fileGroupReader.initRecordIterators();
         // read records from the FG reader
-        return fileGroupReader.getClosableIterator();
+        return CloseableIteratorListener.addListener(fileGroupReader.getClosableIterator());
       }
     }).rdd();
 
