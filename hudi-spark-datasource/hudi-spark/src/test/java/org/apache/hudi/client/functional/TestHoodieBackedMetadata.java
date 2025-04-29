@@ -3152,7 +3152,9 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     Properties properties = new TypedProperties();
     properties.put(HoodieTableConfig.PARTITION_FIELDS.key(), "partition_path");
     HoodieWriteConfig writeConfig = getWriteConfigBuilder(true, true, false)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).withMetadataIndexColumnStats(true)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true)
+            .withMetadataIndexColumnStats(true)
+            .withColumnStatsIndexForColumns("begin_lat,end_lat,distance_in_meters,weight")
             .withProperties(properties)
             .build()).build();
     init(HoodieTableType.COPY_ON_WRITE, writeConfig);
@@ -3183,21 +3185,27 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       // Assert stats from parquet footer same as metadata.
       colStatsFromMetadata.forEach(((partitionAndFileName, stats) -> {
         StoragePath fullFilePath = new StoragePath(basePath, String.format("%s/%s", partitionAndFileName.getLeft(), partitionAndFileName.getRight()));
-        Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangesMap =
+        Map<String, HoodieColumnRangeMetadata<Comparable>> parquetStatsMap =
             HoodieIOFactory.getIOFactory(metaClient.getStorage())
                 .getFileFormatUtils(HoodieFileFormat.PARQUET)
                 .readColumnStatsFromMetadata(metaClient.getStorage(), fullFilePath, columns)
                 .stream()
                 .collect(Collectors.toMap(HoodieColumnRangeMetadata::getColumnName, Function.identity()));
         Map<String, HoodieMetadataColumnStats> columnStatsMap = stats.stream().collect(Collectors.toMap(HoodieMetadataColumnStats::getColumnName, Function.identity()));
-        Assertions.assertEquals(columnRangesMap.size(), columnStatsMap.size());
+        List<String> columnsWithoutStats = Arrays.asList("seconds_since_epoch", "nation");
+        Assertions.assertEquals(parquetStatsMap.size() - columnsWithoutStats.size(), columnStatsMap.size());
         for (String column : columns) {
+          if (columnsWithoutStats.contains(column)) {
+            // Assert columnsWithoutStats are not present in MDT result.
+            Assertions.assertFalse(columnStatsMap.containsKey(column));
+            continue;
+          }
           // Assert getColumnStats returns same data.
           Assertions.assertEquals(columnStatsMap.get(column), tableMetadata.getColumnStats(Collections.singletonList(partitionAndFileName), column).get(partitionAndFileName));
-          Assertions.assertEquals(columnRangesMap.get(column).getNullCount(), columnStatsMap.get(column).getNullCount());
-          Assertions.assertEquals(columnRangesMap.get(column).getValueCount(),columnStatsMap.get(column).getValueCount());
-          Assertions.assertEquals(columnRangesMap.get(column).getMaxValue(), unwrapAvroValueWrapper(columnStatsMap.get(column).getMaxValue()));
-          Assertions.assertEquals(columnRangesMap.get(column).getMinValue(), unwrapAvroValueWrapper(columnStatsMap.get(column).getMinValue()));
+          Assertions.assertEquals(parquetStatsMap.get(column).getNullCount(), columnStatsMap.get(column).getNullCount());
+          Assertions.assertEquals(parquetStatsMap.get(column).getValueCount(),columnStatsMap.get(column).getValueCount());
+          Assertions.assertEquals(parquetStatsMap.get(column).getMaxValue(), unwrapAvroValueWrapper(columnStatsMap.get(column).getMaxValue()));
+          Assertions.assertEquals(parquetStatsMap.get(column).getMinValue(), unwrapAvroValueWrapper(columnStatsMap.get(column).getMinValue()));
         }
       }));
     }

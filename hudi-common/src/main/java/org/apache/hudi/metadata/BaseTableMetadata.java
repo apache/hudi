@@ -440,17 +440,12 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
     for (final Map.Entry<String, HoodieRecord<HoodieMetadataPayload>> entry : hoodieRecords.entrySet()) {
       final Option<HoodieMetadataColumnStats> columnStatMetadata =
           entry.getValue().getData().getColumnStatMetadata();
-      if (columnStatMetadata.isPresent()) {
-        if (!columnStatMetadata.get().getIsDeleted()) {
-          ValidationUtils.checkState(columnStatKeyToFileNameMap.containsKey(entry.getKey()));
-          final Pair<String, String> partitionFileNamePair = columnStatKeyToFileNameMap.get(entry.getKey());
-          if (!fileToColumnStatMap.containsKey(partitionFileNamePair)) {
-            fileToColumnStatMap.put(partitionFileNamePair, new ArrayList<>());
-          }
-          fileToColumnStatMap.get(partitionFileNamePair).add(columnStatMetadata.get());
-        }
+      if (columnStatMetadata.isPresent() && !columnStatMetadata.get().getIsDeleted()) {
+        ValidationUtils.checkState(columnStatKeyToFileNameMap.containsKey(entry.getKey()));
+        final Pair<String, String> partitionFileNamePair = columnStatKeyToFileNameMap.get(entry.getKey());
+        fileToColumnStatMap.computeIfAbsent(partitionFileNamePair, k -> new ArrayList<>()).add(columnStatMetadata.get());
       } else {
-        LOG.error("Meta index column stats missing for: " + entry.getKey());
+        LOG.error("Meta index column stats missing for {}", entry.getKey());
       }
     }
     return fileToColumnStatMap;
