@@ -1781,7 +1781,6 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).withAutoClean(true).retainCommits(4)
             .build())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024 * 1024).build())
-        .withAutoCommit(false)
         .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
         .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class).build())
         .withProperties(properties)
@@ -1852,7 +1851,6 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
         .build();
 
     HoodieWriteConfig newWriteConfig = getConfigBuilder(TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.BLOOM, HoodieFailedWritesCleaningPolicy.EAGER)
-        .withAutoCommit(false)
         .withClusteringConfig(clusteringConfig)
         .withRollbackUsingMarkers(false)
         .build();
@@ -1931,7 +1929,6 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
         .build();
 
     HoodieWriteConfig newWriteConfig = getConfigBuilder(TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.BLOOM, HoodieFailedWritesCleaningPolicy.EAGER)
-        .withAutoCommit(false)
         .withClusteringConfig(clusteringConfig).build();
 
     // trigger clustering
@@ -2575,7 +2572,6 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
   public HoodieWriteConfig.Builder getConfigBuilder(String schemaStr, HoodieIndex.IndexType indexType,
                                                     HoodieFailedWritesCleaningPolicy cleaningPolicy) {
     return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(schemaStr)
-        .withAutoCommit(true)
         .withParallelism(2, 2).withBulkInsertParallelism(2).withFinalizeWriteParallelism(2).withDeleteParallelism(2)
         .withTimelineLayoutVersion(TimelineLayoutVersion.CURR_VERSION)
         .withWriteStatusClass(MetadataMergeWriteStatus.class)

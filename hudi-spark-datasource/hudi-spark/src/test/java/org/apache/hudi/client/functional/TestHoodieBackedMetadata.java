@@ -271,7 +271,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   public void testTurnOffMetadataIndexAfterEnable() throws Exception {
     initPath();
     HoodieWriteConfig cfg = getConfigBuilder(TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.BLOOM, HoodieFailedWritesCleaningPolicy.EAGER)
-        .withAutoCommit(false)
         .withParallelism(1, 1).withBulkInsertParallelism(1).withFinalizeWriteParallelism(1).withDeleteParallelism(1)
         .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true).build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).withMetadataIndexColumnStats(false).build())
@@ -307,7 +306,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // enable column stats and run 1 upserts
     HoodieWriteConfig cfgWithColStatsEnabled = HoodieWriteConfig.newBuilder()
         .withProperties(cfg.getProps())
-        .withAutoCommit(false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .withProperties(cfg.getMetadataConfig().getProps())
             .withMetadataIndexColumnStats(true)
@@ -333,7 +331,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // disable column stats and run 1 upsert
     HoodieWriteConfig cfgWithColStatsDisabled = HoodieWriteConfig.newBuilder()
         .withProperties(cfg.getProps())
-        .withAutoCommit(false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .withProperties(cfg.getMetadataConfig().getProps())
             .withMetadataIndexColumnStats(false)
@@ -361,7 +358,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // enable bloom filter as well as column stats and run 1 upsert
     HoodieWriteConfig cfgWithBloomFilterEnabled = HoodieWriteConfig.newBuilder()
         .withProperties(cfgWithColStatsEnabled.getProps())
-        .withAutoCommit(false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .withProperties(cfgWithColStatsEnabled.getMetadataConfig().getProps())
             .withMetadataIndexBloomFilter(true)
@@ -387,7 +383,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     // disable entire MDT and validate its deleted
     HoodieWriteConfig cfgWithMetadataDisabled = getConfigBuilder(TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.BLOOM, HoodieFailedWritesCleaningPolicy.EAGER)
-        .withAutoCommit(false)
         .withParallelism(1, 1).withBulkInsertParallelism(1).withFinalizeWriteParallelism(1).withDeleteParallelism(1)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
         .build();
@@ -769,7 +764,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     initPath();
     int maxCommits = 1;
     HoodieWriteConfig cfg = getConfigBuilder(TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.BLOOM, HoodieFailedWritesCleaningPolicy.EAGER)
-        .withAutoCommit(false)
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(maxCommits)
             .build())
@@ -2281,7 +2275,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).withAutoClean(true).retainCommits(4)
             .build())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024 * 1024).build())
-        .withAutoCommit(false)
         .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
         .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class).build())
         .withProperties(properties)
@@ -2348,7 +2341,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         .withClusteringTargetPartitions(0).withInlineClusteringNumCommits(1).build();
 
     HoodieWriteConfig newWriteConfig = getConfigBuilder(TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.BLOOM, HoodieFailedWritesCleaningPolicy.EAGER)
-        .withAutoCommit(false)
         .withClusteringConfig(clusteringConfig)
         .withRollbackUsingMarkers(false)
         .build();
@@ -2421,7 +2413,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         .withClusteringTargetPartitions(0).withInlineClusteringNumCommits(1).build();
 
     HoodieWriteConfig newWriteConfig = getConfigBuilder(TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.BLOOM, HoodieFailedWritesCleaningPolicy.EAGER)
-        .withAutoCommit(false)
         .withClusteringConfig(clusteringConfig).build();
 
     // trigger clustering
@@ -2962,7 +2953,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     int maxCommits = 1;
     HoodieWriteConfig cfg = getConfigBuilder(TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.BLOOM, HoodieFailedWritesCleaningPolicy.EAGER)
-        .withAutoCommit(false)
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
             .retainCommits(maxCommits).build())
@@ -3406,7 +3396,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
                                                     HoodieFailedWritesCleaningPolicy cleaningPolicy) {
     Properties properties = getDisabledRowWriterProperties();
     return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(schemaStr)
-        .withAutoCommit(false)
         .withParallelism(2, 2).withBulkInsertParallelism(2).withFinalizeWriteParallelism(2).withDeleteParallelism(2)
         .withTimelineLayoutVersion(TimelineLayoutVersion.CURR_VERSION)
         .withWriteStatusClass(MetadataMergeWriteStatus.class)

@@ -54,7 +54,7 @@ public class TestHoodieJavaClientOnMergeOnReadStorage extends HoodieJavaClientTe
   @Test
   public void testReadingMORTableWithoutBaseFile() throws Exception {
     HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA,
-        HoodieIndex.IndexType.INMEMORY).withAutoCommit(true)
+        HoodieIndex.IndexType.INMEMORY)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(2).build())
         .build();
     HoodieJavaWriteClient client = getHoodieWriteClient(config);
@@ -92,7 +92,7 @@ public class TestHoodieJavaClientOnMergeOnReadStorage extends HoodieJavaClientTe
   @Test
   public void testCompactionOnMORTable() throws Exception {
     HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA,
-        HoodieIndex.IndexType.INMEMORY).withAutoCommit(true)
+        HoodieIndex.IndexType.INMEMORY)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(2).build())
         .build();
     HoodieJavaWriteClient client = getHoodieWriteClient(config);
@@ -126,7 +126,7 @@ public class TestHoodieJavaClientOnMergeOnReadStorage extends HoodieJavaClientTe
   @Test
   public void testAsyncCompactionOnMORTable() throws Exception {
     HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA,
-        HoodieIndex.IndexType.INMEMORY).withAutoCommit(true)
+        HoodieIndex.IndexType.INMEMORY)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(2).build())
         .build();
     HoodieJavaWriteClient client = getHoodieWriteClient(config);

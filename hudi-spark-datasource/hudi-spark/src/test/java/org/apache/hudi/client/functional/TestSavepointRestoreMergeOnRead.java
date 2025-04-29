@@ -335,7 +335,6 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
 
   private void compactWithoutCommit(String compactionInstantTime) {
     HoodieWriteConfig hoodieWriteConfig = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY)
-        .withAutoCommit(false) // disable auto commit
         .withRollbackUsingMarkers(true)
         .build();
 

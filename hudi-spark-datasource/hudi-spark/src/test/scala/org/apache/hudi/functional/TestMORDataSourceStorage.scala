@@ -91,7 +91,7 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
     inputDF1.write.format("org.apache.hudi")
       .options(options)
       .option("hoodie.compact.inline", "false") // else fails due to compaction & deltacommit instant times being same
-      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
       .mode(SaveMode.Overwrite)
       .save(basePath)
@@ -166,7 +166,7 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
     val inputDF1: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     inputDF1.write.format("org.apache.hudi")
       .options(options)
-      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
       .mode(SaveMode.Overwrite)
       .save(basePath)
@@ -190,10 +190,6 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
     // compaction should have been completed
     val metaClient = HoodieTestUtils.createMetaClient(new HadoopStorageConfiguration(fs.getConf), basePath)
     assertEquals(1, metaClient.getActiveTimeline.getCommitAndReplaceTimeline.countInstants())
-
-    val hudiDF2 = spark.read.format("org.apache.hudi").option("hoodie.metadata.enable","true")
-      .load(basePath)
-
     assertEquals(100, hudiDF1.count())
   }
 

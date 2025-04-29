@@ -871,7 +871,6 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
   private HoodieWriteConfig.Builder getHoodieWriteConfigWithSmallFileHandlingOffBuilder(boolean populateMetaFields) {
     HoodieWriteConfig.Builder cfgBuilder = HoodieWriteConfig.newBuilder().withPath(basePath()).withSchema(TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .withDeleteParallelism(2)
-        .withAutoCommit(false)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024)
             .withInlineCompaction(false).withMaxNumDeltaCommitsBeforeCompaction(1).build())
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()

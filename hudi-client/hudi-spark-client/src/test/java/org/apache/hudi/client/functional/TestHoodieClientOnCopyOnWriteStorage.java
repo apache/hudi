@@ -240,10 +240,10 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
                                   Function2<List<HoodieRecord>, String, Integer> recordGenFunction,
                                   Function3<Object, BaseHoodieWriteClient, Object, String> writeFn,
                                   boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords, int expTotalCommits,
-                                  boolean filterForCommitTimeWithAssert, InstantGenerator instantGenerator, boolean leaveInflightCommit) throws Exception {
+                                  boolean filterForCommitTimeWithAssert, InstantGenerator instantGenerator, boolean skipCommit) throws Exception {
     return writeBatch((SparkRDDWriteClient) client, newCommitTime, prevCommitTime, commitTimesBetweenPrevAndNew, initCommitTime, numRecordsInThisCommit, recordGenFunction,
         (writeClient, records, commitTime) -> (JavaRDD<WriteStatus>) writeFn.apply(writeClient, records, commitTime),
-        assertForCommit, expRecordsInThisCommit, expTotalRecords, expTotalCommits, filterForCommitTimeWithAssert, instantGenerator, leaveInflightCommit);
+        assertForCommit, expRecordsInThisCommit, expTotalRecords, expTotalCommits, filterForCommitTimeWithAssert, instantGenerator, skipCommit);
   }
 
   @Override
@@ -693,16 +693,16 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   }
 
   private Pair<JavaRDD<WriteStatus>, List<HoodieRecord>> insertBatchRecords(SparkRDDWriteClient client, String commitTime,
-                                                                         Integer recordNum, int expectStatusSize, int numSlices,
-                                                                         Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieRecord>, String> writeFn,
-                                                                              boolean leaveInflightCommit) throws IOException {
+                                                                            Integer recordNum, int expectStatusSize, int numSlices,
+                                                                            Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieRecord>, String> writeFn,
+                                                                            boolean skipCommit) throws IOException {
     client.startCommitWithTime(commitTime);
     List<HoodieRecord> inserts = dataGen.generateInserts(commitTime, recordNum);
     JavaRDD<HoodieRecord> insertRecordsRDD = jsc.parallelize(inserts, numSlices);
     JavaRDD<WriteStatus> statuses = writeFn.apply(client, insertRecordsRDD, commitTime);
     List<WriteStatus> statusList = statuses.collect();
     JavaRDD<WriteStatus> recreatedStatuses = jsc.parallelize(statusList, numSlices);
-    if (!leaveInflightCommit) {
+    if (!skipCommit) {
       client.commit(commitTime, recreatedStatuses, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
     }
     assertEquals(expectStatusSize, recreatedStatuses.count(), "check expect status size.");

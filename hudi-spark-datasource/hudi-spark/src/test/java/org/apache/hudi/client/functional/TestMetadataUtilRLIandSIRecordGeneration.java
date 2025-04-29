@@ -316,7 +316,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
     initTimelineService();
 
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
-    HoodieWriteConfig writeConfig = getConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER).withAutoCommit(false)
+    HoodieWriteConfig writeConfig = getConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(3)
             .withInlineCompaction(false)
             .compactionSmallFileSize(0).build()).build();

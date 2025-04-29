@@ -259,14 +259,13 @@ public class HoodieClientTestBase extends HoodieSparkClientTestHarness {
   public JavaRDD<WriteStatus> insertFirstBatch(HoodieWriteConfig writeConfig, SparkRDDWriteClient client, String newCommitTime,
       String initCommitTime, int numRecordsInThisCommit,
       Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieRecord>, String> writeFn, boolean isPreppedAPI,
-      boolean assertForCommit, int expRecordsInThisCommit, boolean filterForCommitTimeWithAssert, InstantGenerator instantGenerator,
-                                               boolean leaveInflightCommit) throws Exception {
+      boolean assertForCommit, int expRecordsInThisCommit, boolean filterForCommitTimeWithAssert, InstantGenerator instantGenerator, boolean skipCommit) throws Exception {
     final Function2<List<HoodieRecord>, String, Integer> recordGenFunction =
         generateWrapRecordsFn(isPreppedAPI, writeConfig, dataGen::generateInserts);
 
     return writeBatch(client, newCommitTime, initCommitTime, Option.empty(), initCommitTime, numRecordsInThisCommit,
         recordGenFunction, writeFn, assertForCommit, expRecordsInThisCommit, expRecordsInThisCommit, 1,
-        filterForCommitTimeWithAssert, instantGenerator, leaveInflightCommit);
+        filterForCommitTimeWithAssert, instantGenerator, skipCommit);
   }
 
   /**
@@ -354,13 +353,13 @@ public class HoodieClientTestBase extends HoodieSparkClientTestHarness {
                                           Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieRecord>, String> writeFn, boolean isPreppedAPI,
                                           boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords, int expTotalCommits,
                                           boolean filterForCommitTimeWithAssert, InstantGenerator instantGenerator,
-                                          boolean leaveInflightCommit) throws Exception {
+                                          boolean skipCommit) throws Exception {
     final Function2<List<HoodieRecord>, String, Integer> recordGenFunction =
         generateWrapRecordsFn(isPreppedAPI, writeConfig, dataGen::generateUniqueUpdates);
 
     return writeBatch(client, newCommitTime, prevCommitTime, commitTimesBetweenPrevAndNew, initCommitTime,
         numRecordsInThisCommit, recordGenFunction, writeFn, assertForCommit, expRecordsInThisCommit, expTotalRecords,
-        expTotalCommits, filterForCommitTimeWithAssert, instantGenerator, leaveInflightCommit);
+        expTotalCommits, filterForCommitTimeWithAssert, instantGenerator, skipCommit);
   }
 
   public JavaRDD<WriteStatus> deleteBatch(HoodieWriteConfig writeConfig, SparkRDDWriteClient client, String newCommitTime, String prevCommitTime,
@@ -479,12 +478,12 @@ public class HoodieClientTestBase extends HoodieSparkClientTestHarness {
                                          Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieRecord>, String> writeFn,
                                          boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords, int expTotalCommits,
                                          boolean filterForCommitTimeWithAssert, InstantGenerator instantGenerator,
-                                         boolean leaveInflightCommit) throws Exception {
+                                         boolean skipCommit) throws Exception {
 
     List<HoodieRecord> records = recordGenFunction.apply(newCommitTime, numRecordsInThisCommit);
     return writeBatchHelper(client, newCommitTime, prevCommitTime, commitTimesBetweenPrevAndNew, initCommitTime,
         numRecordsInThisCommit, records, writeFn, assertForCommit, expRecordsInThisCommit, expTotalRecords,
-        expTotalCommits, filterForCommitTimeWithAssert, instantGenerator, leaveInflightCommit);
+        expTotalCommits, filterForCommitTimeWithAssert, instantGenerator, skipCommit);
   }
 
   public JavaRDD<WriteStatus> writeBatch(SparkRDDWriteClient client, String newCommitTime, String prevCommitTime,
@@ -520,7 +519,7 @@ public class HoodieClientTestBase extends HoodieSparkClientTestHarness {
                                                 Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieRecord>, String> writeFn,
                                                 boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords,
                                                 int expTotalCommits, boolean filterForCommitTimeWithAssert,
-                                                InstantGenerator instantGenerator, boolean leaveInflightCommit) throws IOException {
+                                                InstantGenerator instantGenerator, boolean skipCommit) throws IOException {
     // Write 1 (only inserts)
     client.startCommitWithTime(newCommitTime);
 
@@ -530,7 +529,7 @@ public class HoodieClientTestBase extends HoodieSparkClientTestHarness {
     JavaRDD<WriteStatus> result = jsc.parallelize(rawResult.collect(), 1);
 
     //if (doCommit) {
-    if (!leaveInflightCommit) {
+    if (!skipCommit) {
       client.commit(newCommitTime, result);
     }
     //}

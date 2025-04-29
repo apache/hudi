@@ -113,7 +113,6 @@ public class TestConsistentBucketIndex extends HoodieSparkClientTestHarness {
             .withBucketIndexEngineType(HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING)
             .withBucketNum("8")
             .build())
-        .withAutoCommit(false)
         .build();
     writeClient = getHoodieWriteClient(config);
     index = writeClient.getIndex();
