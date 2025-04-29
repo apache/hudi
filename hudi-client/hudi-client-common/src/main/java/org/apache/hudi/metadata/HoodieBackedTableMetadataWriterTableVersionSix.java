@@ -281,8 +281,7 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I, O> exten
         LOG.info("Log compaction with same {} time is already present in the timeline.", logCompactionInstantTime);
       } else if (writeClient.scheduleLogCompactionAtInstant(logCompactionInstantTime, Option.empty())) {
         LOG.info("Log compaction is scheduled for timestamp {}", logCompactionInstantTime);
-        HoodieWriteMetadata<?> logCompactionWriteMetadata = writeClient.logCompact(logCompactionInstantTime);
-        writeClient.commitLogCompaction(logCompactionInstantTime, logCompactionWriteMetadata.getCommitMetadata().get(), Option.empty());
+        writeClient.logCompact(logCompactionInstantTime, true);
       }
     }
   }

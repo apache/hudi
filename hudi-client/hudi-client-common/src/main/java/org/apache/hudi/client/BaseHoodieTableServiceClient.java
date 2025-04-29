@@ -555,6 +555,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
   private void completeClustering(HoodieWriteMetadata<O> clusteringWriteMetadata,
                                   HoodieTable table,
                                   String clusteringCommitTime) {
+    // triggering the dag for the first time for clustering
     List<HoodieWriteStat> writeStats = processAndFetchHoodieWriteStats(clusteringWriteMetadata);
     clusteringWriteMetadata.setWriteStats(writeStats);
 

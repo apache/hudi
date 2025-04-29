@@ -384,10 +384,6 @@ public class TestHoodieMergeHandle extends HoodieSparkClientTestHarness {
    */
   public static class TestWriteStatus extends WriteStatus {
 
-    public TestWriteStatus(Boolean trackSuccessRecords, Double failureFraction, Boolean isMetadataTable) {
-      super(true, failureFraction);
-    }
-
     public TestWriteStatus(Boolean trackSuccessRecords, Double failureFraction) {
       // Track Success Records
       super(true, failureFraction);
