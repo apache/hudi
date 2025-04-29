@@ -78,7 +78,6 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
-import static org.apache.hudi.config.HoodieWriteConfig.AUTO_COMMIT_ENABLE;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -173,7 +172,6 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
         .collect(Collectors.toList()), Option.empty(), metaClient.getCommitActionType());
     assertEquals(300, readTableTotalRecordsNum());
     // after the compaction, total records should remain the same
-    config.setValue(AUTO_COMMIT_ENABLE, "true");
     client.compact(compactionTime);
     assertEquals(300, readTableTotalRecordsNum());
   }
@@ -324,7 +322,6 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
       // committing instant2 that conflicts with the compaction plan should fail
       assertThrows(HoodieWriteConflictException.class, () -> commitToTable(instant2, writeStatuses2));
     }
-    config.setValue(AUTO_COMMIT_ENABLE, "true");
     client.compact(compactionInstant);
     if (runRollback) {
       validateFileListingInMetadataTable();

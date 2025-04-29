@@ -191,7 +191,6 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
 
     String action = HoodieTimeline.LOG_COMPACTION_ACTION;
     if (isComplete) {
-      cfg.setValue(HoodieWriteConfig.AUTO_COMMIT_ENABLE.key(), "true");
       action = HoodieTimeline.DELTA_COMMIT_ACTION;
     }
     SparkRDDWriteClient client = getHoodieWriteClient(cfg);
