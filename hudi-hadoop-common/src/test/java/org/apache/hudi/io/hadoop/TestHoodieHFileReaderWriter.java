@@ -21,6 +21,7 @@ package org.apache.hudi.io.hadoop;
 
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
 import org.apache.hudi.io.storage.HoodieNativeAvroHFileReader;
@@ -32,7 +33,6 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.Iterator;
 import java.util.Spliterator;
 import java.util.Spliterators;
 import java.util.stream.Collectors;
@@ -78,15 +78,16 @@ public class TestHoodieHFileReaderWriter extends TestHoodieHFileReaderWriterBase
       // Even though key16 exists, it's a backward seek not in order.
       // Our native HFile reader does not allow backward seek, and throws an exception
       // Note that backward seek is not expected to happen in production code
-      Iterator<IndexedRecord> iterator =
+      try (ClosableIterator<IndexedRecord> iterator =
           hfileReader.getIndexedRecordsByKeysIterator(
               Arrays.asList("key00001", "key05", "key24", "key16", "key31", "key61"),
-              avroSchema);
-      assertThrows(
-          IllegalStateException.class,
-          () -> StreamSupport.stream(
-                  Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
-              .collect(Collectors.toList()));
+              avroSchema)) {
+        assertThrows(
+            IllegalStateException.class,
+            () -> StreamSupport.stream(
+                    Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
+                .collect(Collectors.toList()));
+      }
     }
   }
 }
