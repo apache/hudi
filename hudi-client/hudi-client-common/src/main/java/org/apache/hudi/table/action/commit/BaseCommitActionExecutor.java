@@ -100,9 +100,22 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
     this.taskContextSupplier = context.getTaskContextSupplier();
     this.txnManagerOption = config.shouldInternalAutoCommit()
         ? Option.of(new TransactionManager(config, table.getStorage())) : Option.empty();
+    initializeTransactionSupportingCast();
     if (!table.getStorageLayout().writeOperationSupported(operationType)) {
       throw new UnsupportedOperationException("Executor " + this.getClass().getSimpleName()
           + " is not compatible with table layout " + table.getStorageLayout().getClass().getSimpleName());
+    }
+  }
+
+  private void initializeTransactionSupportingCast() {
+    if (this.txnManagerOption.isPresent() && this.txnManagerOption.get().isLockRequired()) {
+      // these txn metadata are only needed for auto commit when optimistic concurrent control is also enabled
+      this.lastCompletedTxn = TransactionUtils.getLastCompletedTxnInstantAndMetadata(table.getMetaClient());
+      this.pendingInflightAndRequestedInstants = TransactionUtils.getInflightAndRequestedInstants(table.getMetaClient());
+      this.pendingInflightAndRequestedInstants.remove(instantTime);
+    } else {
+      this.lastCompletedTxn = Option.empty();
+      this.pendingInflightAndRequestedInstants = Collections.emptySet();
     }
   }
 
@@ -184,11 +197,11 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
   }
 
   protected void completeCommit(HoodieWriteMetadata result, boolean overrideCompleteCommit) {
-    // validate commit action before committing result
     runPrecommitValidation(result);
     if (config.shouldInternalAutoCommit() || overrideCompleteCommit) {
       if (!this.txnManagerOption.isPresent()) {
         this.txnManagerOption = Option.of(new TransactionManager(config, table.getStorage()));
+        initializeTransactionSupportingCast();
       }
       autoCommit(result);
       LOG.info("Completing commit for " + instantTime);

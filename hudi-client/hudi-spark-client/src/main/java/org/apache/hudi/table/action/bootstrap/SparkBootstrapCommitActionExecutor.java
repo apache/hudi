@@ -28,9 +28,7 @@ import org.apache.hudi.client.bootstrap.HoodieSparkBootstrapSchemaProvider;
 import org.apache.hudi.client.bootstrap.selector.BootstrapModeSelector;
 import org.apache.hudi.client.bootstrap.translator.BootstrapPartitionPathTranslator;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
-import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.client.utils.SparkValidatorUtils;
-import org.apache.hudi.client.utils.TransactionUtils;
 import org.apache.hudi.common.bootstrap.index.BootstrapIndex;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
@@ -96,6 +94,7 @@ public class SparkBootstrapCommitActionExecutor<T>
         context,
         new HoodieWriteConfig.Builder()
             .withProps(config.getProps())
+            .withInternalAutoCommit(true)
             .withWriteStatusClass(BootstrapWriteStatus.class)
             .withBulkInsertParallelism(config.getBootstrapParallelism()).build(),
         table,
@@ -103,13 +102,6 @@ public class SparkBootstrapCommitActionExecutor<T>
         WriteOperationType.BOOTSTRAP,
         extraMetadata);
     bootstrapSourceStorage = HoodieStorageUtils.getStorage(config.getBootstrapSourceBasePath(), storageConf);
-    this.txnManagerOption = Option.of(new TransactionManager(config, table.getStorage()));
-    if (this.txnManagerOption.isPresent() && this.txnManagerOption.get().isLockRequired()) {
-      // these txn metadata are only needed for auto commit when optimistic concurrent control is also enabled
-      this.lastCompletedTxn = TransactionUtils.getLastCompletedTxnInstantAndMetadata(table.getMetaClient());
-      this.pendingInflightAndRequestedInstants = TransactionUtils.getInflightAndRequestedInstants(table.getMetaClient());
-      this.pendingInflightAndRequestedInstants.remove(instantTime);
-    }
   }
 
   private void validate() {
