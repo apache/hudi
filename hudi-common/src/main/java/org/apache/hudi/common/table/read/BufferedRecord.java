@@ -29,6 +29,7 @@ import org.apache.avro.Schema;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.Objects;
 import java.util.Properties;
 
 import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
@@ -110,7 +111,7 @@ public class BufferedRecord<T> implements Serializable {
   }
 
   public boolean isCommitTimeOrderingDelete() {
-    return isDelete && getOrderingValue().equals(DEFAULT_ORDERING_VALUE);
+    return isDelete && Objects.equals(getOrderingValue(), DEFAULT_ORDERING_VALUE);
   }
 
   public BufferedRecord<T> toBinary(HoodieReaderContext<T> readerContext) {
@@ -118,5 +119,20 @@ public class BufferedRecord<T> implements Serializable {
       record = readerContext.seal(readerContext.toBinaryRow(readerContext.getSchemaFromBufferRecord(this), record));
     }
     return this;
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    BufferedRecord<?> that = (BufferedRecord<?>) o;
+    return isDelete == that.isDelete && Objects.equals(recordKey, that.recordKey) && Objects.equals(orderingValue, that.orderingValue)
+        && Objects.equals(record, that.record) && Objects.equals(schemaId, that.schemaId);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(recordKey, orderingValue, record, schemaId, isDelete);
   }
 }

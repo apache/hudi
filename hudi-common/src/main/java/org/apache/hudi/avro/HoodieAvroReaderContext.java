@@ -34,7 +34,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.SpillableMapUtils;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
@@ -132,16 +132,13 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
   }
 
   @Override
-  public HoodieRecord<IndexedRecord> constructHoodieRecord(BufferedRecord<IndexedRecord> bufferedRecord) {
-    if (bufferedRecord.isDelete()) {
-      return SpillableMapUtils.generateEmptyPayload(
-          bufferedRecord.getRecordKey(),
-          partitionPath,
-          bufferedRecord.getOrderingValue(),
-          payloadClass);
-    }
-    HoodieKey hoodieKey = new HoodieKey(bufferedRecord.getRecordKey(), partitionPath);
-    return new HoodieAvroIndexedRecord(hoodieKey, bufferedRecord.getRecord());
+  public HoodieRecord<IndexedRecord> constructHoodieDataRecord(BufferedRecord<IndexedRecord> bufferedRecord) {
+    return new HoodieAvroIndexedRecord(new HoodieKey(bufferedRecord.getRecordKey(), partitionPath), bufferedRecord.getRecord());
+  }
+
+  @Override
+  protected HoodieRecord.HoodieRecordType getRecordType() {
+    return HoodieRecord.HoodieRecordType.AVRO;
   }
 
   @Override

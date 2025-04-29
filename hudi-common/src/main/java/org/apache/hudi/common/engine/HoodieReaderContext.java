@@ -20,6 +20,9 @@
 package org.apache.hudi.common.engine;
 
 import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.model.HoodieEmptyRecord;
+import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -340,11 +343,32 @@ public abstract class HoodieReaderContext<T> {
 
   /**
    * Constructs a new {@link HoodieRecord} based on the given buffered record {@link BufferedRecord}.
+   * Safe to assume that the buffered record is not a delete.
    *
    * @param bufferedRecord  The {@link BufferedRecord} object with engine-specific row
    * @return A new instance of {@link HoodieRecord}.
    */
-  public abstract HoodieRecord<T> constructHoodieRecord(BufferedRecord<T> bufferedRecord);
+  protected abstract HoodieRecord<T> constructHoodieDataRecord(BufferedRecord<T> bufferedRecord);
+
+  /**
+   * Constructs a new {@link HoodieRecord} based on the given buffered record {@link BufferedRecord}.
+   *
+   * @param bufferedRecord  The {@link BufferedRecord} object with engine-specific row
+   * @return A new instance of {@link HoodieRecord}.
+   */
+  public HoodieRecord<T> constructHoodieRecord(BufferedRecord<T> bufferedRecord) {
+    if (bufferedRecord.isDelete()) {
+      return new HoodieEmptyRecord<>(
+          new HoodieKey(bufferedRecord.getRecordKey(), null),
+          HoodieOperation.DELETE,
+          bufferedRecord.getOrderingValue(),
+          getRecordType());
+    } else {
+      return constructHoodieDataRecord(bufferedRecord);
+    }
+  }
+
+  protected abstract HoodieRecord.HoodieRecordType getRecordType();
 
   /**
    * Seals the engine-specific record to make sure the data referenced in memory do not change.
