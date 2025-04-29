@@ -101,7 +101,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     //1. prepare data and assert data result
     List<FileSlice> firstPartitionCommit2FileSlices = new ArrayList<>();
     List<FileSlice> secondPartitionCommit2FileSlices = new ArrayList<>();
-    HoodieWriteConfig cfg = getConfigBuilder().withRollbackUsingMarkers(isUsingMarkers).withAutoCommit(false).build();
+    HoodieWriteConfig cfg = getConfigBuilder().withRollbackUsingMarkers(isUsingMarkers).build();
     twoUpsertCommitDataWithTwoPartitions(firstPartitionCommit2FileSlices, secondPartitionCommit2FileSlices, cfg, !isUsingMarkers);
     List<HoodieLogFile> firstPartitionCommit2LogFiles = new ArrayList<>();
     List<HoodieLogFile> secondPartitionCommit2LogFiles = new ArrayList<>();
@@ -166,7 +166,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     List<FileSlice> firstPartitionCommit2FileSlices = new ArrayList<>();
     List<FileSlice> secondPartitionCommit2FileSlices = new ArrayList<>();
     HoodieWriteConfig cfg = getConfigBuilder()
-        .withRollbackUsingMarkers(false).withAutoCommit(false)
+        .withRollbackUsingMarkers(false)
         .withMetadataConfig(
             HoodieMetadataConfig.newBuilder().enable(true).build())
         .build();
@@ -184,7 +184,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
             .withLogCompactionBlocksThreshold(1)
             .withMaxNumDeltaCommitsBeforeCompaction(1)
             .withInlineCompactionTriggerStrategy(CompactionTriggerStrategy.NUM_COMMITS).build())
-        .withRollbackUsingMarkers(false).withAutoCommit(false)
+        .withRollbackUsingMarkers(false)
         .withMetadataConfig(
             HoodieMetadataConfig.newBuilder().enable(false).build())
         .build();
@@ -255,7 +255,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
   @Test
   public void testMergeOnReadRestoreCompactionCommit() throws IOException {
     boolean isUsingMarkers = false;
-    HoodieWriteConfig cfg = getConfigBuilder().withRollbackUsingMarkers(isUsingMarkers).withAutoCommit(false).build();
+    HoodieWriteConfig cfg = getConfigBuilder().withRollbackUsingMarkers(isUsingMarkers).build();
 
     // 1. ingest data to partition 3.
     //just generate two partitions
@@ -348,7 +348,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
         .withEmbeddedTimelineServerEnabled(true).withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withEnableBackupForRemoteFileSystemView(false) // Fail test if problem connecting to timeline-server
             .build())
-        .withRollbackUsingMarkers(false).withAutoCommit(false).build();
+        .withRollbackUsingMarkers(false).build();
 
     //1. prepare data
     new HoodieTestDataGenerator().writePartitionMetadata(storage,

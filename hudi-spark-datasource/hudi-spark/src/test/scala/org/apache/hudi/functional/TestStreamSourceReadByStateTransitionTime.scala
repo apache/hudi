@@ -46,8 +46,7 @@ class TestStreamSourceReadByStateTransitionTime extends TestStreamingSource {
           .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)
 
         val writeConfig = HoodieWriteConfig.newBuilder()
-          .withAutoCommit(false)
-          .withEngineType(EngineType.SPARK)
+            .withEngineType(EngineType.SPARK)
           .withPath(tablePath)
           .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
           .withCleanConfig(HoodieCleanConfig.newBuilder()

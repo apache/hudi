@@ -696,12 +696,12 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
                                       Function3<List<WriteStatus>, HoodieJavaWriteClient, List<HoodieRecord>, String> writeFn,
                                       boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords, int expTotalCommits,
                                       boolean filterForCommitTimeWithAssert, InstantGenerator instantGenerator,
-                                      boolean leaveInflightCommit) throws Exception {
+                                      boolean skipCommit) throws Exception {
 
     List<HoodieRecord> records = recordGenFunction.apply(newCommitTime, numRecordsInThisCommit);
     return writeBatchHelper(client, newCommitTime, prevCommitTime, commitTimesBetweenPrevAndNew, initCommitTime,
         numRecordsInThisCommit, records, writeFn, assertForCommit, expRecordsInThisCommit, expTotalRecords,
-        expTotalCommits, filterForCommitTimeWithAssert, instantGenerator, leaveInflightCommit);
+        expTotalCommits, filterForCommitTimeWithAssert, instantGenerator, skipCommit);
   }
 
   public List<WriteStatus> writeBatch(HoodieJavaWriteClient client, String newCommitTime, String prevCommitTime,
@@ -735,14 +735,14 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
                                              Function3<List<WriteStatus>, HoodieJavaWriteClient, List<HoodieRecord>, String> writeFn,
                                              boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords,
                                              int expTotalCommits, boolean filterForCommitTimeWithAssert, InstantGenerator instantGenerator,
-                                             boolean leaveInflightCommit) throws IOException {
+                                             boolean skipCommit) throws IOException {
     // Write 1 (only inserts)
     client.startCommitWithTime(newCommitTime);
 
     List<WriteStatus> result = writeFn.apply(client, records, newCommitTime);
     assertNoWriteErrors(result);
 
-    if (!leaveInflightCommit) {
+    if (!skipCommit) {
       client.commit(newCommitTime, result);
     }
     // check the partition metadata is written out

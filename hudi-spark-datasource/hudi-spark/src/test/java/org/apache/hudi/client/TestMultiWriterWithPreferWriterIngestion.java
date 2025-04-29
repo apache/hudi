@@ -104,7 +104,7 @@ public class TestMultiWriterWithPreferWriterIngestion extends HoodieClientTestBa
         .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
         .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class)
             .withConflictResolutionStrategy(new PreferWriterConflictResolutionStrategy())
-            .build()).withAutoCommit(false).withProperties(properties).build();
+            .build()).withProperties(properties).build();
     Set<String> validInstants = new HashSet<>();
     // Create the first commit with inserts
     SparkRDDWriteClient client = getHoodieWriteClient(cfg);
@@ -211,7 +211,7 @@ public class TestMultiWriterWithPreferWriterIngestion extends HoodieClientTestBa
         .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
         .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class)
             .withConflictResolutionStrategy(new PreferWriterConflictResolutionStrategy())
-            .build()).withAutoCommit(false).withProperties(properties).build();
+            .build()).withProperties(properties).build();
     SparkRDDWriteClient client1 = getHoodieWriteClient(cfg);
     // Create the first commit
     String instant1 = client1.createNewInstantTime();

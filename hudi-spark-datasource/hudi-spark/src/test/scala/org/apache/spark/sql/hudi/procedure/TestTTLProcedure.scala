@@ -113,7 +113,6 @@ class TestTTLProcedure extends HoodieSparkProcedureTestBase with SparkDatasetMix
       .newBuilder
       .withPath(basePath)
       .withSchema(TRIP_EXAMPLE_SCHEMA)
-      .withAutoCommit(autoCommit)
       .withPreCombineField("_row_key")
       .forTable(tableName)
 

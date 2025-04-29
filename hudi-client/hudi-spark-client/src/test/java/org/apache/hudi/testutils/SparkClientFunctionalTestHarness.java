@@ -330,9 +330,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
     List<WriteStatus> statuses = statusesRdd.collect();
     // Verify there are no errors
     assertNoWriteErrors(statuses);
-    //if (doExplicitCommit) {
     client.commit(commitTime, statusesRdd);
-    //}
     assertFileSizesEqual(statuses, status -> FSUtils.getFileSize(
         reloadedMetaClient.getStorage(),
         new StoragePath(reloadedMetaClient.getBasePath(), status.getStat().getPath())));

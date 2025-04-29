@@ -592,7 +592,6 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
         .withPath(basePath)
         .withSchema(jsonSchema)
         .withParallelism(2, 2)
-        .withAutoCommit(false)
         .withRecordMergeMode(RecordMergeMode.CUSTOM)
         .withPayloadConfig(
             HoodiePayloadConfig.newBuilder()

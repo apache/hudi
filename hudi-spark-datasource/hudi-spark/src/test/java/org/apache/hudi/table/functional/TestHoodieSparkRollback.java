@@ -109,7 +109,6 @@ public class TestHoodieSparkRollback extends SparkClientFunctionalTestHarness {
         .withSchema(TRIP_EXAMPLE_SCHEMA)
         .withParallelism(2, 2)
         .withDeleteParallelism(2)
-        .withAutoCommit(autoCommit)
         .withEmbeddedTimelineServerEnabled(false).forTable("test-trip-table")
         .withRollbackUsingMarkers(true)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(mdtEnable).build())

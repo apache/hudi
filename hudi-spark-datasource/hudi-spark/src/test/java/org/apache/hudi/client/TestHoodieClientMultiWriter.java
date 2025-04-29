@@ -285,7 +285,6 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
             .withSecondaryStorageType(FileSystemViewStorageType.MEMORY).build())
         .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
         .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class).build())
-        .withAutoCommit(false)
         .withProperties(properties);
     HoodieWriteConfig writeConfig = writeConfigBuilder.build();
     final SparkRDDWriteClient client1 = getHoodieWriteClient(writeConfig);
@@ -606,7 +605,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
         .withMarkersType(MarkerType.DIRECT.name())
         .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(providerClass)
             .withConflictResolutionStrategy(resolutionStrategy)
-            .build()).withAutoCommit(false).withProperties(lockProperties).build();
+            .build()).withProperties(lockProperties).build();
 
     // Create the first commit
     createCommitWithInserts(writeConfig, getHoodieWriteClient(writeConfig), "000", "001", 200);
@@ -692,7 +691,6 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
         .withLockConfig(HoodieLockConfig.newBuilder()
             .withLockProvider(InProcessLockProvider.class)
             .build())
-        .withAutoCommit(false)
         .withEmbeddedTimelineServerEnabled(false)
         // Timeline-server-based markers are not used for multi-writer tests
         .withMarkersType(MarkerType.DIRECT.name())
@@ -779,7 +777,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
         .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
         .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(providerClass)
             .withConflictResolutionStrategy(resolutionStrategy)
-            .build()).withAutoCommit(false).withProperties(lockProperties)
+            .build()).withProperties(lockProperties)
         .withProperties(properties);
 
     Set<String> validInstants = new HashSet<>();
@@ -955,7 +953,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
         .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
         // Set the config so that heartbeat will expire in 1 second without update
         .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class)
-            .build()).withAutoCommit(false).withProperties(lockProperties);
+            .build()).withProperties(lockProperties);
     Set<String> validInstants = new HashSet<>();
     // Create the first commit with inserts
     HoodieWriteConfig cfg = writeConfigBuilder.build();
@@ -1038,7 +1036,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
         .withMarkersType(MarkerType.DIRECT.name())
         .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class)
             .withConflictResolutionStrategy(new SimpleConcurrentFileWritesConflictResolutionStrategy())
-            .build()).withAutoCommit(false).withProperties(properties);
+            .build()).withProperties(properties);
     HoodieWriteConfig cfg = writeConfigBuilder.build();
     HoodieWriteConfig cfg2 = writeConfigBuilder.build();
     HoodieWriteConfig cfg3 = writeConfigBuilder
@@ -1091,7 +1089,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
         // Timeline-server-based markers are not used for multi-writer tests
         .withMarkersType(MarkerType.DIRECT.name())
         .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class)
-            .build()).withAutoCommit(true).withProperties(lockProperties);
+            .build()).withProperties(lockProperties);
     HoodieWriteConfig cfg = writeConfigBuilder.build();
     HoodieWriteConfig cfg2 = writeConfigBuilder.build();
 
@@ -1179,7 +1177,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
         // Timeline-server-based markers are not used for multi-writer tests
         .withMarkersType(MarkerType.DIRECT.name())
         .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class)
-            .build()).withAutoCommit(true).withProperties(properties);
+            .build()).withProperties(properties);
     HoodieWriteConfig cfg = writeConfigBuilder.build();
     HoodieWriteConfig cfg2 = writeConfigBuilder.build();
 
@@ -1222,7 +1220,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
         .withMarkersType(MarkerType.DIRECT.name())
         .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class)
             .withConflictResolutionStrategy(new SimpleConcurrentFileWritesConflictResolutionStrategy())
-            .build()).withAutoCommit(false);
+            .build());
     HoodieWriteConfig writeConfig1 = writeConfigBuilder.build();
 
     // clean every commit for writer2
@@ -1420,7 +1418,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
           .withAsyncConflictDetectorInitialDelayMs(0)
           .withAsyncConflictDetectorPeriodMs(100)
           .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(lockProvider).build())
-          .withAutoCommit(false).withProperties(properties).build();
+          .withProperties(properties).build();
     } else {
       return getConfigBuilder()
           .withStorageConfig(HoodieStorageConfig.newBuilder().parquetMaxFileSize(20 * 1024).build())
@@ -1445,7 +1443,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
           .withEarlyConflictDetectionStrategy(earlyConflictDetectionStrategy)
           .withAsyncConflictDetectorInitialDelayMs(0)
           .withAsyncConflictDetectorPeriodMs(100)
-          .withAutoCommit(false).withProperties(properties).build();
+          .withProperties(properties).build();
     }
   }
 }

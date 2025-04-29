@@ -556,7 +556,6 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
     HoodieWriteConfig cfg = getConfigBuilder(false, rollbackUsingMarkers, IndexType.INMEMORY)
         .withAvroSchemaValidate(false)
         .withAllowAutoEvolutionColumnDrop(true)
-        .withAutoCommit(false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).withMetadataIndexColumnStats(false).build())
         // in this test we mock few entries in timeline. hence col stats initialization does not work.
         .build();
@@ -645,7 +644,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
    */
   @Test
   public void testRollingStatsWithSmallFileHandling() throws Exception {
-    HoodieWriteConfig cfg = getConfigBuilder(false, IndexType.INMEMORY).withAutoCommit(false).build();
+    HoodieWriteConfig cfg = getConfigBuilder(false, IndexType.INMEMORY).build();
 
     setUp(cfg.getProps());
 

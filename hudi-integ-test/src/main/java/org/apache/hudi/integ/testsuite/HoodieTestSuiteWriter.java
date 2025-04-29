@@ -93,7 +93,6 @@ public abstract class HoodieTestSuiteWriter implements Serializable {
 
     HoodieWriteConfig.Builder builder =
         HoodieWriteConfig.newBuilder().combineInput(true, true).withPath(cfg.targetBasePath)
-            .withAutoCommit(false)
             .withPayloadConfig(HoodiePayloadConfig.newBuilder()
                 .withPayloadOrderingField(cfg.sourceOrderingField)
                 .withPayloadClass(cfg.payloadClassName)

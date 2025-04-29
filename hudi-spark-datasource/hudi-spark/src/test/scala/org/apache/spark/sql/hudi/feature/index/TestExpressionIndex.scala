@@ -2304,7 +2304,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
   private def getWriteConfigBuilder(hudiOpts: Map[String, String], basePath: String): HoodieWriteConfig.Builder = {
     val props = TypedProperties.fromMap(JavaConverters.mapAsJavaMapConverter(hudiOpts).asJava)
     HoodieWriteConfig.newBuilder()
-      .withAutoCommit(false)
+
       .withProps(props)
       .withPath(basePath)
   }
