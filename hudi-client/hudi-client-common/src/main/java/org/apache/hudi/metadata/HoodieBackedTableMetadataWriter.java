@@ -794,12 +794,11 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         // TODO(yihua): directly use indexer map from the constructor instead of
         //  recomputing the records per partition
         // TODO(yihua): Take care of custom partition path to partition type handling
-        getMetadataPartitionsToUpdate().stream()
-            .map(partition -> MetadataPartitionType.fromPartitionPath(partition))
-            .flatMap(partitionType ->
-                enabledIndexBuilderMap.get(partitionType)
-                    .update(instantTime, getTableMetadata(),
-                        Lazy.lazily(this::getMetadataView), commitMetadata).stream())
+        enabledIndexBuilderMap.values().stream()
+            //.map(partition -> MetadataPartitionType.fromPartitionPath(partition))
+            .flatMap(indexer -> indexer.update(
+                instantTime, getTableMetadata(),
+                Lazy.lazily(this::getMetadataView), commitMetadata).stream())
             .collect(Collectors.toList()));
     //.collect(Collectors.toMap(
     //    Function.identity(),
