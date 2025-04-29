@@ -200,7 +200,7 @@ public class DataSourceUtils {
             .withPayloadClass(parameters.getOrDefault(DataSourceWriteOptions.PAYLOAD_CLASS_NAME().key(),
                 parameters.getOrDefault(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), HoodieTableConfig.DEFAULT_PAYLOAD_CLASS_NAME)))
             .withPayloadOrderingField(parameters.getOrDefault(DataSourceWriteOptions.PRECOMBINE_FIELD().key(),
-                parameters.getOrDefault(HoodieTableConfig.PRECOMBINE_FIELD, HoodieTableConfig.PRECOMBINE_FIELD.defaultValue())))
+                parameters.getOrDefault(HoodieTableConfig.PRECOMBINE_FIELD, null)))
             .build())
         // override above with Hoodie configs specified as options.
         .withProps(parameters).build();
