@@ -23,8 +23,6 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
-import org.apache.hudi.common.model.HoodieEmptyRecord;
-import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieSparkRecord;
@@ -95,16 +93,15 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
   }
 
   @Override
-  public HoodieRecord<InternalRow> constructHoodieRecord(BufferedRecord<InternalRow> bufferedRecord) {
-    if (bufferedRecord.isDelete()) {
-      return new HoodieEmptyRecord<>(
-          new HoodieKey(bufferedRecord.getRecordKey(), null),
-          HoodieRecord.HoodieRecordType.SPARK);
-    }
-
+  public HoodieRecord<InternalRow> constructHoodieDataRecord(BufferedRecord<InternalRow> bufferedRecord) {
     Schema schema = getSchemaFromBufferRecord(bufferedRecord);
     InternalRow row = bufferedRecord.getRecord();
     return new HoodieSparkRecord(row, HoodieInternalRowUtils.getCachedSchema(schema));
+  }
+
+  @Override
+  protected HoodieRecord.HoodieRecordType getRecordType() {
+    return HoodieRecord.HoodieRecordType.SPARK;
   }
 
   @Override

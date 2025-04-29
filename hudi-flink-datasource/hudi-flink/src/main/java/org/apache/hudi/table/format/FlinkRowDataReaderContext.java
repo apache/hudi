@@ -25,7 +25,6 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
@@ -43,8 +42,8 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.AvroToRowDataConverters;
-import org.apache.hudi.util.RowProjection;
 import org.apache.hudi.util.RowDataAvroQueryContexts;
+import org.apache.hudi.util.RowProjection;
 import org.apache.hudi.util.SchemaEvolvingRowDataProjection;
 
 import org.apache.avro.Schema;
@@ -148,15 +147,16 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
   }
 
   @Override
-  public HoodieRecord<RowData> constructHoodieRecord(BufferedRecord<RowData> bufferedRecord) {
+  public HoodieRecord<RowData> constructHoodieDataRecord(BufferedRecord<RowData> bufferedRecord) {
     HoodieKey hoodieKey = new HoodieKey(bufferedRecord.getRecordKey(), null);
-    // delete record
-    if (bufferedRecord.isDelete()) {
-      return new HoodieEmptyRecord<>(hoodieKey, HoodieOperation.DELETE, bufferedRecord.getOrderingValue(), HoodieRecord.HoodieRecordType.FLINK);
-    }
     RowData rowData = bufferedRecord.getRecord();
     HoodieOperation operation = HoodieOperation.fromValue(rowData.getRowKind().toByteValue());
     return new HoodieFlinkRecord(hoodieKey, operation, bufferedRecord.getOrderingValue(), rowData);
+  }
+
+  @Override
+  protected HoodieRecord.HoodieRecordType getRecordType() {
+    return HoodieRecord.HoodieRecordType.FLINK;
   }
 
   @Override

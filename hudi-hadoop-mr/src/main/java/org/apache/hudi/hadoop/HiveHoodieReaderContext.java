@@ -24,7 +24,6 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
-import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
@@ -223,15 +222,15 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   }
 
   @Override
-  public HoodieRecord<ArrayWritable> constructHoodieRecord(BufferedRecord<ArrayWritable> bufferedRecord) {
-    if (bufferedRecord.isDelete()) {
-      return new HoodieEmptyRecord<>(
-          new HoodieKey(bufferedRecord.getRecordKey(), null),
-          HoodieRecord.HoodieRecordType.HIVE);
-    }
+  public HoodieRecord<ArrayWritable> constructHoodieDataRecord(BufferedRecord<ArrayWritable> bufferedRecord) {
     Schema schema = getSchemaFromBufferRecord(bufferedRecord);
     ArrayWritable writable = bufferedRecord.getRecord();
     return new HoodieHiveRecord(new HoodieKey(bufferedRecord.getRecordKey(), null), writable, schema, objectInspectorCache);
+  }
+
+  @Override
+  protected HoodieRecord.HoodieRecordType getRecordType() {
+    return HoodieRecord.HoodieRecordType.HIVE;
   }
 
   @Override

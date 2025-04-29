@@ -27,6 +27,7 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.OverwriteWithLatestMerger;
@@ -35,7 +36,6 @@ import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
@@ -161,15 +161,13 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
   }
 
   @Override
-  public HoodieRecord<IndexedRecord> constructHoodieRecord(BufferedRecord<IndexedRecord> bufferedRecord) {
-    if (bufferedRecord.isDelete()) {
-      return SpillableMapUtils.generateEmptyPayload(
-          bufferedRecord.getRecordKey(),
-          null,
-          bufferedRecord.getOrderingValue(),
-          payloadClass);
-    }
-    return new HoodieAvroIndexedRecord(bufferedRecord.getRecord());
+  public HoodieRecord<IndexedRecord> constructHoodieDataRecord(BufferedRecord<IndexedRecord> bufferedRecord) {
+    return new HoodieAvroIndexedRecord(new HoodieKey(bufferedRecord.getRecordKey(), null), bufferedRecord.getRecord());
+  }
+
+  @Override
+  protected HoodieRecord.HoodieRecordType getRecordType() {
+    return HoodieRecord.HoodieRecordType.AVRO;
   }
 
   @Override
