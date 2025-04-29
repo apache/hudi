@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
@@ -93,8 +94,8 @@ public class EngineBasedMerger<T> {
           combinedRecord = combinedRecord.rewriteRecordWithNewSchema(mergedRecord.get().getRight(), props, readerSchema);
         }
         // If pre-combine returns existing record, no need to update it
-        if (combinedRecord.getData() != olderOption.orElse(null)) {
-          return BufferedRecord.forRecordWithContext(combinedRecord, combinedRecordAndSchema.getRight(), readerContext, props);
+        if (combinedRecord.getData() != olderOption.map(BufferedRecord::getRecord).orElse(null)) {
+          return BufferedRecord.forRecordWithContext(combinedRecord, readerSchema, readerContext, props);
         }
         return older;
       }).orElseGet(() -> getLatestAsDeleteRecord(newer, older));
@@ -106,22 +107,23 @@ public class EngineBasedMerger<T> {
           return getNewerRecordWithEventTimeOrdering(newer, older);
         case CUSTOM:
         default:
+          Option<BufferedRecord<T>> mergeResult;
           if (payloadClass.isPresent()) {
             Option<Pair<HoodieRecord, Schema>> mergedRecord = getMergedRecord(older, newer);
-            return mergedRecord.map(combinedRecordAndSchema -> {
+            mergeResult = mergedRecord.map(combinedRecordAndSchema -> {
               T record = readerContext.convertAvroRecord((IndexedRecord) combinedRecordAndSchema.getLeft()
-                  .rewriteRecordWithNewSchema(mergedRecord.get().getRight(), props, readerSchema));
-              return BufferedRecord.forConvertedRecord(record, combinedRecordAndSchema.getLeft(), combinedRecordAndSchema.getRight(), readerContext, props);
-            }).orElseGet(() -> getLatestAsDeleteRecord(newer, older));
+                  .rewriteRecordWithNewSchema(combinedRecordAndSchema.getRight(), props, readerSchema).getData());
+              return BufferedRecord.forConvertedRecord(record, combinedRecordAndSchema.getLeft(), readerSchema, readerContext, props);
+            });
           } else {
             Option<Pair<HoodieRecord, Schema>> mergedRecord = recordMerger.get().merge(
                 readerContext.constructHoodieRecord(older), readerContext.getSchemaFromBufferRecord(older),
                 readerContext.constructHoodieRecord(newer), readerContext.getSchemaFromBufferRecord(newer), props);
-            return mergedRecord.map(combinedRecordAndSchema ->
+            mergeResult = mergedRecord.map(combinedRecordAndSchema ->
                 BufferedRecord.forRecordWithContext((HoodieRecord<T>) combinedRecordAndSchema.getLeft().rewriteRecordWithNewSchema(mergedRecord.get().getRight(), props, readerSchema),
-                    readerSchema, readerContext, props))
-                .orElseGet(() -> getLatestAsDeleteRecord(newer, older));
+                    readerSchema, readerContext, props));
           }
+          return mergeResult.orElseGet(() -> getLatestAsDeleteRecord(newer, older));
       }
     }
   }
@@ -167,7 +169,7 @@ public class EngineBasedMerger<T> {
       Schema recordSchema = readerContext.getSchemaFromBufferRecord(bufferedRecord);
       record = readerContext.convertToAvroRecord(bufferedRecord.getRecord(), recordSchema);
     }
-    return new HoodieAvroRecord<>(HoodieRecordUtils.loadPayload(payloadClass.get(), record, bufferedRecord.getOrderingValue()));
+    return new HoodieAvroRecord<>(new HoodieKey(bufferedRecord.getRecordKey(), null), HoodieRecordUtils.loadPayload(payloadClass.get(), record, bufferedRecord.getOrderingValue()));
   }
 
   /**
