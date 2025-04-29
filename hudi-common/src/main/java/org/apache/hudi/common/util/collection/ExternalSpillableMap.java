@@ -227,7 +227,9 @@ public class ExternalSpillableMap<T extends Serializable, R> implements Map<T, R
       } else if (this.inMemoryMap.size() % NUMBER_OF_RECORDS_TO_ESTIMATE_PAYLOAD_SIZE == 0) {
         this.estimatedPayloadSize = (long) (this.estimatedPayloadSize * 0.9 + (keySizeEstimator.sizeEstimate(key) + valueSizeEstimator.sizeEstimate(value)) * 0.1);
         this.currentInMemoryMapSize = this.inMemoryMap.size() * this.estimatedPayloadSize;
-        LOG.debug("{} : Updated Estimated Payload size {}", loggingContext, this.estimatedPayloadSize);
+        if (this.inMemoryMap.size() / NUMBER_OF_RECORDS_TO_ESTIMATE_PAYLOAD_SIZE == 1) {
+          LOG.info("{} : Updated Estimated Payload size {}", loggingContext, this.estimatedPayloadSize);
+        }
       }
       this.currentInMemoryMapSize += this.estimatedPayloadSize;
       // Remove the old version of the record from disk first to avoid data duplication.
