@@ -250,7 +250,9 @@ public class SparkBootstrapCommitActionExecutor<T>
     // Setup correct schema and run bulk insert.
     HoodieWriteConfig writeConfig = new HoodieWriteConfig.Builder()
         .withProps(config.getProps())
-        .withSchema(bootstrapSchema).withInternalAutoCommit(true).build();
+        .withSchema(bootstrapSchema)
+        .withInternalAutoCommit(true)
+        .build();
 
     Option<HoodieWriteMetadata<HoodieData<WriteStatus>>> writeMetadataOption =
         Option.of(getBulkInsertActionExecutor(HoodieJavaRDD.of(inputRecordsRDD), writeConfig).execute());

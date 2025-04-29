@@ -3366,15 +3366,17 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     String commitTime = "0000001";
     List<HoodieRecord> records = dataGen.generateInserts(commitTime, 100);
     client.startCommitWithTime(commitTime);
-    List<WriteStatus> writeStatuses = client.insert(jsc.parallelize(records, 1), commitTime).collect();
-    assertNoWriteErrors(writeStatuses);
+    JavaRDD<WriteStatus> writeStatuses = client.insert(jsc.parallelize(records, 1), commitTime);
+    assertNoWriteErrors(writeStatuses.collect());
+    client.commit(commitTime, writeStatuses);
 
     // Insert second batch 0000002
     commitTime = "0000002";
     records = dataGen.generateInserts(commitTime, 100);
     client.startCommitWithTime(commitTime);
-    writeStatuses = client.insert(jsc.parallelize(records, 1), commitTime).collect();
-    assertNoWriteErrors(writeStatuses);
+    writeStatuses = client.insert(jsc.parallelize(records, 1), commitTime);
+    assertNoWriteErrors(writeStatuses.collect());
+    client.commit(commitTime, writeStatuses);
 
     // Schedule clustering operation 0000003
     HoodieWriteConfig clusterWriteCfg = getWriteConfigBuilder(true, true, false)
@@ -3425,15 +3427,17 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     String commitTime = "0000001";
     List<HoodieRecord> records = dataGen.generateInserts(commitTime, 100);
     client.startCommitWithTime(commitTime);
-    List<WriteStatus> writeStatuses = client.insert(jsc.parallelize(records, 1), commitTime).collect();
-    assertNoWriteErrors(writeStatuses);
+    JavaRDD<WriteStatus> writeStatuses = client.insert(jsc.parallelize(records, 1), commitTime);
+    assertNoWriteErrors(writeStatuses.collect());
+    client.commit(commitTime, writeStatuses);
 
     // Insert second batch 0000002
     commitTime = "0000002";
     records = dataGen.generateInserts(commitTime, 100);
     client.startCommitWithTime(commitTime);
-    writeStatuses = client.insert(jsc.parallelize(records, 1), commitTime).collect();
-    assertNoWriteErrors(writeStatuses);
+    writeStatuses = client.insert(jsc.parallelize(records, 1), commitTime);
+    assertNoWriteErrors(writeStatuses.collect());
+    client.commit(commitTime, writeStatuses);
 
     // Schedule clustering operation 0000003
     HoodieWriteConfig clusterWriteCfg = getWriteConfigBuilder(true, true, false)
@@ -3450,8 +3454,9 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     records = dataGen.generateInserts(commitTime, 100);
     client = getHoodieWriteClient(cfg);
     client.startCommitWithTime(commitTime);
-    writeStatuses = client.insert(jsc.parallelize(records, 1), commitTime).collect();
-    assertNoWriteErrors(writeStatuses);
+    writeStatuses = client.insert(jsc.parallelize(records, 1), commitTime);
+    assertNoWriteErrors(writeStatuses.collect());
+    client.commit(commitTime, writeStatuses);
 
     // verify metadata table
     validateMetadata(client);
