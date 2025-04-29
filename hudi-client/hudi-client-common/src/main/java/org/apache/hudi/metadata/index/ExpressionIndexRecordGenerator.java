@@ -21,9 +21,11 @@ package org.apache.hudi.metadata.index;
 
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.EngineType;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.avro.Schema;
@@ -52,6 +54,24 @@ public interface ExpressionIndexRecordGenerator {
       int parallelism, Schema readerSchema,
       StorageConfiguration<?> storageConf,
       String instantTime);
+
+  /**
+   * Loads the file slices touched by the commit due to given instant time and returns
+   * the records for the expression index. This generates partition stat record updates
+   * along with EI column stat update records. Partition stat record updates are generated
+   * by reloading the affected partitions column range metadata from EI and then merging
+   * it with partition stat record from the updated data.
+   *
+   * @param commitMetadata
+   * @param indexPartition
+   * @param instantTime
+   * @return
+   */
+  HoodieData<HoodieRecord> updateFromCommitMetadata(HoodieTableMetaClient dataTableMetaClient,
+                                                    HoodieTableMetadata tableMetadata,
+                                                    HoodieCommitMetadata commitMetadata,
+                                                    String indexPartition,
+                                                    String instantTime);
 
   class FileToIndex {
     private final String partition;

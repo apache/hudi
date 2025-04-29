@@ -21,10 +21,12 @@ package org.apache.hudi.metadata.index;
 
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.EngineType;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.avro.Schema;
@@ -47,6 +49,13 @@ public class FlinkExpressionIndexRecordGenerator implements ExpressionIndexRecor
       Schema readerSchema,
       StorageConfiguration<?> storageConf,
       String instantTime) {
+    throw new HoodieNotSupportedException("Flink engine does not support building expression index yet.");
+  }
+
+  @Override
+  public HoodieData<HoodieRecord> updateFromCommitMetadata(HoodieTableMetaClient dataTableMetaClient,
+                                                           HoodieTableMetadata tableMetadata,
+                                                           HoodieCommitMetadata commitMetadata, String indexPartition, String instantTime) {
     throw new HoodieNotSupportedException("Flink engine does not support building expression index yet.");
   }
 }

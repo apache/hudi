@@ -19,6 +19,7 @@
 
 package org.apache.hudi.metadata.index;
 
+import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -43,6 +44,7 @@ import static org.apache.hudi.metadata.MetadataPartitionType.getValidValues;
 
 public class IndexerFactory {
   public static Indexer getIndexBuilder(MetadataPartitionType partitionType,
+                                        EngineType engineType,
                                         HoodieEngineContext engineContext,
                                         HoodieWriteConfig dataTableWriteConfig,
                                         HoodieTableMetaClient dataTableMetaClient,
@@ -65,9 +67,10 @@ public class IndexerFactory {
             engineContext, dataTableWriteConfig, dataTableMetaClient, indexHelper);
       case RECORD_INDEX:
         return new RecordIndexer(
-            engineContext, dataTableWriteConfig, dataTableMetaClient, table);
+            engineType, engineContext, dataTableWriteConfig, dataTableMetaClient, table);
       case SECONDARY_INDEX:
-        return new SecondaryIndexer(engineContext, dataTableWriteConfig, dataTableMetaClient, indexHelper);
+        return new SecondaryIndexer(
+            engineType, engineContext, dataTableWriteConfig, dataTableMetaClient, indexHelper);
       default:
         throw new HoodieNotSupportedException(
             "Unsupported metadata partition type for indexing: " + partitionType);
@@ -79,6 +82,7 @@ public class IndexerFactory {
    */
   // TODO(yihua): remove MetadataPartitionType#getEnabledIndexBuilderMap
   public static Map<MetadataPartitionType, Indexer> getEnabledIndexBuilderMap(
+      EngineType engineType,
       HoodieEngineContext engineContext,
       HoodieWriteConfig dataTableWriteConfig,
       HoodieTableMetaClient metaClient,
@@ -93,6 +97,6 @@ public class IndexerFactory {
             || partitionType.isMetadataPartitionAvailable(metaClient)))
         .collect(Collectors.toMap(
             Function.identity(), type -> IndexerFactory.getIndexBuilder(
-                type, engineContext, dataTableWriteConfig, metaClient, table, indexHelper)));
+                type, engineType, engineContext, dataTableWriteConfig, metaClient, table, indexHelper)));
   }
 }

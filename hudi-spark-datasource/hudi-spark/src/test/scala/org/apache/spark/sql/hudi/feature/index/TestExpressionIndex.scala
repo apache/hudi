@@ -25,7 +25,6 @@ import org.apache.hudi.HoodieConversionUtils.toProperties
 import org.apache.hudi.avro.model.HoodieMetadataBloomFilter
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.client.utils.SparkMetadataWriterUtils
 import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{FileSlice, HoodieIndexDefinition}
@@ -40,6 +39,7 @@ import org.apache.hudi.index.HoodieIndex
 import org.apache.hudi.index.expression.HoodieExpressionIndex
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieMetadataPayload, MetadataPartitionType}
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartitionStatsIndexKey
+import org.apache.hudi.metadata.index.SparkExpressionIndexRecordGenerator
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.sync.common.HoodieSyncConfig.{META_SYNC_BASE_PATH, META_SYNC_DATABASE_NAME, META_SYNC_NO_PARTITION_METADATA, META_SYNC_TABLE_NAME}
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
@@ -2186,7 +2186,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
       HoodieExpressionIndex.BLOOM_FILTER_NUM_ENTRIES -> "1000",
       HoodieExpressionIndex.DYNAMIC_BLOOM_MAX_ENTRIES -> "1000"
     )
-    val bloomFilterRecords = SparkMetadataWriterUtils.getExpressionIndexRecordsUsingBloomFilter(df, "c5",
+    val bloomFilterRecords = SparkExpressionIndexRecordGenerator.getExpressionIndexRecordsUsingBloomFilter(df, "c5",
       HoodieWriteConfig.newBuilder().withPath("a/b").build(), "",
         HoodieIndexDefinition.newBuilder().withIndexName("random").withIndexOptions(JavaConverters.mapAsJavaMapConverter(indexOptions).asJava).build())
       .getExpressionIndexRecords

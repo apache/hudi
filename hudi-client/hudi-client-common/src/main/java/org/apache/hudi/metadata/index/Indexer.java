@@ -19,7 +19,9 @@
 
 package org.apache.hudi.metadata.index;
 
+import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -39,6 +41,16 @@ public interface Indexer {
       Lazy<HoodieTableFileSystemView> fsView,
       HoodieBackedTableMetadata metadata,
       String instantTimeForPartition) throws IOException;
+
+  List<IndexPartitionData> update(
+      String instantTime,
+      HoodieBackedTableMetadata tableMetadata,
+      Lazy<HoodieTableFileSystemView> lazyFileSystemView,
+      HoodieCommitMetadata commitMetadata);
+
+  List<IndexPartitionData> clean(
+      String instantTime,
+      HoodieCleanMetadata cleanMetadata);
 
   default void updateTableConfig() {
     // No index-specific table config update by default

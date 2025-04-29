@@ -39,7 +39,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.collectColumnRangeMetadata;
+import static org.apache.hudi.metadata.index.columnstats.ColumnStatsIndexer.collectColumnRangeMetadata;
 
 /**
  * Util methods used in tests to fetch col stats records for a log file.
