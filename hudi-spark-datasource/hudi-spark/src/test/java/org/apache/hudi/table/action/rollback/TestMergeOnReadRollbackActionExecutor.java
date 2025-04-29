@@ -196,7 +196,9 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     SparkRDDWriteClient client = getHoodieWriteClient(cfg);
     client.scheduleLogCompactionAtInstant("003", Option.empty());
     HoodieWriteMetadata writeMetadata = client.logCompact("003");
-    client.completeLogCompaction("003", writeMetadata, Option.empty());
+    if (isComplete) {
+      client.completeLogCompaction("003", writeMetadata, Option.empty());
+    }
 
     //3. rollback log compact
     metaClient.reloadActiveTimeline();
@@ -218,7 +220,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     //4. assert the rollback stat
     final HoodieRollbackMetadata execute = mergeOnReadRollbackActionExecutor.execute();
     Map<String, HoodieRollbackPartitionMetadata> rollbackMetadata = execute.getPartitionMetadata();
-    assertEquals(2, rollbackMetadata.size());
+    assertEquals(isComplete ? 2 : 0, rollbackMetadata.size());
 
     for (Map.Entry<String, HoodieRollbackPartitionMetadata> entry : rollbackMetadata.entrySet()) {
       HoodieRollbackPartitionMetadata meta = entry.getValue();
