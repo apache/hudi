@@ -55,6 +55,7 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
@@ -567,6 +568,16 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
         .collect(Collectors.groupingBy(HoodieFileGroupId::getPartitionPath, Collectors.mapping(HoodieFileGroupId::getFileId, Collectors.toList())));
   }
 
+  /**
+   * Check if any validators are configured and run those validations. If any of the validations fail, throws HoodieValidationException.
+   */
+  protected void runPrecommitValidators(HoodieWriteMetadata<O> writeMetadata, HoodieTable table, String instantTime) {
+    if (StringUtils.isNullOrEmpty(config.getPreCommitValidators())) {
+      return;
+    }
+    throw new HoodieIOException("Precommit validation not implemented for all engines yet");
+  }
+
   private void completeClustering(HoodieWriteMetadata<O> clusteringWriteMetadata,
                                   HoodieTable table,
                                   String clusteringCommitTime) {
@@ -591,6 +602,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       replaceCommitMetadata.addWriteStat(writeStat.getPartitionPath(), writeStat);
     }
     clusteringWriteMetadata.setCommitMetadata(Option.of(replaceCommitMetadata));
+    runPrecommitValidators(clusteringWriteMetadata, table, clusteringCommitTime);
 
     // Publish file creation metrics for clustering.
     if (config.isMetricsOn()) {
