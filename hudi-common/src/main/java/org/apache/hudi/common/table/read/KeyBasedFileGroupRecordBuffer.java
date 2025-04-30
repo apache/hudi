@@ -92,7 +92,7 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
     Option<BufferedRecord<T>> existingRecord = Option.ofNullable(records.get(recordKey));
     BufferedRecord<T> merged = merger.merge(existingRecord, Option.of(newLogRecord), enablePartialMerging);
     // if merged result is just the existing record, no need to re-seal
-    if (merged.getRecord() != existingRecord.map(BufferedRecord::getRecord).orElse(null)) {
+    if (existingRecord.map(existing -> !existing.equals(merged)).orElse(true)) {
       records.put(recordKey, merged.toBinary(readerContext));
     }
   }
