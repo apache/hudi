@@ -142,7 +142,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   protected Option<HoodieMetadataMetrics> metrics;
   protected StorageConfiguration<?> storageConf;
   protected final transient HoodieEngineContext engineContext;
-  protected final transient Map<MetadataPartitionType, Indexer> enabledIndexBuilderMap;
+  protected final transient Map<MetadataPartitionType, Indexer> enabledIndexerMap;
   protected final transient ExpressionIndexRecordGenerator expressionIndexRecordGenerator;
   // Is the MDT bootstrapped and ready to be read from
   boolean initialized = false;
@@ -170,8 +170,8 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     this.dataMetaClient = HoodieTableMetaClient.builder().setConf(storageConf.newInstance())
         .setBasePath(dataWriteConfig.getBasePath())
         .setTimeGeneratorConfig(dataWriteConfig.getTimeGeneratorConfig()).build();
-    this.enabledIndexBuilderMap =
-        IndexerFactory.getEnabledIndexBuilderMap(
+    this.enabledIndexerMap =
+        IndexerFactory.getEnabledIndexerMap(
             engineContext, dataWriteConfig, dataMetaClient, getTable(dataWriteConfig, dataMetaClient),
             expressionIndexRecordGenerator);
     this.expressionIndexRecordGenerator = expressionIndexRecordGenerator;
@@ -227,10 +227,6 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     return metadata;
   }
 
-  public Set<MetadataPartitionType> getEnabledPartitionTypes() {
-    return this.enabledIndexBuilderMap.keySet();
-  }
-
   /**
    * Initialize the metadata table if needed.
    *
@@ -255,7 +251,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       if (!dataWriteConfig.isMetadataAsyncIndex()) {
         Set<String> completedPartitions = dataMetaClient.getTableConfig().getMetadataPartitions();
         LOG.info("Async metadata indexing disabled and following partitions already initialized: {}", completedPartitions);
-        this.enabledIndexBuilderMap.keySet().stream()
+        this.enabledIndexerMap.keySet().stream()
             .filter(p -> !completedPartitions.contains(p.getPartitionPath()) && !FILES.equals(p))
             .forEach(metadataPartitionsToInit::add);
       }
@@ -270,12 +266,11 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       // If there is no commit on the dataset yet, use the SOLO_COMMIT_TIMESTAMP as the instant time for initial commit
       // Otherwise, we use the timestamp of the latest completed action.
       String dataTableInstantTime = dataMetaClient.getActiveTimeline().filterCompletedInstants().lastInstant().map(HoodieInstant::requestedTime).orElse(SOLO_COMMIT_TIMESTAMP);
-      if (!initializeFromFilesystem(dataTableInstantTime, metadataPartitionsToInit.stream()
-          .collect(Collectors.toMap(Function.identity(),
-              type -> IndexerFactory.getIndexBuilder(
-                  type, engineContext, dataWriteConfig, dataMetaClient,
-                  // TODO(yihua): Revisit this to make sure we don't recreate table instance
-                  getTable(dataWriteConfig, dataMetaClient), expressionIndexRecordGenerator))), inflightInstantTimestamp)) {
+      if (!initializeFromFilesystem(
+          dataTableInstantTime,
+          metadataPartitionsToInit.stream()
+              .collect(Collectors.toMap(Function.identity(), enabledIndexerMap::get)),
+          inflightInstantTimestamp)) {
         LOG.error("Failed to initialize MDT from filesystem");
         return false;
       }
@@ -293,7 +288,6 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
     // If the un-synced instants have been archived, then
     // the metadata table will need to be initialized again.
-    // TODO(yihua): take care of this in the constructor with indexer map when reinitialization is needed.
     if (exists) {
       try {
         metadataMetaClient = HoodieTableMetaClient.builder()
@@ -776,7 +770,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     }
     // fallback to all enabled partitions if table config returned no partitions
     LOG.debug("There are no partitions to update according to table config. Falling back to enabled partition types in the write config.");
-    return getEnabledPartitionTypes().stream().map(MetadataPartitionType::getPartitionPath).collect(Collectors.toSet());
+    return enabledIndexerMap.keySet().stream().map(MetadataPartitionType::getPartitionPath).collect(Collectors.toSet());
   }
 
   public void buildMetadataPartitions(HoodieEngineContext engineContext, List<HoodieIndexPartitionInfo> indexPartitionInfos, String instantTime) throws IOException {
@@ -794,7 +788,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
       // return early and populate enabledPartitionTypes correctly (check in initialCommit)
       MetadataPartitionType partitionType = fromPartitionPath(relativePartitionPath);
-      if (!enabledIndexBuilderMap.containsKey(partitionType)) {
+      if (!enabledIndexerMap.containsKey(partitionType)) {
         throw new HoodieIndexException(String.format("Indexing for metadata partition: %s is not enabled", partitionType));
       }
       partitionTypes.add(partitionType);
@@ -808,7 +802,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     initializeFromFilesystem(instantTime, partitionTypes
         .stream().collect(Collectors.toMap(
             Function.identity(),
-            enabledIndexBuilderMap::get)), Option.empty());
+            enabledIndexerMap::get)), Option.empty());
   }
 
   /**
@@ -928,7 +922,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   public void update(HoodieCleanMetadata cleanMetadata, String instantTime) {
     mayBeReinitMetadataReader();
     processAndCommit(instantTime, () -> HoodieMetadataWriteUtils.convertMetadataToRecords(engineContext,
-        cleanMetadata, instantTime, dataMetaClient, dataWriteConfig.getMetadataConfig(), enabledIndexBuilderMap,
+        cleanMetadata, instantTime, dataMetaClient, dataWriteConfig.getMetadataConfig(), enabledIndexerMap,
         dataWriteConfig.getBloomIndexParallelism(), Option.of(dataWriteConfig.getRecordMerger().getRecordType())));
     closeInternal();
   }

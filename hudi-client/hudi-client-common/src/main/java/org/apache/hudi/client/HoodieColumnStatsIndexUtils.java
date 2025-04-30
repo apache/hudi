@@ -60,7 +60,6 @@ public class HoodieColumnStatsIndexUtils {
       dataTable.getMetaClient().reloadTableConfig();
       try {
         // update data table's table config for list of columns indexed.
-        // TODO(yihua): replace this with indexer
         List<String> columnsToIndex = new ArrayList<>(HoodieTableMetadataUtil.getColumnsToIndex(commitMetadata, dataTable.getMetaClient(), config.getMetadataConfig(),
             Option.of(config.getRecordMerger().getRecordType())).keySet());
         // if col stats is getting updated, lets also update list of columns indexed if changed.

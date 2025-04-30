@@ -78,7 +78,7 @@ public class IndexerFactory {
    * Returns the list of metadata partition types enabled based on the metadata config and table config.
    */
   // TODO(yihua): remove MetadataPartitionType#getEnabledIndexBuilderMap
-  public static Map<MetadataPartitionType, Indexer> getEnabledIndexBuilderMap(
+  public static Map<MetadataPartitionType, Indexer> getEnabledIndexerMap(
       HoodieEngineContext engineContext,
       HoodieWriteConfig dataTableWriteConfig,
       HoodieTableMetaClient metaClient,
