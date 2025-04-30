@@ -49,6 +49,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.EAGER;
@@ -75,31 +76,36 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf,
                                                  HoodieWriteConfig writeConfig,
                                                  HoodieEngineContext context,
+                                                 Option<Set<MetadataPartitionType>> partitionTypesOpt,
                                                  Option<String> inflightInstantTimestamp) {
     return new SparkHoodieBackedTableMetadataWriter(
-        conf, writeConfig, EAGER, context, inflightInstantTimestamp);
+        conf, writeConfig, EAGER, context, partitionTypesOpt, inflightInstantTimestamp);
   }
 
   public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf,
                                                  HoodieWriteConfig writeConfig,
                                                  HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                                  HoodieEngineContext context,
+                                                 Option<Set<MetadataPartitionType>> partitionTypesOpt,
                                                  Option<String> inflightInstantTimestamp) {
     return new SparkHoodieBackedTableMetadataWriter(
-        conf, writeConfig, failedWritesCleaningPolicy, context, inflightInstantTimestamp);
+        conf, writeConfig, failedWritesCleaningPolicy, context, partitionTypesOpt, inflightInstantTimestamp);
   }
 
-  public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf, HoodieWriteConfig writeConfig,
+  public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf,
+                                                 HoodieWriteConfig writeConfig,
                                                  HoodieEngineContext context) {
-    return create(conf, writeConfig, context, Option.empty());
+    return create(conf, writeConfig, context, Option.empty(), Option.empty());
   }
 
   SparkHoodieBackedTableMetadataWriter(StorageConfiguration<?> hadoopConf,
                                        HoodieWriteConfig writeConfig,
                                        HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                        HoodieEngineContext engineContext,
+                                       Option<Set<MetadataPartitionType>> partitionTypesOpt,
                                        Option<String> inflightInstantTimestamp) {
     super(hadoopConf, writeConfig, failedWritesCleaningPolicy, engineContext,
+        partitionTypesOpt,
         // TODO(yihua): revisit metadata write config
         new SparkExpressionIndexRecordGenerator(engineContext, writeConfig, createMetadataWriteConfig(writeConfig,
             failedWritesCleaningPolicy)),

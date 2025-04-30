@@ -49,6 +49,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.EAGER;
@@ -63,7 +64,7 @@ public class SparkHoodieBackedTableMetadataWriterTableVersionSix extends HoodieB
                                                  HoodieEngineContext context,
                                                  Option<String> inflightInstantTimestamp) {
     return new SparkHoodieBackedTableMetadataWriterTableVersionSix(
-        conf, writeConfig, EAGER, context, inflightInstantTimestamp);
+        conf, writeConfig, EAGER, context, Option.empty(), inflightInstantTimestamp);
   }
 
   public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf,
@@ -72,7 +73,7 @@ public class SparkHoodieBackedTableMetadataWriterTableVersionSix extends HoodieB
                                                  HoodieEngineContext context,
                                                  Option<String> inflightInstantTimestamp) {
     return new SparkHoodieBackedTableMetadataWriterTableVersionSix(
-        conf, writeConfig, failedWritesCleaningPolicy, context, inflightInstantTimestamp);
+        conf, writeConfig, failedWritesCleaningPolicy, context, Option.empty(), inflightInstantTimestamp);
   }
 
   public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf, HoodieWriteConfig writeConfig,
@@ -84,8 +85,10 @@ public class SparkHoodieBackedTableMetadataWriterTableVersionSix extends HoodieB
                                        HoodieWriteConfig writeConfig,
                                        HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                        HoodieEngineContext engineContext,
+                                                      Option<Set<MetadataPartitionType>> partitionTypesOpt,
                                        Option<String> inflightInstantTimestamp) {
     super(hadoopConf, writeConfig, failedWritesCleaningPolicy, engineContext,
+        partitionTypesOpt,
         new SparkExpressionIndexRecordGenerator(engineContext, writeConfig, createMetadataWriteConfig(writeConfig,
             failedWritesCleaningPolicy)),
         inflightInstantTimestamp);

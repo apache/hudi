@@ -26,6 +26,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.storage.StorageConfiguration;
 
+import java.util.Set;
+
 /**
  * Factory class for generating SparkHoodieBackedTableMetadataWriter based on the table version.
  */
@@ -36,16 +38,22 @@ public class SparkMetadataWriterFactory {
     if (tableConfig.getTableVersion().lesserThan(HoodieTableVersion.EIGHT)) {
       return SparkHoodieBackedTableMetadataWriterTableVersionSix.create(conf, writeConfig, context, inflightInstantTimestamp);
     } else {
-      return SparkHoodieBackedTableMetadataWriter.create(conf, writeConfig, context, inflightInstantTimestamp);
+      return SparkHoodieBackedTableMetadataWriter.create(
+          conf, writeConfig, context, Option.empty(), inflightInstantTimestamp);
     }
   }
 
   public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf, HoodieWriteConfig writeConfig, HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
-                                                 HoodieEngineContext context, Option<String> inflightInstantTimestamp, HoodieTableConfig tableConfig) {
+                                                 HoodieEngineContext context,
+                                                 Option<Set<MetadataPartitionType>> partitionTypesOpt,
+                                                 Option<String> inflightInstantTimestamp,
+                                                 HoodieTableConfig tableConfig) {
     if (tableConfig.getTableVersion().lesserThan(HoodieTableVersion.EIGHT)) {
-      return new SparkHoodieBackedTableMetadataWriterTableVersionSix(conf, writeConfig, failedWritesCleaningPolicy, context, inflightInstantTimestamp);
+      return new SparkHoodieBackedTableMetadataWriterTableVersionSix(
+          conf, writeConfig, failedWritesCleaningPolicy, context, partitionTypesOpt, inflightInstantTimestamp);
     } else {
-      return new SparkHoodieBackedTableMetadataWriter(conf, writeConfig, failedWritesCleaningPolicy, context, inflightInstantTimestamp);
+      return new SparkHoodieBackedTableMetadataWriter(
+          conf, writeConfig, failedWritesCleaningPolicy, context, partitionTypesOpt, inflightInstantTimestamp);
     }
   }
 

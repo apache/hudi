@@ -231,7 +231,7 @@ public class HoodieJavaWriteClient<T> extends
     }
 
     try (HoodieTableMetadataWriter writer = JavaHoodieBackedTableMetadataWriter.create(
-        context.getStorageConf(), config, context, inFlightInstantTimestamp)) {
+        context.getStorageConf(), config, context, Option.empty(), inFlightInstantTimestamp)) {
       if (writer.isInitialized()) {
         writer.performTableServices(inFlightInstantTimestamp);
       }

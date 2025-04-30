@@ -68,10 +68,10 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieDuplicateDataFileDetectedException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieInsertException;
-import org.apache.hudi.exception.HoodieDuplicateDataFileDetectedException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.exception.SchemaCompatibilityException;
@@ -993,7 +993,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @return instance of {@link HoodieTableMetadataWriter}
    */
   public final Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstantTimestamp) {
-    return getMetadataWriter(triggeringInstantTimestamp, EAGER);
+    return getMetadataWriter(triggeringInstantTimestamp, EAGER, Option.empty());
   }
 
   /**
@@ -1002,8 +1002,9 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @param triggeringInstantTimestamp The instant that is triggering this metadata write.
    * @return An instance of {@link HoodieTableMetadataWriter}.
    */
-  public Option<HoodieTableMetadataWriter> getIndexingMetadataWriter(String triggeringInstantTimestamp) {
-    return getMetadataWriter(triggeringInstantTimestamp, LAZY);
+  public Option<HoodieTableMetadataWriter> getIndexingMetadataWriter(
+      String triggeringInstantTimestamp, Set<MetadataPartitionType> metadataPartitionTypes) {
+    return getMetadataWriter(triggeringInstantTimestamp, LAZY, Option.of(metadataPartitionTypes));
   }
 
   /**
@@ -1028,7 +1029,8 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    */
   protected Option<HoodieTableMetadataWriter> getMetadataWriter(
       String triggeringInstantTimestamp,
-      HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy) {
+      HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
+      Option<Set<MetadataPartitionType>> partitionTypesOpt) {
     // Each engine is expected to override this and
     // provide the actual metadata writer, if enabled.
     return Option.empty();

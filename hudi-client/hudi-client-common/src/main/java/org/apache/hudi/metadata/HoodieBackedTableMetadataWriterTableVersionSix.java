@@ -80,9 +80,10 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I> extends 
                                                            HoodieWriteConfig writeConfig,
                                                            HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                                            HoodieEngineContext engineContext,
+                                                           Option<Set<MetadataPartitionType>> partitionTypesOpt,
                                                            ExpressionIndexRecordGenerator indexHelper,
                                                            Option<String> inflightInstantTimestamp) {
-    super(storageConf, writeConfig, failedWritesCleaningPolicy, engineContext, indexHelper, inflightInstantTimestamp);
+    super(storageConf, writeConfig, failedWritesCleaningPolicy, engineContext, partitionTypesOpt, indexHelper, inflightInstantTimestamp);
   }
 
   // TODO(yihua): move this filtering

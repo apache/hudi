@@ -36,6 +36,7 @@ import org.apache.hudi.index.SparkHoodieIndexFactory;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.SparkMetadataWriterFactory;
 import org.apache.hudi.table.action.commit.HoodieMergeHelper;
 
@@ -44,6 +45,7 @@ import org.apache.spark.TaskContext;
 import org.apache.spark.TaskContext$;
 
 import java.io.IOException;
+import java.util.Set;
 
 public abstract class HoodieSparkTable<T>
     extends HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> {
@@ -96,7 +98,8 @@ public abstract class HoodieSparkTable<T>
   @Override
   protected Option<HoodieTableMetadataWriter> getMetadataWriter(
       String triggeringInstantTimestamp,
-      HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy) {
+      HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
+      Option<Set<MetadataPartitionType>> partitionTypesOpt) {
     if (config.isMetadataTableEnabled()) {
       // if any partition is deleted, we need to reload the metadata table writer so that new table configs are picked up
       // to reflect the delete mdt partitions.
@@ -107,7 +110,7 @@ public abstract class HoodieSparkTable<T>
       // existence after the creation is needed.
       HoodieTableMetadataWriter metadataWriter = SparkMetadataWriterFactory.create(
           getContext().getStorageConf(), config, failedWritesCleaningPolicy, getContext(),
-          Option.of(triggeringInstantTimestamp), metaClient.getTableConfig());
+          partitionTypesOpt, Option.of(triggeringInstantTimestamp), metaClient.getTableConfig());
       try {
         if (isMetadataTableExists || metaClient.getStorage().exists(
             HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath()))) {

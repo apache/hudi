@@ -22,6 +22,7 @@ package org.apache.hudi.metadata.index;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -37,6 +38,7 @@ import org.apache.hudi.table.HoodieTable;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -87,13 +89,15 @@ public class IndexerFactory {
       HoodieWriteConfig dataTableWriteConfig,
       HoodieTableMetaClient metaClient,
       HoodieTable table,
+      Option<Set<MetadataPartitionType>> partitionTypesOpt,
       ExpressionIndexRecordGenerator indexHelper) {
     if (!dataTableWriteConfig.getMetadataConfig().isEnabled()) {
       return Collections.emptyMap();
     }
     return Arrays.stream(getValidValues())
         .filter(partitionType -> partitionType.isMetadataPartitionSupported(metaClient)
-            && (partitionType.isMetadataPartitionEnabled(dataTableWriteConfig.getMetadataConfig())
+            && ((partitionTypesOpt.isPresent() && partitionTypesOpt.get().contains(partitionType))
+            || partitionType.isMetadataPartitionEnabled(dataTableWriteConfig.getMetadataConfig())
             || (partitionType.shouldUpdateIfAvailable(dataTableWriteConfig.getMetadataConfig())
             && partitionType.isMetadataPartitionAvailable(metaClient))))
         .collect(Collectors.toMap(

@@ -46,6 +46,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.EAGER;
 
@@ -57,7 +58,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
   public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf, HoodieWriteConfig writeConfig,
                                                  HoodieEngineContext context) {
-    return new FlinkHoodieBackedTableMetadataWriter(conf, writeConfig, EAGER, context, Option.empty());
+    return new FlinkHoodieBackedTableMetadataWriter(conf, writeConfig, EAGER, context, Option.empty(), Option.empty());
   }
 
   public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf,
@@ -65,25 +66,27 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
                                                  HoodieEngineContext context,
                                                  Option<String> inFlightInstantTimestamp) {
     return new FlinkHoodieBackedTableMetadataWriter(
-        conf, writeConfig, EAGER, context, inFlightInstantTimestamp);
+        conf, writeConfig, EAGER, context, Option.empty(), inFlightInstantTimestamp);
   }
 
   public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf,
                                                  HoodieWriteConfig writeConfig,
                                                  HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                                  HoodieEngineContext context,
+                                                 Option<Set<MetadataPartitionType>> partitionTypesOpt,
                                                  Option<String> inFlightInstantTimestamp) {
     return new FlinkHoodieBackedTableMetadataWriter(
-        conf, writeConfig, failedWritesCleaningPolicy, context, inFlightInstantTimestamp);
+        conf, writeConfig, failedWritesCleaningPolicy, context, partitionTypesOpt, inFlightInstantTimestamp);
   }
 
   FlinkHoodieBackedTableMetadataWriter(StorageConfiguration<?> storageConf,
                                        HoodieWriteConfig writeConfig,
                                        HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                        HoodieEngineContext engineContext,
+                                       Option<Set<MetadataPartitionType>> partitionTypesOpt,
                                        Option<String> inFlightInstantTimestamp) {
     super(storageConf, writeConfig, failedWritesCleaningPolicy, engineContext,
-        new FlinkExpressionIndexRecordGenerator(), inFlightInstantTimestamp);
+        partitionTypesOpt, new FlinkExpressionIndexRecordGenerator(), inFlightInstantTimestamp);
   }
 
   @Override

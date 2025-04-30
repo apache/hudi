@@ -37,6 +37,7 @@ import org.apache.hudi.table.HoodieTable;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.EAGER;
 
@@ -53,8 +54,10 @@ public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetada
    */
   protected JavaHoodieBackedTableMetadataWriter(StorageConfiguration<?> storageConf, HoodieWriteConfig writeConfig, HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                                 HoodieEngineContext engineContext,
+                                                Option<Set<MetadataPartitionType>> partitionTypesOpt,
                                                 Option<String> inflightInstantTimestamp) {
     super(storageConf, writeConfig, failedWritesCleaningPolicy, engineContext,
+        partitionTypesOpt,
         // TODO(yihua): fix
         null,
         inflightInstantTimestamp);
@@ -68,18 +71,20 @@ public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetada
   public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf,
                                                  HoodieWriteConfig writeConfig,
                                                  HoodieEngineContext context,
+                                                 Option<Set<MetadataPartitionType>> partitionTypesOpt,
                                                  Option<String> inflightInstantTimestamp) {
     return new JavaHoodieBackedTableMetadataWriter(
-        conf, writeConfig, EAGER, context, inflightInstantTimestamp);
+        conf, writeConfig, EAGER, context, partitionTypesOpt, inflightInstantTimestamp);
   }
 
   public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf,
                                                  HoodieWriteConfig writeConfig,
                                                  HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                                  HoodieEngineContext context,
+                                                 Option<Set<MetadataPartitionType>> partitionTypesOpt,
                                                  Option<String> inflightInstantTimestamp) {
     return new JavaHoodieBackedTableMetadataWriter(
-        conf, writeConfig, failedWritesCleaningPolicy, context, inflightInstantTimestamp);
+        conf, writeConfig, failedWritesCleaningPolicy, context, partitionTypesOpt, inflightInstantTimestamp);
   }
 
   @Override

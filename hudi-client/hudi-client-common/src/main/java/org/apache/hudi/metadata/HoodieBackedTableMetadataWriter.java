@@ -150,6 +150,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
                                             HoodieWriteConfig writeConfig,
                                             HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                             HoodieEngineContext engineContext,
+                                            Option<Set<MetadataPartitionType>> partitionTypesOpt,
                                             ExpressionIndexRecordGenerator expressionIndexRecordGenerator,
                                             Option<String> inflightInstantTimestamp) {
     this.dataWriteConfig = writeConfig;
@@ -162,7 +163,8 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     this.enabledIndexBuilderMap =
         IndexerFactory.getEnabledIndexBuilderMap(
             getEngineType(), engineContext, dataWriteConfig, dataMetaClient,
-            getTable(dataWriteConfig, dataMetaClient), expressionIndexRecordGenerator);
+            getTable(dataWriteConfig, dataMetaClient), partitionTypesOpt,
+            expressionIndexRecordGenerator);
     this.expressionIndexRecordGenerator = expressionIndexRecordGenerator;
     if (writeConfig.isMetadataTableEnabled()) {
       this.metadataWriteConfig = createMetadataWriteConfig(writeConfig, failedWritesCleaningPolicy);
