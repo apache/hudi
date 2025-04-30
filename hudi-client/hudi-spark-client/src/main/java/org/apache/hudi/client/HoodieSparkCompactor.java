@@ -45,14 +45,14 @@ public class HoodieSparkCompactor<T> extends BaseCompactor<T,
 
   @Override
   public void compact(String instantTime) {
-    LOG.info("Compactor executing compaction " + instantTime);
+    LOG.info("Compactor executing compaction {}", instantTime);
     SparkRDDWriteClient<T> writeClient = (SparkRDDWriteClient<T>) compactionClient;
     HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = writeClient.compact(instantTime);
     List<HoodieWriteStat> writeStats = compactionMetadata.getCommitMetadata().get().getWriteStats();
     long numWriteErrors = writeStats.stream().mapToLong(HoodieWriteStat::getTotalWriteErrors).sum();
     if (numWriteErrors != 0) {
       // We treat even a single error in compaction as fatal
-      LOG.error("Compaction for instant (" + instantTime + ") failed with write errors. Errors :" + numWriteErrors);
+      LOG.error("Compaction for instant ({}) failed with write errors. Errors :{}", instantTime, numWriteErrors);
       throw new HoodieException(
           "Compaction for instant (" + instantTime + ") failed with write errors. Errors :" + numWriteErrors);
     }

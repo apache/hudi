@@ -27,7 +27,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.util.RowDataAvroQueryContexts;
@@ -53,7 +52,6 @@ import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
  * Flink Engine-specific Implementations of `HoodieRecord`, which is expected to hold {@code RowData} as payload.
  */
 public class HoodieFlinkRecord extends HoodieRecord<RowData> {
-  private Comparable<?> orderingValue;
 
   public HoodieFlinkRecord(RowData rowData) {
     super(null, rowData);
@@ -96,16 +94,13 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
   }
 
   @Override
-  public Comparable<?> getOrderingValue(Schema recordSchema, Properties props) {
-    if (this.orderingValue == null) {
-      String orderingField = ConfigUtils.getOrderingField(props);
-      if (isNullOrEmpty(orderingField)) {
-        this.orderingValue = DEFAULT_ORDERING_VALUE;
-      } else {
-        this.orderingValue = (Comparable<?>) getColumnValueAsJava(recordSchema, orderingField, props, false);
-      }
+  protected Comparable<?> doGetOrderingValue(Schema recordSchema, Properties props) {
+    String orderingField = ConfigUtils.getOrderingField(props);
+    if (isNullOrEmpty(orderingField)) {
+      return DEFAULT_ORDERING_VALUE;
+    } else {
+      return (Comparable<?>) getColumnValueAsJava(recordSchema, orderingField, props, false);
     }
-    return this.orderingValue;
   }
 
   @Override
@@ -170,11 +165,11 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
 
   @Override
   public HoodieRecord updateMetaField(Schema recordSchema, int ordinal, String value) {
-    ValidationUtils.checkArgument(recordSchema.getField(RECORD_KEY_METADATA_FIELD) != null,
-        "The record is expected to contain metadata fields.");
-    GenericRowData rowData = (GenericRowData) getData();
-    rowData.setField(ordinal, StringData.fromString(value));
-    return this;
+    String[] metaVals = new String[HoodieRecord.HOODIE_META_COLUMNS.size()];
+    metaVals[ordinal] = value;
+    boolean withOperation = recordSchema.getField(OPERATION_METADATA_FIELD) != null;
+    RowData rowData = new HoodieRowDataWithUpdatedMetaField(metaVals, ordinal, getData(), withOperation);
+    return new HoodieFlinkRecord(getKey(), getOperation(), orderingValue, rowData);
   }
 
   @Override

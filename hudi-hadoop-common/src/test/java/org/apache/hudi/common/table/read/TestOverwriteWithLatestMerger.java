@@ -109,7 +109,7 @@ public class TestOverwriteWithLatestMerger extends HoodieFileGroupReaderTestHarn
     initMetaClient();
     initTestDataGenerator(new String[]{PARTITION_PATH});
     testTable = HoodieTestTable.of(metaClient);
-    readerContext = new HoodieAvroReaderContext(storageConf, metaClient.getTableConfig(), new TestKeyGenerator());
+    readerContext = new HoodieAvroReaderContext(storageConf, metaClient.getTableConfig());
     setUpMockCommits();
   }
 

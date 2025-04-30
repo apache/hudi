@@ -230,7 +230,7 @@ public class MarkerUtils {
     InputStream inputStream = null;
     Set<String> markers = new HashSet<>();
     try {
-      LOG.debug("Read marker file: " + markersFilePath);
+      LOG.debug("Read marker file: {}", markersFilePath);
       HoodieStorage storage = HoodieStorageUtils.getStorage(markersFilePath, conf);
       inputStream = storage.open(markersFilePath);
       markers = new HashSet<>(FileIOUtils.readAsUTFStringLines(inputStream));

@@ -56,12 +56,12 @@ public class HeartbeatUtils {
       String heartbeatFolderPath = HoodieTableMetaClient.getHeartbeatFolderPath(basePath);
       deleted = storage.deleteFile(new StoragePath(heartbeatFolderPath, instantTime));
       if (!deleted) {
-        LOG.error("Failed to delete heartbeat for instant " + instantTime);
+        LOG.error("Failed to delete heartbeat for instant {}", instantTime);
       } else {
-        LOG.info("Deleted the heartbeat for instant " + instantTime);
+        LOG.info("Deleted the heartbeat for instant {}", instantTime);
       }
     } catch (IOException io) {
-      LOG.error("Unable to delete heartbeat for instant " + instantTime, io);
+      LOG.error("Unable to delete heartbeat for instant {}", instantTime, io);
     }
     return deleted;
   }

@@ -752,10 +752,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .options(opts)
       .load(basePath)
     if (expect._5) {
-      if (!readDf.isEmpty) {
-        println("Found df " + readDf.collectAsList().get(0).mkString(","))
-      }
-      assertTrue(readDf.isEmpty)
+      assertTrue(readDf.isEmpty, "Found df " + readDf.collectAsList().get(0).mkString(","))
     } else {
       val row1 = readDf.select("id", "name", "value", "version", "_hoodie_is_deleted").take(1)(0)
       assertEquals(Row(expect.productIterator.toSeq: _*), row1)

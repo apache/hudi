@@ -131,7 +131,7 @@ public class PubsubMessagesFetcher {
               .boxed()
               .map(batchIndex -> getTask(subscriber, messagesToAck, batchIndex)).toArray(CompletableFuture[]::new))
           .get(MAX_WAIT_TIME_TO_ACK_MESSAGES, TimeUnit.MILLISECONDS);
-      LOG.debug("Flushed out all outstanding acknowledged messages: " + messagesToAck.size());
+      LOG.debug("Flushed out all outstanding acknowledged messages: {}", messagesToAck.size());
     } catch (ExecutionException | InterruptedException | TimeoutException e) {
       throw new IOException("Failed to ack messages from PubSub", e);
     }

@@ -62,6 +62,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
@@ -110,11 +111,11 @@ public class TestCompactionCommand extends CLIFunctionalTestHarness {
     HoodieCLI.getTableMetaClient().reloadActiveTimeline();
 
     Object result = shell.evaluate(() -> "compactions show all");
-    System.out.println(result.toString());
+    assertNotNull(result);
 
     TableHeader header = new TableHeader().addTableHeaderField("Compaction Instant Time").addTableHeaderField("State")
         .addTableHeaderField("Total FileIds to be Compacted");
-    Map<String, Integer> fileIds = new HashMap();
+    Map<String, Integer> fileIds = new HashMap<>();
     fileIds.put("001", 3);
     fileIds.put("003", 4);
     fileIds.put("005", 3);
@@ -142,7 +143,7 @@ public class TestCompactionCommand extends CLIFunctionalTestHarness {
     HoodieCLI.getTableMetaClient().reloadActiveTimeline();
 
     Object result = shell.evaluate(() -> "compaction show --instant 001");
-    System.out.println(result.toString());
+    assertNotNull(result);
   }
 
   private void generateCompactionInstances() throws IOException {

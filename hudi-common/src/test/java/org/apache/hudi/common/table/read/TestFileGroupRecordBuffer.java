@@ -44,21 +44,20 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
+import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_PARTITION_PATH;
-import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_RECORD_KEY;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
 import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 import static org.apache.hudi.common.table.read.FileGroupRecordBuffer.getOrderingValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -315,7 +314,7 @@ class TestFileGroupRecordBuffer {
   }
 
   @Test
-  void testProcessCustomDeleteRecord() {
+  void testProcessCustomDeleteRecord() throws IOException {
     String customDeleteKey = "op";
     String customDeleteValue = "d";
     when(schemaHandler.getCustomDeleteMarkerKeyValue())
@@ -337,17 +336,16 @@ class TestFileGroupRecordBuffer {
     record.put("ts", System.currentTimeMillis());
     record.put("op", "d");
     record.put("_hoodie_is_deleted", false);
+    when(readerContext.getOrderingValue(any(), any(), any())).thenReturn(1);
+    when(readerContext.convertValueToEngineType(any())).thenReturn(1);
+    BufferedRecord<GenericRecord> bufferedRecord = BufferedRecord.forRecordWithContext(record, schema, readerContext, Option.of("ts"), true);
 
-    Map<String, Object> metadata = new HashMap<>();
-    metadata.put(INTERNAL_META_RECORD_KEY, "12345");
-    metadata.put(INTERNAL_META_PARTITION_PATH, "partition1");
-    when(readerContext.getOrderingValue(any(), any(), any(), any())).thenReturn(1);
-    when(readerContext.generateMetadataForRecord(any(), any(), any())).thenReturn(metadata);
-    keyBasedBuffer.processDeleteRecord(record, metadata);
-    Map<Serializable, Pair<Option<GenericRecord>, Map<String, Object>>> records =
-        keyBasedBuffer.getLogRecords();
+    keyBasedBuffer.processNextDataRecord(bufferedRecord, "12345");
+    Map<Serializable, BufferedRecord<GenericRecord>> records = keyBasedBuffer.getLogRecords();
     assertEquals(1, records.size());
-    assertEquals(Pair.of(Option.empty(), metadata), records.get("12345"));
+    BufferedRecord<GenericRecord> deleteRecord = records.get("12345");
+    assertNull(deleteRecord.getRecordKey(), "The record key metadata field is missing");
+    assertEquals(1, deleteRecord.getOrderingValue());
 
     // CASE 2: With _hoodie_is_deleted is true.
     GenericRecord anotherRecord = new GenericData.Record(schema);
@@ -355,14 +353,13 @@ class TestFileGroupRecordBuffer {
     anotherRecord.put("ts", System.currentTimeMillis());
     anotherRecord.put("op", "i");
     anotherRecord.put("_hoodie_is_deleted", true);
+    bufferedRecord = BufferedRecord.forRecordWithContext(anotherRecord, schema, readerContext, Option.of("ts"), true);
 
-    Map<String, Object> anotherMetadata = new HashMap<>();
-    anotherMetadata.put(INTERNAL_META_RECORD_KEY, "54321");
-    anotherMetadata.put(INTERNAL_META_PARTITION_PATH, "partition2");
-    when(readerContext.generateMetadataForRecord(any(), any(), any())).thenReturn(anotherMetadata);
-    keyBasedBuffer.processDeleteRecord(anotherRecord, anotherMetadata);
+    keyBasedBuffer.processNextDataRecord(bufferedRecord, "54321");
     records = keyBasedBuffer.getLogRecords();
     assertEquals(2, records.size());
-    assertEquals(Pair.of(Option.empty(), anotherMetadata), records.get("54321"));
+    deleteRecord = records.get("54321");
+    assertNull(deleteRecord.getRecordKey(), "The record key metadata field is missing");
+    assertEquals(1, deleteRecord.getOrderingValue());
   }
 }

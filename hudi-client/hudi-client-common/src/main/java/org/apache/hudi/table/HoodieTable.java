@@ -1109,7 +1109,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
         metadataIndexDisabled = !partitionType.isMetadataPartitionAvailable(metaClient);
         break;
       default:
-        LOG.debug("Not a valid metadata partition type: " + partitionType.name());
+        LOG.debug("Not a valid metadata partition type: {}", partitionType.name());
         return false;
     }
     return metadataIndexDisabled;

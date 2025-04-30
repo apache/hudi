@@ -1910,7 +1910,6 @@ public class TestHiveSyncTool {
     // test one column in DECIMAL
     String oneTargetColumnSql = createTableSqlPrefix + "(`decimal_col` DECIMAL(9,8), `bigint_col` BIGINT)";
     ddlExecutor.runSQL(oneTargetColumnSql);
-    System.out.println(hiveClient.getMetastoreSchema(tableName));
     assertTrue(hiveClient.getMetastoreSchema(tableName).containsValue("DECIMAL(9,8)"), errorMsg);
     ddlExecutor.runSQL(dropTableSql);
 
@@ -1918,7 +1917,6 @@ public class TestHiveSyncTool {
     String multipleTargetColumnSql =
         createTableSqlPrefix + "(`decimal_col1` DECIMAL(9,8), `bigint_col` BIGINT, `decimal_col2` DECIMAL(7,4))";
     ddlExecutor.runSQL(multipleTargetColumnSql);
-    System.out.println(hiveClient.getMetastoreSchema(tableName));
     assertTrue(hiveClient.getMetastoreSchema(tableName).containsValue("DECIMAL(9,8)")
         && hiveClient.getMetastoreSchema(tableName).containsValue("DECIMAL(7,4)"), errorMsg);
     ddlExecutor.runSQL(dropTableSql);
@@ -1926,7 +1924,6 @@ public class TestHiveSyncTool {
     // test no columns in DECIMAL
     String noTargetColumnsSql = createTableSqlPrefix + "(`bigint_col` BIGINT)";
     ddlExecutor.runSQL(noTargetColumnsSql);
-    System.out.println(hiveClient.getMetastoreSchema(tableName));
     assertTrue(hiveClient.getMetastoreSchema(tableName).size() == 1 && hiveClient.getMetastoreSchema(tableName)
         .containsValue("BIGINT"), errorMsg);
     ddlExecutor.runSQL(dropTableSql);

@@ -81,7 +81,7 @@ public class QueryRunner {
 
   public static Dataset<Row> applyOrdering(Dataset<Row> dataset, List<String> orderByColumns) {
     if (orderByColumns != null && !orderByColumns.isEmpty()) {
-      LOG.debug("Applying ordering " + orderByColumns);
+      LOG.debug("Applying ordering {}", orderByColumns);
       return dataset.orderBy(orderByColumns.stream().map(functions::col).toArray(Column[]::new));
     }
     return dataset;

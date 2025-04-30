@@ -300,16 +300,23 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   public void close() {
     try {
       writeLock.lock();
-      this.metaClient = null;
-      this.completionTimeQueryView = null;
-      this.visibleCommitsAndCompactionTimeline = null;
-      tableMetadata.close();
+      closeResources();
       clear();
     } catch (Exception ex) {
       throw new HoodieException("Unable to close file system view", ex);
     } finally {
       writeLock.unlock();
     }
+  }
+
+  protected void closeResources() throws Exception {
+    if (this.completionTimeQueryView != null) {
+      this.completionTimeQueryView.close();
+      this.completionTimeQueryView = null;
+    }
+    this.metaClient = null;
+    this.visibleCommitsAndCompactionTimeline = null;
+    tableMetadata.close();
   }
 
   /**
@@ -454,7 +461,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
           throw new HoodieIOException("Failed to list base files in partition " + partitionPathStr, e);
         }
       } else {
-        LOG.debug("View already built for Partition :{}, FOUND is ", partitionPathStr);
+        LOG.debug("View already built for Partition :{}", partitionPathStr);
       }
       long endTs = System.currentTimeMillis();
       LOG.debug("Time to load partition ({}) ={}", partitionPathStr, (endTs - beginTs));
@@ -545,7 +552,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    */
   protected Stream<FileSlice> filterBaseFileAfterPendingCompaction(FileSlice fileSlice, boolean includeEmptyFileSlice) {
     if (isFileSliceAfterPendingCompaction(fileSlice)) {
-      LOG.debug("File Slice (" + fileSlice + ") is in pending compaction");
+      LOG.debug("File Slice ({}) is in pending compaction", fileSlice);
       // Base file is filtered out of the file-slice as the corresponding compaction
       // instant not completed yet.
       FileSlice transformed = new FileSlice(fileSlice.getPartitionPath(), fileSlice.getBaseInstantTime(), fileSlice.getFileId());

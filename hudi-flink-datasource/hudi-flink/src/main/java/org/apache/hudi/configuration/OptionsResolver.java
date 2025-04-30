@@ -254,7 +254,7 @@ public class OptionsResolver {
    */
   public static boolean needsScheduleCompaction(Configuration conf) {
     return OptionsResolver.isMorTable(conf)
-        && conf.getBoolean(FlinkOptions.COMPACTION_SCHEDULE_ENABLED);
+        && conf.getBoolean(FlinkOptions.COMPACTION_SCHEDULE_ENABLED) && !isAppendMode(conf);
   }
 
   /**

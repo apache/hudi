@@ -104,8 +104,8 @@ public class MarkerHandler extends Handler {
                        HoodieEngineContext hoodieEngineContext,
                        FileSystemViewManager viewManager, Registry metricsRegistry) {
     super(conf, timelineServiceConfig, viewManager);
-    LOG.debug("MarkerHandler batching params: batchNumThreads=" + timelineServiceConfig.markerBatchNumThreads
-        + " batchIntervalMs=" + timelineServiceConfig.markerBatchIntervalMs + "ms");
+    LOG.debug("MarkerHandler batching params: batchNumThreads={} batchIntervalMs={}ms",
+        timelineServiceConfig.markerBatchNumThreads, timelineServiceConfig.markerBatchIntervalMs);
     this.hoodieEngineContext = hoodieEngineContext;
     this.metricsRegistry = metricsRegistry;
     this.parallelism = timelineServiceConfig.markerParallelism;

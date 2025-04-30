@@ -43,6 +43,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.util.ClusteringUtils;
@@ -55,6 +56,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.data.CloseableIteratorListener;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieException;
@@ -325,7 +327,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
     return HoodieJavaRDD.of(jsc.parallelize(clusteringOps, readParallelism).mapPartitions(clusteringOpsPartition -> {
       List<Supplier<ClosableIterator<HoodieRecord<T>>>> suppliers = new ArrayList<>();
       long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(new SparkTaskContextSupplier(), getWriteConfig());
-      LOG.info("MaxMemoryPerCompaction run as part of clustering => " + maxMemoryPerCompaction);
+      LOG.info("MaxMemoryPerCompaction run as part of clustering => {}", maxMemoryPerCompaction);
       Option<BaseKeyGenerator> keyGeneratorOpt = HoodieSparkKeyGeneratorFactory.createBaseKeyGenerator(writeConfig);
       clusteringOpsPartition.forEachRemaining(clusteringOp -> {
         Supplier<ClosableIterator<HoodieRecord<T>>> iteratorSupplier = () -> {
@@ -335,7 +337,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
         };
         suppliers.add(iteratorSupplier);
       });
-      return new LazyConcatenatingIterator<>(suppliers);
+      return CloseableIteratorListener.addListener(new LazyConcatenatingIterator<>(suppliers));
     }));
   }
 
@@ -357,7 +359,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
             iteratorGettersForPartition.add(recordIteratorGetter);
           });
 
-          return new LazyConcatenatingIterator<>(iteratorGettersForPartition);
+          return CloseableIteratorListener.addListener(new LazyConcatenatingIterator<>(iteratorGettersForPartition));
         }));
   }
 
@@ -469,15 +471,16 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
         }
 
         // instantiate FG reader
+        HoodieTableMetaClient metaClient = getHoodieTable().getMetaClient();
         HoodieReaderContext<InternalRow> readerContext = readerContextFactory.getContext();
         HoodieFileGroupReader<InternalRow> fileGroupReader = new HoodieFileGroupReader<>(readerContext,
-            getHoodieTable().getMetaClient().getStorage().newInstance(new StoragePath(basePath), readerContext.getStorageConfiguration()),
+            metaClient.getStorage().newInstance(new StoragePath(basePath), readerContext.getStorageConfiguration()),
             basePath, instantTime, fileSlice, readerSchema, readerSchema, internalSchemaOption,
-            getHoodieTable().getMetaClient(), getHoodieTable().getMetaClient().getTableConfig().getProps(),
+            metaClient, metaClient.getTableConfig().getProps(),
             0, Long.MAX_VALUE, usePosition, false);
         fileGroupReader.initRecordIterators();
         // read records from the FG reader
-        return fileGroupReader.getClosableIterator();
+        return CloseableIteratorListener.addListener(fileGroupReader.getClosableIterator());
       }
     }).rdd();
 

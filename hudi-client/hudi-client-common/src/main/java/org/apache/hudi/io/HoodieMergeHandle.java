@@ -201,8 +201,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       String newFileName = FSUtils.makeBaseFileName(instantTime, writeToken, fileId, hoodieTable.getBaseFileExtension());
       makeOldAndNewFilePaths(partitionPath, latestValidFilePath, newFileName);
 
-      LOG.info(String.format("Merging new data into oldPath %s, as newPath %s", oldFilePath.toString(),
-          newFilePath.toString()));
+      LOG.info("Merging new data into oldPath {}, as newPath {}", oldFilePath, newFilePath);
       // file name is same for all records, in this bunch
       writeStatus.setFileId(fileId);
       writeStatus.setPartitionPath(partitionPath);
@@ -406,7 +405,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       } catch (IOException | RuntimeException e) {
         String errMsg = String.format("Failed to merge old record into new file for key %s from old file %s to new file %s with writerSchema %s",
             key, getOldFilePath(), newFilePath, writeSchemaWithMetaFields.toString(true));
-        LOG.debug("Old record is " + oldRecord);
+        LOG.debug("Old record is {}", oldRecord);
         throw new HoodieUpsertException(errMsg, e);
       }
       recordsWritten++;
@@ -480,8 +479,8 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
 
       performMergeDataValidationCheck(writeStatus);
 
-      LOG.info(String.format("MergeHandle for partitionPath %s fileID %s, took %d ms.", stat.getPartitionPath(),
-          stat.getFileId(), runtimeStats.getTotalUpsertTime()));
+      LOG.info("MergeHandle for partitionPath {} fileID {}, took {} ms.", stat.getPartitionPath(),
+          stat.getFileId(), runtimeStats.getTotalUpsertTime());
 
       return Collections.singletonList(writeStatus);
     } catch (IOException e) {

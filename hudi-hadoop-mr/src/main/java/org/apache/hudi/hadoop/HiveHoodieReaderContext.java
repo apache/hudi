@@ -28,6 +28,8 @@ import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -92,18 +94,15 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   private final List<String> partitionCols;
   private final Set<String> partitionColSet;
 
-  private final String recordKeyField;
-
   protected HiveHoodieReaderContext(HoodieFileGroupReaderBasedRecordReader.HiveReaderCreator readerCreator,
-                                    String recordKeyField,
                                     List<String> partitionCols,
                                     ObjectInspectorCache objectInspectorCache,
-                                    StorageConfiguration<?> storageConfiguration) {
-    super(storageConfiguration);
+                                    StorageConfiguration<?> storageConfiguration,
+                                    HoodieTableConfig tableConfig) {
+    super(storageConfiguration, tableConfig);
     this.readerCreator = readerCreator;
     this.partitionCols = partitionCols;
     this.partitionColSet = new HashSet<>(this.partitionCols);
-    this.recordKeyField = recordKeyField;
     this.objectInspectorCache = objectInspectorCache;
     this.columnTypeMap = objectInspectorCache.getColumnTypeMap();
   }
@@ -203,11 +202,6 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   }
 
   @Override
-  public String getRecordKey(ArrayWritable record, Schema schema) {
-    return getValue(record, schema, recordKeyField).toString();
-  }
-
-  @Override
   public Object getValue(ArrayWritable record, Schema schema, String fieldName) {
     return StringUtils.isNullOrEmpty(fieldName) ? null : objectInspectorCache.getValue(record, schema, fieldName);
   }
@@ -223,18 +217,25 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   }
 
   @Override
-  public HoodieRecord<ArrayWritable> constructHoodieRecord(Option<ArrayWritable> recordOption, Map<String, Object> metadataMap) {
-    if (!recordOption.isPresent()) {
-      return new HoodieEmptyRecord<>(new HoodieKey((String) metadataMap.get(INTERNAL_META_RECORD_KEY), (String) metadataMap.get(INTERNAL_META_PARTITION_PATH)), HoodieRecord.HoodieRecordType.HIVE);
+  public HoodieRecord<ArrayWritable> constructHoodieRecord(BufferedRecord<ArrayWritable> bufferedRecord) {
+    if (bufferedRecord.isDelete()) {
+      return new HoodieEmptyRecord<>(
+          new HoodieKey(bufferedRecord.getRecordKey(), null),
+          HoodieRecord.HoodieRecordType.HIVE);
     }
-    Schema schema = getSchemaFromMetadata(metadataMap);
-    ArrayWritable writable = recordOption.get();
-    return new HoodieHiveRecord(new HoodieKey((String) metadataMap.get(INTERNAL_META_RECORD_KEY), (String) metadataMap.get(INTERNAL_META_PARTITION_PATH)), writable, schema, objectInspectorCache);
+    Schema schema = getSchemaFromBufferRecord(bufferedRecord);
+    ArrayWritable writable = bufferedRecord.getRecord();
+    return new HoodieHiveRecord(new HoodieKey(bufferedRecord.getRecordKey(), null), writable, schema, objectInspectorCache);
   }
 
   @Override
   public ArrayWritable seal(ArrayWritable record) {
     return new ArrayWritable(Writable.class, Arrays.copyOf(record.get(), record.get().length));
+  }
+
+  @Override
+  public ArrayWritable toBinaryRow(Schema schema, ArrayWritable record) {
+    return record;
   }
 
   @Override

@@ -27,7 +27,7 @@ import org.apache.hudi.common.model.HoodieTableQueryType.SNAPSHOT
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.InstantComparison
 import org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps
-import org.apache.hudi.keygen.KeyGenUtils
+import org.apache.hudi.keygen.KeyGenerator
 import org.apache.hudi.metadata.HoodieTableMetadataUtil
 import org.apache.hudi.storage.StoragePath
 
@@ -131,7 +131,7 @@ object RecordLevelIndexSupport {
   }
 
   def getComplexKeyLiteralGenerator(): Function2[AttributeReference, Literal, String] = {
-    (attr: AttributeReference, lit: Literal) => attr.name + KeyGenUtils.DEFAULT_COLUMN_VALUE_SEPARATOR + lit.value.toString
+    (attr: AttributeReference, lit: Literal) => attr.name + KeyGenerator.DEFAULT_COLUMN_VALUE_SEPARATOR + lit.value.toString
   }
 
   /**

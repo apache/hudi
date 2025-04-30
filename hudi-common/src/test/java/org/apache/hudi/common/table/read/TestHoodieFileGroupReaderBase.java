@@ -82,9 +82,6 @@ import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
-import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_ORDERING_FIELD;
-import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_PARTITION_PATH;
-import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_RECORD_KEY;
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.model.WriteOperationType.INSERT;
 import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
@@ -124,11 +121,11 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
 
   private static Stream<Arguments> testArguments() {
     return Stream.of(
-        arguments(RecordMergeMode.COMMIT_TIME_ORDERING, "avro", true),
+        arguments(RecordMergeMode.COMMIT_TIME_ORDERING, "avro", false),
         arguments(RecordMergeMode.COMMIT_TIME_ORDERING, "parquet", true),
         arguments(RecordMergeMode.EVENT_TIME_ORDERING, "avro", true),
         arguments(RecordMergeMode.EVENT_TIME_ORDERING, "parquet", true),
-        arguments(RecordMergeMode.CUSTOM, "avro", true),
+        arguments(RecordMergeMode.CUSTOM, "avro", false),
         arguments(RecordMergeMode.CUSTOM, "parquet", true)
     );
   }
@@ -166,10 +163,17 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     }
   }
 
+  private static Stream<Arguments> logFileOnlyCases() {
+    return Stream.of(
+        arguments(RecordMergeMode.COMMIT_TIME_ORDERING, "avro"),
+        arguments(RecordMergeMode.EVENT_TIME_ORDERING, "parquet"),
+        arguments(RecordMergeMode.CUSTOM, "avro"));
+  }
+
   @ParameterizedTest
-  @MethodSource("testArguments")
-  public void testReadLogFilesOnlyInMergeOnReadTable(RecordMergeMode recordMergeMode, String logDataBlockFormat, boolean populateMetaFields) throws Exception {
-    Map<String, String> writeConfigs = new HashMap<>(getCommonConfigs(recordMergeMode, populateMetaFields));
+  @MethodSource("logFileOnlyCases")
+  public void testReadLogFilesOnlyInMergeOnReadTable(RecordMergeMode recordMergeMode, String logDataBlockFormat) throws Exception {
+    Map<String, String> writeConfigs = new HashMap<>(getCommonConfigs(recordMergeMode, true));
     writeConfigs.put(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), logDataBlockFormat);
     // Use InMemoryIndex to generate log only mor table
     writeConfigs.put("hoodie.index.type", "INMEMORY");
@@ -221,27 +225,19 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       List<T> records = readRecordsFromFileGroup(getStorageConf(), getBasePath(), metaClient, fileSlices,
           avroSchema, RecordMergeMode.COMMIT_TIME_ORDERING, false);
       HoodieReaderContext<T> readerContext = getHoodieReaderContext(getBasePath(), avroSchema, getStorageConf(), metaClient);
-      Comparable orderingFieldValue = "100";
       for (Boolean isCompressionEnabled : new boolean[] {true, false}) {
-        try (ExternalSpillableMap<Serializable, Pair<Option<T>, Map<String, Object>>> spillableMap =
+        try (ExternalSpillableMap<Serializable, BufferedRecord<T>> spillableMap =
                  new ExternalSpillableMap<>(16L, baseMapPath, new DefaultSizeEstimator(),
                      new HoodieRecordSizeEstimator(avroSchema), diskMapType, new DefaultSerializer<>(), isCompressionEnabled, getClass().getSimpleName())) {
           Long position = 0L;
           for (T record : records) {
             String recordKey = readerContext.getRecordKey(record, avroSchema);
             //test key based
-            spillableMap.put(recordKey,
-                Pair.of(
-                    Option.ofNullable(readerContext.seal(record)),
-                    readerContext.generateMetadataForRecord(record, avroSchema)));
+            BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(record, avroSchema, readerContext, Option.of("timestamp"), false);
+            spillableMap.put(recordKey, bufferedRecord.toBinary(readerContext));
 
             //test position based
-            spillableMap.put(position++,
-                Pair.of(
-                    Option.ofNullable(readerContext.seal(record)),
-                    readerContext.generateMetadataForRecord(
-                        recordKey, dataGen.getPartitionPaths()[0],
-                        readerContext.convertValueToEngineType(orderingFieldValue))));
+            spillableMap.put(position++, bufferedRecord.toBinary(readerContext));
           }
 
           assertEquals(records.size() * 2, spillableMap.size());
@@ -249,20 +245,18 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
           position = 0L;
           for (T record : records) {
             String recordKey = readerContext.getRecordKey(record, avroSchema);
-            Pair<Option<T>, Map<String, Object>> keyBased = spillableMap.get(recordKey);
+            BufferedRecord<T> keyBased = spillableMap.get(recordKey);
             assertNotNull(keyBased);
-            Pair<Option<T>, Map<String, Object>> positionBased = spillableMap.get(position++);
+            BufferedRecord<T> positionBased = spillableMap.get(position++);
             assertNotNull(positionBased);
-            assertRecordsEqual(avroSchema, record, keyBased.getLeft().get());
-            assertRecordsEqual(avroSchema, record, positionBased.getLeft().get());
-            assertEquals(keyBased.getRight().get(INTERNAL_META_RECORD_KEY), recordKey);
-            assertEquals(positionBased.getRight().get(INTERNAL_META_RECORD_KEY), recordKey);
-            assertEquals(avroSchema, readerContext.getSchemaFromMetadata(keyBased.getRight()));
-            assertEquals(dataGen.getPartitionPaths()[0], positionBased.getRight().get(INTERNAL_META_PARTITION_PATH));
-            assertEquals(readerContext.convertValueToEngineType(orderingFieldValue),
-                positionBased.getRight().get(INTERNAL_META_ORDERING_FIELD));
+            assertRecordsEqual(avroSchema, record, keyBased.getRecord());
+            assertRecordsEqual(avroSchema, record, positionBased.getRecord());
+            assertEquals(keyBased.getRecordKey(), recordKey);
+            assertEquals(positionBased.getRecordKey(), recordKey);
+            assertEquals(avroSchema, readerContext.getSchemaFromBufferRecord(keyBased));
+            // generate field value is hardcoded as 0 for ordering field: timestamp, see HoodieTestDataGenerator#generateRandomValue
+            assertEquals(readerContext.convertValueToEngineType(0L), positionBased.getOrderingValue());
           }
-
         }
       }
     }

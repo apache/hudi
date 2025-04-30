@@ -82,12 +82,21 @@ public class ObjectInspectorCache {
   }
 
   public Object getValue(ArrayWritable record, Schema schema, String fieldName) {
+    ArrayWritable currentRecord = record;
+    String[] path = fieldName.split("\\.");
+    StructField structFieldRef;
     ArrayWritableObjectInspector objectInspector = getObjectInspector(schema);
-    StructField structFieldRef = objectInspector.getStructFieldRef(fieldName);
-    if (structFieldRef == null) {
-      return null;
+    for (int i = 0; i < path.length; i++) {
+      String field = path[i];
+      structFieldRef = objectInspector.getStructFieldRef(field);
+      Object value = structFieldRef == null ? null : objectInspector.getStructFieldData(currentRecord, structFieldRef);
+      if (i == path.length - 1) {
+        return value;
+      }
+      currentRecord = (ArrayWritable) value;
+      objectInspector = (ArrayWritableObjectInspector) structFieldRef.getFieldObjectInspector();
     }
-    return objectInspector.getStructFieldData(record, structFieldRef);
+    return null;
   }
 
   public ArrayWritableObjectInspector getObjectInspector(Schema schema) {
