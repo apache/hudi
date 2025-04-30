@@ -116,7 +116,7 @@ class TestSparkDataSourceDAGExecution extends HoodieSparkClientTestBase with Sca
   @Test
   def testClusteringDoesNotTriggerRepeatedDAG(): Unit = {
     // register stage event listeners
-    val stageListener = new StageListener("org.apache.hudi.table.action.commit.BaseCommitActionExecutor.executeClustering")
+    val stageListener = new StageListener("org.apache.hudi.client.BaseHoodieTableServiceClient.cluster")
     spark.sparkContext.addSparkListener(stageListener)
 
     var structType: StructType = null
