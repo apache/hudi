@@ -35,6 +35,7 @@ import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieValidationException;
@@ -196,8 +197,7 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
       Schema skeletonRequiredSchema,
       ClosableIterator<RowData> dataFileIterator,
       Schema dataRequiredSchema,
-      Option<String[]> partitionFields,
-      Object[] partitionValues) {
+      List<Pair<String, Object>> partitionFieldAndValues) {
     return new ClosableIterator<RowData>() {
       final JoinedRowData joinedRow = new JoinedRowData();
       @Override

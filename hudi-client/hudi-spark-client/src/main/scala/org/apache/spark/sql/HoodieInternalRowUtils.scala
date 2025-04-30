@@ -135,7 +135,7 @@ object HoodieInternalRowUtils {
                                       updatedValuesMap: JMap[Integer, Object]): UnsafeRowWriter = {
     val unsafeProjection = generateUnsafeProjection(newSchema, newSchema)
     if (prevSchema.equals(newSchema) && renamedColumnsMap.isEmpty && updatedValuesMap.isEmpty) {
-      oldRow => unsafeProjection(oldRow)
+      return oldRow => unsafeProjection(oldRow)
     }
     val writer = if (newSchema.equals(prevSchema)) {
       // Force a modifiable row to be generated so the updated values can be set

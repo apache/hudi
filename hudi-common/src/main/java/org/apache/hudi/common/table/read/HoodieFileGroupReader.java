@@ -51,6 +51,7 @@ import org.apache.avro.Schema;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
@@ -237,24 +238,19 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       PartitionPathParser partitionPathParser = new PartitionPathParser();
       Object[] partitionValues = partitionPathParser.getPartitionFieldVals(partitionPathFields, partitionPath, readerContext.getSchemaHandler().getTableSchema());
       // filter out the partition values that are not required by the data schema
-      Object[] filteredPartitionValues = new Object[0];
-      Option<String[]> filteredPartitionPathFields = Option.empty();
-      if (partitionPathFields.isPresent()) {
+      List<Pair<String, Object>> partitionPathFieldsAndValues = partitionPathFields.map(partitionFields -> {
         Schema dataSchema = dataFileIterator.get().getRight();
-        List<String> fields = new ArrayList<>();
-        List<Object> values = new ArrayList<>();
-        for (int i = 0; i < partitionPathFields.get().length; i++) {
-          String field = partitionPathFields.get()[i];
+        List<Pair<String, Object>> filterFieldsAndValues = new ArrayList<>(partitionFields.length);
+        for (int i = 0; i < partitionFields.length; i++) {
+          String field = partitionFields[i];
           if (dataSchema.getField(field) != null) {
-            fields.add(field);
-            values.add(partitionValues[i]);
+            filterFieldsAndValues.add(Pair.of(field, readerContext.convertValueToEngineType((Comparable) partitionValues[i])));
           }
         }
-        filteredPartitionPathFields = fields.isEmpty() ? Option.empty() : Option.of(fields.toArray(new String[0]));
-        filteredPartitionValues = values.toArray(new Object[0]);
-      }
+        return filterFieldsAndValues;
+      }).orElseGet(Collections::emptyList);
       return readerContext.mergeBootstrapReaders(skeletonFileIterator.get().getLeft(), skeletonFileIterator.get().getRight(),
-          dataFileIterator.get().getLeft(), dataFileIterator.get().getRight(), filteredPartitionPathFields, filteredPartitionValues);
+          dataFileIterator.get().getLeft(), dataFileIterator.get().getRight(), partitionPathFieldsAndValues);
     }
   }
 

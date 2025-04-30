@@ -36,6 +36,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.io.storage.HoodieIOFactory;
@@ -51,7 +52,6 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.function.UnaryOperator;
@@ -184,10 +184,8 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
                                                                Schema skeletonRequiredSchema,
                                                                ClosableIterator<IndexedRecord> dataFileIterator,
                                                                Schema dataRequiredSchema,
-                                                               Option<String[]> partitionFields,
-                                                               Object[] partitionValues) {
-    return new BootstrapIterator(skeletonFileIterator, skeletonRequiredSchema, dataFileIterator, dataRequiredSchema,
-        partitionFields, Arrays.stream(partitionValues).map(value -> convertValueToEngineType((Comparable) value)).toArray());
+                                                               List<Pair<String, Object>> partitionFieldAndValues) {
+    return new BootstrapIterator(skeletonFileIterator, skeletonRequiredSchema, dataFileIterator, dataRequiredSchema, partitionFieldAndValues);
   }
 
   @Override
@@ -261,16 +259,15 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
 
     public BootstrapIterator(ClosableIterator<IndexedRecord> skeletonFileIterator, Schema skeletonRequiredSchema,
                              ClosableIterator<IndexedRecord> dataFileIterator, Schema dataRequiredSchema,
-                             Option<String[]> partitionFields, Object[] partitionValues) {
+                             List<Pair<String, Object>> partitionFieldAndValues) {
       this.skeletonFileIterator = skeletonFileIterator;
       this.skeletonRequiredSchema = skeletonRequiredSchema;
       this.dataFileIterator = dataFileIterator;
       this.dataRequiredSchema = dataRequiredSchema;
       this.mergedSchema = AvroSchemaUtils.mergeSchemas(skeletonRequiredSchema, dataRequiredSchema);
       this.skeletonFields = skeletonRequiredSchema.getFields().size();
-      this.partitionFieldPositions = partitionFields.isPresent() ? IntStream.range(0, partitionFields.get().length)
-          .map(i -> mergedSchema.getField(partitionFields.get()[i]).pos()).toArray() : new int[0];
-      this.partitionValues = partitionValues;
+      this.partitionFieldPositions = partitionFieldAndValues.stream().map(Pair::getLeft).map(field -> mergedSchema.getField(field).pos()).mapToInt(Integer::intValue).toArray();
+      this.partitionValues = partitionFieldAndValues.stream().map(Pair::getValue).toArray();
     }
 
     @Override
@@ -301,7 +298,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
         mergedRecord.put(dataField.pos() + skeletonFields, dataRecord.get(sourceField.pos()));
       }
       for (int i = 0; i < partitionFieldPositions.length; i++) {
-        if (mergedRecord.get(i) != null) {
+        if (mergedRecord.get(partitionFieldPositions[i]) != null) {
           mergedRecord.put(partitionFieldPositions[i], partitionValues[i]);
         }
       }

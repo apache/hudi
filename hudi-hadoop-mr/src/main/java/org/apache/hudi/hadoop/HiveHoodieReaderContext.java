@@ -33,6 +33,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hadoop.utils.HoodieArrayWritableAvroUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 import org.apache.hudi.hadoop.utils.ObjectInspectorCache;
@@ -75,7 +76,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
@@ -242,13 +242,12 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
                                                                Schema skeletonRequiredSchema,
                                                                ClosableIterator<ArrayWritable> dataFileIterator,
                                                                Schema dataRequiredSchema,
-                                                               Option<String[]> partitionFields,
-                                                               Object[] partitionValues) {
+                                                               List<Pair<String, Object>> partitionFieldsAndValues) {
     int skeletonLen = skeletonRequiredSchema.getFields().size();
     int dataLen = dataRequiredSchema.getFields().size();
-    int[] partitionFieldPositions = partitionFields.isPresent() ? IntStream.range(0, partitionFields.get().length)
-        .map(i -> dataRequiredSchema.getField(partitionFields.get()[i]).pos()).toArray() : new int[0];
-    Writable[] convertedPartitionValues = Arrays.stream(partitionValues).map(value -> (Writable) convertValueToEngineType((Comparable) value)).toArray(Writable[]::new);
+    int[] partitionFieldPositions = partitionFieldsAndValues.stream()
+        .map(pair -> dataRequiredSchema.getField(pair.getKey()).pos()).mapToInt(Integer::intValue).toArray();
+    Writable[] convertedPartitionValues = partitionFieldsAndValues.stream().map(Pair::getValue).toArray(Writable[]::new);
     return new ClosableIterator<ArrayWritable>() {
 
       private final ArrayWritable returnWritable = new ArrayWritable(Writable.class);
