@@ -78,18 +78,6 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I> extends 
     super(storageConf, writeConfig, failedWritesCleaningPolicy, engineContext, expressionIndexRecordGenerator, inflightInstantTimestamp);
   }
 
-  // TODO(yihua): move this filtering
-  /*
-  @Override
-  List<MetadataPartitionType> getEnabledPartitions(HoodieMetadataConfig metadataConfig, HoodieTableMetaClient metaClient) {
-    return MetadataPartitionType.getEnabledPartitions(metadataConfig, metaClient).stream()
-        .filter(partition -> !partition.equals(MetadataPartitionType.SECONDARY_INDEX))
-        .filter(partition -> !partition.equals(MetadataPartitionType.EXPRESSION_INDEX))
-        .filter(partition -> !partition.equals(MetadataPartitionType.PARTITION_STATS))
-        .collect(Collectors.toList());
-  }
-  */
-
   @Override
   boolean shouldInitializeFromFilesystem(Set<String> pendingDataInstants, Option<String> inflightInstantTimestamp) {
     if (pendingDataInstants.stream()

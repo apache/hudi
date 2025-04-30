@@ -238,7 +238,8 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   protected boolean initializeIfNeeded(HoodieTableMetaClient dataMetaClient,
                                        Option<String> inflightInstantTimestamp) throws IOException {
     HoodieTimer timer = HoodieTimer.start();
-    List<MetadataPartitionType> metadataPartitionsToInit = new ArrayList<>(MetadataPartitionType.getValidValues().length);
+    List<MetadataPartitionType> metadataPartitionsToInit = new ArrayList<>(
+        MetadataPartitionType.getValidValues(dataMetaClient.getTableConfig().getTableVersion()).length);
 
     try {
       boolean exists = metadataTableExists(dataMetaClient);

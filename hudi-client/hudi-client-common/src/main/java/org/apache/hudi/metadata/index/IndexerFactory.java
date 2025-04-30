@@ -88,7 +88,8 @@ public class IndexerFactory {
     if (!dataTableWriteConfig.getMetadataConfig().isEnabled()) {
       return Collections.emptyMap();
     }
-    return Collections.unmodifiableMap(Arrays.stream(getValidValues())
+    return Collections.unmodifiableMap(Arrays.stream(
+            getValidValues(metaClient.getTableConfig().getTableVersion()))
         .filter(partitionType -> partitionType.isMetadataPartitionSupported(metaClient)
             && (partitionType.isMetadataPartitionEnabled(dataTableWriteConfig.getMetadataConfig())
             || partitionType.isMetadataPartitionAvailable(metaClient)))

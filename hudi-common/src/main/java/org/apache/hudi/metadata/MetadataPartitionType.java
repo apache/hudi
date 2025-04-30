@@ -26,6 +26,7 @@ import org.apache.hudi.avro.model.HoodieSecondaryIndexInfo;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.index.expression.HoodieExpressionIndex;
@@ -446,13 +447,26 @@ public enum MetadataPartitionType {
         .collect(Collectors.toSet());
   }
 
+  public static MetadataPartitionType[] getValidValues() {
+    return getValidValues(HoodieTableVersion.current());
+  }
+
   /**
    * Returns the set of all valid metadata partition types. Prefer using this method over {@link #values()}.
    */
-  public static MetadataPartitionType[] getValidValues() {
-    // ALL_PARTITIONS is just another record type in FILES partition
+  public static MetadataPartitionType[] getValidValues(HoodieTableVersion tableVersion) {
+    if (tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
+      // ALL_PARTITIONS is just another record type in FILES partition
+      return EnumSet.complementOf(EnumSet.of(
+          ALL_PARTITIONS)).toArray(new MetadataPartitionType[0]);
+    }
     return EnumSet.complementOf(EnumSet.of(
-        ALL_PARTITIONS)).toArray(new MetadataPartitionType[0]);
+            ALL_PARTITIONS))
+        .stream()
+        .filter(type -> type != SECONDARY_INDEX
+            && type != EXPRESSION_INDEX
+            && type != PARTITION_STATS)
+        .toArray(MetadataPartitionType[]::new);
   }
 
   /**
@@ -462,7 +476,7 @@ public enum MetadataPartitionType {
     if (!dataMetadataConfig.isEnabled()) {
       return Collections.emptyList();
     }
-    return Arrays.stream(getValidValues())
+    return Arrays.stream(getValidValues(metaClient.getTableConfig().getTableVersion()))
         .filter(partitionType -> partitionType.isMetadataPartitionEnabled(dataMetadataConfig) || partitionType.isMetadataPartitionAvailable(metaClient))
         .collect(Collectors.toList());
   }
