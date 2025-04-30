@@ -34,7 +34,6 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
@@ -63,13 +62,11 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  * This implementation does not rely on a specific engine and can be used in any JVM environment as a result.
  */
 public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> {
-  private final String payloadClass;
 
   public HoodieAvroReaderContext(
       StorageConfiguration<?> storageConfiguration,
       HoodieTableConfig tableConfig) {
     super(storageConfiguration, tableConfig);
-    this.payloadClass = tableConfig.getPayloadClass();
   }
 
   @Override
