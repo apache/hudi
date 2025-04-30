@@ -30,9 +30,18 @@ import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.avro.Schema;
 
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public interface ExpressionIndexRecordGenerator {
+
+  Set<String> SUPPORTED_META_FIELDS_PARTITION_STATS = new HashSet<>(Arrays.asList(
+      HoodieRecord.HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName(),
+      HoodieRecord.HoodieMetadataField.PARTITION_PATH_METADATA_FIELD.getFieldName(),
+      HoodieRecord.HoodieMetadataField.COMMIT_TIME_METADATA_FIELD.getFieldName()));
+
   EngineType getEngineType();
 
   /**

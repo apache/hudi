@@ -265,7 +265,7 @@ public class SparkExpressionIndexRecordGenerator implements ExpressionIndexRecor
           .collect(Collectors.toList());
       // filter for supported types
       final List<String> validColumnsToIndex = columnsToIndexSchemaMap.stream()
-          .filter(colSchemaPair -> HoodieTableMetadataUtil.SUPPORTED_META_FIELDS_PARTITION_STATS.contains(colSchemaPair.getKey())
+          .filter(colSchemaPair -> SUPPORTED_META_FIELDS_PARTITION_STATS.contains(colSchemaPair.getKey())
               || isColumnTypeSupported(colSchemaPair.getValue(), recordTypeOpt))
           .map(entry -> entry.getKey())
           .collect(Collectors.toList());
