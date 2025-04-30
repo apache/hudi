@@ -34,6 +34,7 @@ import org.apache.hudi.util.CloseableInternalRowIterator
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericRecord, IndexedRecord}
 import org.apache.hadoop.conf.Configuration
+import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.spark.sql.HoodieInternalRowUtils
 import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSerializer}
 import org.apache.spark.sql.catalyst.InternalRow
@@ -62,8 +63,9 @@ import scala.collection.mutable
 class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetReader,
                                               filters: Seq[Filter],
                                               requiredFilters: Seq[Filter],
-                                              storageConfiguration: StorageConfiguration[_])
-  extends BaseSparkInternalRowReaderContext(storageConfiguration) {
+                                              storageConfiguration: StorageConfiguration[_],
+                                              tableConfig: HoodieTableConfig)
+  extends BaseSparkInternalRowReaderContext(storageConfiguration, tableConfig) {
   lazy val sparkAdapter: SparkAdapter = SparkAdapterSupport.sparkAdapter
   private lazy val bootstrapSafeFilters: Seq[Filter] = filters.filter(filterIsSafeForBootstrap) ++ requiredFilters
   private val deserializerMap: mutable.Map[Schema, HoodieAvroDeserializer] = mutable.Map()

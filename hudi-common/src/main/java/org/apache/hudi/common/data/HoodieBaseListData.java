@@ -21,6 +21,10 @@ package org.apache.hudi.common.data;
 
 import org.apache.hudi.common.util.Either;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -43,7 +47,12 @@ public abstract class HoodieBaseListData<T> {
   protected HoodieBaseListData(Stream<T> dataStream, boolean lazy) {
     // NOTE: In case this container is being instantiated by an eager parent, we have to
     //       pre-materialize the stream
-    this.data = lazy ? Either.left(dataStream) : Either.right(dataStream.collect(Collectors.toList()));
+    if (lazy) {
+      this.data = Either.left(dataStream);
+    } else {
+      this.data = Either.right(dataStream.collect(Collectors.toList()));
+      dataStream.close();
+    }
     this.lazy = lazy;
   }
 
@@ -69,9 +78,31 @@ public abstract class HoodieBaseListData<T> {
 
   protected List<T> collectAsList() {
     if (lazy) {
-      return data.asLeft().collect(Collectors.toList());
+      try (Stream<T> stream = data.asLeft()) {
+        return stream.collect(Collectors.toList());
+      }
     } else {
       return data.asRight();
+    }
+  }
+
+  static class IteratorCloser implements Runnable {
+    private static final Logger LOG = LoggerFactory.getLogger(IteratorCloser.class);
+    private final Iterator<?> iterator;
+
+    IteratorCloser(Iterator<?> iterator) {
+      this.iterator = iterator;
+    }
+
+    @Override
+    public void run() {
+      if (iterator instanceof AutoCloseable) {
+        try {
+          ((AutoCloseable) iterator).close();
+        } catch (Exception ex) {
+          LOG.warn("Failed to properly close iterator", ex);
+        }
+      }
     }
   }
 }

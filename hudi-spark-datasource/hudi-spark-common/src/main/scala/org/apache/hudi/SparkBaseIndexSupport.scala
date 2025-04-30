@@ -23,7 +23,7 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.{FileSlice, HoodieIndexDefinition}
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.keygen.KeyGenUtils.DEFAULT_RECORD_KEY_PARTS_SEPARATOR
+import org.apache.hudi.keygen.KeyGenerator
 import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata}
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS
 
@@ -209,7 +209,7 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
               var tempCompositeRecordKeys: List[String] = List.empty
               for (compRecKey <- compositeRecordKeys) {
                 for (recKey <- recordKeys) {
-                  tempCompositeRecordKeys = tempCompositeRecordKeys :+ (compRecKey + DEFAULT_RECORD_KEY_PARTS_SEPARATOR + recKey)
+                  tempCompositeRecordKeys = tempCompositeRecordKeys :+ (compRecKey + KeyGenerator.DEFAULT_RECORD_KEY_PARTS_SEPARATOR + recKey)
                 }
               }
               compositeRecordKeys = tempCompositeRecordKeys

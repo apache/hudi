@@ -21,8 +21,8 @@ package org.apache.hudi.avro;
 
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
-import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.avro.Schema;
@@ -157,14 +157,31 @@ class TestHoodieAvroReaderContext {
   }
 
   @Test
-  void getRecordKeyWithKeyGen() {
+  void getNestedField() {
+    when(tableConfig.populateMetaFields()).thenReturn(true);
+    HoodieAvroReaderContext avroReaderContext = new HoodieAvroReaderContext(storageConfig, tableConfig);
+    IndexedRecord indexedRecord = createBaseRecord("compound", "field2", 3.2);
+    assertEquals(3.2, avroReaderContext.getValue(indexedRecord, BASE_SCHEMA, "base_field_3.nested_field"));
+  }
+
+  @Test
+  void getRecordKeyWithSingleKey() {
     when(tableConfig.populateMetaFields()).thenReturn(false);
-    BaseKeyGenerator keyGenerator = mock(BaseKeyGenerator.class);
-    HoodieAvroReaderContext avroReaderContext = new HoodieAvroReaderContext(storageConfig, tableConfig, keyGenerator);
-    IndexedRecord indexedRecord = createSkeletonRecord("field1", "field2", 3);
+    when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[]{"skeleton_field_1"}));
+    HoodieAvroReaderContext avroReaderContext = new HoodieAvroReaderContext(storageConfig, tableConfig);
     String recordKey = "record_key";
-    when(keyGenerator.getRecordKey((GenericRecord) indexedRecord)).thenReturn(recordKey);
+    IndexedRecord indexedRecord = createSkeletonRecord(recordKey, "field2", 3);
     assertEquals(recordKey, avroReaderContext.getRecordKey(indexedRecord, SKELETON_SCHEMA));
+  }
+
+  @Test
+  void getRecordKeyWithMultipleKeys() {
+    when(tableConfig.populateMetaFields()).thenReturn(false);
+    when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[]{"base_field_1", "base_field_3.nested_field"}));
+    HoodieAvroReaderContext avroReaderContext = new HoodieAvroReaderContext(storageConfig, tableConfig);
+    String recordKey = "base_field_1:compound,base_field_3.nested_field:3.2";
+    IndexedRecord indexedRecord = createBaseRecord("compound", "field2", 3.2);
+    assertEquals(recordKey, avroReaderContext.getRecordKey(indexedRecord, BASE_SCHEMA));
   }
 
   @Test
@@ -184,8 +201,7 @@ class TestHoodieAvroReaderContext {
 
   private HoodieAvroReaderContext getReaderContextWithMetaFields() {
     when(tableConfig.populateMetaFields()).thenReturn(true);
-    HoodieAvroReaderContext avroReaderContext = new HoodieAvroReaderContext(storageConfig, tableConfig);
-    return avroReaderContext;
+    return new HoodieAvroReaderContext(storageConfig, tableConfig);
   }
 
   private static Schema getSkeletonSchema() {

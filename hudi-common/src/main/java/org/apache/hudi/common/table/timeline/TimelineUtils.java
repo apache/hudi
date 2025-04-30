@@ -44,6 +44,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.text.ParseException;
@@ -133,6 +134,12 @@ public class TimelineUtils {
                 partitionToLatestDeleteTimestamp.put(partition, instant.requestedTime());
               }
             });
+          } catch (HoodieIOException e) {
+            if (e.getCause() instanceof FileNotFoundException) {
+              LOG.warn("Instant {} not found in storage and has been archived", instant);
+            } else {
+              throw e;
+            }
           } catch (IOException e) {
             throw new HoodieIOException("Failed to get partitions cleaned at " + instant, e);
           }

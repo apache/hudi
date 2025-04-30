@@ -27,10 +27,13 @@ import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.spark.sql.internal.SQLConf;
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieJavaRDD extends HoodieClientTestBase {
   @Test
@@ -64,5 +67,38 @@ public class TestHoodieJavaRDD extends HoodieClientTestBase {
     HoodiePairData<Integer, Integer> shuffleRDD = rddData.mapToPair(key -> Pair.of(key, 1))
         .reduceByKey((p1, p2) -> p1, 11);
     assertEquals(11, shuffleRDD.deduceNumPartitions());
+  }
+
+  @Test
+  void testMapPartitionsWithCloseable() {
+    String partition1 = "partition1";
+    String partition2 = "partition2";
+    HoodieData<String> input = HoodieJavaRDD.of(Arrays.asList(partition1, partition2), context, 2);
+    input.mapPartitions(partition -> new TrackingCloseableIterator<>(partition.next(), Collections.singletonList("a").iterator()), true)
+        .collectAsList();
+    assertTrue(TrackingCloseableIterator.isClosed(partition1));
+    assertTrue(TrackingCloseableIterator.isClosed(partition2));
+  }
+
+  @Test
+  void testFlatMapWithCloseable() {
+    String partition1 = "partition1";
+    String partition2 = "partition2";
+    HoodieData<String> input = HoodieJavaRDD.of(Arrays.asList(partition1, partition2), context, 2);
+    input.flatMap(partition -> new TrackingCloseableIterator<>(partition, Collections.singletonList("a").iterator()))
+        .collectAsList();
+    assertTrue(TrackingCloseableIterator.isClosed(partition1));
+    assertTrue(TrackingCloseableIterator.isClosed(partition2));
+  }
+
+  @Test
+  void testFlatMapToPairWithCloseable() {
+    String partition1 = "partition1";
+    String partition2 = "partition2";
+    HoodieData<String> input = HoodieJavaRDD.of(Arrays.asList(partition1, partition2), context, 2);
+    input.flatMapToPair(partition -> new TrackingCloseableIterator<>(partition, Collections.singletonList(Pair.of(1, "1")).iterator()))
+        .collectAsList();
+    assertTrue(TrackingCloseableIterator.isClosed(partition1));
+    assertTrue(TrackingCloseableIterator.isClosed(partition2));
   }
 }

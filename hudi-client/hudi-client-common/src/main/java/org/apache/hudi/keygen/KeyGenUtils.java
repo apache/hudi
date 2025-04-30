@@ -39,18 +39,18 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.keygen.KeyGenerator.DEFAULT_COLUMN_VALUE_SEPARATOR;
+import static org.apache.hudi.keygen.KeyGenerator.DEFAULT_RECORD_KEY_PARTS_SEPARATOR;
+import static org.apache.hudi.keygen.KeyGenerator.EMPTY_RECORDKEY_PLACEHOLDER;
+import static org.apache.hudi.keygen.KeyGenerator.NULL_RECORDKEY_PLACEHOLDER;
+import static org.apache.hudi.keygen.KeyGenerator.constructRecordKey;
+
 public class KeyGenUtils {
-
-  protected static final String NULL_RECORDKEY_PLACEHOLDER = "__null__";
-  protected static final String EMPTY_RECORDKEY_PLACEHOLDER = "__empty__";
-
   protected static final String HUDI_DEFAULT_PARTITION_PATH = PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH;
   public static final String DEFAULT_PARTITION_PATH_SEPARATOR = "/";
-  public static final String DEFAULT_RECORD_KEY_PARTS_SEPARATOR = ",";
-  public static final String DEFAULT_COLUMN_VALUE_SEPARATOR = ":";
-
   public static final String RECORD_KEY_GEN_PARTITION_ID_CONFIG = "_hoodie.record.key.gen.partition.id";
   public static final String RECORD_KEY_GEN_INSTANT_TIME_CONFIG = "_hoodie.record.key.gen.instant.time";
 
@@ -218,33 +218,14 @@ public class KeyGenUtils {
   }
 
   public static String getRecordKey(GenericRecord record, List<String> recordKeyFields, boolean consistentLogicalTimestampEnabled) {
-    boolean keyIsNullEmpty = true;
-    StringBuilder recordKey = new StringBuilder();
-    for (int i = 0; i < recordKeyFields.size(); i++) {
-      String recordKeyField = recordKeyFields.get(i);
-      String recordKeyValue;
+    BiFunction<String, Integer, String> valueFunction = (recordKeyField, index) -> {
       try {
-        recordKeyValue = HoodieAvroUtils.getNestedFieldValAsString(record, recordKeyField, false, consistentLogicalTimestampEnabled);
+        return HoodieAvroUtils.getNestedFieldValAsString(record, recordKeyField, false, consistentLogicalTimestampEnabled);
       } catch (HoodieException e) {
         throw new HoodieKeyException("Record key field '" + recordKeyField + "' does not exist in the input record");
       }
-      if (recordKeyValue == null) {
-        recordKey.append(recordKeyField).append(DEFAULT_COLUMN_VALUE_SEPARATOR).append(NULL_RECORDKEY_PLACEHOLDER);
-      } else if (recordKeyValue.isEmpty()) {
-        recordKey.append(recordKeyField).append(DEFAULT_COLUMN_VALUE_SEPARATOR).append(EMPTY_RECORDKEY_PLACEHOLDER);
-      } else {
-        recordKey.append(recordKeyField).append(DEFAULT_COLUMN_VALUE_SEPARATOR).append(recordKeyValue);
-        keyIsNullEmpty = false;
-      }
-      if (i != recordKeyFields.size() - 1) {
-        recordKey.append(DEFAULT_RECORD_KEY_PARTS_SEPARATOR);
-      }
-    }
-    if (keyIsNullEmpty) {
-      throw new HoodieKeyException("recordKey values: \"" + recordKey + "\" for fields: "
-          + recordKeyFields + " cannot be entirely null or empty.");
-    }
-    return recordKey.toString();
+    };
+    return constructRecordKey(recordKeyFields.toArray(new String[]{}), valueFunction);
   }
 
   public static String getRecordPartitionPath(GenericRecord record, List<String> partitionPathFields,

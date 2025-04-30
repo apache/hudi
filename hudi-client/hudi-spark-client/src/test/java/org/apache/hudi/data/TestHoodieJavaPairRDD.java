@@ -31,6 +31,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import scala.Tuple2;
@@ -106,5 +107,16 @@ public class TestHoodieJavaPairRDD {
       assertTrue(Arrays.asList("003", "002", "005", "004").contains(item.getRight().getLeft()));
       assertEquals(Option.of("value1"), item.getRight().getRight());
     });
+  }
+
+  @Test
+  void testFlatMapValuesWithCloseable() {
+    String partition1 = "partition1";
+    String partition2 = "partition2";
+    HoodiePairData<Integer, String> input = HoodieJavaPairRDD.of(jsc.parallelizePairs(Arrays.asList(Tuple2.apply(1, partition1), Tuple2.apply(2, partition2)), 2));
+    input.flatMapValues(partition -> new TrackingCloseableIterator<>(partition, Collections.singletonList(1).iterator()))
+        .collectAsList();
+    assertTrue(TrackingCloseableIterator.isClosed(partition1));
+    assertTrue(TrackingCloseableIterator.isClosed(partition2));
   }
 }

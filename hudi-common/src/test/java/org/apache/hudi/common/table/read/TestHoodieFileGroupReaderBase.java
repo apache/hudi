@@ -109,11 +109,11 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
 
   private static Stream<Arguments> testArguments() {
     return Stream.of(
-        arguments(RecordMergeMode.COMMIT_TIME_ORDERING, "avro", true),
+        arguments(RecordMergeMode.COMMIT_TIME_ORDERING, "avro", false),
         arguments(RecordMergeMode.COMMIT_TIME_ORDERING, "parquet", true),
         arguments(RecordMergeMode.EVENT_TIME_ORDERING, "avro", true),
         arguments(RecordMergeMode.EVENT_TIME_ORDERING, "parquet", true),
-        arguments(RecordMergeMode.CUSTOM, "avro", true),
+        arguments(RecordMergeMode.CUSTOM, "avro", false),
         arguments(RecordMergeMode.CUSTOM, "parquet", true)
     );
   }
@@ -151,10 +151,17 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     }
   }
 
+  private static Stream<Arguments> logFileOnlyCases() {
+    return Stream.of(
+        arguments(RecordMergeMode.COMMIT_TIME_ORDERING, "avro"),
+        arguments(RecordMergeMode.EVENT_TIME_ORDERING, "parquet"),
+        arguments(RecordMergeMode.CUSTOM, "avro"));
+  }
+
   @ParameterizedTest
-  @MethodSource("testArguments")
-  public void testReadLogFilesOnlyInMergeOnReadTable(RecordMergeMode recordMergeMode, String logDataBlockFormat, boolean populateMetaFields) throws Exception {
-    Map<String, String> writeConfigs = new HashMap<>(getCommonConfigs(recordMergeMode, populateMetaFields));
+  @MethodSource("logFileOnlyCases")
+  public void testReadLogFilesOnlyInMergeOnReadTable(RecordMergeMode recordMergeMode, String logDataBlockFormat) throws Exception {
+    Map<String, String> writeConfigs = new HashMap<>(getCommonConfigs(recordMergeMode, true));
     writeConfigs.put(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), logDataBlockFormat);
     // Use InMemoryIndex to generate log only mor table
     writeConfigs.put("hoodie.index.type", "INMEMORY");

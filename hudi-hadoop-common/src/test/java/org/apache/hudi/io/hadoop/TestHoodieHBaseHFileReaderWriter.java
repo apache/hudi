@@ -21,6 +21,7 @@ package org.apache.hudi.io.hadoop;
 
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
@@ -42,7 +43,6 @@ import org.junit.jupiter.params.provider.CsvSource;
 
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Spliterator;
 import java.util.Spliterators;
@@ -107,15 +107,16 @@ public class TestHoodieHBaseHFileReaderWriter extends TestHoodieHFileReaderWrite
           (entry.get("_row_key").toString()).contains("key05")
               || (entry.get("_row_key").toString()).contains("key24")
               || (entry.get("_row_key").toString()).contains("key31"))).collect(Collectors.toList());
-      Iterator<IndexedRecord> iterator =
+      try (ClosableIterator<IndexedRecord> iterator =
           hfileReader.getIndexedRecordsByKeysIterator(
               Arrays.asList("key00001", "key05", "key24", "key16", "key31", "key61"),
-              avroSchema);
-      List<GenericRecord> recordsByKeys =
-          StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
-              .map(r -> (GenericRecord) r)
-              .collect(Collectors.toList());
-      assertEquals(expectedKey1s, recordsByKeys);
+              avroSchema)) {
+        List<GenericRecord> recordsByKeys =
+            StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
+                .map(r -> (GenericRecord) r)
+                .collect(Collectors.toList());
+        assertEquals(expectedKey1s, recordsByKeys);
+      }
     }
   }
 

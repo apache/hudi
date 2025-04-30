@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
@@ -91,18 +92,15 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   private final List<String> partitionCols;
   private final Set<String> partitionColSet;
 
-  private final String recordKeyField;
-
   protected HiveHoodieReaderContext(HoodieFileGroupReaderBasedRecordReader.HiveReaderCreator readerCreator,
-                                    String recordKeyField,
                                     List<String> partitionCols,
                                     ObjectInspectorCache objectInspectorCache,
-                                    StorageConfiguration<?> storageConfiguration) {
-    super(storageConfiguration);
+                                    StorageConfiguration<?> storageConfiguration,
+                                    HoodieTableConfig tableConfig) {
+    super(storageConfiguration, tableConfig);
     this.readerCreator = readerCreator;
     this.partitionCols = partitionCols;
     this.partitionColSet = new HashSet<>(this.partitionCols);
-    this.recordKeyField = recordKeyField;
     this.objectInspectorCache = objectInspectorCache;
     this.columnTypeMap = objectInspectorCache.getColumnTypeMap();
   }
@@ -199,11 +197,6 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
         }
         return mergerClass;
     }
-  }
-
-  @Override
-  public String getRecordKey(ArrayWritable record, Schema schema) {
-    return getValue(record, schema, recordKeyField).toString();
   }
 
   @Override

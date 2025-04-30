@@ -24,6 +24,7 @@ import org.apache.hudi.SparkFileFormatInternalRowReaderContext;
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.ReaderContextFactory;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -59,6 +60,7 @@ import scala.collection.JavaConverters;
 class SparkReaderContextFactory implements ReaderContextFactory<InternalRow> {
   private final Broadcast<SparkParquetReader> parquetReaderBroadcast;
   private final Broadcast<SerializableConfiguration> configurationBroadcast;
+  private final Broadcast<HoodieTableConfig> tableConfigBroadcast;
 
   SparkReaderContextFactory(HoodieSparkEngineContext hoodieSparkEngineContext, HoodieTableMetaClient metaClient) {
     this(hoodieSparkEngineContext, metaClient, new TableSchemaResolver(metaClient), SparkAdapterSupport$.MODULE$.sparkAdapter());
@@ -88,6 +90,9 @@ class SparkReaderContextFactory implements ReaderContextFactory<InternalRow> {
     // Spark parquet reader has to be instantiated on the driver and broadcast to the executors
     SparkParquetReader parquetFileReader = sparkAdapter.createParquetFileReader(false, sqlConf, options, configs);
     parquetReaderBroadcast = jsc.broadcast(parquetFileReader);
+    // Broadcast: TableConfig.
+    HoodieTableConfig tableConfig = metaClient.getTableConfig();
+    tableConfigBroadcast = jsc.broadcast(tableConfig);
   }
 
   @Override
@@ -100,6 +105,10 @@ class SparkReaderContextFactory implements ReaderContextFactory<InternalRow> {
       throw new HoodieException("Configuration broadcast is not initialized.");
     }
 
+    if (tableConfigBroadcast == null) {
+      throw new HoodieException("Table config broadcast is not initialized.");
+    }
+
     SparkParquetReader sparkParquetReader = parquetReaderBroadcast.getValue();
     if (sparkParquetReader != null) {
       List<Filter> filters = Collections.emptyList();
@@ -107,7 +116,8 @@ class SparkReaderContextFactory implements ReaderContextFactory<InternalRow> {
           sparkParquetReader,
           JavaConverters.asScalaBufferConverter(filters).asScala().toSeq(),
           JavaConverters.asScalaBufferConverter(filters).asScala().toSeq(),
-          new HadoopStorageConfiguration(configurationBroadcast.getValue().value()));
+          new HadoopStorageConfiguration(configurationBroadcast.getValue().value()),
+          tableConfigBroadcast.getValue());
     } else {
       throw new HoodieException("Cannot get the broadcast Spark Parquet reader.");
     }
