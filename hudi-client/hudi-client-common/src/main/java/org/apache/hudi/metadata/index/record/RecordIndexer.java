@@ -63,12 +63,12 @@ public class RecordIndexer implements Indexer {
   private final HoodieEngineContext engineContext;
   private final HoodieWriteConfig dataTableWriteConfig;
   private final HoodieTableMetaClient dataTableMetaClient;
-  private final HoodieTable table;
+  private final Lazy<HoodieTable> table;
 
   public RecordIndexer(HoodieEngineContext engineContext,
                        HoodieWriteConfig dataTableWriteConfig,
                        HoodieTableMetaClient dataTableMetaClient,
-                       HoodieTable table) {
+                       Lazy<HoodieTable> table) {
     this.engineContext = engineContext;
     this.dataTableWriteConfig = dataTableWriteConfig;
     this.dataTableMetaClient = dataTableMetaClient;
@@ -127,8 +127,7 @@ public class RecordIndexer implements Indexer {
           this.getClass().getSimpleName(),
           dataTableMetaClient,
           dataTableWriteConfig,
-          // TODO(yihua): is table instance needed here?
-          table);
+          table.get());
     }
     records.persist("MEMORY_AND_DISK_SER");
     final long recordCount = records.count();

@@ -32,6 +32,7 @@ import org.apache.hudi.metadata.index.partitionstats.PartitionStatsIndexer;
 import org.apache.hudi.metadata.index.record.RecordIndexer;
 import org.apache.hudi.metadata.index.secondary.SecondaryIndexer;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.util.Lazy;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -46,7 +47,7 @@ public class IndexerFactory {
                                         HoodieEngineContext engineContext,
                                         HoodieWriteConfig dataTableWriteConfig,
                                         HoodieTableMetaClient dataTableMetaClient,
-                                        HoodieTable table,
+                                        Lazy<HoodieTable> table,
                                         ExpressionIndexRecordGenerator indexHelper) {
     switch (partitionType) {
       case BLOOM_FILTERS:
@@ -82,7 +83,7 @@ public class IndexerFactory {
       HoodieEngineContext engineContext,
       HoodieWriteConfig dataTableWriteConfig,
       HoodieTableMetaClient metaClient,
-      HoodieTable table,
+      Lazy<HoodieTable> table,
       ExpressionIndexRecordGenerator indexHelper) {
     if (!dataTableWriteConfig.getMetadataConfig().isEnabled()) {
       return Collections.emptyMap();

@@ -172,7 +172,8 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         .setTimeGeneratorConfig(dataWriteConfig.getTimeGeneratorConfig()).build();
     this.enabledIndexerMap =
         IndexerFactory.getEnabledIndexerMap(
-            engineContext, dataWriteConfig, dataMetaClient, getTable(dataWriteConfig, dataMetaClient),
+            engineContext, dataWriteConfig, dataMetaClient,
+            Lazy.lazily(() -> getTable(dataWriteConfig, dataMetaClient)),
             expressionIndexRecordGenerator);
     this.expressionIndexRecordGenerator = expressionIndexRecordGenerator;
     if (writeConfig.isMetadataTableEnabled()) {
