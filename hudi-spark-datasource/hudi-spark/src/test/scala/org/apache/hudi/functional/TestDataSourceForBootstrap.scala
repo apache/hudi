@@ -25,15 +25,17 @@ import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.timeline.{HoodieInstantTimeGenerator, HoodieTimeline}
 import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieClusteringConfig, HoodieCompactionConfig, HoodieWriteConfig}
-import org.apache.hudi.functional.TestDataSourceForBootstrap.{dropMetaCols, sort}
+import org.apache.hudi.functional.TestDataSourceForBootstrap.{assertDfEquals, assertMetaColsNotNull, dropMetaCols, getExpectedDf, sort}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.keygen.{NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieClientTestUtils}
+import org.apache.hudi.util.SparkConfigUtils
 
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.{DataFrame, Dataset, Row, SaveMode, SparkSession}
-import org.apache.spark.sql.functions.{col, lit}
+import org.apache.spark.sql.expressions.Window
+import org.apache.spark.sql.functions.{col, lit, row_number}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.io.TempDir
@@ -46,7 +48,6 @@ import java.util.Collections
 import scala.collection.JavaConverters._
 
 class TestDataSourceForBootstrap {
-
   var spark: SparkSession = _
   val commonOpts: Map[String, String] = Map(
     HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key -> "4",
@@ -361,7 +362,7 @@ class TestDataSourceForBootstrap {
       .option(DataSourceReadOptions.QUERY_TYPE.key,
         DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
       .load(basePath)
-    assertEquals(numRecords, hoodieROViewDF1.count())
+    assertDfEquals(sourceDF, dropMetaCols(hoodieROViewDF1))
 
     // Perform upsert with clustering
     val updateTimestamp = Instant.now.toEpochMilli
@@ -372,6 +373,7 @@ class TestDataSourceForBootstrap {
       .options(writeOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
+      .option(HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key, "0")
       .option(HoodieClusteringConfig.INLINE_CLUSTERING.key, "true")
       .option(HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key, "1")
       .option(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key, "datestr")
@@ -385,15 +387,10 @@ class TestDataSourceForBootstrap {
     val hoodieROViewDF2 = spark.read.format("hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key,
         DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
-      .load(basePath + "/*")
-    assertEquals(numRecords, hoodieROViewDF2.count())
-
-    // Test query without "*" for MOR READ_OPTIMIZED
-    val hoodieROViewDFWithBasePath = spark.read.format("hudi")
-      .option(DataSourceReadOptions.QUERY_TYPE.key,
-        DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
       .load(basePath)
-    assertEquals(numRecords, hoodieROViewDFWithBasePath.count())
+    val expectedDf = getExpectedDf(sourceDF, updateDF, commonOpts)
+    assertDfEquals(expectedDf, dropMetaCols(hoodieROViewDF2))
+    assertMetaColsNotNull(hoodieROViewDF2)
   }
 
   @ParameterizedTest
@@ -428,7 +425,7 @@ class TestDataSourceForBootstrap {
                             .option(DataSourceReadOptions.QUERY_TYPE.key,
                               DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
                             .load(basePath)
-    assertEquals(numRecords, hoodieROViewDF1.count())
+    assertDfEquals(sourceDF, dropMetaCols(hoodieROViewDF1))
 
     // Perform upsert
     val updateTimestamp = Instant.now.toEpochMilli
@@ -440,6 +437,7 @@ class TestDataSourceForBootstrap {
       .options(writeOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
+      .option(HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key, "0")
       .option(HoodieCompactionConfig.INLINE_COMPACT.key, "true")
       .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key, "1")
       .mode(SaveMode.Append)
@@ -448,21 +446,16 @@ class TestDataSourceForBootstrap {
     // Expect 2 new commits since meta bootstrap - delta commit and compaction commit (due to inline compaction)
     assertEquals(2, HoodieDataSourceHelpers.listCommitsSince(fs, basePath, commitInstantTime1).size())
 
-    // Read table after upsert and verify count. Since we have inline compaction enabled the RO view will have
-    // the updated rows.
+    // Read table after upsert and verify count.
+    // Since we have inline compaction enabled the RO view will have the updated rows.
     val hoodieROViewDF2 = spark.read.format("hudi")
-                            .option(DataSourceReadOptions.QUERY_TYPE.key,
-                              DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
-                            .load(basePath + "/*")
-    assertEquals(numRecords, hoodieROViewDF2.count())
-    assertEquals(numRecordsUpdate, hoodieROViewDF2.filter(s"timestamp == $updateTimestamp").count())
-    // Test query without "*" for MOR READ_OPTIMIZED
-    val hoodieROViewDFWithBasePath = spark.read.format("hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key,
         DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
       .load(basePath)
-    assertEquals(numRecords, hoodieROViewDFWithBasePath.count())
-    assertEquals(numRecordsUpdate, hoodieROViewDFWithBasePath.filter(s"timestamp == $updateTimestamp").count())
+    val expectedDf = getExpectedDf(sourceDF, updateDF, commonOpts)
+    assertDfEquals(expectedDf, dropMetaCols(hoodieROViewDF2))
+    assertMetaColsNotNull(hoodieROViewDF2)
+    assertEquals(numRecordsUpdate, hoodieROViewDF2.filter(s"timestamp == $updateTimestamp").count())
   }
 
   @Test
@@ -694,10 +687,39 @@ class TestDataSourceForBootstrap {
 }
 
 object TestDataSourceForBootstrap {
+  val batchColName = "batch"
+  val rowNumber = "row_number"
+  val partitionColName = "datestr"
+  val nullMetaColFilter = HoodieRecord.HOODIE_META_COLUMNS.asScala.toSeq
+    .map(colName => col(colName).isNull)
+    .reduce((a, b) => a.or(b))
 
   def sort(df: DataFrame): Dataset[Row] = df.sort("_row_key")
 
   def dropMetaCols(df: DataFrame): DataFrame =
     df.drop(HoodieRecord.HOODIE_META_COLUMNS.asScala.toSeq: _*)
 
+  def getExpectedDf(baseDf: DataFrame, updateDf: DataFrame, commonOpts: Map[String, String]): DataFrame = {
+    val windowFunc = Window.partitionBy(SparkConfigUtils.getStringWithAltKeys(
+        commonOpts, DataSourceWriteOptions.RECORDKEY_FIELD))
+      .orderBy(
+        col(SparkConfigUtils.getStringWithAltKeys(
+          commonOpts, DataSourceWriteOptions.PRECOMBINE_FIELD)).desc,
+        col(batchColName).desc)
+    baseDf.withColumn(batchColName, lit("1")).union(updateDf.withColumn(batchColName, lit("1")))
+      .withColumn(rowNumber, row_number().over(windowFunc))
+      .filter(col(rowNumber) === 1)
+      .drop(rowNumber, batchColName)
+  }
+
+  def assertDfEquals(df1: DataFrame, df2: DataFrame): Unit = {
+    assertEquals(df1.count, df2.count)
+    assertEquals(0, df1.except(df2).count)
+    assertEquals(0, df2.except(df1).count)
+  }
+
+  def assertMetaColsNotNull(df: DataFrame): Unit = {
+    assertEquals(0, df.select(HoodieRecord.HOODIE_META_COLUMNS.asScala.toSeq.map(e => col(e)): _*)
+      .filter(nullMetaColFilter).count)
+  }
 }

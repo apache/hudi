@@ -21,12 +21,17 @@ package org.apache.hudi.common.table.read;
 
 import org.apache.hudi.avro.HoodieAvroReaderContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
+
+import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -41,6 +46,12 @@ public class TestHoodieFileGroupReaderOnJava extends HoodieFileGroupReaderOnJava
   @Override
   public HoodieReaderContext<IndexedRecord> getHoodieReaderContext(String tablePath, Schema avroSchema, StorageConfiguration<?> storageConf, HoodieTableMetaClient metaClient) {
     return new HoodieAvroReaderContext(storageConf, metaClient.getTableConfig());
+  }
+
+  @Override
+  public void bootstrapTable(List<HoodieRecord> recordList, Map<String, String> writeConfigs) {
+    throw new HoodieNotSupportedException(
+        "HUDI-8773: Not supporting bootstrap table testing at the file group reader layer in Java yet.");
   }
 
   @Override
