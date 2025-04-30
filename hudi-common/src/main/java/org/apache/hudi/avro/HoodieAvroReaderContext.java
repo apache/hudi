@@ -273,7 +273,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
         mergedRecord.put(dataField.pos() + skeletonFields, dataRecord.get(sourceField.pos()));
       }
       for (int i = 0; i < partitionFieldPositions.length; i++) {
-        if (mergedRecord.get(partitionFieldPositions[i]) != null) {
+        if (mergedRecord.get(partitionFieldPositions[i]) == null) {
           mergedRecord.put(partitionFieldPositions[i], partitionValues[i]);
         }
       }
