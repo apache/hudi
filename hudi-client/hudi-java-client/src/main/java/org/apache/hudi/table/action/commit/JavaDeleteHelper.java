@@ -112,8 +112,8 @@ public class JavaDeleteHelper<R> extends
         // if entire set of keys are non existent
         deleteExecutor.saveWorkloadProfileMetadataToInflight(new WorkloadProfile(Pair.of(new HashMap<>(), new WorkloadStat())), instantTime);
         result = new HoodieWriteMetadata<>();
-        result.setWriteStatuses(Collections.EMPTY_LIST);
-        deleteExecutor.commitOnAutoCommit(result);
+        result.setDataTableWriteStatuses(Collections.EMPTY_LIST);
+        deleteExecutor.completeCommit(result);
       }
       return result;
     } catch (Throwable e) {

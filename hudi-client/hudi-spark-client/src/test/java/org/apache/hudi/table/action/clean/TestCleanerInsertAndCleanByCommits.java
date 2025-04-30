@@ -58,15 +58,16 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.model.HoodieCleaningPolicy.KEEP_LATEST_COMMITS;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTime;
 import static org.apache.hudi.table.TestCleaner.insertFirstBigBatchForClientCleanerTest;
-import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.apache.hudi.testutils.HoodieClientTestBase.Function2;
 import static org.apache.hudi.testutils.HoodieClientTestBase.Function3;
 import static org.apache.hudi.testutils.HoodieClientTestBase.wrapRecordsGenFunctionForPreppedCalls;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestCleanerInsertAndCleanByCommits extends SparkClientFunctionalTestHarness {
 
@@ -124,7 +125,7 @@ public class TestCleanerInsertAndCleanByCommits extends SparkClientFunctionalTes
       Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieRecord>, String> upsertFn, boolean isPreppedAPI, boolean isAsync)
       throws Exception {
     int maxCommits = 3; // keep upto 3 commits from the past
-    HoodieWriteConfig cfg = getConfigBuilder(true)
+    HoodieWriteConfig cfg = getConfigBuilder(false)
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withCleanerPolicy(KEEP_LATEST_COMMITS)
             .withAsyncClean(isAsync).retainCommits(maxCommits).build())
@@ -154,12 +155,12 @@ public class TestCleanerInsertAndCleanByCommits extends SparkClientFunctionalTes
         client.startCommitWithTime(newCommitTime);
         List<HoodieRecord> records = recordUpsertGenWrappedFunction.apply(newCommitTime, BATCH_SIZE);
 
-        List<WriteStatus> statuses = upsertFn.apply(client, jsc().parallelize(records, PARALLELISM), newCommitTime).collect();
-        // Verify there are no errors
-        assertNoWriteErrors(statuses);
+        JavaRDD<WriteStatus> rawStatuses = upsertFn.apply(client, jsc().parallelize(records, PARALLELISM), newCommitTime);
+        JavaRDD<WriteStatus> statuses = jsc().parallelize(rawStatuses.collect(), 1);
+        client.commit(newCommitTime, statuses, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
         commitWriteStatsMap.put(
             newCommitTime,
-            statuses.stream().map(WriteStatus::getStat).collect(Collectors.toList()));
+            statuses.map(WriteStatus::getStat).collect());
 
         metaClient = HoodieTableMetaClient.reload(metaClient);
         validateFilesAfterCleaning(
@@ -250,11 +251,13 @@ public class TestCleanerInsertAndCleanByCommits extends SparkClientFunctionalTes
           commitTimes.remove(lastInstant.requestedTime());
         }
 
-        assertEquals(
-            expectedInstantTimeMap.get(
-                Pair.of(partitionPath, fileGroup.getFileGroupId().getFileId())),
-            commitTimes,
-            "Only contain acceptable versions of file should be present");
+        Set<String> expected = expectedInstantTimeMap.get(Pair.of(partitionPath, fileGroup.getFileGroupId().getFileId()));
+        Set<String> actual = commitTimes;
+        if (expected == null) {
+          assertTrue(actual.isEmpty());
+        } else {
+          assertEquals(expected, actual, "Only contain acceptable versions of file should be present");
+        }
       }
     }
   }

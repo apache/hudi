@@ -60,7 +60,6 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.config.LockConfiguration.FILESYSTEM_LOCK_PATH_PROP_KEY;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestMultiWriterWithPreferWriterIngestion extends HoodieClientTestBase {
 
@@ -170,7 +169,7 @@ public class TestMultiWriterWithPreferWriterIngestion extends HoodieClientTestBa
     future2 = executors.submit(() -> {
       try {
         HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client2.compact(instant5);
-        client2.commitCompaction(instant5, compactionMetadata.getCommitMetadata().get(), Option.empty());
+        client2.commitCompaction(instant5, compactionMetadata, Option.empty(), Option.empty());
         validInstants.add(instant5);
       } catch (Exception e2) {
         if (tableType == HoodieTableType.MERGE_ON_READ) {
@@ -223,14 +222,14 @@ public class TestMultiWriterWithPreferWriterIngestion extends HoodieClientTestBa
 
     JavaRDD<WriteStatus> result1 = updateBatch(cfg, client1, instant2, instant1,
         Option.of(Arrays.asList(instant1)), "000", numRecords, SparkRDDWriteClient::upsert, false, false,
-        numRecords, 200, 2, INSTANT_GENERATOR);
+        numRecords, 200, 2, true, INSTANT_GENERATOR, true);
     // Start and finish another commit while the previous writer for commit 003 is running
     String instant3 = client1.createNewInstantTime();
     SparkRDDWriteClient client2 = getHoodieWriteClient(cfg);
     JavaRDD<WriteStatus> result2 = updateBatch(cfg, client2, instant3, instant1,
         Option.of(Arrays.asList(instant1)), "000", numRecords, SparkRDDWriteClient::upsert, false, false,
         numRecords, 200, 2, INSTANT_GENERATOR);
-    client2.commit(instant3, result2);
+
     // Schedule and run clustering while previous writer for commit 003 is running
     SparkRDDWriteClient client3 = getHoodieWriteClient(cfg);
     // schedule clustering
@@ -242,19 +241,16 @@ public class TestMultiWriterWithPreferWriterIngestion extends HoodieClientTestBa
 
   private void createCommitWithInserts(HoodieWriteConfig cfg, SparkRDDWriteClient client,
                                        String prevCommitTime, String newCommitTime, int numRecords) throws Exception {
-    // Finish first base commmit
-    JavaRDD<WriteStatus> result = insertFirstBatch(cfg, client, newCommitTime, prevCommitTime, numRecords, SparkRDDWriteClient::bulkInsert,
+    insertFirstBatch(cfg, client, newCommitTime, prevCommitTime, numRecords, SparkRDDWriteClient::bulkInsert,
         false, false, numRecords, INSTANT_GENERATOR);
-    assertTrue(client.commit(newCommitTime, result), "Commit should succeed");
   }
 
   private void createCommitWithUpserts(HoodieWriteConfig cfg, SparkRDDWriteClient client, String prevCommit,
                                        String commitTimeBetweenPrevAndNew, String newCommitTime, int numRecords)
       throws Exception {
-    JavaRDD<WriteStatus> result = updateBatch(cfg, client, newCommitTime, prevCommit,
+    updateBatch(cfg, client, newCommitTime, prevCommit,
         Option.of(Arrays.asList(commitTimeBetweenPrevAndNew)), "000", numRecords, SparkRDDWriteClient::upsert, false, false,
         numRecords, 200, 2, INSTANT_GENERATOR);
-    client.commit(newCommitTime, result);
   }
 
 }

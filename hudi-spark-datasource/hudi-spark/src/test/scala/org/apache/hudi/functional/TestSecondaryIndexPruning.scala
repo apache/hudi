@@ -1779,10 +1779,14 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
   private def getWriteConfig(hudiOpts: Map[String, String]): HoodieWriteConfig = {
     val props = TypedProperties.fromMap(JavaConverters.mapAsJavaMapConverter(hudiOpts).asJava)
     HoodieWriteConfig.newBuilder()
+      .withAutoCommit(false)
       .withProps(props)
       .withPath(basePath)
       .build()
   }
+
+  private def metadataWriter(clientConfig: HoodieWriteConfig): HoodieBackedTableMetadataWriter[_,_] = SparkHoodieBackedTableMetadataWriter.create(
+    storageConf, clientConfig, new HoodieSparkEngineContext(jsc)).asInstanceOf[HoodieBackedTableMetadataWriter[_,_]]
 }
 
 object TestSecondaryIndexPruning {

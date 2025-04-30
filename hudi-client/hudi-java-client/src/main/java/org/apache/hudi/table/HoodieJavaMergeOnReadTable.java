@@ -69,7 +69,6 @@ public class HoodieJavaMergeOnReadTable<T> extends HoodieJavaCopyOnWriteTable<T>
                                                               List<HoodieRecord<T>> preppedRecords) {
     return new JavaUpsertPreppedDeltaCommitActionExecutor<>((HoodieJavaEngineContext) context, config,
         this, instantTime, preppedRecords).execute();
-
   }
 
   @Override
@@ -125,7 +124,7 @@ public class HoodieJavaMergeOnReadTable<T> extends HoodieJavaCopyOnWriteTable<T>
   public HoodieWriteMetadata<List<WriteStatus>> logCompact(HoodieEngineContext context, String logCompactionInstantTime) {
     RunCompactionActionExecutor logCompactionExecutor = new RunCompactionActionExecutor(context, config, this,
         logCompactionInstantTime, new HoodieJavaMergeOnReadTableCompactor<>(), this, WriteOperationType.LOG_COMPACT);
-    return logCompactionExecutor.execute();
+    return convertMetadata(logCompactionExecutor.execute());
   }
 
   @Override

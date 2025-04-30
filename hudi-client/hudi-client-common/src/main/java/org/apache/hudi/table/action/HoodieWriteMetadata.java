@@ -32,7 +32,9 @@ import java.util.Map;
  */
 public class HoodieWriteMetadata<O> {
 
-  private O writeStatuses;
+  private O dataTableWriteStatuses;
+  private O metadataTableWriteStatuses;
+  private O allWriteStatuses;
   private Option<Duration> indexLookupDuration = Option.empty();
   private Option<Long> sourceReadAndIndexDurationMs = Option.empty();
 
@@ -50,13 +52,12 @@ public class HoodieWriteMetadata<O> {
   /**
    * Clones the write metadata with transformed write statuses.
    *
-   * @param transformedWriteStatuses transformed write statuses
    * @param <T>                      type of transformed write statuses
    * @return Cloned {@link HoodieWriteMetadata<T>} instance
    */
-  public <T> HoodieWriteMetadata<T> clone(T transformedWriteStatuses) {
+  public <T> HoodieWriteMetadata<T> clone(T allWriteStatuses) {
     HoodieWriteMetadata<T> newMetadataInstance = new HoodieWriteMetadata<>();
-    newMetadataInstance.setWriteStatuses(transformedWriteStatuses);
+    newMetadataInstance.setAllWriteStatuses(allWriteStatuses);
     if (indexLookupDuration.isPresent()) {
       newMetadataInstance.setIndexLookupDuration(indexLookupDuration.get());
     }
@@ -80,16 +81,32 @@ public class HoodieWriteMetadata<O> {
     return newMetadataInstance;
   }
 
-  public O getWriteStatuses() {
-    return writeStatuses;
+  public O getDataTableWriteStatuses() {
+    return dataTableWriteStatuses;
+  }
+
+  public O getAllWriteStatuses() {
+    return allWriteStatuses;
+  }
+
+  public O getMetadataTableWriteStatuses() {
+    return metadataTableWriteStatuses;
   }
 
   public Option<HoodieCommitMetadata> getCommitMetadata() {
     return commitMetadata;
   }
 
-  public void setWriteStatuses(O writeStatuses) {
-    this.writeStatuses = writeStatuses;
+  public void setAllWriteStatuses(O allWriteStatuses) {
+    this.allWriteStatuses = allWriteStatuses;
+  }
+
+  public void setDataTableWriteStatuses(O dataTableWriteStatuses) {
+    this.dataTableWriteStatuses = dataTableWriteStatuses;
+  }
+
+  public void setMetadataTableWriteStatuses(O metadataTableWriteStatuses) {
+    this.metadataTableWriteStatuses = metadataTableWriteStatuses;
   }
 
   public void setCommitMetadata(Option<HoodieCommitMetadata> commitMetadata) {

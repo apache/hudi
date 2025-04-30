@@ -901,9 +901,9 @@ public class TestHoodieAvroUtils {
   @ParameterizedTest
   @MethodSource("getSchemaForFieldParams")
   public void testGetSchemaForFieldSimple(String colName, Schema.Type schemaType) {
-    Pair<String, Schema.Field> actualColNameAndSchemaFile = HoodieAvroUtils.getSchemaForField(SCHEMA_WITH_AVRO_TYPES, colName);
+    Pair<String, Schema> actualColNameAndSchemaFile = HoodieAvroUtils.getSchemaForField(SCHEMA_WITH_AVRO_TYPES, colName);
     assertEquals(colName, actualColNameAndSchemaFile.getKey());
-    assertEquals(schemaType, actualColNameAndSchemaFile.getValue().schema().getType());
+    assertEquals(schemaType, actualColNameAndSchemaFile.getValue().getType());
   }
 
   public static Stream<Arguments> getSchemaForFieldParamsNested() {
@@ -926,8 +926,8 @@ public class TestHoodieAvroUtils {
   @ParameterizedTest
   @MethodSource("getSchemaForFieldParamsNested")
   public void testGetSchemaForFieldNested(String colName, Schema.Type schemaType) {
-    Pair<String, Schema.Field> actualColNameAndSchemaFile = HoodieAvroUtils.getSchemaForField(SCHEMA_WITH_NESTED_FIELD_LARGE, colName);
+    Pair<String, Schema> actualColNameAndSchemaFile = HoodieAvroUtils.getSchemaForField(SCHEMA_WITH_NESTED_FIELD_LARGE, colName);
     assertEquals(colName, actualColNameAndSchemaFile.getKey());
-    assertEquals(schemaType, resolveNullableSchema(actualColNameAndSchemaFile.getValue().schema()).getType());
+    assertEquals(schemaType, resolveNullableSchema(actualColNameAndSchemaFile.getValue()).getType());
   }
 }

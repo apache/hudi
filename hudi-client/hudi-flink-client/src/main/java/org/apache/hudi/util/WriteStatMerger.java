@@ -56,12 +56,12 @@ public class WriteStatMerger {
     }
     merged.setLogFiles(mergedLogFiles);
     // column stats
-    if (stat1.getColumnStats().isPresent()) {
-      merged.putRecordsStats(stat1.getColumnStats().get());
+    /*if (stat1.getRecordStats().isPresent()) {
+      merged.putRecordsStats(stat1.getRecordStats().get());
     }
-    if (stat2.getColumnStats().isPresent()) {
-      merged.putRecordsStats(stat2.getColumnStats().get());
-    }
+    if (stat2.getRecordStats().isPresent()) {
+      merged.putRecordsStats(stat2.getRecordStats().get());
+    }*/
     return merged;
   }
 

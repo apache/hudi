@@ -53,7 +53,7 @@ public class FlinkPartitionTTLActionExecutor<T> extends BaseFlinkCommitActionExe
   public HoodieWriteMetadata<List<WriteStatus>> execute() {
     HoodieWriteMetadata<List<WriteStatus>> emptyResult = new HoodieWriteMetadata<>();
     emptyResult.setPartitionToReplaceFileIds(Collections.emptyMap());
-    emptyResult.setWriteStatuses(Collections.emptyList());
+    emptyResult.setDataTableWriteStatuses(Collections.emptyList());
     try {
       PartitionTTLStrategy strategy = HoodiePartitionTTLStrategyFactory.createStrategy(table, config.getProps(), instantTime);
       List<String> expiredPartitions = strategy.getExpiredPartitionPaths();
@@ -62,8 +62,8 @@ public class FlinkPartitionTTLActionExecutor<T> extends BaseFlinkCommitActionExe
       }
       LOG.info("Partition ttl find the following expired partitions to delete:  " + String.join(",", expiredPartitions));
       // Auto commit is disabled in config, copy config and enable auto commit for FlinkDeletePartitionCommitActionExecutor.
-      HoodieWriteConfig autoCommitConfig = HoodieWriteConfig.newBuilder().withProperties(config.getProps()).withAutoCommit(true).build();
-      return new FlinkDeletePartitionCommitActionExecutor<>(context, autoCommitConfig, table, instantTime, expiredPartitions).execute();
+      HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withProperties(this.config.getProps()).withInternalAutoCommit(true).build();
+      return new FlinkDeletePartitionCommitActionExecutor<>(context, config, table, instantTime, expiredPartitions).execute();
     } catch (HoodieDeletePartitionPendingTableServiceException deletePartitionPendingTableServiceException) {
       LOG.info("Partition is under table service, do nothing, call delete partition next time.");
       return emptyResult;
