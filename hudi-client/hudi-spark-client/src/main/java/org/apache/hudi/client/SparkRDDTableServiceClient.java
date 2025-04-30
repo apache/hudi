@@ -54,7 +54,7 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
 
   @Override
   protected HoodieWriteMetadata<JavaRDD<WriteStatus>> convertToOutputMetadata(HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata) {
-    return writeMetadata.clone(HoodieJavaRDD.getJavaRDD(writeMetadata.getDataTableWriteStatuses() != null ? writeMetadata.getDataTableWriteStatuses() : writeMetadata.getAllWriteStatuses()));
+    return writeMetadata.clone(HoodieJavaRDD.getJavaRDD(writeMetadata.getAllWriteStatuses() != null ? writeMetadata.getAllWriteStatuses() : writeMetadata.getDataTableWriteStatuses()));
   }
 
   @Override

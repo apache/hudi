@@ -156,13 +156,20 @@ public enum WriteOperationType {
   }
 
   public static boolean isInsert(WriteOperationType operation) {
+    return isInsertWithoutReplace(operation)
+        || isInsertWithReplace(operation);
+  }
+
+  public static boolean isInsertWithoutReplace(WriteOperationType operation) {
     return operation == WriteOperationType.INSERT
         || operation == WriteOperationType.INSERT_PREPPED
         || operation == WriteOperationType.BULK_INSERT
-        || operation == WriteOperationType.BULK_INSERT_PREPPED
-        || operation == WriteOperationType.INSERT_OVERWRITE
-        || operation == WriteOperationType.INSERT_OVERWRITE_TABLE;
+        || operation == WriteOperationType.BULK_INSERT_PREPPED;
+  }
 
+  public static boolean isInsertWithReplace(WriteOperationType operation) {
+    return operation == WriteOperationType.INSERT_OVERWRITE
+        || operation == WriteOperationType.INSERT_OVERWRITE_TABLE;
   }
 
   public static boolean isUpsert(WriteOperationType operation) {
@@ -183,6 +190,6 @@ public enum WriteOperationType {
   }
 
   public static boolean optimizedWriteDagSupported(WriteOperationType writeOperationType) {
-    return (isInsert(writeOperationType) || isChangingRecords(writeOperationType) || isCompactionOrClustering(writeOperationType));
+    return (isInsertWithoutReplace(writeOperationType) || isChangingRecords(writeOperationType) || isCompactionOrClustering(writeOperationType));
   }
 }

@@ -611,15 +611,6 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     HoodieWriteMetadata<T> processedWriteMetadata = writeToMetadata(writeMetadata, clusteringInstant, metadataWriterOpt);
     HoodieWriteMetadata<O> clusteringMetadata = convertToOutputMetadata(processedWriteMetadata);
 
-    // Publish file creation metrics for clustering.
-    if (config.isMetricsOn()) {
-      clusteringMetadata.getWriteStats()
-          .ifPresent(hoodieWriteStats -> hoodieWriteStats.stream()
-              .filter(hoodieWriteStat -> hoodieWriteStat.getRuntimeStats() != null)
-              .map(hoodieWriteStat -> hoodieWriteStat.getRuntimeStats().getTotalCreateTime())
-              .forEach(metrics::updateClusteringFileCreationMetrics));
-    }
-
     // TODO : Where is shouldComplete used ?
     if (shouldComplete) {
       completeClustering(clusteringMetadata, table, clusteringInstant, metadataWriterOpt);
@@ -680,7 +671,24 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     Pair<List<HoodieWriteStat>, List<HoodieWriteStat>> dataTableAndMetadataTableHoodieWriteStats = processAndFetchHoodieWriteStats(clusteringWriteMetadata);
     List<HoodieWriteStat> writeStats = dataTableAndMetadataTableHoodieWriteStats.getKey();
     List<HoodieWriteStat> partialMdtHoodieWriteStats = dataTableAndMetadataTableHoodieWriteStats.getValue();
+
+    clusteringWriteMetadata.setWriteStats(writeStats);
+
     HoodieReplaceCommitMetadata replaceCommitMetadata = (HoodieReplaceCommitMetadata) clusteringWriteMetadata.getCommitMetadata().get();
+    for (HoodieWriteStat writeStat: writeStats) {
+      replaceCommitMetadata.addWriteStat(writeStat.getPartitionPath(), writeStat);
+    }
+    clusteringWriteMetadata.setCommitMetadata(Option.of(replaceCommitMetadata));
+
+    // Publish file creation metrics for clustering.
+    if (config.isMetricsOn()) {
+      clusteringWriteMetadata.getWriteStats()
+          .ifPresent(hoodieWriteStats -> hoodieWriteStats.stream()
+              .filter(hoodieWriteStat -> hoodieWriteStat.getRuntimeStats() != null)
+              .map(hoodieWriteStat -> hoodieWriteStat.getRuntimeStats().getTotalCreateTime())
+              .forEach(metrics::updateClusteringFileCreationMetrics));
+    }
+
     handleWriteErrors(writeStats, TableServiceType.CLUSTER);
     final HoodieInstant clusteringInstant = ClusteringUtils.getInflightClusteringInstant(clusteringCommitTime,
         table.getActiveTimeline(), table.getMetaClient().getInstantGenerator()).get();

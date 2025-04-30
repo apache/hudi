@@ -318,13 +318,13 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
     HoodieData<WriteStatus> writeStatusList = writeMetadata.getDataTableWriteStatuses();
     HoodieData<WriteStatus> statuses = updateIndex(writeStatusList, writeMetadata);
     statuses.persist(config.getString(WRITE_STATUS_STORAGE_LEVEL_VALUE), context, HoodieData.HoodieDataCacheKey.of(config.getBasePath(), instantTime));
-    // triggers clustering.
-    writeMetadata.setWriteStats(statuses.map(WriteStatus::getStat).collectAsList());
+    writeMetadata.setDataTableWriteStatuses(statuses);
+
     writeMetadata.setPartitionToReplaceFileIds(getPartitionToReplacedFileIds(clusteringPlan, writeMetadata));
-    completeCommit(writeMetadata);
+    // runPrecommitValidation(writeMetadata);
     if (!writeMetadata.getCommitMetadata().isPresent()) {
       LOG.info("Found empty commit metadata for clustering with instant time " + instantTime);
-      HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(writeMetadata.getWriteStats().get(), writeMetadata.getPartitionToReplaceFileIds(),
+      HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(Collections.emptyList(), writeMetadata.getPartitionToReplaceFileIds(),
           extraMetadata, operationType, schema.get().toString(), getCommitActionType());
       writeMetadata.setCommitMetadata(Option.of(commitMetadata));
     }
@@ -341,13 +341,10 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
   }
 
   private Map<String, List<String>> getPartitionToReplacedFileIds(HoodieClusteringPlan clusteringPlan, HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata) {
-    Set<HoodieFileGroupId> newFilesWritten = writeMetadata.getWriteStats().get().stream()
-        .map(s -> new HoodieFileGroupId(s.getPartitionPath(), s.getFileId())).collect(Collectors.toSet());
+    //    Set<HoodieFileGroupId> newFilesWritten = writeMetadata.getWriteStats().get().stream()
+    //        .map(s -> new HoodieFileGroupId(s.getPartitionPath(), s.getFileId())).collect(Collectors.toSet());
 
     return ClusteringUtils.getFileGroupsFromClusteringPlan(clusteringPlan)
-        .filter(fg -> "org.apache.hudi.client.clustering.run.strategy.SparkSingleFileSortExecutionStrategy"
-            .equals(config.getClusteringExecutionStrategyClass())
-            || !newFilesWritten.contains(fg))
         .collect(Collectors.groupingBy(HoodieFileGroupId::getPartitionPath, Collectors.mapping(HoodieFileGroupId::getFileId, Collectors.toList())));
   }
 
