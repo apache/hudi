@@ -60,7 +60,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertLinesMatch;
 
 /**
- * Integration test cases for {@link BucketStreamWriteFunction}.
+ * Integration test cases for {@link RowDataBucketStreamWriteFunction}.
  */
 @ExtendWith(FlinkMiniCluster.class)
 public class ITTestBucketStreamWrite {

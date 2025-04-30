@@ -27,6 +27,7 @@ import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieArchivalConfig;
@@ -155,6 +156,15 @@ public class FlinkWriteClients {
       Configuration conf,
       boolean enableEmbeddedTimelineService,
       boolean loadFsViewStorageConfig) {
+    return getHoodieClientConfig(conf, enableEmbeddedTimelineService, loadFsViewStorageConfig, false);
+  }
+
+  public static HoodieWriteConfig getHoodieClientConfig(
+      Configuration conf,
+      boolean enableEmbeddedTimelineService,
+      boolean loadFsViewStorageConfig,
+      boolean forScanner) {
+    HoodieTableConfig tableConfig = StreamerUtil.createMetaClient(conf).getTableConfig();
     HoodieWriteConfig.Builder builder =
         HoodieWriteConfig.newBuilder()
             .withEngineType(EngineType.FLINK)
@@ -227,8 +237,14 @@ public class FlinkWriteClients {
             .withAutoCommit(false)
             .withAllowOperationMetadataField(conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED))
             .withProps(flinkConf2TypedProperties(conf))
-            .withSchema(getSourceSchema(conf).toString())
-            .withRecordMergeImplClasses(StreamerUtil.getMergerClasses(conf));
+            .withSchema(getSourceSchema(conf).toString());
+
+    // currently only set there merge configurations for writing, for reader, will support in HUDI-9146
+    if (!forScanner) {
+      builder.withRecordMergeStrategyId(tableConfig.getRecordMergeStrategyId())
+          .withRecordMergeMode(tableConfig.getRecordMergeMode())
+          .withRecordMergeImplClasses(StreamerUtil.getMergerClasses(tableConfig, conf));
+    }
 
     Option<HoodieLockConfig> lockConfig = getLockConfig(conf);
     if (lockConfig.isPresent()) {

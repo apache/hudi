@@ -42,6 +42,7 @@ import org.apache.hudi.sink.transform.RecordConverter;
 import org.apache.hudi.sink.utils.BufferUtils;
 import org.apache.hudi.table.action.commit.BucketInfo;
 import org.apache.hudi.table.action.commit.BucketType;
+import org.apache.hudi.table.action.commit.FlinkWriteHelper;
 import org.apache.hudi.util.MutableIteratorWrapperIterator;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -199,6 +200,7 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
 
   private void initWriteFunction() {
     final String writeOperation = this.config.get(FlinkOptions.OPERATION);
+    StreamerUtil.updateStorageConfForRowDataFileReader(writeClient.getEngineContext().getStorageConf(), config);
     switch (WriteOperationType.fromValue(writeOperation)) {
       case INSERT:
         this.writeFunction = (records, bucketInfo, instantTime) -> this.writeClient.insert(records, bucketInfo, instantTime);
@@ -251,7 +253,7 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
 
       return bucket.writeRow(record.getRowData());
     } catch (MemoryPagesExhaustedException e) {
-      LOG.info("There is no enough free pages in memory pool to create buffer, need flushing first.");
+      LOG.info("There is no enough free pages in memory pool to create buffer, need flushing first.", e);
       return false;
     }
   }
@@ -421,8 +423,8 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
 
   protected Iterator<HoodieRecord> deduplicateRecordsIfNeeded(Iterator<HoodieRecord> records) {
     if (config.get(FlinkOptions.PRE_COMBINE)) {
-      // todo: sort by record key, lazy merge during iterating, default for COW.
-      return records;
+      return FlinkWriteHelper.newInstance().deduplicateRecords(
+          records, null, -1, this.writeClient.getConfig().getSchema(), this.writeClient.getConfig().getProps(), recordMerger);
     } else {
       return records;
     }

@@ -18,11 +18,14 @@
 
 package org.apache.hudi.util;
 
+import org.apache.hudi.client.model.CommitTimeFlinkRecordMerger;
+import org.apache.hudi.client.model.EventTimeFlinkRecordMerger;
 import org.apache.hudi.client.model.PartialUpdateFlinkRecordMerger;
 import org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
@@ -66,6 +69,7 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.streamer.FlinkStreamerConfig;
+import org.apache.hudi.table.format.HoodieFlinkIOFactory;
 
 import org.apache.avro.Schema;
 import org.apache.flink.configuration.ConfigOption;
@@ -143,16 +147,25 @@ public class StreamerUtil {
   }
 
   /**
-   * Generate the StorageConfiguration for file group reader.
+   * Generate the StorageConfiguration for {@code RowData} file reader.
    */
-  public static StorageConfiguration<?> storageConfForFileGroupReader(StorageConfiguration<?> storageConf, Configuration conf) {
+  public static StorageConfiguration<?> storageConfForRowDataFileReader(StorageConfiguration<?> storageConf, Configuration conf) {
     StorageConfiguration<?> newConf = storageConf.newInstance();
-    newConf.set(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(), OptionsResolver.isSchemaEvolutionEnabled(conf) + "");
-    newConf.set(FlinkOptions.READ_UTC_TIMEZONE.key(), conf.get(FlinkOptions.READ_UTC_TIMEZONE).toString());
-    newConf.set(FlinkOptions.PARTITION_DEFAULT_NAME.key(), conf.get(FlinkOptions.PARTITION_DEFAULT_NAME));
-    newConf.set(FlinkOptions.PARTITION_PATH_FIELD.key(), conf.get(FlinkOptions.PARTITION_PATH_FIELD));
-    newConf.set(FlinkOptions.HIVE_STYLE_PARTITIONING.key(), conf.get(FlinkOptions.HIVE_STYLE_PARTITIONING).toString());
+    updateStorageConfForRowDataFileReader(newConf, conf);
     return storageConf;
+  }
+
+  /**
+   * Update the StorageConfiguration to add necessary configurations for {@code RowData} file reader.
+   */
+  public static void updateStorageConfForRowDataFileReader(StorageConfiguration<?> storageConf, Configuration conf) {
+    storageConf.set(HoodieStorageConfig.HOODIE_IO_FACTORY_CLASS.key(), HoodieFlinkIOFactory.class.getName());
+    storageConf.set(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(), OptionsResolver.isSchemaEvolutionEnabled(conf) + "");
+    storageConf.set(HoodieStorageConfig.WRITE_UTC_TIMEZONE.key(), conf.get(FlinkOptions.WRITE_UTC_TIMEZONE).toString());
+    storageConf.set(FlinkOptions.READ_UTC_TIMEZONE.key(), conf.get(FlinkOptions.READ_UTC_TIMEZONE).toString());
+    storageConf.set(FlinkOptions.PARTITION_DEFAULT_NAME.key(), conf.get(FlinkOptions.PARTITION_DEFAULT_NAME));
+    storageConf.set(FlinkOptions.PARTITION_PATH_FIELD.key(), conf.get(FlinkOptions.PARTITION_PATH_FIELD));
+    storageConf.set(FlinkOptions.HIVE_STYLE_PARTITIONING.key(), conf.get(FlinkOptions.HIVE_STYLE_PARTITIONING).toString());
   }
 
   /**
@@ -352,14 +365,21 @@ public class StreamerUtil {
   /**
    * Returns the merger classes.
    */
-  public static String getMergerClasses(Configuration conf) {
-    if (conf.contains(FlinkOptions.PAYLOAD_CLASS_NAME)) {
-      String payloadClass = conf.get(FlinkOptions.PAYLOAD_CLASS_NAME);
-      if (payloadClass.contains(PartialUpdateAvroPayload.class.getSimpleName())) {
-        return PartialUpdateFlinkRecordMerger.class.getName();
-      }
+  public static String getMergerClasses(HoodieTableConfig tableConfig, Configuration conf) {
+    RecordMergeMode recordMergeMode = tableConfig.getRecordMergeMode();
+    switch (recordMergeMode) {
+      case EVENT_TIME_ORDERING:
+        return EventTimeFlinkRecordMerger.class.getName();
+      case COMMIT_TIME_ORDERING:
+        return CommitTimeFlinkRecordMerger.class.getName();
+      default:
+        String payloadClass = tableConfig.getPayloadClass();
+        if (payloadClass.contains(PartialUpdateAvroPayload.class.getSimpleName())) {
+          return PartialUpdateFlinkRecordMerger.class.getName();
+        } else {
+          return conf.get(FlinkOptions.RECORD_MERGER_IMPLS);
+        }
     }
-    return conf.get(FlinkOptions.RECORD_MERGER_IMPLS);
   }
 
   /**

@@ -156,7 +156,7 @@ public class FormatUtils {
       InternalSchema internalSchema,
       org.apache.flink.configuration.Configuration flinkConf,
       Configuration hadoopConf) {
-    HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(flinkConf);
+    HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(flinkConf, false, false, true);
     HoodieStorage storage = HoodieStorageUtils.getStorage(
         split.getTablePath(), HadoopFSUtils.getStorageConf(hadoopConf));
     return HoodieMergedLogRecordScanner.newBuilder()

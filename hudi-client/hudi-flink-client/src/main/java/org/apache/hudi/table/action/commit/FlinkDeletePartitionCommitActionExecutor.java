@@ -56,7 +56,7 @@ public class FlinkDeletePartitionCommitActionExecutor<T extends HoodieRecordPayl
                                                   HoodieTable<?, ?, ?, ?> table,
                                                   String instantTime,
                                                   List<String> partitions) {
-    super(context, null, config, table, instantTime, null, WriteOperationType.DELETE_PARTITION);
+    super(context, null, null, config, table, instantTime, null, WriteOperationType.DELETE_PARTITION);
     this.partitions = partitions;
   }
 

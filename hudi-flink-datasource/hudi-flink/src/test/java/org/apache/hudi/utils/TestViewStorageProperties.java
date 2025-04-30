@@ -23,6 +23,7 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.util.FlinkWriteClients;
+import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.util.ViewStorageProperties;
 
 import org.apache.flink.configuration.Configuration;
@@ -67,6 +68,7 @@ public class TestViewStorageProperties {
   @Test
   void testDumpRemoteViewStorageConfig() throws IOException {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    StreamerUtil.initTableIfNotExists(conf);
     try (HoodieFlinkWriteClient<?> writeClient = FlinkWriteClients.createWriteClient(conf)) {
       FileSystemViewStorageConfig storageConfig = ViewStorageProperties.loadFromProperties(conf.getString(FlinkOptions.PATH), new Configuration());
       assertThat(storageConfig.getStorageType(), is(FileSystemViewStorageType.REMOTE_FIRST));

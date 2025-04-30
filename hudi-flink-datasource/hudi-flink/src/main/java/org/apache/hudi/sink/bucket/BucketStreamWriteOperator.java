@@ -28,7 +28,7 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.types.logical.RowType;
 
 /**
- * Operator for {@link BucketStreamWriteFunction}.
+ * Operator for {@link RowDataBucketStreamWriteFunction}.
  */
 public class BucketStreamWriteOperator extends AbstractWriteOperator<HoodieFlinkInternalRow> {
 
@@ -38,13 +38,9 @@ public class BucketStreamWriteOperator extends AbstractWriteOperator<HoodieFlink
 
   private static AbstractWriteFunction<HoodieFlinkInternalRow> getWriteFunction(Configuration conf, RowType rowType) {
     if (OptionsResolver.isConsistentHashingBucketIndexType(conf)) {
-      return OptionsResolver.supportRowDataAppend(conf)
-          ? new RowDataConsistentBucketStreamWriteFunction(conf, rowType)
-          : new ConsistentBucketStreamWriteFunction(conf, rowType);
+      return new RowDataConsistentBucketStreamWriteFunction(conf, rowType);
     } else {
-      return OptionsResolver.supportRowDataAppend(conf)
-          ? new RowDataBucketStreamWriteFunction(conf, rowType)
-          : new BucketStreamWriteFunction(conf, rowType);
+      return new RowDataBucketStreamWriteFunction(conf, rowType);
     }
   }
 

@@ -21,6 +21,7 @@ package org.apache.hudi.client.model;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -33,6 +34,20 @@ import java.io.IOException;
  * Record merger for Flink HoodieRecord that implements event time based merging strategy.
  */
 public class EventTimeFlinkRecordMerger extends HoodieFlinkRecordMerger {
+
+  public static final EventTimeFlinkRecordMerger INSTANCE = new EventTimeFlinkRecordMerger();
+  public static final EventTimeFlinkRecordMerger PRE_COMBINE_INSTANCE = new EventTimeFlinkRecordMerger(true);
+
+  private final boolean isPreCombineMode;
+
+  public EventTimeFlinkRecordMerger() {
+    this(false);
+  }
+
+  public EventTimeFlinkRecordMerger(boolean isPreCombineMode) {
+    this.isPreCombineMode = isPreCombineMode;
+  }
+
   @Override
   public String getMergingStrategy() {
     return EVENT_TIME_BASED_MERGE_STRATEGY_UUID;
@@ -50,19 +65,24 @@ public class EventTimeFlinkRecordMerger extends HoodieFlinkRecordMerger {
     ValidationUtils.checkArgument(newer.getRecordType() == HoodieRecord.HoodieRecordType.FLINK);
 
     if (older.getOrderingValue(oldSchema, props).compareTo(newer.getOrderingValue(newSchema, props)) > 0) {
-      if (older.isDelete(oldSchema, props)) {
+      if (older.isDelete(oldSchema, props) && !isPreCombineMode) {
         // Delete record
         return Option.empty();
       } else {
         return Option.of(Pair.of(older, oldSchema));
       }
     } else {
-      if (newer.isDelete(newSchema, props)) {
+      if (newer.isDelete(newSchema, props) && !isPreCombineMode) {
         // Delete record
         return Option.empty();
       } else {
         return Option.of(Pair.of(newer, newSchema));
       }
     }
+  }
+
+  @Override
+  public HoodieRecordMerger asPreCombiningMode() {
+    return EventTimeFlinkRecordMerger.PRE_COMBINE_INSTANCE;
   }
 }

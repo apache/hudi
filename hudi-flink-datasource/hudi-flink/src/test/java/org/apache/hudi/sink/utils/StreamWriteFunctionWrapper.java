@@ -26,7 +26,6 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.RowDataStreamWriteFunction;
-import org.apache.hudi.sink.StreamWriteFunction;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.bootstrap.BootstrapOperator;
 import org.apache.hudi.sink.common.AbstractStreamWriteFunction;
@@ -64,7 +63,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * A wrapper class to manipulate the instance of {@link StreamWriteFunction} or {@link RowDataStreamWriteFunction} for testing.
+ * A wrapper class to manipulate the instance {@link AbstractStreamWriteFunction} for testing.
  *
  * @param <I> Input type
  */
@@ -98,7 +97,7 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
   /**
    * Stream write function.
    */
-  protected AbstractStreamWriteFunction writeFunction;
+  protected RowDataStreamWriteFunction writeFunction;
 
   private CompactFunctionWrapper compactFunctionWrapper;
 
@@ -193,11 +192,7 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
   }
 
   public Map<String, List<HoodieRecord>> getDataBuffer() {
-    if (OptionsResolver.supportRowDataAppend(conf)) {
-      return ((RowDataStreamWriteFunction) writeFunction).getDataBuffer();
-    } else {
-      return ((StreamWriteFunction) writeFunction).getDataBuffer();
-    }
+    return writeFunction.getDataBuffer();
   }
 
   public void checkpointFunction(long checkpointId) throws Exception {
@@ -309,11 +304,7 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
   // -------------------------------------------------------------------------
 
   private void setupWriteFunction() throws Exception {
-    if (OptionsResolver.supportRowDataAppend(conf)) {
-      this.writeFunction = new RowDataStreamWriteFunction(conf, rowType);
-    } else {
-      this.writeFunction = new StreamWriteFunction(conf, rowType);
-    }
+    writeFunction = new RowDataStreamWriteFunction(conf, rowType);
     writeFunction.setRuntimeContext(runtimeContext);
     writeFunction.setOperatorEventGateway(gateway);
     writeFunction.initializeState(this.stateInitializationContext);

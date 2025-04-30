@@ -33,6 +33,7 @@ import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.sink.utils.TestWriteBase;
 import org.apache.hudi.util.FlinkWriteClients;
+import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestData;
 
 import org.apache.flink.configuration.Configuration;
@@ -53,13 +54,10 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  * Test cases for stream write.
  */
 public class TestWriteCopyOnWrite extends TestWriteBase {
-
-  // for legacy write function: to trigger buffer flush of 3 rows, each is 576 bytes for INSERT and 624 bytes for UPSERT
-  private static final double BATCH_SIZE_MB_V1 = 0.0016;
   // for RowData write function: to trigger buffer flush with batch size exceeded by 3 rows, each record is 48 bytes
-  private static final double BATCH_SIZE_MB_V2 = 0.00013;
+  private static final double BATCH_SIZE_MB = 0.00013;
   // for RowData write function: to trigger buffer flush with memory pool exhausted.
-  private static final double BUFFER_SIZE_MB_V2 = 0.0003;
+  private static final double BUFFER_SIZE_MB = 0.0003;
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
@@ -264,7 +262,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   @Test
   public void testInsertWithMiniBatches() throws Exception {
     // reset the config option
-    conf.setDouble(FlinkOptions.WRITE_BATCH_SIZE, getBatchSize());
+    conf.setDouble(FlinkOptions.WRITE_BATCH_SIZE, BATCH_SIZE_MB);
 
     Map<String, String> expected = getMiniBatchExpected();
 
@@ -288,7 +286,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   @Test
   public void testInsertWithDeduplication() throws Exception {
     // reset the config option
-    conf.setDouble(FlinkOptions.WRITE_BATCH_SIZE, getBatchSize());
+    conf.setDouble(FlinkOptions.WRITE_BATCH_SIZE, BATCH_SIZE_MB);
     conf.setBoolean(FlinkOptions.PRE_COMBINE, true);
 
     Map<String, String> expected = new HashMap<>();
@@ -336,9 +334,10 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   @Test
   public void testInsertClustering() throws Exception {
     // reset the config option
-    conf.setString(FlinkOptions.OPERATION, "insert");
-    conf.setBoolean(FlinkOptions.INSERT_CLUSTER, true);
-    conf.setDouble(FlinkOptions.WRITE_TASK_MAX_SIZE, 200.0 + getBatchSize());
+    conf.set(FlinkOptions.OPERATION, "insert");
+    conf.set(FlinkOptions.INSERT_CLUSTER, true);
+    conf.set(FlinkOptions.WRITE_MEMORY_SEGMENT_PAGE_SIZE, 64);
+    conf.set(FlinkOptions.WRITE_TASK_MAX_SIZE, 200.0 + BUFFER_SIZE_MB);
 
     TestWriteMergeOnRead.TestHarness.instance()
         .preparePipeline(tempFile, conf)
@@ -389,7 +388,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
     // In rowdata write mode, BinaryInMemorySortBuffer need at least 2 memory segments for auxiliary information,
     // the page size is tuned to 64 to make sure 3 records from 5 will trigger a mini-batch write.
     conf.set(FlinkOptions.WRITE_MEMORY_SEGMENT_PAGE_SIZE, 64);
-    conf.setDouble(FlinkOptions.WRITE_TASK_MAX_SIZE, 200 + getBufferSize());
+    conf.set(FlinkOptions.WRITE_TASK_MAX_SIZE, 200 + BUFFER_SIZE_MB);
 
     Map<String, String> expected = getMiniBatchExpected();
 
@@ -447,14 +446,6 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .checkCompletedInstantCount(4)
         .checkWrittenData(EXPECTED2)
         .end();
-  }
-
-  protected double getBatchSize() {
-    return supportRowDataAppend(conf) ? BATCH_SIZE_MB_V2 : BATCH_SIZE_MB_V1;
-  }
-
-  protected double getBufferSize() {
-    return supportRowDataAppend(conf) ? BUFFER_SIZE_MB_V2 : BATCH_SIZE_MB_V1;
   }
 
   protected Map<String, String> getMiniBatchExpected() {
@@ -657,6 +648,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
     HoodieFlinkWriteClient writeClient2 = null;
 
     try {
+      StreamerUtil.initTableIfNotExists(conf);
       writeClient = FlinkWriteClients.createWriteClient(conf);
       FileSystemViewStorageConfig viewStorageConfig = writeClient.getConfig().getViewStorageConfig();
 

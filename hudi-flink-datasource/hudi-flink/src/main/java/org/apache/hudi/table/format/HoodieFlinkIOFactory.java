@@ -16,11 +16,13 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.io.storage.row;
+package org.apache.hudi.table.format;
 
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.io.hadoop.HoodieHadoopIOFactory;
+import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
+import org.apache.hudi.io.storage.row.HoodieRowDataFileWriterFactory;
 import org.apache.hudi.storage.HoodieStorage;
 
 /**
@@ -37,5 +39,13 @@ public class HoodieFlinkIOFactory extends HoodieHadoopIOFactory {
       return new HoodieRowDataFileWriterFactory(storage);
     }
     return super.getWriterFactory(recordType);
+  }
+
+  @Override
+  public HoodieFileReaderFactory getReaderFactory(HoodieRecord.HoodieRecordType recordType) {
+    if (recordType == HoodieRecord.HoodieRecordType.FLINK) {
+      return new HoodieRowDataFileReaderFactory(storage);
+    }
+    return super.getReaderFactory(recordType);
   }
 }

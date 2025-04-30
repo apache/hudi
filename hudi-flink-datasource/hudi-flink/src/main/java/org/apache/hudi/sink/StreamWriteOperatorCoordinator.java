@@ -77,14 +77,14 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.compareTim
 import static org.apache.hudi.util.StreamerUtil.initTableIfNotExists;
 
 /**
- * {@link OperatorCoordinator} for {@link StreamWriteFunction}.
+ * {@link OperatorCoordinator} for {@link RowDataStreamWriteFunction}.
  *
  * <p>This coordinator starts a new instant when a new checkpoint starts. It commits the instant when all the
  * operator tasks write the buffer successfully for a round of checkpoint.
  *
  * <p>If there is no data for a round of checkpointing, it resets the events buffer and returns early.
  *
- * @see StreamWriteFunction for the work flow and semantics
+ * @see RowDataStreamWriteFunction for the work flow and semantics
  */
 public class StreamWriteOperatorCoordinator
     implements OperatorCoordinatorAdapter {

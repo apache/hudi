@@ -21,6 +21,7 @@ package org.apache.hudi.client.model;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -32,6 +33,8 @@ import java.io.IOException;
  * Record merger for Flink HoodieRecord that implements commit time based merging strategy.
  */
 public class CommitTimeFlinkRecordMerger extends HoodieFlinkRecordMerger {
+
+  public static final CommitTimeFlinkRecordMerger INSTANCE = new CommitTimeFlinkRecordMerger();
 
   @Override
   public String getMergingStrategy() {
@@ -46,5 +49,10 @@ public class CommitTimeFlinkRecordMerger extends HoodieFlinkRecordMerger {
       Schema newSchema,
       TypedProperties props) throws IOException {
     return Option.of(Pair.of(newer, newSchema));
+  }
+
+  @Override
+  public HoodieRecordMerger asPreCombiningMode() {
+    return CommitTimeFlinkRecordMerger.INSTANCE;
   }
 }

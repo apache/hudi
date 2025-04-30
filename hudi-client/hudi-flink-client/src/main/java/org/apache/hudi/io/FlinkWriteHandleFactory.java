@@ -20,12 +20,14 @@ package org.apache.hudi.io;
 
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.io.v2.RowDataLogWriteHandle;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.commit.BucketInfo;
 import org.apache.hudi.table.action.commit.BucketType;
 
 import org.apache.hadoop.fs.Path;
@@ -54,7 +56,8 @@ public class FlinkWriteHandleFactory {
       return ClusterWriteHandleFactory.getInstance();
     }
     if (tableConfig.getTableType().equals(HoodieTableType.MERGE_ON_READ)) {
-      return DeltaCommitWriteHandleFactory.getInstance();
+      return HoodieTableMetadata.isMetadataTable(writeConfig.getBasePath())
+          ? DeltaCommitWriteHandleFactory.getInstance() : DeltaCommitRowDataHandleFactory.getInstance();
     } else if (tableConfig.isCDCEnabled()) {
       return CdcWriteHandleFactory.getInstance();
     } else {
@@ -73,7 +76,7 @@ public class FlinkWriteHandleFactory {
      * <p>CAUTION: the method is not thread safe.
      *
      * @param bucketToHandles The existing write handles
-     * @param record          The first record in the bucket
+     * @param bucketInfo      Bucket info for the records.
      * @param config          Write config
      * @param instantTime     The instant time
      * @param table           The table
@@ -83,7 +86,7 @@ public class FlinkWriteHandleFactory {
      */
     HoodieWriteHandle<?, ?, ?, ?> create(
         Map<String, Path> bucketToHandles,
-        HoodieRecord<T> record,
+        BucketInfo bucketInfo,
         HoodieWriteConfig config,
         String instantTime,
         HoodieTable<T, I, K, O> table,
@@ -99,14 +102,13 @@ public class FlinkWriteHandleFactory {
     @Override
     public HoodieWriteHandle<?, ?, ?, ?> create(
         Map<String, Path> bucketToHandles,
-        HoodieRecord<T> record,
+        BucketInfo bucketInfo,
         HoodieWriteConfig config,
         String instantTime,
         HoodieTable<T, I, K, O> table,
         Iterator<HoodieRecord<T>> recordItr) {
-      final HoodieRecordLocation loc = record.getCurrentLocation();
-      final String fileID = loc.getFileId();
-      final String partitionPath = record.getPartitionPath();
+      final String fileID = bucketInfo.getFileIdPrefix();
+      final String partitionPath = bucketInfo.getPartitionPath();
 
       Path writePath = bucketToHandles.get(fileID);
       if (writePath != null) {
@@ -117,7 +119,7 @@ public class FlinkWriteHandleFactory {
       }
 
       final HoodieWriteHandle<?, ?, ?, ?> writeHandle;
-      if (loc.getInstantTime().equals("I")) {
+      if (bucketInfo.getBucketType() == BucketType.INSERT) {
         writeHandle = new FlinkCreateHandle<>(config, instantTime, table, partitionPath,
             fileID, table.getTaskContextSupplier());
       } else {
@@ -260,7 +262,7 @@ public class FlinkWriteHandleFactory {
   }
 
   /**
-   * Write handle factory for delta commit.
+   * Write handle factory for delta commit, currently only used by metadata writer {@code FlinkHoodieBackedTableMetadataWriter}.
    */
   private static class DeltaCommitWriteHandleFactory<T, I, K, O> implements Factory<T, I, K, O> {
     private static final DeltaCommitWriteHandleFactory<?, ?, ?, ?> INSTANCE = new DeltaCommitWriteHandleFactory<>();
@@ -273,16 +275,46 @@ public class FlinkWriteHandleFactory {
     @Override
     public HoodieWriteHandle<?, ?, ?, ?> create(
         Map<String, Path> bucketToHandles,
-        HoodieRecord<T> record,
+        BucketInfo bucketInfo,
         HoodieWriteConfig config,
         String instantTime,
         HoodieTable<T, I, K, O> table,
         Iterator<HoodieRecord<T>> recordItr) {
-      final String fileID = record.getCurrentLocation().getFileId();
-      final String partitionPath = record.getPartitionPath();
+      final String fileID = bucketInfo.getFileIdPrefix();
+      final String partitionPath = bucketInfo.getPartitionPath();
       final TaskContextSupplier contextSupplier = table.getTaskContextSupplier();
-      BucketType bucketType = record.getCurrentLocation().getInstantTime().equals("I") ? BucketType.INSERT : BucketType.UPDATE;
-      return new FlinkAppendHandle<>(config, instantTime, table, partitionPath, fileID, bucketType, recordItr, contextSupplier);
+      return new FlinkAppendHandle<>(config, instantTime, table, partitionPath, fileID, bucketInfo.getBucketType(), recordItr, contextSupplier);
+    }
+  }
+
+  /**
+   * {@code RowData} write handle factory for delta commit.
+   */
+  private static class DeltaCommitRowDataHandleFactory<T, I, K, O> implements Factory<T, I, K, O> {
+    private static final DeltaCommitRowDataHandleFactory<?, ?, ?, ?> INSTANCE = new DeltaCommitRowDataHandleFactory<>();
+
+    @SuppressWarnings("unchecked")
+    public static <T, I, K, O> DeltaCommitRowDataHandleFactory<T, I, K, O> getInstance() {
+      return (DeltaCommitRowDataHandleFactory<T, I, K, O>) INSTANCE;
+    }
+
+    @Override
+    public HoodieWriteHandle<?, ?, ?, ?> create(
+        Map<String, Path> bucketToHandles,
+        BucketInfo bucketInfo,
+        HoodieWriteConfig config,
+        String instantTime,
+        HoodieTable<T, I, K, O> table,
+        Iterator<HoodieRecord<T>> recordIterator) {
+      return new RowDataLogWriteHandle<>(
+          config,
+          instantTime,
+          table,
+          recordIterator,
+          bucketInfo.getFileIdPrefix(),
+          bucketInfo.getPartitionPath(),
+          bucketInfo.getBucketType(),
+          table.getTaskContextSupplier());
     }
   }
 }
