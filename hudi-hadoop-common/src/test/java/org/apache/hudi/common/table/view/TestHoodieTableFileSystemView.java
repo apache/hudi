@@ -67,6 +67,7 @@ import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsAction;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -231,6 +232,10 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     // confirm deleted
     assertTrue(deleteReplaceCommit && deleteClusterCommitInflight && deleteClusterCommitRequested);
     assertDoesNotThrow(() -> fsView.close());
+    if ((fsView.getClass().isAssignableFrom(AbstractTableFileSystemView.class))) {
+      // completionTimeQueryView will be set to null after close.
+      Assertions.assertThrows(NullPointerException.class, () -> ((AbstractTableFileSystemView) fsView).getCompletionTime(""));
+    }
   }
 
   protected void testViewForFileSlicesWithNoBaseFile(int expNumTotalFileSlices,
