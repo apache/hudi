@@ -54,7 +54,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
   @ParameterizedTest
   @EnumSource(classOf[HoodieTableType])
   def testRLIInitialization(tableType: HoodieTableType): Unit = {
-    val hudiOpts = commonOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name())
+    val hudiOpts = commonOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name()) + (HoodieWriteConfig.OPTIMIZED_WRITE_DAG.key -> "false")
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite)
@@ -313,7 +313,9 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
       client.startCommitWithTime(commitTime, HoodieTimeline.REPLACE_COMMIT_ACTION)
       val deletingPartition = dataGen.getPartitionPaths.last
       val partitionList = Collections.singletonList(deletingPartition)
-      client.deletePartitions(partitionList, commitTime)
+      val result = client.deletePartitions(partitionList, commitTime)
+      client.commit(commitTime, result.getWriteStatuses, org.apache.hudi.common.util.Option.empty(), HoodieTimeline.REPLACE_COMMIT_ACTION,
+        result.getPartitionToReplaceFileIds, org.apache.hudi.common.util.Option.empty());
 
       val deletedDf = latestSnapshot.filter(s"partition = $deletingPartition")
       validateDataAndRecordIndices(hudiOpts, deletedDf)

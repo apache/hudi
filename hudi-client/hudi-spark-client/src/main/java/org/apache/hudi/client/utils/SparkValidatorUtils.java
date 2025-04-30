@@ -72,7 +72,7 @@ public class SparkValidatorUtils {
       LOG.info("no validators configured.");
     } else {
       if (!writeMetadata.getWriteStats().isPresent()) {
-        writeMetadata.setWriteStats(writeMetadata.getWriteStatuses().map(WriteStatus::getStat).collectAsList());
+        writeMetadata.setWriteStats(writeMetadata.getDataTableWriteStatuses().map(WriteStatus::getStat).collectAsList());
       }
       Set<String> partitionsModified = writeMetadata.getWriteStats().get().stream().map(HoodieWriteStat::getPartitionPath).collect(Collectors.toSet());
       SQLContext sqlContext = new SQLContext(HoodieSparkEngineContext.getSparkContext(context));

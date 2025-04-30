@@ -104,6 +104,13 @@ public class HoodieListPairData<K, V> extends HoodieBaseListData<Pair<K, V>> imp
   }
 
   @Override
+  public HoodiePairData<K, V> union(HoodiePairData<K, V> other) {
+    List<Pair<K, V>> curList = collectAsList();
+    curList.addAll(other.collectAsList());
+    return HoodieListPairData.lazy(curList);
+  }
+
+  @Override
   public Map<K, Long> countByKey() {
     try (Stream<Pair<K, V>> stream = asStream()) {
       return stream.collect(Collectors.groupingBy(Pair::getKey, Collectors.counting()));
@@ -200,13 +207,6 @@ public class HoodieListPairData<K, V> extends HoodieBaseListData<Pair<K, V>> imp
 
       return new HoodieListPairData<>(leftOuterJoined, lazy);
     }
-  }
-
-  @Override
-  public HoodiePairData<K, V> union(HoodiePairData<K, V> other) {
-    ValidationUtils.checkArgument(other instanceof HoodieListPairData);
-    Stream<Pair<K, V>> unionStream = Stream.concat(asStream(), ((HoodieListPairData<K, V>) other).asStream());
-    return new HoodieListPairData<>(unionStream, lazy);
   }
 
   @Override

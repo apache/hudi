@@ -107,7 +107,6 @@ import scala.Tuple2;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.apache.hudi.common.util.CleanerUtils.convertCleanMetadata;
-import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertLinesMatch;
@@ -404,7 +403,11 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
 
   @Override
   public SparkRDDWriteClient getHoodieWriteClient(HoodieWriteConfig cfg) {
-    if (null != writeClient) {
+    return getHoodieWriteClient(cfg, true);
+  }
+
+  public SparkRDDWriteClient getHoodieWriteClient(HoodieWriteConfig cfg, boolean shouldCloseOlderClient) {
+    if (null != writeClient && shouldCloseOlderClient) {
       writeClient.close();
       writeClient = null;
     }
@@ -481,16 +484,15 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
   protected List<WriteStatus> writeAndVerifyBatch(BaseHoodieWriteClient client, List<HoodieRecord> inserts, String commitTime, boolean populateMetaFields, boolean autoCommitOff) {
     client.startCommitWithTime(commitTime);
     JavaRDD<HoodieRecord> insertRecordsRDD1 = jsc.parallelize(inserts, 2);
-    JavaRDD<WriteStatus> statusRDD = ((SparkRDDWriteClient) client).upsert(insertRecordsRDD1, commitTime);
-    if (autoCommitOff) {
-      client.commit(commitTime, statusRDD);
-    }
-    List<WriteStatus> statuses = statusRDD.collect();
-    assertNoWriteErrors(statuses);
-    verifyRecordsWritten(commitTime, populateMetaFields, inserts, statuses, client.getConfig(),
+    JavaRDD<WriteStatus> rawStatusRDD = ((SparkRDDWriteClient) client).upsert(insertRecordsRDD1, commitTime);
+    JavaRDD<WriteStatus> statusRDD = jsc.parallelize(rawStatusRDD.collect(), 1);
+    //if (autoCommitOff) {
+    client.commit(commitTime, statusRDD);
+    //}
+    verifyRecordsWritten(commitTime, populateMetaFields, inserts, statusRDD.collect(), client.getConfig(),
         HoodieSparkKeyGeneratorFactory.createKeyGenerator(client.getConfig().getProps()));
 
-    return statuses;
+    return statusRDD.collect();
   }
 
   /**

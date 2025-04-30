@@ -27,6 +27,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.testutils.GenericRecordValidationTestUtils;
 import org.apache.hudi.testutils.HoodieJavaClientTestHarness;
 
@@ -113,6 +114,9 @@ public class TestHoodieJavaClientOnMergeOnReadStorage extends HoodieJavaClientTe
     Option<String> timeStamp = client.scheduleCompaction(Option.empty());
     assertTrue(timeStamp.isPresent());
     client.compact(timeStamp.get());
+    HoodieWriteMetadata writeMetadata = client.compact(timeStamp.get());
+    client.commitCompaction(timeStamp.get(), writeMetadata, Option.empty());
+
 
     // Verify all the records.
     metaClient.reloadActiveTimeline();
@@ -154,7 +158,9 @@ public class TestHoodieJavaClientOnMergeOnReadStorage extends HoodieJavaClientTe
     assertDataInMORTable(config, commitTime, timeStamp.get(), storageConf, Arrays.asList(dataGen.getPartitionPaths()));
 
     // now run compaction
-    client.compact(timeStamp.get());
+    HoodieWriteMetadata writeMetadata = client.compact(timeStamp.get());
+    client.commitCompaction(timeStamp.get(), writeMetadata, Option.empty());
+
     // Verify all the records.
     metaClient.reloadActiveTimeline();
     assertDataInMORTable(config, commitTime, timeStamp.get(), storageConf, Arrays.asList(dataGen.getPartitionPaths()));

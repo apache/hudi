@@ -125,7 +125,7 @@ public class HoodieRowCreateHandle implements Serializable {
     this.seqIdGenerator = (id) -> HoodieRecord.generateSequenceId(instantTime, taskPartitionId, id);
 
     this.writeStatus = new WriteStatus(table.shouldTrackSuccessRecords(),
-        writeConfig.getWriteStatusFailureFraction());
+        writeConfig.getWriteStatusFailureFraction(), table.isMetadataTable());
     this.shouldPreserveHoodieMetadata = shouldPreserveHoodieMetadata;
 
     writeStatus.setPartitionPath(partitionPath);

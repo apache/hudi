@@ -45,6 +45,7 @@ import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.testutils.Assertions;
@@ -195,7 +196,8 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     }
     SparkRDDWriteClient client = getHoodieWriteClient(cfg);
     client.scheduleLogCompactionAtInstant("003", Option.empty());
-    client.logCompact("003");
+    HoodieWriteMetadata writeMetadata = client.logCompact("003");
+    client.completeLogCompaction("003", writeMetadata, Option.empty());
 
     //3. rollback log compact
     metaClient.reloadActiveTimeline();

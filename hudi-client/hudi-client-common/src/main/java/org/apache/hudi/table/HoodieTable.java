@@ -260,6 +260,12 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   public abstract HoodieWriteMetadata<O> upsertPrepped(HoodieEngineContext context, String instantTime,
       I preppedRecords);
 
+  public HoodieWriteMetadata<O> upsertPreppedPartial(HoodieEngineContext context, String instantTime,
+                                                       I preppedRecords, boolean saveWorkloadProfileToInflight,
+                                                     boolean writesToMetadataTable, List<Pair<String, String>> mdtPartitionPathFileGroupIdList) {
+    return this.upsertPrepped(context, instantTime, preppedRecords);
+  }
+
   /**
    * Inserts the given prepared records into the Hoodie table, at the supplied instantTime.
    * <p>

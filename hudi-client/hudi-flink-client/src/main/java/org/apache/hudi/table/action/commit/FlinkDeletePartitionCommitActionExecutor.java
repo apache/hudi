@@ -74,7 +74,7 @@ public class FlinkDeletePartitionCommitActionExecutor<T extends HoodieRecordPayl
       HoodieWriteMetadata<List<WriteStatus>> result = new HoodieWriteMetadata<>();
       result.setPartitionToReplaceFileIds(partitionToReplaceFileIds);
       result.setIndexUpdateDuration(Duration.ofMillis(timer.endTimer()));
-      result.setWriteStatuses(Collections.emptyList());
+      result.setDataTableWriteStatuses(Collections.emptyList());
 
       // created requested
       HoodieInstant dropPartitionsInstant =
@@ -93,7 +93,9 @@ public class FlinkDeletePartitionCommitActionExecutor<T extends HoodieRecordPayl
       this.saveWorkloadProfileMetadataToInflight(
           new WorkloadProfile(Pair.of(new HashMap<>(), new WorkloadStat())),
           instantTime);
-      this.commitOnAutoCommit(result);
+      if (config.shouldInternalAutoCommit()) {
+        completeCommit(result);
+      }
       return result;
     } catch (Exception e) {
       throw new HoodieDeletePartitionException("Failed to drop partitions for commit time " + instantTime, e);

@@ -479,7 +479,14 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> AUTO_COMMIT_ENABLE = ConfigProperty
       .key("hoodie.auto.commit")
-      .defaultValue("true")
+      .defaultValue("false")
+      .markAdvanced()
+      .withDocumentation("Controls whether a write operation should auto commit. This can be turned off to perform inspection"
+          + " of the uncommitted write before deciding to commit.");
+
+  public static final ConfigProperty<String> INTERNAL_AUTO_COMMIT_ENABLE = ConfigProperty
+      .key("hoodie.internal.auto.commit")
+      .defaultValue("false")
       .markAdvanced()
       .withDocumentation("Controls whether a write operation should auto commit. This can be turned off to perform inspection"
           + " of the uncommitted write before deciding to commit.");
@@ -859,6 +866,14 @@ public class HoodieWriteConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion("1.0.0")
       .withDocumentation("Whether to enable incremental table service. So far Clustering and Compaction support incremental processing.");
+
+  public static final ConfigProperty<Boolean> OPTIMIZED_WRITE_DAG = ConfigProperty
+      .key("hoodie.write.optimized.write.dag")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Whether to enable optimized write dag or not. With optimized writes, we execute writes to both data table and metadata table "
+          + "using one RDD stage boundary. If not, writes to data table and metadata table happens across stage boundaries.");
 
   /**
    * Config key with boolean value that indicates whether record being written during MERGE INTO Spark SQL
@@ -1427,7 +1442,11 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public Boolean shouldAutoCommit() {
-    return getBoolean(AUTO_COMMIT_ENABLE);
+    return false;
+  }
+
+  public Boolean shouldInternalAutoCommit() {
+    return getBooleanOrDefault(INTERNAL_AUTO_COMMIT_ENABLE);
   }
 
   public boolean shouldUseExternalSchemaTransformation() {
@@ -2942,6 +2961,14 @@ public class HoodieWriteConfig extends HoodieConfig {
     return metadataConfig.getSecondaryIndexParallelism();
   }
 
+  public boolean getOptimizedWritesEnabled(HoodieTableVersion tableVersion) {
+    if (tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
+      return getBoolean(OPTIMIZED_WRITE_DAG);
+    } else {
+      return false;
+    }
+  }
+
   public static class Builder {
 
     protected final HoodieWriteConfig writeConfig = new HoodieWriteConfig();
@@ -3293,6 +3320,11 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withInternalAutoCommit(boolean autoCommit) {
+      writeConfig.setValue(INTERNAL_AUTO_COMMIT_ENABLE, String.valueOf(autoCommit));
+      return this;
+    }
+
     public Builder withWriteStatusClass(Class<? extends WriteStatus> writeStatusClass) {
       writeConfig.setValue(WRITE_STATUS_CLASS_NAME, writeStatusClass.getName());
       return this;
@@ -3514,6 +3546,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     protected void setDefaults() {
       writeConfig.setDefaultValue(MARKERS_TYPE, getDefaultMarkersType(engineType));
+      writeConfig.setDefaultValue(OPTIMIZED_WRITE_DAG, getDefaultForOptimizedWriteDag(engineType));
       // Check for mandatory properties
       writeConfig.setDefaults(HoodieWriteConfig.class.getName());
       // Set default values of HoodieHBaseIndexConfig
@@ -3633,8 +3666,9 @@ public class HoodieWriteConfig extends HoodieConfig {
       }
       if (writeConcurrencyMode == WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL) {
         checkArgument(
-            writeConfig.getTableType().equals(HoodieTableType.MERGE_ON_READ) && writeConfig.isSimpleBucketIndex(),
-            "Non-blocking concurrency control requires the MOR table with simple bucket index");
+            writeConfig.getTableType().equals(HoodieTableType.MERGE_ON_READ) && (HoodieTableMetadata.isMetadataTable(new StoragePath(writeConfig.getBasePath()))
+                || writeConfig.isSimpleBucketIndex()),
+            "Non-blocking concurrency control requires the MOR table with simple bucket index for data table.");
       }
 
       HoodieCleaningPolicy cleaningPolicy = HoodieCleaningPolicy.valueOf(writeConfig.getString(CLEANER_POLICY));
@@ -3695,6 +3729,18 @@ public class HoodieWriteConfig extends HoodieConfig {
         case JAVA:
           // Timeline-server-based marker is not supported for Flink and Java engines
           return MarkerType.DIRECT.toString();
+        default:
+          throw new HoodieNotSupportedException("Unsupported engine " + engineType);
+      }
+    }
+
+    private boolean getDefaultForOptimizedWriteDag(EngineType engineType) {
+      switch (engineType) {
+        case SPARK:
+          return true;
+        case FLINK:
+        case JAVA:
+          return false;
         default:
           throw new HoodieNotSupportedException("Unsupported engine " + engineType);
       }

@@ -65,9 +65,9 @@ public class HoodieClientRollbackTestBase extends HoodieClientTestBase {
     client.startCommitWithTime(newCommitTime);
     List<HoodieRecord> records = dataGen.generateInsertsContainsAllPartitions(newCommitTime, 2);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
-    JavaRDD<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime);
-    Assertions.assertNoWriteErrors(statuses.collect());
-    client.commit(newCommitTime, statuses);
+    List<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime).collect();
+    Assertions.assertNoWriteErrors(statuses);
+    client.commit(newCommitTime, jsc.parallelize(statuses));
 
     /**
      * Write 2 (updates)
@@ -75,10 +75,10 @@ public class HoodieClientRollbackTestBase extends HoodieClientTestBase {
     newCommitTime = "002";
     client.startCommitWithTime(newCommitTime);
     records = dataGen.generateUpdates(newCommitTime, records);
-    statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime);
-    Assertions.assertNoWriteErrors(statuses.collect());
+    statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
+    Assertions.assertNoWriteErrors(statuses);
     if (commitSecondUpsert) {
-      client.commit(newCommitTime, statuses);
+      client.commit(newCommitTime, jsc.parallelize(statuses));
     }
 
 

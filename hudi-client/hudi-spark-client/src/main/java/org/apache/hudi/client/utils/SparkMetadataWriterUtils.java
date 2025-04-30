@@ -400,7 +400,7 @@ public class SparkMetadataWriterUtils {
       Schema tableSchema = writerSchema.map(schema -> tableConfig.populateMetaFields() ? addMetadataFields(schema) : schema)
           .orElseThrow(() -> new IllegalStateException(String.format("Expected writer schema in commit metadata %s", commitMetadata)));
       List<Pair<String, Schema>> columnsToIndexSchemaMap = columnsToIndex.stream()
-          .map(columnToIndex -> Pair.of(columnToIndex, HoodieAvroUtils.getSchemaForField(tableSchema, columnToIndex).getValue().schema()))
+          .map(columnToIndex -> Pair.of(columnToIndex, HoodieAvroUtils.getSchemaForField(tableSchema, columnToIndex).getValue()))
           .collect(Collectors.toList());
       // filter for supported types
       final List<String> validColumnsToIndex = columnsToIndexSchemaMap.stream()

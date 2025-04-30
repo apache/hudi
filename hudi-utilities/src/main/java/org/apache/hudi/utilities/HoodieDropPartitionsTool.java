@@ -18,6 +18,7 @@
 package org.apache.hudi.utilities;
 
 import org.apache.hudi.DataSourceWriteOptions;
+import org.apache.hudi.client.HoodieWriteResult;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.config.TypedProperties;
@@ -347,7 +348,9 @@ public class HoodieDropPartitionsTool implements Serializable {
     try (SparkRDDWriteClient<HoodieRecordPayload> client =  UtilHelpers.createHoodieClient(jsc, cfg.basePath, "", cfg.parallelism, Option.empty(), props)) {
       List<String> partitionsToDelete = Arrays.asList(cfg.partitions.split(","));
       client.startCommitWithTime(cfg.instantTime, HoodieTimeline.REPLACE_COMMIT_ACTION);
-      client.deletePartitions(partitionsToDelete, cfg.instantTime);
+      HoodieWriteResult result = client.deletePartitions(partitionsToDelete, cfg.instantTime);
+      client.commit(cfg.instantTime, result.getWriteStatuses(), Option.empty(), HoodieTimeline.REPLACE_COMMIT_ACTION,
+          result.getPartitionToReplaceFileIds(), Option.empty());
     }
   }
 
