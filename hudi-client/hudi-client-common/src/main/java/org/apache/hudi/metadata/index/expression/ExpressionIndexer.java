@@ -59,17 +59,17 @@ public class ExpressionIndexer implements Indexer {
   private final HoodieEngineContext engineContext;
   private final HoodieWriteConfig dataTableWriteConfig;
   private final HoodieTableMetaClient dataTableMetaClient;
-  private final ExpressionIndexRecordGenerator indexHelper;
+  private final ExpressionIndexRecordGenerator expressionIndexRecordGenerator;
   private final Lazy<Set<String>> expressionIndexPartitionsToInit;
 
   public ExpressionIndexer(HoodieEngineContext engineContext,
                            HoodieWriteConfig dataTableWriteConfig,
                            HoodieTableMetaClient dataTableMetaClient,
-                           ExpressionIndexRecordGenerator indexHelper) {
+                           ExpressionIndexRecordGenerator expressionIndexRecordGenerator) {
     this.engineContext = engineContext;
     this.dataTableWriteConfig = dataTableWriteConfig;
     this.dataTableMetaClient = dataTableMetaClient;
-    this.indexHelper = indexHelper;
+    this.expressionIndexRecordGenerator = expressionIndexRecordGenerator;
     this.expressionIndexPartitionsToInit = Lazy.lazily(() ->
         getExpressionIndexPartitionsToInit(
             dataTableWriteConfig.getMetadataConfig(), dataTableMetaClient));
@@ -121,7 +121,7 @@ public class ExpressionIndexer implements Indexer {
     Schema readerSchema = getProjectedSchemaForExpressionIndex(indexDefinition, dataTableMetaClient);
     return Collections.singletonList(InitialIndexPartitionData.of(numFileGroup,
         expressionIndexPartitionsToInit.get().iterator().next(),
-        indexHelper.generate(
+        expressionIndexRecordGenerator.generate(
             filesToIndex, indexDefinition, dataTableMetaClient,
             parallelism,
             readerSchema, engineContext.getStorageConf(), instantTimeForPartition)));

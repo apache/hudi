@@ -31,11 +31,13 @@ import org.apache.avro.Schema;
 
 import java.util.List;
 
-public class FlinkExpressionIndexRecordGenerator implements ExpressionIndexRecordGenerator {
-  
+public class SparkNotSupportedExpressionIndexRecordGenerator implements ExpressionIndexRecordGenerator {
+  public SparkNotSupportedExpressionIndexRecordGenerator() {
+  }
+
   @Override
   public EngineType getEngineType() {
-    return EngineType.FLINK;
+    return EngineType.SPARK;
   }
 
   @Override
@@ -47,6 +49,6 @@ public class FlinkExpressionIndexRecordGenerator implements ExpressionIndexRecor
       Schema readerSchema,
       StorageConfiguration<?> storageConf,
       String instantTime) {
-    throw new HoodieNotSupportedException("Flink engine does not support building expression index yet.");
+    throw new HoodieNotSupportedException("Spark engine does not support building expression index on table version 6 and below.");
   }
 }

@@ -24,6 +24,7 @@ import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.storage.StorageConfiguration;
 
@@ -31,11 +32,16 @@ import org.apache.avro.Schema;
 
 import java.util.List;
 
-public class JavaExpressionIndexRecordGenerator implements ExpressionIndexRecordGenerator {
+public class NotSupportedExpressionIndexRecordGenerator implements ExpressionIndexRecordGenerator {
+  private final EngineType engineType;
+
+  public NotSupportedExpressionIndexRecordGenerator(EngineType engineType) {
+    this.engineType = engineType;
+  }
 
   @Override
   public EngineType getEngineType() {
-    return EngineType.JAVA;
+    return engineType;
   }
 
   @Override
@@ -47,6 +53,9 @@ public class JavaExpressionIndexRecordGenerator implements ExpressionIndexRecord
       Schema readerSchema,
       StorageConfiguration<?> storageConf,
       String instantTime) {
-    throw new HoodieNotSupportedException("Java engine does not support building expression index yet.");
+    if (metaClient.getTableConfig().getTableVersion().lesserThan(HoodieTableVersion.EIGHT)) {
+      throw new HoodieNotSupportedException("Table version 6 and below does not support expression index");
+    }
+    throw new HoodieNotSupportedException(engineType + " engine does not support building expression index yet");
   }
 }

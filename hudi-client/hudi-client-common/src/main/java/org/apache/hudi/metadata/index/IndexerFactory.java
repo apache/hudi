@@ -48,7 +48,7 @@ public class IndexerFactory {
                                         HoodieWriteConfig dataTableWriteConfig,
                                         HoodieTableMetaClient dataTableMetaClient,
                                         Lazy<HoodieTable> table,
-                                        ExpressionIndexRecordGenerator indexHelper) {
+                                        ExpressionIndexRecordGenerator expressionIndexRecordGenerator) {
     switch (partitionType) {
       case BLOOM_FILTERS:
         return new BloomFiltersIndexer(
@@ -58,17 +58,18 @@ public class IndexerFactory {
             engineContext, dataTableWriteConfig, dataTableMetaClient);
       case EXPRESSION_INDEX:
         return new ExpressionIndexer(
-            engineContext, dataTableWriteConfig, dataTableMetaClient, indexHelper);
+            engineContext, dataTableWriteConfig, dataTableMetaClient, expressionIndexRecordGenerator);
       case FILES:
         return new FilesIndexer(engineContext);
       case PARTITION_STATS:
         return new PartitionStatsIndexer(
-            engineContext, dataTableWriteConfig, dataTableMetaClient, indexHelper);
+            engineContext, dataTableWriteConfig, dataTableMetaClient);
       case RECORD_INDEX:
         return new RecordIndexer(
             engineContext, dataTableWriteConfig, dataTableMetaClient, table);
       case SECONDARY_INDEX:
-        return new SecondaryIndexer(engineContext, dataTableWriteConfig, dataTableMetaClient, indexHelper);
+        return new SecondaryIndexer(
+            engineContext, expressionIndexRecordGenerator.getEngineType(), dataTableWriteConfig, dataTableMetaClient);
       default:
         throw new HoodieNotSupportedException(
             "Unsupported metadata partition type for indexing: " + partitionType);
@@ -84,7 +85,7 @@ public class IndexerFactory {
       HoodieWriteConfig dataTableWriteConfig,
       HoodieTableMetaClient metaClient,
       Lazy<HoodieTable> table,
-      ExpressionIndexRecordGenerator indexHelper) {
+      ExpressionIndexRecordGenerator expressionIndexRecordGenerator) {
     if (!dataTableWriteConfig.getMetadataConfig().isEnabled()) {
       return Collections.emptyMap();
     }
@@ -95,6 +96,6 @@ public class IndexerFactory {
             || partitionType.isMetadataPartitionAvailable(metaClient)))
         .collect(Collectors.toMap(
             Function.identity(), type -> IndexerFactory.getIndexBuilder(
-                type, engineContext, dataTableWriteConfig, metaClient, table, indexHelper))));
+                type, engineContext, dataTableWriteConfig, metaClient, table, expressionIndexRecordGenerator))));
   }
 }

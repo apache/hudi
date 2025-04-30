@@ -75,7 +75,8 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I> extends 
                                                            HoodieEngineContext engineContext,
                                                            ExpressionIndexRecordGenerator expressionIndexRecordGenerator,
                                                            Option<String> inflightInstantTimestamp) {
-    super(storageConf, writeConfig, failedWritesCleaningPolicy, engineContext, expressionIndexRecordGenerator, inflightInstantTimestamp);
+    super(storageConf, writeConfig, failedWritesCleaningPolicy, engineContext,
+        expressionIndexRecordGenerator, inflightInstantTimestamp);
   }
 
   @Override

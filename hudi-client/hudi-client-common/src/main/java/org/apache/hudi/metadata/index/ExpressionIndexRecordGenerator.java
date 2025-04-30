@@ -30,20 +30,23 @@ import org.apache.avro.Schema;
 
 import java.util.List;
 
+/**
+ * Engine-specific record generator for expression index
+ */
 public interface ExpressionIndexRecordGenerator {
   EngineType getEngineType();
 
   /**
    * Generates expression index records
    *
-   * @param filesToIndex    Triplet of file path, file size and partition name to which file belongs
-   * @param indexDefinition Hoodie Index Definition for the expression index for which records need to be generated
-   * @param metaClient      Hoodie Table Meta Client
-   * @param parallelism     Parallelism to use for engine operations
-   * @param readerSchema    Schema of reader
-   * @param storageConf     Storage Config
-   * @param instantTime     Instant time
-   * @return HoodieData wrapper of expression index HoodieRecords
+   * @param filesToIndex    files to index containing the information of file path, file size and partition name
+   * @param indexDefinition definition of the expression index for which records need to be generated
+   * @param metaClient      {@link HoodieTableMetaClient} isntance
+   * @param parallelism     parallelism to use for engine operations
+   * @param readerSchema    reader schema
+   * @param storageConf     storage config
+   * @param instantTime     instant time
+   * @return expression index records
    */
   HoodieData<HoodieRecord> generate(
       List<FileToIndex> filesToIndex,

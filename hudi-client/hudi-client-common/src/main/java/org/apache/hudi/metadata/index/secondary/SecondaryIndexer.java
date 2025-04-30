@@ -20,6 +20,7 @@
 package org.apache.hudi.metadata.index.secondary;
 
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
@@ -31,7 +32,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
-import org.apache.hudi.metadata.index.ExpressionIndexRecordGenerator;
 import org.apache.hudi.metadata.index.Indexer;
 import org.apache.hudi.util.Lazy;
 
@@ -55,19 +55,19 @@ import static org.apache.hudi.metadata.index.record.RecordIndexer.RECORD_INDEX_A
 public class SecondaryIndexer implements Indexer {
   private static final Logger LOG = LoggerFactory.getLogger(SecondaryIndexer.class);
   private final HoodieEngineContext engineContext;
+  private final EngineType engineType;
   private final HoodieWriteConfig dataTableWriteConfig;
   private final HoodieTableMetaClient dataTableMetaClient;
-  private final ExpressionIndexRecordGenerator indexHelper;
   private final Lazy<Set<String>> secondaryIndexPartitionsToInit;
 
   public SecondaryIndexer(HoodieEngineContext engineContext,
+                          EngineType engineType,
                           HoodieWriteConfig dataTableWriteConfig,
-                          HoodieTableMetaClient dataTableMetaClient,
-                          ExpressionIndexRecordGenerator indexHelper) {
+                          HoodieTableMetaClient dataTableMetaClient) {
     this.engineContext = engineContext;
     this.dataTableWriteConfig = dataTableWriteConfig;
     this.dataTableMetaClient = dataTableMetaClient;
-    this.indexHelper = indexHelper;
+    this.engineType = engineType;
     this.secondaryIndexPartitionsToInit = Lazy.lazily(() ->
         getSecondaryIndexPartitionsToInit(
             SECONDARY_INDEX, dataTableWriteConfig.getMetadataConfig(), dataTableMetaClient));
@@ -105,7 +105,7 @@ public class SecondaryIndexer implements Indexer {
         parallelism,
         this.getClass().getSimpleName(),
         dataTableMetaClient,
-        indexHelper.getEngineType(),
+        engineType,
         indexDefinition);
 
     // Initialize the file groups - using the same estimation logic as that of record index
