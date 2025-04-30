@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieSparkRecord;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
@@ -48,7 +49,6 @@ import java.util.function.UnaryOperator;
 import scala.Function1;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
-import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
 import static org.apache.spark.sql.HoodieInternalRowUtils.getCachedSchema;
 
 /**
@@ -57,8 +57,9 @@ import static org.apache.spark.sql.HoodieInternalRowUtils.getCachedSchema;
  */
 public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderContext<InternalRow> {
 
-  protected BaseSparkInternalRowReaderContext(StorageConfiguration<?> storageConfig) {
-    super(storageConfig);
+  protected BaseSparkInternalRowReaderContext(StorageConfiguration<?> storageConfig,
+                                              HoodieTableConfig tableConfig) {
+    super(storageConfig, tableConfig);
   }
 
   @Override
@@ -87,11 +88,6 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
   @Override
   public Object getValue(InternalRow row, Schema schema, String fieldName) {
     return getFieldValueFromInternalRow(row, schema, fieldName);
-  }
-
-  @Override
-  public String getRecordKey(InternalRow row, Schema schema) {
-    return getFieldValueFromInternalRow(row, schema, RECORD_KEY_METADATA_FIELD).toString();
   }
 
   @Override

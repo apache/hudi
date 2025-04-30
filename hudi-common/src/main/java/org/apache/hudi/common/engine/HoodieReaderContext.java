@@ -22,11 +22,13 @@ package org.apache.hudi.common.engine;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.LocalAvroSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
@@ -41,6 +43,7 @@ import javax.annotation.Nullable;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.Map;
+import java.util.function.BiFunction;
 import java.util.function.UnaryOperator;
 
 import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
@@ -59,6 +62,7 @@ import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIEL
  */
 public abstract class HoodieReaderContext<T> {
   private final StorageConfiguration<?> storageConfiguration;
+  private final BiFunction<T, Schema, String> recordKeyExtractor;
   private FileGroupReaderSchemaHandler<T> schemaHandler = null;
   private String tablePath = null;
   private String latestCommitTime = null;
@@ -71,8 +75,11 @@ public abstract class HoodieReaderContext<T> {
   // for encoding and decoding schemas to the spillable map
   private final LocalAvroSchemaCache localAvroSchemaCache = LocalAvroSchemaCache.getInstance();
 
-  protected HoodieReaderContext(StorageConfiguration<?> storageConfiguration) {
+  protected HoodieReaderContext(StorageConfiguration<?> storageConfiguration,
+                                HoodieTableConfig tableConfig) {
     this.storageConfiguration = storageConfiguration;
+    this.recordKeyExtractor = tableConfig.populateMetaFields() ? metadataKeyExtractor() : virtualKeyExtractor(tableConfig.getRecordKeyFields()
+        .orElseThrow(() -> new IllegalArgumentException("No record keys specified and meta fields are not populated")));
   }
 
   // Getter and Setter for schemaHandler
@@ -209,7 +216,7 @@ public abstract class HoodieReaderContext<T> {
    *
    * @param record    The record in engine-specific type.
    * @param schema    The Avro schema of the record.
-   * @param fieldName The field name.
+   * @param fieldName The field name. A dot separated string if a nested field.
    * @return The field value.
    */
   public abstract Object getValue(T record, Schema schema, String fieldName);
@@ -235,8 +242,21 @@ public abstract class HoodieReaderContext<T> {
    * @return The record key in String.
    */
   public String getRecordKey(T record, Schema schema) {
-    Object val = getValue(record, schema, RECORD_KEY_METADATA_FIELD);
-    return val.toString();
+    return recordKeyExtractor.apply(record, schema);
+  }
+
+  private BiFunction<T, Schema, String> metadataKeyExtractor() {
+    return (record, schema) -> getValue(record, schema, RECORD_KEY_METADATA_FIELD).toString();
+  }
+
+  private BiFunction<T, Schema, String> virtualKeyExtractor(String[] recordKeyFields) {
+    return (record, schema) -> {
+      BiFunction<String, Integer, String> valueFunction = (recordKeyField, index) -> {
+        Object result = getValue(record, schema, recordKeyField);
+        return result != null ? result.toString() : null;
+      };
+      return KeyGenerator.constructRecordKey(recordKeyFields, valueFunction);
+    };
   }
 
   /**
