@@ -293,7 +293,6 @@ public class HoodieMetadataWriteUtils {
   /**
    * Convert the clean action to metadata records.
    */
-  // TODO(yihua): this is only used by writers, why is this in hudi-common?
   public static Map<String, HoodieData<HoodieRecord>> convertMetadataToRecords(HoodieEngineContext engineContext,
                                                                                HoodieCleanMetadata cleanMetadata,
                                                                                String instantTime,

@@ -62,19 +62,20 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I> extends 
    * the timeline. If compaction triggers now, the compaction would use the index instant timestamp and add 001 suffix to it, creating a timestamp
    * value with suffix 010001. Both indexing and compaction suffix would be present in the compaction timestamp in such a case.
    *
-   * @param storageConf                Storage configuration to use for the metadata writer
-   * @param writeConfig                Writer config
-   * @param failedWritesCleaningPolicy Cleaning policy on failed writes
-   * @param engineContext              Engine context
-   * @param inflightInstantTimestamp   Timestamp of any instant in progress
+   * @param storageConf                    storage configuration to use for the metadata writer
+   * @param writeConfig                    writer config
+   * @param failedWritesCleaningPolicy     cleaning policy on failed writes
+   * @param engineContext                  engine context
+   * @param expressionIndexRecordGenerator engine-specific record generator for expression index
+   * @param inflightInstantTimestamp       timestamp of any instant in progress
    */
   protected HoodieBackedTableMetadataWriterTableVersionSix(StorageConfiguration<?> storageConf,
                                                            HoodieWriteConfig writeConfig,
                                                            HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                                            HoodieEngineContext engineContext,
-                                                           ExpressionIndexRecordGenerator indexHelper,
+                                                           ExpressionIndexRecordGenerator expressionIndexRecordGenerator,
                                                            Option<String> inflightInstantTimestamp) {
-    super(storageConf, writeConfig, failedWritesCleaningPolicy, engineContext, indexHelper, inflightInstantTimestamp);
+    super(storageConf, writeConfig, failedWritesCleaningPolicy, engineContext, expressionIndexRecordGenerator, inflightInstantTimestamp);
   }
 
   // TODO(yihua): move this filtering

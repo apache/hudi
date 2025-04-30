@@ -88,12 +88,12 @@ public class IndexerFactory {
     if (!dataTableWriteConfig.getMetadataConfig().isEnabled()) {
       return Collections.emptyMap();
     }
-    return Arrays.stream(getValidValues())
+    return Collections.unmodifiableMap(Arrays.stream(getValidValues())
         .filter(partitionType -> partitionType.isMetadataPartitionSupported(metaClient)
             && (partitionType.isMetadataPartitionEnabled(dataTableWriteConfig.getMetadataConfig())
             || partitionType.isMetadataPartitionAvailable(metaClient)))
         .collect(Collectors.toMap(
             Function.identity(), type -> IndexerFactory.getIndexBuilder(
-                type, engineContext, dataTableWriteConfig, metaClient, table, indexHelper)));
+                type, engineContext, dataTableWriteConfig, metaClient, table, indexHelper))));
   }
 }

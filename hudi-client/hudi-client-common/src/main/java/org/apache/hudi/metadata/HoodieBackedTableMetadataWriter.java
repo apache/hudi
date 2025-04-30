@@ -346,11 +346,11 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
    *
    * @param dataTableInstantTime          data table instant time on which the metadata table
    *                                      is initialized upon
-   * @param builderMapForPartitionsToInit list of MDT partitions to initialize
+   * @param indexerMapForPartitionsToInit a map of metadata partition type to indexers to initialize
    * @param inflightInstantTimestamp      current action instant responsible for this initialization
    */
   private boolean initializeFromFilesystem(String dataTableInstantTime,
-                                           Map<MetadataPartitionType, Indexer> builderMapForPartitionsToInit,
+                                           Map<MetadataPartitionType, Indexer> indexerMapForPartitionsToInit,
                                            Option<String> inflightInstantTimestamp)
       throws IOException {
     Set<String> pendingDataInstants = getPendingDataInstants(dataMetaClient);
@@ -374,7 +374,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       }
     }
 
-    builderMapForPartitionsToInit.keySet().removeIf(
+    indexerMapForPartitionsToInit.keySet().removeIf(
         metadataPartition -> dataMetaClient.getTableConfig().isMetadataPartitionAvailable(metadataPartition));
 
     // Get a complete list of files and partitions from the file system or from already initialized FILES partition of MDT
@@ -398,14 +398,15 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
 
     if (!filesPartitionAvailable) {
+      // FILES partition should always be initialized first if enabled
       initializeMetadataPartition(
-          FILES, builderMapForPartitionsToInit.get(FILES), initializationTime, partitionInfoList, partitionToFilesMap);
+          FILES, indexerMapForPartitionsToInit.get(FILES), initializationTime, partitionInfoList, partitionToFilesMap);
     }
 
     Lazy<List<Pair<String, FileSlice>>> lazyLatestMergedPartitionFileSliceList = getLazyLatestMergedPartitionFileSliceList();
     // TODO(yihua): FILES partition should not be included here (dead code?) as it should be initialized already
     for (Map.Entry<MetadataPartitionType, Indexer> entry :
-        builderMapForPartitionsToInit.entrySet().stream()
+        indexerMapForPartitionsToInit.entrySet().stream()
             .filter(e -> e.getKey() != FILES).collect(Collectors.toList())) {
       initializeMetadataPartition(
           entry.getKey(), entry.getValue(), initializationTime, partitionInfoList, partitionToFilesMap);
@@ -437,15 +438,14 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       throw new HoodieMetadataException(errMsg, e);
     }
 
-    // Generate the file groups
     if (initialIndexPartitionDataList.isEmpty()) {
       LOG.info("Skip building {} index in metadata table", partitionTypeName);
       return;
     }
 
-    // TODO(HUDI-): support initializing multiple partitions per index type
     ValidationUtils.checkArgument(initialIndexPartitionDataList.size() == 1,
-        "Only support the initialization of one partition per index type");
+        "Only support the initialization of one partition per index type "
+            + "(HUDI-9358 for the feature support)");
 
     Indexer.InitialIndexPartitionData initialIndexPartitionData =
         initialIndexPartitionDataList.get(0);
