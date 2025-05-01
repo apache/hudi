@@ -299,6 +299,8 @@ public class HoodieHadoopStorage extends HoodieStorage {
 
   @Override
   public void close() throws IOException {
-    fs.close();
+    // Don't close the wrapped `FileSystem` object.
+    // This will end up closing it for every thread since it
+    // could be cached across JVM. We don't own that object anyway.
   }
 }
