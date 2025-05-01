@@ -20,16 +20,26 @@
 package org.apache.hudi.metadata.index;
 
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.util.collection.Tuple3;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.util.Lazy;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
+
+import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
 
 /**
  * Interface for initializing and updating a type of metadata or index
@@ -70,6 +80,36 @@ public interface Indexer {
    */
   default void updateTableConfig() {
     // No index-specific table config update by default
+  }
+
+  static List<Pair<String, FileSlice>> getPartitionFileSlicePairs(HoodieTableMetaClient dataTableMetaClient,
+                                                                  HoodieTableMetadata metadata,
+                                                                  HoodieTableFileSystemView fsView)
+      throws IOException {
+    String latestInstant = dataTableMetaClient.getActiveTimeline().filterCompletedAndCompactionInstants().lastInstant()
+        .map(HoodieInstant::requestedTime).orElse(SOLO_COMMIT_TIMESTAMP);
+    // TODO(yihua): originally this uses try-catch on fsView so it's not reused.
+    // now we need to rely on outside caller to pass fsView and close the fsView.
+    // also see if we can reuse fsView across indexes.
+    // Collect the list of latest file slices present in each partition
+    List<String> partitions = metadata.getAllPartitionPaths();
+    fsView.loadAllPartitions();
+    List<Pair<String, FileSlice>> partitionFileSlicePairs = new ArrayList<>();
+    partitions.forEach(partition -> fsView.getLatestMergedFileSlicesBeforeOrOn(partition, latestInstant)
+        .forEach(fs -> partitionFileSlicePairs.add(Pair.of(partition, fs))));
+    return partitionFileSlicePairs;
+  }
+
+  static List<Tuple3<String, String, Boolean>> fetchPartitionFileInfoTriplets(
+      Map<String, Map<String, Long>> partitionToAppendedFiles) {
+    // Total number of files which are added or deleted
+    final int totalFiles = partitionToAppendedFiles.values().stream().mapToInt(Map::size).sum();
+    final List<Tuple3<String, String, Boolean>> partitionFileFlagTupleList = new ArrayList<>(totalFiles);
+    partitionToAppendedFiles.entrySet().stream()
+        .flatMap(
+            entry -> entry.getValue().keySet().stream().map(addedFile -> Tuple3.of(entry.getKey(), addedFile, false)))
+        .collect(Collectors.toCollection(() -> partitionFileFlagTupleList));
+    return partitionFileFlagTupleList;
   }
 
   class IndexPartitionData {

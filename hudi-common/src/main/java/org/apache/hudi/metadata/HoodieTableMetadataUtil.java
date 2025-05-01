@@ -179,7 +179,6 @@ import static org.apache.hudi.metadata.HoodieMetadataPayload.RECORD_INDEX_MISSIN
 import static org.apache.hudi.metadata.HoodieTableMetadata.EMPTY_PARTITION_NAME;
 import static org.apache.hudi.metadata.HoodieTableMetadata.NON_PARTITIONED_NAME;
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
-import static org.apache.hudi.metadata.MetadataPartitionType.isNewSecondaryIndexDefinitionRequired;
 
 /**
  * A utility to convert timeline information to metadata table records.
@@ -1207,23 +1206,6 @@ public class HoodieTableMetadataUtil {
    */
   public static String getPartitionIdentifier(@Nonnull String relativePartitionPath) {
     return EMPTY_PARTITION_NAME.equals(relativePartitionPath) ? NON_PARTITIONED_NAME : relativePartitionPath;
-  }
-
-  public static List<Tuple3<String, String, Boolean>> fetchPartitionFileInfoTriplets(
-      Map<String, List<String>> partitionToDeletedFiles,
-      Map<String, Map<String, Long>> partitionToAppendedFiles) {
-    // Total number of files which are added or deleted
-    final int totalFiles = partitionToDeletedFiles.values().stream().mapToInt(List::size).sum()
-        + partitionToAppendedFiles.values().stream().mapToInt(Map::size).sum();
-    final List<Tuple3<String, String, Boolean>> partitionFileFlagTupleList = new ArrayList<>(totalFiles);
-    partitionToDeletedFiles.entrySet().stream()
-        .flatMap(entry -> entry.getValue().stream().map(deletedFile -> Tuple3.of(entry.getKey(), deletedFile, true)))
-        .collect(Collectors.toCollection(() -> partitionFileFlagTupleList));
-    partitionToAppendedFiles.entrySet().stream()
-        .flatMap(
-            entry -> entry.getValue().keySet().stream().map(addedFile -> Tuple3.of(entry.getKey(), addedFile, false)))
-        .collect(Collectors.toCollection(() -> partitionFileFlagTupleList));
-    return partitionFileFlagTupleList;
   }
 
   /**
@@ -2778,19 +2760,6 @@ public class HoodieTableMetadataUtil {
     if (type == MetadataPartitionType.FILES.getRecordType()) {
       filesystemMetadata.forEach((fileName, fileInfo) -> checkState(fileInfo.getIsDeleted() || fileInfo.getSize() > 0, "Existing files should have size > 0"));
     }
-  }
-
-  public static Set<String> getSecondaryIndexPartitionsToInit(MetadataPartitionType partitionType, HoodieMetadataConfig metadataConfig, HoodieTableMetaClient dataMetaClient) {
-    return getIndexPartitionsToInit(
-        partitionType,
-        metadataConfig,
-        dataMetaClient,
-        () -> isNewSecondaryIndexDefinitionRequired(metadataConfig, dataMetaClient),
-        metadataConfig::getSecondaryIndexColumn,
-        metadataConfig::getSecondaryIndexName,
-        PARTITION_NAME_SECONDARY_INDEX_PREFIX,
-        PARTITION_NAME_SECONDARY_INDEX
-    );
   }
 
   /**

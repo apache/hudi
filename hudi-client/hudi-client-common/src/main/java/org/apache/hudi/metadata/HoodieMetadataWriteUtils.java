@@ -330,21 +330,5 @@ public class HoodieMetadataWriteUtils {
     return HoodieTableMetadataUtil.getHoodieIndexDefinition(indexName, dataTableMetaClient);
   }
 
-  public static List<Pair<String, FileSlice>> getPartitionFileSlicePairs(HoodieTableMetaClient dataTableMetaClient,
-                                                                         HoodieTableMetadata metadata,
-                                                                         HoodieTableFileSystemView fsView)
-      throws IOException {
-    String latestInstant = dataTableMetaClient.getActiveTimeline().filterCompletedAndCompactionInstants().lastInstant()
-        .map(HoodieInstant::requestedTime).orElse(SOLO_COMMIT_TIMESTAMP);
-    // TODO(yihua): originally this uses try-catch on fsView so it's not reused.
-    // now we need to rely on outside caller to pass fsView and close the fsView.
-    // also see if we can reuse fsView across indexes.
-    // Collect the list of latest file slices present in each partition
-    List<String> partitions = metadata.getAllPartitionPaths();
-    fsView.loadAllPartitions();
-    List<Pair<String, FileSlice>> partitionFileSlicePairs = new ArrayList<>();
-    partitions.forEach(partition -> fsView.getLatestMergedFileSlicesBeforeOrOn(partition, latestInstant)
-        .forEach(fs -> partitionFileSlicePairs.add(Pair.of(partition, fs))));
-    return partitionFileSlicePairs;
-  }
+
 }

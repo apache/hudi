@@ -51,7 +51,6 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.common.util.ConfigUtils.getReaderConfigs;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.fetchPartitionFileInfoTriplets;
 import static org.apache.hudi.metadata.MetadataPartitionType.BLOOM_FILTERS;
 
 /**
@@ -80,59 +79,44 @@ public class BloomFiltersIndexer implements Indexer {
       Lazy<HoodieTableFileSystemView> fsView,
       HoodieBackedTableMetadata metadata,
       String instantTimeForPartition) throws IOException {
-    HoodieData<HoodieRecord> records = convertFilesToBloomFilterRecords(
-        engineContext, Collections.emptyMap(), partitionToFilesMap, createInstantTime, dataTableMetaClient,
-        dataTableWriteConfig.getBloomIndexParallelism(), dataTableWriteConfig.getBloomFilterType());
+    String bloomFilterType = dataTableWriteConfig.getBloomFilterType();
+    // Create the tuple (partition, filename, isDeleted) to handle both deletes and appends
+    final List<Tuple3<String, String, Boolean>> partitionFileFlagTupleList =
+        Indexer.fetchPartitionFileInfoTriplets(partitionToFilesMap);
+    int parallelism = Math.max(Math.min(partitionFileFlagTupleList.size(),
+        dataTableWriteConfig.getBloomIndexParallelism()), 1);
+    HoodieData<HoodieRecord> records = engineContext.parallelize(partitionFileFlagTupleList, parallelism)
+        .flatMap(partitionFileFlagTuple -> {
+          final String partitionName = partitionFileFlagTuple.f0;
+          final String filename = partitionFileFlagTuple.f1;
+          final boolean isDeleted = partitionFileFlagTuple.f2;
+          if (!FSUtils.isBaseFile(new StoragePath(filename))) {
+            LOG.warn("Ignoring file {} as it is not a base file", filename);
+            return Stream.<HoodieRecord>empty().iterator();
+          }
 
+          // Read the bloom filter from the base file if the file is being added
+          ByteBuffer bloomFilterBuffer = ByteBuffer.allocate(0);
+          if (!isDeleted) {
+            final String pathWithPartition = partitionName + "/" + filename;
+            final StoragePath addedFilePath = new StoragePath(
+                dataTableMetaClient.getBasePath(), pathWithPartition);
+            bloomFilterBuffer = readBloomFilter(dataTableMetaClient.getStorage(), addedFilePath);
+
+            // If reading the bloom filter failed then do not add a record for this file
+            if (bloomFilterBuffer == null) {
+              LOG.error("Failed to read bloom filter from {}", addedFilePath);
+              return Stream.<HoodieRecord>empty().iterator();
+            }
+          }
+
+          return Stream.<HoodieRecord>of(HoodieMetadataPayload.createBloomFilterMetadataRecord(
+                  partitionName, filename, createInstantTime, bloomFilterType, bloomFilterBuffer, partitionFileFlagTuple.f2))
+              .iterator();
+        });
     return Collections.singletonList(InitialIndexPartitionData.of(
         dataTableWriteConfig.getMetadataConfig().getBloomFilterIndexFileGroupCount(),
         BLOOM_FILTERS.getPartitionPath(), records));
-  }
-
-  /**
-   * Convert added and deleted files metadata to bloom filter index records.
-   */
-  private static HoodieData<HoodieRecord> convertFilesToBloomFilterRecords(
-      HoodieEngineContext engineContext,
-      Map<String, List<String>> partitionToDeletedFiles,
-      Map<String, Map<String, Long>> partitionToAppendedFiles,
-      String instantTime,
-      HoodieTableMetaClient dataMetaClient,
-      int bloomIndexParallelism,
-      String bloomFilterType) {
-    // Create the tuple (partition, filename, isDeleted) to handle both deletes and appends
-    final List<Tuple3<String, String, Boolean>> partitionFileFlagTupleList =
-        fetchPartitionFileInfoTriplets(partitionToDeletedFiles, partitionToAppendedFiles);
-
-    // Create records MDT
-    int parallelism = Math.max(Math.min(partitionFileFlagTupleList.size(), bloomIndexParallelism), 1);
-    return engineContext.parallelize(partitionFileFlagTupleList, parallelism).flatMap(partitionFileFlagTuple -> {
-      final String partitionName = partitionFileFlagTuple.f0;
-      final String filename = partitionFileFlagTuple.f1;
-      final boolean isDeleted = partitionFileFlagTuple.f2;
-      if (!FSUtils.isBaseFile(new StoragePath(filename))) {
-        LOG.warn("Ignoring file {} as it is not a base file", filename);
-        return Stream.<HoodieRecord>empty().iterator();
-      }
-
-      // Read the bloom filter from the base file if the file is being added
-      ByteBuffer bloomFilterBuffer = ByteBuffer.allocate(0);
-      if (!isDeleted) {
-        final String pathWithPartition = partitionName + "/" + filename;
-        final StoragePath addedFilePath = new StoragePath(dataMetaClient.getBasePath(), pathWithPartition);
-        bloomFilterBuffer = readBloomFilter(dataMetaClient.getStorage(), addedFilePath);
-
-        // If reading the bloom filter failed then do not add a record for this file
-        if (bloomFilterBuffer == null) {
-          LOG.error("Failed to read bloom filter from {}", addedFilePath);
-          return Stream.<HoodieRecord>empty().iterator();
-        }
-      }
-
-      return Stream.<HoodieRecord>of(HoodieMetadataPayload.createBloomFilterMetadataRecord(
-              partitionName, filename, instantTime, bloomFilterType, bloomFilterBuffer, partitionFileFlagTuple.f2))
-          .iterator();
-    });
   }
 
   private static ByteBuffer readBloomFilter(HoodieStorage storage, StoragePath filePath) throws IOException {

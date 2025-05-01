@@ -25,9 +25,11 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.index.expression.HoodieExpressionIndex;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.index.ExpressionIndexRecordGenerator;
@@ -46,12 +48,12 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.apache.hudi.metadata.HoodieMetadataWriteUtils.getIndexDefinition;
-import static org.apache.hudi.metadata.HoodieMetadataWriteUtils.getPartitionFileSlicePairs;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_EXPRESSION_INDEX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_EXPRESSION_INDEX_PREFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getIndexPartitionsToInit;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getProjectedSchemaForExpressionIndex;
 import static org.apache.hudi.metadata.MetadataPartitionType.EXPRESSION_INDEX;
-import static org.apache.hudi.metadata.MetadataPartitionType.isNewExpressionIndexDefinitionRequired;
+import static org.apache.hudi.metadata.MetadataPartitionType.getIndexDefinitions;
 
 /**
  * Implementation of {@link EXPRESSION_INDEX} index
@@ -73,9 +75,18 @@ public class ExpressionIndexer implements Indexer {
     this.dataTableWriteConfig = dataTableWriteConfig;
     this.dataTableMetaClient = dataTableMetaClient;
     this.expressionIndexRecordGenerator = expressionIndexRecordGenerator;
-    this.expressionIndexPartitionsToInit = Lazy.lazily(() ->
-        getExpressionIndexPartitionsToInit(
-            dataTableWriteConfig.getMetadataConfig(), dataTableMetaClient));
+    this.expressionIndexPartitionsToInit = Lazy.lazily(() -> {
+      HoodieMetadataConfig metadataConfig = dataTableWriteConfig.getMetadataConfig();
+      return getIndexPartitionsToInit(
+          EXPRESSION_INDEX,
+          metadataConfig,
+          dataTableMetaClient,
+          () -> isNewExpressionIndexDefinitionRequired(metadataConfig, dataTableMetaClient),
+          metadataConfig::getExpressionIndexColumn,
+          metadataConfig::getExpressionIndexName,
+          PARTITION_NAME_EXPRESSION_INDEX_PREFIX,
+          metadataConfig.getExpressionIndexType());
+    });
   }
 
   @Override
@@ -100,7 +111,7 @@ public class ExpressionIndexer implements Indexer {
     HoodieIndexDefinition indexDefinition = getIndexDefinition(dataTableMetaClient, indexName);
     ValidationUtils.checkState(indexDefinition != null,
         "Expression Index definition is not present for index " + indexName);
-    List<Pair<String, FileSlice>> partitionFileSlicePairs = getPartitionFileSlicePairs(
+    List<Pair<String, FileSlice>> partitionFileSlicePairs = Indexer.getPartitionFileSlicePairs(
         dataTableMetaClient, metadata, fsView.get());
     List<ExpressionIndexRecordGenerator.FileToIndex> filesToIndex = new ArrayList<>();
     partitionFileSlicePairs.forEach(entry -> {
@@ -130,6 +141,7 @@ public class ExpressionIndexer implements Indexer {
             readerSchema, engineContext.getStorageConf(), instantTimeForPartition)));
   }
 
+  // TODO(yihua): move test and remove the static method
   public static Set<String> getExpressionIndexPartitionsToInit(HoodieMetadataConfig metadataConfig,
                                                                HoodieTableMetaClient dataMetaClient) {
     return getIndexPartitionsToInit(
@@ -142,5 +154,27 @@ public class ExpressionIndexer implements Indexer {
         PARTITION_NAME_EXPRESSION_INDEX_PREFIX,
         metadataConfig.getExpressionIndexType()
     );
+  }
+
+  /**
+   * Given metadata config and table config, determine whether a new expression index definition is required.
+   */
+  public static boolean isNewExpressionIndexDefinitionRequired(HoodieMetadataConfig metadataConfig, HoodieTableMetaClient dataMetaClient) {
+    String expressionIndexColumn = metadataConfig.getExpressionIndexColumn();
+    if (StringUtils.isNullOrEmpty(expressionIndexColumn)) {
+      return false;
+    }
+
+    // check that expr is present in index options
+    Map<String, String> expressionIndexOptions = metadataConfig.getExpressionIndexOptions();
+    if (expressionIndexOptions.isEmpty()) {
+      return false;
+    }
+
+    // get all index definitions for this column and index type
+    // check if none of the index definitions has index function matching the expression
+    List<HoodieIndexDefinition> indexDefinitions = getIndexDefinitions(expressionIndexColumn, PARTITION_NAME_EXPRESSION_INDEX, dataMetaClient);
+    return indexDefinitions.isEmpty()
+        || indexDefinitions.stream().noneMatch(indexDefinition -> indexDefinition.getIndexFunction().equals(expressionIndexOptions.get(HoodieExpressionIndex.EXPRESSION_OPTION)));
   }
 }

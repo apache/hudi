@@ -40,7 +40,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.hudi.metadata.HoodieMetadataWriteUtils.getPartitionFileSlicePairs;
 import static org.apache.hudi.metadata.MetadataPartitionType.PARTITION_STATS;
 
 /**
@@ -77,7 +76,7 @@ public class PartitionStatsIndexer implements Indexer {
     }
     HoodieData<HoodieRecord> records =
         HoodieTableMetadataUtil.convertFilesToPartitionStatsRecords(engineContext,
-            getPartitionFileSlicePairs(dataTableMetaClient, metadata, fsView.get()),
+            Indexer.getPartitionFileSlicePairs(dataTableMetaClient, metadata, fsView.get()),
             dataTableWriteConfig.getMetadataConfig(),
             dataTableMetaClient, Option.empty(), Option.of(dataTableWriteConfig.getRecordMerger().getRecordType()));
     final int numFileGroup = dataTableWriteConfig.getMetadataConfig().getPartitionStatsIndexFileGroupCount();

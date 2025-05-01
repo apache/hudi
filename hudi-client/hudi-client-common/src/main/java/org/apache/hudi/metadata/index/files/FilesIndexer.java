@@ -84,8 +84,8 @@ public class FilesIndexer implements Indexer {
     HoodieData<HoodieRecord> fileListRecords =
         engineContext.parallelize(partitionInfoList, partitionInfoList.size()).map(partitionInfo -> {
           Map<String, Long> fileNameToSizeMap = partitionInfo.getFileNameToSizeMap();
-          return HoodieMetadataPayload.createPartitionFilesRecord(partitionInfo.getRelativePath(), fileNameToSizeMap,
-              Collections.emptyList());
+          return HoodieMetadataPayload.createPartitionFilesRecord(
+              partitionInfo.getRelativePath(), fileNameToSizeMap, Collections.emptyList());
         });
     ValidationUtils.checkState(fileListRecords.count() == partitions.size());
 

@@ -29,7 +29,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.index.expression.HoodieExpressionIndex;
 
 import org.apache.avro.generic.GenericRecord;
 
@@ -77,7 +76,6 @@ import static org.apache.hudi.metadata.HoodieMetadataPayload.SCHEMA_FIELD_ID_REC
 import static org.apache.hudi.metadata.HoodieMetadataPayload.SCHEMA_FIELD_ID_SECONDARY_INDEX;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.SCHEMA_FIELD_NAME_METADATA;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.SECONDARY_INDEX_FIELD_IS_DELETED;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_EXPRESSION_INDEX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_EXPRESSION_INDEX_PREFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.combineFileSystemMetadata;
@@ -504,31 +502,9 @@ public enum MetadataPartitionType {
   }
 
   /**
-   * Given metadata config and table config, determine whether a new expression index definition is required.
-   */
-  public static boolean isNewExpressionIndexDefinitionRequired(HoodieMetadataConfig metadataConfig, HoodieTableMetaClient dataMetaClient) {
-    String expressionIndexColumn = metadataConfig.getExpressionIndexColumn();
-    if (StringUtils.isNullOrEmpty(expressionIndexColumn)) {
-      return false;
-    }
-
-    // check that expr is present in index options
-    Map<String, String> expressionIndexOptions = metadataConfig.getExpressionIndexOptions();
-    if (expressionIndexOptions.isEmpty()) {
-      return false;
-    }
-
-    // get all index definitions for this column and index type
-    // check if none of the index definitions has index function matching the expression
-    List<HoodieIndexDefinition> indexDefinitions = getIndexDefinitions(expressionIndexColumn, PARTITION_NAME_EXPRESSION_INDEX, dataMetaClient);
-    return indexDefinitions.isEmpty()
-        || indexDefinitions.stream().noneMatch(indexDefinition -> indexDefinition.getIndexFunction().equals(expressionIndexOptions.get(HoodieExpressionIndex.EXPRESSION_OPTION)));
-  }
-
-  /**
    * Return all the index definitions for the given column with the same indexType.
    */
-  private static List<HoodieIndexDefinition> getIndexDefinitions(String indexType, String sourceField, HoodieTableMetaClient metaClient) {
+  public static List<HoodieIndexDefinition> getIndexDefinitions(String indexType, String sourceField, HoodieTableMetaClient metaClient) {
     List<HoodieIndexDefinition> indexDefinitions = new ArrayList<>();
     if (metaClient.getIndexMetadata().isPresent()) {
       metaClient.getIndexMetadata().get().getIndexDefinitions().values().stream()

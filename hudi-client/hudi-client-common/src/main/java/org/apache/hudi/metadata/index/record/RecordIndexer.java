@@ -149,24 +149,23 @@ public class RecordIndexer implements Indexer {
   }
 
   /**
-   * Fetch record locations from FileSlice snapshot.
-   *
-   * @param engineContext             context ot use.
-   * @param partitionFileSlicePairs   list of pairs of partition and file slice.
-   * @param recordIndexMaxParallelism parallelism to use.
-   * @param activeModule              active module of interest.
-   * @param metaClient                metaclient instance to use.
-   * @param dataWriteConfig           write config to use.
-   * @param hoodieTable               hoodie table instance of interest.
-   * @return
+   * @param engineContext             {@link HoodieEngineContext} instance
+   * @param partitionFileSlicePairs   list of pairs of partition and file slices
+   * @param recordIndexMaxParallelism parallelism to use
+   * @param activeModule              active module of interest for logging
+   * @param metaClient                {@link HoodieTableMetaClient} instance to use
+   * @param dataTableWriteConfig      write config to use
+   * @param hoodieTable               {@link HoodieTable} instance of interest
+   * @return records for record index based on the snapshot view of the file slices
    */
-  private static HoodieData<HoodieRecord> readRecordKeysFromFileSliceSnapshot(HoodieEngineContext engineContext,
-                                                                              List<Pair<String, FileSlice>> partitionFileSlicePairs,
-                                                                              int recordIndexMaxParallelism,
-                                                                              String activeModule,
-                                                                              HoodieTableMetaClient metaClient,
-                                                                              HoodieWriteConfig dataWriteConfig,
-                                                                              HoodieTable hoodieTable) {
+  private static HoodieData<HoodieRecord> readRecordKeysFromFileSliceSnapshot(
+      HoodieEngineContext engineContext,
+      List<Pair<String, FileSlice>> partitionFileSlicePairs,
+      int recordIndexMaxParallelism,
+      String activeModule,
+      HoodieTableMetaClient metaClient,
+      HoodieWriteConfig dataTableWriteConfig,
+      HoodieTable hoodieTable) {
     if (partitionFileSlicePairs.isEmpty()) {
       return engineContext.emptyHoodieData();
     }
@@ -180,19 +179,20 @@ public class RecordIndexer implements Indexer {
         "Record Index: reading record keys from " + partitionFileSlicePairs.size() + " file slices");
     final int parallelism = Math.min(partitionFileSlicePairs.size(), recordIndexMaxParallelism);
 
-    return engineContext.parallelize(partitionFileSlicePairs, parallelism).flatMap(partitionAndFileSlice -> {
-
-      final String partition = partitionAndFileSlice.getKey();
-      final FileSlice fileSlice = partitionAndFileSlice.getValue();
-      final String fileId = fileSlice.getFileId();
-      return new HoodieMergedReadHandle(dataWriteConfig, instantTime, hoodieTable,
-          Pair.of(partition, fileSlice.getFileId()),
-          Option.of(fileSlice)).getMergedRecords().stream()
-          .map(record -> {
-            HoodieRecord record1 = (HoodieRecord) record;
-            return HoodieMetadataPayload.createRecordIndexUpdate(record1.getRecordKey(), partition, fileId,
-                record1.getCurrentLocation().getInstantTime(), 0);
-          }).iterator();
-    });
+    return engineContext.parallelize(partitionFileSlicePairs, parallelism)
+        .flatMap(partitionAndFileSlice -> {
+          final String partition = partitionAndFileSlice.getKey();
+          final FileSlice fileSlice = partitionAndFileSlice.getValue();
+          final String fileId = fileSlice.getFileId();
+          return new HoodieMergedReadHandle(dataTableWriteConfig, instantTime, hoodieTable,
+              Pair.of(partition, fileSlice.getFileId()),
+              Option.of(fileSlice)).getMergedRecords().stream()
+              .map(record -> {
+                HoodieRecord record1 = (HoodieRecord) record;
+                return HoodieMetadataPayload.createRecordIndexUpdate(
+                    record1.getRecordKey(), partition, fileId,
+                    record1.getCurrentLocation().getInstantTime(), 0);
+              }).iterator();
+        });
   }
 }
