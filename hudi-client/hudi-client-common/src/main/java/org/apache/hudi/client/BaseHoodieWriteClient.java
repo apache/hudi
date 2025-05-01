@@ -1028,9 +1028,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * Provides a new commit time for a write operation (insert/update/delete/insert_overwrite/insert_overwrite_table) without specified action.
    * @param instantTime Instant time to be generated
    */
-  public void startCommitWithTime(String instantTime, boolean avoidOptimizedWrites) {
+  public void startCommitWithTime(String instantTime, boolean skipOptimizedWrites) {
     HoodieTableMetaClient metaClient = createMetaClient(true);
-    startCommitWithTime(instantTime, metaClient.getCommitActionType(), metaClient, avoidOptimizedWrites);
+    startCommitWithTime(instantTime, metaClient.getCommitActionType(), metaClient, skipOptimizedWrites);
   }
 
   /**
@@ -1043,15 +1043,15 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   /**
    * Completes a new commit time for a write operation (insert/update/delete/insert_overwrite/insert_overwrite_table) with specified action.
    */
-  public void startCommitWithTime(String instantTime, String actionType, boolean avoidOptimizedWrites) {
+  public void startCommitWithTime(String instantTime, String actionType, boolean skipOptimizedWrites) {
     HoodieTableMetaClient metaClient = createMetaClient(true);
-    startCommitWithTime(instantTime, actionType, metaClient, avoidOptimizedWrites);
+    startCommitWithTime(instantTime, actionType, metaClient, skipOptimizedWrites);
   }
 
   /**
    * Starts a new commit time for a write operation (insert/update/delete) with specified action.
    */
-  private void startCommitWithTime(String instantTime, String actionType, HoodieTableMetaClient metaClient, boolean avoidOptimizedWrites) {
+  private void startCommitWithTime(String instantTime, String actionType, HoodieTableMetaClient metaClient, boolean skipOptimizedWrites) {
     if (needsUpgrade(metaClient)) {
       // unclear what instant to use, since upgrade does have a given instant.
       executeUsingTxnManager(Option.empty(), () -> tryUpgrade(metaClient, Option.empty()));
@@ -1078,7 +1078,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
           instantTime));
     }
 
-    Option<HoodieTableMetadataWriter> metadataWriterOpt = avoidOptimizedWrites ? Option.empty() :
+    // Even among supported operations, bulk insert to be precise, row writer does not support optimized writes. So, we had to leverage additional argument named `skipOptimizedWrites`
+    Option<HoodieTableMetadataWriter> metadataWriterOpt = skipOptimizedWrites ? Option.empty() :
         (config.getOptimizedWritesEnabled(metaClient.getTableConfig().getTableVersion()) ? getMetadataWriter(instantTime, metaClient) : Option.empty());
     if (metadataWriterOpt.isPresent()) {
       metadataWriterOpt.get().startCommit(instantTime);

@@ -2961,6 +2961,14 @@ public class HoodieWriteConfig extends HoodieConfig {
     return metadataConfig.getSecondaryIndexParallelism();
   }
 
+  /**
+   * Whether to enable Optimized writes or not. By default for table version 6 we are not enabling this, since NBCC is not available in table version 6.
+   * For flink and java engines, there are no issues w/ task retries and so they are out of it.
+   * So, the optimized writes is only supported in spark for table version 8 and above, for incremental operations (insert, upsert, delete)
+   * and table services (compaction and clustering). All other operations go through original metadata write paths.
+   * @param tableVersion {@link HoodieTableVersion} of interest.
+   * @return true if optimized writes are enabled. false otherwise.
+   */
   public boolean getOptimizedWritesEnabled(HoodieTableVersion tableVersion) {
     if (tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
       return getBoolean(OPTIMIZED_WRITE_DAG);

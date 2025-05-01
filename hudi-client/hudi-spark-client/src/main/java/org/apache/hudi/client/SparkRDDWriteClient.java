@@ -115,6 +115,12 @@ public class SparkRDDWriteClient<T> extends
     return SparkHoodieIndexFactory.createIndex(config);
   }
 
+  /**
+   * Creates a {@link HoodieTableMetadataWriter} instance to assist with writing to metadata table.
+   * @param triggeringInstantTimestamp instant time of interest.
+   * @param metaClient data table's {@link HoodieTableMetaClient} instance.
+   * @return Option of {@link HoodieTableMetadataWriter} if we could instantiate.
+   */
   protected Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstantTimestamp, HoodieTableMetaClient metaClient) {
     if (!metaClient.getTableConfig().getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT) || this.metadataWriterMap == null) {
       return Option.empty();
