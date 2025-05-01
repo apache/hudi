@@ -30,17 +30,19 @@ import scala.Tuple2;
 public class SparkMetadataUpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
 
   private List<BucketInfo> bucketInfoList;
+  private final int totalPartitions;
   private Map<String, Integer> fileIdToPartitionIndexMap;
 
   public SparkMetadataUpsertPartitioner(List<BucketInfo> bucketInfoList, Map<String, Integer> fileIdToPartitionIndexMap) {
     super(null, null);
     this.bucketInfoList = bucketInfoList;
+    this.totalPartitions = bucketInfoList.size();
     this.fileIdToPartitionIndexMap = fileIdToPartitionIndexMap;
   }
 
   @Override
   public int numPartitions() {
-    return bucketInfoList.size();
+    return totalPartitions;
   }
 
   @Override

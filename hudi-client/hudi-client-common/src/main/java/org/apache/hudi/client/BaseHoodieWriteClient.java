@@ -281,7 +281,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
                              Option<Map<String, String>> extraMetadata,
                              String commitActionType, Map<String, List<String>> partitionToReplaceFileIds,
                              Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc,
-                             boolean avoidOptimizedWrites) {
+                             boolean skipStreamingWritesToMetadataTable) {
     // Skip the empty commit if not allowed
     if (!config.allowEmptyCommit() && dataTableStats.isEmpty()) {
       return true;
@@ -306,7 +306,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         extraPreCommitFunc.get().accept(table.getMetaClient(), metadata);
       }
 
-      commit(table, commitActionType, instantTime, metadata, dataTableStats, mdtStats, operationType, avoidOptimizedWrites);
+      commit(table, commitActionType, instantTime, metadata, dataTableStats, mdtStats, operationType, skipStreamingWritesToMetadataTable);
       postCommit(table, metadata, instantTime, extraMetadata);
       LOG.info("Committed {}", instantTime);
     } catch (IOException e) {
@@ -335,8 +335,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   }
 
   protected void commit(HoodieTable table, String commitActionType, String instantTime, HoodieCommitMetadata metadata,
-                            List<HoodieWriteStat> dataTablestats, List<HoodieWriteStat> mdtStats, WriteOperationType writeOperationType,
-                        boolean avoidOptimizedWrites) throws IOException {
+                            List<HoodieWriteStat> dataTablestats, List<HoodieWriteStat> metadataWriteStatsSoFar, WriteOperationType writeOperationType,
+                        boolean skipStreamingWritesToMetadataTable) throws IOException {
     LOG.info("Committing {} action {}", instantTime, commitActionType);
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
     // Finalize write
@@ -348,23 +348,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     }
     // generate Completion time
     String completionTime = activeTimeline.createCompletionTime();
-    boolean optimizedWrite = !avoidOptimizedWrites && config.isStreamingWritesToMetadataEnabled(table.getMetaClient().getTableConfig().getTableVersion())
-        && WriteOperationType.streamingWritesToMetadataSupported(writeOperationType);
-    // update Metadata table
-    if (optimizedWrite && metadataWriterMap.containsKey(instantTime) && metadataWriterMap.get(instantTime).isPresent()) {
-      HoodieTableMetadataWriter metadataWriter = metadataWriterMap.get(instantTime).get();
-      try {
-        metadataWriter.writeToFilesPartitionAndCommit(instantTime, context, mdtStats, metadata);
-        metadataWriter.close();
-      } catch (Exception e) {
-        throw new HoodieException("Failed to close metadata writer ", e);
-      } finally {
-        metadataWriterMap.remove(instantTime);
-      }
-    } else {
-      writeTableMetadata(table, instantTime, metadata);
-    }
-
+    // write to metadata table.
+    writeToMetadataTable(skipStreamingWritesToMetadataTable, config, table, writeOperationType, instantTime, metadataWriteStatsSoFar, metadata);
+    // complete the commit in data table.
     activeTimeline.saveAsComplete(false, table.getMetaClient().createNewInstant(HoodieInstant.State.INFLIGHT, commitActionType, instantTime),
         Option.of(metadata), Option.of(completionTime));
     // update cols to Index as applicable
@@ -375,6 +361,38 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         });
   }
 
+  /**
+   * Write to metadata table.
+   * We could either have streaming writes enabled or disabled.
+   * Incase of streaming writes, we have to write to FILES partition and wrap up the commit in metadata table.
+   * If not for streaming writes, we take the legacy route, where we start a new delta commit in metadata table, prepare all records and write to it and wrap up the commit.
+   * @param skipStreamingWritesToMetadataTable true if streaming writes to metadata needs to be skipped. Eg, row writer flow does not support streaming writes to metadata table.
+   * @param config instance of {@link HoodieWriteConfig}.
+   * @param table instance of {@link HoodieTable}.
+   * @param writeOperationType write operation type.
+   * @param instantTime instance time of interest.
+   * @param metadataWriteStatsSoFar List of HoodieWriteStats referring to completed writes to metadata table so far. If streaming writes are disabled, this will be empty.
+   * @param metadata instance of {@link HoodieCommitMetadata} of interest.
+   */
+  private void writeToMetadataTable(boolean skipStreamingWritesToMetadataTable, HoodieWriteConfig config, HoodieTable table, WriteOperationType writeOperationType,
+                                    String instantTime, List<HoodieWriteStat> metadataWriteStatsSoFar, HoodieCommitMetadata metadata) {
+    boolean streamingWritesToMetadataTableEnabled = !skipStreamingWritesToMetadataTable && config.isStreamingWritesToMetadataEnabled(table.getMetaClient().getTableConfig().getTableVersion())
+        && WriteOperationType.streamingWritesToMetadataSupported(writeOperationType);
+    if (streamingWritesToMetadataTableEnabled && metadataWriterMap.containsKey(instantTime) && metadataWriterMap.get(instantTime).isPresent()) {
+      HoodieTableMetadataWriter metadataWriter = metadataWriterMap.get(instantTime).get();
+      try {
+        metadataWriter.writeToFilesPartitionAndCommit(instantTime, context, metadataWriteStatsSoFar, metadata);
+        metadataWriter.close();
+      } catch (Exception e) {
+        throw new HoodieException("Failed to close metadata writer ", e);
+      } finally {
+        metadataWriterMap.remove(instantTime);
+      }
+    } else {
+      writeTableMetadata(table, instantTime, metadata);
+    }
+  }
+  
   // Save internal schema
   private void saveInternalSchema(HoodieTable table, String instantTime, HoodieCommitMetadata metadata) {
     TableSchemaResolver schemaUtil = new TableSchemaResolver(table.getMetaClient());

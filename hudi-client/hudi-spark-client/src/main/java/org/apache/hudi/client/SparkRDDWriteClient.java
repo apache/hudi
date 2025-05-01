@@ -129,8 +129,9 @@ public class SparkRDDWriteClient<T> extends
                         Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc,
                         WriteStatusHandlerCallback writeStatusHandlerCallback) {
     context.setJobStatus(this.getClass().getSimpleName(), "Committing stats: " + config.getTableName());
-    // Triggering the dag for writes. If streaming writes are enabled, writes to both data table and metadata table gets triggers at this jucture.
-    // If not, writes to data table happens here.
+    // Triggering the dag for writes.
+    // If streaming writes are enabled, writes to both data table and metadata table gets triggers at this juncture.
+    // If not, writes to data table gets triggered here.
     // When streaming writes are enabled, WriteStatus is expected to contain all stats required to generate metadata table records and so it could be fatter.
     // So, here we are converting it ot LeanWriteStatus which drops all additional stats and only retains the information required to proceed from here on.
     List<Pair<Boolean, LeanWriteStatus>> leanWriteStatuses = writeStatuses.map(writeStatus -> Pair.of(writeStatus.isMetadataTable(), new LeanWriteStatus(writeStatus))).collect();
@@ -142,7 +143,7 @@ public class SparkRDDWriteClient<T> extends
       totalErrorRecords.getAndAdd(triplet.getValue().getTotalErrorRecords());
     });
     boolean canProceed = writeStatusHandlerCallback.processWriteStatuses(totalRecords.get(), totalErrorRecords.get(),
-        leanWriteStatuses.stream().filter(triplet -> triplet.getValue().hasErrors()).map(Pair::getValue).collect(Collectors.toList()));
+        leanWriteStatuses.stream().filter(triplet -> !triplet.getKey()).map(Pair::getValue).collect(Collectors.toList()));
 
     // only if callback returns true, lets proceed. If not, bail out.
     if (canProceed) {

@@ -18,6 +18,9 @@
 
 package org.apache.hudi.client;
 
+/**
+ * Lean version of {@link WriteStatus} where all additional stats like rli, col sats etc are trimmed off.
+ */
 public class LeanWriteStatus extends WriteStatus {
 
   public LeanWriteStatus(WriteStatus writeStatus) {
