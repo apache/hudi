@@ -197,7 +197,6 @@ class TestEngineBasedMerger {
     String recordKey = "key";
     mockResultConversionToBufferedRecord(schemaId, rewrittenRecord, orderingValue, recordKey, data, resultIsADelete);
 
-
     BufferedRecord<TestRecord> result = merger.merge(Option.of(T1), Option.of(T2), false);
     BufferedRecord<TestRecord> expected = new BufferedRecord<>(recordKey, orderingValue, data, schemaId, resultIsADelete);
     assertEquals(expected, result);
@@ -252,6 +251,27 @@ class TestEngineBasedMerger {
 
     assertEquals(olderAvroRecord, ((CustomPayloadForMergerTesting) olderRecordCaptor.getValue().getData()).getRecord());
     assertEquals(newerAvroRecord, ((CustomPayloadForMergerTesting) newerRecordCaptor.getValue().getData()).getRecord());
+  }
+
+  private static Stream<Arguments> customMergerWithPayloadAndInputIsDelete() {
+    return Stream.of(
+        Arguments.of(HARD_DELETE, T3, HARD_DELETE),
+        Arguments.of(T2_SOFT_DELETE, T3, T3),
+        Arguments.of(T2_SOFT_DELETE, T1, T2_SOFT_DELETE));
+  }
+
+  @ParameterizedTest
+  @MethodSource
+  void customMergerWithPayloadAndInputIsDelete(BufferedRecord<TestRecord> older, BufferedRecord<TestRecord> newer, BufferedRecord<TestRecord> expected) throws Exception {
+    HoodieRecordMerger recordMerger = mock(HoodieRecordMerger.class);
+    when(readerContext.getRecordMerger()).thenReturn(Option.of(recordMerger));
+    when(readerContext.getSchemaHandler().getRequiredSchema()).thenReturn(readerSchema);
+    HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
+    when(recordMerger.getMergingStrategy()).thenReturn(HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID);
+    when(tableConfig.getPayloadClass()).thenReturn(CustomPayloadForMergerTesting.class.getName());
+    EngineBasedMerger<TestRecord> merger = new EngineBasedMerger<>(readerContext, RecordMergeMode.CUSTOM, tableConfig, props);
+    BufferedRecord<TestRecord> result = merger.merge(Option.of(older), Option.of(newer), false);
+    assertEquals(expected, result);
   }
 
   @ParameterizedTest
