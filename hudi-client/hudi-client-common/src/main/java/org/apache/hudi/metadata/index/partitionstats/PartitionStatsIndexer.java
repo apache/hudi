@@ -22,24 +22,39 @@ package org.apache.hudi.metadata.index.partitionstats;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
+import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.index.Indexer;
 import org.apache.hudi.util.Lazy;
 
+import org.apache.avro.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getColumnsToIndex;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getFileStatsRangeMetadata;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.tryResolveSchemaForTable;
 import static org.apache.hudi.metadata.MetadataPartitionType.PARTITION_STATS;
 
 /**
@@ -74,13 +89,96 @@ public class PartitionStatsIndexer implements Indexer {
           HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key());
       return Collections.emptyList();
     }
-    HoodieData<HoodieRecord> records =
-        HoodieTableMetadataUtil.convertFilesToPartitionStatsRecords(engineContext,
-            Indexer.getPartitionFileSlicePairs(dataTableMetaClient, metadata, fsView.get()),
-            dataTableWriteConfig.getMetadataConfig(),
-            dataTableMetaClient, Option.empty(), Option.of(dataTableWriteConfig.getRecordMerger().getRecordType()));
     final int numFileGroup = dataTableWriteConfig.getMetadataConfig().getPartitionStatsIndexFileGroupCount();
+    List<Pair<String, FileSlice>> partitionFileSliceList =
+        Indexer.getPartitionFileSlicePairs(dataTableMetaClient, metadata, fsView.get());
+    if (partitionFileSliceList.isEmpty()) {
+      return Collections.singletonList(InitialIndexPartitionData.of(
+          numFileGroup, PARTITION_STATS.getPartitionPath(), engineContext.emptyHoodieData()));
+    }
+    HoodieMetadataConfig metadataConfig = dataTableWriteConfig.getMetadataConfig();
+    Lazy<Option<Schema>> lazyWriterSchemaOpt = Lazy.lazily(() -> tryResolveSchemaForTable(dataTableMetaClient));
+    final Map<String, Schema> columnsToIndexSchemaMap = getColumnsToIndex(
+        dataTableMetaClient.getTableConfig(), metadataConfig, lazyWriterSchemaOpt,
+        dataTableMetaClient.getActiveTimeline().getWriteTimeline().filterCompletedInstants().empty(),
+        Option.of(dataTableWriteConfig.getRecordMerger().getRecordType()));
+    if (columnsToIndexSchemaMap.isEmpty()) {
+      LOG.warn("No columns to index for partition stats index");
+      return Collections.singletonList(InitialIndexPartitionData.of(
+          numFileGroup, PARTITION_STATS.getPartitionPath(), engineContext.emptyHoodieData()));
+    }
+    LOG.debug("Indexing following columns for partition stats index: {}", columnsToIndexSchemaMap);
+
+    // Group by partition path and collect file names (BaseFile and LogFiles)
+    List<Pair<String, Set<String>>> partitionToFileNames = partitionFileSliceList.stream()
+        .collect(Collectors.groupingBy(Pair::getLeft,
+            Collectors.mapping(pair -> extractFileNames(pair.getRight()), Collectors.toList())))
+        .entrySet().stream()
+        .map(entry -> Pair.of(entry.getKey(),
+            entry.getValue().stream().flatMap(Set::stream).collect(Collectors.toSet())))
+        .collect(Collectors.toList());
+
+    // Create records for MDT
+    int parallelism = Math.max(Math.min(partitionToFileNames.size(),
+        metadataConfig.getPartitionStatsIndexParallelism()), 1);
+    HoodieData<HoodieRecord> records = engineContext.parallelize(partitionToFileNames, parallelism)
+        .flatMap(partitionInfo -> {
+          final String partitionPath = partitionInfo.getKey();
+          // Step 1: Collect Column Metadata for Each File
+          List<List<HoodieColumnRangeMetadata<Comparable>>> fileColumnMetadata =
+              partitionInfo.getValue().stream()
+                  .map(fileName -> getFileStatsRangeMetadata(
+                      partitionPath, fileName, dataTableMetaClient,
+                      new ArrayList<>(columnsToIndexSchemaMap.keySet()), false,
+                      metadataConfig.getMaxReaderBufferSize()))
+                  .collect(Collectors.toList());
+          return collectAndProcessColumnMetadata(
+              fileColumnMetadata, partitionPath, true, columnsToIndexSchemaMap).iterator();
+        });
     return Collections.singletonList(InitialIndexPartitionData.of(
         numFileGroup, PARTITION_STATS.getPartitionPath(), records));
+  }
+
+  private static Stream<HoodieRecord> collectAndProcessColumnMetadata(
+      List<List<HoodieColumnRangeMetadata<Comparable>>> fileColumnMetadata,
+      String partitionPath, boolean isTightBound,
+      Map<String, Schema> colsToIndexSchemaMap
+  ) {
+    return collectAndProcessColumnMetadata(partitionPath, isTightBound, Option.empty(), fileColumnMetadata.stream().flatMap(List::stream), colsToIndexSchemaMap);
+  }
+
+  private static Stream<HoodieRecord> collectAndProcessColumnMetadata(Iterable<HoodieColumnRangeMetadata<Comparable>> fileColumnMetadataIterable, String partitionPath,
+                                                                      boolean isTightBound, Option<String> indexPartitionOpt,
+                                                                      Map<String, Schema> colsToIndexSchemaMap
+  ) {
+
+    List<HoodieColumnRangeMetadata<Comparable>> fileColumnMetadata = new ArrayList<>();
+    fileColumnMetadataIterable.forEach(fileColumnMetadata::add);
+    // Group by Column Name
+    return collectAndProcessColumnMetadata(partitionPath, isTightBound, indexPartitionOpt, fileColumnMetadata.stream(), colsToIndexSchemaMap);
+  }
+
+  private static Stream<HoodieRecord> collectAndProcessColumnMetadata(String partitionPath, boolean isTightBound, Option<String> indexPartitionOpt,
+                                                                      Stream<HoodieColumnRangeMetadata<Comparable>> fileColumnMetadata,
+                                                                      Map<String, Schema> colsToIndexSchemaMap
+  ) {
+    // Group by Column Name
+    Map<String, List<HoodieColumnRangeMetadata<Comparable>>> columnMetadataMap =
+        fileColumnMetadata.collect(Collectors.groupingBy(HoodieColumnRangeMetadata::getColumnName, Collectors.toList()));
+
+    // Aggregate Column Ranges
+    Stream<HoodieColumnRangeMetadata<Comparable>> partitionStatsRangeMetadata = columnMetadataMap.entrySet().stream()
+        .map(entry -> FileFormatUtils.getColumnRangeInPartition(partitionPath, entry.getValue(), colsToIndexSchemaMap));
+
+    // Create Partition Stats Records
+    return HoodieMetadataPayload.createPartitionStatsRecords(partitionPath, partitionStatsRangeMetadata.collect(Collectors.toList()), false, isTightBound, indexPartitionOpt);
+  }
+
+  private static Set<String> extractFileNames(FileSlice fileSlice) {
+    Set<String> fileNames = new HashSet<>();
+    Option<HoodieBaseFile> baseFile = fileSlice.getBaseFile();
+    baseFile.ifPresent(hoodieBaseFile -> fileNames.add(hoodieBaseFile.getFileName()));
+    fileSlice.getLogFiles().forEach(hoodieLogFile -> fileNames.add(hoodieLogFile.getFileName()));
+    return fileNames;
   }
 }
