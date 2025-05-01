@@ -272,11 +272,13 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       // If there is no commit on the dataset yet, use the SOLO_COMMIT_TIMESTAMP as the instant time for initial commit
       // Otherwise, we use the timestamp of the latest completed action.
       String dataTableInstantTime = dataMetaClient.getActiveTimeline().filterCompletedInstants().lastInstant().map(HoodieInstant::requestedTime).orElse(SOLO_COMMIT_TIMESTAMP);
-      if (!initializeFromFilesystem(
-          dataTableInstantTime,
-          metadataPartitionsToInit.stream()
-              .collect(Collectors.toMap(Function.identity(), enabledIndexerMap::get)),
-          inflightInstantTimestamp)) {
+      if (!initializeFromFilesystem(dataTableInstantTime, metadataPartitionsToInit.stream()
+          .collect(Collectors.toMap(Function.identity(),
+              type -> IndexerFactory.getIndexer(
+                  type, engineContext, dataWriteConfig, dataMetaClient,
+                  // TODO(yihua): Revisit this to make sure we don't recreate table instance
+                  Lazy.lazily(() -> getTable(dataWriteConfig, dataMetaClient)),
+                  expressionIndexRecordGenerator))), inflightInstantTimestamp)) {
         LOG.error("Failed to initialize MDT from filesystem");
         return false;
       }
