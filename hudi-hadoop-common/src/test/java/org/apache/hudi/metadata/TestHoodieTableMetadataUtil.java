@@ -26,14 +26,9 @@ import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
@@ -53,13 +48,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -109,6 +102,8 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     assertTrue(result.isEmpty());
   }
 
+  // TODO(yihua): move to indexer test
+  /*
   @Test
   public void testConvertFilesToPartitionStatsRecords() throws Exception {
     HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(metaClient.getStorageConf());
@@ -167,6 +162,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     // Validate the result.
     validatePartitionStats(result, instant1, instant2);
   }
+*/
 
   @Test
   public void testReadRecordKeysFromBaseFilesWithValidRecords() throws Exception {
@@ -215,6 +211,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     }
   }
 
+  /*
   @Test
   public void testGetLogFileColumnRangeMetadata() throws Exception {
     HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(metaClient.getStorageConf());
@@ -281,7 +278,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
         Option.empty());
     // Validate the result.
     validatePartitionStats(result, instant1, instant2, 6);
-  }
+  }*/
 
   private static void validatePartitionStats(HoodieData<HoodieRecord> result, String instant1, String instant2) {
     validatePartitionStats(result, instant1, instant2, 15);

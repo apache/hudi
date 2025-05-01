@@ -2388,6 +2388,33 @@ public class HoodieTableMetadataUtil {
     }
   }
 
+  public static Stream<HoodieRecord> collectAndProcessColumnMetadata(String partitionPath, boolean isTightBound, Option<String> indexPartitionOpt,
+                                                                     Stream<HoodieColumnRangeMetadata<Comparable>> fileColumnMetadata,
+                                                                     Map<String, Schema> colsToIndexSchemaMap
+  ) {
+    // Group by Column Name
+    Map<String, List<HoodieColumnRangeMetadata<Comparable>>> columnMetadataMap =
+        fileColumnMetadata.collect(Collectors.groupingBy(HoodieColumnRangeMetadata::getColumnName, Collectors.toList()));
+
+    // Aggregate Column Ranges
+    Stream<HoodieColumnRangeMetadata<Comparable>> partitionStatsRangeMetadata = columnMetadataMap.entrySet().stream()
+        .map(entry -> FileFormatUtils.getColumnRangeInPartition(partitionPath, entry.getValue(), colsToIndexSchemaMap));
+
+    // Create Partition Stats Records
+    return HoodieMetadataPayload.createPartitionStatsRecords(partitionPath, partitionStatsRangeMetadata.collect(Collectors.toList()), false, isTightBound, indexPartitionOpt);
+  }
+
+  private static Stream<HoodieRecord> collectAndProcessColumnMetadata(Iterable<HoodieColumnRangeMetadata<Comparable>> fileColumnMetadataIterable, String partitionPath,
+                                                                      boolean isTightBound, Option<String> indexPartitionOpt,
+                                                                      Map<String, Schema> colsToIndexSchemaMap
+  ) {
+
+    List<HoodieColumnRangeMetadata<Comparable>> fileColumnMetadata = new ArrayList<>();
+    fileColumnMetadataIterable.forEach(fileColumnMetadata::add);
+    // Group by Column Name
+    return collectAndProcessColumnMetadata(partitionPath, isTightBound, indexPartitionOpt, fileColumnMetadata.stream(), colsToIndexSchemaMap);
+  }
+
   public static HoodieData<HoodieRecord> convertMetadataToPartitionStatRecords(HoodieCommitMetadata commitMetadata, HoodieEngineContext engineContext, HoodieTableMetaClient dataMetaClient,
                                                                                HoodieTableMetadata tableMetadata, HoodieMetadataConfig metadataConfig,
                                                                                Option<HoodieRecordType> recordTypeOpt, boolean isDeletePartition) {

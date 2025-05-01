@@ -67,6 +67,7 @@ import static org.apache.hudi.metadata.HoodieMetadataWriteUtils.createMetadataWr
 import static org.apache.hudi.metadata.HoodieMetadataWriteUtils.getIndexDefinition;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getProjectedSchemaForExpressionIndex;
+import static org.apache.hudi.metadata.index.SparkExpressionIndexRecordGenerator.collectAndProcessExprIndexPartitionStatRecords;
 
 public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetadataWriter<JavaRDD<HoodieRecord>> {
 
@@ -188,7 +189,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
               .flatMapValues(List::iterator);
       // The function below merges the column range metadata from the updated data with latest column range metadata of affected partition computed above
       partitionRecordsFunctionOpt = Option.of(rangeMetadata ->
-          HoodieTableMetadataUtil.collectAndProcessExprIndexPartitionStatRecords(exprIndexPartitionStatUpdates.union(rangeMetadata), true, Option.of(indexDefinition.getIndexName())));
+          collectAndProcessExprIndexPartitionStatRecords(exprIndexPartitionStatUpdates.union(rangeMetadata), true, Option.of(indexDefinition.getIndexName())));
     }
 
     // Step 1: Generate partition name, file path and size triplets from the newly created files in the commit metadata
