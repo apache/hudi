@@ -41,7 +41,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.util.ClusteringUtils;
-import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
@@ -319,15 +318,6 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
     HoodieData<WriteStatus> statuses = updateIndex(writeStatusList, writeMetadata);
     statuses.persist(config.getString(WRITE_STATUS_STORAGE_LEVEL_VALUE), context, HoodieData.HoodieDataCacheKey.of(config.getBasePath(), instantTime));
     writeMetadata.setDataTableWriteStatuses(statuses);
-
-    writeMetadata.setPartitionToReplaceFileIds(getPartitionToReplacedFileIds(clusteringPlan, writeMetadata));
-    // runPrecommitValidation(writeMetadata);
-    if (!writeMetadata.getCommitMetadata().isPresent()) {
-      LOG.info("Found empty commit metadata for clustering with instant time " + instantTime);
-      HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(Collections.emptyList(), writeMetadata.getPartitionToReplaceFileIds(),
-          extraMetadata, operationType, schema.get().toString(), getCommitActionType());
-      writeMetadata.setCommitMetadata(Option.of(commitMetadata));
-    }
     return writeMetadata;
   }
 

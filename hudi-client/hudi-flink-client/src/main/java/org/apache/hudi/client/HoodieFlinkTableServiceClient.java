@@ -59,8 +59,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.text.ParseException;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.table.HoodieTable.maybeDeleteMetadataTable;
 
 public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClient<List<HoodieRecord<T>>, List<WriteStatus>, List<WriteStatus>> {
 
@@ -82,7 +85,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
   }
 
   @Override
-  protected void completeCompaction(HoodieCommitMetadata metadata, HoodieTable table, String compactionCommitTime, List<HoodieWriteStat> partialMdtHoodieWriteStats,
+  protected void completeCompaction(HoodieCommitMetadata metadata, HoodieTable table, String compactionCommitTime, List<HoodieWriteStat> metadataWriteStatsSoFar,
                                                                         Option<HoodieTableMetadataWriter> metadataWriterOpt) {
     this.context.setJobStatus(this.getClass().getSimpleName(), "Collect compaction write status and commit compaction: " + config.getTableName());
     List<HoodieWriteStat> writeStats = metadata.getWriteStats();
@@ -180,22 +183,8 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
   }
 
   @Override
-  protected Pair<List<HoodieWriteStat>, List<HoodieWriteStat>> processAndFetchHoodieWriteStats(HoodieWriteMetadata<List<WriteStatus>> writeMetadata) {
-    List<Pair<Boolean, HoodieWriteStat>> writeStats = writeMetadata.getDataTableWriteStatuses().stream().map(writeStatus ->
-        Pair.of(writeStatus.isMetadataTable(), writeStatus.getStat())).collect(Collectors.toList());
-    List<HoodieWriteStat> dataTableWriteStats = writeStats.stream().filter(entry -> !entry.getKey()).map(Pair::getValue).collect(Collectors.toList());
-    List<HoodieWriteStat> mdtWriteStats = writeStats.stream().filter(Pair::getKey).map(Pair::getValue).collect(Collectors.toList());
-    if (HoodieTableMetadata.isMetadataTable(config.getBasePath())) {
-      dataTableWriteStats.clear();
-      dataTableWriteStats.addAll(mdtWriteStats);
-      mdtWriteStats.clear();
-    }
-    return Pair.of(dataTableWriteStats, mdtWriteStats);
-  }
-
-  @Override
-  protected HoodieData<WriteStatus> convertToWriteStatus(HoodieWriteMetadata<List<WriteStatus>> writeMetadata) {
-    return HoodieListData.eager(writeMetadata.getDataTableWriteStatuses());
+  protected Pair<List<HoodieWriteStat>, List<HoodieWriteStat>> triggerWritesAndFetchWriteStats(HoodieWriteMetadata<List<WriteStatus>> writeMetadata) {
+    return Pair.of(writeMetadata.getDataTableWriteStatuses().stream().map(writeStatus -> writeStatus.getStat()).collect(Collectors.toList()), Collections.EMPTY_LIST);
   }
 
   @Override
@@ -235,7 +224,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
       table.deleteMetadataIndexIfNecessary();
     } else {
       // delete the metadata table if it was enabled but is now disabled
-      table.maybeDeleteMetadataTable();
+      maybeDeleteMetadataTable(config, table.getMetaClient(), context);
     }
   }
 

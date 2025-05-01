@@ -19,8 +19,6 @@
 package org.apache.hudi.client;
 
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
-import org.apache.hudi.common.data.HoodieData;
-import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -29,13 +27,13 @@ import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.HoodieJavaTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -50,17 +48,8 @@ public class HoodieJavaTableServiceClient<T> extends BaseHoodieTableServiceClien
   }
 
   @Override
-  protected Pair<List<HoodieWriteStat>, List<HoodieWriteStat>> processAndFetchHoodieWriteStats(HoodieWriteMetadata<List<WriteStatus>> writeMetadata) {
-    List<Pair<Boolean, HoodieWriteStat>> writeStats = writeMetadata.getAllWriteStatuses().stream().map(writeStatus ->
-        Pair.of(writeStatus.isMetadataTable(), writeStatus.getStat())).collect(Collectors.toList());
-    List<HoodieWriteStat> dataTableWriteStats = writeStats.stream().filter(entry -> !entry.getKey()).map(Pair::getValue).collect(Collectors.toList());
-    List<HoodieWriteStat> mdtWriteStats = writeStats.stream().filter(Pair::getKey).map(Pair::getValue).collect(Collectors.toList());
-    if (HoodieTableMetadata.isMetadataTable(config.getBasePath())) {
-      dataTableWriteStats.clear();
-      dataTableWriteStats.addAll(mdtWriteStats);
-      mdtWriteStats.clear();
-    }
-    return Pair.of(dataTableWriteStats, mdtWriteStats);
+  protected Pair<List<HoodieWriteStat>, List<HoodieWriteStat>> triggerWritesAndFetchWriteStats(HoodieWriteMetadata<List<WriteStatus>> writeMetadata) {
+    return Pair.of(writeMetadata.getDataTableWriteStatuses().stream().map(writeStatus -> writeStatus.getStat()).collect(Collectors.toList()), Collections.EMPTY_LIST);
   }
 
   @Override
@@ -71,11 +60,6 @@ public class HoodieJavaTableServiceClient<T> extends BaseHoodieTableServiceClien
   @Override
   protected HoodieWriteMetadata<List<WriteStatus>> convertToOutputMetadata(HoodieWriteMetadata<List<WriteStatus>> writeMetadata) {
     return writeMetadata;
-  }
-
-  @Override
-  protected HoodieData<WriteStatus> convertToWriteStatus(HoodieWriteMetadata<List<WriteStatus>> writeMetadata) {
-    return HoodieListData.eager(writeMetadata.getDataTableWriteStatuses());
   }
 
   @Override

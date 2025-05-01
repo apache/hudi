@@ -22,7 +22,6 @@ import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
-import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -268,17 +267,12 @@ class TestBaseHoodieTableServiceClient extends HoodieCommonTestHarness {
     }
 
     @Override
-    protected Pair<List<HoodieWriteStat>, List<HoodieWriteStat>> processAndFetchHoodieWriteStats(HoodieWriteMetadata<String> writeMetadata) {
+    protected Pair<List<HoodieWriteStat>, List<HoodieWriteStat>> triggerWritesAndFetchWriteStats(HoodieWriteMetadata<String> writeMetadata) {
       return null;
     }
 
     @Override
     protected HoodieWriteMetadata<String> convertToOutputMetadata(HoodieWriteMetadata<String> writeMetadata) {
-      return null;
-    }
-
-    @Override
-    protected HoodieData<WriteStatus> convertToWriteStatus(HoodieWriteMetadata<String> writeMetadata) {
       return null;
     }
 

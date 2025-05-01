@@ -105,26 +105,6 @@ public class RunCompactionActionExecutor<T> extends
 
       compactor.maybePersist(statuses, context, config, instantTime);
       context.setJobStatus(this.getClass().getSimpleName(), "Preparing compaction metadata: " + config.getTableName());
-
-      // we are triggering the dag here.
-      // thinking if we can keep the RDD<WriteStatus> as is and dereference it in BaseHoodieTableServiceClient just before complete Compaction.
-      /*List<HoodieWriteStat> updateStatusMap = statuses.map(WriteStatus::getStat).collectAsList();
-      HoodieCommitMetadata metadata = new HoodieCommitMetadata(true);
-      for (HoodieWriteStat stat : updateStatusMap) {
-        metadata.addWriteStat(stat.getPartitionPath(), stat);
-      }
-      metadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, config.getSchema());
-      if (schemaPair.getLeft().isPresent()) {
-        metadata.addMetadata(SerDeHelper.LATEST_SCHEMA, schemaPair.getLeft().get());
-        metadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, schemaPair.getRight().get());
-      }
-      // Setting operationType, which is compact.
-      metadata.setOperationType(operationType);
-      compactionMetadata.setDataTableWriteStatuses(statuses);
-      compactionMetadata.setCommitted(false);
-      compactionMetadata.setCommitMetadata(Option.of(metadata));
-      compactionMetadata.setWriteStats(updateStatusMap);*/
-
       compactionWriteMetadata.setDataTableWriteStatuses(statuses);
       compactionWriteMetadata.setCommitted(false);
     } catch (Exception e) {
