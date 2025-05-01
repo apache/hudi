@@ -90,12 +90,9 @@ public class EngineBasedMerger<T> {
 
       return mergedRecord.map(combinedRecordAndSchema -> {
         HoodieRecord<T> combinedRecord = combinedRecordAndSchema.getLeft();
-        if (!combinedRecordAndSchema.getRight().equals(readerSchema)) {
-          combinedRecord = combinedRecord.rewriteRecordWithNewSchema(mergedRecord.get().getRight(), props, readerSchema);
-        }
         // If pre-combine returns existing record, no need to update it
         if (combinedRecord.getData() != olderOption.map(BufferedRecord::getRecord).orElse(null)) {
-          return BufferedRecord.forRecordWithContext(combinedRecord, readerSchema, readerContext, props);
+          return BufferedRecord.forRecordWithContext(combinedRecord, combinedRecordAndSchema.getRight(), readerContext, props);
         }
         return older;
       }).orElseGet(() -> getLatestAsDeleteRecord(newer, older));
@@ -117,17 +114,16 @@ public class EngineBasedMerger<T> {
           if (payloadClass.isPresent()) {
             Option<Pair<HoodieRecord, Schema>> mergedRecord = getMergedRecord(older, newer);
             mergeResult = mergedRecord.map(combinedRecordAndSchema -> {
-              T record = readerContext.convertAvroRecord((IndexedRecord) combinedRecordAndSchema.getLeft()
-                  .rewriteRecordWithNewSchema(combinedRecordAndSchema.getRight(), props, readerSchema).getData());
-              return BufferedRecord.forConvertedRecord(record, combinedRecordAndSchema.getLeft(), readerSchema, readerContext, props);
+              T record = readerContext.convertAvroRecord((IndexedRecord) combinedRecordAndSchema.getLeft().getData());
+              return BufferedRecord.forConvertedRecord(record, combinedRecordAndSchema.getLeft(), combinedRecordAndSchema.getRight(), readerContext, props);
             });
           } else {
             Option<Pair<HoodieRecord, Schema>> mergedRecord = recordMerger.get().merge(
                 readerContext.constructHoodieRecord(older), readerContext.getSchemaFromBufferRecord(older),
                 readerContext.constructHoodieRecord(newer), readerContext.getSchemaFromBufferRecord(newer), props);
             mergeResult = mergedRecord.map(combinedRecordAndSchema ->
-                BufferedRecord.forRecordWithContext((HoodieRecord<T>) combinedRecordAndSchema.getLeft().rewriteRecordWithNewSchema(mergedRecord.get().getRight(), props, readerSchema),
-                    readerSchema, readerContext, props));
+                BufferedRecord.forRecordWithContext((HoodieRecord<T>) combinedRecordAndSchema.getLeft(),
+                    combinedRecordAndSchema.getRight(), readerContext, props));
           }
           return mergeResult.orElseGet(() -> getLatestAsDeleteRecord(newer, older));
       }

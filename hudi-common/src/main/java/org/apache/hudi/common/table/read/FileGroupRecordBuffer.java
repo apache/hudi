@@ -66,6 +66,7 @@ import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetada
 public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T> {
   protected final HoodieReaderContext<T> readerContext;
   protected final Schema readerSchema;
+  protected final Integer readerSchemaId;
   protected final Option<String> orderingFieldName;
   protected final RecordMergeMode recordMergeMode;
   protected final Option<String> payloadClass;
@@ -96,6 +97,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
     this.readerSchema = AvroSchemaCache.intern(readerContext.getSchemaHandler().getRequiredSchema());
     this.orderingFieldName = orderingFieldName;
     this.props = props;
+    this.merger = merger;
     this.internalSchema = readerContext.getSchemaHandler().getInternalSchema();
     this.hoodieTableMetaClient = hoodieTableMetaClient;
     long maxMemorySizeInBytes = props.getLong(MAX_MEMORY_FOR_MERGE.key(), MAX_MEMORY_FOR_MERGE.defaultValue());
@@ -263,7 +265,11 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
       BufferedRecord<T> merged = merger.merge(Option.of(baseRecordInfo), Option.ofNullable(logRecordInfo), enablePartialMerging);
       if (!merged.isDelete()) {
         // Updates
-        nextRecord = readerContext.seal(merged.getRecord());
+        T mergedRecord = merged.getRecord();
+        if (!merged.getSchemaId().equals(readerSchemaId)) {
+          mergedRecord = readerContext.projectRecord(readerContext.getSchemaFromBufferRecord(merged), readerSchema).apply(mergedRecord);
+        }
+        nextRecord = readerContext.seal(mergedRecord);
         readStats.incrementNumUpdates();
         return true;
       } else if (emitDelete) {

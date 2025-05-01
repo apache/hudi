@@ -78,7 +78,8 @@ public class BufferedRecord<T> implements Serializable {
     } catch (IOException e) {
       throw new HoodieException("Failed to get isDelete from record.", e);
     }
-    return new BufferedRecord<>(recordKey, readerContext.convertValueToEngineType(record.getOrderingValue(schema, props)), data, schemaId, isDelete);
+    Comparable<?> orderingValue = record.getOrderingValue(schema, props);
+    return new BufferedRecord<>(recordKey, readerContext.convertValueToEngineType(orderingValue), data, schemaId, isDelete);
   }
 
   public static <T> BufferedRecord<T> forRecordWithContext(T record, Schema schema, HoodieReaderContext<T> readerContext, Option<String> orderingFieldName, boolean isDelete) {

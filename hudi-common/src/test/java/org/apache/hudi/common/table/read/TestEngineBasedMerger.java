@@ -142,23 +142,20 @@ class TestEngineBasedMerger {
     mockRecordConversion(olderRecorderSchema, newerRecorderSchema, olderRecord, newerRecord);
 
     // Mock result
-    HoodieRecord rewrittenRecord = mock(HoodieRecord.class);
     HoodieRecord mergedRecord = mock(HoodieRecord.class);
-    Schema mergedSchema = returnExistingRecord ? readerSchema : mock(Schema.class);
+    Schema mergedSchema = mock(Schema.class);
     when(recordMerger.partialMerge(olderRecord, olderRecorderSchema, newerRecord, newerRecorderSchema, readerSchema, props))
         .thenReturn(Option.of(Pair.of(mergedRecord, mergedSchema)));
 
     BufferedRecord<TestRecord> expected;
     if (!returnExistingRecord) {
-      // Mock rewriting the record with the readerSchema
-      when(mergedRecord.rewriteRecordWithNewSchema(mergedSchema, props, readerSchema)).thenReturn(rewrittenRecord);
-
       // Mock the result
       TestRecord data = new TestRecord();
       Integer schemaId = 2;
       long orderingValue = 1L;
       String recordKey = "key";
-      mockResultConversionToBufferedRecord(schemaId, rewrittenRecord, orderingValue, recordKey, data, false);
+      when(mergedRecord.getData()).thenReturn(data);
+      mockResultConversionToBufferedRecord(schemaId, mergedRecord, mergedSchema, orderingValue, recordKey, false);
 
       expected = new BufferedRecord<>(recordKey, orderingValue, data, schemaId, false);
     } else {
@@ -187,15 +184,18 @@ class TestEngineBasedMerger {
     mockRecordConversion(olderRecorderSchema, newerRecorderSchema, olderRecord, newerRecord);
 
     // Mock result
-    HoodieRecord rewrittenRecord = mock(HoodieRecord.class);
-    mockMergeCallAndRewriteWithReaderSchema(recordMerger, olderRecord, olderRecorderSchema, newerRecord, newerRecorderSchema, rewrittenRecord);
+    HoodieRecord mergedRecord = mock(HoodieRecord.class);
+    Schema mergedSchema = mock(Schema.class);
+    when(recordMerger.merge(olderRecord, olderRecorderSchema, newerRecord, newerRecorderSchema, props))
+        .thenReturn(Option.of(Pair.of(mergedRecord, mergedSchema)));
 
     // Mock the result
     TestRecord data = new TestRecord();
     Integer schemaId = 2;
     long orderingValue = 1L;
     String recordKey = "key";
-    mockResultConversionToBufferedRecord(schemaId, rewrittenRecord, orderingValue, recordKey, data, resultIsADelete);
+    when(mergedRecord.getData()).thenReturn(data);
+    mockResultConversionToBufferedRecord(schemaId, mergedRecord, mergedSchema, orderingValue, recordKey, resultIsADelete);
 
     BufferedRecord<TestRecord> result = merger.merge(Option.of(T1), Option.of(T2), false);
     BufferedRecord<TestRecord> expected = new BufferedRecord<>(recordKey, orderingValue, data, schemaId, resultIsADelete);
@@ -223,7 +223,6 @@ class TestEngineBasedMerger {
     when(readerContext.convertToAvroRecord(T1.getRecord(), olderRecorderSchema)).thenReturn(olderAvroRecord);
     when(readerContext.convertToAvroRecord(T2.getRecord(), newerRecorderSchema)).thenReturn(newerAvroRecord);
 
-
     // Mock merging
     HoodieRecord mergedRecord = mock(HoodieRecord.class);
     Schema mergedSchema = mock(Schema.class);
@@ -238,12 +237,10 @@ class TestEngineBasedMerger {
     long orderingValue = 1L;
     String recordKey = "key";
 
-    HoodieRecord rewrittenRecordWithReaderSchema = mock(HoodieRecord.class);
     IndexedRecord rewrittenData = mock(IndexedRecord.class);
-    when(rewrittenRecordWithReaderSchema.getData()).thenReturn(rewrittenData);
-    when(mergedRecord.rewriteRecordWithNewSchema(mergedSchema, props, readerSchema)).thenReturn(rewrittenRecordWithReaderSchema);
+    when(mergedRecord.getData()).thenReturn(rewrittenData);
     when(readerContext.convertAvroRecord(rewrittenData)).thenReturn(data);
-    mockResultConversionToBufferedRecord(schemaId, mergedRecord, orderingValue, recordKey, data, resultIsADelete);
+    mockResultConversionToBufferedRecord(schemaId, mergedRecord, mergedSchema, orderingValue, recordKey, resultIsADelete);
 
     BufferedRecord<TestRecord> result = merger.merge(Option.of(T1), Option.of(T2), false);
     BufferedRecord<TestRecord> expected = new BufferedRecord<>(recordKey, orderingValue, data, schemaId, resultIsADelete);
@@ -311,24 +308,12 @@ class TestEngineBasedMerger {
     assertEquals(expected, result);
   }
 
-  private void mockResultConversionToBufferedRecord(Integer schemaId, HoodieRecord rewrittenRecord, long orderingValue, String recordKey, TestRecord data, boolean isDelete) throws IOException {
-    when(readerContext.encodeAvroSchema(readerSchema)).thenReturn(schemaId);
-    when(rewrittenRecord.getOrderingValue(readerSchema, props)).thenReturn(orderingValue);
+  private void mockResultConversionToBufferedRecord(Integer schemaId, HoodieRecord rewrittenRecord, Schema schema, long orderingValue, String recordKey, boolean isDelete) throws IOException {
+    when(readerContext.convertValueToEngineType(orderingValue)).thenReturn(orderingValue);
+    when(readerContext.encodeAvroSchema(schema)).thenReturn(schemaId);
+    when(rewrittenRecord.getOrderingValue(schema, props)).thenReturn(orderingValue);
     when(rewrittenRecord.getKey()).thenReturn(new HoodieKey(recordKey, ""));
-    when(rewrittenRecord.isDelete(readerSchema, props)).thenReturn(isDelete);
-    when(rewrittenRecord.getData()).thenReturn(data);
-  }
-
-  private void mockMergeCallAndRewriteWithReaderSchema(HoodieRecordMerger recordMerger, HoodieRecord olderRecord, Schema olderRecorderSchema,
-                                                       HoodieRecord newerRecord, Schema newerRecorderSchema, HoodieRecord rewrittenRecord)
-      throws IOException {
-    HoodieRecord mergedRecord = mock(HoodieRecord.class);
-    Schema mergedSchema = mock(Schema.class);
-    when(recordMerger.merge(olderRecord, olderRecorderSchema, newerRecord, newerRecorderSchema, props))
-        .thenReturn(Option.of(Pair.of(mergedRecord, mergedSchema)));
-
-    // Mock rewriting the record with the readerSchema
-    when(mergedRecord.rewriteRecordWithNewSchema(mergedSchema, props, readerSchema)).thenReturn(rewrittenRecord);
+    when(rewrittenRecord.isDelete(schema, props)).thenReturn(isDelete);
   }
 
   private void mockRecordConversion(Schema olderRecorderSchema, Schema newerRecorderSchema, HoodieRecord olderRecord, HoodieRecord newerRecord) {
