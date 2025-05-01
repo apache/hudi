@@ -125,6 +125,7 @@ public class TestMetadataPartitionType {
 
     // Simulate the meta client having RECORD_INDEX available but config not enabling it
     Mockito.when(metaClient.getTableConfig()).thenReturn(tableConfig);
+    Mockito.when(tableConfig.getTableVersion()).thenReturn(HoodieTableVersion.current());
     Mockito.when(tableConfig.isMetadataPartitionAvailable(MetadataPartitionType.FILES)).thenReturn(true);
     Mockito.when(metaClient.getIndexMetadata()).thenReturn(Option.empty());
     Mockito.when(metaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX)).thenReturn(true);
@@ -165,6 +166,7 @@ public class TestMetadataPartitionType {
 
     // Simulate the meta client having EXPRESSION_INDEX available
     Mockito.when(metaClient.getTableConfig()).thenReturn(tableConfig);
+    Mockito.when(tableConfig.getTableVersion()).thenReturn(HoodieTableVersion.current());
     Mockito.when(tableConfig.isMetadataPartitionAvailable(MetadataPartitionType.FILES)).thenReturn(true);
     HoodieIndexDefinition expressionIndexDefinition = createIndexDefinition(MetadataPartitionType.EXPRESSION_INDEX, "dummy", "column_stats", "lower", Collections.singletonList("name"), null);
     HoodieIndexMetadata expressionIndexMetadata = new HoodieIndexMetadata(Collections.singletonMap("expr_index_dummy", expressionIndexDefinition));
