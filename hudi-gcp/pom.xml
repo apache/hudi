@@ -159,11 +159,6 @@ See https://github.com/GoogleCloudPlatform/cloud-opensource-java/wiki/The-Google
       <scope>test</scope>
     </dependency>
 
-    <dependency>
-      <groupId>org.testcontainers</groupId>
-      <artifactId>testcontainers</artifactId>
-      <scope>test</scope>
-    </dependency>
   </dependencies>
 
   <build>

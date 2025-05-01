@@ -35,6 +35,7 @@ import com.google.cloud.storage.StorageOptions;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 import org.testcontainers.containers.GenericContainer;
@@ -48,6 +49,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.when;
 
+@Disabled("HUDI-9160 The dockerized tests do not work. Disabling them to unblock Azure CI")
 public class TestGCSStorageBasedLockProvider
     extends StorageBasedLockProviderTestBase {
 
