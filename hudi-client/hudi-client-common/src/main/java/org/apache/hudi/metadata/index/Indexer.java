@@ -31,8 +31,33 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Interface for initializing and updating a type of metadata or index
+ * in the metadata table
+ * <p>
+ * When a new type of index is added to MetadataPartitionType, an
+ * implementation of the {@link Indexer} interface is required, and it
+ * must be added to {@link IndexerFactory}.
+ */
 public interface Indexer {
-  List<InitialIndexPartitionData> build(
+  /**
+   * Generates records for initializing the index.
+   *
+   * @param partitionInfoList       list of directory information
+   * @param partitionToFilesMap     map of partition to files
+   * @param createInstantTime       instant time of the data table that the metadata table
+   *                                is initialized on
+   * @param fsView                  lazy file system view of the data table
+   * @param metadata                table metadata of the data table
+   * @param instantTimeForPartition instant time for initializing the metadata table partition
+   * @return a list of {@link InitialIndexPartitionData}, which each data item
+   * representing the records to initialize a particular partition (note that
+   * one index type can correspond to one or multiple partitions in the metadata
+   * table). An empty list returned indicates that the metadata partition does
+   * not need to be initialized.
+   * @throws IOException upon IO error
+   */
+  List<InitialIndexPartitionData> initialize(
       List<HoodieTableMetadataUtil.DirectoryInfo> partitionInfoList,
       Map<String, Map<String, Long>> partitionToFilesMap,
       String createInstantTime,
@@ -40,6 +65,9 @@ public interface Indexer {
       HoodieBackedTableMetadata metadata,
       String instantTimeForPartition) throws IOException;
 
+  /**
+   * Updates the table config of the data table to reflect the state of the index
+   */
   default void updateTableConfig() {
     // No index-specific table config update by default
   }

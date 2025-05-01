@@ -76,7 +76,7 @@ public class ExpressionIndexer implements Indexer {
   }
 
   @Override
-  public List<InitialIndexPartitionData> build(
+  public List<InitialIndexPartitionData> initialize(
       List<HoodieTableMetadataUtil.DirectoryInfo> partitionInfoList,
       Map<String, Map<String, Long>> partitionToFilesMap,
       String createInstantTime,

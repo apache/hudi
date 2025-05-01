@@ -43,12 +43,12 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.metadata.MetadataPartitionType.getValidValues;
 
 public class IndexerFactory {
-  public static Indexer getIndexBuilder(MetadataPartitionType partitionType,
-                                        HoodieEngineContext engineContext,
-                                        HoodieWriteConfig dataTableWriteConfig,
-                                        HoodieTableMetaClient dataTableMetaClient,
-                                        Lazy<HoodieTable> table,
-                                        ExpressionIndexRecordGenerator expressionIndexRecordGenerator) {
+  public static Indexer getIndexer(MetadataPartitionType partitionType,
+                                   HoodieEngineContext engineContext,
+                                   HoodieWriteConfig dataTableWriteConfig,
+                                   HoodieTableMetaClient dataTableMetaClient,
+                                   Lazy<HoodieTable> table,
+                                   ExpressionIndexRecordGenerator expressionIndexRecordGenerator) {
     switch (partitionType) {
       case BLOOM_FILTERS:
         return new BloomFiltersIndexer(
@@ -77,25 +77,31 @@ public class IndexerFactory {
   }
 
   /**
-   * Returns the list of metadata partition types enabled based on the metadata config and table config.
+   * @param engineContext                  {@link HoodieEngineContext} instance
+   * @param dataTableWriteConfig           write config for the data table
+   * @param dataTableMetaClient            meta client of the data table
+   * @param table                          lazy {@link HoodieTable} instance presenting the data table
+   * @param expressionIndexRecordGenerator record generator for the expression index
+   * @return the map of metadata partition type to the indexer for the enabled metadata
+   * partition types based on the metadata config and table config.
    */
   // TODO(yihua): remove MetadataPartitionType#getEnabledIndexBuilderMap
   public static Map<MetadataPartitionType, Indexer> getEnabledIndexerMap(
       HoodieEngineContext engineContext,
       HoodieWriteConfig dataTableWriteConfig,
-      HoodieTableMetaClient metaClient,
+      HoodieTableMetaClient dataTableMetaClient,
       Lazy<HoodieTable> table,
       ExpressionIndexRecordGenerator expressionIndexRecordGenerator) {
     if (!dataTableWriteConfig.getMetadataConfig().isEnabled()) {
       return Collections.emptyMap();
     }
     return Collections.unmodifiableMap(Arrays.stream(
-            getValidValues(metaClient.getTableConfig().getTableVersion()))
-        .filter(partitionType -> partitionType.isMetadataPartitionSupported(metaClient)
+            getValidValues(dataTableMetaClient.getTableConfig().getTableVersion()))
+        .filter(partitionType -> partitionType.isMetadataPartitionSupported(dataTableMetaClient)
             && (partitionType.isMetadataPartitionEnabled(dataTableWriteConfig.getMetadataConfig())
-            || partitionType.isMetadataPartitionAvailable(metaClient)))
+            || partitionType.isMetadataPartitionAvailable(dataTableMetaClient)))
         .collect(Collectors.toMap(
-            Function.identity(), type -> IndexerFactory.getIndexBuilder(
-                type, engineContext, dataTableWriteConfig, metaClient, table, expressionIndexRecordGenerator))));
+            Function.identity(), type -> IndexerFactory.getIndexer(
+                type, engineContext, dataTableWriteConfig, dataTableMetaClient, table, expressionIndexRecordGenerator))));
   }
 }

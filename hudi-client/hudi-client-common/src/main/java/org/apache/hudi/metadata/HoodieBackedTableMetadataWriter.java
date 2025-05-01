@@ -427,7 +427,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     LOG.info("Initializing MDT partition {} at instant {}", partitionTypeName, instantTimeForPartition);
     List<Indexer.InitialIndexPartitionData> initialIndexPartitionDataList;
     try {
-      initialIndexPartitionDataList = indexer.build(
+      initialIndexPartitionDataList = indexer.initialize(
           partitionInfoList, partitionToFilesMap, initializationTime,
           Lazy.lazily(this::getMetadataView), metadata, instantTimeForPartition);
     } catch (Exception e) {
