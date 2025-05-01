@@ -2353,9 +2353,6 @@
           <name>scala-2.12</name>
         </property>
       </activation>
-      <modules>
-        <module>hudi-flink-datasource/hudi-flink1.14.x</module>
-      </modules>
       <build>
         <plugins>
           <plugin>

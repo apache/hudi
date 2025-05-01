@@ -26,7 +26,6 @@ import org.apache.hudi.testutils.HoodieClientTestUtils.getSparkConfForTest
 
 import org.apache.commons.lang.math.RandomUtils.nextInt
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.execution.PartitionedFileUtil
 import org.apache.spark.sql.execution.datasources.FilePartition
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -83,20 +82,7 @@ class TestPartitionDirectoryConverter extends SparkAdapterSupport {
     val partitionOpt = Some(new PartitionPath(partitionPath, partitionValues.toArray))
     val partitionDirectory = PartitionDirectoryConverter.convertFileSlicesToPartitionDirectory(partitionOpt, slices, options)
 
-    val partitionedFiles = partitionDirectory.files.flatMap(file => {
-      // getPath() is very expensive so we only want to call it once in this block:
-      val filePath = file.getPath
-      val isSplitable = false
-      PartitionedFileUtil.splitFiles(
-        spark,
-        file = file,
-        filePath = filePath,
-        isSplitable = isSplitable,
-        maxSplitBytes = maxSplitSize,
-        partitionValues = partitionDirectory.values
-      )
-    })
-
+    val partitionedFiles = sparkAdapter.splitFiles(spark, partitionDirectory, false, maxSplitSize)
     val tasks = sparkAdapter.getFilePartitions(spark, partitionedFiles, maxSplitSize)
     verifyBalanceByNum(tasks, totalRecordNum, logFraction)
     spark.stop()

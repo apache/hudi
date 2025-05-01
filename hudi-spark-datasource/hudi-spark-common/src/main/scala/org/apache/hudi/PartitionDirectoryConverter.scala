@@ -53,7 +53,7 @@ object PartitionDirectoryConverter extends SparkAdapterSupport {
     val c = fileSlices.filter(f => f.hasLogFiles || f.hasBootstrapBase).foldLeft(Map[String, FileSlice]()) { (m, f) => m + (f.getFileId -> f) }
     if (c.nonEmpty) {
       sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(
-        new HoodiePartitionFileSliceMapping(InternalRow.fromSeq(partitionOpt.get.values), c), delegateFiles)
+        sparkAdapter.createHoodiePartitionFileSliceMapping(InternalRow.fromSeq(partitionOpt.get.values), c), delegateFiles)
     } else {
       sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(
         InternalRow.fromSeq(partitionOpt.get.values), delegateFiles)
