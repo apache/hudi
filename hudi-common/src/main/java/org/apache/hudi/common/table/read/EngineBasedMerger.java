@@ -107,6 +107,12 @@ public class EngineBasedMerger<T> {
           return getNewerRecordWithEventTimeOrdering(newer, older);
         case CUSTOM:
         default:
+          if (older.isDelete() || newer.isDelete()) {
+            // IMPORTANT:
+            // this is needed when the fallback HoodieAvroRecordMerger got used, the merger would
+            // return Option.empty when the new payload data is empty(a delete) and ignores its ordering value directly.
+            return getNewerRecordWithEventTimeOrdering(newer, older);
+          }
           Option<BufferedRecord<T>> mergeResult;
           if (payloadClass.isPresent()) {
             Option<Pair<HoodieRecord, Schema>> mergedRecord = getMergedRecord(older, newer);
