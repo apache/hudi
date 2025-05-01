@@ -82,9 +82,10 @@ public interface Indexer {
     // No index-specific table config update by default
   }
 
-  static List<Pair<String, FileSlice>> getPartitionFileSlicePairs(HoodieTableMetaClient dataTableMetaClient,
-                                                                  HoodieTableMetadata metadata,
-                                                                  HoodieTableFileSystemView fsView)
+  static List<Pair<String, FileSlice>> getPartitionFileSlicePairs(
+      HoodieTableMetaClient dataTableMetaClient,
+      HoodieTableMetadata metadata,
+      HoodieTableFileSystemView fsView)
       throws IOException {
     String latestInstant = dataTableMetaClient.getActiveTimeline().filterCompletedAndCompactionInstants().lastInstant()
         .map(HoodieInstant::requestedTime).orElse(SOLO_COMMIT_TIMESTAMP);
