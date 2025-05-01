@@ -253,7 +253,12 @@ public class SparkMain {
     } finally {
       jsc.stop();
     }
-    System.exit(returnCode);
+    if (!jsc.master().equals("yarn")) {
+      System.exit(returnCode);
+    }
+    if (returnCode != 0) {
+      throw new Error("Command failed with exitCode: " + returnCode);
+    }
   }
 
   protected static void clean(JavaSparkContext jsc, String basePath, String propsFilePath,
