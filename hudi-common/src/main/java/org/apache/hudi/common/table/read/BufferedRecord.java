@@ -46,7 +46,7 @@ public class BufferedRecord<T> implements Serializable {
   // this is in the engine specific type to ensure compatibility between log and base file data
   private final Comparable orderingValue;
   // the record itself in the engine specific type
-  private final T record;
+  private T record;
   // the schema id from the reader context schema cache
   private final Integer schemaId;
   // whether this is record represents a deletion for the key
