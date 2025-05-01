@@ -348,7 +348,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     }
     // generate Completion time
     String completionTime = activeTimeline.createCompletionTime();
-    boolean optimizedWrite = !avoidOptimizedWrites && config.getOptimizedWritesEnabled(table.getMetaClient().getTableConfig().getTableVersion())
+    boolean optimizedWrite = !avoidOptimizedWrites && config.isStreamingWritesToMetadataEnabled(table.getMetaClient().getTableConfig().getTableVersion())
         && WriteOperationType.optimizedWriteDagSupported(writeOperationType);
     // update Metadata table
     if (optimizedWrite && metadataWriterMap.containsKey(instantTime) && metadataWriterMap.get(instantTime).isPresent()) {
@@ -1050,6 +1050,10 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
 
   /**
    * Starts a new commit time for a write operation (insert/update/delete) with specified action.
+   * @param instantTime instant time of interest.
+   * @param actionType action type of interest.
+   * @param metaClient {@link HoodieTableMetaClient} instance.
+   * @param skipOptimizedWrites true if optimized writes need to be skipped.
    */
   private void startCommitWithTime(String instantTime, String actionType, HoodieTableMetaClient metaClient, boolean skipOptimizedWrites) {
     if (needsUpgrade(metaClient)) {
@@ -1080,7 +1084,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
 
     // Even among supported operations, bulk insert to be precise, row writer does not support optimized writes. So, we had to leverage additional argument named `skipOptimizedWrites`
     Option<HoodieTableMetadataWriter> metadataWriterOpt = skipOptimizedWrites ? Option.empty() :
-        (config.getOptimizedWritesEnabled(metaClient.getTableConfig().getTableVersion()) ? getMetadataWriter(instantTime, metaClient) : Option.empty());
+        (config.isStreamingWritesToMetadataEnabled(metaClient.getTableConfig().getTableVersion()) ? getMetadataWriter(instantTime, metaClient) : Option.empty());
     if (metadataWriterOpt.isPresent()) {
       metadataWriterOpt.get().startCommit(instantTime);
     }

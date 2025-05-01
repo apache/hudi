@@ -867,12 +867,12 @@ public class HoodieWriteConfig extends HoodieConfig {
       .sinceVersion("1.0.0")
       .withDocumentation("Whether to enable incremental table service. So far Clustering and Compaction support incremental processing.");
 
-  public static final ConfigProperty<Boolean> OPTIMIZED_WRITE_DAG = ConfigProperty
-      .key("hoodie.write.optimized.write.dag")
+  public static final ConfigProperty<Boolean> STREAMING_WRITES_TO_METADATA_TABLE = ConfigProperty
+      .key("hoodie.write.streaming.writes.to.metadata")
       .defaultValue(false)
       .markAdvanced()
       .sinceVersion("1.1.0")
-      .withDocumentation("Whether to enable optimized write dag or not. With optimized writes, we execute writes to both data table and metadata table "
+      .withDocumentation("Whether to enable streaming write to metadata table or not. With streaming writes, we execute writes to both data table and metadata table "
           + "using one RDD stage boundary. If not, writes to data table and metadata table happens across stage boundaries.");
 
   /**
@@ -2969,9 +2969,9 @@ public class HoodieWriteConfig extends HoodieConfig {
    * @param tableVersion {@link HoodieTableVersion} of interest.
    * @return true if optimized writes are enabled. false otherwise.
    */
-  public boolean getOptimizedWritesEnabled(HoodieTableVersion tableVersion) {
+  public boolean isStreamingWritesToMetadataEnabled(HoodieTableVersion tableVersion) {
     if (tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
-      return getBoolean(OPTIMIZED_WRITE_DAG);
+      return getBoolean(STREAMING_WRITES_TO_METADATA_TABLE);
     } else {
       return false;
     }
@@ -3554,7 +3554,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     protected void setDefaults() {
       writeConfig.setDefaultValue(MARKERS_TYPE, getDefaultMarkersType(engineType));
-      writeConfig.setDefaultValue(OPTIMIZED_WRITE_DAG, getDefaultForOptimizedWriteDag(engineType));
+      writeConfig.setDefaultValue(STREAMING_WRITES_TO_METADATA_TABLE, getDefaultForStreamingWritesToMetadataTable(engineType));
       // Check for mandatory properties
       writeConfig.setDefaults(HoodieWriteConfig.class.getName());
       // Set default values of HoodieHBaseIndexConfig
@@ -3742,7 +3742,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       }
     }
 
-    private boolean getDefaultForOptimizedWriteDag(EngineType engineType) {
+    private boolean getDefaultForStreamingWritesToMetadataTable(EngineType engineType) {
       switch (engineType) {
         case SPARK:
           return true;

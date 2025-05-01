@@ -134,14 +134,15 @@ public class SparkRDDWriteClient<T> extends
       if (config.isMetadataTableEnabled()) {
         // if any partition is deleted, we need to reload the metadata table writer so that new table configs are picked up
         // to reflect the delete mdt partitions.
-        // deleteMetadataIndexIfNecessary();
+        // to-fix.
+        //deleteMetadataIndexIfNecessary();
 
         // Create the metadata table writer. First time after the upgrade this creation might trigger
         // metadata table bootstrapping. Bootstrapping process could fail and checking the table
         // existence after the creation is needed.
         HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(
             context.getStorageConf(), config, HoodieFailedWritesCleaningPolicy.LAZY, context,
-            Option.of(triggeringInstantTimestamp), false);
+            Option.of(triggeringInstantTimestamp), true);
         try {
           if (isMetadataTableExists || storage.exists(new StoragePath(
               HoodieTableMetadata.getMetadataTableBasePath(config.getBasePath())))) {
@@ -153,8 +154,7 @@ public class SparkRDDWriteClient<T> extends
         }
       } else {
         // if metadata is not enabled in the write config, we should try and delete it (if present)
-        maybeDeleteMetadataTable(metaClient);
-        // to do fix me to trigger deletion of metadata table.
+        HoodieSparkTable.maybeDeleteMetadataTable(config, metaClient, context);
       }
       isMetadataTableComputed = true;
     }
@@ -240,9 +240,9 @@ public class SparkRDDWriteClient<T> extends
     Option<HoodieTableMetadataWriter> metadataWriterOpt = getMetadataWriter(instantTime, table.getMetaClient());
     HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.upsert(context, instantTime, HoodieJavaRDD.of(records));
     HoodieData<WriteStatus> allWriteStatus = result.getDataTableWriteStatuses();
-    if (metadataWriterOpt.isPresent() && config.getOptimizedWritesEnabled(table.getMetaClient().getTableConfig().getTableVersion())
+    if (metadataWriterOpt.isPresent() && config.isStreamingWritesToMetadataEnabled(table.getMetaClient().getTableConfig().getTableVersion())
         && WriteOperationType.optimizedWriteDagSupported(getOperationType())) {
-      HoodieData<WriteStatus> mdtWriteStatuses = metadataWriterOpt.get().prepareAndWriteToMDT(result.getDataTableWriteStatuses(), instantTime);
+      HoodieData<WriteStatus> mdtWriteStatuses = metadataWriterOpt.get().streamWriteToAllPartitions(result.getDataTableWriteStatuses(), instantTime);
       result.setMetadataTableWriteStatuses(mdtWriteStatuses);
       allWriteStatus = result.getDataTableWriteStatuses().union(mdtWriteStatuses);
       allWriteStatus.persist("MEMORY_AND_DISK_SER", context, HoodieData.HoodieDataCacheKey.of(config.getBasePath(), instantTime));
@@ -263,9 +263,9 @@ public class SparkRDDWriteClient<T> extends
     Option<HoodieTableMetadataWriter> metadataWriterOpt = getMetadataWriter(instantTime, table.getMetaClient());
     HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.upsertPrepped(context, instantTime, HoodieJavaRDD.of(preppedRecords));
     HoodieData<WriteStatus> allWriteStatus = result.getDataTableWriteStatuses();
-    if (metadataWriterOpt.isPresent() && config.getOptimizedWritesEnabled(table.getMetaClient().getTableConfig().getTableVersion())
+    if (metadataWriterOpt.isPresent() && config.isStreamingWritesToMetadataEnabled(table.getMetaClient().getTableConfig().getTableVersion())
         && WriteOperationType.optimizedWriteDagSupported(getOperationType())) {
-      HoodieData<WriteStatus> mdtWriteStatuses = metadataWriterOpt.get().prepareAndWriteToMDT(result.getDataTableWriteStatuses(), instantTime);
+      HoodieData<WriteStatus> mdtWriteStatuses = metadataWriterOpt.get().streamWriteToAllPartitions(result.getDataTableWriteStatuses(), instantTime);
       result.setMetadataTableWriteStatuses(mdtWriteStatuses);
       allWriteStatus = result.getDataTableWriteStatuses().union(mdtWriteStatuses);
       allWriteStatus.persist("MEMORY_AND_DISK_SER", context, HoodieData.HoodieDataCacheKey.of(config.getBasePath(), instantTime));
@@ -301,9 +301,9 @@ public class SparkRDDWriteClient<T> extends
     HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.insert(context, instantTime, HoodieJavaRDD.of(records));
     //HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getDataTableWriteStatuses()));
     HoodieData<WriteStatus> allWriteStatus = result.getDataTableWriteStatuses();
-    if (metadataWriterOpt.isPresent() && config.getOptimizedWritesEnabled(table.getMetaClient().getTableConfig().getTableVersion())
+    if (metadataWriterOpt.isPresent() && config.isStreamingWritesToMetadataEnabled(table.getMetaClient().getTableConfig().getTableVersion())
         && WriteOperationType.optimizedWriteDagSupported(getOperationType())) {
-      HoodieData<WriteStatus> mdtWriteStatuses = metadataWriterOpt.get().prepareAndWriteToMDT(result.getDataTableWriteStatuses(), instantTime);
+      HoodieData<WriteStatus> mdtWriteStatuses = metadataWriterOpt.get().streamWriteToAllPartitions(result.getDataTableWriteStatuses(), instantTime);
       result.setMetadataTableWriteStatuses(mdtWriteStatuses);
       allWriteStatus = result.getDataTableWriteStatuses().union(mdtWriteStatuses);
       allWriteStatus.persist("MEMORY_AND_DISK_SER", context, HoodieData.HoodieDataCacheKey.of(config.getBasePath(), instantTime));
@@ -323,9 +323,9 @@ public class SparkRDDWriteClient<T> extends
     HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.insertPrepped(context, instantTime, HoodieJavaRDD.of(preppedRecords));
     //HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getDataTableWriteStatuses()));
     HoodieData<WriteStatus> allWriteStatus = result.getDataTableWriteStatuses();
-    if (metadataWriterOpt.isPresent() && config.getOptimizedWritesEnabled(table.getMetaClient().getTableConfig().getTableVersion())
+    if (metadataWriterOpt.isPresent() && config.isStreamingWritesToMetadataEnabled(table.getMetaClient().getTableConfig().getTableVersion())
         && WriteOperationType.optimizedWriteDagSupported(getOperationType())) {
-      HoodieData<WriteStatus> mdtWriteStatuses = metadataWriterOpt.get().prepareAndWriteToMDT(result.getDataTableWriteStatuses(), instantTime);
+      HoodieData<WriteStatus> mdtWriteStatuses = metadataWriterOpt.get().streamWriteToAllPartitions(result.getDataTableWriteStatuses(), instantTime);
       result.setMetadataTableWriteStatuses(mdtWriteStatuses);
       allWriteStatus = result.getDataTableWriteStatuses().union(mdtWriteStatuses);
       allWriteStatus.persist("MEMORY_AND_DISK_SER", context, HoodieData.HoodieDataCacheKey.of(config.getBasePath(), instantTime));
@@ -381,9 +381,9 @@ public class SparkRDDWriteClient<T> extends
     HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.bulkInsert(context, instantTime, HoodieJavaRDD.of(records), userDefinedBulkInsertPartitioner);
     //HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getDataTableWriteStatuses()));
     HoodieData<WriteStatus> allWriteStatus = result.getDataTableWriteStatuses();
-    if (metadataWriterOpt.isPresent() && config.getOptimizedWritesEnabled(table.getMetaClient().getTableConfig().getTableVersion())
+    if (metadataWriterOpt.isPresent() && config.isStreamingWritesToMetadataEnabled(table.getMetaClient().getTableConfig().getTableVersion())
         && WriteOperationType.optimizedWriteDagSupported(getOperationType())) {
-      HoodieData<WriteStatus> mdtWriteStatuses = metadataWriterOpt.get().prepareAndWriteToMDT(result.getDataTableWriteStatuses(), instantTime);
+      HoodieData<WriteStatus> mdtWriteStatuses = metadataWriterOpt.get().streamWriteToAllPartitions(result.getDataTableWriteStatuses(), instantTime);
       result.setMetadataTableWriteStatuses(mdtWriteStatuses);
       allWriteStatus = result.getDataTableWriteStatuses().union(mdtWriteStatuses);
       allWriteStatus.persist("MEMORY_AND_DISK_SER", context, HoodieData.HoodieDataCacheKey.of(config.getBasePath(), instantTime));
@@ -401,9 +401,9 @@ public class SparkRDDWriteClient<T> extends
     Option<HoodieTableMetadataWriter> metadataWriterOpt = getMetadataWriter(instantTime, table.getMetaClient());
     HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.bulkInsertPrepped(context, instantTime, HoodieJavaRDD.of(preppedRecords), bulkInsertPartitioner);
     HoodieData<WriteStatus> allWriteStatus = result.getDataTableWriteStatuses();
-    if (metadataWriterOpt.isPresent() && config.getOptimizedWritesEnabled(table.getMetaClient().getTableConfig().getTableVersion())
+    if (metadataWriterOpt.isPresent() && config.isStreamingWritesToMetadataEnabled(table.getMetaClient().getTableConfig().getTableVersion())
         && WriteOperationType.optimizedWriteDagSupported(getOperationType())) {
-      HoodieData<WriteStatus> mdtWriteStatuses = metadataWriterOpt.get().prepareAndWriteToMDT(result.getDataTableWriteStatuses(), instantTime);
+      HoodieData<WriteStatus> mdtWriteStatuses = metadataWriterOpt.get().streamWriteToAllPartitions(result.getDataTableWriteStatuses(), instantTime);
       result.setMetadataTableWriteStatuses(mdtWriteStatuses);
       allWriteStatus = result.getDataTableWriteStatuses().union(mdtWriteStatuses);
       allWriteStatus.persist("MEMORY_AND_DISK_SER", context, HoodieData.HoodieDataCacheKey.of(config.getBasePath(), instantTime));
@@ -421,9 +421,9 @@ public class SparkRDDWriteClient<T> extends
     HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.delete(context, instantTime, HoodieJavaRDD.of(keys));
     //HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getDataTableWriteStatuses()));
     HoodieData<WriteStatus> allWriteStatus = result.getDataTableWriteStatuses();
-    if (metadataWriterOpt.isPresent() && config.getOptimizedWritesEnabled(table.getMetaClient().getTableConfig().getTableVersion())
+    if (metadataWriterOpt.isPresent() && config.isStreamingWritesToMetadataEnabled(table.getMetaClient().getTableConfig().getTableVersion())
         && WriteOperationType.optimizedWriteDagSupported(getOperationType())) {
-      HoodieData<WriteStatus> mdtWriteStatuses = metadataWriterOpt.get().prepareAndWriteToMDT(result.getDataTableWriteStatuses(), instantTime);
+      HoodieData<WriteStatus> mdtWriteStatuses = metadataWriterOpt.get().streamWriteToAllPartitions(result.getDataTableWriteStatuses(), instantTime);
       result.setMetadataTableWriteStatuses(mdtWriteStatuses);
       allWriteStatus = result.getDataTableWriteStatuses().union(mdtWriteStatuses);
       allWriteStatus.persist("MEMORY_AND_DISK_SER", context, HoodieData.HoodieDataCacheKey.of(config.getBasePath(), instantTime));
@@ -440,9 +440,9 @@ public class SparkRDDWriteClient<T> extends
     HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.deletePrepped(context,instantTime, HoodieJavaRDD.of(preppedRecord));
     //HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getDataTableWriteStatuses()));
     HoodieData<WriteStatus> allWriteStatus = result.getDataTableWriteStatuses();
-    if (metadataWriterOpt.isPresent() && config.getOptimizedWritesEnabled(table.getMetaClient().getTableConfig().getTableVersion())
+    if (metadataWriterOpt.isPresent() && config.isStreamingWritesToMetadataEnabled(table.getMetaClient().getTableConfig().getTableVersion())
         && WriteOperationType.optimizedWriteDagSupported(getOperationType())) {
-      HoodieData<WriteStatus> mdtWriteStatuses = metadataWriterOpt.get().prepareAndWriteToMDT(result.getDataTableWriteStatuses(), instantTime);
+      HoodieData<WriteStatus> mdtWriteStatuses = metadataWriterOpt.get().streamWriteToAllPartitions(result.getDataTableWriteStatuses(), instantTime);
       result.setMetadataTableWriteStatuses(mdtWriteStatuses);
       allWriteStatus = result.getDataTableWriteStatuses().union(mdtWriteStatuses);
       allWriteStatus.persist("MEMORY_AND_DISK_SER", context, HoodieData.HoodieDataCacheKey.of(config.getBasePath(), instantTime));

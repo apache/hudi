@@ -248,19 +248,19 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     WriteMarkersFactory.get(config.getMarkersType(), table, logCompactionInstantTime);
     // start commit in MDT if enabled
     Option<HoodieTableMetadataWriter> metadataWriterOpt = Option.empty();
-    if (config.getOptimizedWritesEnabled(table.getMetaClient().getTableConfig().getTableVersion())) {
+    if (config.isStreamingWritesToMetadataEnabled(table.getMetaClient().getTableConfig().getTableVersion())) {
       metadataWriterOpt = getMetadataWriterFunc.apply(logCompactionInstantTime, table.getMetaClient());
-    }
-    if (metadataWriterOpt.isPresent()) {
-      metadataWriterOpt.get().reInitWriteClient();
-      metadataWriterOpt.get().startCommit(logCompactionInstantTime);
+      metadataWriterOpt.ifPresent(metadataWriter -> {
+        // if metadata writer is present.
+        metadataWriter.reInitWriteClient();
+        metadataWriter.startCommit(logCompactionInstantTime);
+      });
     }
 
     HoodieWriteMetadata<T> writeMetadata = table.logCompact(context, logCompactionInstantTime);
     HoodieWriteMetadata<T> processedWriteMetadata = writeToMetadata(writeMetadata, logCompactionInstantTime, metadataWriterOpt);
     HoodieWriteMetadata<O> logCompactionMetadata = convertToOutputMetadata(processedWriteMetadata);
-    if (shouldComplete || (config.getOptimizedWritesEnabled(table.getMetaClient().getTableConfig().getTableVersion())
-        || logCompactionMetadata.getCommitMetadata().isPresent())) {
+    if (shouldComplete) {
       commitLogCompaction(logCompactionInstantTime, logCompactionMetadata, Option.of(table), metadataWriterOpt);
     }
     return logCompactionMetadata;
@@ -343,12 +343,13 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     compactionTimer = metrics.getCompactionCtx();
     // start commit in MDT if enabled
     Option<HoodieTableMetadataWriter> metadataWriterOpt = Option.empty();
-    if (config.getOptimizedWritesEnabled(table.getMetaClient().getTableConfig().getTableVersion())) {
+    if (config.isStreamingWritesToMetadataEnabled(table.getMetaClient().getTableConfig().getTableVersion())) {
       metadataWriterOpt = getMetadataWriterFunc.apply(compactionInstantTime, table.getMetaClient());
-    }
-    if (metadataWriterOpt.isPresent()) {
-      metadataWriterOpt.get().reInitWriteClient();
-      metadataWriterOpt.get().startCommit(compactionInstantTime);
+      metadataWriterOpt.ifPresent(metadataWriter -> {
+        // if metadata writer is present.
+        metadataWriter.reInitWriteClient();
+        metadataWriter.startCommit(compactionInstantTime);
+      });
     }
     HoodieWriteMetadata<T> writeMetadata = table.compact(context, compactionInstantTime);
     HoodieWriteMetadata<T> processedWriteMetadata = writeToMetadata(writeMetadata, compactionInstantTime, metadataWriterOpt);
@@ -411,7 +412,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       finalizeWrite(table, compactionCommitTime, writeStats);
       // write to MDT FILES partition and commit
       // commit call will also be doing marker reconciliation for metadata table.
-      if (!metadataWriterOpt.isPresent() && config.getOptimizedWritesEnabled(table.getMetaClient().getTableConfig().getTableVersion())) {
+      if (!metadataWriterOpt.isPresent() && config.isStreamingWritesToMetadataEnabled(table.getMetaClient().getTableConfig().getTableVersion())) {
         // with auto commit disabled flow, user may not have reference to metadata writer. So, lets fetch the metadata writer instance once.
         metadataWriterOpt = getMetadataWriterFunc.apply(compactionCommitTime, table.getMetaClient());
         // if metadata table is enabled, this will return a valid instance, if not, will return Option.empty.
@@ -514,7 +515,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       preCommit(metadata);
       finalizeWrite(table, logCompactionCommitTime, writeStats);
       // commit to data table after committing to metadata table.
-      if (!metadataWriterOpt.isPresent() && config.getOptimizedWritesEnabled(table.getMetaClient().getTableConfig().getTableVersion())) {
+      if (!metadataWriterOpt.isPresent() && config.isStreamingWritesToMetadataEnabled(table.getMetaClient().getTableConfig().getTableVersion())) {
         // with auto commit disabled flow, user may not have reference to metadata writer. So, lets fetch the metadata writer instance once.
         metadataWriterOpt = getMetadataWriterFunc.apply(logCompactionCommitTime, table.getMetaClient());
         // if metadata table is enabled, this will return a valid instance, if not, will return Option.empty.
@@ -599,14 +600,13 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     LOG.info("Starting clustering at {} for table {}", clusteringInstant, table.getConfig().getBasePath());
     // start commit in MDT if enabled
     Option<HoodieTableMetadataWriter> metadataWriterOpt = Option.empty();
-    if (config.getOptimizedWritesEnabled(table.getMetaClient().getTableConfig().getTableVersion())) {
+    if (config.isStreamingWritesToMetadataEnabled(table.getMetaClient().getTableConfig().getTableVersion())) {
       metadataWriterOpt = getMetadataWriterFunc.apply(clusteringInstant, table.getMetaClient());
+      metadataWriterOpt.ifPresent(metadataWriter -> {
+        metadataWriter.reInitWriteClient();
+        metadataWriter.startCommit(clusteringInstant);
+      });
     }
-    if (metadataWriterOpt.isPresent()) {
-      metadataWriterOpt.get().reInitWriteClient();
-      metadataWriterOpt.get().startCommit(clusteringInstant);
-    }
-
     HoodieWriteMetadata<T> writeMetadata = table.cluster(context, clusteringInstant);
     HoodieWriteMetadata<T> processedWriteMetadata = writeToMetadata(writeMetadata, clusteringInstant, metadataWriterOpt);
     HoodieWriteMetadata<O> clusteringMetadata = convertToOutputMetadata(processedWriteMetadata);
@@ -701,7 +701,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       if (isPreCommitRequired()) {
         preCommit(replaceCommitMetadata);
       }
-      if (!metadataWriterOpt.isPresent() && config.getOptimizedWritesEnabled(table.getMetaClient().getTableConfig().getTableVersion())) {
+      if (!metadataWriterOpt.isPresent() && config.isStreamingWritesToMetadataEnabled(table.getMetaClient().getTableConfig().getTableVersion())) {
         // with auto commit disabled flow, user may not have reference to metadata writer. So, lets fetch the metadata writer instance once.
         metadataWriterOpt = getMetadataWriterFunc.apply(clusteringCommitTime, table.getMetaClient());
         // if metadata table is enabled, this will return a valid instance, if not, will return Option.empty.

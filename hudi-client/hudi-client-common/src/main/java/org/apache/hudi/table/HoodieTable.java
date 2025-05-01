@@ -1043,8 +1043,8 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   /**
    * Deletes the metadata table if the writer disables metadata table with hoodie.metadata.enable=false
    */
-  public void maybeDeleteMetadataTable() {
-    if (shouldExecuteMetadataTableDeletion()) {
+  public static void maybeDeleteMetadataTable(HoodieWriteConfig config, HoodieTableMetaClient metaClient, HoodieEngineContext context) {
+    if (shouldExecuteMetadataTableDeletion(config, metaClient)) {
       try {
         LOG.info("Deleting metadata table because it is disabled in writer.");
         deleteMetadataTable(config.getBasePath(), context);
@@ -1121,7 +1121,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     return metadataIndexDisabled;
   }
 
-  private boolean shouldExecuteMetadataTableDeletion() {
+  private static boolean shouldExecuteMetadataTableDeletion(HoodieWriteConfig config, HoodieTableMetaClient metaClient) {
     // Only execute metadata table deletion when all the following conditions are met
     // (1) This is data table
     // (2) Metadata table is disabled in HoodieWriteConfig for the writer

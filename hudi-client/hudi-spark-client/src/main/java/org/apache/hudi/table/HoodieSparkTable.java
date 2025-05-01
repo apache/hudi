@@ -119,7 +119,7 @@ public abstract class HoodieSparkTable<T>
       }
     } else {
       // if metadata is not enabled in the write config, we should try and delete it (if present)
-      maybeDeleteMetadataTable();
+      maybeDeleteMetadataTable(config, metaClient, context);
     }
 
     return Option.empty();

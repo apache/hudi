@@ -46,10 +46,19 @@ import java.util.Map;
 import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
 import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
 
+/**
+ * For now this is a placeholder to generate all MDT records in one place.
+ * Once https://github.com/apache/hudi/pull/13226 is landed, we will leverage the new abstraction to generate MDT records.
+ */
 public class MetadataIndexGenerator implements Serializable {
 
   private static final Logger LOG = LoggerFactory.getLogger(MetadataIndexGenerator.class);
 
+  /**
+   * MDT record generation utility. This function is expected to be invoked from a map Partition call, where one spark task will receive
+   * one WriteStatus as input and the output contains prepared Metadata table records for all eligible partitions that can operate on one
+   * WriteStatus instance only.
+   */
   static class PerWriteStatsIndexGenerator implements SerializableFunction<WriteStatus, Iterator<Pair<String, HoodieRecord>>> {
     List<MetadataPartitionType> enabledPartitionTypes;
     HoodieWriteConfig dataWriteConfig;
@@ -68,6 +77,10 @@ public class MetadataIndexGenerator implements Serializable {
       if (enabledPartitionTypes.contains(RECORD_INDEX)) {
         allRecords.addAll(processWriteStatusForRLI(writeStatus, dataWriteConfig));
       }
+      // yet to add support for more partitions.
+      // bloom filter
+      // secondary index
+      // expression index.
       return allRecords.iterator();
     }
   }
@@ -80,6 +93,7 @@ public class MetadataIndexGenerator implements Serializable {
   protected static List<Pair<String, HoodieRecord>> processWriteStatusForColStats(WriteStatus writeStatus) {
     List<Pair<String, HoodieRecord>> allRecords = new ArrayList<>();
     Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMap = new HashMap<>();
+    // to fix.
     /*writeStatus.getStat().getColumnStats().get();
     Collection<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList = columnRangeMap.values();
     allRecords.addAll(HoodieMetadataPayload.createColumnStatsRecords(writeStatus.getStat().getPartitionPath(), columnRangeMetadataList, false)

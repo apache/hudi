@@ -122,9 +122,9 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
                                                  HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                                  HoodieEngineContext context,
                                                  Option<String> inflightInstantTimestamp,
-                                                 boolean shortLivedWriteClient) {
+                                                 boolean streamingWrites) {
     return new SparkHoodieBackedTableMetadataWriter(
-        conf, writeConfig, failedWritesCleaningPolicy, context, inflightInstantTimestamp, shortLivedWriteClient);
+        conf, writeConfig, failedWritesCleaningPolicy, context, inflightInstantTimestamp, streamingWrites);
   }
 
   public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf, HoodieWriteConfig writeConfig,
@@ -137,7 +137,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
                                        HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                        HoodieEngineContext engineContext,
                                        Option<String> inflightInstantTimestamp) {
-    this(hadoopConf, writeConfig, failedWritesCleaningPolicy, engineContext, inflightInstantTimestamp, true);
+    this(hadoopConf, writeConfig, failedWritesCleaningPolicy, engineContext, inflightInstantTimestamp, false);
   }
 
   SparkHoodieBackedTableMetadataWriter(StorageConfiguration<?> hadoopConf,
@@ -145,8 +145,8 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
                                        HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                        HoodieEngineContext engineContext,
                                        Option<String> inflightInstantTimestamp,
-                                       boolean shortLivedWriteClient) {
-    super(hadoopConf, writeConfig, failedWritesCleaningPolicy, engineContext, inflightInstantTimestamp, shortLivedWriteClient);
+                                       boolean streamingWrites) {
+    super(hadoopConf, writeConfig, failedWritesCleaningPolicy, engineContext, inflightInstantTimestamp, streamingWrites);
   }
 
   @Override

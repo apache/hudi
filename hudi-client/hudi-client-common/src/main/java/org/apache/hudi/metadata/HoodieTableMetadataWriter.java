@@ -40,11 +40,34 @@ import java.util.List;
  */
 public interface HoodieTableMetadataWriter<I,O> extends Serializable, AutoCloseable {
 
+  /**
+   * Starts a new commit in metadata table for optimized write flow.
+   * @param instantTime
+   */
   void startCommit(String instantTime);
 
-  HoodieData<WriteStatus> prepareAndWriteToMDT(HoodieData<WriteStatus> writeStatus, String instantTime);
+  /**
+   * Prepare records and write to Metadata table for all eligible partitions except FILES partition. This will be used in optimized writes,
+   * where in data table writes statuses are maintained as HoodieData and based on that, we prepare records and write to Metadata table
+   * partitions (except FILES). Caution should be followed to ensure the action is not triggered on the incoming HoodieData < WriteStatus >
+   *   and for the writes to metadata table. Caller is expected to trigger collect just once for both set of HoodieData < WriteStatus >.
+   * @param writeStatus {@link HoodieData} of {@link WriteStatus} from data table writes.
+   * @param instantTime instant time of interest.
+   * @return {@link HoodieData} of {@link WriteStatus} for writes to metadata table.
+   */
+  HoodieData<WriteStatus> streamWriteToAllPartitions(HoodieData<WriteStatus> writeStatus, String instantTime);
 
-  void writeToFilesPartitionAndCommit(String instantTime, HoodieEngineContext context, List<HoodieWriteStat> partialMdtWriteStats, HoodieCommitMetadata commitMetadata);
+  /**
+   * This api will be used in optimized writes flow, where in a write in data table is already written to all data table, all partitions in Metadata table
+   * using {@code #streamWriteToAllPartitions} and the action is triggered for all writes together. Post that, marker reconciliation of data table is executed and then
+   * we call {@code #writeToFilesPartitionAndCommit} where in, we write to FILES partition in metadata table and complete the commit. This will also take care of
+   * executing marker reconciliation in metadata table for all metadata table partitions.
+   * @param instantTime instant time of interest.
+   * @param context {@link HoodieEngineContext} of interest.
+   * @param metadataWriteStatsSoFar List<HoodieWriteStat> for partial/streaming writes to metadata table completed so far.
+   * @param commitMetadata {@link HoodieCommitMetadata} of interest.
+   */
+  void writeToFilesPartitionAndCommit(String instantTime, HoodieEngineContext context, List<HoodieWriteStat> metadataWriteStatsSoFar, HoodieCommitMetadata commitMetadata);
 
   /**
    * Builds the given metadata partitions to create index.

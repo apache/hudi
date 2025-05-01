@@ -107,7 +107,7 @@ public abstract class HoodieJavaTable<T>
         throw new HoodieMetadataException("Checking existence of metadata table failed", e);
       }
     } else {
-      maybeDeleteMetadataTable();
+      maybeDeleteMetadataTable(config, metaClient, context);
     }
 
     return Option.empty();

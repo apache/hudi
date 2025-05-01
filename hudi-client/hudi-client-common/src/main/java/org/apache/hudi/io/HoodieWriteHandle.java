@@ -119,7 +119,7 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
         hoodieTable.shouldTrackSuccessRecords(), config.getWriteStatusFailureFraction(), hoodieTable.isMetadataTable());
     // TODO: Add operation type check - `&& WriteOperationType.optimizedWriteDagSupported(writeOperationType)`
     if (config.isMetadataColumnStatsIndexEnabled()) {
-      if (config.getOptimizedWritesEnabled(hoodieTable.getMetaClient().getTableConfig().getTableVersion())) {
+      if (config.isStreamingWritesToMetadataEnabled(hoodieTable.getMetaClient().getTableConfig().getTableVersion())) {
         // Disabled as it was added as part of optimised writes
         this.colStatsEnabled = true;
       }
