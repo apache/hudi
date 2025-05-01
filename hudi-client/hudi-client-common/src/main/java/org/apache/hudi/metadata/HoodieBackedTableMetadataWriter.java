@@ -1160,7 +1160,10 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   public HoodieData<WriteStatus> prepareAndWriteToMDT(HoodieData<WriteStatus> writeStatus, String instantTime) {
     // Generate HoodieRecords for MDT partitions which can be generated just by using one WriteStatus
     // todo: introduce parallelism and process N writeStatus using M spark partitions. as of now, its 1 on 1.
-    HoodieData<Pair<String, HoodieRecord>> perWriteStatusRecords = writeStatus.flatMap(new MetadataIndexGenerator.PerWriteStatsIndexGenerator(enabledPartitionTypes, dataWriteConfig));
+
+    List<MetadataPartitionType> mdtPartitionsToTag = new ArrayList<>(enabledPartitionTypes);
+    mdtPartitionsToTag.remove(FILES);
+    HoodieData<Pair<String, HoodieRecord>> perWriteStatusRecords = writeStatus.flatMap(new MetadataIndexGenerator.PerWriteStatsIndexGenerator(mdtPartitionsToTag, dataWriteConfig));
 
     // Generate HoodieRecords for MDT partitions which need per hudi partition writeStats in one spark task
     HoodieData<Pair<String, HoodieRecord>> perPartitionRecords = metadataIndexGenerator.prepareMDTRecordsGroupedByHudiPartition(writeStatus);
@@ -1168,9 +1171,9 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     HoodieData<Pair<String, HoodieRecord>> mdtRecords = perWriteStatusRecords.union(perPartitionRecords);
 
     // tag records
-    List<MetadataPartitionType> mdtPartitionsToTag = new ArrayList<>(enabledPartitionTypes);
-    mdtPartitionsToTag.remove(FILES);
-    Pair<List<Pair<String, String>>, HoodieData<HoodieRecord>> taggedMdtRecords = tagRecordsWithLocation(mdtRecords, dataMetaClient.getTableConfig().getMetadataPartitions());
+    Pair<List<Pair<String, String>>, HoodieData<HoodieRecord>> taggedMdtRecords = tagRecordsWithLocation(mdtRecords,
+        mdtPartitionsToTag.stream().map(mdtPartition -> mdtPartition.getPartitionPath()).collect(
+        Collectors.toSet()));
     // todo fix parallelism. Do we really need this. Upsert partitioner will do this anyways.
 
     // write partial writes to mdt table (every partition except FILES)
