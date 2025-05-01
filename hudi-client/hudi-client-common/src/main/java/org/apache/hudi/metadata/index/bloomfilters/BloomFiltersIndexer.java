@@ -85,6 +85,9 @@ public class BloomFiltersIndexer implements Indexer {
         Indexer.fetchPartitionFileInfoTriplets(partitionToFilesMap);
     int parallelism = Math.max(Math.min(partitionFileFlagTupleList.size(),
         dataTableWriteConfig.getBloomIndexParallelism()), 1);
+    // This meta client object has to be local to allow Spark to serialize the object
+    // instead of the whole indexer object
+    HoodieTableMetaClient metaClient = dataTableMetaClient;
     HoodieData<HoodieRecord> records = engineContext.parallelize(partitionFileFlagTupleList, parallelism)
         .flatMap(partitionFileFlagTuple -> {
           final String partitionName = partitionFileFlagTuple.f0;
@@ -100,8 +103,8 @@ public class BloomFiltersIndexer implements Indexer {
           if (!isDeleted) {
             final String pathWithPartition = partitionName + "/" + filename;
             final StoragePath addedFilePath = new StoragePath(
-                dataTableMetaClient.getBasePath(), pathWithPartition);
-            bloomFilterBuffer = readBloomFilter(dataTableMetaClient.getStorage(), addedFilePath);
+                metaClient.getBasePath(), pathWithPartition);
+            bloomFilterBuffer = readBloomFilter(metaClient.getStorage(), addedFilePath);
 
             // If reading the bloom filter failed then do not add a record for this file
             if (bloomFilterBuffer == null) {

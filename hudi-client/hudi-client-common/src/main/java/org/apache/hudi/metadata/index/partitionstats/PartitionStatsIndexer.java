@@ -119,6 +119,9 @@ public class PartitionStatsIndexer implements Indexer {
     // Create records for MDT
     int parallelism = Math.max(Math.min(partitionToFileNames.size(),
         metadataConfig.getPartitionStatsIndexParallelism()), 1);
+    // This meta client object has to be local to allow Spark to serialize the object
+    // instead of the whole indexer object
+    HoodieTableMetaClient metaClient = dataTableMetaClient;
     HoodieData<HoodieRecord> records = engineContext.parallelize(partitionToFileNames, parallelism)
         .flatMap(partitionInfo -> {
           final String partitionPath = partitionInfo.getKey();
@@ -126,7 +129,7 @@ public class PartitionStatsIndexer implements Indexer {
           List<List<HoodieColumnRangeMetadata<Comparable>>> fileColumnMetadata =
               partitionInfo.getValue().stream()
                   .map(fileName -> getFileStatsRangeMetadata(
-                      partitionPath, fileName, dataTableMetaClient,
+                      partitionPath, fileName, metaClient,
                       new ArrayList<>(columnsToIndexSchemaMap.keySet()), false,
                       metadataConfig.getMaxReaderBufferSize()))
                   .collect(Collectors.toList());

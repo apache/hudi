@@ -111,12 +111,15 @@ public class ColumnStatsIndexer implements Indexer {
     int parallelism = Math.max(Math.min(partitionFileFlagTupleList.size(),
         dataTableWriteConfig.getColumnStatsIndexParallelism()), 1);
     List<String> columnListToIndex = columnsToIndex.get();
+    // This meta client object has to be local to allow Spark to serialize the object
+    // instead of the whole indexer object
+    HoodieTableMetaClient metaClient = dataTableMetaClient;
     HoodieData<HoodieRecord> records = engineContext.parallelize(partitionFileFlagTupleList, parallelism)
         .flatMap(partitionFileFlagTuple -> {
           final String partitionPath = partitionFileFlagTuple.f0;
           final String filename = partitionFileFlagTuple.f1;
           final boolean isDeleted = partitionFileFlagTuple.f2;
-          return getColumnStatsRecords(partitionPath, filename, dataTableMetaClient, columnListToIndex,
+          return getColumnStatsRecords(partitionPath, filename, metaClient, columnListToIndex,
               isDeleted, maxReaderBufferSize).iterator();
         });
     return Collections.singletonList(InitialIndexPartitionData.of(
