@@ -103,7 +103,7 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
     while (it.hasNext()) {
       DeleteRecord record = it.next();
       String recordKey = record.getRecordKey();
-      processNextLogRecord(BufferedRecord.forDeleteRecord(record), recordKey);
+      processNextLogRecord(BufferedRecord.forDeleteRecord(record, readerContext), recordKey);
     }
   }
 

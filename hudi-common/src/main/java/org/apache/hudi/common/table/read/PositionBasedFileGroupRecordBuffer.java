@@ -178,7 +178,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
     while (it.hasNext()) {
       DeleteRecord record = it.next();
       long recordPosition = recordPositions.get(recordIndex++);
-      processNextLogRecord(BufferedRecord.forDeleteRecord(record), recordPosition);
+      processNextLogRecord(BufferedRecord.forDeleteRecord(record, readerContext), recordPosition);
     }
   }
 

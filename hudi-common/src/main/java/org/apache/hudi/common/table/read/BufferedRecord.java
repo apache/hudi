@@ -40,10 +40,16 @@ import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
  * @param <T> The type of the engine specific row.
  */
 public class BufferedRecord<T> implements Serializable {
+  // the key of the record
   private final String recordKey;
+  // the ordering value of the record to be used for even time based ordering
+  // this is in the engine specific type to ensure compatibility between log and base file data
   private final Comparable orderingValue;
-  private T record;
+  // the record itself in the engine specific type
+  private final T record;
+  // the schema id from the reader context schema cache
   private final Integer schemaId;
+  // whether this is record represents a deletion for the key
   private final boolean isDelete;
 
   BufferedRecord(String recordKey, Comparable orderingValue, T record, Integer schemaId, boolean isDelete) {
@@ -72,7 +78,7 @@ public class BufferedRecord<T> implements Serializable {
     } catch (IOException e) {
       throw new HoodieException("Failed to get isDelete from record.", e);
     }
-    return new BufferedRecord<>(recordKey, record.getOrderingValue(schema, props), data, schemaId, isDelete);
+    return new BufferedRecord<>(recordKey, readerContext.convertValueToEngineType(record.getOrderingValue(schema, props)), data, schemaId, isDelete);
   }
 
   public static <T> BufferedRecord<T> forRecordWithContext(T record, Schema schema, HoodieReaderContext<T> readerContext, Option<String> orderingFieldName, boolean isDelete) {
@@ -82,8 +88,8 @@ public class BufferedRecord<T> implements Serializable {
     return new BufferedRecord<>(recordKey, orderingValue, record, schemaId, isDelete);
   }
 
-  public static <T> BufferedRecord<T> forDeleteRecord(DeleteRecord deleteRecord) {
-    return new BufferedRecord<>(deleteRecord.getRecordKey(), deleteRecord.getOrderingValue(), null, null, true);
+  public static <T> BufferedRecord<T> forDeleteRecord(DeleteRecord deleteRecord, HoodieReaderContext<T> readerContext) {
+    return new BufferedRecord<>(deleteRecord.getRecordKey(), readerContext.convertValueToEngineType(deleteRecord.getOrderingValue()), null, null, true);
   }
 
   public BufferedRecord<T> asDeleteRecord() {
