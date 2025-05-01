@@ -38,7 +38,7 @@ import org.apache.spark.sql.catalyst.expressions.{Expression, InterpretedPredica
 import org.apache.spark.sql.catalyst.parser.ParseException
 import org.apache.spark.sql.catalyst.trees.Origin
 import org.apache.spark.sql.catalyst.util.DateFormatter
-import org.apache.spark.sql.execution.{QueryExecution, SQLExecution}
+import org.apache.spark.sql.execution.{PartitionedFileUtil, QueryExecution, SQLExecution}
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
@@ -168,5 +168,14 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
         a.compareTo(b)
       }
     }
+  }
+
+  override def splitFiles(sparkSession: SparkSession,
+                          partitionDirectory: PartitionDirectory,
+                          isSplitable: Boolean,
+                          maxSplitSize: Long): Seq[PartitionedFile] = {
+    partitionDirectory.files.flatMap(file =>
+      PartitionedFileUtil.splitFiles(file, isSplitable, maxSplitSize, partitionDirectory.values)
+    )
   }
 }

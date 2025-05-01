@@ -514,7 +514,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
       // handle records coming from DELETE statements(the orderingVal is constant 0)
       return true;
     }
-    return newRecord.getOrderingValue().compareTo(oldRecord.getOrderingValue()) >= 0;
+    return readerContext.compareValues(newRecord.getOrderingValue(), oldRecord.getOrderingValue()) >= 0;
   }
 
   private Option<Pair<HoodieRecord, Schema>> getMergedRecord(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) throws IOException {

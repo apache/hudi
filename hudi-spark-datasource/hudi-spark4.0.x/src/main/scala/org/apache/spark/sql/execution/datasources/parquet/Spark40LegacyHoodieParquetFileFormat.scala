@@ -181,8 +181,7 @@ class Spark40LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
         //TODO: HARDCODED TIMELINE OBJECT
         val layout = TimelineLayout.fromVersion(TimelineLayoutVersion.CURR_LAYOUT_VERSION)
         InternalSchemaCache.getInternalSchemaByVersionId(
-          commitInstantTime, tablePath, storage, if (validCommits == null) "" else validCommits,
-          layout.getInstantFileNameParser, layout.getCommitMetadataSerDe, layout.getInstantGenerator)
+          commitInstantTime, tablePath, storage, if (validCommits == null) "" else validCommits, layout)
       } else {
         null
       }
