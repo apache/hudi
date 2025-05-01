@@ -299,6 +299,6 @@ public class HoodieHadoopStorage extends HoodieStorage {
 
   @Override
   public void close() throws IOException {
-    fs.close();
+    // fs.close();
   }
 }

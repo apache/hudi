@@ -135,11 +135,11 @@ public class HoodieCatalog extends AbstractCatalog {
 
   @Override
   public void close() throws CatalogException {
-    try {
+    /*try {
       fs.close();
     } catch (IOException e) {
       throw new CatalogException("Closing FileSystem exception.", e);
-    }
+    }*/
   }
 
   // ------ databases ------
