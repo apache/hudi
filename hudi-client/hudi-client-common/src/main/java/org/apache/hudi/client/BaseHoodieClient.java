@@ -86,6 +86,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
    */
   private transient Option<EmbeddedTimelineService> timelineServer;
   private final boolean shouldStopTimelineServer;
+  // Cached HoodieTableMetadataWriter for each action in data table. This will be cleaned up when action is completed or when write client is closed.
   protected Map<String, Option<HoodieTableMetadataWriter>> metadataWriterMap = new ConcurrentHashMap<>();
 
   protected BaseHoodieClient(HoodieEngineContext context, HoodieWriteConfig clientConfig) {

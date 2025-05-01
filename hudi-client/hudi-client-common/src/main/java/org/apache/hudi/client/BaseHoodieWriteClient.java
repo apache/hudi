@@ -349,7 +349,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     // generate Completion time
     String completionTime = activeTimeline.createCompletionTime();
     boolean optimizedWrite = !avoidOptimizedWrites && config.isStreamingWritesToMetadataEnabled(table.getMetaClient().getTableConfig().getTableVersion())
-        && WriteOperationType.optimizedWriteDagSupported(writeOperationType);
+        && WriteOperationType.streamingWritesToMetadataSupported(writeOperationType);
     // update Metadata table
     if (optimizedWrite && metadataWriterMap.containsKey(instantTime) && metadataWriterMap.get(instantTime).isPresent()) {
       HoodieTableMetadataWriter metadataWriter = metadataWriterMap.get(instantTime).get();

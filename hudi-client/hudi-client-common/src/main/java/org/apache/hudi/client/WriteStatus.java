@@ -61,6 +61,7 @@ public class WriteStatus implements Serializable {
 
   protected List<Pair<HoodieRecordDelegate, Throwable>> failedRecords = new ArrayList<>();
 
+  // true if this WriteStatus refers to a write happening in metadata table.
   private boolean isMetadataTable;
   private Throwable globalError = null;
 

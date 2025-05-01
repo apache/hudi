@@ -189,7 +189,10 @@ public enum WriteOperationType {
     return operationType == COMPACT || operationType == CLUSTER;
   }
 
-  public static boolean optimizedWriteDagSupported(WriteOperationType writeOperationType) {
+  /**
+   * @return true if streaming writes to metadata table is supported for a given {@link WriteOperationType}. false otherwise.
+   */
+  public static boolean streamingWritesToMetadataSupported(WriteOperationType writeOperationType) {
     return (isInsertWithoutReplace(writeOperationType) || isChangingRecords(writeOperationType) || isCompactionOrClustering(writeOperationType));
   }
 }

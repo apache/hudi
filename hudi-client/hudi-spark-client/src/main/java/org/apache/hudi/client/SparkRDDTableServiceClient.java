@@ -61,7 +61,7 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
   protected HoodieWriteMetadata<HoodieData<WriteStatus>> writeToMetadata(HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata, String compactionInstantTime,
                                                                          Option<HoodieTableMetadataWriter> metadataWriterOpt) {
     if (metadataWriterOpt.isPresent()) { // write to metadata table if enabled
-      HoodieData<WriteStatus> mdtWriteStatuses = metadataWriterOpt.get().streamWriteToAllPartitions((HoodieData<WriteStatus>) writeMetadata.getDataTableWriteStatuses(), compactionInstantTime);
+      HoodieData<WriteStatus> mdtWriteStatuses = metadataWriterOpt.get().streamWriteToMetadataPartitions((HoodieData<WriteStatus>) writeMetadata.getDataTableWriteStatuses(), compactionInstantTime);
       writeMetadata.setAllWriteStatuses(((HoodieData<WriteStatus>) writeMetadata.getDataTableWriteStatuses()).union(mdtWriteStatuses));
       return writeMetadata;
     } else {

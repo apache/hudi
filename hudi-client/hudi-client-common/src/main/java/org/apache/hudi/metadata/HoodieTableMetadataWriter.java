@@ -55,7 +55,7 @@ public interface HoodieTableMetadataWriter<I,O> extends Serializable, AutoClosea
    * @param instantTime instant time of interest.
    * @return {@link HoodieData} of {@link WriteStatus} for writes to metadata table.
    */
-  HoodieData<WriteStatus> streamWriteToAllPartitions(HoodieData<WriteStatus> writeStatus, String instantTime);
+  HoodieData<WriteStatus> streamWriteToMetadataPartitions(HoodieData<WriteStatus> writeStatus, String instantTime);
 
   /**
    * This api will be used in optimized writes flow, where in a write in data table is already written to all data table, all partitions in Metadata table

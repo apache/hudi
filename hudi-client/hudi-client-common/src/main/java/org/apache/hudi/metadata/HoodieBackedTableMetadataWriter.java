@@ -1159,7 +1159,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   /**
    *
    */
-  public HoodieData<WriteStatus> streamWriteToAllPartitions(HoodieData<WriteStatus> writeStatus, String instantTime) {
+  public HoodieData<WriteStatus> streamWriteToMetadataPartitions(HoodieData<WriteStatus> writeStatus, String instantTime) {
     // Generate HoodieRecords for MDT partitions which can be generated just by using one WriteStatus
 
     List<MetadataPartitionType> mdtPartitionsToTag = new ArrayList<>(enabledPartitionTypes);
