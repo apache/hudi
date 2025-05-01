@@ -53,6 +53,9 @@ import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.readRecordKeysFromBaseFiles;
 import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
 
+/**
+ * Implementation of {@link RECORD_INDEX} index
+ */
 public class RecordIndexer implements Indexer {
 
   private static final Logger LOG = LoggerFactory.getLogger(RecordIndexer.class);

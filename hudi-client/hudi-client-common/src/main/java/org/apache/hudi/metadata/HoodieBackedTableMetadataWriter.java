@@ -220,6 +220,10 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
   protected abstract void initRegistry();
 
+  public Map<MetadataPartitionType, Indexer> getEnabledIndexerMap() {
+    return enabledIndexerMap;
+  }
+
   public HoodieWriteConfig getWriteConfig() {
     return metadataWriteConfig;
   }

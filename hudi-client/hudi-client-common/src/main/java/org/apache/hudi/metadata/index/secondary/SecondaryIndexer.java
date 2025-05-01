@@ -52,6 +52,9 @@ import static org.apache.hudi.metadata.MetadataPartitionType.SECONDARY_INDEX;
 import static org.apache.hudi.metadata.SecondaryIndexRecordGenerationUtils.readSecondaryKeysFromFileSlices;
 import static org.apache.hudi.metadata.index.record.RecordIndexer.RECORD_INDEX_AVERAGE_RECORD_SIZE;
 
+/**
+ * Implementation of {@link SECONDARY_INDEX} index
+ */
 public class SecondaryIndexer implements Indexer {
   private static final Logger LOG = LoggerFactory.getLogger(SecondaryIndexer.class);
   private final HoodieEngineContext engineContext;

@@ -53,6 +53,9 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getProjectedSchem
 import static org.apache.hudi.metadata.MetadataPartitionType.EXPRESSION_INDEX;
 import static org.apache.hudi.metadata.MetadataPartitionType.isNewExpressionIndexDefinitionRequired;
 
+/**
+ * Implementation of {@link EXPRESSION_INDEX} index
+ */
 public class ExpressionIndexer implements Indexer {
 
   private static final Logger LOG = LoggerFactory.getLogger(ExpressionIndexer.class);

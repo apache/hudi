@@ -43,6 +43,9 @@ import java.util.Map;
 import static org.apache.hudi.metadata.HoodieMetadataWriteUtils.getPartitionFileSlicePairs;
 import static org.apache.hudi.metadata.MetadataPartitionType.PARTITION_STATS;
 
+/**
+ * Implementation of {@link PARTITION_STATS} metadata
+ */
 public class PartitionStatsIndexer implements Indexer {
 
   private static final Logger LOG = LoggerFactory.getLogger(PartitionStatsIndexer.class);

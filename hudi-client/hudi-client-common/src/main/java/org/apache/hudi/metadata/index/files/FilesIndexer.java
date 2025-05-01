@@ -41,6 +41,9 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
 
+/**
+ * Implementation of {@link FILES} metadata
+ */
 public class FilesIndexer implements Indexer {
 
   private static final Logger LOG = LoggerFactory.getLogger(FilesIndexer.class);

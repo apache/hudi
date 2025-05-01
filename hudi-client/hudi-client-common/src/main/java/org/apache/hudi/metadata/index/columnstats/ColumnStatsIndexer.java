@@ -49,6 +49,9 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.fetchPartitionFil
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getColumnStatsRecords;
 import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
 
+/**
+ * Implementation of {@link COLUMN_STATS} metadata
+ */
 public class ColumnStatsIndexer implements Indexer {
 
   private static final Logger LOG = LoggerFactory.getLogger(ColumnStatsIndexer.class);
@@ -125,14 +128,15 @@ public class ColumnStatsIndexer implements Indexer {
   /**
    * Convert added and deleted action metadata to column stats index records.
    */
-  public static HoodieData<HoodieRecord> convertFilesToColumnStatsRecords(HoodieEngineContext engineContext,
-                                                                          Map<String, List<String>> partitionToDeletedFiles,
-                                                                          Map<String, Map<String, Long>> partitionToAppendedFiles,
-                                                                          HoodieTableMetaClient dataMetaClient,
-                                                                          HoodieMetadataConfig metadataConfig,
-                                                                          int columnStatsIndexParallelism,
-                                                                          int maxReaderBufferSize,
-                                                                          List<String> columnsToIndex) {
+  private static HoodieData<HoodieRecord> convertFilesToColumnStatsRecords(
+      HoodieEngineContext engineContext,
+      Map<String, List<String>> partitionToDeletedFiles,
+      Map<String, Map<String, Long>> partitionToAppendedFiles,
+      HoodieTableMetaClient dataMetaClient,
+      HoodieMetadataConfig metadataConfig,
+      int columnStatsIndexParallelism,
+      int maxReaderBufferSize,
+      List<String> columnsToIndex) {
     if ((partitionToAppendedFiles.isEmpty() && partitionToDeletedFiles.isEmpty())) {
       return engineContext.emptyHoodieData();
     }

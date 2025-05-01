@@ -54,6 +54,9 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.fetchPartitionFileInfoTriplets;
 import static org.apache.hudi.metadata.MetadataPartitionType.BLOOM_FILTERS;
 
+/**
+ * Implementation of {@link BLOOM_FILTERS} index
+ */
 public class BloomFiltersIndexer implements Indexer {
 
   private static final Logger LOG = LoggerFactory.getLogger(BloomFiltersIndexer.class);
@@ -89,15 +92,17 @@ public class BloomFiltersIndexer implements Indexer {
   /**
    * Convert added and deleted files metadata to bloom filter index records.
    */
-  public static HoodieData<HoodieRecord> convertFilesToBloomFilterRecords(HoodieEngineContext engineContext,
-                                                                          Map<String, List<String>> partitionToDeletedFiles,
-                                                                          Map<String, Map<String, Long>> partitionToAppendedFiles,
-                                                                          String instantTime,
-                                                                          HoodieTableMetaClient dataMetaClient,
-                                                                          int bloomIndexParallelism,
-                                                                          String bloomFilterType) {
+  private static HoodieData<HoodieRecord> convertFilesToBloomFilterRecords(
+      HoodieEngineContext engineContext,
+      Map<String, List<String>> partitionToDeletedFiles,
+      Map<String, Map<String, Long>> partitionToAppendedFiles,
+      String instantTime,
+      HoodieTableMetaClient dataMetaClient,
+      int bloomIndexParallelism,
+      String bloomFilterType) {
     // Create the tuple (partition, filename, isDeleted) to handle both deletes and appends
-    final List<Tuple3<String, String, Boolean>> partitionFileFlagTupleList = fetchPartitionFileInfoTriplets(partitionToDeletedFiles, partitionToAppendedFiles);
+    final List<Tuple3<String, String, Boolean>> partitionFileFlagTupleList =
+        fetchPartitionFileInfoTriplets(partitionToDeletedFiles, partitionToAppendedFiles);
 
     // Create records MDT
     int parallelism = Math.max(Math.min(partitionFileFlagTupleList.size(), bloomIndexParallelism), 1);
