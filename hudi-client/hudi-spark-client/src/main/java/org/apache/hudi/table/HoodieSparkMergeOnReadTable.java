@@ -130,10 +130,9 @@ public class HoodieSparkMergeOnReadTable<T> extends HoodieSparkCopyOnWriteTable<
 
   @Override
   public HoodieWriteMetadata<HoodieData<WriteStatus>> upsertPreppedPartial(HoodieEngineContext context, String instantTime,
-                                                                    HoodieData<HoodieRecord<T>> preppedRecords, boolean saveWorkloadProfileToInflight,
-                                                                    boolean writeToMetadataTable, List<Pair<String, String>> mdtPartitionPathFileGroupIdList) {
+                                                                           HoodieData<HoodieRecord<T>> preppedRecords, List<Pair<String, String>> mdtPartitionPathFileGroupIdList) {
     return new SparkMetadataTableUpsertCommitActionExecutor<>((HoodieSparkEngineContext) context, config, this, instantTime, preppedRecords,
-        saveWorkloadProfileToInflight, writeToMetadataTable, mdtPartitionPathFileGroupIdList).execute();
+        mdtPartitionPathFileGroupIdList).execute();
   }
 
   @Override

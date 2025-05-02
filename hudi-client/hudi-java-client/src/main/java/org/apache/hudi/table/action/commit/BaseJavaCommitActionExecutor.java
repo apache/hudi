@@ -86,13 +86,11 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
 
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> execute(List<HoodieRecord<T>> inputRecords) {
-    return execute(inputRecords, Option.empty(), true, false, Collections.EMPTY_LIST);
+    return execute(inputRecords, Option.empty());
   }
 
   @Override
-  public HoodieWriteMetadata<List<WriteStatus>> execute(List<HoodieRecord<T>> inputRecords, Option<HoodieTimer> sourceReadAndIndexTimer,
-                                                        boolean saveWorkloadProfileToInflight, boolean writesToMetadata,
-                                                        List<Pair<String, String>> mdtPartitionPathFileGroupIdList) {
+  public HoodieWriteMetadata<List<WriteStatus>> execute(List<HoodieRecord<T>> inputRecords, Option<HoodieTimer> sourceReadAndIndexTimer) {
     HoodieWriteMetadata<List<WriteStatus>> result = new HoodieWriteMetadata<>();
 
     WorkloadProfile workloadProfile =

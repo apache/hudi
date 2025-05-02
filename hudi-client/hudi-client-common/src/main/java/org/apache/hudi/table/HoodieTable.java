@@ -260,9 +260,18 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   public abstract HoodieWriteMetadata<O> upsertPrepped(HoodieEngineContext context, String instantTime,
       I preppedRecords);
 
+  /**
+   * Upserts the given prepared records into the Hoodie table, at the supplied instantTime.
+   * This is different from {@link #upsertPrepped(HoodieEngineContext, String, Object)} by means of supporting partial writes. i.e
+   * caller can call upsertPreppedPartial multiple times for the same action of interest.
+   * @param context HoodieEngineContext
+   * @param instantTime Instant Time for the action
+   * @param preppedRecords hoodieRecords to upsert
+   * @param mdtPartitionPathFileGroupIdList partition, fileID mapping information.
+   * @return HoodieWriteMetadata
+   */
   public HoodieWriteMetadata<O> upsertPreppedPartial(HoodieEngineContext context, String instantTime,
-                                                       I preppedRecords, boolean saveWorkloadProfileToInflight,
-                                                     boolean writesToMetadataTable, List<Pair<String, String>> mdtPartitionPathFileGroupIdList) {
+                                                     I preppedRecords, List<Pair<String, String>> mdtPartitionPathFileGroupIdList) {
     return this.upsertPrepped(context, instantTime, preppedRecords);
   }
 

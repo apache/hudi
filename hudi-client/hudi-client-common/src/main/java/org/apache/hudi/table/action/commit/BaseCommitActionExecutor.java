@@ -29,7 +29,6 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -72,7 +71,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_STATUS_STORAGE_LEVEL_VALUE;
@@ -105,16 +103,11 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
     }
   }
 
-  public HoodieWriteMetadata<O> execute(I inputRecords) {
-    return this.execute(inputRecords, Option.empty(), true, false, Collections.emptyList());
-  }
+  public abstract HoodieWriteMetadata<O> execute(I inputRecords);
 
   public HoodieWriteMetadata<O> execute(I inputRecords, Option<HoodieTimer> sourceReadAndIndexTimer) {
     return this.execute(inputRecords);
   }
-
-  public abstract HoodieWriteMetadata<O> execute(I inputRecords, Option<HoodieTimer> sourceReadAndIndexTimer, boolean saveWorkloadProfileToInflight, boolean writesToMetadata,
-                                        List<Pair<String, String>> mdtPartitionPathFileGroupIdList);
 
   /**
    * Save the workload profile in an intermediate file (here re-using commit files) This is useful when performing
@@ -328,14 +321,6 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
     result.setIndexUpdateDuration(Duration.between(indexStartTime, Instant.now()));
     result.setDataTableWriteStatuses(statuses);
     return statuses;
-  }
-
-  private Map<String, List<String>> getPartitionToReplacedFileIds(HoodieClusteringPlan clusteringPlan, HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata) {
-    //    Set<HoodieFileGroupId> newFilesWritten = writeMetadata.getWriteStats().get().stream()
-    //        .map(s -> new HoodieFileGroupId(s.getPartitionPath(), s.getFileId())).collect(Collectors.toSet());
-
-    return ClusteringUtils.getFileGroupsFromClusteringPlan(clusteringPlan)
-        .collect(Collectors.groupingBy(HoodieFileGroupId::getPartitionPath, Collectors.mapping(HoodieFileGroupId::getFileId, Collectors.toList())));
   }
 
   /**

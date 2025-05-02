@@ -185,7 +185,7 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
     }
 
     @Override
-    public String upsertPreppedPartialRecords(String preppedRecords, String instantTime, boolean initialCall, boolean writesToMetadataTable,
+    public String upsertPreppedPartialRecords(String preppedRecords, String instantTime, boolean initialCall,
                                               List<Pair<String, String>> mdtPartitionPathFileGroupIdList) {
       return "";
     }

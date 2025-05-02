@@ -1148,7 +1148,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     getWriteClient().startCommitWithTime(instantTime, HoodieTimeline.DELTA_COMMIT_ACTION);
   }
 
-  public void writeToFilesPartitionAndCommit(String instantTime, HoodieEngineContext context, List<HoodieWriteStat> metadataWriteStatsSoFar, HoodieCommitMetadata metadata) {
+  public void wrapUpStreamingWriteToMetadataTableAndCompleteCommit(String instantTime, HoodieEngineContext context, List<HoodieWriteStat> metadataWriteStatsSoFar, HoodieCommitMetadata metadata) {
     List<HoodieWriteStat> allWriteStats = new ArrayList<>(metadataWriteStatsSoFar);
     allWriteStats.addAll(prepareAndWriteToFILESPartition(context, metadata, instantTime).map(writeStatus -> writeStatus.getStat()).collectAsList());
     // finally committing to MDT
@@ -1164,7 +1164,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
 
     List<MetadataPartitionType> mdtPartitionsToTag = new ArrayList<>(enabledPartitionTypes);
     mdtPartitionsToTag.remove(FILES);
-    HoodieData<Pair<String, HoodieRecord>> perWriteStatusRecords = writeStatus.flatMap(new MetadataIndexGenerator.PerWriteStatsIndexGenerator(mdtPartitionsToTag, dataWriteConfig));
+    HoodieData<Pair<String, HoodieRecord>> perWriteStatusRecords = writeStatus.flatMap(new MetadataIndexGenerator.PerWriteStatsBasedIndexGenerator(mdtPartitionsToTag, dataWriteConfig));
 
     // Generate HoodieRecords for MDT partitions which need per hudi partition writeStats in one spark task
     // for eg, partition stats index
@@ -1179,7 +1179,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     // todo fix parallelism. Do we really need this. Upsert partitioner will do this anyways.
 
     // write partial writes to mdt table (every partition except FILES)
-    HoodieData<WriteStatus> mdtWriteStatusHoodieData = convertEngineSpecificDataToHoodieData(writeToMDT(taggedMdtRecords, instantTime, true));
+    HoodieData<WriteStatus> mdtWriteStatusHoodieData = convertEngineSpecificDataToHoodieData(streamWriteToMetadataTable(taggedMdtRecords, instantTime, true));
     // dag not yet de-referenced. do not invoke any action on mdtWriteStatusHoodieData yet.
     return mdtWriteStatusHoodieData;
   }
@@ -1189,11 +1189,11 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     // write to mdt table
     Pair<List<Pair<String, String>>, HoodieData<HoodieRecord>> taggedRecords = tagRecordsWithLocation(mdtRecords.map(record -> Pair.of(FILES.getPartitionPath(), record)),
         Collections.singleton(FILES.getPartitionPath()));
-    HoodieData<WriteStatus> mdtWriteStatusHoodieData = convertEngineSpecificDataToHoodieData(writeToMDT(taggedRecords, instantTime, false));
+    HoodieData<WriteStatus> mdtWriteStatusHoodieData = convertEngineSpecificDataToHoodieData(streamWriteToMetadataTable(taggedRecords, instantTime, false));
     return mdtWriteStatusHoodieData;
   }
 
-  protected O writeToMDT(Pair<List<Pair<String, String>>, HoodieData<HoodieRecord>> taggedMdtRecords, String instantTime, boolean initialCall) {
+  protected O streamWriteToMetadataTable(Pair<List<Pair<String, String>>, HoodieData<HoodieRecord>> taggedMdtRecords, String instantTime, boolean initialCall) {
     throw new HoodieMetadataException("Should be implemented by engines");
   }
 

@@ -96,12 +96,6 @@ public abstract class BaseFlinkCommitActionExecutor<T> extends
 
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> execute(List<HoodieRecord<T>> inputRecords, Option<HoodieTimer> sourceReadAndIndexTimer) {
-    return execute(inputRecords, sourceReadAndIndexTimer, true, false, Collections.emptyList());
-  }
-
-  @Override
-  public HoodieWriteMetadata<List<WriteStatus>> execute(List<HoodieRecord<T>> inputRecords, Option<HoodieTimer> sourceReadAndIndexTimer, boolean saveWorkloadProfileToInflight,
-                                                        boolean writesToMetadata, List<Pair<String, String>> mdtPartitionPathFileGroupIdList) {
     final HoodieRecord<?> record = inputRecords.get(0);
     final String partitionPath = record.getPartitionPath();
     final String fileId = record.getCurrentLocation().getFileId();

@@ -199,24 +199,8 @@ public class HoodieFlinkWriteClient<T>
 
   @Override
   public List<WriteStatus> upsertPreppedPartialRecords(List<HoodieRecord<T>> preppedRecords, String instantTime, boolean initialCall,
-                                                       boolean writesToMetadataTable,
                                                        List<Pair<String, String>> mdtPartitionPathFileGroupIdList) {
-    // only used for metadata table, the upsert happens in single thread
-    HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
-        initTable(WriteOperationType.UPSERT, Option.ofNullable(instantTime));
-    table.validateUpsertSchema();
-    if (initialCall) {
-      preWrite(instantTime, WriteOperationType.UPSERT_PREPPED, table.getMetaClient());
-    }
-    Map<String, List<HoodieRecord<T>>> preppedRecordsByFileId = preppedRecords.stream().parallel()
-        .collect(Collectors.groupingBy(r -> r.getCurrentLocation().getFileId()));
-    return preppedRecordsByFileId.values().stream().parallel().map(records -> {
-      HoodieWriteMetadata<List<WriteStatus>> result;
-      try (AutoCloseableWriteHandle closeableHandle = new AutoCloseableWriteHandle(records, instantTime, table)) {
-        result = ((HoodieFlinkTable<T>) table).upsertPrepped(context, closeableHandle.getWriteHandle(), instantTime, records);
-      }
-      return postWrite(result, instantTime, table);
-    }).flatMap(Collection::stream).collect(Collectors.toList());
+    throw new HoodieNotSupportedException("Streaming writes to metadata table are not supported for Flink Engine");
   }
 
   @Override

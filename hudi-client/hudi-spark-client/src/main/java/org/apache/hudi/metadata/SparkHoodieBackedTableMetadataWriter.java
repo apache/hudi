@@ -204,18 +204,15 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   @Override
-  public JavaRDD<WriteStatus> writeToMDT(Pair<List<Pair<String, String>>, HoodieData<HoodieRecord>> mdtRecordsHoodieData, String instantTime, boolean initialCall) {
+  public JavaRDD<WriteStatus> streamWriteToMetadataTable(Pair<List<Pair<String, String>>, HoodieData<HoodieRecord>> mdtRecordsHoodieData, String instantTime, boolean initialCall) {
     JavaRDD<HoodieRecord> mdtRecords = HoodieJavaRDD.getJavaRDD(mdtRecordsHoodieData.getValue());
 
     if (initialCall) {
       preWrite(instantTime);
     }
     engineContext.setJobStatus(this.getClass().getSimpleName(), String.format("Upserting at %s into metadata table %s", instantTime, metadataWriteConfig.getTableName()));
-    JavaRDD<WriteStatus> mdtWriteStatuses = getWriteClient().upsertPreppedPartialRecords(mdtRecords, instantTime, initialCall, true,
-        mdtRecordsHoodieData.getKey());
-
-    // todo update metrics.
-    return mdtWriteStatuses;
+    JavaRDD<WriteStatus> metadataWriteStatusesSoFar = getWriteClient().upsertPreppedPartialRecords(mdtRecords, instantTime, initialCall, mdtRecordsHoodieData.getKey());
+    return metadataWriteStatusesSoFar;
   }
 
   /**

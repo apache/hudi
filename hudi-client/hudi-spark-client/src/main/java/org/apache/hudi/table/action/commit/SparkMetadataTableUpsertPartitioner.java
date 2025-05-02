@@ -27,13 +27,18 @@ import java.util.Map;
 
 import scala.Tuple2;
 
-public class SparkMetadataUpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
+/**
+ * SparkHoodiePartitioner used for metadata table. All records to metadata table are already tagged records.
+ * So, we special case it so that we can avoid dag triggers (count by key) which happens with regular data table.
+ * @param <T>
+ */
+public class SparkMetadataTableUpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
 
   private List<BucketInfo> bucketInfoList;
   private final int totalPartitions;
   private Map<String, Integer> fileIdToPartitionIndexMap;
 
-  public SparkMetadataUpsertPartitioner(List<BucketInfo> bucketInfoList, Map<String, Integer> fileIdToPartitionIndexMap) {
+  public SparkMetadataTableUpsertPartitioner(List<BucketInfo> bucketInfoList, Map<String, Integer> fileIdToPartitionIndexMap) {
     super(null, null);
     this.bucketInfoList = bucketInfoList;
     this.totalPartitions = bucketInfoList.size();

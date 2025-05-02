@@ -560,7 +560,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     // if we have streaming writes to metadata enabled, we would have the HoodieTableMetadataWriter available.
     if (metadataWriterOpt.isPresent()) {
       try {
-        metadataWriterOpt.get().writeToFilesPartitionAndCommit(instantTime, context, metadataWriteStatsSoFar, metadata);
+        metadataWriterOpt.get().wrapUpStreamingWriteToMetadataTableAndCompleteCommit(instantTime, context, metadataWriteStatsSoFar, metadata);
       } finally {
         cleanUpMetadataWriterInstance.apply(instantTime);
       }

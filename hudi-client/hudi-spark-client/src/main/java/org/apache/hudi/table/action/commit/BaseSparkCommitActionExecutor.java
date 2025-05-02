@@ -36,7 +36,6 @@ import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaPairRDD;
@@ -105,7 +104,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     keyGeneratorOpt = HoodieSparkKeyGeneratorFactory.createBaseKeyGenerator(config);
   }
 
-  private HoodieData<HoodieRecord<T>> clusteringHandleUpdate(HoodieData<HoodieRecord<T>> inputRecords) {
+  protected HoodieData<HoodieRecord<T>> clusteringHandleUpdate(HoodieData<HoodieRecord<T>> inputRecords) {
     context.setJobStatus(this.getClass().getSimpleName(), "Handling updates which are under clustering: " + config.getTableName());
     Set<HoodieFileGroupId> fileGroupsInPendingClustering =
         table.getFileSystemView().getFileGroupsInPendingClustering().map(Pair::getKey).collect(Collectors.toSet());
@@ -149,16 +148,14 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
 
   @Override
   public HoodieWriteMetadata<HoodieData<WriteStatus>> execute(HoodieData<HoodieRecord<T>> inputRecords) {
-    return this.execute(inputRecords, Option.empty(), true, false, Collections.emptyList());
+    return this.execute(inputRecords, Option.empty());
   }
 
   @Override
-  public HoodieWriteMetadata<HoodieData<WriteStatus>> execute(HoodieData<HoodieRecord<T>> inputRecords, Option<HoodieTimer> sourceReadAndIndexTimer,
-                                                              boolean saveWorkloadProfileToInflight, boolean writesToMetadata,
-                                                              List<Pair<String, String>> mdtPartitionPathFileGroupIdList) {
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> execute(HoodieData<HoodieRecord<T>> inputRecords, Option<HoodieTimer> sourceReadAndIndexTimer) {
     // Cache the tagged records, so we don't end up computing both
     JavaRDD<HoodieRecord<T>> inputRDD = HoodieJavaRDD.getJavaRDD(inputRecords);
-    if (!config.isSourceRddPersisted() || inputRDD.getStorageLevel() == StorageLevel.NONE()) {
+    if (shouldPersistInputRecords(inputRDD)) {
       HoodieJavaRDD.of(inputRDD).persist(config.getTaggedRecordStorageLevel(),
           context, HoodieDataCacheKey.of(config.getBasePath(), instantTime));
     } else {
@@ -166,25 +163,18 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     }
 
     HoodieData<WriteStatus> writeStatuses = null;
-    ValidationUtils.checkState(!writesToMetadata, "Writes to Metadata table has to be use SparkMetadataTableUpsertCommitActionExecutor");
     // Handle records update with clustering
     HoodieData<HoodieRecord<T>> inputRecordsWithClusteringUpdate = clusteringHandleUpdate(inputRecords);
     LOG.info("Num spark partitions for inputRecords before triggering workload profile {}", inputRecordsWithClusteringUpdate.getNumPartitions());
 
-    context.setJobStatus(this.getClass().getSimpleName(), "Building workload profile:" + config.getTableName());
-    WorkloadProfile workloadProfile =
-        new WorkloadProfile(buildProfile(inputRecordsWithClusteringUpdate), operationType, table.getIndex().canIndexLogFiles());
-    LOG.debug("Input workload profile :{}", workloadProfile);
+    WorkloadProfile workloadProfile = prepareWorkloadProfileAndSaveToInflight(inputRecordsWithClusteringUpdate);
+
     Long sourceReadAndIndexDurationMs = null;
     if (sourceReadAndIndexTimer.isPresent()) {
       sourceReadAndIndexDurationMs = sourceReadAndIndexTimer.get().endTimer();
       LOG.info("Source read and index timer {}", sourceReadAndIndexDurationMs);
     }
-    // partition using the insert partitioner
     final Partitioner partitioner = getPartitioner(workloadProfile);
-    if (saveWorkloadProfileToInflight) {
-      saveWorkloadProfileMetadataToInflight(workloadProfile, instantTime);
-    }
     context.setJobStatus(this.getClass().getSimpleName(), "Doing partition and writing data: " + config.getTableName());
     writeStatuses = mapPartitionsAsRDD(inputRecordsWithClusteringUpdate, partitioner);
 
@@ -194,6 +184,20 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
       result.setSourceReadAndIndexDurationMs(sourceReadAndIndexDurationMs);
     }
     return result;
+  }
+
+  protected boolean shouldPersistInputRecords(JavaRDD<HoodieRecord<T>> inputRDD) {
+    return !config.isSourceRddPersisted() || inputRDD.getStorageLevel() == StorageLevel.NONE();
+  }
+
+  protected WorkloadProfile prepareWorkloadProfileAndSaveToInflight(HoodieData<HoodieRecord<T>> inputRecordsWithClusteringUpdate) {
+    context.setJobStatus(this.getClass().getSimpleName(), "Building workload profile:" + config.getTableName());
+    WorkloadProfile workloadProfile =
+        new WorkloadProfile(buildProfile(inputRecordsWithClusteringUpdate), operationType, table.getIndex().canIndexLogFiles());
+    LOG.debug("Input workload profile :{}", workloadProfile);
+    // partition using the insert partitioner
+    saveWorkloadProfileMetadataToInflight(workloadProfile, instantTime);
+    return workloadProfile;
   }
 
   /**

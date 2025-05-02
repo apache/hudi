@@ -34,6 +34,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.JavaHoodieIndexFactory;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
@@ -162,16 +163,8 @@ public class HoodieJavaWriteClient<T> extends
   @Override
   public List<WriteStatus> upsertPreppedPartialRecords(List<HoodieRecord<T>> preppedRecords,
                                                 String instantTime, boolean initialCall,
-                                                       boolean writesToMetadataTable,
                                                        List<Pair<String,String>> mdtPartitionPathFileIdPairs) {
-    HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
-        initTable(WriteOperationType.UPSERT_PREPPED, Option.ofNullable(instantTime));
-    table.validateUpsertSchema();
-    if (initialCall) {
-      preWrite(instantTime, WriteOperationType.UPSERT_PREPPED, table.getMetaClient());
-    }
-    HoodieWriteMetadata<List<WriteStatus>> result = table.upsertPreppedPartial(context,instantTime, preppedRecords, initialCall, writesToMetadataTable, mdtPartitionPathFileIdPairs);
-    return postWrite(result, instantTime, table);
+    throw new HoodieNotSupportedException("Streaming writes to metadata table are not supported for Java engine");
   }
 
   @Override

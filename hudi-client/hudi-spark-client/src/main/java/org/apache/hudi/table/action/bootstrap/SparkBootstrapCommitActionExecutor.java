@@ -44,7 +44,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CommitUtils;
-import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -191,9 +190,7 @@ public class SparkBootstrapCommitActionExecutor<T>
   }
 
   @Override
-  public HoodieWriteMetadata<HoodieData<WriteStatus>> execute(HoodieData<HoodieRecord<T>> inputRecords, Option<HoodieTimer> sourceReadAndIndexTimer,
-                                                              boolean saveWorkloadProfileToInflight,
-                                                              boolean writesToMetadata, List<Pair<String, String>> mdtPartitionPathFileGroupIdList) {
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> execute(HoodieData<HoodieRecord<T>> inputRecords) {
     // NO_OP
     return null;
   }
@@ -227,7 +224,6 @@ public class SparkBootstrapCommitActionExecutor<T>
       LOG.info("Finished writing bootstrap index for source " + config.getBootstrapSourceBasePath() + " in table "
           + config.getBasePath());
     }
-    // siva to validate.
     commit(result, bootstrapSourceAndStats.values().stream()
         .flatMap(f -> f.stream().map(Pair::getValue)).collect(Collectors.toList()));
     LOG.info("Committing metadata bootstrap !!");

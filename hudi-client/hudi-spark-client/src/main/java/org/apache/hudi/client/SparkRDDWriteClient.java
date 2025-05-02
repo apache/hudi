@@ -229,7 +229,6 @@ public class SparkRDDWriteClient<T> extends
 
   @Override
   public JavaRDD<WriteStatus> upsertPreppedPartialRecords(JavaRDD<HoodieRecord<T>> preppedRecords, String instantTime, boolean initialCall,
-                                                          boolean writesToMetadataTable,
                                                           List<Pair<String, String>> mdtPartitionPathFileGroupIdList) {
     HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table =
         initTable(WriteOperationType.UPSERT_PREPPED, Option.ofNullable(instantTime));
@@ -238,8 +237,7 @@ public class SparkRDDWriteClient<T> extends
     if (initialCall) {
       preWrite(instantTime, WriteOperationType.UPSERT_PREPPED, table.getMetaClient());
     }
-    HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.upsertPreppedPartial(context, instantTime, HoodieJavaRDD.of(preppedRecords), initialCall,
-        writesToMetadataTable, mdtPartitionPathFileGroupIdList);
+    HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.upsertPreppedPartial(context, instantTime, HoodieJavaRDD.of(preppedRecords), mdtPartitionPathFileGroupIdList);
     result.setAllWriteStatuses(result.getDataTableWriteStatuses());
     HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getAllWriteStatuses()));
     return postWrite(resultRDD, instantTime, table);

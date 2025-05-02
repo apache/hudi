@@ -381,7 +381,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     if (streamingWritesToMetadataTableEnabled && metadataWriterMap.containsKey(instantTime) && metadataWriterMap.get(instantTime).isPresent()) {
       HoodieTableMetadataWriter metadataWriter = metadataWriterMap.get(instantTime).get();
       try {
-        metadataWriter.writeToFilesPartitionAndCommit(instantTime, context, metadataWriteStatsSoFar, metadata);
+        metadataWriter.wrapUpStreamingWriteToMetadataTableAndCompleteCommit(instantTime, context, metadataWriteStatsSoFar, metadata);
         metadataWriter.close();
       } catch (Exception e) {
         throw new HoodieException("Failed to close metadata writer ", e);
@@ -512,8 +512,32 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   public abstract O upsertPreppedRecords(I preppedRecords, final String instantTime);
 
+  /**
+   * Upserts the given prepared records into the Hoodie table.
+   *
+   * <p>
+   *
+   * This differs from {@link #upsertPreppedRecords(Object, String)} by means of allowing
+   * partial writes. Typically, callers are expected to do the following to write to hudi
+   * writeClient.startCommit
+   * writeClient.upsert(records)
+   * writeClient.commit()
+   *
+   * With this partial writes, callers can call into upsertPreppedPartial multiple times before commiting the commit
+   * writeClient.startCommit
+   * writeClient.upsertPreppedPartialRecords(records_batch1)
+   * writeClient.upsertPreppedPartialRecords(records_batch2)
+   * writeClient.commit()
+   *
+   * This is used mainly to write to metadata table when streaming writes are enabled.
+   *
+   * @param preppedRecords instance of {@link I} referring to prepared records.
+   * @param instantTime instant time of interest.
+   * @param initialCall true if this represents inital calls. false otherwise.
+   * @param mdtPartitionPathFileGroupIdList
+   * @return
+   */
   public abstract O upsertPreppedPartialRecords(I preppedRecords, final String instantTime, boolean initialCall,
-                                                boolean writesToMetadataTable,
                                                 List<Pair<String, String>> mdtPartitionPathFileGroupIdList);
 
   /**

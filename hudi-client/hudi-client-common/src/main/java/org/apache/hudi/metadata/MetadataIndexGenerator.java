@@ -59,11 +59,11 @@ public class MetadataIndexGenerator implements Serializable {
    * one WriteStatus as input and the output contains prepared Metadata table records for all eligible partitions that can operate on one
    * WriteStatus instance only.
    */
-  static class PerWriteStatsIndexGenerator implements SerializableFunction<WriteStatus, Iterator<Pair<String, HoodieRecord>>> {
+  static class PerWriteStatsBasedIndexGenerator implements SerializableFunction<WriteStatus, Iterator<Pair<String, HoodieRecord>>> {
     List<MetadataPartitionType> enabledPartitionTypes;
     HoodieWriteConfig dataWriteConfig;
 
-    public PerWriteStatsIndexGenerator(List<MetadataPartitionType> enabledPartitionTypes, HoodieWriteConfig dataWriteConfig) {
+    public PerWriteStatsBasedIndexGenerator(List<MetadataPartitionType> enabledPartitionTypes, HoodieWriteConfig dataWriteConfig) {
       this.enabledPartitionTypes = enabledPartitionTypes;
       this.dataWriteConfig = dataWriteConfig;
     }
