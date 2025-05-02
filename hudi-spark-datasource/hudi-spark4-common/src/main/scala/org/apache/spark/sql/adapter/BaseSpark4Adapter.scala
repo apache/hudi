@@ -18,7 +18,7 @@
 package org.apache.spark.sql.adapter
 
 import org.apache.hudi.{AvroConversionUtils, DefaultSource, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, Spark4HoodiePartitionCDCFileGroupMapping, Spark4HoodiePartitionFileSliceMapping, Spark4RowSerDe}
-import org.apache.hudi.client.model.{HoodieInternalRow, Spark4HoodieInternalRow}
+import org.apache.hudi.client.model.HoodieInternalRow
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
@@ -129,13 +129,13 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
                                  fileName: UTF8String,
                                  sourceRow: InternalRow,
                                  sourceContainsMetaFields: Boolean): HoodieInternalRow = {
-    new Spark4HoodieInternalRow(commitTime, commitSeqNumber, recordKey, partitionPath, fileName, sourceRow, sourceContainsMetaFields)
+    new HoodieInternalRow(commitTime, commitSeqNumber, recordKey, partitionPath, fileName, sourceRow, sourceContainsMetaFields)
   }
 
   override def createInternalRow(metaFields: Array[UTF8String],
                                  sourceRow: InternalRow,
                                  sourceContainsMetaFields: Boolean): HoodieInternalRow = {
-    new Spark4HoodieInternalRow(metaFields, sourceRow, sourceContainsMetaFields)
+    new HoodieInternalRow(metaFields, sourceRow, sourceContainsMetaFields)
   }
 
   override def createHoodiePartitionCDCFileGroupMapping(partitionValues: InternalRow,

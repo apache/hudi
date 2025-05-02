@@ -29,6 +29,7 @@ import org.apache.spark.sql.types.Decimal;
 import org.apache.spark.sql.types.StringType$;
 import org.apache.spark.unsafe.types.CalendarInterval;
 import org.apache.spark.unsafe.types.UTF8String;
+import org.apache.spark.unsafe.types.VariantVal;
 
 /**
  * Hudi internal implementation of the {@link InternalRow} allowing to extend arbitrary
@@ -46,7 +47,7 @@ import org.apache.spark.unsafe.types.UTF8String;
  *   allow in-place updates due to its memory layout)</li>
  * </ul>
  */
-public abstract class HoodieInternalRow extends InternalRow {
+public class HoodieInternalRow extends InternalRow {
 
   /**
    * Collection of meta-fields as defined by {@link HoodieRecord#HOODIE_META_COLUMNS}
@@ -226,6 +227,21 @@ public abstract class HoodieInternalRow extends InternalRow {
   public MapData getMap(int ordinal) {
     ruleOutMetaFieldsAccess(ordinal, MapData.class);
     return sourceRow.getMap(rebaseOrdinal(ordinal));
+  }
+
+  @Override
+  public VariantVal getVariant(int ordinal) {
+    ruleOutMetaFieldsAccess(ordinal, VariantVal.class);
+    return sourceRow.getVariant(rebaseOrdinal(ordinal));
+  }
+
+  @Override
+  public InternalRow copy() {
+    UTF8String[] copyMetaFields = new UTF8String[metaFields.length];
+    for (int i = 0; i < metaFields.length; i++) {
+      copyMetaFields[i] = metaFields[i] != null ? metaFields[i].copy() : null;
+    }
+    return new HoodieInternalRow(copyMetaFields, sourceRow.copy(), sourceContainsMetaFields);
   }
 
   protected int rebaseOrdinal(int ordinal) {
