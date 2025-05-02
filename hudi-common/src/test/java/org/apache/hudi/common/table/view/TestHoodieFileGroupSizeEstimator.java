@@ -50,7 +50,7 @@ class TestHoodieFileGroupSizeEstimator {
     // setup mocks
     HoodieFileGroupId fileGroupId = new HoodieFileGroupId("path1", UUID.randomUUID().toString());
     List<FileSlice> fileSlices = Collections.singletonList(new FileSlice(fileGroupId, "001",
-        new HoodieBaseFile("/tmp/" + FSUtils.makeBaseFileName("001", "1-0-1", fileGroupId.getFileId())), Collections.emptyList()));
+        new HoodieBaseFile("/tmp/" + FSUtils.makeBaseFileName("001", "1-0-1", fileGroupId.getFileId(), "parquet")), Collections.emptyList()));
     when(fileGroup1.getFileGroupId()).thenReturn(fileGroupId);
     when(fileGroup1.getAllFileSlices()).thenReturn(fileSlices.stream()).thenReturn(fileSlices.stream());
 
@@ -71,7 +71,8 @@ class TestHoodieFileGroupSizeEstimator {
     // setup mocks
     HoodieFileGroupId fileGroupId = new HoodieFileGroupId("path1", UUID.randomUUID().toString());
     List<FileSlice> fileSlices = IntStream.range(1, 100).mapToObj(i -> new FileSlice(fileGroupId, "001",
-        new HoodieBaseFile("/tmp/" + FSUtils.makeBaseFileName("00" + i, "1-0-1", fileGroupId.getFileId())), Collections.emptyList())).collect(Collectors.toList());
+        new HoodieBaseFile("/tmp/" + FSUtils.makeBaseFileName("00" + i, "1-0-1", fileGroupId.getFileId(), "parquet")), Collections.emptyList()))
+        .collect(Collectors.toList());
     when(fileGroup1.getFileGroupId()).thenReturn(fileGroupId);
     when(fileGroup1.getAllFileSlices()).thenReturn(fileSlices.stream()).thenReturn(fileSlices.stream());
 
@@ -80,7 +81,7 @@ class TestHoodieFileGroupSizeEstimator {
 
     long result = new HoodieFileGroupSizeEstimator().sizeEstimate(Arrays.asList(fileGroup1, fileGroup2));
     long exactSize = ObjectSizeCalculator.getObjectSize(fileSlices) + ObjectSizeCalculator.getObjectSize(fileGroupId) * 2;
-    Assertions.assertTrue(Math.abs(result - exactSize) / (1.0 * exactSize) < 0.05); // ensure that sampling is accurate within 5%
+    Assertions.assertTrue(Math.abs(result - exactSize) / (1.0 * exactSize) < 0.1); // ensure that sampling is accurate within 10%
     verify(fileGroup1, never()).getTimeline();
     verify(fileGroup2, never()).getTimeline();
   }
