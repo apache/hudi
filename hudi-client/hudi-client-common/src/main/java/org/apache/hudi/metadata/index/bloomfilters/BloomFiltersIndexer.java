@@ -33,7 +33,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
-import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.index.Indexer;
 import org.apache.hudi.storage.HoodieStorage;
@@ -74,7 +73,6 @@ public class BloomFiltersIndexer implements Indexer {
 
   @Override
   public List<InitialIndexPartitionData> initialize(
-      List<HoodieTableMetadataUtil.DirectoryInfo> partitionInfoList,
       Map<String, Map<String, Long>> partitionToFilesMap,
       Lazy<List<Pair<String, FileSlice>>> lazyPartitionFileSliceList,
       String createInstantTime,

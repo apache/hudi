@@ -77,7 +77,6 @@ public class RecordIndexer implements Indexer {
 
   @Override
   public List<InitialIndexPartitionData> initialize(
-      List<HoodieTableMetadataUtil.DirectoryInfo> partitionInfoList,
       Map<String, Map<String, Long>> partitionToFilesMap,
       Lazy<List<Pair<String, FileSlice>>> lazyPartitionFileSlicePairs,
       String createInstantTime,

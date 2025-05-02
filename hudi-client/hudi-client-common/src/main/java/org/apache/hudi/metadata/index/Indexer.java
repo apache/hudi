@@ -25,7 +25,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.Tuple3;
-import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.util.Lazy;
 
 import java.io.IOException;
@@ -46,7 +45,6 @@ public interface Indexer {
   /**
    * Generates records for initializing the index.
    *
-   * @param partitionInfoList          list of directory information
    * @param partitionToFilesMap        map of partition to files
    * @param lazyPartitionFileSliceList lazily-evaluated list of file slices for the indexer
    *                                   that needs it
@@ -61,7 +59,6 @@ public interface Indexer {
    * @throws IOException upon IO error
    */
   List<InitialIndexPartitionData> initialize(
-      List<HoodieTableMetadataUtil.DirectoryInfo> partitionInfoList,
       Map<String, Map<String, Long>> partitionToFilesMap,
       Lazy<List<Pair<String, FileSlice>>> lazyPartitionFileSliceList,
       String createInstantTime,

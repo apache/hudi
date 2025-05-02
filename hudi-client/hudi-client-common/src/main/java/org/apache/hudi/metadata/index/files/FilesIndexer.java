@@ -26,7 +26,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
-import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.index.Indexer;
 import org.apache.hudi.util.Lazy;
@@ -35,10 +34,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
+import java.util.Set;
 
 import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
 
@@ -56,25 +56,21 @@ public class FilesIndexer implements Indexer {
 
   @Override
   public List<InitialIndexPartitionData> initialize(
-      List<HoodieTableMetadataUtil.DirectoryInfo> partitionInfoList,
-      Map<String, Map<String, Long>> partitionToFilesMap,
+      Map<String, Map<String, Long>> partitionIdToFilesMap,
       Lazy<List<Pair<String, FileSlice>>> lazyPartitionFileSliceList,
       String createInstantTime,
       String instantTimeForPartition) throws IOException {
     // FILES partition uses a single file group
     final int numFileGroup = 1;
 
-    List<String> partitions = partitionInfoList.stream()
-        .map(p -> HoodieTableMetadataUtil.getPartitionIdentifierForFilesPartition(p.getRelativePath()))
-        .collect(Collectors.toList());
-    final int totalDataFilesCount =
-        partitionInfoList.stream().mapToInt(HoodieTableMetadataUtil.DirectoryInfo::getTotalFiles).sum();
+    Set<String> partitions = partitionIdToFilesMap.keySet();
+    final int totalDataFilesCount = partitionIdToFilesMap.values().stream().mapToInt(Map::size).sum();
     LOG.info("Committing total {} partitions and {} files to metadata", partitions.size(), totalDataFilesCount);
 
     // Record which saves the list of all partitions
     HoodieRecord record = HoodieMetadataPayload.createPartitionListRecord(partitions);
     HoodieData<HoodieRecord> allPartitionsRecord = engineContext.parallelize(Collections.singletonList(record), 1);
-    if (partitionInfoList.isEmpty()) {
+    if (partitionIdToFilesMap.isEmpty()) {
       return Collections.singletonList(InitialIndexPartitionData.of(
           numFileGroup, FILES.getPartitionPath(), allPartitionsRecord));
     }
@@ -82,11 +78,12 @@ public class FilesIndexer implements Indexer {
     // Records which save the file listing of each partition
     engineContext.setJobStatus(this.getClass().getSimpleName(), "Creating records for metadata FILES partition");
     HoodieData<HoodieRecord> fileListRecords =
-        engineContext.parallelize(partitionInfoList, partitionInfoList.size()).map(partitionInfo -> {
-          Map<String, Long> fileNameToSizeMap = partitionInfo.getFileNameToSizeMap();
-          return HoodieMetadataPayload.createPartitionFilesRecord(
-              partitionInfo.getRelativePath(), fileNameToSizeMap, Collections.emptyList());
-        });
+        engineContext.parallelize(new ArrayList<>(partitionIdToFilesMap.entrySet()), partitionIdToFilesMap.size())
+            .map(partitionInfo -> {
+              Map<String, Long> fileNameToSizeMap = partitionInfo.getValue();
+              return HoodieMetadataPayload.createPartitionFilesRecord(
+                  partitionInfo.getKey(), fileNameToSizeMap, Collections.emptyList());
+            });
     ValidationUtils.checkState(fileListRecords.count() == partitions.size());
 
     return Collections.singletonList(InitialIndexPartitionData.of(

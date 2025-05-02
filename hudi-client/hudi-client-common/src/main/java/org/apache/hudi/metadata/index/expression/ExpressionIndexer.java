@@ -29,7 +29,6 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.expression.HoodieExpressionIndex;
-import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.index.ExpressionIndexRecordGenerator;
 import org.apache.hudi.metadata.index.Indexer;
@@ -90,7 +89,6 @@ public class ExpressionIndexer implements Indexer {
 
   @Override
   public List<InitialIndexPartitionData> initialize(
-      List<HoodieTableMetadataUtil.DirectoryInfo> partitionInfoList,
       Map<String, Map<String, Long>> partitionToFilesMap,
       Lazy<List<Pair<String, FileSlice>>> lazyPartitionFileSliceList,
       String createInstantTime,

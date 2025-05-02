@@ -410,7 +410,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     if (!filesPartitionAvailable) {
       // FILES partition should always be initialized first if enabled
       initializeMetadataPartition(
-          FILES, indexerMapForPartitionsToInit.get(FILES), initializationTime, partitionInfoList,
+          FILES, indexerMapForPartitionsToInit.get(FILES), initializationTime,
           partitionToFilesMap, lazyPartitionFileSliceList);
     }
 
@@ -420,7 +420,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         indexerMapForPartitionsToInit.entrySet().stream()
             .filter(e -> e.getKey() != FILES).collect(Collectors.toList())) {
       initializeMetadataPartition(
-          entry.getKey(), entry.getValue(), initializationTime, partitionInfoList, partitionToFilesMap, lazyPartitionFileSliceList);
+          entry.getKey(), entry.getValue(), initializationTime, partitionToFilesMap, lazyPartitionFileSliceList);
     }
     return true;
   }
@@ -448,7 +448,6 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   private void initializeMetadataPartition(MetadataPartitionType partitionType,
                                            Indexer indexer,
                                            String initializationTime,
-                                           List<DirectoryInfo> partitionInfoList,
                                            Map<String, Map<String, Long>> partitionToFilesMap,
                                            Lazy<List<Pair<String, FileSlice>>> lazyPartitionFileSliceList)
       throws IOException {
@@ -459,8 +458,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     List<Indexer.InitialIndexPartitionData> initialIndexPartitionDataList;
     try {
       initialIndexPartitionDataList = indexer.initialize(
-          partitionInfoList, partitionToFilesMap, lazyPartitionFileSliceList,
-          initializationTime, instantTimeForPartition);
+          partitionToFilesMap, lazyPartitionFileSliceList, initializationTime, instantTimeForPartition);
     } catch (Exception e) {
       String metricKey = partitionType.getPartitionPath() + "_" + HoodieMetadataMetrics.BOOTSTRAP_ERR_STR;
       metrics.ifPresent(m -> m.setMetric(metricKey, 1));
