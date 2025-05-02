@@ -74,10 +74,10 @@ public class PartitionStatsIndexer implements Indexer {
 
   @Override
   public List<InitialIndexPartitionData> initialize(
-      Map<String, Map<String, Long>> partitionToFilesMap,
-      Lazy<List<Pair<String, FileSlice>>> lazyPartitionFileSliceList,
       String createInstantTime,
-      String instantTimeForPartition) throws IOException {
+      String instantTimeForPartition,
+      Map<String, Map<String, Long>> partitionIdToAllFilesMap,
+      Lazy<List<Pair<String, FileSlice>>> lazyLatestMergedPartitionFileSliceList) throws IOException {
     // For PARTITION_STATS, COLUMN_STATS should also be enabled
     if (!dataTableWriteConfig.isMetadataColumnStatsIndexEnabled()) {
       LOG.warn("Skipping partition stats initialization as column stats index is not enabled. Please enable {}",
@@ -85,7 +85,7 @@ public class PartitionStatsIndexer implements Indexer {
       return Collections.emptyList();
     }
     final int numFileGroup = dataTableWriteConfig.getMetadataConfig().getPartitionStatsIndexFileGroupCount();
-    List<Pair<String, FileSlice>> partitionFileSliceList = lazyPartitionFileSliceList.get();
+    List<Pair<String, FileSlice>> partitionFileSliceList = lazyLatestMergedPartitionFileSliceList.get();
     if (partitionFileSliceList.isEmpty()) {
       return Collections.singletonList(InitialIndexPartitionData.of(
           numFileGroup, PARTITION_STATS.getPartitionPath(), engineContext.emptyHoodieData()));

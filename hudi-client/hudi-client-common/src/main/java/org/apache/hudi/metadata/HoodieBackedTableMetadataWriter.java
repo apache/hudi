@@ -406,12 +406,12 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
     // TODO(yihua): check this wrt files partition, i.e., after files partition is ready in
     //  MDT, could it be leveraged afterward?
-    Lazy<List<Pair<String, FileSlice>>> lazyPartitionFileSliceList = getLazyPartitionFileSliceList();
+    Lazy<List<Pair<String, FileSlice>>> lazyLatestMergedPartitionFileSliceList = getLazyPartitionFileSliceList();
     if (!filesPartitionAvailable) {
       // FILES partition should always be initialized first if enabled
       initializeMetadataPartition(
           FILES, indexerMapForPartitionsToInit.get(FILES), initializationTime,
-          partitionToFilesMap, lazyPartitionFileSliceList);
+          partitionToAllFilesMap, lazyLatestMergedPartitionFileSliceList);
     }
 
     Lazy<List<Pair<String, FileSlice>>> lazyLatestMergedPartitionFileSliceList = getLazyLatestMergedPartitionFileSliceList();
@@ -420,7 +420,8 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         indexerMapForPartitionsToInit.entrySet().stream()
             .filter(e -> e.getKey() != FILES).collect(Collectors.toList())) {
       initializeMetadataPartition(
-          entry.getKey(), entry.getValue(), initializationTime, partitionToFilesMap, lazyPartitionFileSliceList);
+          entry.getKey(), entry.getValue(), initializationTime,
+          partitionToAllFilesMap, lazyLatestMergedPartitionFileSliceList);
     }
     return true;
   }
@@ -445,11 +446,12 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     });
   }
 
-  private void initializeMetadataPartition(MetadataPartitionType partitionType,
-                                           Indexer indexer,
-                                           String initializationTime,
-                                           Map<String, Map<String, Long>> partitionToFilesMap,
-                                           Lazy<List<Pair<String, FileSlice>>> lazyPartitionFileSliceList)
+  private void initializeMetadataPartition(
+      MetadataPartitionType partitionType,
+      Indexer indexer,
+      String initializationTime,
+      Map<String, Map<String, Long>> partitionToAllFilesMap,
+      Lazy<List<Pair<String, FileSlice>>> lazyLatestMergedPartitionFileSliceList)
       throws IOException {
     // Find the commit timestamp to use for this partition. Each initialization should use its own unique commit time.
     String instantTimeForPartition = generateUniqueInstantTime(initializationTime);
@@ -458,7 +460,8 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     List<Indexer.InitialIndexPartitionData> initialIndexPartitionDataList;
     try {
       initialIndexPartitionDataList = indexer.initialize(
-          partitionToFilesMap, lazyPartitionFileSliceList, initializationTime, instantTimeForPartition);
+          initializationTime, instantTimeForPartition,
+          partitionToAllFilesMap, lazyLatestMergedPartitionFileSliceList);
     } catch (Exception e) {
       String metricKey = partitionType.getPartitionPath() + "_" + HoodieMetadataMetrics.BOOTSTRAP_ERR_STR;
       metrics.ifPresent(m -> m.setMetric(metricKey, 1));

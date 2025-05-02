@@ -73,14 +73,14 @@ public class BloomFiltersIndexer implements Indexer {
 
   @Override
   public List<InitialIndexPartitionData> initialize(
-      Map<String, Map<String, Long>> partitionToFilesMap,
-      Lazy<List<Pair<String, FileSlice>>> lazyPartitionFileSliceList,
       String createInstantTime,
-      String instantTimeForPartition) throws IOException {
+      String instantTimeForPartition,
+      Map<String, Map<String, Long>> partitionIdToAllFilesMap,
+      Lazy<List<Pair<String, FileSlice>>> lazyLatestMergedPartitionFileSliceList) throws IOException {
     String bloomFilterType = dataTableWriteConfig.getBloomFilterType();
     // Create the tuple (partition, filename, isDeleted) to handle both deletes and appends
     final List<Tuple3<String, String, Boolean>> partitionFileFlagTupleList =
-        Indexer.fetchPartitionFileInfoTriplets(partitionToFilesMap);
+        Indexer.fetchPartitionFileInfoTriplets(partitionIdToAllFilesMap);
     int parallelism = Math.max(Math.min(partitionFileFlagTupleList.size(),
         dataTableWriteConfig.getBloomIndexParallelism()), 1);
     // This meta client object has to be local to allow Spark to serialize the object

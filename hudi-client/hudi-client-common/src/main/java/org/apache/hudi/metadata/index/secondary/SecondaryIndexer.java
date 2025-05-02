@@ -107,10 +107,10 @@ public class SecondaryIndexer implements Indexer {
 
   @Override
   public List<InitialIndexPartitionData> initialize(
-      Map<String, Map<String, Long>> partitionToFilesMap,
-      Lazy<List<Pair<String, FileSlice>>> lazyPartitionFileSliceList,
       String createInstantTime,
-      String instantTimeForPartition) throws IOException {
+      String instantTimeForPartition,
+      Map<String, Map<String, Long>> partitionIdToAllFilesMap,
+      Lazy<List<Pair<String, FileSlice>>> lazyLatestMergedPartitionFileSliceList) throws IOException {
     if (secondaryIndexPartitionsToInit.get().size() != 1) {
       if (secondaryIndexPartitionsToInit.get().size() > 1) {
         LOG.warn("Skipping secondary index initialization as only one secondary index "
@@ -123,7 +123,7 @@ public class SecondaryIndexer implements Indexer {
 
     HoodieIndexDefinition indexDefinition = getIndexDefinition(dataTableMetaClient, indexName);
     ValidationUtils.checkState(indexDefinition != null, "Secondary Index definition is not present for index " + indexName);
-    List<Pair<String, FileSlice>> partitionFileSlicePairs = lazyPartitionFileSliceList.get();
+    List<Pair<String, FileSlice>> partitionFileSlicePairs = lazyLatestMergedPartitionFileSliceList.get();
 
     int parallelism = Math.min(partitionFileSlicePairs.size(),
         dataTableWriteConfig.getMetadataConfig().getSecondaryIndexParallelism());

@@ -75,13 +75,13 @@ public class ColumnStatsIndexer implements Indexer {
 
   @Override
   public List<InitialIndexPartitionData> initialize(
-      Map<String, Map<String, Long>> partitionToFilesMap,
-      Lazy<List<Pair<String, FileSlice>>> lazyPartitionFileSliceList,
       String createInstantTime,
-      String instantTimeForPartition) throws IOException {
+      String instantTimeForPartition,
+      Map<String, Map<String, Long>> partitionIdToAllFilesMap,
+      Lazy<List<Pair<String, FileSlice>>> lazyLatestMergedPartitionFileSliceList) throws IOException {
 
     final int numFileGroup = dataTableWriteConfig.getMetadataConfig().getColumnStatsIndexFileGroupCount();
-    if (partitionToFilesMap.isEmpty()) {
+    if (partitionIdToAllFilesMap.isEmpty()) {
       return Collections.singletonList(InitialIndexPartitionData.of(
           numFileGroup, COLUMN_STATS.getPartitionPath(), engineContext.emptyHoodieData()));
     }
@@ -98,7 +98,7 @@ public class ColumnStatsIndexer implements Indexer {
     int maxReaderBufferSize = dataTableWriteConfig.getMetadataConfig().getMaxReaderBufferSize();
     // Create the tuple (partition, filename, isDeleted) to handle both deletes and appends
     final List<Tuple3<String, String, Boolean>> partitionFileFlagTupleList =
-        Indexer.fetchPartitionFileInfoTriplets(partitionToFilesMap);
+        Indexer.fetchPartitionFileInfoTriplets(partitionIdToAllFilesMap);
 
     // Create records MDT
     int parallelism = Math.max(Math.min(partitionFileFlagTupleList.size(),

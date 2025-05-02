@@ -56,21 +56,21 @@ public class FilesIndexer implements Indexer {
 
   @Override
   public List<InitialIndexPartitionData> initialize(
-      Map<String, Map<String, Long>> partitionIdToFilesMap,
-      Lazy<List<Pair<String, FileSlice>>> lazyPartitionFileSliceList,
       String createInstantTime,
-      String instantTimeForPartition) throws IOException {
+      String instantTimeForPartition,
+      Map<String, Map<String, Long>> partitionIdToAllFilesMap,
+      Lazy<List<Pair<String, FileSlice>>> lazyLatestMergedPartitionFileSliceList) throws IOException {
     // FILES partition uses a single file group
     final int numFileGroup = 1;
 
-    Set<String> partitions = partitionIdToFilesMap.keySet();
-    final int totalDataFilesCount = partitionIdToFilesMap.values().stream().mapToInt(Map::size).sum();
+    Set<String> partitions = partitionIdToAllFilesMap.keySet();
+    final int totalDataFilesCount = partitionIdToAllFilesMap.values().stream().mapToInt(Map::size).sum();
     LOG.info("Committing total {} partitions and {} files to metadata", partitions.size(), totalDataFilesCount);
 
     // Record which saves the list of all partitions
     HoodieRecord record = HoodieMetadataPayload.createPartitionListRecord(partitions);
     HoodieData<HoodieRecord> allPartitionsRecord = engineContext.parallelize(Collections.singletonList(record), 1);
-    if (partitionIdToFilesMap.isEmpty()) {
+    if (partitionIdToAllFilesMap.isEmpty()) {
       return Collections.singletonList(InitialIndexPartitionData.of(
           numFileGroup, FILES.getPartitionPath(), allPartitionsRecord));
     }
@@ -78,7 +78,7 @@ public class FilesIndexer implements Indexer {
     // Records which save the file listing of each partition
     engineContext.setJobStatus(this.getClass().getSimpleName(), "Creating records for metadata FILES partition");
     HoodieData<HoodieRecord> fileListRecords =
-        engineContext.parallelize(new ArrayList<>(partitionIdToFilesMap.entrySet()), partitionIdToFilesMap.size())
+        engineContext.parallelize(new ArrayList<>(partitionIdToAllFilesMap.entrySet()), partitionIdToAllFilesMap.size())
             .map(partitionInfo -> {
               Map<String, Long> fileNameToSizeMap = partitionInfo.getValue();
               return HoodieMetadataPayload.createPartitionFilesRecord(
