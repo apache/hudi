@@ -43,6 +43,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.index.Indexer;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.Lazy;
@@ -73,7 +74,7 @@ import static org.apache.hudi.metadata.SecondaryIndexRecordGenerationUtils.getFi
 import static org.apache.hudi.metadata.index.record.RecordIndexer.RECORD_INDEX_AVERAGE_RECORD_SIZE;
 
 /**
- * Implementation of {@link SECONDARY_INDEX} index
+ * Implementation of {@link MetadataPartitionType#SECONDARY_INDEX} index
  */
 public class SecondaryIndexer implements Indexer {
   private static final Logger LOG = LoggerFactory.getLogger(SecondaryIndexer.class);

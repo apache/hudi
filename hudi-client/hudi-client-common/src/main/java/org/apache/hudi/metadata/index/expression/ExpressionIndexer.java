@@ -32,6 +32,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.expression.HoodieExpressionIndex;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.index.ExpressionIndexRecordGenerator;
 import org.apache.hudi.metadata.index.Indexer;
 import org.apache.hudi.util.Lazy;
@@ -56,7 +57,7 @@ import static org.apache.hudi.metadata.MetadataPartitionType.EXPRESSION_INDEX;
 import static org.apache.hudi.metadata.MetadataPartitionType.getIndexDefinitions;
 
 /**
- * Implementation of {@link EXPRESSION_INDEX} index
+ * Implementation of {@link MetadataPartitionType#EXPRESSION_INDEX} index
  */
 public class ExpressionIndexer implements Indexer {
 

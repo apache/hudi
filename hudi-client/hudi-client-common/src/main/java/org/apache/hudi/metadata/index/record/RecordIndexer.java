@@ -35,6 +35,7 @@ import org.apache.hudi.io.HoodieMergedReadHandle;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.index.Indexer;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.util.Lazy;
@@ -54,7 +55,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.readRecordKeysFro
 import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
 
 /**
- * Implementation of {@link RECORD_INDEX} index
+ * Implementation of {@link MetadataPartitionType#RECORD_INDEX} index
  */
 public class RecordIndexer implements Indexer {
 

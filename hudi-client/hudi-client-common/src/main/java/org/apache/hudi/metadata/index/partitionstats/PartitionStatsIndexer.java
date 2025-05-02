@@ -33,6 +33,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.index.Indexer;
 import org.apache.hudi.util.Lazy;
 
@@ -56,7 +57,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.tryResolveSchemaF
 import static org.apache.hudi.metadata.MetadataPartitionType.PARTITION_STATS;
 
 /**
- * Implementation of {@link PARTITION_STATS} metadata
+ * Implementation of {@link MetadataPartitionType#PARTITION_STATS} metadata
  */
 public class PartitionStatsIndexer implements Indexer {
 

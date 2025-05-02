@@ -27,6 +27,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.index.Indexer;
 import org.apache.hudi.util.Lazy;
 
@@ -42,7 +43,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
 
 /**
- * Implementation of {@link FILES} metadata
+ * Implementation of {@link MetadataPartitionType#FILES} metadata
  */
 public class FilesIndexer implements Indexer {
 

@@ -30,6 +30,7 @@ import org.apache.hudi.common.util.collection.Tuple3;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.index.Indexer;
 import org.apache.hudi.util.Lazy;
 
@@ -48,7 +49,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getColumnStatsRec
 import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
 
 /**
- * Implementation of {@link COLUMN_STATS} metadata
+ * Implementation of {@link MetadataPartitionType#COLUMN_STATS} metadata
  */
 public class ColumnStatsIndexer implements Indexer {
 
