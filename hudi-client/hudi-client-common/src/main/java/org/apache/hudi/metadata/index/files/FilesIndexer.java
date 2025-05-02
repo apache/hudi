@@ -56,8 +56,7 @@ public class FilesIndexer implements Indexer {
 
   @Override
   public List<InitialIndexPartitionData> initialize(
-      String createInstantTime,
-      String instantTimeForPartition,
+      String dataTableInstantTime,
       Map<String, Map<String, Long>> partitionIdToAllFilesMap,
       Lazy<List<Pair<String, FileSlice>>> lazyLatestMergedPartitionFileSliceList) throws IOException {
     // FILES partition uses a single file group

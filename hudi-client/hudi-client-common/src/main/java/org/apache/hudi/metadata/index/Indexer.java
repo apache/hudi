@@ -45,9 +45,8 @@ public interface Indexer {
   /**
    * Generates records for initializing the index.
    *
-   * @param createInstantTime                      instant time of the data table that the metadata table
+   * @param dataTableInstantTime                   instant time of the data table that the metadata table
    *                                               is initialized on
-   * @param instantTimeForPartition                instant time for initializing the metadata table partition
    * @param partitionIdToAllFilesMap               map of partition to files
    * @param lazyLatestMergedPartitionFileSliceList lazily-evaluated list of file slices for the indexer
    *                                               that needs it
@@ -59,8 +58,7 @@ public interface Indexer {
    * @throws IOException upon IO error
    */
   List<InitialIndexPartitionData> initialize(
-      String createInstantTime,
-      String instantTimeForPartition,
+      String dataTableInstantTime,
       Map<String, Map<String, Long>> partitionIdToAllFilesMap,
       Lazy<List<Pair<String, FileSlice>>> lazyLatestMergedPartitionFileSliceList) throws IOException;
 

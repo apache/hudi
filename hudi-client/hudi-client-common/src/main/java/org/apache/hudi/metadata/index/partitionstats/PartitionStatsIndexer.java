@@ -74,8 +74,7 @@ public class PartitionStatsIndexer implements Indexer {
 
   @Override
   public List<InitialIndexPartitionData> initialize(
-      String createInstantTime,
-      String instantTimeForPartition,
+      String dataTableInstantTime,
       Map<String, Map<String, Long>> partitionIdToAllFilesMap,
       Lazy<List<Pair<String, FileSlice>>> lazyLatestMergedPartitionFileSliceList) throws IOException {
     // For PARTITION_STATS, COLUMN_STATS should also be enabled

@@ -89,8 +89,7 @@ public class ExpressionIndexer implements Indexer {
 
   @Override
   public List<InitialIndexPartitionData> initialize(
-      String createInstantTime,
-      String instantTimeForPartition,
+      String dataTableInstantTime,
       Map<String, Map<String, Long>> partitionIdToAllFilesMap,
       Lazy<List<Pair<String, FileSlice>>> lazyLatestMergedPartitionFileSliceList) throws IOException {
     if (expressionIndexPartitionsToInit.get().size() != 1) {
@@ -133,7 +132,7 @@ public class ExpressionIndexer implements Indexer {
         expressionIndexRecordGenerator.generate(
             filesToIndex, indexDefinition, dataTableMetaClient,
             parallelism,
-            readerSchema, engineContext.getStorageConf(), instantTimeForPartition)));
+            readerSchema, engineContext.getStorageConf(), dataTableInstantTime)));
   }
 
   // TODO(yihua): move test and remove the static method

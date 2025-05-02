@@ -75,8 +75,7 @@ public class ColumnStatsIndexer implements Indexer {
 
   @Override
   public List<InitialIndexPartitionData> initialize(
-      String createInstantTime,
-      String instantTimeForPartition,
+      String dataTableInstantTime,
       Map<String, Map<String, Long>> partitionIdToAllFilesMap,
       Lazy<List<Pair<String, FileSlice>>> lazyLatestMergedPartitionFileSliceList) throws IOException {
 

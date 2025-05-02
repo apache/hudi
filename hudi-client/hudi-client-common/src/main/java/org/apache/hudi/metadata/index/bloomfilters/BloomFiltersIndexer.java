@@ -73,8 +73,7 @@ public class BloomFiltersIndexer implements Indexer {
 
   @Override
   public List<InitialIndexPartitionData> initialize(
-      String createInstantTime,
-      String instantTimeForPartition,
+      String dataTableInstantTime,
       Map<String, Map<String, Long>> partitionIdToAllFilesMap,
       Lazy<List<Pair<String, FileSlice>>> lazyLatestMergedPartitionFileSliceList) throws IOException {
     String bloomFilterType = dataTableWriteConfig.getBloomFilterType();
@@ -112,7 +111,7 @@ public class BloomFiltersIndexer implements Indexer {
           }
 
           return Stream.<HoodieRecord>of(HoodieMetadataPayload.createBloomFilterMetadataRecord(
-                  partitionName, filename, createInstantTime, bloomFilterType, bloomFilterBuffer, partitionFileFlagTuple.f2))
+                  partitionName, filename, dataTableInstantTime, bloomFilterType, bloomFilterBuffer, partitionFileFlagTuple.f2))
               .iterator();
         });
     return Collections.singletonList(InitialIndexPartitionData.of(
