@@ -250,7 +250,7 @@ class TestBaseHoodieTableServiceClient extends HoodieCommonTestHarness {
     }
 
     @Override
-    protected List<HoodieWriteStat> processAndFetchHoodieWriteStats(HoodieWriteMetadata<String> writeMetadata) {
+    protected List<HoodieWriteStat> triggerWritesAndFetchWriteStats(HoodieWriteMetadata<String> writeMetadata) {
       return null;
     }
 

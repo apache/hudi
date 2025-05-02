@@ -45,7 +45,7 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
   }
 
   @Override
-  protected List<HoodieWriteStat> processAndFetchHoodieWriteStats(HoodieWriteMetadata<JavaRDD<WriteStatus>> writeMetadata) {
+  protected List<HoodieWriteStat> triggerWritesAndFetchWriteStats(HoodieWriteMetadata<JavaRDD<WriteStatus>> writeMetadata) {
     return writeMetadata.getWriteStatuses().map(writeStatus -> writeStatus.getStat()).collect();
   }
 
@@ -56,7 +56,12 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
 
   @Override
   protected void runPrecommitValidators(HoodieWriteMetadata<JavaRDD<WriteStatus>> writeMetadata, HoodieTable table, String instantTime) {
-    SparkValidatorUtils.runValidators(instantTime, writeMetadata, config, context, table);
+    HoodieWriteMetadata<HoodieData<WriteStatus>> recreatedWriteMetadata = new HoodieWriteMetadata<>();
+    if (writeMetadata.getWriteStats().isPresent()) {
+      writeMetadata.setWriteStats(writeMetadata.getWriteStats().get());
+    }
+    recreatedWriteMetadata.setPartitionToReplaceFileIds(writeMetadata.getPartitionToReplaceFileIds());
+    SparkValidatorUtils.runValidators(config, recreatedWriteMetadata, context, table, instantTime);
   }
 
   @Override

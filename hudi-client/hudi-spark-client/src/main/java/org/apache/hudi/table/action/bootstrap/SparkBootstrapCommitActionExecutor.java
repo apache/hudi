@@ -177,7 +177,7 @@ public class SparkBootstrapCommitActionExecutor<T>
     HoodieData<WriteStatus> statuses = table.getIndex().updateLocation(writeStatuses, context, table);
     result.setIndexUpdateDuration(Duration.between(indexStartTime, Instant.now()));
     result.setWriteStatuses(statuses);
-    completeCommit(result, true);
+    commitOnInternalAutoCommit(result, true);
   }
 
   @Override
