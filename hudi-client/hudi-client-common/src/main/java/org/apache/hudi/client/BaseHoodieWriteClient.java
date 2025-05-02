@@ -65,7 +65,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.HoodieRestoreException;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.exception.HoodieSavepointException;
@@ -115,7 +114,6 @@ import static org.apache.hudi.avro.AvroSchemaUtils.getAvroRecordQualifiedName;
 import static org.apache.hudi.common.model.HoodieCommitMetadata.SCHEMA_KEY;
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
 import static org.apache.hudi.metadata.HoodieTableMetadata.getMetadataTableBasePath;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.deleteMetadataTable;
 
 /**
  * Abstract Write Client providing functionality for performing commit, index updates and rollback
@@ -176,35 +174,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     this.index = createIndex(writeConfig);
     this.upgradeDowngradeHelper = upgradeDowngradeHelper;
     this.metrics.emitIndexTypeMetrics(config.getIndexType().ordinal());
-  }
-
-  protected Option<HoodieTableMetadataWriter> getMetadataWriter(
-      String triggeringInstantTimestamp) {
-    // Each engine is expected to override this and
-    // provide the actual metadata writer, if enabled.
-    isMetadataTableExists = false;
-    return Option.empty();
-  }
-
-  public void maybeDeleteMetadataTable(HoodieTableMetaClient metaClient) {
-    if (shouldExecuteMetadataTableDeletion(metaClient)) {
-      try {
-        LOG.info("Deleting metadata table because it is disabled in writer.");
-        deleteMetadataTable(config.getBasePath(), context);
-      } catch (HoodieMetadataException e) {
-        throw new HoodieException("Failed to delete metadata table.", e);
-      }
-    }
-  }
-
-  private boolean shouldExecuteMetadataTableDeletion(HoodieTableMetaClient metaClient) {
-    // Only execute metadata table deletion when all the following conditions are met
-    // (1) This is data table
-    // (2) Metadata table is disabled in HoodieWriteConfig for the writer
-    // (3) if mdt is already enabled.
-    return !metaClient.isMetadataTable()
-        && !config.isMetadataTableEnabled()
-        && !metaClient.getTableConfig().getMetadataPartitions().isEmpty();
   }
 
   protected abstract HoodieIndex<?, ?> createIndex(HoodieWriteConfig writeConfig);
@@ -1070,9 +1039,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * Provides a new commit time for a write operation (insert/update/delete/insert_overwrite/insert_overwrite_table) without specified action.
    * @param instantTime Instant time to be generated
    */
-  public void startCommitWithTime(String instantTime, boolean skipOptimizedWrites) {
+  public void startCommitWithTime(String instantTime, boolean skipStreamingWritesToMetadata) {
     HoodieTableMetaClient metaClient = createMetaClient(true);
-    startCommitWithTime(instantTime, metaClient.getCommitActionType(), metaClient, skipOptimizedWrites);
+    startCommitWithTime(instantTime, metaClient.getCommitActionType(), metaClient, skipStreamingWritesToMetadata);
   }
 
   /**
@@ -1085,9 +1054,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   /**
    * Completes a new commit time for a write operation (insert/update/delete/insert_overwrite/insert_overwrite_table) with specified action.
    */
-  public void startCommitWithTime(String instantTime, String actionType, boolean skipOptimizedWrites) {
+  public void startCommitWithTime(String instantTime, String actionType, boolean skipStreamingWritesToMetadata) {
     HoodieTableMetaClient metaClient = createMetaClient(true);
-    startCommitWithTime(instantTime, actionType, metaClient, skipOptimizedWrites);
+    startCommitWithTime(instantTime, actionType, metaClient, skipStreamingWritesToMetadata);
   }
 
   /**
@@ -1095,9 +1064,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param instantTime instant time of interest.
    * @param actionType action type of interest.
    * @param metaClient {@link HoodieTableMetaClient} instance.
-   * @param skipOptimizedWrites true if optimized writes need to be skipped.
+   * @param skipStreamingWritesToMetadata true if optimized writes need to be skipped.
    */
-  private void startCommitWithTime(String instantTime, String actionType, HoodieTableMetaClient metaClient, boolean skipOptimizedWrites) {
+  private void startCommitWithTime(String instantTime, String actionType, HoodieTableMetaClient metaClient, boolean skipStreamingWritesToMetadata) {
     if (needsUpgrade(metaClient)) {
       // unclear what instant to use, since upgrade does have a given instant.
       executeUsingTxnManager(Option.empty(), () -> tryUpgrade(metaClient, Option.empty()));
@@ -1125,7 +1094,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     }
 
     // Even among supported operations, bulk insert to be precise, row writer does not support optimized writes. So, we had to leverage additional argument named `skipOptimizedWrites`
-    Option<HoodieTableMetadataWriter> metadataWriterOpt = skipOptimizedWrites ? Option.empty() :
+    Option<HoodieTableMetadataWriter> metadataWriterOpt = skipStreamingWritesToMetadata ? Option.empty() :
         (config.isStreamingWritesToMetadataEnabled(metaClient.getTableConfig().getTableVersion()) ? getMetadataWriter(instantTime, metaClient) : Option.empty());
     if (metadataWriterOpt.isPresent()) {
       metadataWriterOpt.get().startCommit(instantTime);
