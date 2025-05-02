@@ -114,7 +114,6 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
                                        HoodieEngineContext engineContext,
                                        Option<String> inflightInstantTimestamp) {
     super(hadoopConf, writeConfig, failedWritesCleaningPolicy, engineContext,
-        // TODO(yihua): revisit metadata write config
         new SparkExpressionIndexRecordGenerator(engineContext, writeConfig),
         inflightInstantTimestamp);
   }
