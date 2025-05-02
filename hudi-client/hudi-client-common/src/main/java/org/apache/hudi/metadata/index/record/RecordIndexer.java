@@ -27,12 +27,10 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.HoodieMergedReadHandle;
-import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -44,13 +42,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.readRecordKeysFromBaseFiles;
 import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
 
@@ -83,25 +79,18 @@ public class RecordIndexer implements Indexer {
   public List<InitialIndexPartitionData> initialize(
       List<HoodieTableMetadataUtil.DirectoryInfo> partitionInfoList,
       Map<String, Map<String, Long>> partitionToFilesMap,
+      Lazy<List<Pair<String, FileSlice>>> lazyPartitionFileSlicePairs,
       String createInstantTime,
-      Lazy<HoodieTableFileSystemView> fsView,
-      HoodieBackedTableMetadata metadata,
       String instantTimeForPartition) throws IOException {
-    // TODO(yihua): could we unify the file listing across indexes?
-    // Collect the list of latest base files present in each partition
-    List<String> partitions = metadata.getAllPartitionPaths();
-    fsView.get().loadAllPartitions();
     HoodieData<HoodieRecord> records = null;
     if (dataTableMetaClient.getTableConfig().getTableType() == HoodieTableType.COPY_ON_WRITE) {
       // for COW, we can only consider base files to initialize.
-      final List<Pair<String, HoodieBaseFile>> partitionBaseFilePairs = new ArrayList<>();
-      for (String partition : partitions) {
-        partitionBaseFilePairs.addAll(fsView.get().getLatestBaseFiles(partition)
-            .map(basefile -> Pair.of(partition, basefile)).collect(Collectors.toList()));
-      }
-
-      LOG.info("Initializing record index from {} base files in {} partitions",
-          partitionBaseFilePairs.size(), partitions.size());
+      final List<Pair<String, HoodieBaseFile>> partitionBaseFilePairs =
+          lazyPartitionFileSlicePairs.get().stream()
+              .filter(e -> e.getRight().getBaseFile().isPresent())
+              .map(e -> Pair.of(e.getLeft(), e.getRight().getBaseFile().get()))
+              .collect(Collectors.toList());
+      LOG.info("Initializing record index from {} base files", partitionBaseFilePairs.size());
 
       // Collect record keys from the files in parallel
       records = readRecordKeysFromBaseFiles(
@@ -114,16 +103,8 @@ public class RecordIndexer implements Indexer {
           engineContext.getStorageConf(),
           this.getClass().getSimpleName());
     } else {
-      final List<Pair<String, FileSlice>> partitionFileSlicePairs = new ArrayList<>();
-      String latestCommit = dataTableMetaClient.getActiveTimeline().filterCompletedAndCompactionInstants().lastInstant()
-          .map(instant -> instant.requestedTime()).orElse(SOLO_COMMIT_TIMESTAMP);
-      for (String partition : partitions) {
-        fsView.get().getLatestMergedFileSlicesBeforeOrOn(partition, latestCommit)
-            .forEach(fs -> partitionFileSlicePairs.add(Pair.of(partition, fs)));
-      }
-
-      LOG.info("Initializing record index from {} file slices in {} partitions",
-          partitionFileSlicePairs.size(), partitions.size());
+      final List<Pair<String, FileSlice>> partitionFileSlicePairs = lazyPartitionFileSlicePairs.get();
+      LOG.info("Initializing record index from {} file slices", partitionFileSlicePairs.size());
       records = readRecordKeysFromFileSliceSnapshot(
           engineContext,
           partitionFileSlicePairs,

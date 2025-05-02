@@ -94,9 +94,8 @@ public class ExpressionIndexer implements Indexer {
   public List<InitialIndexPartitionData> initialize(
       List<HoodieTableMetadataUtil.DirectoryInfo> partitionInfoList,
       Map<String, Map<String, Long>> partitionToFilesMap,
+      Lazy<List<Pair<String, FileSlice>>> lazyPartitionFileSliceList,
       String createInstantTime,
-      Lazy<HoodieTableFileSystemView> fsView,
-      HoodieBackedTableMetadata metadata,
       String instantTimeForPartition) throws IOException {
     if (expressionIndexPartitionsToInit.get().size() != 1) {
       if (expressionIndexPartitionsToInit.get().size() > 1) {
@@ -112,8 +111,7 @@ public class ExpressionIndexer implements Indexer {
     HoodieIndexDefinition indexDefinition = getIndexDefinition(dataTableMetaClient, indexName);
     ValidationUtils.checkState(indexDefinition != null,
         "Expression Index definition is not present for index " + indexName);
-    List<Pair<String, FileSlice>> partitionFileSlicePairs = Indexer.getPartitionFileSlicePairs(
-        dataTableMetaClient, metadata, fsView.get());
+    List<Pair<String, FileSlice>> partitionFileSlicePairs = lazyPartitionFileSliceList.get();
     List<ExpressionIndexRecordGenerator.FileToIndex> filesToIndex = new ArrayList<>();
     partitionFileSlicePairs.forEach(entry -> {
       if (entry.getValue().getBaseFile().isPresent()) {

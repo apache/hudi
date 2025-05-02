@@ -28,7 +28,6 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.Tuple3;
-import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.util.Lazy;
@@ -53,13 +52,13 @@ public interface Indexer {
   /**
    * Generates records for initializing the index.
    *
-   * @param partitionInfoList       list of directory information
-   * @param partitionToFilesMap     map of partition to files
-   * @param createInstantTime       instant time of the data table that the metadata table
-   *                                is initialized on
-   * @param fsView                  lazy file system view of the data table
-   * @param metadata                table metadata of the data table
-   * @param instantTimeForPartition instant time for initializing the metadata table partition
+   * @param partitionInfoList          list of directory information
+   * @param partitionToFilesMap        map of partition to files
+   * @param lazyPartitionFileSliceList lazily-evaluated list of file slices for the indexer
+   *                                   that needs it
+   * @param createInstantTime          instant time of the data table that the metadata table
+   *                                   is initialized on
+   * @param instantTimeForPartition    instant time for initializing the metadata table partition
    * @return a list of {@link InitialIndexPartitionData}, which each data item
    * representing the records to initialize a particular partition (note that
    * one index type can correspond to one or multiple partitions in the metadata
@@ -70,9 +69,8 @@ public interface Indexer {
   List<InitialIndexPartitionData> initialize(
       List<HoodieTableMetadataUtil.DirectoryInfo> partitionInfoList,
       Map<String, Map<String, Long>> partitionToFilesMap,
+      Lazy<List<Pair<String, FileSlice>>> lazyPartitionFileSliceList,
       String createInstantTime,
-      Lazy<HoodieTableFileSystemView> fsView,
-      HoodieBackedTableMetadata metadata,
       String instantTimeForPartition) throws IOException;
 
   /**

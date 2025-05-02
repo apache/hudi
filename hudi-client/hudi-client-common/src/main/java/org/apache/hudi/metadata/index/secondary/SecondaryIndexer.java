@@ -32,7 +32,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieFileSliceReader;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -41,7 +40,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.storage.HoodieIOFactory;
-import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.index.Indexer;
@@ -111,9 +109,8 @@ public class SecondaryIndexer implements Indexer {
   public List<InitialIndexPartitionData> initialize(
       List<HoodieTableMetadataUtil.DirectoryInfo> partitionInfoList,
       Map<String, Map<String, Long>> partitionToFilesMap,
+      Lazy<List<Pair<String, FileSlice>>> lazyPartitionFileSliceList,
       String createInstantTime,
-      Lazy<HoodieTableFileSystemView> fsView,
-      HoodieBackedTableMetadata metadata,
       String instantTimeForPartition) throws IOException {
     if (secondaryIndexPartitionsToInit.get().size() != 1) {
       if (secondaryIndexPartitionsToInit.get().size() > 1) {
@@ -127,8 +124,7 @@ public class SecondaryIndexer implements Indexer {
 
     HoodieIndexDefinition indexDefinition = getIndexDefinition(dataTableMetaClient, indexName);
     ValidationUtils.checkState(indexDefinition != null, "Secondary Index definition is not present for index " + indexName);
-    List<Pair<String, FileSlice>> partitionFileSlicePairs = Indexer.getPartitionFileSlicePairs(
-        dataTableMetaClient, metadata, fsView.get());
+    List<Pair<String, FileSlice>> partitionFileSlicePairs = lazyPartitionFileSliceList.get();
 
     int parallelism = Math.min(partitionFileSlicePairs.size(),
         dataTableWriteConfig.getMetadataConfig().getSecondaryIndexParallelism());

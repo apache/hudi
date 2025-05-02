@@ -27,11 +27,9 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.index.Indexer;
@@ -78,9 +76,8 @@ public class PartitionStatsIndexer implements Indexer {
   public List<InitialIndexPartitionData> initialize(
       List<HoodieTableMetadataUtil.DirectoryInfo> partitionInfoList,
       Map<String, Map<String, Long>> partitionToFilesMap,
+      Lazy<List<Pair<String, FileSlice>>> lazyPartitionFileSliceList,
       String createInstantTime,
-      Lazy<HoodieTableFileSystemView> fsView,
-      HoodieBackedTableMetadata metadata,
       String instantTimeForPartition) throws IOException {
     // For PARTITION_STATS, COLUMN_STATS should also be enabled
     if (!dataTableWriteConfig.isMetadataColumnStatsIndexEnabled()) {
@@ -89,8 +86,7 @@ public class PartitionStatsIndexer implements Indexer {
       return Collections.emptyList();
     }
     final int numFileGroup = dataTableWriteConfig.getMetadataConfig().getPartitionStatsIndexFileGroupCount();
-    List<Pair<String, FileSlice>> partitionFileSliceList =
-        Indexer.getPartitionFileSlicePairs(dataTableMetaClient, metadata, fsView.get());
+    List<Pair<String, FileSlice>> partitionFileSliceList = lazyPartitionFileSliceList.get();
     if (partitionFileSliceList.isEmpty()) {
       return Collections.singletonList(InitialIndexPartitionData.of(
           numFileGroup, PARTITION_STATS.getPartitionPath(), engineContext.emptyHoodieData()));
