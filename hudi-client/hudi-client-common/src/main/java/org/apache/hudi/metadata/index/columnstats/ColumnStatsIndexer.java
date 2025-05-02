@@ -82,7 +82,6 @@ public class ColumnStatsIndexer implements Indexer {
       String instantTimeForPartition) throws IOException {
 
     final int numFileGroup = dataTableWriteConfig.getMetadataConfig().getColumnStatsIndexFileGroupCount();
-    // TODO(yihua): Revisit to see to return -1
     if (partitionToFilesMap.isEmpty()) {
       return Collections.singletonList(InitialIndexPartitionData.of(
           numFileGroup, COLUMN_STATS.getPartitionPath(), engineContext.emptyHoodieData()));
@@ -95,11 +94,6 @@ public class ColumnStatsIndexer implements Indexer {
     }
 
     LOG.info("Indexing {} columns for column stats index", columnsToIndex.get().size());
-
-    if (partitionToFilesMap.isEmpty()) {
-      return Collections.singletonList(InitialIndexPartitionData.of(
-          numFileGroup, COLUMN_STATS.getPartitionPath(), engineContext.emptyHoodieData()));
-    }
 
     // during initialization, we need stats for base and log files.
     int maxReaderBufferSize = dataTableWriteConfig.getMetadataConfig().getMaxReaderBufferSize();
@@ -128,8 +122,6 @@ public class ColumnStatsIndexer implements Indexer {
 
   @Override
   public void updateTableConfig() {
-    // TODO(yihua): though this engine-independent, only Spark has implemented before this PR.
-    //  Revisit to make sure if that's intentional
     HoodieIndexDefinition indexDefinition = HoodieIndexDefinition.newBuilder()
         .withIndexName(PARTITION_NAME_COLUMN_STATS)
         .withIndexType(PARTITION_NAME_COLUMN_STATS)

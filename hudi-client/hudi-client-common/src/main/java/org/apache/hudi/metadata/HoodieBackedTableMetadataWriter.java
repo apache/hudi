@@ -459,8 +459,8 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     List<Indexer.InitialIndexPartitionData> initialIndexPartitionDataList;
     try {
       initialIndexPartitionDataList = indexer.initialize(
-          partitionInfoList, partitionToFilesMap, lazyPartitionFileSliceList, initializationTime,
-          Lazy.lazily(this::getMetadataView), metadata, instantTimeForPartition);
+          partitionInfoList, partitionToFilesMap, lazyPartitionFileSliceList,
+          initializationTime, instantTimeForPartition);
     } catch (Exception e) {
       String metricKey = partitionType.getPartitionPath() + "_" + HoodieMetadataMetrics.BOOTSTRAP_ERR_STR;
       metrics.ifPresent(m -> m.setMetric(metricKey, 1));
