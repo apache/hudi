@@ -28,28 +28,22 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieFileSliceReader;
-import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CollectionUtils;
-import org.apache.hudi.common.util.FileIOUtils;
-import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.index.Indexer;
-import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.Lazy;
 
@@ -66,11 +60,6 @@ import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.config.HoodieCommonConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES;
-import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED;
-import static org.apache.hudi.common.config.HoodieCommonConfig.MAX_MEMORY_FOR_COMPACTION;
-import static org.apache.hudi.common.config.HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE;
-import static org.apache.hudi.common.util.ConfigUtils.getReaderConfigs;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.createSecondaryIndexRecord;
 import static org.apache.hudi.metadata.HoodieMetadataWriteUtils.getIndexDefinition;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX;
@@ -80,6 +69,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getIndexPartition
 import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
 import static org.apache.hudi.metadata.MetadataPartitionType.SECONDARY_INDEX;
 import static org.apache.hudi.metadata.MetadataPartitionType.isNewSecondaryIndexDefinitionRequired;
+import static org.apache.hudi.metadata.SecondaryIndexRecordGenerationUtils.getFileSliceReader;
 import static org.apache.hudi.metadata.index.record.RecordIndexer.RECORD_INDEX_AVERAGE_RECORD_SIZE;
 
 /**
@@ -162,11 +152,12 @@ public class SecondaryIndexer implements Indexer {
         numFileGroup, secondaryIndexPartitionsToInit.get().iterator().next(), records));
   }
 
-  public static HoodieData<HoodieRecord> readSecondaryKeysFromFileSlices(HoodieEngineContext engineContext,
-                                                                         List<Pair<String, FileSlice>> partitionFileSlicePairs,
-                                                                         int secondaryIndexMaxParallelism,
-                                                                         String activeModule, HoodieTableMetaClient metaClient, EngineType engineType,
-                                                                         HoodieIndexDefinition indexDefinition) {
+  public static HoodieData<HoodieRecord> readSecondaryKeysFromFileSlices(
+      HoodieEngineContext engineContext,
+      List<Pair<String, FileSlice>> partitionFileSlicePairs,
+      int secondaryIndexMaxParallelism,
+      String activeModule, HoodieTableMetaClient metaClient, EngineType engineType,
+      HoodieIndexDefinition indexDefinition) {
     if (partitionFileSlicePairs.isEmpty()) {
       return engineContext.emptyHoodieData();
     }
@@ -198,53 +189,21 @@ public class SecondaryIndexer implements Indexer {
     });
   }
 
-  private static ClosableIterator<HoodieRecord> createSecondaryIndexGenerator(HoodieTableMetaClient metaClient,
-                                                                              EngineType engineType, List<String> logFilePaths,
-                                                                              Schema tableSchema, String partition,
-                                                                              Option<StoragePath> dataFilePath,
-                                                                              HoodieIndexDefinition indexDefinition,
-                                                                              String instantTime) throws Exception {
-    final String basePath = metaClient.getBasePath().toString();
-    final StorageConfiguration<?> storageConf = metaClient.getStorageConf();
-
-    HoodieRecordMerger recordMerger = HoodieRecordUtils.createRecordMerger(
-        basePath,
-        engineType,
-        Collections.emptyList(),
-        metaClient.getTableConfig().getRecordMergeStrategyId());
-
-    HoodieMergedLogRecordScanner mergedLogRecordScanner = HoodieMergedLogRecordScanner.newBuilder()
-        .withStorage(metaClient.getStorage())
-        .withBasePath(metaClient.getBasePath())
-        .withLogFilePaths(logFilePaths)
-        .withReaderSchema(tableSchema)
-        .withLatestInstantTime(instantTime)
-        .withReverseReader(false)
-        .withMaxMemorySizeInBytes(storageConf.getLong(MAX_MEMORY_FOR_COMPACTION.key(), DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES))
-        .withBufferSize(HoodieMetadataConfig.MAX_READER_BUFFER_SIZE_PROP.defaultValue())
-        .withSpillableMapBasePath(FileIOUtils.getDefaultSpillableMapBasePath())
-        .withPartition(partition)
-        .withOptimizedLogBlocksScan(storageConf.getBoolean("hoodie" + HoodieMetadataConfig.OPTIMIZED_LOG_BLOCKS_SCAN, false))
-        .withDiskMapType(storageConf.getEnum(SPILLABLE_DISK_MAP_TYPE.key(), SPILLABLE_DISK_MAP_TYPE.defaultValue()))
-        .withBitCaskDiskMapCompressionEnabled(storageConf.getBoolean(DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue()))
-        .withRecordMerger(recordMerger)
-        .withTableMetaClient(metaClient)
-        .build();
-
-    Option<HoodieFileReader> baseFileReader = Option.empty();
-    if (dataFilePath.isPresent()) {
-      baseFileReader = Option.of(HoodieIOFactory.getIOFactory(metaClient.getStorage()).getReaderFactory(recordMerger.getRecordType()).getFileReader(getReaderConfigs(storageConf), dataFilePath.get()));
-    }
-    HoodieFileSliceReader fileSliceReader = new HoodieFileSliceReader(baseFileReader, mergedLogRecordScanner, tableSchema, metaClient.getTableConfig().getPreCombineField(), recordMerger,
-        metaClient.getTableConfig().getProps(),
-        Option.empty(), Option.empty());
-    ClosableIterator<HoodieRecord> fileSliceIterator = ClosableIterator.wrap(fileSliceReader);
+  private static ClosableIterator<HoodieRecord> createSecondaryIndexGenerator(
+      HoodieTableMetaClient metaClient,
+      EngineType engineType, List<String> logFilePaths,
+      Schema tableSchema, String partition,
+      Option<StoragePath> dataFilePath,
+      HoodieIndexDefinition indexDefinition,
+      String instantTime) throws Exception {
     return new ClosableIterator<HoodieRecord>() {
+      private final HoodieFileSliceReader<HoodieRecord> fileSliceReader = getFileSliceReader(
+          metaClient, engineType, logFilePaths, tableSchema, partition, dataFilePath, instantTime);
       private HoodieRecord nextValidRecord;
 
       @Override
       public void close() {
-        fileSliceIterator.close();
+        fileSliceReader.close();
       }
 
       @Override
@@ -261,8 +220,8 @@ public class SecondaryIndexer implements Indexer {
         // NOTE: Delete record should not happen when initializing the secondary index i.e. when called from readSecondaryKeysFromFileSlices,
         // because from that call, we get the merged records as of some committed instant. So, delete records must have been filtered out.
         // Loop to find the next valid record or exhaust the iterator.
-        while (fileSliceIterator.hasNext()) {
-          HoodieRecord record = fileSliceIterator.next();
+        while (fileSliceReader.hasNext()) {
+          HoodieRecord record = fileSliceReader.next();
           String secondaryKey = getSecondaryKey(record);
           if (secondaryKey != null) {
             nextValidRecord = createSecondaryIndexRecord(

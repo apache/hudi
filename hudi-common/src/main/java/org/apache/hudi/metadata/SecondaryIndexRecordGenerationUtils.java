@@ -186,7 +186,7 @@ public class SecondaryIndexRecordGenerationUtils {
     return recordKeyToSecondaryKey;
   }
 
-  private static HoodieFileSliceReader getFileSliceReader(
+  public static HoodieFileSliceReader getFileSliceReader(
       HoodieTableMetaClient metaClient, EngineType engineType,
       List<String> logFilePaths, Schema tableSchema, String partition,
       Option<StoragePath> dataFilePath, String instantTime) throws IOException {
