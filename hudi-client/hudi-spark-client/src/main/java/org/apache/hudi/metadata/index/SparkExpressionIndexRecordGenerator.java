@@ -51,14 +51,11 @@ public class SparkExpressionIndexRecordGenerator implements ExpressionIndexRecor
   private static final Logger LOG = LoggerFactory.getLogger(SparkExpressionIndexRecordGenerator.class);
   private final HoodieEngineContext engineContext;
   private final HoodieWriteConfig dataTableWriteConfig;
-  private final HoodieWriteConfig metadataTableWriteConfig;
 
   public SparkExpressionIndexRecordGenerator(HoodieEngineContext engineContext,
-                                             HoodieWriteConfig dataTableWriteConfig,
-                                             HoodieWriteConfig metadataTableWriteConfig) {
+                                             HoodieWriteConfig dataTableWriteConfig) {
     this.engineContext = engineContext;
     this.dataTableWriteConfig = dataTableWriteConfig;
-    this.metadataTableWriteConfig = metadataTableWriteConfig;
   }
 
   @Override
@@ -78,7 +75,6 @@ public class SparkExpressionIndexRecordGenerator implements ExpressionIndexRecor
     HoodieSparkExpressionIndex.ExpressionIndexComputationMetadata expressionIndexComputationMetadata =
         SparkMetadataWriterUtils.getExprIndexRecords(filesToIndex, indexDefinition,
             metaClient, parallelism, readerSchema, instantTime, engineContext, dataTableWriteConfig,
-            metadataTableWriteConfig,
             Option.of(rangeMetadata ->
                 collectAndProcessExprIndexPartitionStatRecords(
                     rangeMetadata, true, Option.of(indexDefinition.getIndexName()))));

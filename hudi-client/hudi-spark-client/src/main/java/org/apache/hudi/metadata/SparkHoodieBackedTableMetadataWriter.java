@@ -63,7 +63,6 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.EAGER;
-import static org.apache.hudi.metadata.HoodieMetadataWriteUtils.createMetadataWriteConfig;
 import static org.apache.hudi.metadata.HoodieMetadataWriteUtils.getIndexDefinition;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getProjectedSchemaForExpressionIndex;
@@ -116,8 +115,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
                                        Option<String> inflightInstantTimestamp) {
     super(hadoopConf, writeConfig, failedWritesCleaningPolicy, engineContext,
         // TODO(yihua): revisit metadata write config
-        new SparkExpressionIndexRecordGenerator(engineContext, writeConfig, createMetadataWriteConfig(writeConfig,
-            failedWritesCleaningPolicy)),
+        new SparkExpressionIndexRecordGenerator(engineContext, writeConfig),
         inflightInstantTimestamp);
   }
 
@@ -208,8 +206,9 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     // In the partitionRecordsFunctionOpt function we merge the expression index records from the new files created in the commit metadata
     // with the expression index records from the unmodified files to get the new partition stat records
     HoodieSparkExpressionIndex.ExpressionIndexComputationMetadata expressionIndexComputationMetadata =
-        SparkMetadataWriterUtils.getExprIndexRecords(partitionFilePathPairs, indexDefinition, dataMetaClient, parallelism, readerSchema, instantTime, engineContext, dataWriteConfig,
-            partitionRecordsFunctionOpt);
+        SparkMetadataWriterUtils.getExprIndexRecords(
+            partitionFilePathPairs, indexDefinition, dataMetaClient, parallelism, readerSchema,
+            instantTime, engineContext, dataWriteConfig, partitionRecordsFunctionOpt);
     return expressionIndexComputationMetadata.getPartitionStatRecordsOption().isPresent()
         ? expressionIndexComputationMetadata.getExpressionIndexRecords().union(expressionIndexComputationMetadata.getPartitionStatRecordsOption().get())
         : expressionIndexComputationMetadata.getExpressionIndexRecords();
