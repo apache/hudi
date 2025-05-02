@@ -109,6 +109,7 @@ import static org.apache.hudi.hive.testutils.HiveTestUtil.hiveSyncProps;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_CONDITIONAL_SYNC;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_INCREMENTAL;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -987,6 +988,7 @@ public class TestHiveSyncTool {
     assertEquals(0, commentCnt, "hive schema field comment numbers should match the avro schema field doc numbers");
 
     hiveSyncProps.setProperty(HIVE_SYNC_COMMENT.key(), "true");
+    hiveSyncProps.setProperty(META_SYNC_INCREMENTAL.key(), "false");
     reInitHiveSyncClient();
     reSyncHiveTable();
     fieldSchemas = hiveClient.getMetastoreFieldSchemas(HiveTestUtil.TABLE_NAME);
