@@ -58,12 +58,14 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
   protected final HoodieSyncConfig config;
   protected final PartitionValueExtractor partitionValueExtractor;
   protected final HoodieTableMetaClient metaClient;
+  protected final ParquetTableSchemaResolver tableSchemaResolver;
   private static final String TEMP_SUFFIX = "_temp";
 
   public HoodieSyncClient(HoodieSyncConfig config, HoodieTableMetaClient metaClient) {
     this.config = config;
     this.partitionValueExtractor = ReflectionUtils.loadClass(config.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS));
     this.metaClient = Objects.requireNonNull(metaClient, "metaClient is null");
+    this.tableSchemaResolver = new ParquetTableSchemaResolver(metaClient);
   }
 
   public HoodieTimeline getActiveTimeline() {
@@ -98,7 +100,7 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
   @Override
   public MessageType getStorageSchema() {
     try {
-      return new ParquetTableSchemaResolver(metaClient).getTableParquetSchema();
+      return tableSchemaResolver.getTableParquetSchema();
     } catch (Exception e) {
       throw new HoodieSyncException("Failed to read schema from storage.", e);
     }
@@ -107,7 +109,7 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
   @Override
   public MessageType getStorageSchema(boolean includeMetadataField) {
     try {
-      return new ParquetTableSchemaResolver(metaClient).getTableParquetSchema(includeMetadataField);
+      return tableSchemaResolver.getTableParquetSchema(includeMetadataField);
     } catch (Exception e) {
       throw new HoodieSyncException("Failed to read schema from storage.", e);
     }
