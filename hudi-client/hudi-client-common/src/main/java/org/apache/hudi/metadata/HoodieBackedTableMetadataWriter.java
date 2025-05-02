@@ -276,7 +276,6 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
           .collect(Collectors.toMap(Function.identity(),
               type -> IndexerFactory.getIndexer(
                   type, engineContext, dataWriteConfig, dataMetaClient,
-                  // TODO(yihua): Revisit this to make sure we don't recreate table instance
                   Lazy.lazily(() -> getTable(dataWriteConfig, dataMetaClient)),
                   expressionIndexRecordGenerator))), inflightInstantTimestamp)) {
         LOG.error("Failed to initialize MDT from filesystem");
