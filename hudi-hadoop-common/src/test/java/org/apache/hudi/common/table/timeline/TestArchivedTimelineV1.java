@@ -447,6 +447,44 @@ public class TestArchivedTimelineV1 extends HoodieCommonTestHarness {
     assertDoesNotThrow(() -> readAndValidateArchivedFile(path, metaClient.getStorage()));
   }
 
+  public void testDuplicateTimestampDifferentActions() throws Exception {
+    // Two actions that share the very same commit time "30"
+    HoodieInstant commit30 = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "30");
+    HoodieInstant clean30  = new HoodieInstant(false, HoodieTimeline.CLEAN_ACTION,  "30");
+
+    HoodieInstant commit31 = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "31");
+
+    // Write them to a brand new archive log
+    Path archivePath = HoodieArchivedTimeline.getArchiveLogPath(metaClient.getArchivePath());
+    try (HoodieLogFormat.Writer writer = buildWriter(archivePath)) {
+      List<IndexedRecord> records = new ArrayList<>();
+      records.add(createArchivedMetaWrapper(commit30));
+      records.add(createArchivedMetaWrapper(clean30));
+      records.add(createArchivedMetaWrapper(commit31));
+      writeArchiveLog(writer, records);
+    }
+
+    // Build timeline (no filters), should read the new archive
+    HoodieArchivedTimeline dupTimeline = new HoodieArchivedTimeline(metaClient);
+    dupTimeline.loadCompletedInstantDetailsInMemory();
+
+    // Both actions for 30 are present (positive case)
+    assertTrue(dupTimeline.getInstantDetails(commit30).isPresent(),
+        "commit metadata for ts=30 must be loaded");
+    assertTrue(dupTimeline.getInstantDetails(clean30).isPresent(),
+        "clean metadata for ts=30 must be loaded");
+    assertFalse(Arrays.equals(dupTimeline.getInstantDetails(commit30).get(),
+        dupTimeline.getInstantDetails(clean30).get()),
+        "clean and commit metadata should have different payloads");
+
+    // For ts=31 we only archived COMMIT, so CLEAN must be absent (negative case)
+    HoodieInstant fakeClean31 = new HoodieInstant(false, HoodieTimeline.CLEAN_ACTION, "31");
+    assertTrue(dupTimeline.getInstantDetails(commit31).isPresent(),
+        "commit metadata for ts=31 must be loaded");
+    assertFalse(dupTimeline.getInstantDetails(fakeClean31).isPresent(),
+        "clean metadata for ts=31 must NOT be loaded");
+  }
+
   private void readAndValidateArchivedFile(String path, HoodieStorage storage) throws IOException {
     try (HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(
         storage, new HoodieLogFile(path), HoodieArchivedMetaEntry.getClassSchema())) {

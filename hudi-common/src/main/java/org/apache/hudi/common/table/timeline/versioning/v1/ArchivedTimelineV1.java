@@ -41,6 +41,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -58,7 +59,9 @@ public class ArchivedTimelineV1 extends BaseTimelineV1 implements HoodieArchived
   private static final String ACTION_STATE = "actionState";
   private static final String STATE_TRANSITION_TIME = "stateTransitionTime";
   private HoodieTableMetaClient metaClient;
-  private final Map<String, Map<HoodieInstant.State, byte[]>> readCommits = new HashMap<>();
+  // The first key is the timestamp -> multiple action types -> hoodie instant state and contents
+  private final Map<String, Map<String, Map<HoodieInstant.State, byte[]>>> 
+  readCommits = new HashMap<>();
   private final ArchivedTimelineLoaderV1 timelineLoader = new ArchivedTimelineLoaderV1();
 
   private static final Logger LOG = LoggerFactory.getLogger(org.apache.hudi.common.table.timeline.HoodieArchivedTimeline.class);
@@ -162,8 +165,12 @@ public class ArchivedTimelineV1 extends BaseTimelineV1 implements HoodieArchived
   }
 
   @Override
-  public Option<byte[]> getInstantDetails(HoodieInstant instant) {
-    return Option.ofNullable(readCommits.getOrDefault(instant.requestedTime(), new HashMap<>()).get(instant.getState()));
+public Option<byte[]> getInstantDetails(HoodieInstant instant) {
+    return Option.ofNullable(
+        readCommits
+            .getOrDefault(instant.getTimestamp(), Collections.emptyMap())
+            .getOrDefault(instant.getAction(), Collections.emptyMap())
+            .get(instant.getState()));
   }
 
   @Override
@@ -281,11 +288,11 @@ public class ArchivedTimelineV1 extends BaseTimelineV1 implements HoodieArchived
       getMetadataKey(hoodieInstant).map(key -> {
         Object actionData = record.get(key);
         if (actionData != null) {
-          this.readCommits.computeIfAbsent(instantTime, k -> new HashMap<>());
+          this.readCommits.computeIfAbsent(instantTime, k -> new HashMap<>()).computeIfAbsent(action, a -> new HashMap<>());
           if (action.equals(HoodieTimeline.COMPACTION_ACTION)) {
-            readCommits.get(instantTime).put(hoodieInstant.getState(), HoodieAvroUtils.avroToBytes((IndexedRecord) actionData));
+            readCommits.get(instantTime).get(action).put(hoodieInstant.getState(), HoodieAvroUtils.indexedRecordToBytes((IndexedRecord) actionData));
           } else {
-            readCommits.get(instantTime).put(hoodieInstant.getState(), actionData.toString().getBytes(StandardCharsets.UTF_8));
+            readCommits.get(instantTime).get(action).put(hoodieInstant.getState(), actionData.toString().getBytes(StandardCharsets.UTF_8));
           }
         }
         return null;
