@@ -335,7 +335,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
 
   public void commitCompaction(String compactionInstantTime, HoodieWriteMetadata<O> compactionWriteMetadata, Option<HoodieTable> tableOpt) {
     // dereferencing the write dag for compaction for the first time.
-    List<HoodieWriteStat> writeStats = processAndFetchHoodieWriteStats(compactionWriteMetadata);
+    List<HoodieWriteStat> writeStats = triggerWritesAndFetchWriteStats(compactionWriteMetadata);
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata(true);
     for (HoodieWriteStat stat : writeStats) {
       commitMetadata.addWriteStat(stat.getPartitionPath(), stat);
@@ -359,7 +359,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     completeCompaction(commitMetadata, table, compactionInstantTime);
   }
 
-  protected abstract List<HoodieWriteStat> processAndFetchHoodieWriteStats(HoodieWriteMetadata<O> writeMetadata);
+  protected abstract List<HoodieWriteStat> triggerWritesAndFetchWriteStats(HoodieWriteMetadata<O> writeMetadata);
 
   /**
    * Commit Compaction and track metrics.
@@ -395,7 +395,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
 
   public void commitLogCompaction(String compactionInstantTime, HoodieWriteMetadata<O> writeMetadata, Option<HoodieTable> tableOpt) {
     // dereferencing the write dag for log compaction for the first time.
-    List<HoodieWriteStat> writeStats = processAndFetchHoodieWriteStats(writeMetadata);
+    List<HoodieWriteStat> writeStats = triggerWritesAndFetchWriteStats(writeMetadata);
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata(true);
     for (HoodieWriteStat stat : writeStats) {
       commitMetadata.addWriteStat(stat.getPartitionPath(), stat);
@@ -538,7 +538,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
 
     // TODO : Where is shouldComplete used ?
     if (shouldComplete) {
-      completeClustering(clusteringMetadata, table, clusteringInstant);
+      commitClustering(clusteringMetadata, table, clusteringInstant);
     }
     return clusteringMetadata;
   }
@@ -578,11 +578,11 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     throw new HoodieIOException("Precommit validation not implemented for all engines yet");
   }
 
-  private void completeClustering(HoodieWriteMetadata<O> clusteringWriteMetadata,
-                                  HoodieTable table,
-                                  String clusteringCommitTime) {
+  private void commitClustering(HoodieWriteMetadata<O> clusteringWriteMetadata,
+                           HoodieTable table,
+                           String clusteringCommitTime) {
     // triggering the dag for the first time for clustering
-    List<HoodieWriteStat> writeStats = processAndFetchHoodieWriteStats(clusteringWriteMetadata);
+    List<HoodieWriteStat> writeStats = triggerWritesAndFetchWriteStats(clusteringWriteMetadata);
     clusteringWriteMetadata.setWriteStats(writeStats);
 
     HoodieClusteringPlan clusteringPlan = ClusteringUtils.getPendingClusteringPlan(table.getMetaClient(), clusteringCommitTime);
@@ -612,6 +612,14 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
               .map(hoodieWriteStat -> hoodieWriteStat.getRuntimeStats().getTotalCreateTime())
               .forEach(metrics::updateClusteringFileCreationMetrics));
     }
+
+    completeClustering(replaceCommitMetadata, writeStats, table, clusteringCommitTime);
+  }
+
+  private void completeClustering(HoodieReplaceCommitMetadata replaceCommitMetadata,
+                                  List<HoodieWriteStat> writeStats,
+                                  HoodieTable table,
+                                  String clusteringCommitTime) {
 
     handleWriteErrors(writeStats, TableServiceType.CLUSTER);
     final HoodieInstant clusteringInstant = ClusteringUtils.getInflightClusteringInstant(clusteringCommitTime,

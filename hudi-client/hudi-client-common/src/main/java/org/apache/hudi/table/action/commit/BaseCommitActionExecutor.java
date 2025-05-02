@@ -189,13 +189,13 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
     runPrecommitValidators(result);
   }
 
-  protected void completeCommit(HoodieWriteMetadata result) {
-    completeCommit(result, false);
+  protected void commitOnInternalAutoCommit(HoodieWriteMetadata result) {
+    commitOnInternalAutoCommit(result, false);
   }
 
-  protected void completeCommit(HoodieWriteMetadata result, boolean overrideCompleteCommit) {
+  protected void commitOnInternalAutoCommit(HoodieWriteMetadata result, boolean overrideInternalAutoCommit) {
     runPrecommitValidation(result);
-    if (config.shouldInternalAutoCommit() || overrideCompleteCommit) {
+    if (config.shouldInternalAutoCommit() || overrideInternalAutoCommit) {
       if (!this.txnManagerOption.isPresent()) {
         this.txnManagerOption = Option.of(new TransactionManager(config, table.getStorage()));
         initializeTransactionSupportingCast();

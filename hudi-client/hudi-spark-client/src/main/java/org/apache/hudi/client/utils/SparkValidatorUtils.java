@@ -38,7 +38,6 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.commit.BaseSparkCommitActionExecutor;
 import org.apache.hudi.util.JavaScalaConverters;
 
-import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
@@ -61,50 +60,6 @@ public class SparkValidatorUtils {
 
   /**
    * Check configured pre-commit validators and run them. Note that this only works for COW tables
-   *
-   * Throw error if there are validation failures.
-   */
-  public static void runValidators(String instantTime,
-                                   HoodieWriteMetadata<JavaRDD<WriteStatus>> writeMetadata,
-                                   HoodieWriteConfig config,
-                                   HoodieEngineContext context,
-                                   HoodieTable table) {
-    if (StringUtils.isNullOrEmpty(config.getPreCommitValidators())) {
-      LOG.info("no validators configured.");
-    } else {
-      if (!writeMetadata.getWriteStats().isPresent()) {
-        writeMetadata.setWriteStats(writeMetadata.getWriteStatuses().map(WriteStatus::getStat).collect());
-      }
-      runValidation(instantTime, writeMetadata, config, context, table);
-    }
-  }
-
-  private static void runValidation(String instantTime, HoodieWriteMetadata<?> writeMetadata, HoodieWriteConfig config, HoodieEngineContext context, HoodieTable table) {
-    Set<String> partitionsModified = writeMetadata.getWriteStats().get().stream().map(HoodieWriteStat::getPartitionPath).collect(Collectors.toSet());
-    SQLContext sqlContext = new SQLContext(HoodieSparkEngineContext.getSparkContext(context));
-    // Refresh timeline to ensure validator sees the any other operations done on timeline (async operations such as other clustering/compaction/rollback)
-    table.getMetaClient().reloadActiveTimeline();
-    Dataset<Row> afterState = getRecordsFromPendingCommits(sqlContext, partitionsModified, writeMetadata, table, instantTime);
-    Dataset<Row> beforeState = getRecordsFromCommittedFiles(sqlContext, partitionsModified, table, afterState.schema());
-
-    Stream<SparkPreCommitValidator> validators = Arrays.stream(config.getPreCommitValidators().split(","))
-        .map(validatorClass -> ((SparkPreCommitValidator) ReflectionUtils.loadClass(validatorClass,
-            new Class<?>[] {HoodieSparkTable.class, HoodieEngineContext.class, HoodieWriteConfig.class},
-            table, context, config)));
-
-    boolean allSuccess = validators.map(v -> runValidatorAsync(v, writeMetadata, beforeState, afterState, instantTime)).map(CompletableFuture::join)
-        .reduce(true, Boolean::logicalAnd);
-
-    if (allSuccess) {
-      LOG.info("All validations succeeded");
-    } else {
-      LOG.error("At least one pre-commit validation failed");
-      throw new HoodieValidationException("At least one pre-commit validation failed");
-    }
-  }
-
-  /**
-   * Check configured pre-commit validators and run them. Note that this only works for COW tables
    * <p>
    * Throw error if there are validation failures.
    */
@@ -119,7 +74,27 @@ public class SparkValidatorUtils {
       if (!writeMetadata.getWriteStats().isPresent()) {
         writeMetadata.setWriteStats(writeMetadata.getWriteStatuses().map(WriteStatus::getStat).collectAsList());
       }
-      runValidation(instantTime, writeMetadata, config, context, table);
+      Set<String> partitionsModified = writeMetadata.getWriteStats().get().stream().map(HoodieWriteStat::getPartitionPath).collect(Collectors.toSet());
+      SQLContext sqlContext = new SQLContext(HoodieSparkEngineContext.getSparkContext(context));
+      // Refresh timeline to ensure validator sees the any other operations done on timeline (async operations such as other clustering/compaction/rollback)
+      table.getMetaClient().reloadActiveTimeline();
+      Dataset<Row> afterState = getRecordsFromPendingCommits(sqlContext, partitionsModified, writeMetadata, table, instantTime);
+      Dataset<Row> beforeState = getRecordsFromCommittedFiles(sqlContext, partitionsModified, table, afterState.schema());
+
+      Stream<SparkPreCommitValidator> validators = Arrays.stream(config.getPreCommitValidators().split(","))
+          .map(validatorClass -> ((SparkPreCommitValidator) ReflectionUtils.loadClass(validatorClass,
+              new Class<?>[] {HoodieSparkTable.class, HoodieEngineContext.class, HoodieWriteConfig.class},
+              table, context, config)));
+
+      boolean allSuccess = validators.map(v -> runValidatorAsync(v, writeMetadata, beforeState, afterState, instantTime)).map(CompletableFuture::join)
+          .reduce(true, Boolean::logicalAnd);
+
+      if (allSuccess) {
+        LOG.info("All validations succeeded");
+      } else {
+        LOG.error("At least one pre-commit validation failed");
+        throw new HoodieValidationException("At least one pre-commit validation failed");
+      }
     }
   }
 
