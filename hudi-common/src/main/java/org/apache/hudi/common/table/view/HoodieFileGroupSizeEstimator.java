@@ -38,7 +38,16 @@ class HoodieFileGroupSizeEstimator implements SizeEstimator<List<HoodieFileGroup
       return 0;
     }
     long sizeOfFileGroupIds = ObjectSizeCalculator.getObjectSize(hoodieFileGroups.get(0).getFileGroupId()) * hoodieFileGroups.size();
-    long sizeOfFileSlices = ObjectSizeCalculator.getObjectSize(hoodieFileGroups.stream().flatMap(HoodieFileGroup::getAllFileSlices).collect(Collectors.toList()));
+    // only include the first 10 file slices to limit the cost of the size estimation when dealing with large partitions
+    long totalFileSlices = hoodieFileGroups.stream().flatMap(HoodieFileGroup::getAllFileSlices).count();
+    long sizeOfFileSlices;
+    if (totalFileSlices > 10) {
+      double samplingFactor = totalFileSlices / 10.0;
+      sizeOfFileSlices = Math.round(ObjectSizeCalculator.getObjectSize(hoodieFileGroups.stream().flatMap(HoodieFileGroup::getAllFileSlices)
+          .limit(10).collect(Collectors.toList())) * samplingFactor);
+    } else {
+      sizeOfFileSlices = ObjectSizeCalculator.getObjectSize(hoodieFileGroups.stream().flatMap(HoodieFileGroup::getAllFileSlices).collect(Collectors.toList()));
+    }
     return sizeOfFileSlices + sizeOfFileGroupIds;
   }
 }
