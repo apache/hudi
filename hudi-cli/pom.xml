@@ -24,6 +24,7 @@
   <modelVersion>4.0.0</modelVersion>
 
   <artifactId>hudi-cli</artifactId>
+  <version>${heapfork.label}-${heapfork.version}</version>
   <packaging>jar</packaging>
 
   <properties>
@@ -165,42 +166,42 @@
     <dependency>
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-common</artifactId>
-      <version>${project.version}</version>
+      <version>0.15.0</version>
       <scope>test</scope>
       <type>test-jar</type>
     </dependency>
     <dependency>
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-hadoop-common</artifactId>
-      <version>${project.version}</version>
+      <version>0.15.0</version>
       <scope>test</scope>
       <type>test-jar</type>
     </dependency>
     <dependency>
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-client-common</artifactId>
-      <version>${project.version}</version>
+      <version>0.15.0</version>
       <scope>test</scope>
       <type>test-jar</type>
     </dependency>
     <dependency>
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-spark-client</artifactId>
-      <version>${project.version}</version>
+      <version>0.15.0</version>
       <scope>test</scope>
       <type>test-jar</type>
     </dependency>
     <dependency>
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-spark_${scala.binary.version}</artifactId>
-      <version>${project.version}</version>
+      <version>0.15.0</version>
       <scope>test</scope>
       <type>test-jar</type>
     </dependency>
     <dependency>
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-utilities_${scala.binary.version}</artifactId>
-      <version>${project.version}</version>
+      <version>0.15.0</version>
       <scope>test</scope>
       <type>test-jar</type>
     </dependency>
@@ -317,7 +318,7 @@
     <dependency>
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-tests-common</artifactId>
-      <version>${project.version}</version>
+      <version>0.15.0</version>
       <scope>test</scope>
     </dependency>
   </dependencies>

@@ -132,7 +132,7 @@ public class SparkMain {
     }
   }
 
-  public static void main(String[] args) {
+  public static void main(String[] args) throws Exception {
     ValidationUtils.checkArgument(args.length >= 4);
     final String commandString = args[0];
     LOG.info("Invoking SparkMain: {}", commandString);
@@ -142,6 +142,7 @@ public class SparkMain {
         Option.of(args[1]), Option.of(args[2]));
 
     int returnCode = 0;
+    Exception exception = null;
     try {
       cmd.assertGtEq(args.length);
       List<String> configs = cmd.makeConfigs(args);
@@ -247,17 +248,20 @@ public class SparkMain {
         default:
           break;
       }
-    } catch (Exception exception) {
-      LOG.error("Fail to execute commandString", exception);
+    } catch (Exception e) {
+      LOG.error("Fail to execute commandString", e);
       returnCode = -1;
+      exception = e;
     } finally {
       jsc.stop();
     }
     if (!jsc.master().equals("yarn")) {
       System.exit(returnCode);
+    } else if (exception != null) {
+      throw exception;
     }
     if (returnCode != 0) {
-      throw new Error("Command failed with exitCode: " + returnCode);
+      throw new Error("Command failed with exitCode " + returnCode + ". Check application logs for details.");
     }
   }
 
