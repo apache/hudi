@@ -46,6 +46,7 @@ import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.data.CloseableIteratorListener;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.execution.bulkinsert.BulkInsertInternalPartitionerFactory;
@@ -339,7 +340,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
         }
       });
 
-      return new ConcatenatingIterator<>(recordIterators);
+      return CloseableIteratorListener.addListener(new ConcatenatingIterator<>(recordIterators));
     }));
   }
 
@@ -380,7 +381,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
             }
           });
 
-          return new ConcatenatingIterator<>(iteratorsForPartition);
+          return CloseableIteratorListener.addListener(new ConcatenatingIterator<>(iteratorsForPartition));
         }));
   }
 

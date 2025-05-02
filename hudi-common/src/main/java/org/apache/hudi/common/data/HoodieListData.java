@@ -119,10 +119,12 @@ public class HoodieListData<T> extends HoodieBaseListData<T> implements HoodieDa
   @Override
   public <O> HoodieData<O> mapPartitions(SerializableFunction<Iterator<T>, Iterator<O>> func, boolean preservesPartitioning) {
     Function<Iterator<T>, Iterator<O>> mapper = throwingMapWrapper(func);
+    Iterator<T> iterator = asStream().iterator();
+    Iterator<O> newIterator = mapper.apply(iterator);
     return new HoodieListData<>(
         StreamSupport.stream(
             Spliterators.spliteratorUnknownSize(
-                mapper.apply(asStream().iterator()), Spliterator.ORDERED), true),
+                newIterator, Spliterator.ORDERED), true).onClose(new IteratorCloser(newIterator)),
         lazy
     );
   }
@@ -130,18 +132,22 @@ public class HoodieListData<T> extends HoodieBaseListData<T> implements HoodieDa
   @Override
   public <O> HoodieData<O> flatMap(SerializableFunction<T, Iterator<O>> func) {
     Function<T, Iterator<O>> mapper = throwingMapWrapper(func);
-    Stream<O> mappedStream = asStream().flatMap(e ->
-        StreamSupport.stream(
-            Spliterators.spliteratorUnknownSize(mapper.apply(e), Spliterator.ORDERED), true));
+    Stream<O> mappedStream = asStream().flatMap(e -> {
+      Iterator<O> iterator = mapper.apply(e);
+      return StreamSupport.stream(
+          Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), true).onClose(new IteratorCloser(iterator));
+    });
     return new HoodieListData<>(mappedStream, lazy);
   }
 
   @Override
   public <K, V> HoodiePairData<K, V> flatMapToPair(SerializableFunction<T, Iterator<? extends Pair<K, V>>> func) {
     Function<T, Iterator<? extends Pair<K, V>>> mapper = throwingMapWrapper(func);
-    Stream<Pair<K, V>> mappedStream = asStream().flatMap(e ->
-        StreamSupport.stream(
-            Spliterators.spliteratorUnknownSize(mapper.apply(e), Spliterator.ORDERED), true));
+    Stream<Pair<K, V>> mappedStream = asStream().flatMap(e -> {
+      Iterator<? extends Pair<K, V>> iterator = mapper.apply(e);
+      return StreamSupport.stream(
+          Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), true).onClose(new IteratorCloser(iterator));
+    });
 
     return new HoodieListPairData<>(mappedStream, lazy);
   }
