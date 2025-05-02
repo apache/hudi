@@ -88,8 +88,9 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline implements Hoo
   private static final String ACTION_STATE = "actionState";
   private static final String STATE_TRANSITION_TIME = "stateTransitionTime";
   private HoodieTableMetaClient metaClient;
-  private final Map<String, Map<HoodieInstant.State, byte[]>> readCommits = new HashMap<>();
-
+  // The first key is the timestamp -> multiple action types -> hoodie instant state and contents
+  private final Map<String, Map<String, Map<HoodieInstant.State, byte[]>>> readCommits
+      = new HashMap<>();
   private static final Logger LOG = LoggerFactory.getLogger(HoodieArchivedTimeline.class);
 
   /**
@@ -230,7 +231,11 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline implements Hoo
 
   @Override
   public Option<byte[]> getInstantDetails(HoodieInstant instant) {
-    return Option.ofNullable(readCommits.getOrDefault(instant.getTimestamp(), Collections.emptyMap()).get(instant.getState()));
+    return Option.ofNullable(
+        readCommits
+            .getOrDefault(instant.getTimestamp(), Collections.emptyMap())
+            .getOrDefault(instant.getAction(), Collections.emptyMap())
+            .get(instant.getState()));
   }
 
   @Override
@@ -265,11 +270,11 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline implements Hoo
       getMetadataKey(hoodieInstant).map(key -> {
         Object actionData = record.get(key);
         if (actionData != null) {
-          this.readCommits.computeIfAbsent(instantTime, k -> new HashMap<>());
+          this.readCommits.computeIfAbsent(instantTime, k -> new HashMap<>()).computeIfAbsent(action, a -> new HashMap<>());
           if (action.equals(HoodieTimeline.COMPACTION_ACTION)) {
-            readCommits.get(instantTime).put(hoodieInstant.getState(), HoodieAvroUtils.indexedRecordToBytes((IndexedRecord) actionData));
+            readCommits.get(instantTime).get(action).put(hoodieInstant.getState(), HoodieAvroUtils.indexedRecordToBytes((IndexedRecord) actionData));
           } else {
-            readCommits.get(instantTime).put(hoodieInstant.getState(), actionData.toString().getBytes(StandardCharsets.UTF_8));
+            readCommits.get(instantTime).get(action).put(hoodieInstant.getState(), actionData.toString().getBytes(StandardCharsets.UTF_8));
           }
         }
         return null;
