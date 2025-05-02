@@ -27,22 +27,22 @@ import org.apache.hudi.common.model.OperationModeAwareness;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.avro.generic.GenericRecord;
 
+import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * A utility class for HoodieRecord.
  */
 public class HoodieRecordUtils {
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieRecordUtils.class);
-
   private static final Map<String, Object> INSTANCE_CACHE = new HashMap<>();
+  private static final Map<String, Constructor<?>> CONSTRUCTOR_CACHE = new ConcurrentHashMap<>();
 
   static {
     INSTANCE_CACHE.put(HoodieAvroRecordMerger.class.getName(), HoodieAvroRecordMerger.INSTANCE);
@@ -91,13 +91,16 @@ public class HoodieRecordUtils {
   /**
    * Instantiate a given class with an avro record payload.
    */
-  public static <T extends HoodieRecordPayload> T loadPayload(String recordPayloadClass,
-                                                              Object[] payloadArgs,
-                                                              Class<?>... constructorArgTypes) {
+  public static <T extends HoodieRecordPayload> T loadPayload(String recordPayloadClass, GenericRecord record, Comparable orderingValue) {
     try {
-      return (T) ReflectionUtils.getClass(recordPayloadClass).getConstructor(constructorArgTypes)
-          .newInstance(payloadArgs);
-    } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
+      return (T) CONSTRUCTOR_CACHE.computeIfAbsent(recordPayloadClass, key -> {
+        try {
+          return ReflectionUtils.getClass(recordPayloadClass).getConstructor(GenericRecord.class, Comparable.class);
+        } catch (NoSuchMethodException ex) {
+          throw new HoodieException("Unable to find constructor for payload class: " + recordPayloadClass, ex);
+        }
+      }).newInstance(record, orderingValue);
+    } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
       throw new HoodieException("Unable to instantiate payload class ", e);
     }
   }

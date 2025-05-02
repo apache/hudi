@@ -18,8 +18,6 @@
 
 package org.apache.hudi.common.util;
 
-import org.apache.avro.generic.GenericRecord;
-
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordMerger;
@@ -51,7 +49,7 @@ class TestHoodieRecordUtils {
   @Test
   void loadPayload() {
     String payloadClassName = DefaultHoodieRecordPayload.class.getName();
-    HoodieRecordPayload payload = HoodieRecordUtils.loadPayload(payloadClassName, new Object[] {null, 0}, GenericRecord.class, Comparable.class);
+    HoodieRecordPayload payload = HoodieRecordUtils.loadPayload(payloadClassName, null, 0);
     assertEquals(payload.getClass().getName(), payloadClassName);
   }
 }

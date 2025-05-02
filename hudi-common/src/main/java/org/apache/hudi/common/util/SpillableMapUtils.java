@@ -137,7 +137,7 @@ public class SpillableMapUtils {
     final String partitionPath = (partitionName.isPresent() ? partitionName.get() :
         record.get(recordKeyPartitionPathFieldPair.getRight()).toString());
 
-    Object preCombineVal = getPreCombineVal(record, preCombineField);
+    Comparable preCombineVal = getPreCombineVal(record, preCombineField);
     HoodieOperation operation = withOperationField
         ? HoodieOperation.fromName(getNullableValAsString(record, HoodieRecord.OPERATION_METADATA_FIELD)) : null;
 
@@ -151,8 +151,7 @@ public class SpillableMapUtils {
     }
 
     HoodieRecord<? extends HoodieRecordPayload> hoodieRecord = new HoodieAvroRecord<>(new HoodieKey(recKey, partitionPath),
-        HoodieRecordUtils.loadPayload(payloadClazz, new Object[] {record, preCombineVal}, GenericRecord.class,
-            Comparable.class), operation);
+        HoodieRecordUtils.loadPayload(payloadClazz, record, preCombineVal), operation);
 
     return (HoodieRecord<R>) hoodieRecord;
   }
@@ -164,20 +163,18 @@ public class SpillableMapUtils {
    * @param preCombineField The preCombine field name
    * @return the preCombine field value or 0 if the field does not exist in the avro schema
    */
-  private static Object getPreCombineVal(GenericRecord rec, String preCombineField) {
+  private static Comparable getPreCombineVal(GenericRecord rec, String preCombineField) {
     if (Strings.isNullOrEmpty(preCombineField)) {
       return 0;
     }
     Schema.Field field = rec.getSchema().getField(preCombineField);
-    return field == null ? 0 : rec.get(field.pos());
+    return field == null ? 0 : (Comparable) rec.get(field.pos());
   }
 
   /**
    * Utility method to convert bytes to HoodieRecord using schema and payload class.
    */
   public static <R> R generateEmptyPayload(String recKey, String partitionPath, Comparable orderingVal, String payloadClazz) {
-    HoodieRecord<? extends HoodieRecordPayload> hoodieRecord = new HoodieAvroRecord<>(new HoodieKey(recKey, partitionPath),
-        HoodieRecordUtils.loadPayload(payloadClazz, new Object[] {null, orderingVal}, GenericRecord.class, Comparable.class));
-    return (R) hoodieRecord;
+    return (R) new HoodieAvroRecord<>(new HoodieKey(recKey, partitionPath), HoodieRecordUtils.loadPayload(payloadClazz, null, orderingVal));
   }
 }

@@ -127,7 +127,6 @@ public class ExternalSpillableMap<T extends Serializable, R> implements Map<T, R
    * A custom iterator to wrap over iterating in-memory + disk spilled data.
    */
   public Iterator<R> iterator() {
-
     return diskBasedMap == null ? inMemoryMap.values().iterator() : new IteratorWrapper<>(inMemoryMap.values().iterator(), diskBasedMap.iterator());
   }
 
@@ -199,21 +198,20 @@ public class ExternalSpillableMap<T extends Serializable, R> implements Map<T, R
 
   @Override
   public R put(T key, R value) {
-    if (this.estimatedPayloadSize == 0) {
-      // At first, use the sizeEstimate of a record being inserted into the spillable map.
-      // Note, the converter may over-estimate the size of a record in the JVM
-      this.estimatedPayloadSize = keySizeEstimator.sizeEstimate(key) + valueSizeEstimator.sizeEstimate(value);
-    } else if (this.inMemoryMap.size() % NUMBER_OF_RECORDS_TO_ESTIMATE_PAYLOAD_SIZE == 0) {
-      this.estimatedPayloadSize = (long) (this.estimatedPayloadSize * 0.9 + (keySizeEstimator.sizeEstimate(key) + valueSizeEstimator.sizeEstimate(value)) * 0.1);
-      this.currentInMemoryMapSize = this.inMemoryMap.size() * this.estimatedPayloadSize;
-      if (this.inMemoryMap.size() / NUMBER_OF_RECORDS_TO_ESTIMATE_PAYLOAD_SIZE == 1) {
-        LOG.info(loggingContext + " : Updated Estimated Payload size {}", this.estimatedPayloadSize);
-      }
-    }
-
     if (this.inMemoryMap.containsKey(key)) {
       this.inMemoryMap.put(key, value);
     } else if (this.currentInMemoryMapSize < this.maxInMemorySizeInBytes) {
+      if (this.estimatedPayloadSize == 0) {
+        // At first, use the sizeEstimate of a record being inserted into the spillable map.
+        // Note, the converter may over-estimate the size of a record in the JVM
+        this.estimatedPayloadSize = keySizeEstimator.sizeEstimate(key) + valueSizeEstimator.sizeEstimate(value);
+      } else if (this.inMemoryMap.size() % NUMBER_OF_RECORDS_TO_ESTIMATE_PAYLOAD_SIZE == 0) {
+        this.estimatedPayloadSize = (long) (this.estimatedPayloadSize * 0.9 + (keySizeEstimator.sizeEstimate(key) + valueSizeEstimator.sizeEstimate(value)) * 0.1);
+        this.currentInMemoryMapSize = this.inMemoryMap.size() * this.estimatedPayloadSize;
+        if (this.inMemoryMap.size() / NUMBER_OF_RECORDS_TO_ESTIMATE_PAYLOAD_SIZE == 1) {
+          LOG.info(loggingContext + " : Updated Estimated Payload size {}", this.estimatedPayloadSize);
+        }
+      }
       this.currentInMemoryMapSize += this.estimatedPayloadSize;
       // Remove the old version of the record from disk first to avoid data duplication.
       if (inDiskContainsKey(key)) {
@@ -258,10 +256,12 @@ public class ExternalSpillableMap<T extends Serializable, R> implements Map<T, R
   }
 
   public void close() {
-    String diskBasedMapLog = diskBasedMap == null ? "No entries were spilled to disk. " : String.format("Total entries in diskBasedMap {} and rough size spilled to disk {}",
-        diskBasedMap.size(), (estimatedPayloadSize * diskBasedMap.size()));
-    LOG.info(loggingContext + " : Total entries in InMemory map {}, with average record size as {}, currentInMemoryMapSize {}. {}",
-        inMemoryMap.size(), estimatedPayloadSize, currentInMemoryMapSize, diskBasedMapLog);
+    if (!inMemoryMap.isEmpty()) {
+      String diskBasedMapLog = diskBasedMap == null ? "No entries were spilled to disk. " : String.format("Total entries in diskBasedMap %s and rough size spilled to disk %s",
+          diskBasedMap.size(), (estimatedPayloadSize * diskBasedMap.size()));
+      LOG.info("{} : Total entries in InMemory map {}, with average record size as {}, currentInMemoryMapSize {}. {}", loggingContext,
+          inMemoryMap.size(), estimatedPayloadSize, currentInMemoryMapSize, diskBasedMapLog);
+    }
     inMemoryMap.clear();
     if (diskBasedMap != null) {
       diskBasedMap.close();
