@@ -25,29 +25,28 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
-import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.metadata.index.FlinkExpressionIndexRecordGenerator;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.avro.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.EAGER;
 
@@ -59,7 +58,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
   public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf, HoodieWriteConfig writeConfig,
                                                  HoodieEngineContext context) {
-    return new FlinkHoodieBackedTableMetadataWriter(conf, writeConfig, EAGER, context, Option.empty());
+    return new FlinkHoodieBackedTableMetadataWriter(conf, writeConfig, EAGER, context, Option.empty(), Option.empty());
   }
 
   public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf,
@@ -67,24 +66,27 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
                                                  HoodieEngineContext context,
                                                  Option<String> inFlightInstantTimestamp) {
     return new FlinkHoodieBackedTableMetadataWriter(
-        conf, writeConfig, EAGER, context, inFlightInstantTimestamp);
+        conf, writeConfig, EAGER, context, Option.empty(), inFlightInstantTimestamp);
   }
 
   public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf,
                                                  HoodieWriteConfig writeConfig,
                                                  HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                                  HoodieEngineContext context,
+                                                 Option<Set<MetadataPartitionType>> partitionTypesOpt,
                                                  Option<String> inFlightInstantTimestamp) {
     return new FlinkHoodieBackedTableMetadataWriter(
-        conf, writeConfig, failedWritesCleaningPolicy, context, inFlightInstantTimestamp);
+        conf, writeConfig, failedWritesCleaningPolicy, context, partitionTypesOpt, inFlightInstantTimestamp);
   }
 
   FlinkHoodieBackedTableMetadataWriter(StorageConfiguration<?> storageConf,
                                        HoodieWriteConfig writeConfig,
                                        HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                        HoodieEngineContext engineContext,
+                                       Option<Set<MetadataPartitionType>> partitionTypesOpt,
                                        Option<String> inFlightInstantTimestamp) {
-    super(storageConf, writeConfig, failedWritesCleaningPolicy, engineContext, inFlightInstantTimestamp);
+    super(storageConf, writeConfig, failedWritesCleaningPolicy, engineContext,
+        partitionTypesOpt, new FlinkExpressionIndexRecordGenerator(), inFlightInstantTimestamp);
   }
 
   @Override
@@ -190,13 +192,6 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   @Override
   protected void preWrite(String instantTime) {
     metadataMetaClient.getActiveTimeline().transitionRequestedToInflight(HoodieActiveTimeline.DELTA_COMMIT_ACTION, instantTime);
-  }
-
-  @Override
-  protected HoodieData<HoodieRecord> getExpressionIndexRecords(List<Pair<String, Pair<String, Long>>> partitionFilePathAndSizeTriplet, HoodieIndexDefinition indexDefinition,
-                                                               HoodieTableMetaClient metaClient, int parallelism, Schema readerSchema, StorageConfiguration<?> storageConf,
-                                                               String instantTime) {
-    throw new HoodieNotSupportedException("Flink metadata table does not support expression index yet.");
   }
 
   @Override

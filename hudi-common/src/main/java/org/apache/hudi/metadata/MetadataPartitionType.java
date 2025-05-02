@@ -215,6 +215,11 @@ public enum MetadataPartitionType {
     }
 
     @Override
+    public boolean shouldUpdateIfAvailable(HoodieMetadataConfig metadataConfig) {
+      return isMetadataPartitionEnabled(metadataConfig);
+    }
+
+    @Override
     public void constructMetadataPayload(HoodieMetadataPayload payload, GenericRecord record) {
       GenericRecord secondaryIndexRecord = getNestedFieldValue(record, SCHEMA_FIELD_ID_SECONDARY_INDEX);
       checkState(secondaryIndexRecord != null, "Valid SecondaryIndexMetadata record expected for type: " + MetadataPartitionType.SECONDARY_INDEX.getRecordType());
@@ -231,6 +236,12 @@ public enum MetadataPartitionType {
     @Override
     public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig) {
       return metadataConfig.isPartitionStatsIndexEnabled();
+    }
+
+    @Override
+    public boolean isMetadataPartitionSupported(HoodieTableMetaClient metaClient) {
+      // Partition stats is supported for partitioned tables only
+      return metaClient.getTableConfig().isTablePartitioned();
     }
 
     @Override
@@ -354,6 +365,14 @@ public enum MetadataPartitionType {
    */
   public boolean isMetadataPartitionAvailable(HoodieTableMetaClient metaClient) {
     return metaClient.getTableConfig().isMetadataPartitionAvailable(this);
+  }
+
+  public boolean shouldUpdateIfAvailable(HoodieMetadataConfig metadataConfig) {
+    return true;
+  }
+
+  public boolean isMetadataPartitionSupported(HoodieTableMetaClient metaClient) {
+    return true;
   }
 
   MetadataPartitionType(final String partitionPath, final String fileIdPrefix, final int recordType) {

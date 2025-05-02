@@ -135,10 +135,10 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.StringUtils.toStringWithThreshold;
 import static org.apache.hudi.io.storage.HoodieSparkIOFactory.getHoodieSparkIOFactory;
 import static org.apache.hudi.metadata.HoodieTableMetadata.getMetadataTableBasePath;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.META_COL_SET_TO_INDEX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getLocationFromRecordIndexInfo;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getLogFileColumnRangeMetadata;
+import static org.apache.hudi.metadata.index.columnstats.ColumnStatsIndexer.META_COL_SET_TO_INDEX;
+import static org.apache.hudi.metadata.index.columnstats.ColumnStatsIndexer.getLogFileColumnRangeMetadata;
 
 /**
  * TODO: [HUDI-8294]

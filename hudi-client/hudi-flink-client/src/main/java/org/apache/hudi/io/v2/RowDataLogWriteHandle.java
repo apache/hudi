@@ -38,7 +38,7 @@ import org.apache.hudi.io.log.block.HoodieFlinkAvroDataBlock;
 import org.apache.hudi.io.log.block.HoodieFlinkParquetDataBlock;
 import org.apache.hudi.io.storage.ColumnRangeMetadataProvider;
 import org.apache.hudi.io.storage.row.HoodieFlinkIOFactory;
-import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+import org.apache.hudi.metadata.index.columnstats.ColumnStatsIndexer;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.commit.BucketType;
@@ -120,7 +120,7 @@ public class RowDataLogWriteHandle<T, I, K, O>
 
     // for parquet data block, we can get column stats from parquet footer directly.
     if (config.isMetadataColumnStatsIndexEnabled()) {
-      Set<String> columnsToIndexSet = new HashSet<>(HoodieTableMetadataUtil
+      Set<String> columnsToIndexSet = new HashSet<>(ColumnStatsIndexer
           .getColumnsToIndex(hoodieTable.getMetaClient().getTableConfig(),
               config.getMetadataConfig(), Lazy.eagerly(Option.of(writeSchemaWithMetaFields)),
               Option.of(HoodieRecord.HoodieRecordType.FLINK)).keySet());

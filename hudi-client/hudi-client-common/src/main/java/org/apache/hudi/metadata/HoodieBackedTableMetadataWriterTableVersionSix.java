@@ -21,8 +21,10 @@ package org.apache.hudi.metadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -33,17 +35,23 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.metadata.index.ExpressionIndexRecordGenerator;
+import org.apache.hudi.metadata.index.Indexer;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.convertFilesToFilesPartitionRecords;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.processRollbackMetadata;
 
 /**
  * HoodieBackedTableMetadataWriter for tables with version 6. The class derives most of the functionality from HoodieBackedTableMetadataWriter
@@ -72,10 +80,14 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I> extends 
                                                            HoodieWriteConfig writeConfig,
                                                            HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                                            HoodieEngineContext engineContext,
+                                                           Option<Set<MetadataPartitionType>> partitionTypesOpt,
+                                                           ExpressionIndexRecordGenerator indexHelper,
                                                            Option<String> inflightInstantTimestamp) {
-    super(storageConf, writeConfig, failedWritesCleaningPolicy, engineContext, inflightInstantTimestamp);
+    super(storageConf, writeConfig, failedWritesCleaningPolicy, engineContext, partitionTypesOpt, indexHelper, inflightInstantTimestamp);
   }
 
+  // TODO(yihua): move this filtering
+  /*
   @Override
   List<MetadataPartitionType> getEnabledPartitions(HoodieMetadataConfig metadataConfig, HoodieTableMetaClient metaClient) {
     return MetadataPartitionType.getEnabledPartitions(metadataConfig, metaClient).stream()
@@ -84,6 +96,7 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I> extends 
         .filter(partition -> !partition.equals(MetadataPartitionType.PARTITION_STATS))
         .collect(Collectors.toList());
   }
+  */
 
   @Override
   boolean shouldInitializeFromFilesystem(Set<String> pendingDataInstants, Option<String> inflightInstantTimestamp) {
@@ -212,7 +225,7 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I> extends 
       // a. any log files as part of RB commit metadata that was added
       // b. log files added by the commit in DT being rolled back. By rolled back, we mean, a rollback block will be added and does not mean it will be deleted.
       // both above list should only be added to FILES partition.
-      processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(engineContext, dataMetaClient, rollbackMetadata, instantTime));
+      processAndCommit(instantTime, () -> convertMetadataToRecords(engineContext, dataMetaClient, rollbackMetadata, instantTime));
 
       String rollbackInstantTime = createRollbackTimestamp(instantTime);
       if (deltacommitsSinceCompaction.containsInstant(deltaCommitInstant)) {
@@ -226,6 +239,35 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I> extends 
       }
       closeInternal();
     }
+  }
+
+  /**
+   * Convert rollback action metadata to metadata table records.
+   * <p>
+   * We only need to handle FILES partition here as HUDI rollbacks on MOR table may end up adding a new log file. All other partitions
+   * are handled by actual rollback of the deltacommit which added records to those partitions.
+   */
+  public static List<Indexer.IndexPartitionData> convertMetadataToRecords(
+      HoodieEngineContext engineContext, HoodieTableMetaClient dataTableMetaClient, HoodieRollbackMetadata rollbackMetadata, String instantTime) {
+
+    List<HoodieRecord> filesPartitionRecords = convertMetadataToRollbackRecords(rollbackMetadata, instantTime, dataTableMetaClient);
+    final HoodieData<HoodieRecord> rollbackRecordsRDD = filesPartitionRecords.isEmpty() ? engineContext.emptyHoodieData()
+        : engineContext.parallelize(filesPartitionRecords, filesPartitionRecords.size());
+
+    return Collections.singletonList(Indexer.IndexPartitionData.of(
+        MetadataPartitionType.FILES.getPartitionPath(), rollbackRecordsRDD));
+  }
+
+  /**
+   * Convert rollback action metadata to files partition records.
+   * Consider only new log files added.
+   */
+  private static List<HoodieRecord> convertMetadataToRollbackRecords(HoodieRollbackMetadata rollbackMetadata,
+                                                                     String instantTime,
+                                                                     HoodieTableMetaClient dataTableMetaClient) {
+    Map<String, Map<String, Long>> partitionToAppendedFiles = new HashMap<>();
+    processRollbackMetadata(rollbackMetadata, partitionToAppendedFiles);
+    return convertFilesToFilesPartitionRecords(Collections.emptyMap(), partitionToAppendedFiles, instantTime, "Rollback");
   }
 
   private void validateRollbackVersionSix(

@@ -27,7 +27,8 @@ import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
-import org.apache.hudi.metadata.{HoodieTableMetadata, HoodieTableMetadataUtil}
+import org.apache.hudi.metadata.HoodieTableMetadata
+import org.apache.hudi.metadata.index.columnstats.ColumnStatsIndexer.getColumnStatsValueAsString
 import org.apache.hudi.storage.StoragePath
 
 import org.apache.spark.internal.Logging
@@ -184,8 +185,8 @@ class ShowColumnStatsOverlapProcedure extends BaseProcedure with ProcedureBuilde
     colStatsRecords.collectAsList().asScala
       .filter(c => allFileNamesMap.keySet.contains(c.getFileName))
       .flatMap(c => {
-        val minValueOption = HoodieTableMetadataUtil.getColumnStatsValueAsString(c.getMinValue)
-        val maxValueOption = HoodieTableMetadataUtil.getColumnStatsValueAsString(c.getMaxValue)
+        val minValueOption = getColumnStatsValueAsString(c.getMinValue)
+        val maxValueOption = getColumnStatsValueAsString(c.getMaxValue)
         (minValueOption.isPresent, maxValueOption.isPresent) match {
           case (true, true) =>
             val fileName = allFileNamesMap.getOrElse(c.getFileName, c.getColumnName)

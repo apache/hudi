@@ -27,7 +27,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+import org.apache.hudi.metadata.index.columnstats.ColumnStatsIndexer;
 import org.apache.hudi.table.HoodieTable;
 
 import java.util.ArrayList;
@@ -60,7 +60,9 @@ public class HoodieColumnStatsIndexUtils {
       dataTable.getMetaClient().reloadTableConfig();
       try {
         // update data table's table config for list of columns indexed.
-        List<String> columnsToIndex = new ArrayList<>(HoodieTableMetadataUtil.getColumnsToIndex(commitMetadata, dataTable.getMetaClient(), config.getMetadataConfig(),
+        // TODO(yihua): replace this with indexer
+        List<String> columnsToIndex = new ArrayList<>(ColumnStatsIndexer.getColumnsToIndex(
+            commitMetadata, dataTable.getMetaClient(), config.getMetadataConfig(),
             Option.of(config.getRecordMerger().getRecordType())).keySet());
         // if col stats is getting updated, lets also update list of columns indexed if changed.
         updateColStatsFunc.apply(dataTable.getMetaClient(), columnsToIndex);

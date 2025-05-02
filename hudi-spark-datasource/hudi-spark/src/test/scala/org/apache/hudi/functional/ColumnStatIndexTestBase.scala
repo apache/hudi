@@ -29,8 +29,8 @@ import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.view.FileSystemViewManager
 import org.apache.hudi.config.HoodieCompactionConfig
 import org.apache.hudi.functional.ColumnStatIndexTestBase.{ColumnStatsTestCase, ColumnStatsTestParams}
-import org.apache.hudi.metadata.HoodieTableMetadataUtil
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS
+import org.apache.hudi.metadata.index.columnstats.ColumnStatsIndexer
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 import org.apache.hudi.testutils.{HoodieSparkClientTestBase, LogFileColStatsTestUtil}
@@ -297,7 +297,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
 
     val columnStatsIndex = new ColumnStatsIndexSupport(spark, localSourceTableSchema, metadataConfig, metaClient)
     val indexedColumnswithMeta: Set[String] = metaClient.getIndexMetadata.get().getIndexDefinitions.get(PARTITION_NAME_COLUMN_STATS).getSourceFields.asScala.toSet
-    val indexedColumns = indexedColumnswithMeta.filter(colName => !HoodieTableMetadataUtil.META_COL_SET_TO_INDEX.contains(colName))
+    val indexedColumns = indexedColumnswithMeta.filter(colName => !ColumnStatsIndexer.META_COL_SET_TO_INDEX.contains(colName))
     val sortedIndexedColumns : Set[String] = TreeSet(indexedColumns.toSeq:_*)
     val (expectedColStatsSchema, _) = composeIndexSchema(sortedIndexedColumns.toSeq, indexedColumns.toSeq, localSourceTableSchema)
 
@@ -339,7 +339,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
     val schemaUtil = new TableSchemaResolver(metaClient)
     val tableSchema = schemaUtil.getTableAvroSchema(false)
     val indexedColumnswithMeta: Set[String] = metaClient.getIndexMetadata.get().getIndexDefinitions.get(PARTITION_NAME_COLUMN_STATS).getSourceFields.asScala.toSet
-    val pIndexedColumns = indexedColumnswithMeta.filter(colName => !HoodieTableMetadataUtil.META_COL_SET_TO_INDEX.contains(colName))
+    val pIndexedColumns = indexedColumnswithMeta.filter(colName => !ColumnStatsIndexer.META_COL_SET_TO_INDEX.contains(colName))
       .toSeq.sorted
 
     val (pExpectedColStatsSchema, _) = composeIndexSchema(pIndexedColumns, pIndexedColumns, sourceTableSchema)

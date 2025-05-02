@@ -7,18 +7,20 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 
-package org.apache.hudi.metadata;
+package org.apache.hudi.metadata.index.secondary;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.EngineType;
@@ -26,11 +28,13 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieFileSliceReader;
@@ -41,15 +45,25 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieIndexException;
+import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieIOFactory;
+import org.apache.hudi.metadata.HoodieBackedTableMetadata;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+import org.apache.hudi.metadata.MetadataPartitionType;
+import org.apache.hudi.metadata.index.ExpressionIndexRecordGenerator;
+import org.apache.hudi.metadata.index.Indexer;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.util.Lazy;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -58,11 +72,13 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.HoodieCommonConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES;
@@ -71,16 +87,141 @@ import static org.apache.hudi.common.config.HoodieCommonConfig.MAX_MEMORY_FOR_CO
 import static org.apache.hudi.common.config.HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE;
 import static org.apache.hudi.common.util.ConfigUtils.getReaderConfigs;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.createSecondaryIndexRecord;
+import static org.apache.hudi.metadata.HoodieMetadataWriteUtils.getIndexDefinition;
+import static org.apache.hudi.metadata.HoodieMetadataWriteUtils.getPartitionFileSlicePairs;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.filePath;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartitionLatestFileSlicesIncludingInflight;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getSecondaryIndexPartitionsToInit;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.tryResolveSchemaForTable;
+import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
+import static org.apache.hudi.metadata.MetadataPartitionType.SECONDARY_INDEX;
+import static org.apache.hudi.metadata.index.partitionstats.PartitionStatsIndexer.getPartitionLatestFileSlicesIncludingInflight;
+import static org.apache.hudi.metadata.index.record.RecordIndexer.RECORD_INDEX_AVERAGE_RECORD_SIZE;
 
-/**
- * Utility methods for generating secondary index records during initialization and updates.
- */
-public class SecondaryIndexRecordGenerationUtils {
+public class SecondaryIndexer implements Indexer {
+  private static final Logger LOG = LoggerFactory.getLogger(SecondaryIndexer.class);
+  private final EngineType engineType;
+  private final HoodieEngineContext engineContext;
+  private final HoodieWriteConfig dataTableWriteConfig;
+  private final HoodieTableMetaClient dataTableMetaClient;
+  private final ExpressionIndexRecordGenerator indexHelper;
+  private final Lazy<Set<String>> secondaryIndexPartitionsToInit;
 
-  private static final Logger LOG = LoggerFactory.getLogger(SecondaryIndexRecordGenerationUtils.class);
+  public SecondaryIndexer(EngineType engineType,
+                          HoodieEngineContext engineContext,
+                          HoodieWriteConfig dataTableWriteConfig,
+                          HoodieTableMetaClient dataTableMetaClient,
+                          ExpressionIndexRecordGenerator indexHelper) {
+    this.engineType = engineType;
+    this.engineContext = engineContext;
+    this.dataTableWriteConfig = dataTableWriteConfig;
+    this.dataTableMetaClient = dataTableMetaClient;
+    this.indexHelper = indexHelper;
+    this.secondaryIndexPartitionsToInit = Lazy.lazily(() ->
+        getSecondaryIndexPartitionsToInit(
+            SECONDARY_INDEX, dataTableWriteConfig.getMetadataConfig(), dataTableMetaClient));
+  }
+
+  @Override
+  public List<InitialIndexPartitionData> build(
+      List<HoodieTableMetadataUtil.DirectoryInfo> partitionInfoList,
+      Map<String, Map<String, Long>> partitionToFilesMap,
+      String createInstantTime,
+      Lazy<HoodieTableFileSystemView> fsView,
+      HoodieBackedTableMetadata metadata,
+      String instantTimeForPartition) throws IOException {
+    if (secondaryIndexPartitionsToInit.get().size() != 1) {
+      if (secondaryIndexPartitionsToInit.get().size() > 1) {
+        LOG.warn("Skipping secondary index initialization as only one secondary index "
+                + "bootstrap at a time is supported for now. Provided: {}",
+            secondaryIndexPartitionsToInit.get());
+
+      }
+      return Collections.emptyList();
+    }
+    String indexName = secondaryIndexPartitionsToInit.get().iterator().next();
+
+    HoodieIndexDefinition indexDefinition = getIndexDefinition(dataTableMetaClient, indexName);
+    ValidationUtils.checkState(indexDefinition != null, "Secondary Index definition is not present for index " + indexName);
+    List<Pair<String, FileSlice>> partitionFileSlicePairs = getPartitionFileSlicePairs(
+        dataTableMetaClient, metadata, fsView.get());
+
+    int parallelism = Math.min(partitionFileSlicePairs.size(),
+        dataTableWriteConfig.getMetadataConfig().getSecondaryIndexParallelism());
+    HoodieData<HoodieRecord> records = readSecondaryKeysFromFileSlices(
+        engineContext,
+        partitionFileSlicePairs,
+        parallelism,
+        this.getClass().getSimpleName(),
+        dataTableMetaClient,
+        indexHelper.getEngineType(),
+        indexDefinition);
+
+    // Initialize the file groups - using the same estimation logic as that of record index
+    final int numFileGroup = HoodieTableMetadataUtil.estimateFileGroupCount(
+        RECORD_INDEX, records.count(), RECORD_INDEX_AVERAGE_RECORD_SIZE,
+        dataTableWriteConfig.getRecordIndexMinFileGroupCount(),
+        dataTableWriteConfig.getRecordIndexMaxFileGroupCount(),
+        dataTableWriteConfig.getRecordIndexGrowthFactor(),
+        dataTableWriteConfig.getRecordIndexMaxFileGroupSizeBytes());
+
+    return Collections.singletonList(InitialIndexPartitionData.of(
+        numFileGroup, secondaryIndexPartitionsToInit.get().iterator().next(), records));
+  }
+
+  @Override
+  public List<IndexPartitionData> update(String instantTime,
+                                         HoodieBackedTableMetadata tableMetadata,
+                                         Lazy<HoodieTableFileSystemView> lazyFileSystemView,
+                                         HoodieCommitMetadata commitMetadata) {
+    // If write operation type based on commit metadata is COMPACT or CLUSTER then no need to update,
+    // because these operations do not change the secondary key - record key mapping.
+    WriteOperationType operationType = commitMetadata.getOperationType();
+    if (operationType.isInsertOverwriteOrDeletePartition()
+        && MetadataPartitionType.SECONDARY_INDEX.isMetadataPartitionAvailable(dataTableMetaClient)) {
+      throw new HoodieIndexException(String.format("Can not perform operation %s on secondary index", operationType));
+    } else if (operationType == WriteOperationType.COMPACT || operationType == WriteOperationType.CLUSTER) {
+      return Collections.emptyList();
+    }
+
+    return dataTableMetaClient.getTableConfig().getMetadataPartitions()
+        .stream()
+        .filter(partition -> partition.startsWith(PARTITION_NAME_SECONDARY_INDEX_PREFIX))
+        .map(partition -> {
+          HoodieData<HoodieRecord> secondaryIndexRecords;
+          try {
+            secondaryIndexRecords = getSecondaryIndexUpdates(
+                lazyFileSystemView, commitMetadata, partition, instantTime);
+          } catch (Exception e) {
+            throw new HoodieMetadataException("Failed to get secondary index updates for partition " + partition, e);
+          }
+          return IndexPartitionData.of(partition, secondaryIndexRecords);
+        })
+        .collect(Collectors.toList());
+  }
+
+  @Override
+  public List<IndexPartitionData> clean(String instantTime, HoodieCleanMetadata cleanMetadata) {
+    return Collections.emptyList();
+  }
+
+  private HoodieData<HoodieRecord> getSecondaryIndexUpdates(Lazy<HoodieTableFileSystemView> lazyFileSystemView,
+                                                            HoodieCommitMetadata commitMetadata, String indexPartition, String instantTime) {
+    List<HoodieWriteStat> allWriteStats = commitMetadata.getPartitionToWriteStats().values().stream()
+        .flatMap(Collection::stream).collect(Collectors.toList());
+    // Return early if there are no write stats.
+    if (allWriteStats.isEmpty() || WriteOperationType.isCompactionOrClustering(commitMetadata.getOperationType())) {
+      return engineContext.emptyHoodieData();
+    }
+    HoodieIndexDefinition indexDefinition = getIndexDefinition(dataTableMetaClient, indexPartition);
+    // Load file system view for only the affected partitions on the driver.
+    // By loading on the driver one time, we avoid loading the same metadata multiple times on the executors.
+    HoodieTableFileSystemView fsView = lazyFileSystemView.get();
+    fsView.loadPartitions(new ArrayList<>(commitMetadata.getWritePartitionPaths()));
+    return convertWriteStatsToSecondaryIndexRecords(
+        allWriteStats, instantTime, indexDefinition, dataTableWriteConfig.getMetadataConfig(), fsView,
+        dataTableMetaClient, engineContext, engineType);
+  }
 
   /**
    * Converts the write stats to secondary index records.
