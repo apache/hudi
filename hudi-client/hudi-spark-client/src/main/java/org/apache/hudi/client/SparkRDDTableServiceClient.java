@@ -58,7 +58,7 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
   protected void runPrecommitValidators(HoodieWriteMetadata<JavaRDD<WriteStatus>> writeMetadata, HoodieTable table, String instantTime) {
     HoodieWriteMetadata<HoodieData<WriteStatus>> recreatedWriteMetadata = new HoodieWriteMetadata<>();
     if (writeMetadata.getWriteStats().isPresent()) {
-      writeMetadata.setWriteStats(writeMetadata.getWriteStats().get());
+      recreatedWriteMetadata.setWriteStats(writeMetadata.getWriteStats().get());
     }
     recreatedWriteMetadata.setPartitionToReplaceFileIds(writeMetadata.getPartitionToReplaceFileIds());
     SparkValidatorUtils.runValidators(config, recreatedWriteMetadata, context, table, instantTime);
