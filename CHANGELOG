@@ -737,3 +737,9 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 --- [2025-04-26 06:54:51] [release-v1.116.0] ---
 [ENG-26001][INTERNAL] Fix Archived Metadata Invalid Schema issue (#1337)
 [AUDIT-1071]: Changelog for release-v1.115.0 (#1341)
+
+--- [2025-05-02 06:44:36] [release-v1.117.0] ---
+[ENG-26001][INTERNAL] Allow for reading archived commits with duplicate action types (#1354)
+[ENG-26490][HUDI-9314] Reduce overhead for payload creation (#1351)
+[ENG-26491][HUDI-9219] Add callbacks for CloseableIterators and eager close data readers (#1352)
+[AUDIT-1332]: Changelog for release-v1.116.0 (#1343)
