@@ -44,7 +44,7 @@ public enum StorageSchemes {
   S3A("s3a", true, null, "org.apache.hudi.aws.transaction.lock.S3StorageLockClient"),
   S3("s3", true, null, "org.apache.hudi.aws.transaction.lock.S3StorageLockClient"),
   // Google Cloud Storage
-  GCS("gs", true, null, null),
+  GCS("gs", true, null, "org.apache.hudi.gcp.transaction.lock.GCSStorageLockClient"),
   // Azure WASB
   WASB("wasb", null, null, null),
   WASBS("wasbs", null, null, null),
