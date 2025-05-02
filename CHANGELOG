@@ -743,3 +743,8 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 [ENG-26490][HUDI-9314] Reduce overhead for payload creation (#1351)
 [ENG-26491][HUDI-9219] Add callbacks for CloseableIterators and eager close data readers (#1352)
 [AUDIT-1332]: Changelog for release-v1.116.0 (#1343)
+
+--- [2025-05-02 21:20:16] [release-v1.118.0] ---
+[ENG-23190][HUDI-9365] Reduce overhead of Hive and AWS Glue sync tools (#1353)
+[ENG-26490][HUDI-9364] Improve FileSystemView loading performance with large partitions (#1348)
+[AUDIT-1071]: Changelog for release-v1.117.0 (#1355)
