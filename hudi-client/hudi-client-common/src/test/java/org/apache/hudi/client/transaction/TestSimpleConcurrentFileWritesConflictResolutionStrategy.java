@@ -129,18 +129,14 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
 
   @Test
   public void testConcurrentWritesWithReplaceInflightCommit() throws Exception {
-    TestConflictResolutionStrategyUtil.createClusterInflight(metaClient.createNewInstantTime(), metaClient);
-    HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
+    String replaceInstant = metaClient.createNewInstantTime();
+    HoodieTestTable.of(metaClient).addRequestedReplace(replaceInstant, Option.empty());
+    TestConflictResolutionStrategyUtil.createClusterInflight(replaceInstant, metaClient);
     Option<HoodieInstant> lastSuccessfulInstant = Option.empty();
 
-    // writer 1 starts
     String currentWriterInstant = metaClient.createNewInstantTime();
     createInflightCommit(currentWriterInstant, metaClient);
     Option<HoodieInstant> currentInstant = Option.of(INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
-
-    // writer 2 starts and finishes
-    String newInstantTime = metaClient.createNewInstantTime();
-    TestConflictResolutionStrategyUtil.createClusterInflight(newInstantTime, metaClient);
 
     SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new SimpleConcurrentFileWritesConflictResolutionStrategy();
     HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant);
@@ -160,6 +156,33 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     } catch (HoodieWriteConflictException e) {
       // expected
     }
+  }
+
+  @Test
+  public void testConcurrentWritesWithClusteringInflightCommit() throws Exception {
+    // writer 1 starts
+    String currentWriterInstant = metaClient.createNewInstantTime();
+    createInflightCommit(currentWriterInstant, metaClient);
+    Option<HoodieInstant> currentInstant = Option.of(INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
+
+    String clusteringInstantTime = metaClient.createNewInstantTime();
+    createClusterRequested(clusteringInstantTime, metaClient);
+    Option<HoodieInstant> lastSuccessfulInstant = Option.empty();
+    HoodieTestTable.of(metaClient).addInflightReplace(clusteringInstantTime, Option.empty());
+
+    SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new SimpleConcurrentFileWritesConflictResolutionStrategy();
+    HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant);
+    metaClient.reloadActiveTimeline();
+
+    List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant.get(), lastSuccessfulInstant).collect(
+        Collectors.toList());
+
+    // writer 1 conflicts with writer 2
+    Assertions.assertEquals(1, candidateInstants.size());
+    ConcurrentOperation thatCommitOperation = new ConcurrentOperation(candidateInstants.get(0), metaClient);
+    ConcurrentOperation thisCommitOperation = new ConcurrentOperation(currentInstant.get(), currentMetadata);
+    Assertions.assertTrue(strategy.hasConflict(thisCommitOperation, thatCommitOperation));
+    Assertions.assertThrows(HoodieWriteConflictException.class, () -> strategy.resolveConflict(null, thisCommitOperation, thatCommitOperation));
   }
 
   @Test
