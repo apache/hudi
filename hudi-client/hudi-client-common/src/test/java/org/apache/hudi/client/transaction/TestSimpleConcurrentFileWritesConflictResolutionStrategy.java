@@ -40,7 +40,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.buildClusteringPlan;
+import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.buildRequestedReplaceMetadata;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createCluster;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createClusterRequested;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createCommit;
@@ -180,7 +180,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
   public void testConcurrentWritesWithLegacyClusteringInflightCommit() throws Exception {
     String clusteringInstantTime = metaClient.createNewInstantTime();
     // create a replace commit with a clustering operation to mimic a commit written by a v6 writer
-    HoodieTestTable.of(metaClient).addRequestedReplace(clusteringInstantTime, Option.of(buildClusteringPlan("file-1")));
+    HoodieTestTable.of(metaClient).addRequestedReplace(clusteringInstantTime, Option.of(buildRequestedReplaceMetadata("file-1", WriteOperationType.CLUSTER)));
     Option<HoodieInstant> lastSuccessfulInstant = Option.empty();
     HoodieTestTable.of(metaClient).addInflightReplace(clusteringInstantTime, Option.empty());
 

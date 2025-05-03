@@ -41,8 +41,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.hudi.common.testutils.HoodieTestUtils.COMMIT_METADATA_SER_DE;
-
 public class TestConflictResolutionStrategyUtil {
 
   public static void createCommit(String instantTime, HoodieTableMetaClient metaClient) throws Exception {
@@ -117,15 +115,15 @@ public class TestConflictResolutionStrategyUtil {
     String fileId2 = "file-2";
 
     // create replace instant to mark fileId1 as deleted
-    HoodieRequestedReplaceMetadata requestedReplaceMetadata = buildClusteringPlan(fileId1);
+    HoodieRequestedReplaceMetadata requestedReplaceMetadata = buildRequestedReplaceMetadata(fileId1, WriteOperationType.CLUSTER);
     HoodieTestTable.of(metaClient)
         .addRequestedCluster(instantTime, requestedReplaceMetadata)
         .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
   }
 
-  static HoodieRequestedReplaceMetadata buildClusteringPlan(String fileId1) {
+  static HoodieRequestedReplaceMetadata buildRequestedReplaceMetadata(String fileId1, WriteOperationType writeOperationType) {
     HoodieRequestedReplaceMetadata requestedReplaceMetadata = new HoodieRequestedReplaceMetadata();
-    requestedReplaceMetadata.setOperationType(WriteOperationType.CLUSTER.name());
+    requestedReplaceMetadata.setOperationType(writeOperationType.name());
     HoodieClusteringPlan clusteringPlan = new HoodieClusteringPlan();
     HoodieClusteringGroup clusteringGroup = new HoodieClusteringGroup();
     HoodieSliceInfo sliceInfo = new HoodieSliceInfo();
@@ -194,7 +192,7 @@ public class TestConflictResolutionStrategyUtil {
     replaceMetadata.addWriteStat(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, writeStat);
     replaceMetadata.setOperationType(writeOperationType);
     // create replace instant to mark fileId1 as deleted
-    HoodieRequestedReplaceMetadata requestedReplaceMetadata = buildClusteringPlan(fileId1);
+    HoodieRequestedReplaceMetadata requestedReplaceMetadata = buildRequestedReplaceMetadata(fileId1, WriteOperationType.INSERT_OVERWRITE);
     HoodieTestTable.of(metaClient)
         .addReplaceCommit(instantTime, Option.of(requestedReplaceMetadata), Option.empty(), replaceMetadata)
         .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
@@ -214,7 +212,7 @@ public class TestConflictResolutionStrategyUtil {
     replaceMetadata.addWriteStat(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, writeStat);
     replaceMetadata.setOperationType(writeOperationType);
     // create replace instant to mark fileId1 as deleted
-    HoodieRequestedReplaceMetadata requestedReplaceMetadata = buildClusteringPlan(fileId1);
+    HoodieRequestedReplaceMetadata requestedReplaceMetadata = buildRequestedReplaceMetadata(fileId1, writeOperationType);
     HoodieTestTable.of(metaClient)
         .addCluster(instantTime, requestedReplaceMetadata, Option.empty(), replaceMetadata)
         .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
@@ -224,26 +222,10 @@ public class TestConflictResolutionStrategyUtil {
     String fileId1 = "file-1";
     String fileId2 = "file-2";
     // create replace instant to mark fileId2 as deleted
-    HoodieRequestedReplaceMetadata requestedReplaceMetadata = buildClusteringPlan(fileId2);
+    HoodieRequestedReplaceMetadata requestedReplaceMetadata = buildRequestedReplaceMetadata(fileId2, writeOperationType);
     HoodieTestTable.of(metaClient)
         .addPendingCluster(instantTime, requestedReplaceMetadata, Option.empty())
         .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
-  }
-
-  public static void createCompleteReplace(String instantTime, WriteOperationType writeOperationType, HoodieTableMetaClient metaClient) throws Exception {
-    String fileId1 = "file-1";
-    String fileId2 = "file-2";
-
-    // create replace instant to mark fileId2 as deleted
-    HoodieReplaceCommitMetadata replaceMetadata = new HoodieReplaceCommitMetadata();
-    Map<String, List<String>> partitionFileIds = new HashMap<>();
-    partitionFileIds.put(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, Arrays.asList(fileId2));
-    replaceMetadata.setPartitionToReplaceFileIds(partitionFileIds);
-    HoodieWriteStat writeStat = new HoodieWriteStat();
-    writeStat.setFileId("file-2");
-    replaceMetadata.addWriteStat(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, writeStat);
-    replaceMetadata.setOperationType(writeOperationType);
-    FileCreateUtilsLegacy.createReplaceCommit(COMMIT_METADATA_SER_DE, metaClient.getBasePath().toString(), instantTime, replaceMetadata);
   }
 
   public static void createPendingCompaction(String instantTime, HoodieTableMetaClient metaClient) throws Exception {
