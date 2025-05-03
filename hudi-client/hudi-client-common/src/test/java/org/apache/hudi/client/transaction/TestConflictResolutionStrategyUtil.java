@@ -137,12 +137,7 @@ public class TestConflictResolutionStrategyUtil {
   }
 
   public static void createClusterInflight(String instantTime, HoodieTableMetaClient metaClient) throws Exception {
-    String fileId1 = "file-1";
-    String fileId2 = "file-2";
-
-    HoodieTestTable.of(metaClient)
-        .addInflightCluster(instantTime)
-        .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
+    HoodieTestTable.of(metaClient).addInflightCluster(instantTime);
   }
 
   public static void createReplaceInflight(String instantTime, HoodieTableMetaClient metaClient) throws Exception {

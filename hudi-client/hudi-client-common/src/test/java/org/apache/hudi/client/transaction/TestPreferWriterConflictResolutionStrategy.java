@@ -174,7 +174,7 @@ public class TestPreferWriterConflictResolutionStrategy extends HoodieCommonTest
     // clustering 1 gets scheduled
     String newInstantTime = metaClient.createNewInstantTime();
     createClusterRequested(newInstantTime, metaClient);
-    createClusterInflight(newInstantTime, WriteOperationType.CLUSTER, metaClient);
+    createClusterInflight(newInstantTime, metaClient);
 
     Option<HoodieInstant> currentInstant = Option.of(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
     PreferWriterConflictResolutionStrategy strategy = new PreferWriterConflictResolutionStrategy();
