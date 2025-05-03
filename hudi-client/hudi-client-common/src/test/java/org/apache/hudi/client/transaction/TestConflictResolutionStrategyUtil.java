@@ -136,14 +136,29 @@ public class TestConflictResolutionStrategyUtil {
     String fileId1 = "file-1";
     String fileId2 = "file-2";
 
-    HoodieReplaceCommitMetadata inflightReplaceMetadata = new HoodieReplaceCommitMetadata();
-    inflightReplaceMetadata.setOperationType(WriteOperationType.INSERT_OVERWRITE);
-    HoodieWriteStat writeStat = new HoodieWriteStat();
-    writeStat.setFileId("file-1");
-    inflightReplaceMetadata.addWriteStat(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, writeStat);
+    HoodieReplaceCommitMetadata inflightReplaceMetadata = buildReplaceCommitMetadata(WriteOperationType.CLUSTER);
     HoodieTestTable.of(metaClient)
         .addInflightCluster(instantTime, Option.of(inflightReplaceMetadata))
         .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
+  }
+
+  public static void createReplaceInflight(String instantTime, HoodieTableMetaClient metaClient) throws Exception {
+    String fileId1 = "file-1";
+    String fileId2 = "file-2";
+
+    HoodieReplaceCommitMetadata inflightReplaceMetadata = buildReplaceCommitMetadata(WriteOperationType.INSERT_OVERWRITE);
+    HoodieTestTable.of(metaClient)
+        .addInflightReplace(instantTime, Option.of(inflightReplaceMetadata))
+        .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
+  }
+
+  private static HoodieReplaceCommitMetadata buildReplaceCommitMetadata(WriteOperationType insertOverwrite) {
+    HoodieReplaceCommitMetadata inflightReplaceMetadata = new HoodieReplaceCommitMetadata();
+    inflightReplaceMetadata.setOperationType(insertOverwrite);
+    HoodieWriteStat writeStat = new HoodieWriteStat();
+    writeStat.setFileId("file-1");
+    inflightReplaceMetadata.addWriteStat(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, writeStat);
+    return inflightReplaceMetadata;
   }
 
   public static void createPendingInsertOverwrite(String instantTime, WriteOperationType writeOperationType, HoodieTableMetaClient metaClient) throws Exception {

@@ -129,14 +129,14 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
 
   @Test
   public void testConcurrentWritesWithReplaceInflightCommit() throws Exception {
-    String replaceInstant = metaClient.createNewInstantTime();
-    HoodieTestTable.of(metaClient).addRequestedReplace(replaceInstant, Option.empty());
-    TestConflictResolutionStrategyUtil.createClusterInflight(replaceInstant, metaClient);
-    Option<HoodieInstant> lastSuccessfulInstant = Option.empty();
-
     String currentWriterInstant = metaClient.createNewInstantTime();
     createInflightCommit(currentWriterInstant, metaClient);
     Option<HoodieInstant> currentInstant = Option.of(INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
+
+    String replaceInstant = metaClient.createNewInstantTime();
+    HoodieTestTable.of(metaClient).addRequestedReplace(replaceInstant, Option.empty());
+    TestConflictResolutionStrategyUtil.createReplaceInflight(replaceInstant, metaClient);
+    Option<HoodieInstant> lastSuccessfulInstant = Option.empty();
 
     SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new SimpleConcurrentFileWritesConflictResolutionStrategy();
     HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant);
@@ -168,7 +168,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     String clusteringInstantTime = metaClient.createNewInstantTime();
     createClusterRequested(clusteringInstantTime, metaClient);
     Option<HoodieInstant> lastSuccessfulInstant = Option.empty();
-    HoodieTestTable.of(metaClient).addInflightReplace(clusteringInstantTime, Option.empty());
+    HoodieTestTable.of(metaClient).addInflightCluster(clusteringInstantTime, Option.empty());
 
     SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new SimpleConcurrentFileWritesConflictResolutionStrategy();
     HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant);
@@ -372,7 +372,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
   }
 
   @Test
-  public void tstConcurrentWritesWithPendingInsertOverwriteReplace() throws Exception {
+  public void testConcurrentWritesWithPendingInsertOverwriteReplace() throws Exception {
     createCommit(metaClient.createNewInstantTime(), metaClient);
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     // consider commits before this are all successful

@@ -68,7 +68,7 @@ public class SimpleConcurrentFileWritesConflictResolutionStrategy
     Stream<HoodieInstant> compactionAndClusteringPendingTimeline = activeTimeline
         .filterPendingReplaceClusteringAndCompactionTimeline()
         .filter(instant -> ClusteringUtils.isClusteringInstant(activeTimeline, instant, metaClient.getInstantGenerator())
-            || (HoodieTimeline.COMPACTION_ACTION.equals(instant.getAction()) && compareTimestamps(instant.requestedTime(), GREATER_THAN, currentInstant.requestedTime())))
+            || (!HoodieTimeline.CLUSTERING_ACTION.equals(instant.getAction()) && compareTimestamps(instant.requestedTime(), GREATER_THAN, currentInstant.requestedTime())))
         .getInstantsAsStream();
     return Stream.concat(completedCommitsInstantStream, compactionAndClusteringPendingTimeline);
   }
