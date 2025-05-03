@@ -33,11 +33,13 @@ import org.apache.hudi.table.HoodieTable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
 import java.util.ConcurrentModificationException;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLUSTERING_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 
@@ -55,21 +57,24 @@ public class SimpleConcurrentFileWritesConflictResolutionStrategy
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
     // To find which instants are conflicting, we apply the following logic
     // 1. Get completed instants timeline only for commits that have happened since the last successful write.
-    // 2. Get any scheduled or completed compaction or clustering operations that have started and/or finished
-    // after the current instant. We need to check for write conflicts since they may have mutated the same files
-    // that are being newly created by the current write.
+    // 2. Get any scheduled or completed compaction that have started and/or finished after the current instant.
+    // 3. Get any completed replace commit that happened since the last successful write and any pending replace commit.
+    // We need to check for write conflicts since they may have mutated the same files that are being newly created by the current write.
     Stream<HoodieInstant> completedCommitsInstantStream = activeTimeline
         .getCommitsTimeline()
         .filterCompletedInstants()
         .findInstantsAfter(lastSuccessfulInstant.isPresent() ? lastSuccessfulInstant.get().getTimestamp() : HoodieTimeline.INIT_INSTANT_TS)
         .getInstantsAsStream();
 
-    Stream<HoodieInstant> compactionAndClusteringPendingTimeline = activeTimeline
-        .getTimelineOfActions(CollectionUtils.createSet(REPLACE_COMMIT_ACTION, COMPACTION_ACTION))
+    Stream<HoodieInstant> pendingCompactions = activeTimeline
+        .getTimelineOfActions(Collections.singleton(COMPACTION_ACTION))
         .findInstantsAfter(currentInstant.getTimestamp())
         .filterInflightsAndRequested()
         .getInstantsAsStream();
-    return Stream.concat(completedCommitsInstantStream, compactionAndClusteringPendingTimeline);
+    Stream<HoodieInstant> pendingClustering = activeTimeline.getTimelineOfActions(CollectionUtils.createSet(REPLACE_COMMIT_ACTION, CLUSTERING_ACTION))
+        .filterInflightsAndRequested()
+        .getInstantsAsStream();
+    return Stream.concat(completedCommitsInstantStream, Stream.concat(pendingCompactions, pendingClustering)).distinct();
   }
 
   @Override

@@ -52,6 +52,7 @@ public interface HoodieTimeline extends Serializable {
   String ROLLBACK_ACTION = "rollback";
   String SAVEPOINT_ACTION = "savepoint";
   String REPLACE_COMMIT_ACTION = "replacecommit";
+  String CLUSTERING_ACTION = "clustering";
   String INFLIGHT_EXTENSION = ".inflight";
   // With Async Compaction, compaction instant can be in 3 states :
   // (compaction-requested), (compaction-inflight), (completed)
