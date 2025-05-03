@@ -186,13 +186,21 @@ class Spark40LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
         null
       }
 
-      lazy val footerFileMetaData =
-        ParquetFooterReader.readFooter(sharedConf, filePath, SKIP_ROW_GROUPS).getFileMetaData
+      val fileFooter = if (enableVectorizedReader) {
+        // When there are vectorized reads, we can avoid reading the footer twice by reading
+        // all row groups in advance and filter row groups according to filters that require
+        // push down (no need to read the footer metadata again).
+        ParquetFooterReader.readFooter(sharedConf, file, ParquetFooterReader.WITH_ROW_GROUPS)
+      } else {
+        ParquetFooterReader.readFooter(sharedConf, file, ParquetFooterReader.SKIP_ROW_GROUPS)
+      }
+
+      val footerFileMetaData = fileFooter.getFileMetaData
+      val datetimeRebaseSpec = DataSourceUtils.datetimeRebaseSpec(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
+      val int96RebaseSpec = DataSourceUtils.int96RebaseSpec(footerFileMetaData.getKeyValueMetaData.get, int96RebaseModeInRead)
       // Try to push down filters when filter push-down is enabled.
       val pushed = if (enableParquetFilterPushDown) {
         val parquetSchema = footerFileMetaData.getSchema
-        val datetimeRebaseSpec =
-        DataSourceUtils.datetimeRebaseSpec(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
         val parquetFilters = new ParquetFilters(
           parquetSchema,
           pushDownDate,
@@ -266,10 +274,6 @@ class Spark40LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
       if (enableVectorizedReader) {
         val vectorizedReader =
           if (shouldUseInternalSchema) {
-            val int96RebaseSpec =
-              DataSourceUtils.int96RebaseSpec(footerFileMetaData.getKeyValueMetaData.get, int96RebaseModeInRead)
-            val datetimeRebaseSpec =
-              DataSourceUtils.datetimeRebaseSpec(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
             new Spark4HoodieVectorizedParquetRecordReader(
               convertTz.orNull,
               datetimeRebaseSpec.mode.toString,
@@ -280,10 +284,6 @@ class Spark40LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
               capacity,
               typeChangeInfos)
           } else {
-            val int96RebaseSpec =
-            DataSourceUtils.int96RebaseSpec(footerFileMetaData.getKeyValueMetaData.get, int96RebaseModeInRead)
-            val datetimeRebaseSpec =
-              DataSourceUtils.datetimeRebaseSpec(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
             new VectorizedParquetRecordReader(
               convertTz.orNull,
               datetimeRebaseSpec.mode.toString,
@@ -303,7 +303,7 @@ class Spark40LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
         // Instead, we use FileScanRDD's task completion listener to close this iterator.
         val iter = new RecordReaderIterator(vectorizedReader)
         try {
-          vectorizedReader.initialize(split, hadoopAttemptContext)
+          vectorizedReader.initialize(split, hadoopAttemptContext, Option.apply(fileFooter))
 
           // NOTE: We're making appending of the partitioned values to the rows read from the
           //       data file configurable
@@ -329,10 +329,6 @@ class Spark40LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
         }
       } else {
         logDebug(s"Falling back to parquet-mr")
-        val int96RebaseSpec =
-        DataSourceUtils.int96RebaseSpec(footerFileMetaData.getKeyValueMetaData.get, int96RebaseModeInRead)
-        val datetimeRebaseSpec =
-          DataSourceUtils.datetimeRebaseSpec(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
         val readSupport = new ParquetReadSupport(
           convertTz,
           enableVectorizedReader = false,
@@ -345,9 +341,10 @@ class Spark40LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
         } else {
           new ParquetRecordReader[InternalRow](readSupport)
         }
-        val iter = new RecordReaderIterator[InternalRow](reader)
+        val readerWithRowIndexes = ParquetRowIndexUtil.addRowIndexToRecordReaderIfNeeded(reader, requiredSchema)
+        val iter = new RecordReaderIterator[InternalRow](readerWithRowIndexes)
         try {
-          reader.initialize(split, hadoopAttemptContext)
+          readerWithRowIndexes.initialize(split, hadoopAttemptContext)
 
           val fullSchema = DataTypeUtils.toAttributes(requiredSchema) ++ DataTypeUtils.toAttributes(partitionSchema)
           val unsafeProjection = if (typeChangeInfos.isEmpty) {
