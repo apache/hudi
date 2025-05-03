@@ -204,9 +204,9 @@ public class HoodieListPairData<K, V> extends HoodieBaseListData<Pair<K, V>> imp
 
   @Override
   public HoodiePairData<K, V> union(HoodiePairData<K, V> other) {
-    List<Pair<K, V>> curList = collectAsList();
-    curList.addAll(other.collectAsList());
-    return HoodieListPairData.lazy(curList);
+    ValidationUtils.checkArgument(other instanceof HoodieListPairData);
+    Stream<Pair<K, V>> unionStream = Stream.concat(asStream(), ((HoodieListPairData<K, V>) other).asStream());
+    return new HoodieListPairData<>(unionStream, lazy);
   }
 
   @Override
