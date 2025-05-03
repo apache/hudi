@@ -376,8 +376,8 @@ public class HoodieTestTable implements AutoCloseable {
     return this;
   }
 
-  public HoodieTestTable addInflightCluster(String instantTime, Option<HoodieReplaceCommitMetadata> inflightReplaceMetadata) throws Exception {
-    createInflightClusterCommit(metaClient, metaClient.getCommitMetadataSerDe(), instantTime, inflightReplaceMetadata);
+  public HoodieTestTable addInflightCluster(String instantTime) throws Exception {
+    createInflightClusterCommit(metaClient, metaClient.getCommitMetadataSerDe(), instantTime, Option.empty());
     currentInstantTime = instantTime;
     return this;
   }

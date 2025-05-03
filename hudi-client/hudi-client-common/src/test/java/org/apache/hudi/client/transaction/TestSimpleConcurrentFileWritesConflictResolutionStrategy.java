@@ -42,6 +42,7 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.buildRequestedReplaceMetadata;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createCluster;
+import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createClusterInflight;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createClusterRequested;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createCommit;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createCommitMetadata;
@@ -159,7 +160,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     String clusteringInstantTime = metaClient.createNewInstantTime();
     createClusterRequested(clusteringInstantTime, metaClient);
     Option<HoodieInstant> lastSuccessfulInstant = Option.empty();
-    HoodieTestTable.of(metaClient).addInflightCluster(clusteringInstantTime, Option.empty());
+    createClusterInflight(clusteringInstantTime, metaClient);
 
     SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new SimpleConcurrentFileWritesConflictResolutionStrategy();
     HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant);
