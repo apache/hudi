@@ -184,17 +184,13 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
     throw new HoodieIOException("Precommit validation not implemented for all engines yet");
   }
 
-  protected void runPrecommitValidation(HoodieWriteMetadata result) {
-    // validate commit action before committing result
-    runPrecommitValidators(result);
-  }
-
   protected void commitOnInternalAutoCommit(HoodieWriteMetadata result) {
     commitOnInternalAutoCommit(result, false);
   }
 
   protected void commitOnInternalAutoCommit(HoodieWriteMetadata result, boolean overrideInternalAutoCommit) {
-    runPrecommitValidation(result);
+    // validate commit action before committing result
+    runPrecommitValidators(result);
     if (config.shouldInternalAutoCommit() || overrideInternalAutoCommit) {
       if (!this.txnManagerOption.isPresent()) {
         this.txnManagerOption = Option.of(new TransactionManager(config, table.getStorage()));
