@@ -1780,6 +1780,8 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
         spark.sql(s"create index idx_bloom_$tableName on $tableName using bloom_filters(city) options(expr='upper', " +
           s"${HoodieExpressionIndex.FALSE_POSITIVE_RATE}='0.01', ${HoodieExpressionIndex.BLOOM_FILTER_TYPE}='SIMPLE', ${HoodieExpressionIndex.BLOOM_FILTER_NUM_ENTRIES}='1000')")
         var metaClient = createMetaClient(spark, basePath)
+        val expectedInstantTime = metaClient.getCommitsTimeline
+          .filterCompletedInstants().lastInstant().get().requestedTime
         assertTrue(metaClient.getTableConfig.getMetadataPartitions.contains(s"expr_index_idx_bloom_$tableName"))
         assertTrue(metaClient.getIndexMetadata.isPresent)
         assertEquals(2, metaClient.getIndexMetadata.get.getIndexDefinitions.size())
@@ -1795,7 +1797,8 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
         val indexMetadata = indexMetadataDf.collect()
         indexMetadata.foreach(row => {
           val bloomFilterMetadata = row.getStruct(1)
-          assertTrue(bloomFilterMetadata.getString(0).equals("SIMPLE"))
+          assertEquals("SIMPLE", bloomFilterMetadata.getString(0))
+          assertEquals(expectedInstantTime, bloomFilterMetadata.getString(1))
         })
 
         // Pruning takes place only if query uses upper function on city
