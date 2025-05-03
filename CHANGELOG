@@ -748,3 +748,7 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 [ENG-23190][HUDI-9365] Reduce overhead of Hive and AWS Glue sync tools (#1353)
 [ENG-26490][HUDI-9364] Improve FileSystemView loading performance with large partitions (#1348)
 [AUDIT-1071]: Changelog for release-v1.117.0 (#1355)
+
+--- [2025-05-03 16:32:16] [release-v1.119.0] ---
+[ENG-26515][HUDI-9371] Fix conflict resolution handling of inflight clustering (#1357)
+[AUDIT-1071]: Changelog for release-v1.118.0 (#1356)
