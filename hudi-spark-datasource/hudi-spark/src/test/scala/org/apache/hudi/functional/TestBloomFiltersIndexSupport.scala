@@ -22,11 +22,14 @@ package org.apache.hudi.functional
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex}
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
+import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{FileSlice, HoodieTableType}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
+import org.apache.hudi.common.util.hash.{FileIndexID, PartitionIndexID}
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata}
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.{JavaConversions, JFunction}
 
@@ -35,7 +38,7 @@ import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, E
 import org.apache.spark.sql.functions.{col, not}
 import org.apache.spark.sql.types.StringType
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
-import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
 
@@ -211,10 +214,26 @@ class TestBloomFiltersIndexSupport extends HoodieSparkClientTestBase {
 
     assertTrue(rowArr.length > 0)
 
+    val bloomFilterMetadataMap = spark.read.format("hudi")
+      .load(HoodieTableMetadata.getMetadataTableBasePath(basePath))
+      .where("type = 4")
+      .select("key", "BloomFilterMetadata")
+      .collect()
+      .map(row => (row.get(0), row.getStruct(1)))
+      .toMap
+
     for (row <- rowArr) {
       val recordKey: String = row.getAs("_hoodie_record_key")
       val partitionPath: String = row.getAs("_hoodie_partition_path")
       val fileName: String = row.getAs("_hoodie_file_name")
+      val commitTime: String = FSUtils.getCommitTime(fileName)
+      val bloomFilterRecordKey = HoodieMetadataPayload.getBloomFilterIndexKey(
+        new PartitionIndexID(partitionPath), new FileIndexID(fileName))
+      // Validate bloom filter record in the metadata table
+      assertTrue(bloomFilterMetadataMap.contains(bloomFilterRecordKey))
+      assertEquals(commitTime, bloomFilterMetadataMap(bloomFilterRecordKey).get(1))
+
+      // Validate table metadata API fetching the bloom filter
       val bloomFilter = metadata.getBloomFilter(partitionPath, fileName)
       assertTrue(bloomFilter.isPresent, "BloomFilter should be present for " + fileName)
       assertTrue(bloomFilter.get().mightContain(recordKey))
