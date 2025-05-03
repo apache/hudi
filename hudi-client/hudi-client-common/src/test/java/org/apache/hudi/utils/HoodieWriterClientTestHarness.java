@@ -251,6 +251,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType).build())
         .withEmbeddedTimelineServerEnabled(true).withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withEnableBackupForRemoteFileSystemView(false) // Fail test if problem connecting to timeline-server
+            .withRemoteServerHost("localhost")
             .withRemoteServerPort(timelineServicePort).build())
         .withEmbeddedTimelineServerPort(timelineServicePort);
     if (StringUtils.nonEmpty(schemaStr)) {
