@@ -2055,7 +2055,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public String getBloomFilterType() {
-    return getString(HoodieStorageConfig.BLOOM_FILTER_TYPE);
+    return getStorageConfig().getBloomFilterType();
   }
 
   public int getDynamicBloomFilterMaxNumEntries() {
