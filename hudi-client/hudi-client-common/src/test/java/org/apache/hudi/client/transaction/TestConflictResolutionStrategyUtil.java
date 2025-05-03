@@ -36,6 +36,7 @@ import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.Option;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -116,6 +117,13 @@ public class TestConflictResolutionStrategyUtil {
     String fileId2 = "file-2";
 
     // create replace instant to mark fileId1 as deleted
+    HoodieRequestedReplaceMetadata requestedReplaceMetadata = buildClusteringPlan(fileId1);
+    HoodieTestTable.of(metaClient)
+        .addRequestedCluster(instantTime, requestedReplaceMetadata)
+        .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
+  }
+
+  static HoodieRequestedReplaceMetadata buildClusteringPlan(String fileId1) {
     HoodieRequestedReplaceMetadata requestedReplaceMetadata = new HoodieRequestedReplaceMetadata();
     requestedReplaceMetadata.setOperationType(WriteOperationType.CLUSTER.name());
     HoodieClusteringPlan clusteringPlan = new HoodieClusteringPlan();
@@ -123,13 +131,11 @@ public class TestConflictResolutionStrategyUtil {
     HoodieSliceInfo sliceInfo = new HoodieSliceInfo();
     sliceInfo.setFileId(fileId1);
     sliceInfo.setPartitionPath(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH);
-    clusteringGroup.setSlices(Arrays.asList(sliceInfo));
-    clusteringPlan.setInputGroups(Arrays.asList(clusteringGroup));
+    clusteringGroup.setSlices(Collections.singletonList(sliceInfo));
+    clusteringPlan.setInputGroups(Collections.singletonList(clusteringGroup));
     requestedReplaceMetadata.setClusteringPlan(clusteringPlan);
     requestedReplaceMetadata.setVersion(TimelineLayoutVersion.CURR_VERSION);
-    HoodieTestTable.of(metaClient)
-        .addRequestedCluster(instantTime, requestedReplaceMetadata)
-        .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
+    return requestedReplaceMetadata;
   }
 
   public static void createClusterInflight(String instantTime, HoodieTableMetaClient metaClient) throws Exception {
@@ -188,17 +194,7 @@ public class TestConflictResolutionStrategyUtil {
     replaceMetadata.addWriteStat(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, writeStat);
     replaceMetadata.setOperationType(writeOperationType);
     // create replace instant to mark fileId1 as deleted
-    HoodieRequestedReplaceMetadata requestedReplaceMetadata = new HoodieRequestedReplaceMetadata();
-    requestedReplaceMetadata.setOperationType(WriteOperationType.CLUSTER.name());
-    HoodieClusteringPlan clusteringPlan = new HoodieClusteringPlan();
-    HoodieClusteringGroup clusteringGroup = new HoodieClusteringGroup();
-    HoodieSliceInfo sliceInfo = new HoodieSliceInfo();
-    sliceInfo.setFileId(fileId1);
-    sliceInfo.setPartitionPath(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH);
-    clusteringGroup.setSlices(Arrays.asList(sliceInfo));
-    clusteringPlan.setInputGroups(Arrays.asList(clusteringGroup));
-    requestedReplaceMetadata.setClusteringPlan(clusteringPlan);
-    requestedReplaceMetadata.setVersion(TimelineLayoutVersion.CURR_VERSION);
+    HoodieRequestedReplaceMetadata requestedReplaceMetadata = buildClusteringPlan(fileId1);
     HoodieTestTable.of(metaClient)
         .addReplaceCommit(instantTime, Option.of(requestedReplaceMetadata), Option.empty(), replaceMetadata)
         .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
@@ -218,17 +214,7 @@ public class TestConflictResolutionStrategyUtil {
     replaceMetadata.addWriteStat(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, writeStat);
     replaceMetadata.setOperationType(writeOperationType);
     // create replace instant to mark fileId1 as deleted
-    HoodieRequestedReplaceMetadata requestedReplaceMetadata = new HoodieRequestedReplaceMetadata();
-    requestedReplaceMetadata.setOperationType(WriteOperationType.CLUSTER.name());
-    HoodieClusteringPlan clusteringPlan = new HoodieClusteringPlan();
-    HoodieClusteringGroup clusteringGroup = new HoodieClusteringGroup();
-    HoodieSliceInfo sliceInfo = new HoodieSliceInfo();
-    sliceInfo.setFileId(fileId1);
-    sliceInfo.setPartitionPath(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH);
-    clusteringGroup.setSlices(Arrays.asList(sliceInfo));
-    clusteringPlan.setInputGroups(Arrays.asList(clusteringGroup));
-    requestedReplaceMetadata.setClusteringPlan(clusteringPlan);
-    requestedReplaceMetadata.setVersion(TimelineLayoutVersion.CURR_VERSION);
+    HoodieRequestedReplaceMetadata requestedReplaceMetadata = buildClusteringPlan(fileId1);
     HoodieTestTable.of(metaClient)
         .addCluster(instantTime, requestedReplaceMetadata, Option.empty(), replaceMetadata)
         .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
@@ -238,17 +224,7 @@ public class TestConflictResolutionStrategyUtil {
     String fileId1 = "file-1";
     String fileId2 = "file-2";
     // create replace instant to mark fileId2 as deleted
-    HoodieRequestedReplaceMetadata requestedReplaceMetadata = new HoodieRequestedReplaceMetadata();
-    requestedReplaceMetadata.setOperationType(WriteOperationType.CLUSTER.name());
-    HoodieClusteringPlan clusteringPlan = new HoodieClusteringPlan();
-    HoodieClusteringGroup clusteringGroup = new HoodieClusteringGroup();
-    HoodieSliceInfo sliceInfo = new HoodieSliceInfo();
-    sliceInfo.setFileId(fileId2);
-    sliceInfo.setPartitionPath(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH);
-    clusteringGroup.setSlices(Arrays.asList(sliceInfo));
-    clusteringPlan.setInputGroups(Arrays.asList(clusteringGroup));
-    requestedReplaceMetadata.setClusteringPlan(clusteringPlan);
-    requestedReplaceMetadata.setVersion(TimelineLayoutVersion.CURR_VERSION);
+    HoodieRequestedReplaceMetadata requestedReplaceMetadata = buildClusteringPlan(fileId2);
     HoodieTestTable.of(metaClient)
         .addPendingCluster(instantTime, requestedReplaceMetadata, Option.empty())
         .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);

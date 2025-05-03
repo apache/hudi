@@ -40,7 +40,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
+import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.buildClusteringPlan;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createCluster;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createClusterRequested;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createCommit;
@@ -50,11 +50,12 @@ import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyU
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createCompleteCommit;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createCompleteCompaction;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createInflightCommit;
-import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createPendingCompaction;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createPendingCluster;
+import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createPendingCompaction;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createPendingInsertOverwrite;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createReplace;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createRequestedCommit;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 
 public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends HoodieCommonTestHarness {
 
@@ -115,16 +116,11 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant.get(), lastSuccessfulInstant).collect(
         Collectors.toList());
     // writer 1 conflicts with writer 2
-    Assertions.assertTrue(candidateInstants.size() == 1);
+    Assertions.assertEquals(1, candidateInstants.size());
     ConcurrentOperation thatCommitOperation = new ConcurrentOperation(candidateInstants.get(0), metaClient);
     ConcurrentOperation thisCommitOperation = new ConcurrentOperation(currentInstant.get(), currentMetadata);
     Assertions.assertTrue(strategy.hasConflict(thisCommitOperation, thatCommitOperation));
-    try {
-      strategy.resolveConflict(null, thisCommitOperation, thatCommitOperation);
-      Assertions.fail("Cannot reach here, writer 1 and writer 2 should have thrown a conflict");
-    } catch (HoodieWriteConflictException e) {
-      // expected
-    }
+    Assertions.assertThrows(HoodieWriteConflictException.class, () -> strategy.resolveConflict(null, thisCommitOperation, thatCommitOperation));
   }
 
   @Test
@@ -150,12 +146,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     ConcurrentOperation thatCommitOperation = new ConcurrentOperation(candidateInstants.get(0), metaClient);
     ConcurrentOperation thisCommitOperation = new ConcurrentOperation(currentInstant.get(), currentMetadata);
     Assertions.assertTrue(strategy.hasConflict(thisCommitOperation, thatCommitOperation));
-    try {
-      strategy.resolveConflict(null, thisCommitOperation, thatCommitOperation);
-      Assertions.fail("Cannot reach here, writer 1 and writer 2 should have thrown a conflict");
-    } catch (HoodieWriteConflictException e) {
-      // expected
-    }
+    Assertions.assertThrows(HoodieWriteConflictException.class, () -> strategy.resolveConflict(null, thisCommitOperation, thatCommitOperation));
   }
 
   @Test
@@ -169,6 +160,34 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     createClusterRequested(clusteringInstantTime, metaClient);
     Option<HoodieInstant> lastSuccessfulInstant = Option.empty();
     HoodieTestTable.of(metaClient).addInflightCluster(clusteringInstantTime, Option.empty());
+
+    SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new SimpleConcurrentFileWritesConflictResolutionStrategy();
+    HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant);
+    metaClient.reloadActiveTimeline();
+
+    List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant.get(), lastSuccessfulInstant).collect(
+        Collectors.toList());
+
+    // writer 1 conflicts with writer 2
+    Assertions.assertEquals(1, candidateInstants.size());
+    ConcurrentOperation thatCommitOperation = new ConcurrentOperation(candidateInstants.get(0), metaClient);
+    ConcurrentOperation thisCommitOperation = new ConcurrentOperation(currentInstant.get(), currentMetadata);
+    Assertions.assertTrue(strategy.hasConflict(thisCommitOperation, thatCommitOperation));
+    Assertions.assertThrows(HoodieWriteConflictException.class, () -> strategy.resolveConflict(null, thisCommitOperation, thatCommitOperation));
+  }
+
+  @Test
+  public void testConcurrentWritesWithLegacyClusteringInflightCommit() throws Exception {
+    String clusteringInstantTime = metaClient.createNewInstantTime();
+    // create a replace commit with a clustering operation to mimic a commit written by a v6 writer
+    HoodieTestTable.of(metaClient).addRequestedReplace(clusteringInstantTime, Option.of(buildClusteringPlan("file-1")));
+    Option<HoodieInstant> lastSuccessfulInstant = Option.empty();
+    HoodieTestTable.of(metaClient).addInflightReplace(clusteringInstantTime, Option.empty());
+
+    // writer 1 starts
+    String currentWriterInstant = metaClient.createNewInstantTime();
+    createInflightCommit(currentWriterInstant, metaClient);
+    Option<HoodieInstant> currentInstant = Option.of(INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
 
     SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new SimpleConcurrentFileWritesConflictResolutionStrategy();
     HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant);
@@ -205,16 +224,11 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant.get(), lastSuccessfulInstant).collect(
         Collectors.toList());
     // writer 1 conflicts with scheduled compaction plan 1
-    Assertions.assertTrue(candidateInstants.size() == 1);
+    Assertions.assertEquals(1, candidateInstants.size());
     ConcurrentOperation thatCommitOperation = new ConcurrentOperation(candidateInstants.get(0), metaClient);
     ConcurrentOperation thisCommitOperation = new ConcurrentOperation(currentInstant.get(), currentMetadata);
     Assertions.assertTrue(strategy.hasConflict(thisCommitOperation, thatCommitOperation));
-    try {
-      strategy.resolveConflict(null, thisCommitOperation, thatCommitOperation);
-      Assertions.fail("Cannot reach here, should have thrown a conflict");
-    } catch (HoodieWriteConflictException e) {
-      // expected
-    }
+    Assertions.assertThrows(HoodieWriteConflictException.class, () -> strategy.resolveConflict(null, thisCommitOperation, thatCommitOperation));
   }
 
   @Test
@@ -237,16 +251,11 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant.get(), lastSuccessfulInstant).collect(
         Collectors.toList());
     // writer 1 conflicts with compaction 1
-    Assertions.assertTrue(candidateInstants.size() == 1);
+    Assertions.assertEquals(1, candidateInstants.size());
     ConcurrentOperation thatCommitOperation = new ConcurrentOperation(candidateInstants.get(0), metaClient);
     ConcurrentOperation thisCommitOperation = new ConcurrentOperation(currentInstant.get(), currentMetadata);
     Assertions.assertTrue(strategy.hasConflict(thisCommitOperation, thatCommitOperation));
-    try {
-      strategy.resolveConflict(null, thisCommitOperation, thatCommitOperation);
-      Assertions.fail("Cannot reach here, should have thrown a conflict");
-    } catch (HoodieWriteConflictException e) {
-      // expected
-    }
+    Assertions.assertThrows(HoodieWriteConflictException.class, () -> strategy.resolveConflict(null, thisCommitOperation, thatCommitOperation));
   }
 
   /**
@@ -267,7 +276,6 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
 
     Option<HoodieInstant> currentInstant = Option.of(INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
     SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new SimpleConcurrentFileWritesConflictResolutionStrategy();
-    HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant);
     metaClient.reloadActiveTimeline();
     List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant.get(), lastSuccessfulInstant).collect(
         Collectors.toList());
@@ -299,12 +307,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     ConcurrentOperation thatCommitOperation = new ConcurrentOperation(candidateInstants.get(0), metaClient);
     ConcurrentOperation thisCommitOperation = new ConcurrentOperation(currentInstant.get(), currentMetadata);
     Assertions.assertTrue(strategy.hasConflict(thisCommitOperation, thatCommitOperation));
-    try {
-      strategy.resolveConflict(null, thisCommitOperation, thatCommitOperation);
-      Assertions.fail("Cannot reach here, should have thrown a conflict");
-    } catch (HoodieWriteConflictException e) {
-      // expected
-    }
+    Assertions.assertThrows(HoodieWriteConflictException.class, () -> strategy.resolveConflict(null, thisCommitOperation, thatCommitOperation));
   }
 
   @Test
@@ -327,16 +330,11 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant.get(), lastSuccessfulInstant).collect(
         Collectors.toList());
     // writer 1 conflicts with cluster 1
-    Assertions.assertTrue(candidateInstants.size() == 1);
+    Assertions.assertEquals(1, candidateInstants.size());
     ConcurrentOperation thatCommitOperation = new ConcurrentOperation(candidateInstants.get(0), metaClient);
     ConcurrentOperation thisCommitOperation = new ConcurrentOperation(currentInstant.get(), currentMetadata);
     Assertions.assertTrue(strategy.hasConflict(thisCommitOperation, thatCommitOperation));
-    try {
-      strategy.resolveConflict(null, thisCommitOperation, thatCommitOperation);
-      Assertions.fail("Cannot reach here, should have thrown a conflict");
-    } catch (HoodieWriteConflictException e) {
-      // expected
-    }
+    Assertions.assertThrows(HoodieWriteConflictException.class, () -> strategy.resolveConflict(null, thisCommitOperation, thatCommitOperation));
   }
 
   @Test
@@ -359,16 +357,11 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant.get(), lastSuccessfulInstant).collect(
         Collectors.toList());
     // writer 1 conflicts with replace 1
-    Assertions.assertTrue(candidateInstants.size() == 1);
+    Assertions.assertEquals(1, candidateInstants.size());
     ConcurrentOperation thatCommitOperation = new ConcurrentOperation(candidateInstants.get(0), metaClient);
     ConcurrentOperation thisCommitOperation = new ConcurrentOperation(currentInstant.get(), currentMetadata);
     Assertions.assertTrue(strategy.hasConflict(thisCommitOperation, thatCommitOperation));
-    try {
-      strategy.resolveConflict(null, thisCommitOperation, thatCommitOperation);
-      Assertions.fail("Cannot reach here, should have thrown a conflict");
-    } catch (HoodieWriteConflictException e) {
-      // expected
-    }
+    Assertions.assertThrows(HoodieWriteConflictException.class, () -> strategy.resolveConflict(null, thisCommitOperation, thatCommitOperation));
   }
 
   @Test
@@ -393,7 +386,10 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant.get(), lastSuccessfulInstant).collect(
         Collectors.toList());
     // writer 1 will not conflicts with insert_overwrite 1
-    Assertions.assertTrue(candidateInstants.size() == 0);
+    Assertions.assertEquals(1, candidateInstants.size());
+    ConcurrentOperation thatCommitOperation = new ConcurrentOperation(candidateInstants.get(0), metaClient);
+    ConcurrentOperation thisCommitOperation = new ConcurrentOperation(currentInstant.get(), currentMetadata);
+    Assertions.assertFalse(strategy.hasConflict(thisCommitOperation, thatCommitOperation));
   }
 
   // try to simulate HUDI-3355
@@ -445,10 +441,10 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     for (HoodieInstant instant : completedInstantsDuringCurrentWriteOperation) {
       ConcurrentOperation thatCommitOperation = new ConcurrentOperation(instant, metaClient);
       Assertions.assertTrue(strategy.hasConflict(thisCommitOperation, thatCommitOperation));
-      try {
-        strategy.resolveConflict(null, thisCommitOperation, thatCommitOperation);
-      } catch (HoodieWriteConflictException e) {
-        // expected
+      if (instant.requestedTime().equals(newCompactionInstantTimeC11)) {
+        Assertions.assertDoesNotThrow(() -> strategy.resolveConflict(null, thisCommitOperation, thatCommitOperation));
+      } else {
+        Assertions.assertThrows(HoodieWriteConflictException.class, () -> strategy.resolveConflict(null, thisCommitOperation, thatCommitOperation));
       }
     }
   }
