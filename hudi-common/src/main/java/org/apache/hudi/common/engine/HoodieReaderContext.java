@@ -368,6 +368,10 @@ public abstract class HoodieReaderContext<T> {
     }
   }
 
+  /**
+   * Returns the engine's record type
+   * @return a {@link HoodieRecord.HoodieRecordType}
+   */
   protected abstract HoodieRecord.HoodieRecordType getRecordType();
 
   /**

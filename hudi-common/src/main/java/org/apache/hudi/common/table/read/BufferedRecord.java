@@ -42,7 +42,7 @@ import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 public class BufferedRecord<T> implements Serializable {
   // the key of the record
   private final String recordKey;
-  // the ordering value of the record to be used for even time based ordering
+  // the ordering value of the record to be used for event time based ordering
   // this is in the engine specific type to ensure compatibility between log and base file data
   private final Comparable orderingValue;
   // the record itself in the engine specific type
