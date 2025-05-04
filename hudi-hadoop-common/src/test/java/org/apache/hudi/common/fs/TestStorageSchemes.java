@@ -41,7 +41,7 @@ public class TestStorageSchemes {
 
     for (StorageSchemes scheme : StorageSchemes.values()) {
       String schemeName = scheme.getScheme();
-      if (scheme.getScheme().startsWith("s3")) {
+      if (scheme.getScheme().startsWith("s3") || scheme.getScheme().startsWith("gs")) {
         assertTrue(StorageSchemes.getStorageLockImplementationIfExists(schemeName).isPresent());
       } else {
         assertFalse(StorageSchemes.getStorageLockImplementationIfExists(schemeName).isPresent());

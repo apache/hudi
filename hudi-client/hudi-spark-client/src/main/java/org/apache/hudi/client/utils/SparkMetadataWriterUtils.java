@@ -25,6 +25,7 @@ import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.EngineType;
@@ -206,10 +207,11 @@ public class SparkMetadataWriterUtils {
         : new ExpressionIndexComputationMetadata(colStatRecords);
   }
 
-  public static ExpressionIndexComputationMetadata getExpressionIndexRecordsUsingBloomFilter(Dataset<Row> dataset, String columnToIndex, HoodieWriteConfig metadataWriteConfig, String instantTime,
-                                                                                             HoodieIndexDefinition indexDefinition) {
+  public static ExpressionIndexComputationMetadata getExpressionIndexRecordsUsingBloomFilter(
+      Dataset<Row> dataset, String columnToIndex, HoodieStorageConfig storageConfig, String instantTime,
+      HoodieIndexDefinition indexDefinition) {
     String indexName = indexDefinition.getIndexName();
-    setBloomFilterProps(metadataWriteConfig, indexDefinition.getIndexOptions());
+    setBloomFilterProps(storageConfig, indexDefinition.getIndexOptions());
 
     // Group data using expression index metadata and then create bloom filter on the group
     Dataset<HoodieRecord> bloomFilterRecords = dataset.select(columnToIndex, SparkMetadataWriterUtils.getExpressionIndexColumnNames())
@@ -219,22 +221,22 @@ public class SparkMetadataWriterUtils {
           String partition = pair.getLeft().toString();
           String relativeFilePath = pair.getRight().toString();
           String fileName = FSUtils.getFileName(relativeFilePath, partition);
-          BloomFilter bloomFilter = HoodieFileWriterFactory.createBloomFilter(metadataWriteConfig);
+          BloomFilter bloomFilter = HoodieFileWriterFactory.createBloomFilter(storageConfig);
           iterator.forEachRemaining(row -> {
             byte[] key = row.getAs(columnToIndex).toString().getBytes();
             bloomFilter.add(key);
           });
           ByteBuffer bloomByteBuffer = ByteBuffer.wrap(getUTF8Bytes(bloomFilter.serializeToString()));
-          HoodieRecord bloomFilterRecord = createBloomFilterMetadataRecord(partition, fileName, instantTime, metadataWriteConfig.getBloomFilterType(), bloomByteBuffer, false, indexName);
+          HoodieRecord bloomFilterRecord = createBloomFilterMetadataRecord(partition, fileName, instantTime, storageConfig.getBloomFilterType(), bloomByteBuffer, false, indexName);
           return Collections.singletonList(bloomFilterRecord).iterator();
         }), Encoders.kryo(HoodieRecord.class));
     return new ExpressionIndexComputationMetadata(HoodieJavaRDD.of(bloomFilterRecords.javaRDD()));
   }
 
-  private static void setBloomFilterProps(HoodieWriteConfig metadataWriteConfig, Map<String, String> indexOptions) {
+  private static void setBloomFilterProps(HoodieStorageConfig storageConfig, Map<String, String> indexOptions) {
     BLOOM_FILTER_CONFIG_MAPPING.forEach((sourceKey, targetKey) -> {
       if (indexOptions.containsKey(sourceKey)) {
-        metadataWriteConfig.getProps().setProperty(targetKey, indexOptions.get(sourceKey));
+        storageConfig.getProps().setProperty(targetKey, indexOptions.get(sourceKey));
       }
     });
   }
@@ -305,16 +307,15 @@ public class SparkMetadataWriterUtils {
    * @param instantTime                     Instant time
    * @param engineContext                   HoodieEngineContext
    * @param dataWriteConfig                 Write Config for the data table
-   * @param metadataWriteConfig             Write config for the metadata table
    * @param partitionRecordsFunctionOpt     Function used to generate partition stat records for the EI. It takes the column range metadata generated for the provided partition files as input
    *                                        and uses those to generate the final partition stats
    * @return ExpressionIndexComputationMetadata containing both EI column stat records and partition stat records if partitionRecordsFunctionOpt is provided
    */
-  @SuppressWarnings("checkstyle:LineLength")
-  public static ExpressionIndexComputationMetadata getExprIndexRecords(List<Pair<String, Pair<String, Long>>> partitionFilePathAndSizeTriplet, HoodieIndexDefinition indexDefinition,
-                                                                       HoodieTableMetaClient metaClient, int parallelism, Schema readerSchema, String instantTime,
-                                                                       HoodieEngineContext engineContext, HoodieWriteConfig dataWriteConfig, HoodieWriteConfig metadataWriteConfig,
-                                                                       Option<Function<HoodiePairData<String, HoodieColumnRangeMetadata<Comparable>>, HoodieData<HoodieRecord>>> partitionRecordsFunctionOpt) {
+  public static ExpressionIndexComputationMetadata getExprIndexRecords(
+      List<Pair<String, Pair<String, Long>>> partitionFilePathAndSizeTriplet, HoodieIndexDefinition indexDefinition,
+      HoodieTableMetaClient metaClient, int parallelism, Schema readerSchema, String instantTime,
+      HoodieEngineContext engineContext, HoodieWriteConfig dataWriteConfig,
+      Option<Function<HoodiePairData<String, HoodieColumnRangeMetadata<Comparable>>, HoodieData<HoodieRecord>>> partitionRecordsFunctionOpt) {
     HoodieSparkEngineContext sparkEngineContext = (HoodieSparkEngineContext) engineContext;
     if (indexDefinition.getSourceFields().isEmpty()) {
       // In case there are no columns to index, bail
@@ -348,7 +349,8 @@ public class SparkMetadataWriterUtils {
     if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_COLUMN_STATS)) {
       return getExpressionIndexRecordsUsingColumnStats(rowDataset, expressionIndex, columnToIndex, partitionRecordsFunctionOpt);
     } else if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_BLOOM_FILTERS)) {
-      return getExpressionIndexRecordsUsingBloomFilter(rowDataset, columnToIndex, metadataWriteConfig, instantTime, indexDefinition);
+      return getExpressionIndexRecordsUsingBloomFilter(
+          rowDataset, columnToIndex, dataWriteConfig.getStorageConfig(), instantTime, indexDefinition);
     } else {
       throw new UnsupportedOperationException(indexDefinition.getIndexType() + " is not yet supported");
     }
