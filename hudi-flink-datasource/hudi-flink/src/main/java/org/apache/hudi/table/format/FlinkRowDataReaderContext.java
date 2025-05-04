@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.format;
 
+import org.apache.hudi.client.model.BootstrapRowData;
 import org.apache.hudi.client.model.CommitTimeFlinkRecordMerger;
 import org.apache.hudi.client.model.EventTimeFlinkRecordMerger;
 import org.apache.hudi.client.model.HoodieFlinkRecord;
@@ -192,6 +193,10 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
       ClosableIterator<RowData> dataFileIterator,
       Schema dataRequiredSchema,
       List<Pair<String, Object>> partitionFieldAndValues) {
+    Map<Integer, Object> partitionOrdinalToValues = partitionFieldAndValues.stream()
+        .collect(Collectors.toMap(
+            pair -> dataRequiredSchema.getField(pair.getKey()).pos(),
+            Pair::getValue));
     return new ClosableIterator<RowData>() {
       final JoinedRowData joinedRow = new JoinedRowData();
       @Override
@@ -206,10 +211,17 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
       @Override
       public RowData next() {
         RowData skeletonRow = skeletonFileIterator.next();
-        RowData dataRow = dataFileIterator.next();
+        RowData dataRow = appendPartitionFields(dataFileIterator.next());
         joinedRow.setRowKind(dataRow.getRowKind());
         joinedRow.replace(skeletonRow, dataRow);
         return joinedRow;
+      }
+
+      private RowData appendPartitionFields(RowData dataRow) {
+        if (partitionFieldAndValues.isEmpty()) {
+          return dataRow;
+        }
+        return new BootstrapRowData(dataRow, partitionOrdinalToValues);
       }
 
       @Override
