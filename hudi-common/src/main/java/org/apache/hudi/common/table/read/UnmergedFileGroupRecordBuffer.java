@@ -91,6 +91,11 @@ public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
   }
 
   @Override
+  public HoodieReadStats getStats() {
+    return readStats;
+  }
+
+  @Override
   public BufferType getBufferType() {
     return BufferType.UNMERGED;
   }
