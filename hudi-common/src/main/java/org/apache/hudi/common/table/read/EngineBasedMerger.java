@@ -44,6 +44,11 @@ import java.util.Objects;
 
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
 
+/**
+ * Handles the logic for merging two records in an engine agnostic way. This allows the Hudi project to consolidate the merging logic and avoid deviation between engines.
+ * The class takes in {@link HoodieReaderContext<T>} for the engine specific operations such as fetching the value representing the event time when {@link RecordMergeMode#EVENT_TIME_ORDERING} is used.
+ * @param <T> The type of the engine's row
+ */
 public class EngineBasedMerger<T> {
   private final HoodieReaderContext<T> readerContext;
   private final RecordMergeMode recordMergeMode;
