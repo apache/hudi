@@ -925,6 +925,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     return startCommit(metaClient.getCommitActionType(), metaClient);
   }
 
+  /**
+   * Provides a new commit time for the provided action.
+   */
   public String startCommit(String actionType) {
     HoodieTableMetaClient metaClient = createMetaClient(true);
     return startCommit(actionType, metaClient);
