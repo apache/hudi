@@ -185,15 +185,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
               val reader = new HoodieFileGroupReader[InternalRow](readerContext, new HoodieHadoopStorage(metaClient.getBasePath, storageConf), tablePath, queryTimestamp,
                 fileSlice, dataAvroSchema, requestedAvroSchema, internalSchemaOpt, metaClient, props, file.start, baseFileLength, shouldUseRecordPosition, false)
               reader.initRecordIterators()
-              // Append partition values to rows and project to output schema
-              appendPartitionAndProject(
-                reader.getClosableIterator,
-                requestedSchema,
-                remainingPartitionSchema,
-                outputSchema,
-                fileSliceMapping.getPartitionValues,
-                fixedPartitionIndexes)
-
+              projectSchema(reader.getClosableIterator, requestedSchema, outputSchema)
             case _ =>
               readBaseFile(file, parquetFileReader.value, requestedSchema, remainingPartitionSchema, fixedPartitionIndexes,
                 requiredSchema, partitionSchema, outputSchema, filters, storageConf)
@@ -238,29 +230,6 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
       cdcSchema,
       requiredSchema,
       props)
-  }
-
-  private def appendPartitionAndProject(iter: HoodieFileGroupReader.HoodieFileGroupReaderIterator[InternalRow],
-                                        inputSchema: StructType,
-                                        partitionSchema: StructType,
-                                        to: StructType,
-                                        partitionValues: InternalRow,
-                                        fixedPartitionIndexes: Set[Int]): Iterator[InternalRow] = {
-    if (partitionSchema.isEmpty) {
-      //'inputSchema' and 'to' should be the same so the projection will just be an identity func
-      projectSchema(iter, inputSchema, to)
-    } else {
-      val fixedPartitionValues = if (partitionSchema.length == partitionValues.numFields) {
-        //need to append all of the partition fields
-        partitionValues
-      } else {
-        //some partition fields read from file, some were not
-        getFixedPartitionValues(partitionValues, partitionSchema, fixedPartitionIndexes)
-      }
-      val unsafeProjection = generateUnsafeProjection(StructType(inputSchema.fields ++ partitionSchema.fields), to)
-      val joinedRow = new JoinedRow()
-      makeCloseableFileGroupMappingRecordIterator(iter, d => unsafeProjection(joinedRow(d, fixedPartitionValues)))
-    }
   }
 
   private def projectSchema(iter: HoodieFileGroupReader.HoodieFileGroupReaderIterator[InternalRow],
