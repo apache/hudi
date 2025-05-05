@@ -19,7 +19,7 @@ package org.apache.spark.sql.hudi.dml
 
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 import org.apache.hudi.avro.HoodieAvroUtils
-import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig}
+import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig, RecordMergeMode}
 import org.apache.hudi.common.model.{FileSlice, HoodieLogFile}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, HoodieTableVersion, TableSchemaResolver}
 import org.apache.hudi.common.table.log.HoodieLogFileReader
@@ -52,6 +52,10 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
 
   test("Test partial update with MOR and Parquet log format") {
     testPartialUpdate("mor", "parquet")
+  }
+
+  test("Test partial update with MOR and Parquet log format and commit time ordering") {
+    testPartialUpdate("mor", "parquet", commitTimeOrdering = true)
   }
 
   test("Test partial update and insert with COW and Avro log format") {
@@ -257,6 +261,12 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
 
   def testPartialUpdate(tableType: String,
                         logDataBlockFormat: String): Unit = {
+    testPartialUpdate(tableType, logDataBlockFormat, commitTimeOrdering = false)
+  }
+
+  def testPartialUpdate(tableType: String,
+                        logDataBlockFormat: String,
+                        commitTimeOrdering: Boolean): Unit = {
     withTempDir { tmp =>
       val tableName = generateTableName
       val basePath = tmp.getCanonicalPath + "/" + tableName
@@ -264,6 +274,11 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
       spark.sql(s"set ${DataSourceWriteOptions.ENABLE_MERGE_INTO_PARTIAL_UPDATES.key} = true")
       spark.sql(s"set ${HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key} = $logDataBlockFormat")
       spark.sql(s"set ${HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key} = true")
+      val mergeMode = if (commitTimeOrdering) {
+        RecordMergeMode.COMMIT_TIME_ORDERING.name()
+      } else {
+        RecordMergeMode.EVENT_TIME_ORDERING.name()
+      }
 
       // Create a table with five data fields
       spark.sql(
@@ -278,7 +293,8 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
            |tblproperties(
            | type ='$tableType',
            | primaryKey = 'id',
-           | preCombineField = '_ts'
+           | preCombineField = '_ts',
+           | recordMergeMode = '$mergeMode'
            |)
            |location '$basePath'
         """.stripMargin)
@@ -296,18 +312,27 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
       spark.sql(
         s"""
            |merge into $tableName t0
-           |using ( select 1 as id, 'a1' as name, 12.0 as price, 1001 as ts
+           |using ( select 1 as id, 'a1' as name, 12.0 as price, 999 as ts
            |union select 3 as id, 'a3' as name, 25.0 as price, 1260 as ts) s0
            |on t0.id = s0.id
            |when matched then update set price = s0.price, _ts = s0.ts
            |""".stripMargin)
 
       validateTableSchema(tableName, structFields)
-      checkAnswer(s"select id, name, price, _ts, description from $tableName")(
-        Seq(1, "a1", 12.0, 1001, "a1: desc1"),
-        Seq(2, "a2", 20.0, 1200, "a2: desc2"),
-        Seq(3, "a3", 25.0, 1260, "a3: desc3")
-      )
+      if (commitTimeOrdering) {
+        checkAnswer(s"select id, name, price, _ts, description from $tableName")(
+          Seq(1, "a1", 12.0,  999, "a1: desc1"),
+          Seq(2, "a2", 20.0, 1200, "a2: desc2"),
+          Seq(3, "a3", 25.0, 1260, "a3: desc3")
+        )
+      } else {
+        checkAnswer(s"select id, name, price, _ts, description from $tableName")(
+          Seq(1, "a1", 10.0, 1000, "a1: desc1"),
+          Seq(2, "a2", 20.0, 1200, "a2: desc2"),
+          Seq(3, "a3", 25.0, 1260, "a3: desc3")
+        )
+      }
+
 
       if (tableType.equals("mor")) {
         validateLogBlock(basePath, 1, Seq(Seq("price", "_ts")), true)
