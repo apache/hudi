@@ -102,6 +102,28 @@ class TestHoodieInternalRowUtils extends FunSuite with Matchers with BeforeAndAf
     assertEquals(serDe.deserializeRow(newRow), Row("Rob", 18, null.asInstanceOf[StructType], null.asInstanceOf[StringType], null.asInstanceOf[IntegerType]))
   }
 
+  test("Test rewriting with field value injections") {
+    val rowWithNull = Seq(
+      Row("Andrew", null, Row("Mission st", "SF"), "John", 19)
+    )
+    val oldRow = sparkSession.createDataFrame(sparkSession.sparkContext.parallelize(rowWithNull), mergedSchema).queryExecution.toRdd.first()
+
+    val updatedValuesMap: java.util.Map[Integer, Object] = JCollections.singletonMap(1, 18).asInstanceOf[java.util.Map[Integer, Object]]
+    val rowWriter = HoodieInternalRowUtils.genUnsafeRowWriter(mergedSchema, schema1, JCollections.emptyMap(), updatedValuesMap)
+    val newRow1 = rowWriter(oldRow)
+
+    val serDe = sparkAdapter.createSparkRowSerDe(schema1)
+    assertEquals(serDe.deserializeRow(newRow1), Row("Andrew", 18, Row("Mission st", "SF")));
+
+    // non-nul value should not be rewritten
+    val rowWithoutNull = Seq(
+      Row("Andrew", 25, Row("Mission st", "SF"), "John", 19)
+    )
+    val oldRow2 = sparkSession.createDataFrame(sparkSession.sparkContext.parallelize(rowWithoutNull), mergedSchema).queryExecution.toRdd.first()
+    val newRow2 = rowWriter(oldRow2)
+    assertEquals(serDe.deserializeRow(newRow2), Row("Andrew", 25, Row("Mission st", "SF")));
+  }
+
   /**
    * test record data type changes.
    * int => long/float/double/string
