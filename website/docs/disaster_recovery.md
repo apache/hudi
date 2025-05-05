@@ -120,7 +120,7 @@ Let's trigger a savepoint as of the latest commit.
 #### Using Hudi CLI
 
 1. Launch the Hudi CLI.
-2. Specify the SPARK_HOME if it not specified.
+2. Specify the SPARK_HOME if it's not specified.
 
 ```sh
 cd hudi-cli
@@ -231,7 +231,7 @@ spark.sql("select count(partitionpath, uuid) from  hudi_trips_snapshot").show()
 
 ### Restore
 
-Let's say something bad happened, and you want to restore your table to an older snapshot. We can perform restore operation via [Hudi CLI](/docs/cli) or [SQL Procedures](/docs/procedures). And do remember to bring down all of your writer processes while doing a restore.
+Let's say something bad happened, and you want to restore your table to an older snapshot. We can perform a restore operation via [Hudi CLI](/docs/cli) or [SQL Procedures](/docs/procedures). And do remember to bring down all of your writer processes while doing a restore.
 
 Let's checkout timeline once, before we trigger the restore.
 ```shell
@@ -270,7 +270,7 @@ drwxr-xr-x  2 nsb  wheel    64 Jan 28 16:00 archived
 #### Using Hudi CLI
 
 1. Launch the Hudi CLI or use the existing Hudi CLI.
-2. Specify the SPARK_HOME if it not specified.
+2. Specify the SPARK_HOME if it's not specified.
 
 ```shell
 cd hudi-cli
@@ -278,7 +278,7 @@ cd hudi-cli
 set --conf SPARK_HOME=<SPARK_HOME>
 ```
 
-3. Connect to the Hudi table using the specified table path for example `/tmp/hudi_trips_cow/`.
+3. Connect to the Hudi table using the specified table path, for example `/tmp/hudi_trips_cow/`.
 4. Execute the `refresh` command to update the table state to its latest version.
 5. Run the `savepoints show` command to display the all savepoints.
 6. Run the `savepoint rollback` specifying the savepoint **instant_time** to perform the rollback.
@@ -317,7 +317,7 @@ spark-sql --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:$HUDI_
 ```
 
 2. Run the `show_savepoints` command to display all the savepoints from the table.
-3. Run the `rollback_to_savepoint` command by specifing the savepoint **instant_time** to rollback.
+3. Run the `rollback_to_savepoint` command by specifying the savepoint **instant_time** to rollback.
 4. (Optional) Run the `delete_savepoint` command to delete the savepoint **instant_time** from the existing savepoints.
 
 ```sql
