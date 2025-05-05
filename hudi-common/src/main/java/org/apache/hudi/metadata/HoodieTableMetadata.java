@@ -254,6 +254,18 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
   Map<Pair<String, String>, HoodieMetadataColumnStats> getColumnStats(final List<Pair<String, String>> partitionNameFileNameList, final String columnName)
       throws HoodieMetadataException;
 
+
+  /**
+   * Get column stats for files from the metadata table index.
+   *
+   * @param partitionNameFileNameList - List of partition and file name pair for which bloom filters need to be retrieved.
+   * @param columnNames               - List of column name for which stats are needed.
+   * @return Map of partition and file name pair to a list of column stats.
+   * @throws HoodieMetadataException
+   */
+  Map<Pair<String, String>, List<HoodieMetadataColumnStats>> getColumnStats(List<Pair<String, String>> partitionNameFileNameList, List<String> columnNames)
+      throws HoodieMetadataException;
+
   /**
    * Returns the location of record keys which are found in the record index.
    * Records that are not found are ignored and wont be part of map object that is returned.
