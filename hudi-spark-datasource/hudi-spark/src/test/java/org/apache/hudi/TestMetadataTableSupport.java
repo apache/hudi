@@ -94,11 +94,10 @@ class TestMetadataTableSupport extends HoodieSparkClientTestBase {
       assertEquals(timestamp0, instants.get(4).requestedTime());
 
       // Insert second batch.
-      String timestamp1 = "20241015000000001";
+      String timestamp1 = writeClient.startCommit(REPLACE_COMMIT_ACTION);
       List<HoodieRecord> records1 = dataGen.generateInserts(timestamp1, 50);
       JavaRDD<HoodieRecord> dataset1 = jsc.parallelize(records1, 2);
 
-      writeClient.startCommitWithTime(timestamp1, REPLACE_COMMIT_ACTION);
       writeClient.insertOverwriteTable(dataset1, timestamp1);
 
       // Validate.

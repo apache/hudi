@@ -44,7 +44,6 @@ import java.util.stream.Collectors;
  */
 public class HoodieDataSourceInternalBatchWrite implements BatchWrite {
 
-  private final String instantTime;
   private final HoodieWriteConfig writeConfig;
   private final StructType structType;
   private final boolean arePartitionRecordsSorted;
@@ -52,21 +51,20 @@ public class HoodieDataSourceInternalBatchWrite implements BatchWrite {
   private final DataSourceInternalWriterHelper dataSourceInternalWriterHelper;
   private Map<String, String> extraMetadata = new HashMap<>();
 
-  public HoodieDataSourceInternalBatchWrite(String instantTime, HoodieWriteConfig writeConfig, StructType structType,
+  public HoodieDataSourceInternalBatchWrite(HoodieWriteConfig writeConfig, StructType structType,
                                             SparkSession jss, StorageConfiguration<?> storageConf, Map<String, String> properties, boolean populateMetaFields, boolean arePartitionRecordsSorted) {
-    this.instantTime = instantTime;
     this.writeConfig = writeConfig;
     this.structType = structType;
     this.populateMetaFields = populateMetaFields;
     this.arePartitionRecordsSorted = arePartitionRecordsSorted;
     this.extraMetadata = DataSourceUtils.getExtraMetadata(properties);
-    this.dataSourceInternalWriterHelper = new DataSourceInternalWriterHelper(instantTime, writeConfig, structType,
+    this.dataSourceInternalWriterHelper = new DataSourceInternalWriterHelper(writeConfig, structType,
         jss, storageConf, extraMetadata);
   }
 
   @Override
   public DataWriterFactory createBatchWriterFactory(PhysicalWriteInfo info) {
-    dataSourceInternalWriterHelper.createInflightCommit();
+    String instantTime = dataSourceInternalWriterHelper.createInflightCommit();
     if (WriteOperationType.BULK_INSERT == dataSourceInternalWriterHelper.getWriteOperationType()) {
       return new HoodieBulkInsertDataInternalWriterFactory(dataSourceInternalWriterHelper.getHoodieTable(),
           writeConfig, instantTime, structType, populateMetaFields, arePartitionRecordsSorted);
