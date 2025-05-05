@@ -41,6 +41,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -143,7 +144,7 @@ public class HoodieClientRollbackTestBase extends HoodieClientTestBase {
     newCommitTime = "002";
     records = dataGen.generateInsertsContainsAllPartitions(newCommitTime, 2);
     writeRecords = jsc.parallelize(records, 1);
-    client.startCommitWithTime(newCommitTime, commitActionType);
+    metaClient.getActiveTimeline().createRequestedCommitWithReplaceMetadata(newCommitTime, REPLACE_COMMIT_ACTION);
     HoodieWriteResult result = client.insertOverwrite(writeRecords, newCommitTime);
     statuses = result.getWriteStatuses();
     Assertions.assertNoWriteErrors(statuses.collect());

@@ -34,7 +34,6 @@ import java.util.Map;
  */
 public class HoodieDataSourceInternalBatchWriteBuilder implements WriteBuilder {
 
-  private final String instantTime;
   private final HoodieWriteConfig writeConfig;
   private final StructType structType;
   private final SparkSession jss;
@@ -43,10 +42,9 @@ public class HoodieDataSourceInternalBatchWriteBuilder implements WriteBuilder {
   private final boolean populateMetaFields;
   private final boolean arePartitionRecordsSorted;
 
-  public HoodieDataSourceInternalBatchWriteBuilder(String instantTime, HoodieWriteConfig writeConfig, StructType structType,
+  public HoodieDataSourceInternalBatchWriteBuilder(HoodieWriteConfig writeConfig, StructType structType,
                                                    SparkSession jss, StorageConfiguration<?> storageConf, Map<String, String> properties, boolean populateMetaFields,
                                                    boolean arePartitionRecordsSorted) {
-    this.instantTime = instantTime;
     this.writeConfig = writeConfig;
     this.structType = structType;
     this.jss = jss;
@@ -58,7 +56,7 @@ public class HoodieDataSourceInternalBatchWriteBuilder implements WriteBuilder {
 
   @Override
   public BatchWrite buildForBatch() {
-    return new HoodieDataSourceInternalBatchWrite(instantTime, writeConfig, structType, jss,
+    return new HoodieDataSourceInternalBatchWrite(writeConfig, structType, jss,
         storageConf, properties, populateMetaFields, arePartitionRecordsSorted);
   }
 }

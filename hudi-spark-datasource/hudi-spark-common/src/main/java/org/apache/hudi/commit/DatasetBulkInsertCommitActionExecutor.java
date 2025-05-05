@@ -27,7 +27,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieInternalConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.internal.DataSourceInternalWriterHelper;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import org.apache.spark.api.java.JavaRDD;
@@ -43,9 +42,8 @@ import java.util.stream.Collectors;
 public class DatasetBulkInsertCommitActionExecutor extends BaseDatasetBulkInsertCommitActionExecutor {
 
   public DatasetBulkInsertCommitActionExecutor(HoodieWriteConfig config,
-                                               SparkRDDWriteClient writeClient,
-                                               String instantTime) {
-    super(config, writeClient, instantTime);
+                                               SparkRDDWriteClient writeClient) {
+    super(config, writeClient);
   }
 
   @Override
@@ -72,7 +70,6 @@ public class DatasetBulkInsertCommitActionExecutor extends BaseDatasetBulkInsert
     }
 
     records.write().format(targetFormat)
-        .option(DataSourceInternalWriterHelper.INSTANT_TIME_OPT_KEY, instantTime)
         .options(opts)
         .options(customOpts)
         .options(optsOverrides)
