@@ -1332,7 +1332,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
   private static void startSchemaEvolutionTransaction(HoodieTableMetaClient metaClient, SparkRDDWriteClient client, String nextCommitTime2, HoodieTableType tableType) throws IOException {
     String commitActionType = CommitUtils.getCommitActionType(WriteOperationType.UPSERT, tableType);
-    client.startCommitWithTime(nextCommitTime2, commitActionType);
+    metaClient.getActiveTimeline().createNewInstant(metaClient.createNewInstant(HoodieInstant.State.REQUESTED, metaClient.getCommitActionType(), nextCommitTime2));
     client.preWrite(nextCommitTime2, WriteOperationType.UPSERT, client.createMetaClient(true));
     HoodieInstant requested = metaClient.createNewInstant(HoodieInstant.State.REQUESTED, commitActionType, nextCommitTime2);
     HoodieCommitMetadata metadata = new HoodieCommitMetadata();

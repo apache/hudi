@@ -49,17 +49,13 @@ class TestTTLProcedure extends HoodieSparkProcedureTestBase with SparkDatasetMix
         val dataGen = new HoodieTestDataGenerator(0xDEED)
         val partitionPaths = dataGen.getPartitionPaths()
         val partitionPath0 = partitionPaths(0)
-        val instant0 = getCommitTimeAtUTC(0)
+        writeRecordsForPartition(client, dataGen, partitionPath0)
 
-        writeRecordsForPartition(client, dataGen, partitionPath0, instant0)
-
-        val instant1 = getCommitTimeAtUTC(1000)
         val partitionPath1 = partitionPaths(1)
-        writeRecordsForPartition(client, dataGen, partitionPath1, instant1)
+        writeRecordsForPartition(client, dataGen, partitionPath1)
 
-        val currentInstant = client.createNewInstantTime()
         val partitionPath2 = partitionPaths(2)
-        writeRecordsForPartition(client, dataGen, partitionPath2, currentInstant)
+        writeRecordsForPartition(client, dataGen, partitionPath2)
         spark.sql(
           s"""
              | create table $tableName using hudi
@@ -82,12 +78,12 @@ class TestTTLProcedure extends HoodieSparkProcedureTestBase with SparkDatasetMix
 
   private def writeRecordsForPartition(client: SparkRDDWriteClient[Nothing],
                                        dataGen: HoodieTestDataGenerator,
-                                       partition: String, instantTime: String): Unit = {
+                                       partition: String): Unit = {
+    val instantTime = client.startCommit(HoodieTimeline.COMMIT_ACTION)
     val records: java.util.List[HoodieRecord[Nothing]] =
       dataGen.generateInsertsForPartition(instantTime, 10, partition)
         .asInstanceOf[java.util.List[HoodieRecord[Nothing]]]
     // Use this JavaRDD to call the insert method
-    client.startCommitWithTime(instantTime, HoodieTimeline.COMMIT_ACTION)
     client.insert(spark.sparkContext.parallelize(records.asScala.toSeq).toJavaRDD(), instantTime)
   }
 

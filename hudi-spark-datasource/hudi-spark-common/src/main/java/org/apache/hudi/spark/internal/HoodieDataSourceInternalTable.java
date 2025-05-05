@@ -37,7 +37,6 @@ import java.util.Set;
  */
 class HoodieDataSourceInternalTable implements SupportsWrite {
 
-  private final String instantTime;
   private final HoodieWriteConfig writeConfig;
   private final StructType structType;
   private final SparkSession jss;
@@ -46,10 +45,9 @@ class HoodieDataSourceInternalTable implements SupportsWrite {
   private final Map<String, String> properties;
   private final boolean populateMetaFields;
 
-  public HoodieDataSourceInternalTable(String instantTime, HoodieWriteConfig config,
+  public HoodieDataSourceInternalTable(HoodieWriteConfig config,
                                        StructType schema, SparkSession jss, StorageConfiguration<?> storageConf, Map<String, String> properties,
                                        boolean populateMetaFields, boolean arePartitionRecordsSorted) {
-    this.instantTime = instantTime;
     this.writeConfig = config;
     this.structType = schema;
     this.jss = jss;
@@ -81,7 +79,7 @@ class HoodieDataSourceInternalTable implements SupportsWrite {
 
   @Override
   public WriteBuilder newWriteBuilder(LogicalWriteInfo logicalWriteInfo) {
-    return new HoodieDataSourceInternalBatchWriteBuilder(instantTime, writeConfig, structType, jss,
+    return new HoodieDataSourceInternalBatchWriteBuilder(writeConfig, structType, jss,
         storageConf, properties, populateMetaFields, arePartitionRecordsSorted);
   }
 }

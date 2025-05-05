@@ -56,20 +56,18 @@ public abstract class BaseDatasetBulkInsertCommitActionExecutor implements Seria
 
   protected final transient HoodieWriteConfig writeConfig;
   protected final transient SparkRDDWriteClient writeClient;
-  protected final String instantTime;
+  protected String instantTime;
   protected HoodieTable table;
 
   public BaseDatasetBulkInsertCommitActionExecutor(HoodieWriteConfig config,
-                                                   SparkRDDWriteClient writeClient,
-                                                   String instantTime) {
+                                                   SparkRDDWriteClient writeClient) {
     this.writeConfig = config;
     this.writeClient = writeClient;
-    this.instantTime = instantTime;
   }
 
   protected void preExecute() {
     table.validateInsertSchema();
-    writeClient.startCommitWithTime(instantTime, getCommitActionType());
+    instantTime = writeClient.startCommit(getCommitActionType());
     writeClient.preWrite(instantTime, getWriteOperationType(), table.getMetaClient());
   }
 
@@ -137,5 +135,9 @@ public abstract class BaseDatasetBulkInsertCommitActionExecutor implements Seria
 
   protected Map<String, List<String>> getPartitionToReplacedFileIds(HoodieData<WriteStatus> writeStatuses) {
     return Collections.emptyMap();
+  }
+
+  public String getInstantTime() {
+    return instantTime;
   }
 }

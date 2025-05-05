@@ -466,7 +466,7 @@ public class StreamSync implements Serializable, Closeable {
     try {
       // Refresh Timeline
       HoodieTableMetaClient metaClient = initializeMetaClientAndRefreshTimeline();
-      String instantTime = metaClient.createNewInstantTime();
+      String instantTime = startCommit(metaClient, !autoGenerateRecordKeys);
 
       Pair<InputBatch, Boolean> inputBatchAndUseRowWriter = readFromSource(instantTime, metaClient);
 
@@ -928,15 +928,14 @@ public class StreamSync implements Serializable, Closeable {
    *
    * @return Instant time of the commit
    */
-  private String startCommit(String instantTime, boolean retryEnabled) {
+  private String startCommit(HoodieTableMetaClient metaClient, boolean retryEnabled) {
     final int maxRetries = 2;
     int retryNum = 1;
     RuntimeException lastException = null;
     while (retryNum <= maxRetries) {
       try {
         String commitActionType = CommitUtils.getCommitActionType(cfg.operation, HoodieTableType.valueOf(cfg.tableType));
-        writeClient.startCommitWithTime(instantTime, commitActionType);
-        return instantTime;
+        return writeClient.startCommit(commitActionType, metaClient);
       } catch (IllegalArgumentException ie) {
         lastException = ie;
         if (!retryEnabled) {
@@ -950,19 +949,17 @@ public class StreamSync implements Serializable, Closeable {
           // No-Op
         }
       }
-      instantTime = writeClient.createNewInstantTime();
     }
     throw lastException;
   }
 
   private WriteClientWriteResult writeToSink(InputBatch inputBatch, String instantTime, boolean useRowWriter) {
     WriteClientWriteResult writeClientWriteResult = null;
-    instantTime = startCommit(instantTime, !autoGenerateRecordKeys);
 
     if (useRowWriter) {
       Dataset<Row> df = (Dataset<Row>) inputBatch.getBatch().orElseGet(() -> hoodieSparkContext.getSqlContext().emptyDataFrame());
       HoodieWriteConfig hoodieWriteConfig = prepareHoodieConfigForRowWriter(inputBatch.getSchemaProvider().getTargetSchema());
-      BaseDatasetBulkInsertCommitActionExecutor executor = new HoodieStreamerDatasetBulkInsertCommitActionExecutor(hoodieWriteConfig, writeClient, instantTime);
+      BaseDatasetBulkInsertCommitActionExecutor executor = new HoodieStreamerDatasetBulkInsertCommitActionExecutor(hoodieWriteConfig, writeClient);
       writeClientWriteResult = new WriteClientWriteResult(executor.execute(df, !HoodieStreamerUtils.getPartitionColumns(props).isEmpty()).getWriteStatuses());
     } else {
       JavaRDD<HoodieRecord> records = (JavaRDD<HoodieRecord>) inputBatch.getBatch().orElseGet(() -> hoodieSparkContext.emptyRDD());

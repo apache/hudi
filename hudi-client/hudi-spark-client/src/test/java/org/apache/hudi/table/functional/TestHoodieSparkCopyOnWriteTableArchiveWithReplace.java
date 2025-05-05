@@ -77,8 +77,7 @@ public class TestHoodieSparkCopyOnWriteTableArchiveWithReplace extends SparkClie
       assertEquals(21, countRecordsOptionallySince(jsc(), basePath(), sqlContext(), timeline1, Option.empty()));
 
       // delete the 1st and the 2nd partition; 1 replace commit
-      final String instantTime4 = client.createNewInstantTime();
-      client.startCommitWithTime(instantTime4, HoodieActiveTimeline.REPLACE_COMMIT_ACTION);
+      final String instantTime4 = client.startCommit(HoodieActiveTimeline.REPLACE_COMMIT_ACTION);
       client.deletePartitions(Arrays.asList(DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH), instantTime4);
 
       // 2nd write batch; 6 commits for the 4th partition; the 6th commit to trigger archiving the replace commit
