@@ -111,7 +111,7 @@ drwxr-xr-x  2 nsb  wheel    64 Jan 28 16:00 archived
 -rw-r--r--  1 nsb  wheel  4428 Jan 28 16:02 20220128160245447.commit
 ```
 
-### Savepoint
+### Savepoint Example
 
 Savepoints can be created via [Hudi CLI](/docs/cli) or [SQL Procedures](/docs/procedures).
 
@@ -229,7 +229,7 @@ spark.sql("select count(partitionpath, uuid) from  hudi_trips_snapshot").show()
 +--------------------------+
 ```
 
-### Restore
+### Restore Example
 
 Let's say something bad happened, and you want to restore your table to an older snapshot. We can perform a restore operation via [Hudi CLI](/docs/cli) or [SQL Procedures](/docs/procedures). And do remember to bring down all of your writer processes while doing a restore.
 
