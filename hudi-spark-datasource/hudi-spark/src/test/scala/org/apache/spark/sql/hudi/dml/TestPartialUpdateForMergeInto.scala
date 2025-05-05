@@ -317,11 +317,10 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
            |on t0.id = s0.id
            |when matched then update set price = s0.price, _ts = s0.ts
            |""".stripMargin)
-
       validateTableSchema(tableName, structFields)
       if (commitTimeOrdering) {
         checkAnswer(s"select id, name, price, _ts, description from $tableName")(
-          Seq(1, "a1", 12.0,  999, "a1: desc1"),
+          Seq(1, "a1", 12.0, 999, "a1: desc1"),
           Seq(2, "a2", 20.0, 1200, "a2: desc2"),
           Seq(3, "a3", 25.0, 1260, "a3: desc3")
         )
@@ -332,10 +331,29 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
           Seq(3, "a3", 25.0, 1260, "a3: desc3")
         )
       }
-
-
       if (tableType.equals("mor")) {
         validateLogBlock(basePath, 1, Seq(Seq("price", "_ts")), true)
+      }
+
+
+      // TODO: [HUDI-9375] get rid of this update and fix the rest of the test accordingly
+      // showcase the difference between event time and commit time ordering
+      // Partial updates using MERGE INTO statement with changed fields: "price" and "_ts"
+      spark.sql(
+        s"""
+           |merge into $tableName t0
+           |using ( select 1 as id, 'a1' as name, 12.0 as price, 1001 as ts) s0
+           |on t0.id = s0.id
+           |when matched then update set price = s0.price, _ts = s0.ts
+           |""".stripMargin)
+
+      checkAnswer(s"select id, name, price, _ts, description from $tableName")(
+        Seq(1, "a1", 12.0, 1001, "a1: desc1"),
+        Seq(2, "a2", 20.0, 1200, "a2: desc2"),
+        Seq(3, "a3", 25.0, 1260, "a3: desc3")
+      )
+      if (tableType.equals("mor")) {
+        validateLogBlock(basePath, 2, Seq(Seq("price", "_ts"), Seq("price", "_ts")), true)
       }
 
       // Partial updates using MERGE INTO statement with changed fields: "description" and "_ts"
@@ -356,9 +374,9 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
       )
 
       if (tableType.equals("mor")) {
-        validateLogBlock(basePath, 2, Seq(Seq("price", "_ts"), Seq("_ts", "description")), true)
+        validateLogBlock(basePath, 3, Seq(Seq("price", "_ts"), Seq("price", "_ts"), Seq("_ts", "description")), true)
 
-        spark.sql(s"set ${HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key} = 3")
+        spark.sql(s"set ${HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key} = 4")
         // Partial updates that trigger compaction
         spark.sql(
           s"""
