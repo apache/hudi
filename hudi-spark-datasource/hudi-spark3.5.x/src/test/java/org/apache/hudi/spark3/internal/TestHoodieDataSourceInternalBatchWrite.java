@@ -151,7 +151,7 @@ class TestHoodieDataSourceInternalBatchWrite extends
     extraMeta.put("keyB", "valB");
     extraMeta.put("commit_extra_c", "valC");
     // none of the keys has commit metadata key prefix.
-    testDataSourceWriterInternal(extraMeta, Collections.EMPTY_MAP, true);
+    testDataSourceWriterInternal(extraMeta, Collections.emptyMap(), true);
   }
 
   @ParameterizedTest
@@ -210,7 +210,7 @@ class TestHoodieDataSourceInternalBatchWrite extends
     for (int i = 0; i < 3; i++) {
       // init writer
       HoodieDataSourceInternalBatchWrite dataSourceInternalBatchWrite =
-          new HoodieDataSourceInternalBatchWrite(cfg, STRUCT_TYPE, sqlContext.sparkSession(), storageConf, Collections.EMPTY_MAP, populateMetaFields, false);
+          new HoodieDataSourceInternalBatchWrite(cfg, STRUCT_TYPE, sqlContext.sparkSession(), storageConf, Collections.emptyMap(), populateMetaFields, false);
       List<HoodieWriterCommitMessage> commitMessages = new ArrayList<>();
       Dataset<Row> totalInputRows = null;
       DataWriter<InternalRow> writer = dataSourceInternalBatchWrite.createBatchWriterFactory(null).createWriter(partitionCounter++, RANDOM.nextLong());
