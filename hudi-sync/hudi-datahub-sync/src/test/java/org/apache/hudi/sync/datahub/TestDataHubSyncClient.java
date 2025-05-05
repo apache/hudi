@@ -36,6 +36,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
@@ -47,10 +48,13 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS;
+import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_DATAHUB_DATAPLATFORM_INSTANCE_NAME;
 import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_DATAHUB_SYNC_SUPPRESS_EXCEPTIONS;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -97,7 +101,7 @@ public class TestDataHubSyncClient {
   }
 
   @Test
-  public void testUpdateTableSchemaInvokesRestEmitter() throws IOException {
+  public void testUpdateTableSchema() throws IOException {
     Properties props = new Properties();
     props.put(META_SYNC_PARTITION_EXTRACTOR_CLASS.key(), DummyPartitionValueExtractor.class.getName());
     props.put(META_SYNC_BASE_PATH.key(), tableBasePath);
@@ -112,8 +116,81 @@ public class TestDataHubSyncClient {
     DataHubSyncClientStub dhClient = new DataHubSyncClientStub(configStub);
 
     dhClient.updateTableSchema("some_table", null, null);
-    verify(restEmitterMock, times(9)).emit(any(MetadataChangeProposalWrapper.class),
-            Mockito.any());
+    ArgumentCaptor<MetadataChangeProposalWrapper> captor = ArgumentCaptor.forClass(MetadataChangeProposalWrapper.class);
+    verify(restEmitterMock, times(11)).emit(captor.capture(), Mockito.any());
+
+    Map<String, String> capturedProposalsMap = captor.getAllValues().stream()
+        .collect(Collectors.toMap(
+            mcpw -> mcpw.getEntityUrn() + "+" + mcpw.getAspectName(),
+            mcpw -> mcpw.getAspect().toString()
+        ));
+
+    Map<String, String> expectedProposalsMap = new HashMap<>();
+    expectedProposalsMap.put("urn:li:container:ca5c62a21c8486b650b16634aacd3996+containerProperties", "{name=default}");
+    expectedProposalsMap.put("urn:li:container:ca5c62a21c8486b650b16634aacd3996+subTypes", "{typeNames=[Database]}");
+    expectedProposalsMap.put("urn:li:container:ca5c62a21c8486b650b16634aacd3996+dataPlatformInstance", "{platform=urn:li:dataPlatform:hudi}");
+    expectedProposalsMap.put("urn:li:container:ca5c62a21c8486b650b16634aacd3996+browsePathsV2", "{path=[]}");
+    expectedProposalsMap.put("urn:li:container:ca5c62a21c8486b650b16634aacd3996+status", "{removed=false}");
+    expectedProposalsMap.put("urn:li:dataset:(urn:li:dataPlatform:hudi,default.unknown,DEV)+status", "{removed=false}");
+    expectedProposalsMap.put("urn:li:dataset:(urn:li:dataPlatform:hudi,default.unknown,DEV)+subTypes", "{typeNames=[Table]}");
+    expectedProposalsMap.put("urn:li:dataset:(urn:li:dataPlatform:hudi,default.unknown,DEV)+dataPlatformInstance", "{platform=urn:li:dataPlatform:hudi}");
+    expectedProposalsMap.put("urn:li:dataset:(urn:li:dataPlatform:hudi,default.unknown,DEV)+browsePathsV2", "{path=[{urn=urn:li:container:ca5c62a21c8486b650b16634aacd3996, id=default}]}");
+    expectedProposalsMap.put("urn:li:dataset:(urn:li:dataPlatform:hudi,default.unknown,DEV)+container", "{container=urn:li:container:ca5c62a21c8486b650b16634aacd3996}");
+    expectedProposalsMap.put("urn:li:dataset:(urn:li:dataPlatform:hudi,default.unknown,DEV)+schemaMetadata", "{platformSchema={com.linkedin.schema.OtherSchema={rawSchema"
+        + "={\"type\":\"record\",\"name\":\"triprec\",\"fields\":[{\"name\":\"ts\",\"type\":\"long\"}]}}}, schemaName=triprec, fields=[{nullable=false, fieldPath=[version=2.0]"
+        + ".[type=triprec].[type=long].ts, isPartOfKey=false, type={type={com.linkedin.schema.NumberType={}}}, nativeDataType=long}], version=0, platform=urn:li:dataPlatform:hudi"
+        + ", hash=fcb5c4d60382cb4d1dd4710810b42295}");
+
+    assertEquals(expectedProposalsMap, capturedProposalsMap);
+  }
+
+  @Test
+  public void testUpdateTableSchemaWhenPlatformInstance() throws IOException {
+    Properties props = new Properties();
+    props.put(META_SYNC_PARTITION_EXTRACTOR_CLASS.key(), DummyPartitionValueExtractor.class.getName());
+    props.put(META_SYNC_DATAHUB_DATAPLATFORM_INSTANCE_NAME.key(), "test_instance");
+    props.put(META_SYNC_BASE_PATH.key(), tableBasePath);
+
+    Mockito.when(
+        restEmitterMock.emit(any(MetadataChangeProposalWrapper.class), Mockito.any())
+    ).thenReturn(
+        CompletableFuture.completedFuture(MetadataWriteResponse.builder().build())
+    );
+
+    DatahubSyncConfigStub configStub = new DatahubSyncConfigStub(props, restEmitterMock);
+    DataHubSyncClientStub dhClient = new DataHubSyncClientStub(configStub);
+
+    dhClient.updateTableSchema("some_table", null, null);
+    ArgumentCaptor<MetadataChangeProposalWrapper> captor = ArgumentCaptor.forClass(MetadataChangeProposalWrapper.class);
+    verify(restEmitterMock, times(11)).emit(captor.capture(), Mockito.any());
+
+    Map<String, String> capturedProposalsMap = captor.getAllValues().stream()
+        .collect(Collectors.toMap(
+            mcpw -> mcpw.getEntityUrn() + "+" + mcpw.getAspectName(),
+            mcpw -> mcpw.getAspect().toString()
+        ));
+
+    Map<String, String> expectedProposalsMap = new HashMap<>();
+    expectedProposalsMap.put("urn:li:container:da9c1430eb7551811f4c0e11b911614d+containerProperties", "{name=default}");
+    expectedProposalsMap.put("urn:li:container:da9c1430eb7551811f4c0e11b911614d+subTypes", "{typeNames=[Database]}");
+    expectedProposalsMap.put("urn:li:container:da9c1430eb7551811f4c0e11b911614d+dataPlatformInstance", "{platform=urn:li:dataPlatform:hudi, instance="
+        + "urn:li:dataPlatformInstance:(urn:li:dataPlatform:hudi,test_instance)}");
+    expectedProposalsMap.put("urn:li:container:da9c1430eb7551811f4c0e11b911614d+browsePathsV2", "{path=[{urn=urn:li:dataPlatformInstance:(urn:li:dataPlatform"
+        + ":hudi,test_instance), id=urn:li:dataPlatformInstance:(urn:li:dataPlatform:hudi,test_instance)}]}");
+    expectedProposalsMap.put("urn:li:container:da9c1430eb7551811f4c0e11b911614d+status", "{removed=false}");
+    expectedProposalsMap.put("urn:li:dataset:(urn:li:dataPlatform:hudi,test_instance.default.unknown,DEV)+status", "{removed=false}");
+    expectedProposalsMap.put("urn:li:dataset:(urn:li:dataPlatform:hudi,test_instance.default.unknown,DEV)+subTypes", "{typeNames=[Table]}");
+    expectedProposalsMap.put("urn:li:dataset:(urn:li:dataPlatform:hudi,test_instance.default.unknown,DEV)+dataPlatformInstance", "{platform=urn:li:dataPlatform:hudi, instance="
+        + "urn:li:dataPlatformInstance:(urn:li:dataPlatform:hudi,test_instance)}");
+    expectedProposalsMap.put("urn:li:dataset:(urn:li:dataPlatform:hudi,test_instance.default.unknown,DEV)+browsePathsV2", "{path=[{urn=urn:li:dataPlatformInstance:(urn:li:dataPlatform"
+        + ":hudi,test_instance), id=urn:li:dataPlatformInstance:(urn:li:dataPlatform:hudi,test_instance)}, {urn=urn:li:container:da9c1430eb7551811f4c0e11b911614d, id=default}]}");
+    expectedProposalsMap.put("urn:li:dataset:(urn:li:dataPlatform:hudi,test_instance.default.unknown,DEV)+container", "{container=urn:li:container:da9c1430eb7551811f4c0e11b911614d}");
+    expectedProposalsMap.put("urn:li:dataset:(urn:li:dataPlatform:hudi,test_instance.default.unknown,DEV)+schemaMetadata", "{platformSchema={com.linkedin.schema.OtherSchema={rawSchema"
+        + "={\"type\":\"record\",\"name\":\"triprec\",\"fields\":[{\"name\":\"ts\",\"type\":\"long\"}]}}}, schemaName=triprec, fields=[{nullable=false, fieldPath=[version=2.0]"
+        + ".[type=triprec].[type=long].ts, isPartOfKey=false, type={type={com.linkedin.schema.NumberType={}}}, nativeDataType=long}], version=0, platform=urn:li:dataPlatform:hudi"
+        + ", hash=fcb5c4d60382cb4d1dd4710810b42295}");
+
+    assertEquals(expectedProposalsMap, capturedProposalsMap);
   }
 
   @Test
