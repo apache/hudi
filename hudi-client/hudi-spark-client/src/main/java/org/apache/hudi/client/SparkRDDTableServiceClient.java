@@ -55,7 +55,7 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
   }
 
   @Override
-  protected void runPrecommitValidators(HoodieWriteMetadata<JavaRDD<WriteStatus>> writeMetadata, HoodieTable table, String instantTime) {
+  protected void runPrecommitValidationForClustering(HoodieWriteMetadata<JavaRDD<WriteStatus>> writeMetadata, HoodieTable table, String instantTime) {
     HoodieWriteMetadata<HoodieData<WriteStatus>> recreatedWriteMetadata = new HoodieWriteMetadata<>();
     if (writeMetadata.getWriteStats().isPresent()) {
       recreatedWriteMetadata.setWriteStats(writeMetadata.getWriteStats().get());

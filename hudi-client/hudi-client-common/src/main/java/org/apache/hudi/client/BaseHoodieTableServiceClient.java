@@ -409,7 +409,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       commitMetadata.addMetadata(SerDeHelper.LATEST_SCHEMA, schemaPair.getLeft().get());
       commitMetadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, schemaPair.getRight().get());
     }
-    // Setting operationType, which is compact.
+    // Setting operationType, which is log compact.
     commitMetadata.setOperationType(WriteOperationType.LOG_COMPACT);
     writeMetadata.setCommitted(true);
     writeMetadata.setCommitMetadata(Option.of(commitMetadata));
@@ -571,7 +571,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
   /**
    * Check if any validators are configured and run those validations. If any of the validations fail, throws HoodieValidationException.
    */
-  protected void runPrecommitValidators(HoodieWriteMetadata<O> writeMetadata, HoodieTable table, String instantTime) {
+  protected void runPrecommitValidationForClustering(HoodieWriteMetadata<O> writeMetadata, HoodieTable table, String instantTime) {
     if (StringUtils.isNullOrEmpty(config.getPreCommitValidators())) {
       return;
     }
@@ -602,7 +602,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       replaceCommitMetadata.addWriteStat(writeStat.getPartitionPath(), writeStat);
     }
     clusteringWriteMetadata.setCommitMetadata(Option.of(replaceCommitMetadata));
-    runPrecommitValidators(clusteringWriteMetadata, table, clusteringCommitTime);
+    runPrecommitValidationForClustering(clusteringWriteMetadata, table, clusteringCommitTime);
 
     // Publish file creation metrics for clustering.
     if (config.isMetricsOn()) {
