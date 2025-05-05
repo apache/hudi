@@ -427,14 +427,14 @@ public class TestArchivedTimelineV1 extends HoodieCommonTestHarness {
   @Test
   public void testDuplicateTimestampDifferentActions() throws Exception {
     // Two actions that share the very same commit time "30"
-    HoodieInstant commit30 = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "30");
-    HoodieInstant clean30  = new HoodieInstant(false, HoodieTimeline.CLEAN_ACTION,  "30");
+    HoodieInstant commit30 = createInstantV1(COMPLETED, HoodieTimeline.COMMIT_ACTION, "30");
+    HoodieInstant clean30  = createInstantV1(COMPLETED, HoodieTimeline.CLEAN_ACTION,  "30");
 
-    HoodieInstant commit31 = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "31");
+    HoodieInstant commit31 = createInstantV1(COMPLETED, HoodieTimeline.COMMIT_ACTION, "31");
 
     // Write them to a brand new archive log
-    Path archivePath = HoodieArchivedTimeline.getArchiveLogPath(metaClient.getArchivePath());
-    try (HoodieLogFormat.Writer writer = buildWriter(archivePath)) {
+    try (HoodieLogFormat.Writer writer = buildWriter(
+            ArchivedTimelineV1.getArchiveLogPath(metaClient.getArchivePath()))) {
       List<IndexedRecord> records = new ArrayList<>();
       records.add(createArchivedMetaWrapper(commit30));
       records.add(createArchivedMetaWrapper(clean30));
@@ -443,7 +443,7 @@ public class TestArchivedTimelineV1 extends HoodieCommonTestHarness {
     }
 
     // Build timeline (no filters), should read the new archive
-    HoodieArchivedTimeline dupTimeline = new HoodieArchivedTimeline(metaClient);
+    HoodieArchivedTimeline dupTimeline = new ArchivedTimelineV1(metaClient);
     dupTimeline.loadCompletedInstantDetailsInMemory();
 
     // Both actions for 30 are present (positive case)
@@ -456,7 +456,7 @@ public class TestArchivedTimelineV1 extends HoodieCommonTestHarness {
         "clean and commit metadata should have different payloads");
 
     // For ts=31 we only archived COMMIT, so CLEAN must be absent (negative case)
-    HoodieInstant fakeClean31 = new HoodieInstant(false, HoodieTimeline.CLEAN_ACTION, "31");
+    HoodieInstant fakeClean31 = createInstantV1(COMPLETED, HoodieTimeline.CLEAN_ACTION, "31");
     assertTrue(dupTimeline.getInstantDetails(commit31).isPresent(),
         "commit metadata for ts=31 must be loaded");
     assertFalse(dupTimeline.getInstantDetails(fakeClean31).isPresent(),
