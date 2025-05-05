@@ -97,7 +97,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
 
   @ParameterizedTest
   @ValueSource(booleans = {false, true})
-  public void testMergeOnReadRollbackActionExecutor(boolean isUsingMarkers) throws IOException {
+  public void testMergeOnReadRollbackActionExecutor(boolean isUsingMarkers) throws IOException, InterruptedException {
     //1. prepare data and assert data result
     List<FileSlice> firstPartitionCommit2FileSlices = new ArrayList<>();
     List<FileSlice> secondPartitionCommit2FileSlices = new ArrayList<>();
@@ -113,7 +113,8 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
 
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
       // create client so that timeline server starts
-
+      // Wait for embedded timeline server port to be ready
+      Thread.sleep(1000);
       //2. rollback
       HoodieInstant rollBackInstant = INSTANT_GENERATOR.createNewInstant(isUsingMarkers ? HoodieInstant.State.INFLIGHT : HoodieInstant.State.COMPLETED,
           HoodieTimeline.DELTA_COMMIT_ACTION, "002");
