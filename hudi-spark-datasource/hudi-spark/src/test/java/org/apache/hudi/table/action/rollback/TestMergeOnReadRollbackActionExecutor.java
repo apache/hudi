@@ -258,7 +258,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
   }
 
   @Test
-  public void testMergeOnReadRestoreCompactionCommit() throws IOException {
+  public void testMergeOnReadRestoreCompactionCommit() throws IOException, InterruptedException {
     boolean isUsingMarkers = false;
     HoodieWriteConfig cfg = getConfigBuilder().withRollbackUsingMarkers(isUsingMarkers).build();
 
@@ -295,6 +295,8 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
 
     // Start a client so that timeline server starts
     client = getHoodieWriteClient(cfg);
+    // Sleep for 1 second to ensure the timeline server port is listening
+    Thread.sleep(1000);
     try {
       //3. rollback the update to partition1 and partition2
       HoodieInstant rollBackInstant = INSTANT_GENERATOR.createNewInstant(isUsingMarkers ? HoodieInstant.State.INFLIGHT : HoodieInstant.State.COMPLETED,
