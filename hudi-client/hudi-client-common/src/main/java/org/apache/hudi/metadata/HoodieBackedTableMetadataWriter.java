@@ -83,7 +83,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -287,7 +286,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       }
       metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.INITIALIZE_STR, timer.endTimer()));
       return true;
-    } catch (IOException | UncheckedIOException e) {
+    } catch (IOException | HoodieIOException e) {
       LOG.error("Failed to initialize metadata table. Disabling the writer.", e);
       return false;
     }
@@ -683,7 +682,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
             .forEach(fs -> partitionFileSlicePairs.add(Pair.of(partition, fs))));
         return partitionFileSlicePairs;
       } catch (IOException e) {
-        throw new UncheckedIOException(e);
+        throw new HoodieIOException("Cannot get the latest merged file slices", e);
       }
     });
   }
