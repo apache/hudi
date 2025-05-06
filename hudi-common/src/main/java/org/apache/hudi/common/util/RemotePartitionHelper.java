@@ -73,7 +73,7 @@ public class RemotePartitionHelper implements Serializable {
     builder.addParameter(PARTITION_NUM_PARAM, String.valueOf(partitionNum));
 
     String url = builder.toString();
-    LOG.info("Sending request : (" + url + ")");
+    LOG.info("Sending request : (" + url + ").");
     Response response = (Response)(retryHelper != null ? retryHelper.start(() -> Request.Get(url).connectTimeout(timeoutMs).socketTimeout(timeoutMs).execute())
         : Request.Get(url).connectTimeout(timeoutMs).socketTimeout(timeoutMs).execute());
     String content = response.returnContent().asString(Consts.UTF_8);
