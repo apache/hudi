@@ -752,3 +752,7 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 --- [2025-05-03 16:32:16] [release-v1.119.0] ---
 [ENG-26515][HUDI-9371] Fix conflict resolution handling of inflight clustering (#1357)
 [AUDIT-1071]: Changelog for release-v1.118.0 (#1356)
+
+--- [2025-05-06 16:04:20] [release-v1.120.0] ---
+[ENG-24929][MINOR] Fix bug in PubsubQueueClient for handling empty response (#1359)
+[AUDIT-1071]: Changelog for release-v1.119.0 (#1358)
