@@ -51,14 +51,14 @@ public class HoodieDataSourceInternalBatchWrite implements BatchWrite {
   private final DataSourceInternalWriterHelper dataSourceInternalWriterHelper;
   private Map<String, String> extraMetadata = new HashMap<>();
 
-  public HoodieDataSourceInternalBatchWrite(HoodieWriteConfig writeConfig, StructType structType,
+  public HoodieDataSourceInternalBatchWrite(String instantTime, HoodieWriteConfig writeConfig, StructType structType,
                                             SparkSession jss, StorageConfiguration<?> storageConf, Map<String, String> properties, boolean populateMetaFields, boolean arePartitionRecordsSorted) {
     this.writeConfig = writeConfig;
     this.structType = structType;
     this.populateMetaFields = populateMetaFields;
     this.arePartitionRecordsSorted = arePartitionRecordsSorted;
     this.extraMetadata = DataSourceUtils.getExtraMetadata(properties);
-    this.dataSourceInternalWriterHelper = new DataSourceInternalWriterHelper(writeConfig, structType,
+    this.dataSourceInternalWriterHelper = new DataSourceInternalWriterHelper(instantTime, writeConfig, structType,
         jss, storageConf, extraMetadata);
   }
 
