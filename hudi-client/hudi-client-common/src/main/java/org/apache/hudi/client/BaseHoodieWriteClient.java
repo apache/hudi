@@ -58,6 +58,7 @@ import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -951,8 +952,14 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     startCommitWithTime(instantTime, metaClient.getCommitActionType(), metaClient);
   }
 
-  @Deprecated
-  public void startCommitWithTime(String instantTime, String actionType) {
+  /**
+   * Provides a new commit at the specified time with the provided action type.
+   * This is only for testing purposes to setup particular sequences of commits.
+   * @param instantTime the commit start time
+   * @param actionType the type of commit
+   */
+  @VisibleForTesting
+  void startCommitWithTime(String instantTime, String actionType) {
     HoodieTableMetaClient metaClient = createMetaClient(true);
     startCommitWithTime(instantTime, actionType, metaClient);
   }

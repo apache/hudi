@@ -24,6 +24,7 @@ import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.client.HoodieWriteResult;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.SparkTaskContextSupplier;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.clustering.plan.strategy.SparkSingleFileSortPlanStrategy;
 import org.apache.hudi.client.clustering.run.strategy.SparkSingleFileSortExecutionStrategy;
@@ -1264,7 +1265,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
     // Do Insert Overwrite
     String commitTime2 = "002";
-    client.startCommitWithTime(commitTime2, REPLACE_COMMIT_ACTION);
+    WriteClientTestUtils.startCommitWithTime(writeClient, commitTime2, REPLACE_COMMIT_ACTION);
     List<HoodieRecord> inserts2 = dataGen.generateInserts(commitTime2, batch2RecordsCount);
     List<HoodieRecord> insertsAndUpdates2 = new ArrayList<>(inserts2);
     JavaRDD<HoodieRecord> insertAndUpdatesRDD2 = jsc.parallelize(insertsAndUpdates2, 2);
@@ -1319,7 +1320,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   }
 
   private Set<String> deletePartitionWithCommit(SparkRDDWriteClient client, String commitTime, List<String> deletePartitionPath) {
-    client.startCommitWithTime(commitTime, REPLACE_COMMIT_ACTION);
+    WriteClientTestUtils.startCommitWithTime(client, commitTime, REPLACE_COMMIT_ACTION);
     HoodieWriteResult writeResult = client.deletePartitions(deletePartitionPath, commitTime);
     Set<String> deletePartitionReplaceFileIds =
         writeResult.getPartitionToReplaceFileIds().entrySet()
