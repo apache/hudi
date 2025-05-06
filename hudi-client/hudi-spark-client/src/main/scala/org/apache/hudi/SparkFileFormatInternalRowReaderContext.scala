@@ -26,13 +26,12 @@ import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.read.PositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME
-import org.apache.hudi.common.util.{Option => HOption}
+import org.apache.hudi.common.util.{ValidationUtils, Option => HOption}
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.collection.{CachingIterator, ClosableIterator, Pair => HPair}
 import org.apache.hudi.io.storage.{HoodieSparkFileReaderFactory, HoodieSparkParquetReader}
 import org.apache.hudi.storage.{HoodieStorage, StorageConfiguration, StoragePath}
 import org.apache.hudi.util.CloseableInternalRowIterator
-
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericRecord, IndexedRecord}
 import org.apache.hadoop.conf.Configuration
@@ -242,6 +241,8 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
         override def next(): Any = {
           (skeletonFileIterator.next(), dataFileIterator.next()) match {
             case (s: ColumnarBatch, d: ColumnarBatch) =>
+              ValidationUtils.checkState(partitionFieldAndValues.isEmpty,
+                "Columnar reads do not support bootstrap partitioning")
               //This will not be used until [HUDI-7693] is implemented
               val numCols = s.numCols() + d.numCols()
               val vecs: Array[ColumnVector] = new Array[ColumnVector](numCols)
