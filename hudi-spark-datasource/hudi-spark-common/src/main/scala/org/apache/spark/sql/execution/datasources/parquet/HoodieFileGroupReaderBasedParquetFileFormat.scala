@@ -183,9 +183,9 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
                 0
               }
               val reader = new HoodieFileGroupReader[InternalRow](readerContext, new HoodieHadoopStorage(metaClient.getBasePath, storageConf), tablePath, queryTimestamp,
-                fileSlice, dataAvroSchema, requestedAvroSchema, internalSchemaOpt, metaClient, props, file.start, baseFileLength, shouldUseRecordPosition, false)
+                fileSlice, dataAvroSchema, AvroConversionUtils.convertStructTypeToAvroSchema(outputSchema, sanitizedTableName), internalSchemaOpt, metaClient, props, file.start, baseFileLength, shouldUseRecordPosition, false)
               reader.initRecordIterators()
-              projectSchema(reader.getClosableIterator, requestedSchema, outputSchema)
+              projectSchema(reader.getClosableIterator, outputSchema, outputSchema)
             case _ =>
               readBaseFile(file, parquetFileReader.value, requestedSchema, remainingPartitionSchema, fixedPartitionIndexes,
                 requiredSchema, partitionSchema, outputSchema, filters, storageConf)
