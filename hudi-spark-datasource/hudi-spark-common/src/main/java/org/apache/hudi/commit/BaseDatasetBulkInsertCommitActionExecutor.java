@@ -96,10 +96,6 @@ public abstract class BaseDatasetBulkInsertCommitActionExecutor implements Seria
 
     boolean populateMetaFields = writeConfig.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS);
     preExecute();
-    if (instantTime == null) {
-      // ensure that the commit is started
-      instantTime = writeClient.startCommit(getCommitActionType());
-    }
     table = writeClient.initTable(getWriteOperationType(), Option.ofNullable(instantTime));
 
     BulkInsertPartitioner<Dataset<Row>> bulkInsertPartitionerRows = getPartitioner(populateMetaFields, isTablePartitioned);
