@@ -32,7 +32,7 @@ import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.action.cluster.strategy.UpdateStrategy;
 import org.apache.hudi.table.action.cluster.util.ConsistentHashingUpdateStrategyUtils;
 import org.apache.hudi.table.action.commit.BucketInfo;
-import org.apache.hudi.sink.clustering.update.strategy.RowDataConsistentBucketUpdateStrategy.BucketRecords;
+import org.apache.hudi.sink.clustering.update.strategy.ConsistentBucketUpdateStrategy.BucketRecords;
 import org.apache.hudi.table.action.commit.BucketType;
 
 import org.slf4j.Logger;
@@ -52,16 +52,16 @@ import java.util.stream.Collectors;
  * Update strategy for consistent hashing bucket index. If updates to file groups that are under clustering are identified,
  * then the current batch of records will route to both old and new file groups, i.e., dual write.
  */
-public class RowDataConsistentBucketUpdateStrategy<T> extends UpdateStrategy<T, List<BucketRecords>> {
+public class ConsistentBucketUpdateStrategy<T> extends UpdateStrategy<T, List<BucketRecords>> {
 
-  private static final Logger LOG = LoggerFactory.getLogger(RowDataConsistentBucketUpdateStrategy.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ConsistentBucketUpdateStrategy.class);
 
   private boolean initialized = false;
   private final List<String> indexKeyFields;
   private final Map<String, Pair<String, ConsistentBucketIdentifier>> partitionToIdentifier;
   private String lastRefreshInstant = HoodieTimeline.INIT_INSTANT_TS;
 
-  public RowDataConsistentBucketUpdateStrategy(
+  public ConsistentBucketUpdateStrategy(
       HoodieFlinkWriteClient writeClient, List<String> indexKeyFields) {
     super(writeClient.getEngineContext(), writeClient.getHoodieTable(), Collections.emptySet());
 

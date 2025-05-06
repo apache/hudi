@@ -39,6 +39,7 @@ import org.apache.hudi.io.storage.ColumnRangeMetadataProvider;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.commit.BucketType;
+import org.apache.hudi.util.FlinkClientUtil;
 import org.apache.hudi.util.Lazy;
 
 import org.slf4j.Logger;
@@ -81,6 +82,8 @@ public class RowDataLogWriteHandle<T, I, K, O>
       BucketType bucketType,
       TaskContextSupplier taskContextSupplier) {
     super(config, instantTime, hoodieTable, partitionPath, fileId, bucketType, recordItr, taskContextSupplier);
+    // setup necessary configurations for log write handle.
+    FlinkClientUtil.updateStorageConfForWriteHandle(hoodieTable.getStorageConf(), config);
   }
 
   @Override

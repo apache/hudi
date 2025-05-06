@@ -38,16 +38,19 @@ import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodiePayloadConfig;
@@ -86,10 +89,12 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.StringReader;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Properties;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.model.HoodieFileFormat.HOODIE_LOG;
 import static org.apache.hudi.common.model.HoodieFileFormat.ORC;
@@ -149,23 +154,15 @@ public class StreamerUtil {
   /**
    * Generate the StorageConfiguration for {@code RowData} file reader.
    */
-  public static StorageConfiguration<?> storageConfForRowDataFileReader(StorageConfiguration<?> storageConf, Configuration conf) {
+  public static StorageConfiguration<?> storageConfForReader(StorageConfiguration<?> storageConf, Configuration conf) {
     StorageConfiguration<?> newConf = storageConf.newInstance();
-    updateStorageConfForRowDataFileReader(newConf, conf);
-    return storageConf;
-  }
-
-  /**
-   * Update the StorageConfiguration to add necessary configurations for {@code RowData} file reader.
-   */
-  public static void updateStorageConfForRowDataFileReader(StorageConfiguration<?> storageConf, Configuration conf) {
-    storageConf.set(HoodieStorageConfig.HOODIE_IO_FACTORY_CLASS.key(), HoodieFlinkIOFactory.class.getName());
-    storageConf.set(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(), OptionsResolver.isSchemaEvolutionEnabled(conf) + "");
-    storageConf.set(HoodieStorageConfig.WRITE_UTC_TIMEZONE.key(), conf.get(FlinkOptions.WRITE_UTC_TIMEZONE).toString());
-    storageConf.set(FlinkOptions.READ_UTC_TIMEZONE.key(), conf.get(FlinkOptions.READ_UTC_TIMEZONE).toString());
-    storageConf.set(FlinkOptions.PARTITION_DEFAULT_NAME.key(), conf.get(FlinkOptions.PARTITION_DEFAULT_NAME));
-    storageConf.set(FlinkOptions.PARTITION_PATH_FIELD.key(), conf.get(FlinkOptions.PARTITION_PATH_FIELD));
-    storageConf.set(FlinkOptions.HIVE_STYLE_PARTITIONING.key(), conf.get(FlinkOptions.HIVE_STYLE_PARTITIONING).toString());
+    newConf.set(HoodieStorageConfig.HOODIE_IO_FACTORY_CLASS.key(), HoodieFlinkIOFactory.class.getName());
+    newConf.set(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(), OptionsResolver.isSchemaEvolutionEnabled(conf) + "");
+    newConf.set(FlinkOptions.READ_UTC_TIMEZONE.key(), conf.get(FlinkOptions.READ_UTC_TIMEZONE).toString());
+    newConf.set(FlinkOptions.PARTITION_DEFAULT_NAME.key(), conf.get(FlinkOptions.PARTITION_DEFAULT_NAME));
+    newConf.set(FlinkOptions.PARTITION_PATH_FIELD.key(), conf.get(FlinkOptions.PARTITION_PATH_FIELD));
+    newConf.set(FlinkOptions.HIVE_STYLE_PARTITIONING.key(), conf.get(FlinkOptions.HIVE_STYLE_PARTITIONING).toString());
+    return newConf;
   }
 
   /**
@@ -365,21 +362,48 @@ public class StreamerUtil {
   /**
    * Returns the merger classes.
    */
-  public static String getMergerClasses(HoodieTableConfig tableConfig, Configuration conf) {
-    RecordMergeMode recordMergeMode = tableConfig.getRecordMergeMode();
-    switch (recordMergeMode) {
+  public static String getMergerClasses(Configuration conf, RecordMergeMode mergeMode, String payloadClass) {
+    switch (mergeMode) {
       case EVENT_TIME_ORDERING:
         return EventTimeFlinkRecordMerger.class.getName();
       case COMMIT_TIME_ORDERING:
         return CommitTimeFlinkRecordMerger.class.getName();
       default:
-        String payloadClass = tableConfig.getPayloadClass();
         if (payloadClass.contains(PartialUpdateAvroPayload.class.getSimpleName())) {
           return PartialUpdateFlinkRecordMerger.class.getName();
         } else {
           return conf.get(FlinkOptions.RECORD_MERGER_IMPLS);
         }
     }
+  }
+
+  /**
+   * Infers the merging behavior based on what the user sets (or doesn't set).
+   *
+   * @param conf Flink configuration
+   * @return The correct merging behaviour: <merge_mode, payload_class, merge_strategy_id>
+   */
+  public static Triple<RecordMergeMode, String, String> inferMergingBehavior(Configuration conf) {
+    return HoodieTableConfig.inferCorrectMergingBehavior(
+        getMergeMode(conf), getPayloadClass(conf), getMergeStrategyId(conf), OptionsResolver.getPreCombineField(conf), HoodieTableVersion.EIGHT);
+  }
+
+  /**
+   * Get the {@link HoodieRecordMerger} from configuration for Flink reader.
+   *
+   * @param conf Flink configuration
+   * @return The {@link HoodieRecordMerger} for Flink reader.
+   */
+  public static HoodieRecordMerger getRecordMergerForReader(Configuration conf, String tablePath) {
+    List<String> mergers = Collections.emptyList();
+    if (conf.contains(FlinkOptions.RECORD_MERGER_IMPLS)) {
+      mergers = Arrays.stream(conf.get(FlinkOptions.RECORD_MERGER_IMPLS).split(","))
+          .map(String::trim)
+          .distinct()
+          .collect(Collectors.toList());
+    }
+
+    return HoodieRecordUtils.createRecordMerger(tablePath, EngineType.FLINK, mergers, conf.get(FlinkOptions.RECORD_MERGER_STRATEGY_ID));
   }
 
   /**

@@ -30,6 +30,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
+import org.apache.hudi.util.FlinkClientUtil;
 
 import org.apache.avro.Schema;
 import org.slf4j.Logger;
@@ -69,6 +70,8 @@ public class FlinkMergeHandle<T, I, K, O>
                           Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
                           TaskContextSupplier taskContextSupplier) {
     super(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier, Option.empty());
+    // setup necessary configurations for log write handle.
+    FlinkClientUtil.updateStorageConfForMergeHandle(hoodieTable.getStorageConf(), config);
     if (rolloverPaths == null) {
       // #makeOldAndNewFilePaths may already initialize it already
       rolloverPaths = new ArrayList<>();
@@ -156,14 +159,9 @@ public class FlinkMergeHandle<T, I, K, O>
   }
 
   @Override
-  protected HoodieRecord<T> updateOrPrependMetaFields(HoodieRecord<T> record, Schema schema, Schema targetSchema, String fileName, Properties prop) {
-    if (schema.getField(HoodieRecord.RECORD_KEY_METADATA_FIELD) == null) {
-      // prepend meta fields
-      return super.updateOrPrependMetaFields(record, schema, targetSchema, fileName, prop);
-    } else {
-      // update specific meta field: FILENAME_METADATA_FIELD
-      return record.updateMetaField(schema, HoodieRecord.FILENAME_META_FIELD_ORD, fileName);
-    }
+  protected HoodieRecord<T> updateFileName(HoodieRecord<T> record, Schema schema, Schema targetSchema, String fileName, Properties prop) {
+    // update specific meta field: FILENAME_METADATA_FIELD
+    return record.updateMetaField(schema, HoodieRecord.FILENAME_META_FIELD_ORD, fileName);
   }
 
   /**

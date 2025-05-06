@@ -29,7 +29,6 @@ import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
@@ -43,7 +42,6 @@ import org.apache.hudi.table.format.FormatUtils;
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.table.format.RecordIterators;
 import org.apache.hudi.util.AvroToRowDataConverters;
-import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.RowDataProjection;
 import org.apache.hudi.util.RowDataToAvroConverters;
 import org.apache.hudi.util.StreamerUtil;
@@ -730,8 +728,7 @@ public class MergeOnReadInputFormat
       this.avroToRowDataConverter = AvroToRowDataConverters.createRowConverter(requiredRowType, flinkConf.getBoolean(FlinkOptions.READ_UTC_TIMEZONE));
       this.projection = projection;
       this.instantRange = split.getInstantRange().orElse(null);
-      HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(flinkConf, false, false, true);
-      this.recordMerger = writeConfig.getRecordMerger();
+      this.recordMerger = StreamerUtil.getRecordMergerForReader(flinkConf, split.getTablePath());
     }
 
     @Override

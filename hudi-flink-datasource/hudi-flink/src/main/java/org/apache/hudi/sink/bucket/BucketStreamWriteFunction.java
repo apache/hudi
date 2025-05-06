@@ -25,7 +25,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.index.bucket.BucketIdentifier;
 import org.apache.hudi.index.bucket.partition.NumBucketsFunction;
-import org.apache.hudi.sink.RowDataStreamWriteFunction;
+import org.apache.hudi.sink.StreamWriteFunction;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
@@ -48,9 +48,9 @@ import java.util.Set;
  * is used for deciding whether the incoming records in an UPDATE or INSERT.
  * The index is local because different partition paths have separate items in the index.
  */
-public class RowDataBucketStreamWriteFunction extends RowDataStreamWriteFunction {
+public class BucketStreamWriteFunction extends StreamWriteFunction {
 
-  private static final Logger LOG = LoggerFactory.getLogger(RowDataBucketStreamWriteFunction.class);
+  private static final Logger LOG = LoggerFactory.getLogger(BucketStreamWriteFunction.class);
 
   private int parallelism;
 
@@ -87,7 +87,7 @@ public class RowDataBucketStreamWriteFunction extends RowDataStreamWriteFunction
    *
    * @param config The config options
    */
-  public RowDataBucketStreamWriteFunction(Configuration config, RowType rowType) {
+  public BucketStreamWriteFunction(Configuration config, RowType rowType) {
     super(config, rowType);
   }
 

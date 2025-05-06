@@ -103,11 +103,11 @@ import java.util.NoSuchElementException;
  *
  * @see StreamWriteOperatorCoordinator
  */
-public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlinkInternalRow> {
+public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlinkInternalRow> {
 
   private static final long serialVersionUID = 1L;
 
-  private static final Logger LOG = LoggerFactory.getLogger(RowDataStreamWriteFunction.class);
+  private static final Logger LOG = LoggerFactory.getLogger(StreamWriteFunction.class);
 
   /**
    * Write buffer as buckets for a checkpoint. The key is bucket ID.
@@ -141,7 +141,7 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
    *
    * @param config The config options
    */
-  public RowDataStreamWriteFunction(Configuration config, RowType rowType) {
+  public StreamWriteFunction(Configuration config, RowType rowType) {
     super(config);
     this.rowType = rowType;
     this.keyGen = RowDataKeyGen.instance(config, rowType);
@@ -200,7 +200,6 @@ public class RowDataStreamWriteFunction extends AbstractStreamWriteFunction<Hood
 
   private void initWriteFunction() {
     final String writeOperation = this.config.get(FlinkOptions.OPERATION);
-    StreamerUtil.updateStorageConfForRowDataFileReader(writeClient.getEngineContext().getStorageConf(), config);
     switch (WriteOperationType.fromValue(writeOperation)) {
       case INSERT:
         this.writeFunction = (records, bucketInfo, instantTime) -> this.writeClient.insert(records, bucketInfo, instantTime);

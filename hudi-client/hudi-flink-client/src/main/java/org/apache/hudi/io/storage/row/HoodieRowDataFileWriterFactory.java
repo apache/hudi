@@ -56,8 +56,9 @@ public class HoodieRowDataFileWriterFactory extends HoodieFileWriterFactory {
    * Create a parquet writer on a given OutputStream.
    *
    * @param outputStream outputStream where parquet bytes will be written into
-   * @param config hoodie config
-   * @param schema write schema
+   * @param config       hoodie config
+   * @param schema       write schema
+   *
    * @return an HoodieFileWriter for writing hoodie records.
    */
   @Override
@@ -76,11 +77,12 @@ public class HoodieRowDataFileWriterFactory extends HoodieFileWriterFactory {
   /**
    * Create a parquet RowData writer on a given storage path.
    *
-   * @param instantTime instant time to write
-   * @param storagePath file storage path
-   * @param config hoodie configuration
-   * @param schema write schema
+   * @param instantTime         instant time to write
+   * @param storagePath         file storage path
+   * @param config              hoodie configuration
+   * @param schema              write schema
    * @param taskContextSupplier task context supplier
+   *
    * @return a RowData parquet writer
    */
   @Override
@@ -97,11 +99,12 @@ public class HoodieRowDataFileWriterFactory extends HoodieFileWriterFactory {
   /**
    * Create a parquet RowData writer on a given storage path.
    *
-   * @param instantTime instant time to write
-   * @param storagePath file storage path
-   * @param config hoodie configuration
-   * @param rowType rowType of record
+   * @param instantTime         instant time to write
+   * @param storagePath         file storage path
+   * @param config              hoodie configuration
+   * @param rowType             rowType of record
    * @param taskContextSupplier task context supplier
+   *
    * @return a RowData parquet writer
    */
   public HoodieFileWriter newParquetFileWriter(

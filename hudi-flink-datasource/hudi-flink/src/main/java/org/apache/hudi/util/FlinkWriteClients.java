@@ -24,12 +24,13 @@ import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieClusteringConfig;
@@ -164,7 +165,6 @@ public class FlinkWriteClients {
       boolean enableEmbeddedTimelineService,
       boolean loadFsViewStorageConfig,
       boolean forScanner) {
-    HoodieTableConfig tableConfig = StreamerUtil.createMetaClient(conf).getTableConfig();
     HoodieWriteConfig.Builder builder =
         HoodieWriteConfig.newBuilder()
             .withEngineType(EngineType.FLINK)
@@ -241,9 +241,11 @@ public class FlinkWriteClients {
 
     // currently only set there merge configurations for writing, for reader, will support in HUDI-9146
     if (!forScanner) {
-      builder.withRecordMergeStrategyId(tableConfig.getRecordMergeStrategyId())
-          .withRecordMergeMode(tableConfig.getRecordMergeMode())
-          .withRecordMergeImplClasses(StreamerUtil.getMergerClasses(tableConfig, conf));
+      // <merge_mode, payload_class, merge_strategy_id>
+      Triple<RecordMergeMode, String, String> mergingBehavior = StreamerUtil.inferMergingBehavior(conf);
+      builder.withRecordMergeStrategyId(mergingBehavior.getRight())
+          .withRecordMergeMode(mergingBehavior.getLeft())
+          .withRecordMergeImplClasses(StreamerUtil.getMergerClasses(conf, mergingBehavior.getLeft(), mergingBehavior.getMiddle()));
     }
 
     Option<HoodieLockConfig> lockConfig = getLockConfig(conf);

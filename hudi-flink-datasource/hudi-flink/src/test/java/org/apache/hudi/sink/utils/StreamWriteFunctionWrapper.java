@@ -25,7 +25,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.sink.RowDataStreamWriteFunction;
+import org.apache.hudi.sink.StreamWriteFunction;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.bootstrap.BootstrapOperator;
 import org.apache.hudi.sink.common.AbstractStreamWriteFunction;
@@ -97,7 +97,7 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
   /**
    * Stream write function.
    */
-  protected RowDataStreamWriteFunction writeFunction;
+  protected StreamWriteFunction writeFunction;
 
   private CompactFunctionWrapper compactFunctionWrapper;
 
@@ -304,7 +304,7 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
   // -------------------------------------------------------------------------
 
   private void setupWriteFunction() throws Exception {
-    writeFunction = new RowDataStreamWriteFunction(conf, rowType);
+    writeFunction = new StreamWriteFunction(conf, rowType);
     writeFunction.setRuntimeContext(runtimeContext);
     writeFunction.setOperatorEventGateway(gateway);
     writeFunction.initializeState(this.stateInitializationContext);

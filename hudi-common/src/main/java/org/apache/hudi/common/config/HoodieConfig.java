@@ -242,6 +242,10 @@ public class HoodieConfig implements Serializable {
     return rawValue.map(Object::toString).orElse(defaultVal);
   }
 
+  public String getStringOrDefault(String key, String defaultVal) {
+    return Option.ofNullable(props.getProperty(key)).orElse(defaultVal);
+  }
+
   public TypedProperties getProps() {
     return props;
   }

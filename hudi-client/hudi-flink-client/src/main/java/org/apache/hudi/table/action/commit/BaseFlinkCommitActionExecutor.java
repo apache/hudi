@@ -72,15 +72,6 @@ public abstract class BaseFlinkCommitActionExecutor<T> extends
 
   public BaseFlinkCommitActionExecutor(HoodieEngineContext context,
                                        HoodieWriteHandle<?, ?, ?, ?> writeHandle,
-                                       HoodieWriteConfig config,
-                                       HoodieTable table,
-                                       String instantTime,
-                                       WriteOperationType operationType) {
-    this(context, writeHandle, null, config, table, instantTime, operationType, Option.empty());
-  }
-
-  public BaseFlinkCommitActionExecutor(HoodieEngineContext context,
-                                       HoodieWriteHandle<?, ?, ?, ?> writeHandle,
                                        BucketInfo bucketInfo,
                                        HoodieWriteConfig config,
                                        HoodieTable table,

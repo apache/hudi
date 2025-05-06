@@ -19,9 +19,9 @@
 package org.apache.hudi.sink.utils;
 
 import org.apache.hudi.client.model.HoodieFlinkInternalRow;
-import org.apache.hudi.sink.RowDataStreamWriteFunction;
+import org.apache.hudi.sink.StreamWriteFunction;
 import org.apache.hudi.sink.bucket.ConsistentBucketAssignFunction;
-import org.apache.hudi.sink.bucket.RowDataConsistentBucketStreamWriteFunction;
+import org.apache.hudi.sink.bucket.ConsistentBucketStreamWriteFunction;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.state.FunctionSnapshotContext;
@@ -31,7 +31,7 @@ import org.apache.flink.table.data.RowData;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * A wrapper class to manipulate the {@link RowDataConsistentBucketStreamWriteFunction} instance for testing.
+ * A wrapper class to manipulate the {@link ConsistentBucketStreamWriteFunction} instance for testing.
  *
  * @param <I> Input type
  */
@@ -61,8 +61,8 @@ public class ConsistentBucketStreamWriteFunctionWrapper<I> extends BucketStreamW
     }
   }
 
-  protected RowDataStreamWriteFunction createWriteFunction() {
-    return new RowDataConsistentBucketStreamWriteFunction(conf, rowType);
+  protected StreamWriteFunction createWriteFunction() {
+    return new ConsistentBucketStreamWriteFunction(conf, rowType);
   }
 
   @Override

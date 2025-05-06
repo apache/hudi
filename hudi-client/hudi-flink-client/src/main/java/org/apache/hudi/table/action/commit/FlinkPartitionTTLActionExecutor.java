@@ -46,7 +46,7 @@ public class FlinkPartitionTTLActionExecutor<T> extends BaseFlinkCommitActionExe
                                          HoodieWriteConfig config,
                                          HoodieTable table,
                                          String instantTime) {
-    super(context, null, config, table, instantTime, WriteOperationType.DELETE_PARTITION);
+    super(context, null, null, config, table, instantTime, WriteOperationType.DELETE_PARTITION);
   }
 
   @Override

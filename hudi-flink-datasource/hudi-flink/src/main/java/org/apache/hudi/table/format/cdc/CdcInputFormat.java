@@ -366,8 +366,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
           ? null
           : RowDataProjection.instance(tableState.getRequiredRowType(), tableState.getRequiredPositions());
 
-      HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(flinkConf, false, false, true);
-      this.recordMerger = writeConfig.getRecordMerger();
+      this.recordMerger = StreamerUtil.getRecordMergerForReader(flinkConf, split.getTablePath());
       this.payloadProps = StreamerUtil.getPayloadConfig(flinkConf).getProps();
       initImages(cdcFileSplit);
     }

@@ -24,10 +24,10 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.collection.MappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.sink.RowDataStreamWriteFunction;
+import org.apache.hudi.sink.StreamWriteFunction;
 import org.apache.hudi.sink.buffer.RowDataBucket;
-import org.apache.hudi.sink.clustering.update.strategy.RowDataConsistentBucketUpdateStrategy;
-import org.apache.hudi.sink.clustering.update.strategy.RowDataConsistentBucketUpdateStrategy.BucketRecords;
+import org.apache.hudi.sink.clustering.update.strategy.ConsistentBucketUpdateStrategy;
+import org.apache.hudi.sink.clustering.update.strategy.ConsistentBucketUpdateStrategy.BucketRecords;
 import org.apache.hudi.util.MutableIteratorWrapperIterator;
 
 import org.apache.flink.configuration.Configuration;
@@ -48,11 +48,11 @@ import java.util.stream.Collectors;
  * A stream write function with consistent bucket hash index, and it writes flink RowData without Avro conversion.
  * The function tags each incoming record with a location of a file based on consistent bucket index.
  */
-public class RowDataConsistentBucketStreamWriteFunction extends RowDataStreamWriteFunction {
+public class ConsistentBucketStreamWriteFunction extends StreamWriteFunction {
 
-  private static final Logger LOG = LoggerFactory.getLogger(RowDataConsistentBucketStreamWriteFunction.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ConsistentBucketStreamWriteFunction.class);
 
-  private transient RowDataConsistentBucketUpdateStrategy updateStrategy;
+  private transient ConsistentBucketUpdateStrategy updateStrategy;
 
   /**
    * Constructs a RowDataConsistentBucketStreamWriteFunction.
@@ -60,7 +60,7 @@ public class RowDataConsistentBucketStreamWriteFunction extends RowDataStreamWri
    * @param config  The config options
    * @param rowType LogicalType of record
    */
-  public RowDataConsistentBucketStreamWriteFunction(Configuration config, RowType rowType) {
+  public ConsistentBucketStreamWriteFunction(Configuration config, RowType rowType) {
     super(config, rowType);
   }
 
@@ -68,7 +68,7 @@ public class RowDataConsistentBucketStreamWriteFunction extends RowDataStreamWri
   public void open(Configuration parameters) throws IOException {
     super.open(parameters);
     List<String> indexKeyFields = Arrays.asList(config.get(FlinkOptions.INDEX_KEY_FIELD).split(","));
-    this.updateStrategy = new RowDataConsistentBucketUpdateStrategy(this.writeClient, indexKeyFields);
+    this.updateStrategy = new ConsistentBucketUpdateStrategy(this.writeClient, indexKeyFields);
     LOG.info("Create update strategy with index key fields: {}", indexKeyFields);
   }
 
