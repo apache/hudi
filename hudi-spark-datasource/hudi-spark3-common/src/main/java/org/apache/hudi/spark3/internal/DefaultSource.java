@@ -23,6 +23,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.config.HoodieInternalConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.internal.BaseDefaultSource;
+import org.apache.hudi.internal.DataSourceInternalWriterHelper;
 
 import org.apache.spark.sql.HoodieDataTypeUtils;
 import org.apache.spark.sql.connector.catalog.Table;
@@ -48,6 +49,7 @@ public class DefaultSource extends BaseDefaultSource implements TableProvider {
 
   @Override
   public Table getTable(StructType schema, Transform[] partitioning, Map<String, String> properties) {
+    String instantTime = properties.get(DataSourceInternalWriterHelper.INSTANT_TIME_OPT_KEY);
     String path = properties.get("path");
     String tblName = properties.get(HoodieWriteConfig.TBL_NAME.key());
     boolean populateMetaFields = Boolean.parseBoolean(properties.getOrDefault(HoodieTableConfig.POPULATE_META_FIELDS.key(),
@@ -60,7 +62,7 @@ public class DefaultSource extends BaseDefaultSource implements TableProvider {
     HoodieDataTypeUtils.tryOverrideParquetWriteLegacyFormatProperty(newProps, schema);
     // 1st arg to createHoodieConfig is not really required to be set. but passing it anyways.
     HoodieWriteConfig config = DataSourceUtils.createHoodieConfig(newProps.get(HoodieWriteConfig.AVRO_SCHEMA_STRING.key()), path, tblName, newProps);
-    return new HoodieDataSourceInternalTable(config, schema, getSparkSession(),
+    return new HoodieDataSourceInternalTable(instantTime, config, schema, getSparkSession(),
         getConfiguration(), newProps, populateMetaFields, arePartitionRecordsSorted);
   }
 }
