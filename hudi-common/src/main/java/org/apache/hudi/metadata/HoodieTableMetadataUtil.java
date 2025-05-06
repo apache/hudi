@@ -248,19 +248,36 @@ public class HoodieTableMetadataUtil {
       String filePath,
       Schema recordSchema,
       StorageConfiguration<?> storageConfig) {
-    // Helper class to calculate column stats
-    class ColumnStats {
-      Object minValue;
-      Object maxValue;
-      long nullCount;
-      long valueCount;
-    }
 
-    HashMap<String, ColumnStats> allColumnStats = new HashMap<>();
+    Map<String, ColumnStats> allColumnStats = collectColStats(records, targetFields, recordSchema, storageConfig, Option.empty(),
+        Option.empty());
+    return generateColumnRangeMetadata(targetFields, filePath, allColumnStats);
+  }
 
-    final Properties properties = new Properties();
+  // Helper class to calculate column stats
+  public static class ColumnStats {
+    Object minValue;
+    Object maxValue;
+    long nullCount;
+    long valueCount;
+  }
+
+  public static Properties getPropertiesToGenerateColStats(StorageConfiguration<?> storageConfig) {
+    Properties properties = new Properties();
     properties.setProperty(HoodieStorageConfig.WRITE_UTC_TIMEZONE.key(),
         storageConfig.getString(HoodieStorageConfig.WRITE_UTC_TIMEZONE.key(), HoodieStorageConfig.WRITE_UTC_TIMEZONE.defaultValue().toString()));
+    return properties;
+  }
+
+  public static Map<String, ColumnStats> collectColStats(List<HoodieRecord> records,
+                                                         List<Pair<String, Schema>> targetFields,
+                                                         Schema recordSchema,
+                                                         StorageConfiguration<?> storageConfig,
+                                                         Option<Map<String, ColumnStats>> allColumnStatsOpt,
+                                                         Option<Properties> propertiesOpt) {
+    Map<String, ColumnStats> allColumnStats = allColumnStatsOpt.map(allColumnStatsMap -> allColumnStatsMap).orElse(new HashMap<>());
+
+    final Properties properties = propertiesOpt.map(props -> props).orElse(getPropertiesToGenerateColStats(storageConfig));
     // Collect stats for all columns by iterating through records while accounting
     // corresponding stats
     records.forEach((record) -> {
@@ -279,6 +296,9 @@ public class HoodieTableMetadataUtil {
 
         } else if (record.getRecordType() == HoodieRecordType.SPARK) {
           fieldValue = record.getColumnValues(recordSchema, new String[]{fieldName}, false)[0];
+          if (fieldSchema.getType() == Schema.Type.STRING) {
+            fieldValue = fieldValue.toString();
+          }
           if (fieldSchema.getType() == Schema.Type.INT && fieldSchema.getLogicalType() != null && fieldSchema.getLogicalType() == LogicalTypes.date()) {
             fieldValue = java.sql.Date.valueOf(LocalDate.ofEpochDay((Integer) fieldValue).toString());
           }
@@ -304,7 +324,12 @@ public class HoodieTableMetadataUtil {
         }
       });
     });
+    return allColumnStats;
+  }
 
+  public static Map<String, HoodieColumnRangeMetadata<Comparable>> generateColumnRangeMetadata(List<Pair<String, Schema>> targetFields,
+                                                                                               String filePath,
+                                                                                               Map<String, ColumnStats> allColumnStats) {
     Stream<HoodieColumnRangeMetadata<Comparable>> hoodieColumnRangeMetadataStream =
         targetFields.stream().map(fieldNameSchemaPair -> {
           String fieldName = fieldNameSchemaPair.getKey();

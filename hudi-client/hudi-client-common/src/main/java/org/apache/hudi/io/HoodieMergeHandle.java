@@ -349,9 +349,7 @@ public class  HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       // deflate record payload after recording success. This will help users access payload as a
       // part of marking
       // record successful.
-      if (!colStatsEnabled) {
-        newRecord.deflate();
-      }
+      newRecord.deflate();
       return true;
     } catch (Exception e) {
       LOG.error("Error writing record  " + newRecord, e);
@@ -421,7 +419,7 @@ public class  HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     HoodieRecord populatedRecord = record.prependMetaFields(schema, writeSchemaWithMetaFields, metadataValues, prop);
 
     if (colStatsEnabled) {
-      this.recordList.add(record);
+      attachColStats(populatedRecord);
     }
     if (shouldPreserveRecordMetadata) {
       fileWriter.write(key.getRecordKey(), populatedRecord, writeSchemaWithMetaFields);
@@ -482,7 +480,7 @@ public class  HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       runtimeStats.setTotalUpsertTime(timer.endTimer());
       stat.setRuntimeStats(runtimeStats);
       if (colStatsEnabled) {
-        attachColStats(stat, recordList, fieldsToIndex, writeSchemaWithMetaFields);
+        attachColStats(stat);
       }
 
       performMergeDataValidationCheck(writeStatus);

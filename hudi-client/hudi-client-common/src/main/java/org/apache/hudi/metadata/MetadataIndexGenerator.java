@@ -38,10 +38,12 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
 import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
@@ -92,12 +94,11 @@ public class MetadataIndexGenerator implements Serializable {
 
   protected static List<Pair<String, HoodieRecord>> processWriteStatusForColStats(WriteStatus writeStatus) {
     List<Pair<String, HoodieRecord>> allRecords = new ArrayList<>();
-    Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMap = new HashMap<>();
-    // to fix.
-    /*writeStatus.getStat().getColumnStats().get();
-    Collection<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList = columnRangeMap.values();
-    allRecords.addAll(HoodieMetadataPayload.createColumnStatsRecords(writeStatus.getStat().getPartitionPath(), columnRangeMetadataList, false)
-    .collect(Collectors.toList()).stream().map(record -> Pair.of(COLUMN_STATS.getPartitionPath(), record)).collect(Collectors.toList()));*/
+    writeStatus.getStat().getColumnStats().ifPresent(columnRangeMap -> {
+      Collection<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList = columnRangeMap.values();
+      allRecords.addAll(HoodieMetadataPayload.createColumnStatsRecords(writeStatus.getStat().getPartitionPath(), columnRangeMetadataList, false)
+          .collect(Collectors.toList()).stream().map(record -> Pair.of(COLUMN_STATS.getPartitionPath(), record)).collect(Collectors.toList()));
+    });
     return allRecords;
   }
 

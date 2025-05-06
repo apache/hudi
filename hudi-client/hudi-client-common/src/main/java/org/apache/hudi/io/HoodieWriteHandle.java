@@ -26,6 +26,7 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
+import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -43,6 +44,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -59,8 +61,11 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -94,6 +99,8 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
   protected List<HoodieRecord> recordList = new ArrayList<>();
   protected boolean colStatsEnabled = false;
   protected List<Pair<String, Schema>> fieldsToIndex = new ArrayList<>();
+  protected Map<String, HoodieTableMetadataUtil.ColumnStats> colStatsTracker = new HashMap<>();
+  protected Option<Properties> propsForColStats = Option.empty();
 
   public HoodieWriteHandle(HoodieWriteConfig config, String instantTime, String partitionPath,
                            String fileId, HoodieTable<T, I, K, O> hoodieTable, TaskContextSupplier taskContextSupplier) {
@@ -122,6 +129,7 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
       if (config.isStreamingWritesToMetadataEnabled(hoodieTable.getMetaClient().getTableConfig().getTableVersion())) {
         // Disabled as it was added as part of optimised writes
         this.colStatsEnabled = true;
+        this.propsForColStats = Option.of(HoodieTableMetadataUtil.getPropertiesToGenerateColStats(hoodieTable.getStorageConf()));
       }
       Set<String> columnsToIndexSet = new HashSet<>(HoodieTableMetadataUtil
           .getColumnsToIndex(hoodieTable.getMetaClient().getTableConfig(),
@@ -330,20 +338,18 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     }
   }
 
-  protected void attachColStats(HoodieWriteStat stat, List<HoodieRecord> recordList, List<Pair<String, Schema>> fieldsToIndex,
-                                Schema writeSchemaWithMetaFields) {
-    // populate col stats if required
-    /*try {
-      Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataMap =
-          HoodieTableMetadataUtil.collectColumnRangeMetadata(recordList, fieldsToIndex, stat.getPath(), writeSchemaWithMetaFields, hoodieTable.getStorageConf());
-      stat.putRecordsStats(columnRangeMetadataMap);
-      deflateAllRecords(recordList);
-    } catch (HoodieException e) {
-      throw new HoodieMetadataException("Failed to generate col stats for file " + stat.getPath(), e);
-    }*/
+  protected void attachColStats(HoodieRecord record) {
+    HoodieTableMetadataUtil.collectColStats(Collections.singletonList(record), fieldsToIndex, writeSchemaWithMetaFields, hoodieTable.getStorageConf(),
+        Option.of(colStatsTracker), propsForColStats);
   }
 
-  protected void deflateAllRecords(List<HoodieRecord> records) {
-    records.forEach(record -> record.deflate());
+  protected void attachColStats(HoodieWriteStat stat) {
+    try {
+      Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataMap =
+          HoodieTableMetadataUtil.generateColumnRangeMetadata(fieldsToIndex, stat.getPath(), colStatsTracker);
+      stat.putRecordsStats(columnRangeMetadataMap);
+    } catch (HoodieException e) {
+      throw new HoodieMetadataException("Failed to generate col stats for file " + stat.getPath(), e);
+    }
   }
 }

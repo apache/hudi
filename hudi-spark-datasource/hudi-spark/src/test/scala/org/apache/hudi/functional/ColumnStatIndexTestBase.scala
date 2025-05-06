@@ -553,5 +553,5 @@ object ColumnStatIndexTestBase {
                                    smallFileLimit: Integer = 100 * 1024 * 1024,
                                    shouldValidatePartitionStats : Boolean = false,
                                    validationSortColumns : Seq[String] = Seq("c1_maxValue", "c1_minValue", "c2_maxValue",
-                                     "c2_minValue", "c3_maxValue", "c3_minValue", "c5_maxValue", "c5_minValue"))
+                                     "c2_minValue", "c5_maxValue", "c5_minValue"))
 }

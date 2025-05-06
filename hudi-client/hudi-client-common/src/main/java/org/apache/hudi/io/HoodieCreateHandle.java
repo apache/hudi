@@ -145,7 +145,7 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
             record.prependMetaFields(schema, writeSchemaWithMetaFields, metadataValues, config.getProps());
 
         if (colStatsEnabled) {
-          this.recordList.add(record);
+          this.attachColStats(populatedRecord);
         }
         if (preserveMetadata) {
           fileWriter.write(record.getRecordKey(), populatedRecord, writeSchemaWithMetaFields);
@@ -167,9 +167,7 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       // deflate record payload after recording success. This will help users access payload as a
       // part of marking
       // record successful.
-      if (!colStatsEnabled) {
-        record.deflate();
-      }
+      record.deflate();
     } catch (Throwable t) {
       // Not throwing exception from here, since we don't want to fail the entire job
       // for a single record
@@ -258,7 +256,7 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     stat.setRuntimeStats(runtimeStats);
 
     if (colStatsEnabled) {
-      attachColStats(stat, recordList, fieldsToIndex, writeSchemaWithMetaFields);
+      attachColStats(stat);
     }
   }
 }
