@@ -111,6 +111,9 @@ public class TimelineService {
     @Parameter(names = {"--enable-marker-requests", "-em"}, description = "Enable handling of marker-related requests")
     public boolean enableMarkerRequests = false;
 
+    @Parameter(names = {"--enable-remote-partitioner"}, description = "Enable remote partitioner")
+    public boolean enableRemotePartitioner = true;
+
     @Parameter(names = {"--enable-instant-state-requests"}, description = "Enable handling of instant state requests")
     public boolean enableInstantStateRequests = false;
 
@@ -195,6 +198,7 @@ public class TimelineService {
       private Long maxAllowableHeartbeatIntervalInMs = 120000L;
 
       private int instantStateForceRefreshRequestNumber = 100;
+      private boolean enableRemotePartitioner = true;
 
       public Builder() {
       }
@@ -246,6 +250,11 @@ public class TimelineService {
 
       public Builder enableMarkerRequests(boolean enableMarkerRequests) {
         this.enableMarkerRequests = enableMarkerRequests;
+        return this;
+      }
+
+      public Builder enableRemotePartitioner(boolean enableRemotePartitioner) {
+        this.enableRemotePartitioner = enableRemotePartitioner;
         return this;
       }
 
@@ -316,6 +325,7 @@ public class TimelineService {
         config.async = this.async;
         config.compress = this.compress;
         config.enableMarkerRequests = this.enableMarkerRequests;
+        config.enableRemotePartitioner = this.enableRemotePartitioner;
         config.markerBatchNumThreads = this.markerBatchNumThreads;
         config.markerBatchIntervalMs = this.markerBatchIntervalMs;
         config.markerParallelism = this.markerParallelism;

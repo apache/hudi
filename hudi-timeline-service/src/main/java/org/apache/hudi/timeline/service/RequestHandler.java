@@ -36,6 +36,7 @@ import org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.RemotePartitionHelper;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -43,6 +44,7 @@ import org.apache.hudi.timeline.service.handlers.BaseFileHandler;
 import org.apache.hudi.timeline.service.handlers.FileSliceHandler;
 import org.apache.hudi.timeline.service.handlers.InstantStateHandler;
 import org.apache.hudi.timeline.service.handlers.MarkerHandler;
+import org.apache.hudi.timeline.service.handlers.RemotePartitionerHandler;
 import org.apache.hudi.timeline.service.handlers.TimelineHandler;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -86,6 +88,7 @@ public class RequestHandler {
   private final BaseFileHandler dataFileHandler;
   private final MarkerHandler markerHandler;
   private final InstantStateHandler instantStateHandler;
+  private RemotePartitionerHandler partitionerHandler;
   private final Registry metricsRegistry = Registry.getRegistry("TimelineService");
   private final ScheduledExecutorService asyncResultService;
 
@@ -103,6 +106,9 @@ public class RequestHandler {
           conf, timelineServiceConfig, hoodieEngineContext, viewManager, metricsRegistry);
     } else {
       this.markerHandler = null;
+    }
+    if (timelineServiceConfig.enableRemotePartitioner) {
+      this.partitionerHandler = new RemotePartitionerHandler(conf, timelineServiceConfig, viewManager);
     }
     if (timelineServiceConfig.enableInstantStateRequests) {
       this.instantStateHandler = new InstantStateHandler(conf, timelineServiceConfig, viewManager);
@@ -193,6 +199,9 @@ public class RequestHandler {
     registerTimelineAPI();
     if (markerHandler != null) {
       registerMarkerAPI();
+    }
+    if (partitionerHandler != null) {
+      registerRemotePartitionerAPI();
     }
     if (instantStateHandler != null) {
       registerInstantStateAPI();
@@ -556,6 +565,17 @@ public class RequestHandler {
       metricsRegistry.add("REFRESH_INSTANT_STATE", 1);
       boolean success = instantStateHandler.refresh(getInstantStateDirPathParam(ctx));
       writeValueAsString(ctx, success);
+    }, false));
+  }
+
+  private void registerRemotePartitionerAPI() {
+    app.get(RemotePartitionHelper.URL, new ViewHandler(ctx -> {
+      int partition = partitionerHandler.gePartitionIndex(
+          ctx.queryParamAsClass(RemotePartitionHelper.NUM_BUCKETS_PARAM, String.class).getOrDefault(""),
+          ctx.queryParamAsClass(RemotePartitionHelper.PARTITION_PATH_PARAM, String.class).getOrDefault(""),
+          ctx.queryParamAsClass(RemotePartitionHelper.CUR_BUCKET_PARAM, String.class).getOrDefault(""),
+          ctx.queryParamAsClass(RemotePartitionHelper.PARTITION_NUM_PARAM, String.class).getOrDefault(""));
+      writeValueAsString(ctx, partition);
     }, false));
   }
 

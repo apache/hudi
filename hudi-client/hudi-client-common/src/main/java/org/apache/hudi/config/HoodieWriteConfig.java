@@ -2281,6 +2281,10 @@ public class HoodieWriteConfig extends HoodieConfig {
   public String getRecordIndexInputStorageLevel() {
     return getStringOrDefault(HoodieIndexConfig.RECORD_INDEX_INPUT_STORAGE_LEVEL_VALUE);
   }
+  
+  public boolean isUsingRemotePartitioner() {
+    return getBoolean(HoodieIndexConfig.BUCKET_PARTITIONER);
+  }
 
   /**
    * storage properties.

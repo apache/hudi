@@ -287,6 +287,11 @@ public class HoodieIndexConfig extends HoodieConfig {
       .withDocumentation("Only applies if index type is BUCKET. Determine the number of buckets in the hudi table, "
           + "and each partition is divided to N buckets.");
 
+  public static final ConfigProperty<Boolean> BUCKET_PARTITIONER = ConfigProperty
+      .key("hoodie.bucket.remote.partitioner.enable")
+      .defaultValue(true)
+      .withDocumentation("Use Remote Partitioner to do repartition based on bucket.");
+
   public static final ConfigProperty<String> BUCKET_INDEX_PARTITION_RULE_TYPE = ConfigProperty
       .key("hoodie.bucket.index.partition.rule.type")
       .defaultValue(PartitionBucketIndexRule.REGEX.name)
