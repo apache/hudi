@@ -65,7 +65,7 @@ class TestEngineBasedMerger {
 
   private static Stream<Arguments> commitTimeOrdering() {
     return Stream.of(
-        // Validate commit time does not impact the ordering
+        // Validate event time does not impact the ordering
         Arguments.of(Arrays.asList(T1, T3, T2), T2),
         // Validate hard delete does not impact the ordering
         Arguments.of(Arrays.asList(T1, HARD_DELETE, T2), T2));
