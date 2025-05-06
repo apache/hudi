@@ -56,7 +56,7 @@ import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.commit.BaseCommitActionExecutor;
-import org.apache.hudi.table.action.commit.BaseSparkCommitActionExecutor;
+import org.apache.hudi.table.action.commit.SparkAutoCommitExecutor;
 import org.apache.hudi.table.action.commit.SparkBulkInsertCommitActionExecutor;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
@@ -94,7 +94,6 @@ public class SparkBootstrapCommitActionExecutor<T>
         context,
         new HoodieWriteConfig.Builder()
             .withProps(config.getProps())
-            .withInternalAutoCommit(true)
             .withWriteStatusClass(BootstrapWriteStatus.class)
             .withBulkInsertParallelism(config.getBootstrapParallelism()).build(),
         table,
@@ -177,7 +176,8 @@ public class SparkBootstrapCommitActionExecutor<T>
     HoodieData<WriteStatus> statuses = table.getIndex().updateLocation(writeStatuses, context, table);
     result.setIndexUpdateDuration(Duration.between(indexStartTime, Instant.now()));
     result.setWriteStatuses(statuses);
-    commitOnInternalAutoCommit(result, true);
+    runPrecommitValidators(result);
+    completeCommit(result);
   }
 
   @Override
@@ -251,11 +251,10 @@ public class SparkBootstrapCommitActionExecutor<T>
     HoodieWriteConfig writeConfig = new HoodieWriteConfig.Builder()
         .withProps(config.getProps())
         .withSchema(bootstrapSchema)
-        .withInternalAutoCommit(true)
         .build();
 
     Option<HoodieWriteMetadata<HoodieData<WriteStatus>>> writeMetadataOption =
-        Option.of(getBulkInsertActionExecutor(HoodieJavaRDD.of(inputRecordsRDD), writeConfig).execute());
+        Option.of(doBulkInsertAndCommit(HoodieJavaRDD.of(inputRecordsRDD), writeConfig));
 
     // Delete the marker directory for the instant
     WriteMarkersFactory.get(config.getMarkersType(), table, bootstrapInstantTime)
@@ -264,9 +263,9 @@ public class SparkBootstrapCommitActionExecutor<T>
     return writeMetadataOption;
   }
 
-  protected BaseSparkCommitActionExecutor<T> getBulkInsertActionExecutor(HoodieData<HoodieRecord> inputRecordsRDD, HoodieWriteConfig writeConfig) {
-    return new SparkBulkInsertCommitActionExecutor((HoodieSparkEngineContext) context, writeConfig, table, HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS,
-        inputRecordsRDD, Option.empty(), extraMetadata);
+  protected HoodieWriteMetadata<HoodieData<WriteStatus>> doBulkInsertAndCommit(HoodieData<HoodieRecord> inputRecordsRDD, HoodieWriteConfig writeConfig) {
+    return new SparkAutoCommitExecutor(new SparkBulkInsertCommitActionExecutor((HoodieSparkEngineContext) context, writeConfig, table, HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS,
+        inputRecordsRDD, Option.empty(), extraMetadata)).execute();
   }
 
   /**

@@ -95,8 +95,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
     this.operationType = operationType;
     this.extraMetadata = extraMetadata;
     this.taskContextSupplier = context.getTaskContextSupplier();
-    this.txnManagerOption = config.shouldInternalAutoCommit()
-        ? Option.of(new TransactionManager(config, table.getStorage())) : Option.empty();
+    this.txnManagerOption = Option.empty();
     initializeTransactionSupportingCast();
     if (!table.getStorageLayout().writeOperationSupported(operationType)) {
       throw new UnsupportedOperationException("Executor " + this.getClass().getSimpleName()
@@ -184,23 +183,13 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
     throw new HoodieIOException("Precommit validation not implemented for all engines yet");
   }
 
-  protected void commitOnInternalAutoCommit(HoodieWriteMetadata result) {
-    commitOnInternalAutoCommit(result, false);
-  }
-
-  protected void commitOnInternalAutoCommit(HoodieWriteMetadata result, boolean overrideInternalAutoCommit) {
-    // validate commit action before committing result
-    runPrecommitValidators(result);
-    if (config.shouldInternalAutoCommit() || overrideInternalAutoCommit) {
-      if (!this.txnManagerOption.isPresent()) {
-        this.txnManagerOption = Option.of(new TransactionManager(config, table.getStorage()));
-        initializeTransactionSupportingCast();
-      }
-      autoCommit(result);
-      LOG.info("Completing commit for " + instantTime);
-    } else {
-      LOG.debug("Auto commit disabled for " + instantTime);
+  protected void completeCommit(HoodieWriteMetadata result) {
+    if (!this.txnManagerOption.isPresent()) {
+      this.txnManagerOption = Option.of(new TransactionManager(config, table.getStorage()));
+      initializeTransactionSupportingCast();
     }
+    autoCommit(result);
+    LOG.info("Completing commit for " + instantTime);
   }
 
   protected void autoCommit(HoodieWriteMetadata<O> result) {

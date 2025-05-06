@@ -61,9 +61,7 @@ public class FlinkPartitionTTLActionExecutor<T> extends BaseFlinkCommitActionExe
         return emptyResult;
       }
       LOG.info("Partition ttl find the following expired partitions to delete:  " + String.join(",", expiredPartitions));
-      // Internal Auto commit is disabled in config, copy config and enable internal auto commit for FlinkDeletePartitionCommitActionExecutor.
-      HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withProperties(this.config.getProps()).withInternalAutoCommit(true).build();
-      return new FlinkDeletePartitionCommitActionExecutor<>(context, config, table, instantTime, expiredPartitions).execute();
+      return new FlinkAutoCommitActionExecutor(new FlinkDeletePartitionCommitActionExecutor<>(context, config, table, instantTime, expiredPartitions)).execute();
     } catch (HoodieDeletePartitionPendingTableServiceException deletePartitionPendingTableServiceException) {
       LOG.info("Partition is under table service, do nothing, call delete partition next time.");
       return emptyResult;

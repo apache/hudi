@@ -477,13 +477,6 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Write status objects hold metadata about a write (stats, errors), that is not yet committed to storage. "
           + "This controls the how that information is cached for inspection by clients. We rarely expect this to be changed.");
 
-  public static final ConfigProperty<String> INTERNAL_AUTO_COMMIT_ENABLE = ConfigProperty
-      .key("hoodie.internal.auto.commit")
-      .defaultValue("false")
-      .markAdvanced()
-      .withDocumentation("Controls whether a write operation should auto commit. This can be turned off to perform inspection"
-          + " of the uncommitted write before deciding to commit.");
-
   public static final ConfigProperty<String> WRITE_STATUS_CLASS_NAME = ConfigProperty
       .key("hoodie.writestatus.class")
       .defaultValue(WriteStatus.class.getName())
@@ -1414,10 +1407,6 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean isConsistentLogicalTimestampEnabled() {
     return getBooleanOrDefault(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED);
-  }
-
-  public Boolean shouldInternalAutoCommit() {
-    return getBooleanOrDefault(INTERNAL_AUTO_COMMIT_ENABLE);
   }
 
   public boolean shouldUseExternalSchemaTransformation() {
@@ -3275,11 +3264,6 @@ public class HoodieWriteConfig extends HoodieConfig {
     public Builder withTTLConfig(HoodieTTLConfig ttlConfig) {
       writeConfig.getProps().putAll(ttlConfig.getProps());
       isTTLConfigSet = true;
-      return this;
-    }
-
-    public Builder withInternalAutoCommit(boolean autoCommit) {
-      writeConfig.setValue(INTERNAL_AUTO_COMMIT_ENABLE, String.valueOf(autoCommit));
       return this;
     }
 
