@@ -336,7 +336,6 @@ class TestHoodieDataSourceInternalBatchWrite extends
     }
   }
 
-
   private String createInstant(HoodieWriteConfig cfg) {
     String instantTime;
     try (SparkRDDWriteClient<?> writeClient = new SparkRDDWriteClient<>(new HoodieSparkEngineContext(new JavaSparkContext(sparkSession.sparkContext())), cfg)) {

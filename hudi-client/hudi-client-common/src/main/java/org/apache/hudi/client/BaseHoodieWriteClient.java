@@ -965,8 +965,14 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     startCommitWithTime(Option.of(instantTime), metaClient.getCommitActionType(), metaClient);
   }
 
-  @Deprecated
-  public void startCommitWithTime(String instantTime, String actionType) {
+  /**
+   * Provides a new commit at the specified time with the provided action type.
+   * This is only for testing purposes to setup particular sequences of commits.
+   * @param instantTime the commit start time
+   * @param actionType the type of commit
+   */
+  @VisibleForTesting
+  void startCommitWithTime(String instantTime, String actionType) {
     HoodieTableMetaClient metaClient = createMetaClient(true);
     startCommitWithTime(instantTime, actionType, metaClient);
   }
