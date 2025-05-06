@@ -19,11 +19,14 @@
 package org.apache.hudi.metadata;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -32,19 +35,29 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.io.storage.HoodieFileReader;
+import org.apache.hudi.io.storage.HoodieIOFactory;
+import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.io.Serializable;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+import static org.apache.hudi.metadata.MetadataPartitionType.BLOOM_FILTERS;
 import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
 import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
 
@@ -64,10 +77,14 @@ public class MetadataIndexGenerator implements Serializable {
   static class PerWriteStatsBasedIndexGenerator implements SerializableFunction<WriteStatus, Iterator<Pair<String, HoodieRecord>>> {
     List<MetadataPartitionType> enabledPartitionTypes;
     HoodieWriteConfig dataWriteConfig;
+    StorageConfiguration<?> storageConf;
+    String instantTime;
 
-    public PerWriteStatsBasedIndexGenerator(List<MetadataPartitionType> enabledPartitionTypes, HoodieWriteConfig dataWriteConfig) {
+    public PerWriteStatsBasedIndexGenerator(List<MetadataPartitionType> enabledPartitionTypes, HoodieWriteConfig dataWriteConfig, StorageConfiguration<?> storageConf, String instantTime) {
       this.enabledPartitionTypes = enabledPartitionTypes;
       this.dataWriteConfig = dataWriteConfig;
+      this.storageConf = storageConf;
+      this.instantTime = instantTime;
     }
 
     @Override
@@ -79,11 +96,51 @@ public class MetadataIndexGenerator implements Serializable {
       if (enabledPartitionTypes.contains(RECORD_INDEX)) {
         allRecords.addAll(processWriteStatusForRLI(writeStatus, dataWriteConfig));
       }
+      if (enabledPartitionTypes.contains(BLOOM_FILTERS)) {
+        allRecords.addAll(processWriteStatusForBloomFilters(writeStatus, dataWriteConfig));
+      }
       // yet to add support for more partitions.
       // bloom filter
       // secondary index
       // expression index.
       return allRecords.iterator();
+    }
+
+    private List<Pair<String, HoodieRecord>> processWriteStatusForBloomFilters(WriteStatus writeStatus, HoodieWriteConfig dataWriteConfig) throws IOException {
+      HoodieWriteStat hoodieWriteStat = writeStatus.getStat();
+      final String partition = hoodieWriteStat.getPartitionPath();
+
+      // For bloom filter index, delta writes do not change the base file bloom filter entries
+      if (hoodieWriteStat instanceof HoodieDeltaWriteStat) {
+        return Collections.emptyList();
+      }
+
+      String pathWithPartition = hoodieWriteStat.getPath();
+      if (pathWithPartition == null) {
+        // Empty partition
+        LOG.error("Failed to find path in write stat to update metadata table {}", hoodieWriteStat);
+        return Collections.emptyList();
+      }
+
+      String fileName = FSUtils.getFileName(pathWithPartition, partition);
+      if (!FSUtils.isBaseFile(new StoragePath(fileName))) {
+        return Collections.emptyList();
+      }
+
+      final StoragePath writeFilePath = new StoragePath(dataWriteConfig.getBasePath(), pathWithPartition);
+      HoodieHadoopStorage storage = new HoodieHadoopStorage(writeFilePath, storageConf);
+      try (HoodieFileReader fileReader = HoodieIOFactory.getIOFactory(storage)
+          .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(dataWriteConfig, writeFilePath)) {
+          final BloomFilter fileBloomFilter = fileReader.readBloomFilter();
+          if (fileBloomFilter == null) {
+            LOG.error("Failed to read bloom filter for {}", writeFilePath);
+            return Collections.emptyList();
+          }
+          ByteBuffer bloomByteBuffer = ByteBuffer.wrap(getUTF8Bytes(fileBloomFilter.serializeToString()));
+          HoodieRecord record = HoodieMetadataPayload.createBloomFilterMetadataRecord(
+              partition, fileName, instantTime, dataWriteConfig.getBloomFilterType(), bloomByteBuffer, false);
+          return Collections.singletonList(Pair.of(BLOOM_FILTERS.getPartitionPath(), record));
+      }
     }
   }
 

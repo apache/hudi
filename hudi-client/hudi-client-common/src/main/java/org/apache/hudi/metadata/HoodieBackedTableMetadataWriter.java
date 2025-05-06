@@ -1164,7 +1164,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
 
     List<MetadataPartitionType> mdtPartitionsToTag = new ArrayList<>(enabledPartitionTypes);
     mdtPartitionsToTag.remove(FILES);
-    HoodieData<Pair<String, HoodieRecord>> perWriteStatusRecords = writeStatus.flatMap(new MetadataIndexGenerator.PerWriteStatsBasedIndexGenerator(mdtPartitionsToTag, dataWriteConfig));
+    HoodieData<Pair<String, HoodieRecord>> perWriteStatusRecords = writeStatus.flatMap(new MetadataIndexGenerator.PerWriteStatsBasedIndexGenerator(mdtPartitionsToTag, dataWriteConfig, storageConf, instantTime));
 
     // Generate HoodieRecords for MDT partitions which need per hudi partition writeStats in one spark task
     // for eg, partition stats index
