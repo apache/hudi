@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -104,10 +105,12 @@ public class TestPartialUpdateFlinkRecordMerger {
     HoodieEmptyRecord deleteRecord = new HoodieEmptyRecord(new HoodieKey("1", "par1"), HoodieOperation.DELETE, 1L, HoodieRecord.HoodieRecordType.FLINK);
 
     Option<Pair<HoodieRecord, Schema>> mergingResult = recordMerger.merge(record1, schema, deleteRecord, schema, new TypedProperties());
-    assertTrue(mergingResult.isEmpty());
+    assertTrue(mergingResult.isPresent());
+    assertTrue(mergingResult.get().getLeft().isDelete(schema, CollectionUtils.emptyProps()));
 
     mergingResult = recordMerger.merge(deleteRecord, schema, record1, schema, new TypedProperties());
-    assertTrue(mergingResult.isEmpty());
+    assertTrue(mergingResult.isPresent());
+    assertTrue(mergingResult.get().getLeft().isDelete(schema, CollectionUtils.emptyProps()));
   }
 
   /**

@@ -27,6 +27,7 @@ import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
+import java.util.Iterator;
 import java.util.List;
 
 /**
@@ -34,15 +35,16 @@ import java.util.List;
  */
 public class FlinkUpsertCommitActionExecutor<T> extends BaseFlinkCommitActionExecutor<T> {
 
-  private final List<HoodieRecord<T>> inputRecords;
+  private final Iterator<HoodieRecord<T>> inputRecords;
 
   public FlinkUpsertCommitActionExecutor(HoodieEngineContext context,
                                          HoodieWriteHandle<?, ?, ?, ?> writeHandle,
+                                         BucketInfo bucketInfo,
                                          HoodieWriteConfig config,
                                          HoodieTable table,
                                          String instantTime,
-                                         List<HoodieRecord<T>> inputRecords) {
-    super(context, writeHandle, config, table, instantTime, WriteOperationType.UPSERT);
+                                         Iterator<HoodieRecord<T>> inputRecords) {
+    super(context, writeHandle, bucketInfo, config, table, instantTime, WriteOperationType.UPSERT);
     this.inputRecords = inputRecords;
   }
 

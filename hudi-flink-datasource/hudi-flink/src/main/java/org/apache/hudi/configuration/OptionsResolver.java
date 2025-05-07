@@ -23,9 +23,9 @@ import org.apache.hudi.client.transaction.BucketIndexConcurrentFileWritesConflic
 import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictResolutionStrategy;
 import org.apache.hudi.common.config.HoodieCommonConfig;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
-import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -40,12 +40,14 @@ import org.apache.hudi.index.bucket.partition.PartitionBucketIndexUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.sink.overwrite.PartitionOverwriteMode;
 import org.apache.hudi.table.format.FilePathUtils;
+import org.apache.hudi.table.format.HoodieFlinkIOFactory;
 
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
 
 import java.lang.reflect.Field;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -70,20 +72,6 @@ public class OptionsResolver {
     // 1. inline clustering is supported for COW table;
     // 2. async clustering is supported for both COW and MOR table
     return isInsertOperation(conf) && ((isCowTable(conf) && !conf.getBoolean(FlinkOptions.INSERT_CLUSTER)) || isMorTable(conf));
-  }
-
-  /**
-   * Returns whether the RowData append is enabled with given configuration {@code conf}.
-   * <p>
-   * todo:
-   * <p> support RowData append for COW, see HUDI-9149
-   * <p> support RowData append for operation besides UPSERT/DELETE, see HUDI-9149
-   */
-  public static boolean supportRowDataAppend(Configuration conf) {
-    return conf.get(FlinkOptions.INSERT_ROWDATA_MODE_ENABLED)
-        && HoodieTableType.valueOf(conf.get(FlinkOptions.TABLE_TYPE)) == HoodieTableType.MERGE_ON_READ
-        && (WriteOperationType.valueOf(conf.get(FlinkOptions.OPERATION).toUpperCase()) == WriteOperationType.UPSERT
-            || WriteOperationType.valueOf(conf.get(FlinkOptions.OPERATION).toUpperCase()) == WriteOperationType.DELETE);
   }
 
   /**
@@ -439,6 +427,26 @@ public class OptionsResolver {
     return isBucketIndexType(conf)
         ? new BucketIndexConcurrentFileWritesConflictResolutionStrategy()
         : new SimpleConcurrentFileWritesConflictResolutionStrategy();
+  }
+
+  /**
+   * Returns the IO related options as a map.
+   */
+  public static Map<String, String> getIOOptions(Configuration conf) {
+    Map<String, String> confMap = new HashMap<>();
+    // file writer options
+    confMap.put(HoodieStorageConfig.HOODIE_IO_FACTORY_CLASS.key(), HoodieFlinkIOFactory.class.getName());
+    confMap.put(HoodieStorageConfig.WRITE_UTC_TIMEZONE.key(), conf.get(FlinkOptions.WRITE_UTC_TIMEZONE).toString());
+
+    // file reader options
+    confMap.put(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(),
+        conf.getString(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(), HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.defaultValue().toString()));
+    confMap.put(FlinkOptions.READ_UTC_TIMEZONE.key(), conf.get(FlinkOptions.READ_UTC_TIMEZONE).toString());
+
+    confMap.put(FlinkOptions.PARTITION_PATH_FIELD.key(), conf.get(FlinkOptions.PARTITION_PATH_FIELD));
+    confMap.put(FlinkOptions.PARTITION_DEFAULT_NAME.key(), conf.get(FlinkOptions.PARTITION_DEFAULT_NAME));
+    confMap.put(FlinkOptions.HIVE_STYLE_PARTITIONING.key(), conf.get(FlinkOptions.HIVE_STYLE_PARTITIONING).toString());
+    return confMap;
   }
 
   /**

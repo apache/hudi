@@ -163,7 +163,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
     super.open();
 
     this.taskID = getRuntimeContext().getIndexOfThisSubtask();
-    this.writeConfig = FlinkWriteClients.getHoodieClientConfig(this.conf);
+    this.writeConfig = FlinkWriteClients.getHoodieClientConfig(this.conf, false, false, true);
     this.writeClient = FlinkWriteClients.createWriteClient(conf, getRuntimeContext());
     this.table = writeClient.getHoodieTable();
 
@@ -331,7 +331,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
       Iterable<IndexedRecord> indexedRecords = () -> {
         try {
           HoodieFileReaderFactory fileReaderFactory = HoodieIOFactory.getIOFactory(table.getStorage())
-              .getReaderFactory(table.getConfig().getRecordMerger().getRecordType());
+              .getReaderFactory(writeConfig.getRecordMerger().getRecordType());
           HoodieAvroFileReader fileReader = (HoodieAvroFileReader) fileReaderFactory.getFileReader(
               table.getConfig(), new StoragePath(clusteringOp.getDataFilePath()));
 

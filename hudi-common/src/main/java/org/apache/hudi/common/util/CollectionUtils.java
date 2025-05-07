@@ -117,6 +117,13 @@ public class CollectionUtils {
   }
 
   /**
+   * Collects provided {@link Iterator} to a {@link List}
+   */
+  public static <T> List<T> toList(Iterator<T> iterator) {
+    return toStream(iterator).collect(Collectors.toList());
+  }
+
+  /**
    * Combines provided arrays into one
    */
   @SuppressWarnings("unchecked")

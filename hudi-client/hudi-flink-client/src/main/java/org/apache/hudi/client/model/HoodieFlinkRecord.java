@@ -27,10 +27,12 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.util.RowDataAvroQueryContexts;
 import org.apache.hudi.util.RowDataAvroQueryContexts.RowDataQueryContext;
+import org.apache.hudi.util.RowProjection;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
@@ -44,6 +46,7 @@ import org.apache.flink.table.data.utils.JoinedRowData;
 
 import java.io.ByteArrayOutputStream;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Properties;
 
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
@@ -77,7 +80,7 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
 
   @Override
   public HoodieRecord<RowData> newInstance(HoodieKey key, HoodieOperation op) {
-    return new HoodieFlinkRecord(key, op, orderingValue, this.data);
+    return new HoodieFlinkRecord(key, op, orderingValue, data);
   }
 
   @Override
@@ -96,7 +99,7 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
   @Override
   protected Comparable<?> doGetOrderingValue(Schema recordSchema, Properties props) {
     String orderingField = ConfigUtils.getOrderingField(props);
-    if (isNullOrEmpty(orderingField)) {
+    if (isNullOrEmpty(orderingField) || recordSchema.getField(orderingField) == null) {
       return DEFAULT_ORDERING_VALUE;
     } else {
       return (Comparable<?>) getColumnValueAsJava(recordSchema, orderingField, props, false);
@@ -110,11 +113,21 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
 
   @Override
   public String getRecordKey(Schema recordSchema, Option<BaseKeyGenerator> keyGeneratorOpt) {
+    if (key == null) {
+      ValidationUtils.checkArgument(recordSchema.getField(RECORD_KEY_METADATA_FIELD) != null,
+          "There should be `_hoodie_record_key` in record schema.");
+      String recordKey = Objects.toString(data.getString(HoodieMetadataField.RECORD_KEY_METADATA_FIELD.ordinal()));
+      key = new HoodieKey(recordKey, null);
+    }
     return getRecordKey();
   }
 
   @Override
   public String getRecordKey(Schema recordSchema, String keyFieldName) {
+    if (key == null) {
+      String recordKey = Objects.toString(RowDataAvroQueryContexts.fromAvroSchema(recordSchema).getFieldQueryContext(keyFieldName).getFieldGetter().getFieldOrNull(data));
+      key = new HoodieKey(recordKey, null);
+    }
     return getRecordKey();
   }
 
@@ -174,7 +187,9 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
 
   @Override
   public HoodieRecord rewriteRecordWithNewSchema(Schema recordSchema, Properties props, Schema newSchema, Map<String, String> renameCols) {
-    throw new UnsupportedOperationException("Not supported for " + this.getClass().getSimpleName());
+    RowProjection rowProjection = RowDataAvroQueryContexts.getRowProjection(recordSchema, newSchema, renameCols);
+    RowData newRow = rowProjection.project(getData());
+    return new HoodieFlinkRecord(getKey(), getOperation(), newRow);
   }
 
   @Override

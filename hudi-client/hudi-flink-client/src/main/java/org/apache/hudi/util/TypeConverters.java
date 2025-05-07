@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.table.format;
+package org.apache.hudi.util;
 
 import org.apache.hudi.common.util.ValidationUtils;
 

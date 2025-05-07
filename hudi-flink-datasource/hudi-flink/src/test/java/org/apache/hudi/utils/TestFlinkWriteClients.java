@@ -21,11 +21,12 @@ package org.apache.hudi.utils;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
+import org.apache.hudi.client.model.CommitTimeFlinkRecordMerger;
+import org.apache.hudi.client.model.EventTimeFlinkRecordMerger;
 import org.apache.hudi.client.model.PartialUpdateFlinkRecordMerger;
 import org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
-import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
@@ -109,7 +110,7 @@ public class TestFlinkWriteClients {
 
     HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
     String mergerClasses = writeConfig.getString(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES);
-    assertThat(mergerClasses, is(HoodieAvroRecordMerger.class.getName()));
+    assertThat(mergerClasses, is(EventTimeFlinkRecordMerger.class.getName()));
   }
 
   @ParameterizedTest
@@ -129,7 +130,7 @@ public class TestFlinkWriteClients {
 
     HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
     String mergerClasses = writeConfig.getString(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES);
-    assertThat(mergerClasses, is(HoodieAvroRecordMerger.class.getName()));
+    assertThat(mergerClasses, is(CommitTimeFlinkRecordMerger.class.getName()));
   }
 
   @ParameterizedTest

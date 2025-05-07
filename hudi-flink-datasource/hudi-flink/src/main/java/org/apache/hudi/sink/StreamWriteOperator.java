@@ -19,7 +19,6 @@
 package org.apache.hudi.sink;
 
 import org.apache.hudi.client.model.HoodieFlinkInternalRow;
-import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.sink.common.AbstractWriteOperator;
 import org.apache.hudi.sink.common.WriteOperatorFactory;
 
@@ -33,8 +32,7 @@ import org.apache.flink.table.types.logical.RowType;
 public class StreamWriteOperator extends AbstractWriteOperator<HoodieFlinkInternalRow> {
 
   public StreamWriteOperator(Configuration conf, RowType rowType) {
-    super(OptionsResolver.supportRowDataAppend(conf)
-        ? new RowDataStreamWriteFunction(conf, rowType) : new StreamWriteFunction(conf, rowType));
+    super(new StreamWriteFunction(conf, rowType));
   }
 
   public static WriteOperatorFactory<HoodieFlinkInternalRow> getFactory(Configuration conf, RowType rowType) {

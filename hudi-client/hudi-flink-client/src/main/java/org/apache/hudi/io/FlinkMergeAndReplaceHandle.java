@@ -32,12 +32,14 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
+import org.apache.avro.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Properties;
 
 /**
  * A {@link HoodieMergeHandle} that supports MERGE write incrementally(small data buffers).
@@ -131,6 +133,12 @@ public class FlinkMergeAndReplaceHandle<T, I, K, O>
     } catch (IOException e) {
       throw new HoodieException("Checking existing path for merge and replace handle error: " + newFilePath, e);
     }
+  }
+
+  @Override
+  protected HoodieRecord<T> updateFileName(HoodieRecord<T> record, Schema schema, Schema targetSchema, String fileName, Properties prop) {
+    // update specific meta field: FILENAME_METADATA_FIELD
+    return record.updateMetaField(schema, HoodieRecord.FILENAME_META_FIELD_ORD, fileName);
   }
 
   /**

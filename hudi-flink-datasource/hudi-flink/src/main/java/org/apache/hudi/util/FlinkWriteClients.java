@@ -24,11 +24,13 @@ import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieClusteringConfig;
@@ -155,6 +157,14 @@ public class FlinkWriteClients {
       Configuration conf,
       boolean enableEmbeddedTimelineService,
       boolean loadFsViewStorageConfig) {
+    return getHoodieClientConfig(conf, enableEmbeddedTimelineService, loadFsViewStorageConfig, false);
+  }
+
+  public static HoodieWriteConfig getHoodieClientConfig(
+      Configuration conf,
+      boolean enableEmbeddedTimelineService,
+      boolean loadFsViewStorageConfig,
+      boolean forScanner) {
     HoodieWriteConfig.Builder builder =
         HoodieWriteConfig.newBuilder()
             .withEngineType(EngineType.FLINK)
@@ -227,8 +237,16 @@ public class FlinkWriteClients {
             .withAutoCommit(false)
             .withAllowOperationMetadataField(conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED))
             .withProps(flinkConf2TypedProperties(conf))
-            .withSchema(getSourceSchema(conf).toString())
-            .withRecordMergeImplClasses(StreamerUtil.getMergerClasses(conf));
+            .withSchema(getSourceSchema(conf).toString());
+
+    // currently only set there merge configurations for writing, for reader, will support in HUDI-9146
+    if (!forScanner) {
+      // <merge_mode, payload_class, merge_strategy_id>
+      Triple<RecordMergeMode, String, String> mergingBehavior = StreamerUtil.inferMergingBehavior(conf);
+      builder.withRecordMergeStrategyId(mergingBehavior.getRight())
+          .withRecordMergeMode(mergingBehavior.getLeft())
+          .withRecordMergeImplClasses(StreamerUtil.getMergerClasses(conf, mergingBehavior.getLeft(), mergingBehavior.getMiddle()));
+    }
 
     Option<HoodieLockConfig> lockConfig = getLockConfig(conf);
     if (lockConfig.isPresent()) {

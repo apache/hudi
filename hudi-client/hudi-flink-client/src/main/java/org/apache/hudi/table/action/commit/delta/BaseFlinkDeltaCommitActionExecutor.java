@@ -28,6 +28,7 @@ import org.apache.hudi.io.ExplicitWriteHandleFactory;
 import org.apache.hudi.io.FlinkAppendHandle;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.commit.BaseFlinkCommitActionExecutor;
+import org.apache.hudi.table.action.commit.BucketInfo;
 
 import java.util.Collections;
 import java.util.Iterator;
@@ -41,11 +42,12 @@ public abstract class BaseFlinkDeltaCommitActionExecutor<T>
 
   public BaseFlinkDeltaCommitActionExecutor(HoodieEngineContext context,
                                             FlinkAppendHandle<?, ?, ?, ?> writeHandle,
+                                            BucketInfo bucketInfo,
                                             HoodieWriteConfig config,
                                             HoodieTable table,
                                             String instantTime,
                                             WriteOperationType operationType) {
-    super(context, writeHandle, config, table, instantTime, operationType);
+    super(context, writeHandle, bucketInfo, config, table, instantTime, operationType);
   }
 
   @Override

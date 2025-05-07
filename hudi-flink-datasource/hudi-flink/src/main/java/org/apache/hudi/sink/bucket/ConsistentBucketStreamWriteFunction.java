@@ -19,15 +19,19 @@
 package org.apache.hudi.sink.bucket;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.model.HoodieFlinkInternalRow;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.collection.MappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.StreamWriteFunction;
-import org.apache.hudi.sink.clustering.update.strategy.FlinkConsistentBucketUpdateStrategy;
+import org.apache.hudi.sink.buffer.RowDataBucket;
+import org.apache.hudi.sink.clustering.update.strategy.ConsistentBucketUpdateStrategy;
+import org.apache.hudi.sink.clustering.update.strategy.ConsistentBucketUpdateStrategy.BucketRecords;
+import org.apache.hudi.util.MutableIteratorWrapperIterator;
 
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.table.data.binary.BinaryRowData;
 import org.apache.flink.table.types.logical.RowType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,23 +39,26 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
  * A stream write function with consistent bucket hash index.
+ * The function tags each incoming record with a location of a file based on consistent bucket index.
  */
 public class ConsistentBucketStreamWriteFunction extends StreamWriteFunction {
 
   private static final Logger LOG = LoggerFactory.getLogger(ConsistentBucketStreamWriteFunction.class);
 
-  private transient FlinkConsistentBucketUpdateStrategy updateStrategy;
+  private transient ConsistentBucketUpdateStrategy updateStrategy;
 
   /**
    * Constructs a ConsistentBucketStreamWriteFunction.
    *
-   * @param config The config options
+   * @param config  The config options
+   * @param rowType LogicalType of record
    */
   public ConsistentBucketStreamWriteFunction(Configuration config, RowType rowType) {
     super(config, rowType);
@@ -60,8 +67,9 @@ public class ConsistentBucketStreamWriteFunction extends StreamWriteFunction {
   @Override
   public void open(Configuration parameters) throws IOException {
     super.open(parameters);
-    List<String> indexKeyFields = Arrays.asList(config.getString(FlinkOptions.INDEX_KEY_FIELD).split(","));
-    this.updateStrategy = new FlinkConsistentBucketUpdateStrategy(this.writeClient, indexKeyFields);
+    List<String> indexKeyFields = Arrays.asList(config.get(FlinkOptions.INDEX_KEY_FIELD).split(","));
+    this.updateStrategy = new ConsistentBucketUpdateStrategy(this.writeClient, indexKeyFields);
+    LOG.info("Create update strategy with index key fields: {}", indexKeyFields);
   }
 
   @Override
@@ -71,12 +79,21 @@ public class ConsistentBucketStreamWriteFunction extends StreamWriteFunction {
   }
 
   @Override
-  protected List<WriteStatus> writeRecords(String instant, List<HoodieFlinkInternalRow> records) {
+  protected List<WriteStatus> writeRecords(String instant, RowDataBucket rowDataBucket) {
+    writeMetrics.startFileFlush();
     updateStrategy.initialize(this.writeClient);
-    Pair<List<Pair<List<HoodieRecord>, String>>, Set<HoodieFileGroupId>> recordListFgPair =
-        updateStrategy.handleUpdate(Collections.singletonList(Pair.of(deduplicateRecordsIfNeeded(convertToHoodieRecords(records)), instant)));
-    return recordListFgPair.getKey().stream().flatMap(
-        recordsInstantPair -> writeFunction.apply(recordsInstantPair.getLeft(), recordsInstantPair.getRight()).stream()
-    ).collect(Collectors.toList());
+
+    Iterator<BinaryRowData> rowItr =
+        new MutableIteratorWrapperIterator<>(
+            rowDataBucket.getDataIterator(), () -> new BinaryRowData(rowType.getFieldCount()));
+    Iterator<HoodieRecord> recordItr = deduplicateRecordsIfNeeded(
+        new MappingIterator<>(rowItr, rowData -> recordConverter.convert(rowData, rowDataBucket.getBucketInfo())));
+
+    Pair<List<BucketRecords>, Set<HoodieFileGroupId>> recordListFgPair =
+        updateStrategy.handleUpdate(Collections.singletonList(BucketRecords.of(recordItr, rowDataBucket.getBucketInfo(), instant)));
+
+    return recordListFgPair.getKey().stream()
+        .flatMap(bucketRecords -> writeFunction.write(bucketRecords.getRecordItr(), bucketRecords.getBucketInfo(), bucketRecords.getInstant()).stream())
+        .collect(Collectors.toList());
   }
 }

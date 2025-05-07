@@ -130,7 +130,7 @@ public class BootstrapOperator
     }
 
     this.hadoopConf = HadoopConfigurations.getHadoopConf(this.conf);
-    this.writeConfig = FlinkWriteClients.getHoodieClientConfig(this.conf, true);
+    this.writeConfig = FlinkWriteClients.getHoodieClientConfig(this.conf, false, true, true);
     this.hoodieTable = FlinkTables.createTable(writeConfig, hadoopConf, getRuntimeContext());
     this.ckpMetadata = CkpMetadataFactory.getCkpMetadata(writeConfig, conf);
     this.aggregateManager = getRuntimeContext().getGlobalAggregateManager();

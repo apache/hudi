@@ -38,14 +38,17 @@ public class FlinkInsertPreppedCommitActionExecutor<T> extends BaseFlinkCommitAc
 
   public FlinkInsertPreppedCommitActionExecutor(HoodieEngineContext context,
                                                 HoodieWriteHandle<?, ?, ?, ?> writeHandle,
-                                                HoodieWriteConfig config, HoodieTable table,
-                                                String instantTime, List<HoodieRecord<T>> preppedRecords) {
-    super(context, writeHandle, config, table, instantTime, WriteOperationType.INSERT_PREPPED);
+                                                BucketInfo bucketInfo,
+                                                HoodieWriteConfig config,
+                                                HoodieTable table,
+                                                String instantTime,
+                                                List<HoodieRecord<T>> preppedRecords) {
+    super(context, writeHandle, bucketInfo, config, table, instantTime, WriteOperationType.INSERT_PREPPED);
     this.preppedRecords = preppedRecords;
   }
 
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> execute() {
-    return super.execute(preppedRecords);
+    return super.execute(preppedRecords.iterator());
   }
 }
