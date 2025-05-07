@@ -71,7 +71,6 @@ public class TestBucketAssigner {
     final String basePath = tempFile.getAbsolutePath();
     conf = TestConfigurations.getDefaultConf(basePath);
 
-    StreamerUtil.initTableIfNotExists(conf);
     writeConfig = FlinkWriteClients.getHoodieClientConfig(conf);
     context = new HoodieFlinkEngineContext(
         HadoopFSUtils.getStorageConf(HadoopConfigurations.getHadoopConf(conf)),

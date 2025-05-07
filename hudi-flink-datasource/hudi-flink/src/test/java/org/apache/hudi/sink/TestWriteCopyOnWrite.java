@@ -33,7 +33,6 @@ import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.sink.utils.TestWriteBase;
 import org.apache.hudi.util.FlinkWriteClients;
-import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestData;
 
 import org.apache.flink.configuration.Configuration;
@@ -648,7 +647,6 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
     HoodieFlinkWriteClient writeClient2 = null;
 
     try {
-      StreamerUtil.initTableIfNotExists(conf);
       writeClient = FlinkWriteClients.createWriteClient(conf);
       FileSystemViewStorageConfig viewStorageConfig = writeClient.getConfig().getViewStorageConfig();
 
