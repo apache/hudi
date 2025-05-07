@@ -20,7 +20,7 @@
 package org.apache.spark.sql.hudi.procedure
 
 import org.apache.hudi.SparkDatasetMixin
-import org.apache.hudi.client.SparkRDDWriteClient
+import org.apache.hudi.client.{SparkRDDWriteClient, WriteClientTestUtils}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType}
 import org.apache.hudi.common.table.HoodieTableConfig
@@ -49,13 +49,17 @@ class TestTTLProcedure extends HoodieSparkProcedureTestBase with SparkDatasetMix
         val dataGen = new HoodieTestDataGenerator(0xDEED)
         val partitionPaths = dataGen.getPartitionPaths()
         val partitionPath0 = partitionPaths(0)
-        writeRecordsForPartition(client, dataGen, partitionPath0)
+        val instant0 = getCommitTimeAtUTC(0)
 
+        writeRecordsForPartition(client, dataGen, partitionPath0, instant0)
+
+        val instant1 = getCommitTimeAtUTC(1000)
         val partitionPath1 = partitionPaths(1)
-        writeRecordsForPartition(client, dataGen, partitionPath1)
+        writeRecordsForPartition(client, dataGen, partitionPath1, instant1)
 
+        val currentInstant = client.createNewInstantTime()
         val partitionPath2 = partitionPaths(2)
-        writeRecordsForPartition(client, dataGen, partitionPath2)
+        writeRecordsForPartition(client, dataGen, partitionPath2, currentInstant)
         spark.sql(
           s"""
              | create table $tableName using hudi
@@ -78,12 +82,12 @@ class TestTTLProcedure extends HoodieSparkProcedureTestBase with SparkDatasetMix
 
   private def writeRecordsForPartition(client: SparkRDDWriteClient[Nothing],
                                        dataGen: HoodieTestDataGenerator,
-                                       partition: String): Unit = {
-    val instantTime = client.startCommit(HoodieTimeline.COMMIT_ACTION)
+                                       partition: String, instantTime: String): Unit = {
     val records: java.util.List[HoodieRecord[Nothing]] =
       dataGen.generateInsertsForPartition(instantTime, 10, partition)
         .asInstanceOf[java.util.List[HoodieRecord[Nothing]]]
     // Use this JavaRDD to call the insert method
+    WriteClientTestUtils.startCommitWithTime(client, instantTime, HoodieTimeline.COMMIT_ACTION)
     client.insert(spark.sparkContext.parallelize(records.asScala.toSeq).toJavaRDD(), instantTime)
   }
 
