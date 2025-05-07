@@ -32,6 +32,8 @@ import org.apache.hudi.sync.datahub.util.SchemaFieldsUtil;
 import com.linkedin.common.BrowsePathEntry;
 import com.linkedin.common.BrowsePathEntryArray;
 import com.linkedin.common.BrowsePathsV2;
+import com.linkedin.common.DataPlatformInstance;
+import com.linkedin.common.urn.DataPlatformUrn;
 import com.linkedin.common.Status;
 import com.linkedin.common.SubTypes;
 import com.linkedin.common.UrnArray;
@@ -71,6 +73,9 @@ public class DataHubSyncClient extends HoodieSyncClient {
   private static final Logger LOG = LoggerFactory.getLogger(DataHubSyncClient.class);
 
   protected final DataHubSyncConfig config;
+  private final DataPlatformUrn dataPlatformUrn;
+  private final Option<String> dataPlatformInstance;
+  private final Option<Urn> dataPlatformInstanceUrn;
   private final DatasetUrn datasetUrn;
   private final Urn databaseUrn;
   private final String tableName;
@@ -81,7 +86,10 @@ public class DataHubSyncClient extends HoodieSyncClient {
     super(config);
     this.config = config;
     HoodieDataHubDatasetIdentifier datasetIdentifier =
-        config.getDatasetIdentifier();
+            config.getDatasetIdentifier();
+    this.dataPlatformUrn = datasetIdentifier.getDataPlatformUrn();
+    this.dataPlatformInstance = datasetIdentifier.getDataPlatformInstance();
+    this.dataPlatformInstanceUrn = datasetIdentifier.getDataPlatformInstanceUrn();
     this.datasetUrn = datasetIdentifier.getDatasetUrn();
     this.databaseUrn = datasetIdentifier.getDatabaseUrn();
     this.tableName = datasetIdentifier.getTableName();
@@ -217,8 +225,8 @@ public class DataHubSyncClient extends HoodieSyncClient {
     return containerProposal;
   }
 
-  private MetadataChangeProposalWrapper createBrowsePathsAspect(Urn entityUrn, List<BrowsePathEntry> path) {
-    BrowsePathEntryArray browsePathEntryArray = new BrowsePathEntryArray(path);
+  private MetadataChangeProposalWrapper createBrowsePathsAspect(Urn entityUrn, List<BrowsePathEntry> paths) {
+    BrowsePathEntryArray browsePathEntryArray = new BrowsePathEntryArray(paths);
     MetadataChangeProposalWrapper browsePathsProposal = MetadataChangeProposalWrapper.builder()
         .entityType(entityUrn.getEntityType())
         .entityUrn(entityUrn)
@@ -226,6 +234,21 @@ public class DataHubSyncClient extends HoodieSyncClient {
         .aspect(new BrowsePathsV2().setPath(browsePathEntryArray))
         .build();
     return browsePathsProposal;
+  }
+
+  private MetadataChangeProposalWrapper createDataPlatformInstanceAspect(Urn entityUrn) {
+    DataPlatformInstance dataPlatformInstanceAspect = new DataPlatformInstance().setPlatform(this.dataPlatformUrn);
+    if (this.dataPlatformInstanceUrn.isPresent()) {
+      dataPlatformInstanceAspect.setInstance(dataPlatformInstanceUrn.get());
+    }
+
+    MetadataChangeProposalWrapper dataPlatformInstanceProposal = MetadataChangeProposalWrapper.builder()
+            .entityType(entityUrn.getEntityType())
+            .entityUrn(entityUrn)
+            .upsert()
+            .aspect(dataPlatformInstanceAspect)
+            .build();
+    return dataPlatformInstanceProposal;
   }
 
   private MetadataChangeProposalWrapper createDomainAspect(Urn entityUrn) {
@@ -252,12 +275,18 @@ public class DataHubSyncClient extends HoodieSyncClient {
         .aspect(new ContainerProperties().setName(databaseName))
         .build();
 
+    List<BrowsePathEntry> paths = dataPlatformInstanceUrn.map(dpiUrn -> Collections.singletonList(
+        new BrowsePathEntry().setUrn(dpiUrn).setId(dpiUrn.toString()))
+    ).orElse(Collections.emptyList());
+
     Stream<MetadataChangeProposalWrapper> resultStream = Stream.of(
-        containerEntityProposal,
-        createSubTypeAspect(databaseUrn, "Database"),
-        createBrowsePathsAspect(databaseUrn, Collections.emptyList()), createStatusAspect(databaseUrn),
-        config.attachDomain() ? createDomainAspect(databaseUrn) : null
-    ).filter(Objects::nonNull);
+            containerEntityProposal,
+            createSubTypeAspect(databaseUrn, "Database"),
+            createDataPlatformInstanceAspect(databaseUrn),
+            createBrowsePathsAspect(databaseUrn, paths),
+            createStatusAspect(databaseUrn),
+            config.attachDomain() ? createDomainAspect(databaseUrn) : null
+        ).filter(Objects::nonNull);
     return resultStream;
   }
 
@@ -314,13 +343,23 @@ public class DataHubSyncClient extends HoodieSyncClient {
   }
 
   private Stream<MetadataChangeProposalWrapper> createDatasetEntity() {
+    BrowsePathEntry databasePath = new BrowsePathEntry().setUrn(databaseUrn).setId(databaseName);
+    List<BrowsePathEntry> paths = dataPlatformInstanceUrn.map(dpiUrn -> {
+      List<BrowsePathEntry> list = new ArrayList<BrowsePathEntry>();
+      list.add(new BrowsePathEntry().setUrn(dpiUrn).setId(dpiUrn.toString()));
+      list.add(databasePath);
+      return list;
+    }
+    ).orElse(Collections.singletonList(databasePath));
+
     Stream<MetadataChangeProposalWrapper> result = Stream.of(
-        createStatusAspect(datasetUrn),
-        createSubTypeAspect(datasetUrn, "Table"),
-        createBrowsePathsAspect(datasetUrn, Collections.singletonList(new BrowsePathEntry().setUrn(databaseUrn).setId(databaseName))),
-        createContainerAspect(datasetUrn, databaseUrn),
-        createSchemaMetadataAspect(tableName),
-        config.attachDomain() ? createDomainAspect(datasetUrn) : null
+            createStatusAspect(datasetUrn),
+            createSubTypeAspect(datasetUrn, "Table"),
+            createDataPlatformInstanceAspect(datasetUrn),
+            createBrowsePathsAspect(datasetUrn, paths),
+            createContainerAspect(datasetUrn, databaseUrn),
+            createSchemaMetadataAspect(tableName),
+            config.attachDomain() ? createDomainAspect(datasetUrn) : null
     ).filter(Objects::nonNull);
     return result;
   }
