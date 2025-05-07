@@ -249,7 +249,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
    *
    * @param partitions The list of partitions
    */
-  public static HoodieRecord<HoodieMetadataPayload> createPartitionListRecord(List<String> partitions) {
+  public static HoodieRecord<HoodieMetadataPayload> createPartitionListRecord(Collection<String> partitions) {
     return createPartitionListRecord(partitions, false);
   }
 
@@ -258,7 +258,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
    *
    * @param partitions The list of partitions
    */
-  public static HoodieRecord<HoodieMetadataPayload> createPartitionListRecord(List<String> partitions, boolean isDeleted) {
+  public static HoodieRecord<HoodieMetadataPayload> createPartitionListRecord(Collection<String> partitions, boolean isDeleted) {
     Map<String, HoodieMetadataFileInfo> fileInfo = new HashMap<>();
     partitions.forEach(partition -> fileInfo.put(getPartitionIdentifierForFilesPartition(partition), new HoodieMetadataFileInfo(0L, isDeleted)));
 
