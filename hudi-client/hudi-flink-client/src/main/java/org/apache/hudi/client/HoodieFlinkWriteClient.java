@@ -302,9 +302,7 @@ public class HoodieFlinkWriteClient<T>
   }
 
   /**
-   * Create {@link BucketInfo} from the given {@link HoodieRecord}.
-   * @param record Hoodie record
-   * @return An instance of {@link BucketInfo}
+   * Returns the {@link BucketInfo} from a given {@link HoodieRecord}.
    */
   private BucketInfo createBucketInfo(HoodieRecord record) {
     BucketType bucketType = record.getCurrentLocation().getInstantTime().equals("I") ? BucketType.INSERT : BucketType.UPDATE;

@@ -30,7 +30,6 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
-import org.apache.hudi.util.FlinkClientUtil;
 
 import org.apache.avro.Schema;
 import org.slf4j.Logger;
@@ -70,8 +69,6 @@ public class FlinkMergeHandle<T, I, K, O>
                           Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
                           TaskContextSupplier taskContextSupplier) {
     super(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier, Option.empty());
-    // setup necessary configurations for log write handle.
-    FlinkClientUtil.updateStorageConfForMergeHandle(hoodieTable.getStorageConf(), config);
     if (rolloverPaths == null) {
       // #makeOldAndNewFilePaths may already initialize it already
       rolloverPaths = new ArrayList<>();

@@ -45,7 +45,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * A stream write function with consistent bucket hash index, and it writes flink RowData without Avro conversion.
+ * A stream write function with consistent bucket hash index.
  * The function tags each incoming record with a location of a file based on consistent bucket index.
  */
 public class ConsistentBucketStreamWriteFunction extends StreamWriteFunction {
@@ -55,7 +55,7 @@ public class ConsistentBucketStreamWriteFunction extends StreamWriteFunction {
   private transient ConsistentBucketUpdateStrategy updateStrategy;
 
   /**
-   * Constructs a RowDataConsistentBucketStreamWriteFunction.
+   * Constructs a ConsistentBucketStreamWriteFunction.
    *
    * @param config  The config options
    * @param rowType LogicalType of record

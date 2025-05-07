@@ -42,7 +42,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * A stream write function with simple bucket hash index, and it writes flink RowData without Avro conversion.
+ * A stream write function with simple bucket hash index.
  *
  * <p>The task holds a fresh new local index: {(partition + bucket number) &rarr fileId} mapping, this index
  * is used for deciding whether the incoming records in an UPDATE or INSERT.
@@ -75,6 +75,9 @@ public class BucketStreamWriteFunction extends StreamWriteFunction {
    * Functions for calculating the task partition to dispatch.
    */
   private Functions.Function3<Integer, String, Integer, Integer> partitionIndexFunc;
+  /**
+   * Function to calculate num buckets per partition.
+   */
   private NumBucketsFunction numBucketsFunction;
 
   /**
@@ -94,8 +97,6 @@ public class BucketStreamWriteFunction extends StreamWriteFunction {
   @Override
   public void open(Configuration parameters) throws IOException {
     super.open(parameters);
-    this.numBucketsFunction = new NumBucketsFunction(config.get(FlinkOptions.BUCKET_INDEX_PARTITION_EXPRESSIONS),
-        config.get(FlinkOptions.BUCKET_INDEX_PARTITION_RULE), config.get(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS));
     this.indexKeyFields = OptionsResolver.getIndexKeyField(config);
     this.isNonBlockingConcurrencyControl = OptionsResolver.isNonBlockingConcurrencyControl(config);
     this.taskID = getRuntimeContext().getIndexOfThisSubtask();
@@ -104,6 +105,8 @@ public class BucketStreamWriteFunction extends StreamWriteFunction {
     this.incBucketIndex = new HashSet<>();
     this.partitionIndexFunc = BucketIndexUtil.getPartitionIndexFunc(parallelism);
     this.isInsertOverwrite = OptionsResolver.isInsertOverwrite(config);
+    this.numBucketsFunction = new NumBucketsFunction(config.get(FlinkOptions.BUCKET_INDEX_PARTITION_EXPRESSIONS),
+        config.get(FlinkOptions.BUCKET_INDEX_PARTITION_RULE), config.get(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS));
   }
 
   @Override

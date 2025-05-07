@@ -35,7 +35,6 @@ import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.io.BaseFileGroupReaderBasedMergeHandle;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.util.FlinkClientUtil;
 
 import org.apache.avro.Schema;
 import org.apache.flink.table.data.RowData;
@@ -66,8 +65,6 @@ public class FlinkFileGroupReaderBasedMergeHandle<T, I, K, O> extends BaseFileGr
       HoodieReaderContext<T> readerContext) {
     super(config, instantTime, hoodieTable, operation,
         taskContextSupplier, keyGeneratorOpt, readerContext);
-    // setup necessary configurations for log write handle.
-    FlinkClientUtil.updateStorageConfForWriteHandle(hoodieTable.getStorageConf(), config);
   }
 
   @Override

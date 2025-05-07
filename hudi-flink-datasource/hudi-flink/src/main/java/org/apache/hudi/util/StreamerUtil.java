@@ -152,20 +152,6 @@ public class StreamerUtil {
   }
 
   /**
-   * Generate the StorageConfiguration for {@code RowData} file reader.
-   */
-  public static StorageConfiguration<?> storageConfForReader(StorageConfiguration<?> storageConf, Configuration conf) {
-    StorageConfiguration<?> newConf = storageConf.newInstance();
-    newConf.set(HoodieStorageConfig.HOODIE_IO_FACTORY_CLASS.key(), HoodieFlinkIOFactory.class.getName());
-    newConf.set(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(), OptionsResolver.isSchemaEvolutionEnabled(conf) + "");
-    newConf.set(FlinkOptions.READ_UTC_TIMEZONE.key(), conf.get(FlinkOptions.READ_UTC_TIMEZONE).toString());
-    newConf.set(FlinkOptions.PARTITION_DEFAULT_NAME.key(), conf.get(FlinkOptions.PARTITION_DEFAULT_NAME));
-    newConf.set(FlinkOptions.PARTITION_PATH_FIELD.key(), conf.get(FlinkOptions.PARTITION_PATH_FIELD));
-    newConf.set(FlinkOptions.HIVE_STYLE_PARTITIONING.key(), conf.get(FlinkOptions.HIVE_STYLE_PARTITIONING).toString());
-    return newConf;
-  }
-
-  /**
    * Read config from properties file (`--props` option) and cmd line (`--hoodie-conf` option).
    */
   public static DFSPropertiesConfiguration readConfig(org.apache.hadoop.conf.Configuration hadoopConfig,

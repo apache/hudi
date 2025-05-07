@@ -18,21 +18,14 @@
 
 package org.apache.hudi.util;
 
-import org.apache.hudi.common.config.HoodieCommonConfig;
-import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
-import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
-import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.flink.api.java.hadoop.mapred.utils.HadoopUtils;
 import org.apache.flink.configuration.Configuration;
 import org.apache.hadoop.fs.Path;
 
 import java.io.File;
-
-import static org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH;
 
 /**
  * Utilities for Hoodie Flink client.
@@ -64,40 +57,6 @@ public class FlinkClientUtil {
       hadoopConf = new org.apache.hadoop.conf.Configuration();
     }
     return hadoopConf;
-  }
-
-  /**
-   * Set necessary writing configurations into the StorageConfiguration for write handle.
-   *
-   * @param storageConf storage configuration
-   * @param writeConfig hoodie write configuration
-   */
-  public static void updateStorageConfForWriteHandle(StorageConfiguration<?> storageConf, HoodieWriteConfig writeConfig) {
-    storageConf.set(HoodieStorageConfig.HOODIE_IO_FACTORY_CLASS.key(),
-        "org.apache.hudi.table.format.HoodieFlinkIOFactory");
-    storageConf.set(HoodieStorageConfig.WRITE_UTC_TIMEZONE.key(),
-        writeConfig.getStringOrDefault(HoodieStorageConfig.WRITE_UTC_TIMEZONE.key(), HoodieStorageConfig.WRITE_UTC_TIMEZONE.defaultValue() + ""));
-  }
-
-  /**
-   * Set necessary reading/writing configurations into the StorageConfiguration for merge handle.
-   *
-   * @param storageConf storage configuration
-   * @param writeConfig hoodie write configuration
-   */
-  public static void updateStorageConfForMergeHandle(StorageConfiguration<?> storageConf, HoodieWriteConfig writeConfig) {
-    updateStorageConfForWriteHandle(storageConf, writeConfig);
-    // necessary configurations for file reader
-    storageConf.set(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(),
-        writeConfig.getStringOrDefault(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(), HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.defaultValue() + ""));
-    storageConf.set("read.utc-timezone",
-        writeConfig.getStringOrDefault("read.utc-timezone", "true"));
-    storageConf.set("partition.default_name",
-        writeConfig.getStringOrDefault("partition.default_name", DEFAULT_PARTITION_PATH));
-    storageConf.set(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(),
-        writeConfig.getStringOrDefault(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), ""));
-    storageConf.set(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key(),
-        writeConfig.getStringOrDefault(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key(), KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.defaultValue()));
   }
 
   /**
