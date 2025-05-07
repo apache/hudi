@@ -49,6 +49,7 @@ import org.apache.spark.unsafe.types.UTF8String;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.Collections;
 import java.util.Map;
 import java.util.Properties;
 
@@ -217,7 +218,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     StructType newStructType = HoodieInternalRowUtils.getCachedSchema(newSchema);
 
     Function1<InternalRow, UnsafeRow> unsafeRowWriter =
-        HoodieInternalRowUtils.getCachedUnsafeRowWriter(structType, newStructType, renameCols);
+        HoodieInternalRowUtils.getCachedUnsafeRowWriter(structType, newStructType, renameCols, Collections.emptyMap());
 
     UnsafeRow unsafeRow = unsafeRowWriter.apply(this.data);
 

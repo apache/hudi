@@ -79,13 +79,13 @@ class TestHoodieInternalRowUtils extends FunSuite with Matchers with BeforeAndAf
     val data = sparkSession.sparkContext.parallelize(rows)
     val oldRow = sparkSession.createDataFrame(data, mergedSchema).queryExecution.toRdd.first()
 
-    val rowWriter1 = HoodieInternalRowUtils.genUnsafeRowWriter(mergedSchema, schema1, JCollections.emptyMap())
+    val rowWriter1 = HoodieInternalRowUtils.genUnsafeRowWriter(mergedSchema, schema1, JCollections.emptyMap(), JCollections.emptyMap())
     val newRow1 = rowWriter1(oldRow)
 
     val serDe1 = sparkAdapter.createSparkRowSerDe(schema1)
     assertEquals(serDe1.deserializeRow(newRow1), Row("Andrew", 18, Row("Mission st", "SF")));
 
-    val rowWriter2 = HoodieInternalRowUtils.genUnsafeRowWriter(mergedSchema, schema2, JCollections.emptyMap())
+    val rowWriter2 = HoodieInternalRowUtils.genUnsafeRowWriter(mergedSchema, schema2, JCollections.emptyMap(), JCollections.emptyMap())
     val newRow2 = rowWriter2(oldRow)
 
     val serDe2 = sparkAdapter.createSparkRowSerDe(schema2)
@@ -95,11 +95,33 @@ class TestHoodieInternalRowUtils extends FunSuite with Matchers with BeforeAndAf
   test("Test simple rewriting (with nullable value)") {
     val data = sparkSession.sparkContext.parallelize(Seq(Row("Rob", 18, null.asInstanceOf[StructType])))
     val oldRow = sparkSession.createDataFrame(data, schema1).queryExecution.toRdd.first()
-    val rowWriter = HoodieInternalRowUtils.genUnsafeRowWriter(schema1, mergedSchema, JCollections.emptyMap())
+    val rowWriter = HoodieInternalRowUtils.genUnsafeRowWriter(schema1, mergedSchema, JCollections.emptyMap(), JCollections.emptyMap())
     val newRow = rowWriter(oldRow)
 
     val serDe = sparkAdapter.createSparkRowSerDe(mergedSchema)
     assertEquals(serDe.deserializeRow(newRow), Row("Rob", 18, null.asInstanceOf[StructType], null.asInstanceOf[StringType], null.asInstanceOf[IntegerType]))
+  }
+
+  test("Test rewriting with field value injections") {
+    val rowWithNull = Seq(
+      Row("Andrew", null, Row("Mission st", "SF"), "John", 19)
+    )
+    val oldRow = sparkSession.createDataFrame(sparkSession.sparkContext.parallelize(rowWithNull), mergedSchema).queryExecution.toRdd.first()
+
+    val updatedValuesMap: java.util.Map[Integer, Object] = JCollections.singletonMap(1, 18).asInstanceOf[java.util.Map[Integer, Object]]
+    val rowWriter = HoodieInternalRowUtils.genUnsafeRowWriter(mergedSchema, schema1, JCollections.emptyMap(), updatedValuesMap)
+    val newRow1 = rowWriter(oldRow)
+
+    val serDe = sparkAdapter.createSparkRowSerDe(schema1)
+    assertEquals(serDe.deserializeRow(newRow1), Row("Andrew", 18, Row("Mission st", "SF")));
+
+    // non-nul value should not be rewritten
+    val rowWithoutNull = Seq(
+      Row("Andrew", 25, Row("Mission st", "SF"), "John", 19)
+    )
+    val oldRow2 = sparkSession.createDataFrame(sparkSession.sparkContext.parallelize(rowWithoutNull), mergedSchema).queryExecution.toRdd.first()
+    val newRow2 = rowWriter(oldRow2)
+    assertEquals(serDe.deserializeRow(newRow2), Row("Andrew", 25, Row("Mission st", "SF")));
   }
 
   /**
@@ -192,7 +214,7 @@ class TestHoodieInternalRowUtils extends FunSuite with Matchers with BeforeAndAf
     val newRowExpected = AvroConversionUtils.createAvroToInternalRowConverter(newAvroSchema, newStructTypeSchema)
       .apply(newRecord).get
 
-    val rowWriter = HoodieInternalRowUtils.genUnsafeRowWriter(structTypeSchema, newStructTypeSchema, new HashMap[String, String])
+    val rowWriter = HoodieInternalRowUtils.genUnsafeRowWriter(structTypeSchema, newStructTypeSchema, JCollections.emptyMap(), JCollections.emptyMap())
     val newRow = rowWriter(row)
 
     internalRowCompare(newRowExpected, newRow, newStructTypeSchema)
@@ -247,7 +269,7 @@ class TestHoodieInternalRowUtils extends FunSuite with Matchers with BeforeAndAf
     val row = AvroConversionUtils.createAvroToInternalRowConverter(schema, structTypeSchema).apply(avroRecord).get
     val newRowExpected = AvroConversionUtils.createAvroToInternalRowConverter(newAvroSchema, newStructTypeSchema).apply(newAvroRecord).get
 
-    val rowWriter = HoodieInternalRowUtils.genUnsafeRowWriter(structTypeSchema, newStructTypeSchema, new HashMap[String, String])
+    val rowWriter = HoodieInternalRowUtils.genUnsafeRowWriter(structTypeSchema, newStructTypeSchema, JCollections.emptyMap(), JCollections.emptyMap())
     val newRow = rowWriter(row)
 
     internalRowCompare(newRowExpected, newRow, newStructTypeSchema)

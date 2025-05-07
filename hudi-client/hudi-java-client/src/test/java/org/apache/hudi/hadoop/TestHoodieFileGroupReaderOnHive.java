@@ -19,7 +19,6 @@
 
 package org.apache.hudi.hadoop;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -39,6 +38,8 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
 import org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat;
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
+import org.apache.hadoop.hive.serde2.typeinfo.TypeInfo;
+import org.apache.hadoop.hive.serde2.typeinfo.TypeInfoUtils;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.mapred.JobConf;
 import org.junit.jupiter.api.AfterAll;
@@ -46,6 +47,7 @@ import org.junit.jupiter.api.BeforeAll;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.hadoop.HoodieFileGroupReaderBasedRecordReader.getStoredPartitionFieldNames;
@@ -92,7 +94,7 @@ public class TestHoodieFileGroupReaderOnHive extends HoodieFileGroupReaderOnJava
   public HoodieReaderContext<ArrayWritable> getHoodieReaderContext(String tablePath, Schema avroSchema, StorageConfiguration<?> storageConf, HoodieTableMetaClient metaClient) {
     HoodieFileGroupReaderBasedRecordReader.HiveReaderCreator readerCreator = (inputSplit, jobConf) -> new MapredParquetInputFormat().getRecordReader(inputSplit, jobConf, null);
     JobConf jobConf = new JobConf(storageConf.unwrapAs(Configuration.class));
-    setupJobconf(jobConf, metaClient.getTableConfig().populateMetaFields());
+    setupJobconf(jobConf, avroSchema);
     return new HiveHoodieReaderContext(readerCreator,
         getStoredPartitionFieldNames(new JobConf(storageConf.unwrapAs(Configuration.class)), avroSchema),
         new ObjectInspectorCache(avroSchema, jobConf), storageConf, metaClient.getTableConfig());
@@ -103,12 +105,13 @@ public class TestHoodieFileGroupReaderOnHive extends HoodieFileGroupReaderOnJava
     ArrayWritableTestUtil.assertArrayWritableEqual(schema, expected, actual, false);
   }
 
-  private void setupJobconf(JobConf jobConf, boolean populateMetaFields) {
-    Schema schema = populateMetaFields ? HoodieAvroUtils.addMetadataFields(HoodieTestDataGenerator.AVRO_SCHEMA) : HoodieTestDataGenerator.AVRO_SCHEMA;
+  private void setupJobconf(JobConf jobConf, Schema schema) {
     List<Schema.Field> fields = schema.getFields();
     setHiveColumnNameProps(fields, jobConf, USE_FAKE_PARTITION);
-    String metaFieldTypes = "string,string,string,string,string,";
-    jobConf.set("columns.types", (populateMetaFields ? metaFieldTypes : "") + HoodieTestDataGenerator.TRIP_HIVE_COLUMN_TYPES + ",string");
+    List<TypeInfo> types = TypeInfoUtils.getTypeInfosFromTypeString(HoodieTestDataGenerator.TRIP_HIVE_COLUMN_TYPES);
+    Map<String, String> typeMappings = HoodieTestDataGenerator.AVRO_SCHEMA.getFields().stream().collect(Collectors.toMap(Schema.Field::name, field -> types.get(field.pos()).getTypeName()));
+    String columnTypes = fields.stream().map(field -> typeMappings.getOrDefault(field.name(), "string")).collect(Collectors.joining(","));
+    jobConf.set("columns.types", columnTypes + ",string");
   }
 
   private void setHiveColumnNameProps(List<Schema.Field> fields, JobConf jobConf, boolean isPartitioned) {
