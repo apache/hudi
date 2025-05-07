@@ -34,6 +34,7 @@ import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
@@ -93,7 +94,8 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
         TimeGenerators.getTimeGenerator(clientConfig.getTimeGeneratorConfig(), context.getStorageConf()));
   }
 
-  protected BaseHoodieClient(HoodieEngineContext context, HoodieWriteConfig clientConfig,
+  @VisibleForTesting
+  BaseHoodieClient(HoodieEngineContext context, HoodieWriteConfig clientConfig,
                              Option<EmbeddedTimelineService> timelineServer, TransactionManager transactionManager, TimeGenerator timeGenerator) {
     this.storageConf = context.getStorageConf();
     this.storage = HoodieStorageUtils.getStorage(clientConfig.getBasePath(), storageConf);
