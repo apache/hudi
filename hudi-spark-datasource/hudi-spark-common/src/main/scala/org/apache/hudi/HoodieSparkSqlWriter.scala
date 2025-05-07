@@ -836,9 +836,9 @@ class HoodieSparkSqlWriterInternal {
       case _ =>
         throw new HoodieException(s"$mode with bulk_insert in row writer path is not supported yet");
     }
-    val instantTime = executor.getInstantTime
 
     val writeResult = executor.execute(df, tableConfig.isTablePartitioned)
+    val instantTime = executor.getInstantTime
 
     try {
       val (writeSuccessful, compactionInstant, clusteringInstant) = mode match {
