@@ -42,7 +42,6 @@ import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -52,8 +51,6 @@ import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CollectionUtils;
-import org.apache.hudi.common.util.CommitUtils;
-import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -66,8 +63,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieLogCompactException;
 import org.apache.hudi.exception.HoodieRollbackException;
-import org.apache.hudi.internal.schema.HoodieSchemaException;
-import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -79,7 +74,6 @@ import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.util.CommonClientUtils;
 
 import com.codahale.metrics.Timer;
-import org.apache.avro.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -336,26 +330,18 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
   public void commitCompaction(String compactionInstantTime, HoodieWriteMetadata<O> compactionWriteMetadata, Option<HoodieTable> tableOpt) {
     // dereferencing the write dag for compaction for the first time.
     List<HoodieWriteStat> writeStats = triggerWritesAndFetchWriteStats(compactionWriteMetadata);
-    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata(true);
+    // Fetch commit metadata from HoodieWriteMetadata and update HoodieWriteStat
+    HoodieCommitMetadata commitMetadata = compactionWriteMetadata.getCommitMetadata().get();
+    commitMetadata.setCompacted(true);
     for (HoodieWriteStat stat : writeStats) {
       commitMetadata.addWriteStat(stat.getPartitionPath(), stat);
     }
-    commitMetadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, config.getSchema());
-    HoodieTable table = tableOpt.orElseGet(() -> createTable(config, context.getStorageConf()));
-    Pair<Option<String>, Option<String>> schemaPair = InternalSchemaCache
-        .getInternalSchemaAndAvroSchemaForClusteringAndCompaction(table.getMetaClient(), compactionInstantTime);
-
-    if (schemaPair.getLeft().isPresent()) {
-      commitMetadata.addMetadata(SerDeHelper.LATEST_SCHEMA, schemaPair.getLeft().get());
-      commitMetadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, schemaPair.getRight().get());
-    }
-
-    commitMetadata.setOperationType(WriteOperationType.COMPACT);
     compactionWriteMetadata.setCommitted(true);
     compactionWriteMetadata.setCommitMetadata(Option.of(commitMetadata));
     metrics.emitCompactionCompleted();
     LOG.info("Compaction completed. Instant time: {}.", compactionInstantTime);
 
+    HoodieTable table = tableOpt.orElseGet(() -> createTable(config, context.getStorageConf()));
     completeCompaction(commitMetadata, table, compactionInstantTime);
   }
 
@@ -396,25 +382,17 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
   public void commitLogCompaction(String compactionInstantTime, HoodieWriteMetadata<O> writeMetadata, Option<HoodieTable> tableOpt) {
     // dereferencing the write dag for log compaction for the first time.
     List<HoodieWriteStat> writeStats = triggerWritesAndFetchWriteStats(writeMetadata);
-    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata(true);
+    // fetch HoodieCommitMetadata and update HoodieWriteStat
+    HoodieCommitMetadata commitMetadata = writeMetadata.getCommitMetadata().get();
     for (HoodieWriteStat stat : writeStats) {
       commitMetadata.addWriteStat(stat.getPartitionPath(), stat);
     }
-    commitMetadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, config.getSchema());
-    HoodieTable table = tableOpt.orElseGet(() -> createTable(config, context.getStorageConf()));
-    Pair<Option<String>, Option<String>> schemaPair = InternalSchemaCache
-        .getInternalSchemaAndAvroSchemaForClusteringAndCompaction(table.getMetaClient(), compactionInstantTime);
-
-    if (schemaPair.getLeft().isPresent()) {
-      commitMetadata.addMetadata(SerDeHelper.LATEST_SCHEMA, schemaPair.getLeft().get());
-      commitMetadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, schemaPair.getRight().get());
-    }
-    // Setting operationType, which is log compact.
-    commitMetadata.setOperationType(WriteOperationType.LOG_COMPACT);
+    commitMetadata.setCompacted(true);
     writeMetadata.setCommitted(true);
     writeMetadata.setCommitMetadata(Option.of(commitMetadata));
     metrics.emitCompactionCompleted();
     LOG.info("Log Compaction completed. Instant time: {}.", compactionInstantTime);
+    HoodieTable table = tableOpt.orElseGet(() -> createTable(config, context.getStorageConf()));
     completeLogCompaction(commitMetadata, table, compactionInstantTime);
   }
   
@@ -584,23 +562,16 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     // triggering the dag for the first time for clustering
     List<HoodieWriteStat> writeStats = triggerWritesAndFetchWriteStats(clusteringWriteMetadata);
     clusteringWriteMetadata.setWriteStats(writeStats);
-
-    HoodieClusteringPlan clusteringPlan = ClusteringUtils.getPendingClusteringPlan(table.getMetaClient(), clusteringCommitTime);
-    clusteringWriteMetadata.setPartitionToReplaceFileIds(getPartitionToReplacedFileIds(clusteringPlan, clusteringWriteMetadata));
-    Option<Schema> schema;
-    try {
-      schema = new TableSchemaResolver(table.getMetaClient()).getTableAvroSchemaIfPresent(false);
-    } catch (Exception ex) {
-      throw new HoodieSchemaException(ex);
-    }
-    // Create HoodieCommitMetadata w/ all required info except HoodieWriteStats which will be populated later when dag is triggered.
-    HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(Collections.emptyList(), clusteringWriteMetadata.getPartitionToReplaceFileIds(),
-        Option.empty(), WriteOperationType.CLUSTER, schema.get().toString(), HoodieTimeline.CLUSTERING_ACTION);
-    clusteringWriteMetadata.setCommitMetadata(Option.of(commitMetadata));
+    // Fetch Replace commit metadata and update HoodieWriteStats annd Partition to Replace FileIds
     HoodieReplaceCommitMetadata replaceCommitMetadata = (HoodieReplaceCommitMetadata) clusteringWriteMetadata.getCommitMetadata().get();
     for (HoodieWriteStat writeStat: writeStats) {
       replaceCommitMetadata.addWriteStat(writeStat.getPartitionPath(), writeStat);
     }
+    HoodieClusteringPlan clusteringPlan = ClusteringUtils.getPendingClusteringPlan(table.getMetaClient(), clusteringCommitTime);
+    Map<String, List<String>> partitionToReplaceFileIds = getPartitionToReplacedFileIds(clusteringPlan, clusteringWriteMetadata);
+    clusteringWriteMetadata.setPartitionToReplaceFileIds(partitionToReplaceFileIds);
+    replaceCommitMetadata.setPartitionToReplaceFileIds(partitionToReplaceFileIds);
+
     clusteringWriteMetadata.setCommitMetadata(Option.of(replaceCommitMetadata));
     runPrecommitValidationForClustering(clusteringWriteMetadata, table, clusteringCommitTime);
 

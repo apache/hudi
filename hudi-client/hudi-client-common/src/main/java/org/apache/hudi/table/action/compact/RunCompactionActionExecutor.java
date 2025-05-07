@@ -22,6 +22,7 @@ import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -32,6 +33,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCompactionException;
+import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.HoodieCompactionHandler;
 import org.apache.hudi.table.HoodieTable;
@@ -105,6 +107,15 @@ public class RunCompactionActionExecutor<T> extends
 
       compactor.maybePersist(statuses, context, config, instantTime);
       context.setJobStatus(this.getClass().getSimpleName(), "Preparing compaction metadata: " + config.getTableName());
+
+      HoodieCommitMetadata metadata = new HoodieCommitMetadata();
+      metadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, config.getSchema());
+      if (schemaPair.getLeft().isPresent()) {
+        metadata.addMetadata(SerDeHelper.LATEST_SCHEMA, schemaPair.getLeft().get());
+        metadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, schemaPair.getRight().get());
+      }
+      metadata.setOperationType(operationType);
+      compactionWriteMetadata.setCommitMetadata(Option.of(metadata));
       compactionWriteMetadata.setWriteStatuses(statuses);
       compactionWriteMetadata.setCommitted(false);
     } catch (Exception e) {
