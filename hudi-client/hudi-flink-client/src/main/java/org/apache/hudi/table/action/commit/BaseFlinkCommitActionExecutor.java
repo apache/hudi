@@ -192,6 +192,7 @@ public abstract class BaseFlinkCommitActionExecutor<T> extends
     // This is needed since sometimes some buckets are never picked in getPartition() and end up with 0 records
     HoodieMergeHandle<?, ?, ?, ?> upsertHandle = (HoodieMergeHandle<?, ?, ?, ?>) this.writeHandle;
     if (upsertHandle.isEmptyNewRecords() && !recordItr.hasNext()) {
+      LOG.info("Empty partition with fileId => {}.", fileId);
       return Collections.singletonList((List<WriteStatus>) Collections.EMPTY_LIST).iterator();
     }
     // these are updates

@@ -206,6 +206,7 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
         break;
       case UPSERT:
       case DELETE: // shares the code path with UPSERT
+      case DELETE_PREPPED:
         this.writeFunction = (records, bucketInfo, instantTime) -> this.writeClient.upsert(records, bucketInfo, instantTime);
         break;
       case INSERT_OVERWRITE:

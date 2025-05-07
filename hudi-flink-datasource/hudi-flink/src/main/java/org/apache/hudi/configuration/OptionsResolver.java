@@ -436,8 +436,7 @@ public class OptionsResolver {
     Map<String, String> confMap = new HashMap<>();
     // file writer options
     confMap.put(HoodieStorageConfig.HOODIE_IO_FACTORY_CLASS.key(), HoodieFlinkIOFactory.class.getName());
-    confMap.put(HoodieStorageConfig.WRITE_UTC_TIMEZONE.key(),
-        conf.getString(HoodieStorageConfig.WRITE_UTC_TIMEZONE.key(), HoodieStorageConfig.WRITE_UTC_TIMEZONE.defaultValue().toString()));
+    confMap.put(HoodieStorageConfig.WRITE_UTC_TIMEZONE.key(), conf.get(FlinkOptions.WRITE_UTC_TIMEZONE).toString());
 
     // file reader options
     confMap.put(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(),

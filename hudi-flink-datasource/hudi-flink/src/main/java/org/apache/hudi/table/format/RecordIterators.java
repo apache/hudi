@@ -194,10 +194,11 @@ public abstract class RecordIterators {
   /**
    * Get partition values from the file path.
    *
-   * @param conf storage configuration
-   * @param path file path
+   * @param conf       storage configuration
+   * @param path       file path
    * @param fieldNames full field names
    * @param fieldTypes full field types
+   *
    * @return partition specification values.
    */
   private static LinkedHashMap<String, Object> getPartitionSpec(

@@ -54,7 +54,6 @@ public class HadoopConfigurations {
     hadoopOptions.forEach(hadoopConf::set);
     // kind of hacky: flink specific IO options.
     Map<String, String> ioOptions = OptionsResolver.getIOOptions(conf);
-    hadoopOptions.forEach(hadoopConf::set);
     ioOptions.forEach(hadoopConf::set);
     return hadoopConf;
   }

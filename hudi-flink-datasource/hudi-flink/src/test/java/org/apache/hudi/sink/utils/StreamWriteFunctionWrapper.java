@@ -28,7 +28,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.StreamWriteFunction;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.bootstrap.BootstrapOperator;
-import org.apache.hudi.sink.common.AbstractStreamWriteFunction;
 import org.apache.hudi.sink.common.AbstractWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.partitioner.BucketAssignFunction;
@@ -63,7 +62,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * A wrapper class to manipulate the instance {@link AbstractStreamWriteFunction} for testing.
+ * A wrapper class to manipulate the instance {@link StreamWriteFunction} for testing.
  *
  * @param <I> Input type
  */
