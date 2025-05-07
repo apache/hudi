@@ -40,7 +40,6 @@ import org.apache.hudi.sink.meta.CkpMetadataFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
@@ -49,7 +48,6 @@ import org.apache.hudi.utils.TestUtils;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.table.data.RowData;
-import org.apache.flink.table.types.logical.RowType;
 import org.hamcrest.MatcherAssert;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -634,11 +632,6 @@ public class TestWriteBase {
 
   protected TestHarness preparePipeline() throws Exception {
     return preparePipeline(conf);
-  }
-
-  protected boolean supportRowDataAppend(Configuration conf) {
-    RowType rowType = (RowType) AvroSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(conf)).getLogicalType();
-    return OptionsResolver.supportRowDataAppend(conf);
   }
 
   protected TestHarness preparePipeline(Configuration conf) throws Exception {

@@ -26,8 +26,6 @@ import java.util.List;
 
 /**
  * Interface for flink write client that supports writing RowData directly into the underneath filesystem.
- * <p>
- * todo: add support for Insert/InsertOverwrite/InsertOverwriteTable, see HUDI-9075
  */
 public interface FlinkRowDataWriteClient<T> {
 

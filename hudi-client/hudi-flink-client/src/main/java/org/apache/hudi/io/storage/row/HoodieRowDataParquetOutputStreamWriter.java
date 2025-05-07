@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io.storage.row;
 
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.io.storage.HoodieParquetConfig;
 import org.apache.hudi.parquet.io.OutputStreamBackedOutputFile;
@@ -81,8 +82,8 @@ public class HoodieRowDataParquetOutputStreamWriter implements HoodieRowDataFile
   }
 
   @Override
-  public void writeRow(RowData row) throws IOException {
-    writer.write(row);
+  public void writeRowWithMetaData(HoodieKey key, RowData row) throws IOException {
+    writeRow(key.getRecordKey(), row);
   }
 
   @Override

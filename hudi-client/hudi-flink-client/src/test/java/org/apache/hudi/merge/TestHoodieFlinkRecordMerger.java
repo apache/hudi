@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.util.AvroSchemaConverter;
@@ -97,7 +98,8 @@ public class TestHoodieFlinkRecordMerger {
 
     EventTimeFlinkRecordMerger merger = new EventTimeFlinkRecordMerger();
     Option<Pair<HoodieRecord, Schema>> mergingResult = merger.merge(oldRecord, schema, deleteRecord, schema, new TypedProperties());
-    assertTrue(mergingResult.isEmpty());
+    assertTrue(mergingResult.isPresent());
+    assertTrue(mergingResult.get().getLeft().isDelete(schema, CollectionUtils.emptyProps()));
   }
 
   @Test
@@ -111,7 +113,8 @@ public class TestHoodieFlinkRecordMerger {
 
     EventTimeFlinkRecordMerger merger = new EventTimeFlinkRecordMerger();
     Option<Pair<HoodieRecord, Schema>> mergingResult = merger.merge(deleteRecord, schema, newRecord, schema, new TypedProperties());
-    assertTrue(mergingResult.isEmpty());
+    assertTrue(mergingResult.isPresent());
+    assertTrue(mergingResult.get().getLeft().isDelete(schema, CollectionUtils.emptyProps()));
   }
 
   @Test

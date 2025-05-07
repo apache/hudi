@@ -21,7 +21,6 @@ package org.apache.hudi.util;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.table.format.TypeConverters;
 
 import org.apache.flink.table.data.ArrayData;
 import org.apache.flink.table.data.GenericArrayData;
@@ -141,7 +140,7 @@ public class SchemaEvolvingRowDataProjection implements RowProjection {
       // this is a new added column
       if (fieldIdxInFrom == -1) {
         fieldGetters[i] = RowDataUtils.NULL_GETTER;
-        objectConverters[i] = TypeConverters.NOOP_CONVERTER::convert;
+        objectConverters[i] = TypeConverters.NOOP_CONVERTER;
       } else {
         fieldGetters[i] = RowData.createFieldGetter(fromRowType.getTypeAt(fieldIdxInFrom), fieldIdxInFrom);
         final LogicalType fromFieldType = fromRowType.getTypeAt(fieldIdxInFrom);

@@ -64,7 +64,7 @@ public class RowDataUtils {
       case SMALLINT:
         return fieldVal -> ((Short) fieldVal).intValue();
       case DATE:
-        return fieldVal -> LocalDate.ofEpochDay((Long) fieldVal);
+        return fieldVal -> LocalDate.ofEpochDay((Integer) fieldVal);
       case CHAR:
       case VARCHAR:
         return Object::toString;

@@ -80,6 +80,7 @@ import java.io.IOException;
  * </pre>
  */
 public class PartialUpdateFlinkRecordMerger extends HoodieFlinkRecordMerger {
+
   @Override
   public String getMergingStrategy() {
     return CUSTOM_MERGE_STRATEGY_UUID;
@@ -97,21 +98,14 @@ public class PartialUpdateFlinkRecordMerger extends HoodieFlinkRecordMerger {
     ValidationUtils.checkArgument(newer.getRecordType() == HoodieRecord.HoodieRecordType.FLINK);
 
     if (older.getOrderingValue(oldSchema, props).compareTo(newer.getOrderingValue(newSchema, props)) > 0) {
-      if (older.isDelete(oldSchema, props)) {
-        // Delete record
-        return Option.empty();
-      } else if (newer.isDelete(newSchema, props)) {
-        // return old directly, if newer is delete
+      if (older.isDelete(oldSchema, props) || newer.isDelete(newSchema, props)) {
         return Option.of(Pair.of(older, oldSchema));
       } else {
         HoodieRecord mergedRecord = mergeRecord(newer, newSchema, older, oldSchema, props);
         return Option.of(Pair.of(mergedRecord, oldSchema));
       }
     } else {
-      if (newer.isDelete(newSchema, props)) {
-        // Delete record
-        return Option.empty();
-      } else if (older.isDelete(oldSchema, props)) {
+      if (newer.isDelete(newSchema, props) || older.isDelete(oldSchema, props)) {
         return Option.of(Pair.of(newer, newSchema));
       } else {
         HoodieRecord mergedRecord = mergeRecord(older, oldSchema, newer, newSchema, props);

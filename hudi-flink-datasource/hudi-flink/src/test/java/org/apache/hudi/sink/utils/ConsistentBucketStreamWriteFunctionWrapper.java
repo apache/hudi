@@ -19,11 +19,9 @@
 package org.apache.hudi.sink.utils;
 
 import org.apache.hudi.client.model.HoodieFlinkInternalRow;
-import org.apache.hudi.configuration.OptionsResolver;
+import org.apache.hudi.sink.StreamWriteFunction;
 import org.apache.hudi.sink.bucket.ConsistentBucketAssignFunction;
 import org.apache.hudi.sink.bucket.ConsistentBucketStreamWriteFunction;
-import org.apache.hudi.sink.bucket.RowDataConsistentBucketStreamWriteFunction;
-import org.apache.hudi.sink.common.AbstractStreamWriteFunction;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.state.FunctionSnapshotContext;
@@ -63,13 +61,8 @@ public class ConsistentBucketStreamWriteFunctionWrapper<I> extends BucketStreamW
     }
   }
 
-  @Override
-  protected AbstractStreamWriteFunction createWriteFunction() {
-    if (OptionsResolver.supportRowDataAppend(conf)) {
-      return new RowDataConsistentBucketStreamWriteFunction(conf, rowType);
-    } else {
-      return new ConsistentBucketStreamWriteFunction(conf, rowType);
-    }
+  protected StreamWriteFunction createWriteFunction() {
+    return new ConsistentBucketStreamWriteFunction(conf, rowType);
   }
 
   @Override
