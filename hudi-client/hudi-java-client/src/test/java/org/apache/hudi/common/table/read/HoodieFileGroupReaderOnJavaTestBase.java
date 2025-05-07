@@ -48,7 +48,7 @@ public abstract class HoodieFileGroupReaderOnJavaTestBase<T> extends TestHoodieF
 
   @Override
   public String getBasePath() {
-    return tempDir.toAbsolutePath() + "/myTable";
+    return "file://" + tempDir.toAbsolutePath() + "/myTable";
   }
 
   @Override

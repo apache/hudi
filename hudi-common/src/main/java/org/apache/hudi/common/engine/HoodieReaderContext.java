@@ -23,11 +23,12 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.util.LocalAvroSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -42,6 +43,7 @@ import javax.annotation.Nullable;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.function.BiFunction;
 import java.util.function.UnaryOperator;
@@ -321,13 +323,17 @@ public abstract class HoodieReaderContext<T> {
    * skeleton file iterator, followed by all columns in the data file iterator
    *
    * @param skeletonFileIterator iterator over bootstrap skeleton files that contain hudi metadata columns
-   * @param dataFileIterator     iterator over data files that were bootstrapped into the hudi table
+   * @param skeletonRequiredSchema the schema of the skeleton file iterator
+   * @param dataFileIterator iterator over data files that were bootstrapped into the hudi table
+   * @param dataRequiredSchema the schema of the data file iterator
+   * @param requiredPartitionFieldAndValues the partition field names and their values that are required by the query
    * @return iterator that concatenates the skeletonFileIterator and dataFileIterator
    */
   public abstract ClosableIterator<T> mergeBootstrapReaders(ClosableIterator<T> skeletonFileIterator,
                                                             Schema skeletonRequiredSchema,
                                                             ClosableIterator<T> dataFileIterator,
-                                                            Schema dataRequiredSchema);
+                                                            Schema dataRequiredSchema,
+                                                            List<Pair<String, Object>> requiredPartitionFieldAndValues);
 
   /**
    * Creates a function that will reorder records of schema "from" to schema of "to"
