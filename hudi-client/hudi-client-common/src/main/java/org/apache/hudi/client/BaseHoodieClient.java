@@ -73,7 +73,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
   protected final String basePath;
   protected final HoodieHeartbeatClient heartbeatClient;
   protected final TransactionManager txnManager;
-  private final TimeGenerator timeGenerator;
+  protected final TimeGenerator timeGenerator;
 
   /**
    * Timeline Server has the same lifetime as that of Client. Any operations done on the same timeline service will be
@@ -88,7 +88,13 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
   }
 
   protected BaseHoodieClient(HoodieEngineContext context, HoodieWriteConfig clientConfig,
-      Option<EmbeddedTimelineService> timelineServer) {
+                             Option<EmbeddedTimelineService> timelineServer) {
+    this(context, clientConfig, timelineServer, new TransactionManager(clientConfig, HoodieStorageUtils.getStorage(clientConfig.getBasePath(), context.getStorageConf())),
+        TimeGenerators.getTimeGenerator(clientConfig.getTimeGeneratorConfig(), context.getStorageConf()));
+  }
+
+  protected BaseHoodieClient(HoodieEngineContext context, HoodieWriteConfig clientConfig,
+                             Option<EmbeddedTimelineService> timelineServer, TransactionManager transactionManager, TimeGenerator timeGenerator) {
     this.storageConf = context.getStorageConf();
     this.storage = HoodieStorageUtils.getStorage(clientConfig.getBasePath(), storageConf);
     this.context = context;
@@ -100,9 +106,8 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
         clientConfig.getHoodieClientHeartbeatIntervalInMs(),
         clientConfig.getHoodieClientHeartbeatTolerableMisses());
     this.metrics = new HoodieMetrics(config, storage);
-    this.txnManager = new TransactionManager(config, storage);
-    this.timeGenerator = TimeGenerators.getTimeGenerator(
-        config.getTimeGeneratorConfig(), storageConf);
+    this.txnManager = transactionManager;
+    this.timeGenerator = timeGenerator;
     startEmbeddedServerView();
     initWrapperFSMetrics();
     runClientInitCallbacks();
