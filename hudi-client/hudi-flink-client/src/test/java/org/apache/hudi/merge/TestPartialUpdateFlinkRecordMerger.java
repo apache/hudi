@@ -104,10 +104,12 @@ public class TestPartialUpdateFlinkRecordMerger {
     HoodieEmptyRecord deleteRecord = new HoodieEmptyRecord(new HoodieKey("1", "par1"), HoodieOperation.DELETE, 1L, HoodieRecord.HoodieRecordType.FLINK);
 
     Option<Pair<HoodieRecord, Schema>> mergingResult = recordMerger.merge(record1, schema, deleteRecord, schema, new TypedProperties());
-    assertTrue(mergingResult.isEmpty());
+    assertTrue(mergingResult.isPresent());
+    assertTrue(mergingResult.get().getLeft().isDelete(schema, new TypedProperties()));
 
     mergingResult = recordMerger.merge(deleteRecord, schema, record1, schema, new TypedProperties());
-    assertTrue(mergingResult.isEmpty());
+    assertTrue(mergingResult.isPresent());
+    assertTrue(mergingResult.get().getLeft().isDelete(schema, new TypedProperties()));
   }
 
   /**

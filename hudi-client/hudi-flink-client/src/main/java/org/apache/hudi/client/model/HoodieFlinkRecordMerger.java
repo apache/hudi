@@ -21,12 +21,11 @@ package org.apache.hudi.client.model;
 
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
-import org.apache.hudi.common.model.OperationModeAwareness;
 
 /**
  * Base class for {@link HoodieRecordMerger } of HoodieFlinkRecord.
  */
-public abstract class HoodieFlinkRecordMerger implements HoodieRecordMerger, OperationModeAwareness {
+public abstract class HoodieFlinkRecordMerger implements HoodieRecordMerger {
   @Override
   public HoodieRecord.HoodieRecordType getRecordType() {
     return HoodieRecord.HoodieRecordType.FLINK;

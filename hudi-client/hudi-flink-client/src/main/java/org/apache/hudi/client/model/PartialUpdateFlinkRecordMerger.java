@@ -21,7 +21,6 @@ package org.apache.hudi.client.model;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -82,19 +81,6 @@ import java.io.IOException;
  */
 public class PartialUpdateFlinkRecordMerger extends HoodieFlinkRecordMerger {
 
-  public static final PartialUpdateFlinkRecordMerger INSTANCE = new PartialUpdateFlinkRecordMerger();
-  public static final PartialUpdateFlinkRecordMerger PRE_COMBINE_INSTANCE = new PartialUpdateFlinkRecordMerger(true);
-
-  private final boolean isPreCombineMode;
-
-  public PartialUpdateFlinkRecordMerger() {
-    this(false);
-  }
-
-  public PartialUpdateFlinkRecordMerger(boolean isPreCombineMode) {
-    this.isPreCombineMode = isPreCombineMode;
-  }
-
   @Override
   public String getMergingStrategy() {
     return CUSTOM_MERGE_STRATEGY_UUID;
@@ -112,29 +98,14 @@ public class PartialUpdateFlinkRecordMerger extends HoodieFlinkRecordMerger {
     ValidationUtils.checkArgument(newer.getRecordType() == HoodieRecord.HoodieRecordType.FLINK);
 
     if (older.getOrderingValue(oldSchema, props).compareTo(newer.getOrderingValue(newSchema, props)) > 0) {
-      if (older.isDelete(oldSchema, props)) {
-        // Delete record
-        if (isPreCombineMode) {
-          return Option.of(Pair.of(older, oldSchema));
-        } else {
-          return Option.empty();
-        }
-      } else if (newer.isDelete(newSchema, props)) {
-        // return old directly, if newer is delete
+      if (older.isDelete(oldSchema, props) || newer.isDelete(newSchema, props)) {
         return Option.of(Pair.of(older, oldSchema));
       } else {
         HoodieRecord mergedRecord = mergeRecord(newer, newSchema, older, oldSchema, props);
         return Option.of(Pair.of(mergedRecord, oldSchema));
       }
     } else {
-      if (newer.isDelete(newSchema, props)) {
-        // Delete record
-        if (isPreCombineMode) {
-          return Option.of(Pair.of(newer, newSchema));
-        } else {
-          return Option.empty();
-        }
-      } else if (older.isDelete(oldSchema, props)) {
+      if (newer.isDelete(newSchema, props) || older.isDelete(oldSchema, props)) {
         return Option.of(Pair.of(newer, newSchema));
       } else {
         HoodieRecord mergedRecord = mergeRecord(older, oldSchema, newer, newSchema, props);
@@ -171,10 +142,5 @@ public class PartialUpdateFlinkRecordMerger extends HoodieFlinkRecordMerger {
       }
     }
     return result;
-  }
-
-  @Override
-  public HoodieRecordMerger asPreCombiningMode() {
-    return PartialUpdateFlinkRecordMerger.INSTANCE;
   }
 }

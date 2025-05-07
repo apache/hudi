@@ -21,7 +21,6 @@ package org.apache.hudi.client.model;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -49,10 +48,5 @@ public class CommitTimeFlinkRecordMerger extends HoodieFlinkRecordMerger {
       Schema newSchema,
       TypedProperties props) throws IOException {
     return Option.of(Pair.of(newer, newSchema));
-  }
-
-  @Override
-  public HoodieRecordMerger asPreCombiningMode() {
-    return CommitTimeFlinkRecordMerger.INSTANCE;
   }
 }

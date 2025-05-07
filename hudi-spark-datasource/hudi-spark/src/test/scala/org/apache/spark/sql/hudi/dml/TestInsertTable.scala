@@ -44,6 +44,43 @@ import java.util.concurrent.{CountDownLatch, TimeUnit}
 
 class TestInsertTable extends HoodieSparkSqlTestBase {
 
+  test("Test insert table") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+
+      spark.sql("set hoodie.datasource.write.operation = upsert")
+
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  dt string,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | tblproperties (primaryKey = 'id')
+           | partitioned by (dt)
+           | location '$tablePath'
+       """.stripMargin)
+
+      spark.sql(
+        s"""
+           | insert into $tableName values
+           | (1, 'a1', 10, 1000, "2021-01-05"),
+           | (1, 'a2', 11, 1001, "2021-01-05"),
+           | (1, 'a3', 12, 1002, "2021-01-05")
+           """.stripMargin)
+
+      checkAnswer(s"select id, name, price, ts, dt from $tableName where year(dt) > '2020' and lower(name) > 'a0'")(
+        Seq(1, "a1", 10.0, 1000, "2021-01-05"),
+        Seq(2, "a2", 20.0, 2000, "2021-01-06"),
+        Seq(3, "a3", 30.0, 3000, "2021-01-07")
+      )
+    }
+  }
+
   test("Test Insert Into with subset of columns") {
     // This is only supported by Spark 3.5
     if (HoodieSparkUtils.gteqSpark3_5) {
