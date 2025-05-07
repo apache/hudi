@@ -67,6 +67,7 @@ public abstract class BaseDatasetBulkInsertCommitActionExecutor implements Seria
 
   protected void preExecute() {
     table.validateInsertSchema();
+    table = writeClient.initTable(getWriteOperationType(), Option.ofNullable(instantTime));
     instantTime = writeClient.startCommit(getCommitActionType());
     writeClient.preWrite(instantTime, getWriteOperationType(), table.getMetaClient());
   }
@@ -96,7 +97,6 @@ public abstract class BaseDatasetBulkInsertCommitActionExecutor implements Seria
 
     boolean populateMetaFields = writeConfig.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS);
     preExecute();
-    table = writeClient.initTable(getWriteOperationType(), Option.ofNullable(instantTime));
 
     BulkInsertPartitioner<Dataset<Row>> bulkInsertPartitionerRows = getPartitioner(populateMetaFields, isTablePartitioned);
     Dataset<Row> hoodieDF = HoodieDatasetBulkInsertHelper.prepareForBulkInsert(records, writeConfig, bulkInsertPartitionerRows, instantTime);
