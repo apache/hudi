@@ -50,6 +50,7 @@ public class DatasetBulkInsertCommitActionExecutor extends BaseDatasetBulkInsert
   @Override
   protected void preExecute() {
     instantTime = writeClient.startCommit();
+    table = writeClient.initTable(getWriteOperationType(), Option.ofNullable(instantTime));
   }
 
   @Override
