@@ -32,7 +32,6 @@ import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.HoodieColumnStatsIndexUtils;
-import org.apache.hudi.client.PartitionFileIdPairsHolder;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -262,7 +261,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
       I preppedRecords);
 
   public HoodieWriteMetadata<O> upsertPrepped(HoodieEngineContext context, String instantTime,
-                                                       I preppedRecords, Option<PartitionFileIdPairsHolder> partitionFileIdPairsHolderOpt) {
+                                                       I preppedRecords, Option<List<Pair<String, String>>> partitionFileIdPairsOpt) {
     return upsertPrepped(context, instantTime, preppedRecords);
   }
 
