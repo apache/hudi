@@ -184,6 +184,11 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     return result;
   }
 
+  /**
+   * Prepares workload profiles and saves the same to inflight instant.
+   * @param inputRecordsWithClusteringUpdate input records of interest.
+   * @return {@link WorkloadProfile} thus prepared.
+   */
   protected WorkloadProfile prepareWorkloadProfileAndSaveToInflight(HoodieData<HoodieRecord<T>> inputRecordsWithClusteringUpdate) {
     context.setJobStatus(this.getClass().getSimpleName(), "Building workload profile:" + config.getTableName());
     WorkloadProfile workloadProfile =
