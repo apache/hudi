@@ -276,12 +276,14 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       // NOTE: Once Records are added to map (spillable-map), DO NOT change it as they won't persist
       keyToNewRecords.put(record.getRecordKey(), record);
     }
-    LOG.info("Number of entries in MemoryBasedMap => "
-        + ((ExternalSpillableMap) keyToNewRecords).getInMemoryMapNumEntries()
-        + ", Total size in bytes of MemoryBasedMap => "
-        + ((ExternalSpillableMap) keyToNewRecords).getCurrentInMemoryMapSize() + ", Number of entries in BitCaskDiskMap => "
-        + ((ExternalSpillableMap) keyToNewRecords).getDiskBasedMapNumEntries() + ", Size of file spilled to disk => "
-        + ((ExternalSpillableMap) keyToNewRecords).getSizeOfFileOnDiskInBytes());
+    if (keyToNewRecords instanceof ExternalSpillableMap) {
+      LOG.info("Number of entries in MemoryBasedMap => "
+          + ((ExternalSpillableMap) keyToNewRecords).getInMemoryMapNumEntries()
+          + ", Total size in bytes of MemoryBasedMap => "
+          + ((ExternalSpillableMap) keyToNewRecords).getCurrentInMemoryMapSize() + ", Number of entries in BitCaskDiskMap => "
+          + ((ExternalSpillableMap) keyToNewRecords).getDiskBasedMapNumEntries() + ", Size of file spilled to disk => "
+          + ((ExternalSpillableMap) keyToNewRecords).getSizeOfFileOnDiskInBytes());
+    }
   }
 
   public boolean isEmptyNewRecords() {

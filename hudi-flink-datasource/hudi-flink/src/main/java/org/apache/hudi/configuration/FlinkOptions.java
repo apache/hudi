@@ -392,13 +392,6 @@ public class FlinkOptions extends HoodieConfig {
   // ------------------------------------------------------------------------
 
   @AdvancedConfig
-  public static final ConfigOption<Boolean> INSERT_ROWDATA_MODE_ENABLED = ConfigOptions
-      .key("write.rowdata.mode.enabled")
-      .booleanType()
-      .defaultValue(true)
-      .withDescription("Whether to enable writing RowData directly without converting to Avro.");
-
-  @AdvancedConfig
   public static final ConfigOption<Boolean> INSERT_CLUSTER = ConfigOptions
       .key("write.insert.cluster")
       .booleanType()
