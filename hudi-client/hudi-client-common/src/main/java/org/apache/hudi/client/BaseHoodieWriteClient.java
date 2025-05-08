@@ -1135,22 +1135,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   }
 
   /**
-   * Commit a log compaction operation. Allow passing additional meta-data to be stored in commit instant file.
-   *
-   * @param logCompactionInstantTime Log Compaction Instant Time
-   * @param metadata All the metadata that gets stored along with a commit
-   * @param extraMetadata Extra Metadata to be stored
-   */
-  public void commitLogCompaction(String logCompactionInstantTime, HoodieCommitMetadata metadata,
-                                  Option<Map<String, String>> extraMetadata) {
-    HoodieTable table = createTable(config);
-    extraMetadata.ifPresent(m -> m.forEach(metadata::addMetadata));
-    completeLogCompaction(metadata, table, logCompactionInstantTime);
-  }
-
-  /**
    * Commit Log Compaction and track metrics.
-   */
+   **/
   protected void completeLogCompaction(HoodieCommitMetadata metadata, HoodieTable table, String logCompactionCommitTime) {
     tableServiceClient.completeLogCompaction(metadata, table, logCompactionCommitTime);
   }

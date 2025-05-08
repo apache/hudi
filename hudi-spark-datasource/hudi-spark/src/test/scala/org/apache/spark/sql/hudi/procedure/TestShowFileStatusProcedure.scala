@@ -95,7 +95,8 @@ class TestShowFileStatusProcedure extends HoodieSparkProcedureTestBase {
           client.cluster(newInstant)
         } else {
           client.scheduleCompactionAtInstant(newInstant, HOption.empty())
-          client.compact(newInstant)
+          val result = client.compact(newInstant)
+          client.commitCompaction(newInstant, result, HOption.empty())
         }
 
         spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002, 1000)")
@@ -199,7 +200,8 @@ class TestShowFileStatusProcedure extends HoodieSparkProcedureTestBase {
           client.cluster(newInstant)
         } else {
           client.scheduleCompactionAtInstant(newInstant, HOption.empty())
-          client.compact(newInstant)
+          val result = client.compact(newInstant)
+          client.commitCompaction(newInstant, result, HOption.empty())
         }
 
         spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002, 1000)")

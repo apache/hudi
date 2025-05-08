@@ -53,6 +53,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.commit.SparkBucketIndexPartitioner;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
@@ -158,7 +159,8 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
 
     // do compaction
     String compactionTime = (String) client1.scheduleCompaction(Option.empty()).get();
-    client1.compact(compactionTime);
+    HoodieWriteMetadata writeMetadata = client1.compact(compactionTime);
+    client1.commitCompaction(compactionTime, writeMetadata, Option.empty());
 
     // result is [(id1,Danny,23,2,par1)]
     Map<String, String> result = Collections.singletonMap("par1", "[id1,par1,id1,Danny,23,2,par1]");
@@ -203,7 +205,8 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
         metaClient.getCommitActionType());
 
     // do compaction
-    client1.compact(compactionTime);
+    HoodieWriteMetadata writeMetadata = client1.compact(compactionTime);
+    client1.commitCompaction(compactionTime, writeMetadata, Option.empty());
 
     // read optimized result is [(id1,Danny,23,1,par1)]
     // because 2nd commit is in inflight state and
@@ -332,7 +335,8 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
 
     // do compaction
     String compactionTime = (String) client1.scheduleCompaction(Option.empty()).get();
-    client1.compact(compactionTime);
+    HoodieWriteMetadata writeMetadata = client1.compact(compactionTime);
+    client1.commitCompaction(compactionTime, writeMetadata, Option.empty());
 
     // result is [(id1,Danny,23,2,par1)]
     Map<String, String> result = Collections.singletonMap("par1", "[id1,par1,id1,Danny,23,2,par1]");
@@ -476,7 +480,8 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
 
     // do compaction
     String compactionTime = (String) client1.scheduleCompaction(Option.empty()).get();
-    client1.compact(compactionTime);
+    HoodieWriteMetadata writeMetadata = client1.compact(compactionTime);
+    client1.commitCompaction(compactionTime, writeMetadata, Option.empty());
 
     // result is [(id1,Danny,23,2,par1)]
     Map<String, String> result = Collections.singletonMap("par1", "[id1,par1,id1,Danny,23,2,par1]");
@@ -528,7 +533,8 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
 
     // do compaction
     String compactionTime = (String) client1.scheduleCompaction(Option.empty()).get();
-    client1.compact(compactionTime);
+    HoodieWriteMetadata writeMetadata = client1.compact(compactionTime);
+    client1.commitCompaction(compactionTime, writeMetadata, Option.empty());
 
     // result is [(id1,Danny,23,2,par1)]
     Map<String, String> result = Collections.singletonMap("par1", "[id1,par1,id1,Danny,23,2,par1]");
@@ -566,7 +572,8 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
 
     // do compaction
     String compactionTime = (String) client1.scheduleCompaction(Option.empty()).get();
-    client1.compact(compactionTime);
+    HoodieWriteMetadata writeMetadata = client1.compact(compactionTime);
+    client1.commitCompaction(compactionTime, writeMetadata, Option.empty());
 
     // result is [(id1,Danny,23,2,par1)]
     Map<String, String> result = Collections.singletonMap("par1", "[id1,par1,id1,Danny,23,2,par1]");

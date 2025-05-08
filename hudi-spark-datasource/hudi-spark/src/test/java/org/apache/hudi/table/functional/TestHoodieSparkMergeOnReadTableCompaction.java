@@ -52,6 +52,7 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.commit.SparkBucketIndexPartitioner;
 import org.apache.hudi.table.action.rollback.RollbackUtils;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
@@ -171,7 +172,8 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
         .collect(Collectors.toList()), Option.empty(), metaClient.getCommitActionType());
     assertEquals(300, readTableTotalRecordsNum());
     // after the compaction, total records should remain the same
-    client.compact(compactionTime);
+    HoodieWriteMetadata result = client.compact(compactionTime);
+    client.commitCompaction(compactionTime, result, Option.empty());
     assertEquals(300, readTableTotalRecordsNum());
   }
 
@@ -205,17 +207,27 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
       JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 2);
 
       // initialize 100 records
-      client.upsert(writeRecords, client.startCommit());
+      String commit1 = client.startCommit();
+      JavaRDD writeStatuses = client.upsert(writeRecords, commit1);
+      client.commit(commit1, writeStatuses);
+
       // update 100 records
-      client.upsert(writeRecords, client.startCommit());
+      String commit2 = client.startCommit();
+      writeStatuses = client.upsert(writeRecords, commit2);
+      client.commit(commit2, writeStatuses);
       // schedule compaction
       client.scheduleCompaction(Option.empty());
       // delete 50 records
       List<HoodieKey> toBeDeleted = records.stream().map(HoodieRecord::getKey).limit(50).collect(Collectors.toList());
       JavaRDD<HoodieKey> deleteRecords = jsc().parallelize(toBeDeleted, 2);
-      client.delete(deleteRecords, client.startCommit());
+      String commit3 = client.startCommit();
+      writeStatuses = client.delete(deleteRecords, commit3);
+      client.commit(commit3, writeStatuses);
+
       // insert the same 100 records again
-      client.upsert(writeRecords, client.startCommit());
+      String commit4 = client.startCommit();
+      writeStatuses = client.upsert(writeRecords, commit4);
+      client.commit(commit4, writeStatuses);
       assertEquals(100, readTableTotalRecordsNum());
     } finally {
       jsc().hadoopConfiguration().set(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "true");
@@ -319,7 +331,8 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
       // committing instant2 that conflicts with the compaction plan should fail
       assertThrows(HoodieWriteConflictException.class, () -> commitToTable(instant2, writeStatuses2));
     }
-    client.compact(compactionInstant);
+    HoodieWriteMetadata result = client.compact(compactionInstant);
+    client.commitCompaction(compactionInstant, result, Option.empty());
     if (runRollback) {
       validateFileListingInMetadataTable();
     }

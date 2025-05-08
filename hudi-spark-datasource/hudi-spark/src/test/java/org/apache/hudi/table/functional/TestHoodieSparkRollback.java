@@ -83,6 +83,7 @@ public class TestHoodieSparkRollback extends SparkClientFunctionalTestHarness {
     JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
 
     List<WriteStatus> statuses = client.upsert(writeRecords, commitTime).collect();
+    client.commit(commitTime, jsc().parallelize(statuses));
     assertNoWriteErrors(statuses);
     return records;
   }
@@ -94,6 +95,7 @@ public class TestHoodieSparkRollback extends SparkClientFunctionalTestHarness {
     records = dataGen.generateUpdates(commitTime, records);
     JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
     List<WriteStatus> statuses = client.upsert(writeRecords, commitTime).collect();
+    client.commit(commitTime, jsc().parallelize(statuses));
     assertNoWriteErrors(statuses);
     return statuses;
   }

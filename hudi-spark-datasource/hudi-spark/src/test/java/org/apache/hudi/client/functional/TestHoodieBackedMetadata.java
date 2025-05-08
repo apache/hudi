@@ -2142,7 +2142,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       if (metaClient.getTableType() == HoodieTableType.MERGE_ON_READ) {
         newCommitTime = client.createNewInstantTime();
         client.scheduleCompactionAtInstant(newCommitTime, Option.empty());
-        client.compact(newCommitTime);
+        HoodieWriteMetadata result = client.compact(newCommitTime);
+        client.commitCompaction(newCommitTime, result, Option.empty());
         validateMetadata(client);
       }
 
@@ -2163,7 +2164,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       if (metaClient.getTableType() == HoodieTableType.MERGE_ON_READ) {
         newCommitTime = client.createNewInstantTime();
         client.scheduleCompactionAtInstant(newCommitTime, Option.empty());
-        client.compact(newCommitTime);
+        HoodieWriteMetadata result = client.compact(newCommitTime);
+        client.commitCompaction(newCommitTime, result, Option.empty());
         validateMetadata(client);
       }
 
@@ -3530,7 +3532,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     try (SparkRDDWriteClient metadataWriteClient = new SparkRDDWriteClient(context, metadataWriteConfig, Option.empty())) {
       final String compactionInstantTime = client.createNewInstantTime();
       assertTrue(metadataWriteClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty()));
-      metadataWriteClient.compact(compactionInstantTime);
+      HoodieWriteMetadata result = metadataWriteClient.compact(compactionInstantTime);
+      metadataWriteClient.commitCompaction(compactionInstantTime, result, Option.empty());
 
       // verify metadata table
       validateMetadata(client);

@@ -46,7 +46,7 @@ import java.util.Map;
 
 import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.EAGER;
 
-public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetadataWriter<List<HoodieRecord>,List<WriteStatus>> {
+public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetadataWriter<List<HoodieRecord>, List<WriteStatus>> {
 
   /**
    * Hudi backed table metadata writer.

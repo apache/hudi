@@ -35,6 +35,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex.IndexType;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 
@@ -180,7 +181,8 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
 
     // Compact once so we can incrementally read later
     assertTrue(client.scheduleCompactionAtInstant("002", Option.empty()));
-    client.compact("002");
+    HoodieWriteMetadata result = client.compact("002");
+    client.commitCompaction("002", result, Option.empty());
 
     // Updates with same schema is allowed
     final int numUpdateRecords = 5;

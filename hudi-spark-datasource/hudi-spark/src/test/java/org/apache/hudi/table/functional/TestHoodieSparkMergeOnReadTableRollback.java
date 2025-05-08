@@ -179,6 +179,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
     HoodieWriteConfig cfg = cfgBuilder.build();
     cfg.setValue(HoodieTableConfig.VERSION, String.valueOf(tableVersion));
     cfg.setValue(HoodieWriteConfig.WRITE_TABLE_VERSION, String.valueOf(tableVersion));
+    cfg.setValue(HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key(), "0");
 
     Properties properties = CollectionUtils.copy(cfg.getProps());
     properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().toString());
@@ -292,6 +293,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
         writeRecords = jsc().parallelize(copyOfRecords, 1);
         writeStatusJavaRDD = thirdClient.upsert(writeRecords, commitTime2);
         statuses = writeStatusJavaRDD.collect();
+        thirdClient.commit(commitTime2, jsc().parallelize(statuses));
         // Verify there are no errors
         assertNoWriteErrors(statuses);
 
@@ -339,12 +341,11 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
 
         String compactionInstantTime = thirdClient.scheduleCompaction(Option.empty()).get().toString();
         thirdClient.compact(compactionInstantTime);
+        // leave it inflight
 
         metaClient = HoodieTableMetaClient.reload(metaClient);
 
         final String compactedCommitTime = metaClient.getActiveTimeline().reload().lastInstant().get().requestedTime();
-        assertTrue(listAllBaseFilesInPath(hoodieTable).stream()
-            .anyMatch(file -> compactedCommitTime.equals(new HoodieBaseFile(file).getCommitTime())));
         hoodieTable.rollbackInflightCompaction(INSTANT_GENERATOR.createNewInstant(
             HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, compactedCommitTime));
         allFiles = listAllBaseFilesInPath(hoodieTable);
@@ -1014,13 +1015,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
       newCommitTime = writeClient.scheduleCompaction(Option.empty()).get().toString();
       HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = writeClient.compact(newCommitTime);
       statuses = compactionMetadata.getWriteStatuses();
-      // Ensure all log files have been compacted into base files
-      String extension = table.getBaseFileExtension();
-      Collection<List<HoodieWriteStat>> stats = compactionMetadata.getCommitMetadata().get().getPartitionToWriteStats().values();
-      assertEquals(numLogFiles, stats.stream().flatMap(Collection::stream).filter(state -> state.getPath().contains(extension)).count());
-      assertEquals(numLogFiles, stats.stream().mapToLong(Collection::size).sum());
 
-      //writeClient.commitCompaction(newCommitTime, statuses, Option.empty());
       // Trigger a rollback of compaction
       table.getActiveTimeline().reload();
       table.rollbackInflightCompaction(INSTANT_GENERATOR.createNewInstant(
@@ -1056,13 +1051,13 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
       // commit 1
       List<HoodieRecord> records = insertRecords(client, dataGen, "001");
       // commit 2 to create log files
-      List<HoodieRecord> updates1 = updateRecords(client, dataGen, "002", records, metaClient, cfg, true);
+      List<HoodieRecord> updates1 = updateRecords(client, dataGen, "002", records, metaClient, cfg, true, true);
 
       // trigger a inflight commit 3 which will be later be rolled back explicitly.
-      List<HoodieRecord> updates2 = updateRecords(autoCommitFalseClient, dataGen, "003", records, metaClient, autoCommitFalseCfg, false);
+      List<HoodieRecord> updates2 = updateRecords(autoCommitFalseClient, dataGen, "003", records, metaClient, autoCommitFalseCfg, false, false);
 
       // commit 4 successful (mimic multi-writer scenario)
-      List<HoodieRecord> updates3 = updateRecords(client, dataGen, "004", records, metaClient, cfg, false);
+      List<HoodieRecord> updates3 = updateRecords(client, dataGen, "004", records, metaClient, cfg, false, true);
 
       // trigger compaction
       long numLogFiles = getNumLogFilesInLatestFileSlice(metaClient, cfg, dataGen);
@@ -1081,13 +1076,16 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
 
   private List<HoodieRecord> updateRecords(SparkRDDWriteClient client, HoodieTestDataGenerator dataGen, String commitTime,
                                            List<HoodieRecord> records, HoodieTableMetaClient metaClient, HoodieWriteConfig cfg,
-                                           boolean assertLogFiles) throws IOException {
+                                           boolean assertLogFiles, boolean doCommit) throws IOException {
     client.startCommitWithTime(commitTime);
 
     records = dataGen.generateUpdates(commitTime, records);
     JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
     List<WriteStatus> statuses = client.upsert(writeRecords, commitTime).collect();
     assertNoWriteErrors(statuses);
+    if (doCommit) {
+      client.commit(commitTime, jsc().parallelize(statuses));
+    }
 
     if (assertLogFiles) {
       HoodieTable table = HoodieSparkTable.create(cfg, context(), metaClient);
@@ -1110,6 +1108,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
     // Do a compaction
     String instantTime = client.scheduleCompaction(Option.empty()).get().toString();
     HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client.compact(instantTime);
+    client.commitCompaction(instantTime, compactionMetadata, Option.empty());
 
     metaClient.reloadActiveTimeline();
     HoodieTable table = HoodieSparkTable.create(cfg, context(), metaClient);
@@ -1117,7 +1116,6 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
     Collection<List<HoodieWriteStat>> stats = compactionMetadata.getCommitMetadata().get().getPartitionToWriteStats().values();
     assertEquals(numLogFiles, stats.stream().flatMap(Collection::stream).filter(state -> state.getPath().contains(extension)).count());
     assertEquals(numLogFiles, stats.stream().mapToLong(Collection::size).sum());
-    client.commitCompaction(instantTime, compactionMetadata, Option.empty());
     return numLogFiles;
   }
 

@@ -57,6 +57,7 @@ import org.apache.hudi.io.hadoop.HoodieAvroParquetReader;
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.BootstrapUtils;
 import org.apache.hudi.testutils.HoodieMergeOnReadTestUtils;
 import org.apache.hudi.testutils.HoodieSparkClientTestBase;
@@ -325,7 +326,8 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
     if (deltaCommit) {
       Option<String> compactionInstant = client.scheduleCompaction(Option.empty());
       assertTrue(compactionInstant.isPresent());
-      client.compact(compactionInstant.get());
+      HoodieWriteMetadata result = client.compact(compactionInstant.get());
+      client.commitCompaction(compactionInstant.get(), result, Option.empty());
       checkBootstrapResults(totalRecords, schema, compactionInstant.get(), checkNumRawFiles,
           numInstantsAfterBootstrap + 2, 2, updateTimestamp, updateTimestamp, !deltaCommit,
           Arrays.asList(compactionInstant.get()), false);
