@@ -141,7 +141,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
         String compactionCommitTime = client.scheduleCompaction(Option.empty()).get().toString();
         HoodieWriteMetadata result = client.compact(compactionCommitTime);
         client.commitCompaction(compactionCommitTime, result, Option.empty());
-        metaClient.reloadActiveTimeline().containsInstant(compactionCommitTime);
+        metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(compactionCommitTime);
 
         HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
         hoodieTable.getHoodieView().sync();
@@ -261,7 +261,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
         // trigger compaction again.
         HoodieWriteMetadata result = client1.compact(compactionInstant.get());
         client.commitCompaction(compactionInstant.get(), result, Option.empty());
-        metaClient.reloadActiveTimeline().containsInstant(compactionInstant.get());
+        metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(compactionInstant.get());
         // verify that there is no new rollback instant generated
         HoodieInstant newRollbackInstant = metaClient.getActiveTimeline().getRollbackTimeline().lastInstant().get();
         assertEquals(rollbackInstant.requestedTime(), newRollbackInstant.requestedTime());
@@ -451,7 +451,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
       HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = writeClient.compact(instantTime);
       String extension = table.getBaseFileExtension();
       writeClient.commitCompaction(instantTime, compactionMetadata, Option.empty());
-      metaClient.reloadActiveTimeline().containsInstant(instantTime);
+      metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(instantTime);
       Collection<List<HoodieWriteStat>> stats = compactionMetadata.getCommitMetadata().get().getPartitionToWriteStats().values();
       assertEquals(numLogFiles, stats.stream().flatMap(Collection::stream).filter(state -> state.getPath().contains(extension)).count());
       assertEquals(numLogFiles, stats.stream().mapToLong(Collection::size).sum());

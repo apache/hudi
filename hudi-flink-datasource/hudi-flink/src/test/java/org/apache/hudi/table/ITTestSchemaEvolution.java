@@ -493,6 +493,7 @@ public class ITTestSchemaEvolution {
           .setParallelism(1);
 
       env.execute("flink_hudi_compaction");
+      assertTrue(table.getMetaClient().reloadActiveTimeline().filterCompletedInstants().containsInstant(instant.requestedTime()));
     }
   }
 

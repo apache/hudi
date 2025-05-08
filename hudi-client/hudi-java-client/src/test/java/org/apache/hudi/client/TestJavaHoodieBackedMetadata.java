@@ -1644,7 +1644,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
         boolean tmp = client.scheduleCompactionAtInstant(newCommitTime, Option.empty());
         HoodieWriteMetadata writeMetadata = client.compact(newCommitTime);
         client.commitCompaction(newCommitTime, writeMetadata, Option.empty());
-        metaClient.reloadActiveTimeline().containsInstant(newCommitTime);
+        metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(newCommitTime);
         validateMetadata(client);
       }
 
@@ -1668,7 +1668,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
         client.scheduleCompactionAtInstant(newCommitTime, Option.empty());
         HoodieWriteMetadata writeMetadata = client.compact(newCommitTime);
         client.commitCompaction(newCommitTime, writeMetadata, Option.empty());
-        metaClient.reloadActiveTimeline().containsInstant(newCommitTime);
+        metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(newCommitTime);
         validateMetadata(client);
       }
 
@@ -2718,7 +2718,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
             .setBasePath(metadataTableBasePath)
             .setConf(storageConf)
             .build();
-        assertTrue(mdtMetaClient.getActiveTimeline().containsInstant(compactionInstantTime));
+        assertTrue(mdtMetaClient.getActiveTimeline().filterCompletedInstants().containsInstant(compactionInstantTime));
 
         // verify metadata table
         validateMetadata(client);

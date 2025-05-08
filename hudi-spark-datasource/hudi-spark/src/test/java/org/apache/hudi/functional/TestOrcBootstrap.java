@@ -308,7 +308,7 @@ public class TestOrcBootstrap extends HoodieSparkClientTestBase {
       assertTrue(compactionInstant.isPresent());
       HoodieWriteMetadata result = client.compact(compactionInstant.get());
       client.commitCompaction(compactionInstant.get(), result, Option.empty());
-      metaClient.reloadActiveTimeline().containsInstant(compactionInstant.get());
+      metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(compactionInstant.get());
       checkBootstrapResults(totalRecords, schema, compactionInstant.get(), checkNumRawFiles,
           numInstantsAfterBootstrap + 2, 2, updateTimestamp, updateTimestamp, !deltaCommit,
           Arrays.asList(compactionInstant.get()), false);
