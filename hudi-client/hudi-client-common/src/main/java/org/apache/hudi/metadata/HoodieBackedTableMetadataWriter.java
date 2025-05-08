@@ -406,22 +406,21 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
     // TODO(yihua): check this wrt files partition, i.e., after files partition is ready in
     //  MDT, could it be leveraged afterward?
-    Lazy<List<Pair<String, FileSlice>>> lazyLatestMergedPartitionFileSliceList = getLazyPartitionFileSliceList();
+    Lazy<List<Pair<String, FileSlice>>> lazyLatestMergedPartitionFileSliceList = getLazyLatestMergedPartitionFileSliceList();
     if (!filesPartitionAvailable) {
       // FILES partition should always be initialized first if enabled
       initializeMetadataPartition(
           FILES, indexerMapForPartitionsToInit.get(FILES), dataTableInstantTime,
-          partitionToAllFilesMap, lazyLatestMergedPartitionFileSliceList);
+          partitionIdToAllFilesMap, lazyLatestMergedPartitionFileSliceList);
     }
 
-    Lazy<List<Pair<String, FileSlice>>> lazyLatestMergedPartitionFileSliceList = getLazyLatestMergedPartitionFileSliceList();
     // TODO(yihua): FILES partition should not be included here (dead code?) as it should be initialized already
     for (Map.Entry<MetadataPartitionType, Indexer> entry :
         indexerMapForPartitionsToInit.entrySet().stream()
             .filter(e -> e.getKey() != FILES).collect(Collectors.toList())) {
       initializeMetadataPartition(
           entry.getKey(), entry.getValue(), dataTableInstantTime,
-          partitionToAllFilesMap, lazyLatestMergedPartitionFileSliceList);
+          partitionIdToAllFilesMap, lazyLatestMergedPartitionFileSliceList);
     }
     return true;
   }
