@@ -22,7 +22,6 @@ import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
-import org.apache.hudi.client.PartitionFileIdPairsHolder;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.data.HoodieData;
@@ -37,6 +36,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -131,11 +131,11 @@ public class HoodieSparkMergeOnReadTable<T> extends HoodieSparkCopyOnWriteTable<
 
   @Override
   public HoodieWriteMetadata<HoodieData<WriteStatus>> upsertPrepped(HoodieEngineContext context, String instantTime,
-                                                                    HoodieData<HoodieRecord<T>> preppedRecords, Option<PartitionFileIdPairsHolder> partitionFileIdPairsHolderOpt) {
-    ValidationUtils.checkArgument(partitionFileIdPairsHolderOpt.isPresent(), "ParitionFileIdPairsHolder is expected to be present with upsert prepped for metadata table");
-    // Uses optimized upsert partitoner for metadata table when all records are upsert and locaitons are known upfront
-    return new SparkMetadataTableUpsertCommitActionExecutor<>((HoodieSparkEngineContext) context, config, this, instantTime, preppedRecords, 
-        partitionFileIdPairsHolderOpt.get().getPartitionFileSlices()).execute();
+                                                                    HoodieData<HoodieRecord<T>> preppedRecords, Option<List<Pair<String, String>>> partitionFileIdPairsOpt) {
+    ValidationUtils.checkArgument(partitionFileIdPairsOpt.isPresent(), "ParitionFileIdPairs is expected to be present with upsert prepped for metadata table");
+    // Uses optimized upsert partitioner for metadata table when all records are upsert and locations are known upfront
+    return new SparkMetadataTableUpsertCommitActionExecutor<>((HoodieSparkEngineContext) context, config, this, instantTime, preppedRecords,
+        partitionFileIdPairsOpt.get()).execute();
   }
 
   @Override
