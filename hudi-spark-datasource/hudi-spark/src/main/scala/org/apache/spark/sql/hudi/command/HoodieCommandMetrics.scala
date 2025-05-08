@@ -25,7 +25,7 @@ import org.apache.hudi.common.util.VisibleForTesting
 import org.apache.spark.SparkContext
 import org.apache.spark.sql.execution.metric.{SQLMetric, SQLMetrics}
 
-import scala.jdk.CollectionConverters.collectionAsScalaIterableConverter
+import scala.collection.JavaConverters._
 
 object HoodieCommandMetrics {
 
