@@ -37,6 +37,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Properties;
@@ -139,6 +140,14 @@ public class FlinkMergeAndReplaceHandle<T, I, K, O>
   protected HoodieRecord<T> updateFileName(HoodieRecord<T> record, Schema schema, Schema targetSchema, String fileName, Properties prop) {
     // update specific meta field: FILENAME_METADATA_FIELD
     return record.updateMetaField(schema, HoodieRecord.FILENAME_META_FIELD_ORD, fileName);
+  }
+
+  @Override
+  protected void initializeIncomingRecordsMap() {
+    LOG.info("Initialize on-heap keyToNewRecords for incoming records.");
+    // the incoming records are already buffered on heap and the underlying bytes are managed by memory pool
+    // in Flink write buffer, so there is no need to use ExternalSpillableMap.
+    this.keyToNewRecords = new HashMap<>();
   }
 
   /**

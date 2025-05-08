@@ -782,34 +782,6 @@ public class ITTestHoodieDataSource {
     assertRowsEquals(result, TestData.DATA_SET_SOURCE_INSERT);
   }
 
-  @Test
-  void testDeleteForLegacyAvroWrite() {
-    String hoodieTableDDL = sql("t1")
-        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
-        .option(FlinkOptions.TABLE_TYPE, MERGE_ON_READ)
-        // disable rowdata write mode to use legacy avro writing path
-        .option(FlinkOptions.INSERT_ROWDATA_MODE_ENABLED, false)
-        .end();
-    streamTableEnv.executeSql(hoodieTableDDL);
-
-    final String insertInto1 = "insert into t1 values\n"
-        + "('id1','Danny',23,TIMESTAMP '1970-01-01 00:00:01','par1')";
-
-    execInsertSql(streamTableEnv, insertInto1);
-
-    final String insertInto2 = "insert into t1 values\n"
-        + "('id1','Stephen',33,TIMESTAMP '1970-01-01 00:00:02','par2'),\n"
-        + "('id1','Julian',53,TIMESTAMP '1970-01-01 00:00:03','par1'),\n"
-        + "('id1','Fabian',31,TIMESTAMP '1970-01-01 00:00:04','par2'),\n"
-        + "('id1','Sophia',18,TIMESTAMP '1970-01-01 00:00:05','par3')";
-
-    execInsertSql(streamTableEnv, insertInto2);
-
-    List<Row> result = CollectionUtil.iterableToList(
-        () -> streamTableEnv.sqlQuery("select * from t1").execute().collect());
-    assertRowsEquals(result, "[+I[id1, Sophia, 18, 1970-01-01T00:00:05, par3]]");
-  }
-
   @ParameterizedTest
   @EnumSource(value = ExecMode.class)
   void testWriteAndReadParMiddle(ExecMode execMode) throws Exception {
@@ -2536,19 +2508,19 @@ public class ITTestHoodieDataSource {
   }
 
   @ParameterizedTest
-  @MethodSource("indexPartitioningAndRowDataModeParams")
-  void testWriteMultipleCommitWithLegacyAndRowDataWrite(String indexType, boolean hiveStylePartitioning, boolean rowDataWriteMode) throws Exception {
+  @MethodSource("indexAndPartitioningParams")
+  void testWriteMultipleCommitWithDifferentLogBlockType(String indexType, boolean hiveStylePartitioning) throws Exception {
     // create filesystem table named source
     String createSource = TestConfigurations.getFileSourceDDL("source");
     streamTableEnv.executeSql(createSource);
 
-    // insert first batch of data with rowdata mode writing disabled
+    // insert first batch of data with parquet log block
     String hoodieTableDDL = sql("t1")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
         .option(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ)
         .option(FlinkOptions.INDEX_TYPE, indexType)
         .option(FlinkOptions.HIVE_STYLE_PARTITIONING, hiveStylePartitioning)
-        .option(FlinkOptions.INSERT_ROWDATA_MODE_ENABLED, false)
+        .option(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "parquet")
         .option(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), false)
         .end();
     streamTableEnv.executeSql(hoodieTableDDL);
@@ -2557,7 +2529,7 @@ public class ITTestHoodieDataSource {
 
     streamTableEnv.executeSql("drop table t1");
 
-    // insert second batch of data with rowdata mode writing enabled
+    // insert second batch of data with avro log block
     hoodieTableDDL = sql("t1")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
         .option(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ)
@@ -2565,7 +2537,7 @@ public class ITTestHoodieDataSource {
         .option(FlinkOptions.READ_AS_STREAMING, true)
         .option(FlinkOptions.READ_START_COMMIT, FlinkOptions.START_COMMIT_EARLIEST)
         .option(FlinkOptions.HIVE_STYLE_PARTITIONING, hiveStylePartitioning)
-        .option(FlinkOptions.INSERT_ROWDATA_MODE_ENABLED, rowDataWriteMode)
+        .option(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "avro")
         .option(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), false)
         .end();
     streamTableEnv.executeSql(hoodieTableDDL);
@@ -2678,23 +2650,6 @@ public class ITTestHoodieDataSource {
             {"FLINK_STATE", true},
             {"BUCKET", false},
             {"BUCKET", true}};
-    return Stream.of(data).map(Arguments::of);
-  }
-
-  /**
-   * Return test params => (index type, hive style partitioning).
-   */
-  private static Stream<Arguments> indexPartitioningAndRowDataModeParams() {
-    Object[][] data =
-        new Object[][] {
-            {"FLINK_STATE", false, false},
-            {"FLINK_STATE", false, true},
-            {"FLINK_STATE", true, false},
-            {"FLINK_STATE", true, true},
-            {"BUCKET", false, false},
-            {"BUCKET", false, true},
-            {"BUCKET", true, false},
-            {"BUCKET", true, true}};
     return Stream.of(data).map(Arguments::of);
   }
 
