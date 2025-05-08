@@ -31,7 +31,7 @@ import java.util.Map;
 import java.util.function.Function;
 
 /**
- * RowData implementation used when reading from Spark bootstrapped table. In these tables, the partition values
+ * RowData implementation used when reading from Flink bootstrapped table. In these tables, the partition values
  * are not always written to the data files, so we need to use the values inferred from the file's partition path.
  */
 public class BootstrapRowData implements RowData {
@@ -60,7 +60,7 @@ public class BootstrapRowData implements RowData {
 
   @Override
   public boolean isNullAt(int pos) {
-    return !partitionOrdinalToValues.containsKey(pos) || row.isNullAt(pos);
+    return !partitionOrdinalToValues.containsKey(pos) && row.isNullAt(pos);
   }
 
   @Override
