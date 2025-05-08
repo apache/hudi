@@ -35,9 +35,9 @@ import org.apache.avro.generic.GenericRecord;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -459,7 +459,7 @@ public enum MetadataPartitionType {
    * Returns the set of all metadata partition names.
    */
   public static Set<String> getAllPartitionPaths() {
-    return Arrays.stream(getValidValues())
+    return getValidValues().stream()
         .map(MetadataPartitionType::getPartitionPath)
         .collect(Collectors.toSet());
   }
@@ -467,25 +467,9 @@ public enum MetadataPartitionType {
   /**
    * Returns the set of all valid metadata partition types. Prefer using this method over {@link #values()}.
    */
-  private static MetadataPartitionType[] getValidValues() {
+  protected static Set<MetadataPartitionType> getValidValues() {
     // ALL_PARTITIONS is just another record type in FILES partition
-    return EnumSet.complementOf(EnumSet.of(
-        ALL_PARTITIONS)).toArray(new MetadataPartitionType[0]);
-  }
-
-  /**
-   * Returns the list of metadata partition types enabled based on the metadata config and table config.
-   */
-  public static List<MetadataPartitionType> getEnabledPartitions(HoodieMetadataConfig dataMetadataConfig,
-                                                                 HoodieTableMetaClient metaClient) {
-    if (!dataMetadataConfig.isEnabled()) {
-      return Collections.emptyList();
-    }
-    return Arrays.stream(getValidValues())
-        .filter(partitionType -> partitionType.isMetadataPartitionSupported(metaClient)
-            && (partitionType.isMetadataPartitionEnabled(dataMetadataConfig)
-            || partitionType.isMetadataPartitionAvailable(metaClient)))
-        .collect(Collectors.toList());
+    return new HashSet<>(EnumSet.complementOf(EnumSet.of(ALL_PARTITIONS)));
   }
 
   public static MetadataPartitionType fromPartitionPath(String partitionPath) {

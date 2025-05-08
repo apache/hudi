@@ -38,7 +38,6 @@ import org.apache.hudi.storage.StorageConfiguration;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
@@ -74,15 +73,6 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I> extends 
                                                            HoodieEngineContext engineContext,
                                                            Option<String> inflightInstantTimestamp) {
     super(storageConf, writeConfig, failedWritesCleaningPolicy, engineContext, inflightInstantTimestamp);
-  }
-
-  @Override
-  List<MetadataPartitionType> getEnabledPartitions(HoodieMetadataConfig metadataConfig, HoodieTableMetaClient metaClient) {
-    return MetadataPartitionType.getEnabledPartitions(metadataConfig, metaClient).stream()
-        .filter(partition -> !partition.equals(MetadataPartitionType.SECONDARY_INDEX))
-        .filter(partition -> !partition.equals(MetadataPartitionType.EXPRESSION_INDEX))
-        .filter(partition -> !partition.equals(MetadataPartitionType.PARTITION_STATS))
-        .collect(Collectors.toList());
   }
 
   @Override
