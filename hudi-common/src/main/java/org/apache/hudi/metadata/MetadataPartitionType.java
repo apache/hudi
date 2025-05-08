@@ -26,6 +26,7 @@ import org.apache.hudi.avro.model.HoodieSecondaryIndexInfo;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.index.expression.HoodieExpressionIndex;
@@ -180,6 +181,12 @@ public enum MetadataPartitionType {
   },
   EXPRESSION_INDEX(PARTITION_NAME_EXPRESSION_INDEX_PREFIX, "expr-index-", -1) {
     @Override
+    public boolean isMetadataPartitionSupported(HoodieTableMetaClient metaClient) {
+      // Partition stats is supported for partitioned tables only
+      return metaClient.getTableConfig().getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT);
+    }
+
+    @Override
     public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig) {
       return metadataConfig.isExpressionIndexEnabled();
     }
@@ -200,6 +207,12 @@ public enum MetadataPartitionType {
     }
   },
   SECONDARY_INDEX(HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX, "secondary-index-", 7) {
+    @Override
+    public boolean isMetadataPartitionSupported(HoodieTableMetaClient metaClient) {
+      // Partition stats is supported for partitioned tables only
+      return metaClient.getTableConfig().getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT);
+    }
+
     @Override
     public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig) {
       return metadataConfig.isSecondaryIndexEnabled();
@@ -228,6 +241,13 @@ public enum MetadataPartitionType {
     }
   },
   PARTITION_STATS(HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS, "partition-stats-", 6) {
+    @Override
+    public boolean isMetadataPartitionSupported(HoodieTableMetaClient metaClient) {
+      // Partition stats is supported for partitioned tables only
+      return metaClient.getTableConfig().isTablePartitioned()
+          && metaClient.getTableConfig().getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT);
+    }
+
     @Override
     public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig) {
       return metadataConfig.isPartitionStatsIndexEnabled();
@@ -345,6 +365,14 @@ public enum MetadataPartitionType {
   private final int recordType;
 
   /**
+   * @param metaClient data table's meta client instance
+   * @return whether the metadata partition is supported for the data table
+   */
+  public boolean isMetadataPartitionSupported(HoodieTableMetaClient metaClient) {
+    return true;
+  }
+
+  /**
    * Check if the metadata partition is enabled based on the metadata config.
    */
   public abstract boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig);
@@ -439,7 +467,7 @@ public enum MetadataPartitionType {
   /**
    * Returns the set of all valid metadata partition types. Prefer using this method over {@link #values()}.
    */
-  public static MetadataPartitionType[] getValidValues() {
+  private static MetadataPartitionType[] getValidValues() {
     // ALL_PARTITIONS is just another record type in FILES partition
     return EnumSet.complementOf(EnumSet.of(
         ALL_PARTITIONS)).toArray(new MetadataPartitionType[0]);
@@ -448,12 +476,15 @@ public enum MetadataPartitionType {
   /**
    * Returns the list of metadata partition types enabled based on the metadata config and table config.
    */
-  public static List<MetadataPartitionType> getEnabledPartitions(HoodieMetadataConfig dataMetadataConfig, HoodieTableMetaClient metaClient) {
+  public static List<MetadataPartitionType> getEnabledPartitions(HoodieMetadataConfig dataMetadataConfig,
+                                                                 HoodieTableMetaClient metaClient) {
     if (!dataMetadataConfig.isEnabled()) {
       return Collections.emptyList();
     }
     return Arrays.stream(getValidValues())
-        .filter(partitionType -> partitionType.isMetadataPartitionEnabled(dataMetadataConfig) || partitionType.isMetadataPartitionAvailable(metaClient))
+        .filter(partitionType -> partitionType.isMetadataPartitionSupported(metaClient)
+            && (partitionType.isMetadataPartitionEnabled(dataMetadataConfig)
+            || partitionType.isMetadataPartitionAvailable(metaClient)))
         .collect(Collectors.toList());
   }
 

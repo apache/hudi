@@ -1225,7 +1225,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     metaClient.getTableConfig().setMetadataPartitionState(
         metaClient, RECORD_INDEX.getPartitionPath(), false);
     metaClient.getTableConfig().setMetadataPartitionsInflight(
-        metaClient, RECORD_INDEX);
+        metaClient, Collections.singletonList(RECORD_INDEX.getPartitionPath()));
     timeline = metaClient.getActiveTimeline().reload();
     mdtTimeline = mdtMetaClient.getActiveTimeline().reload();
     assertEquals(commit, timeline.lastInstant().get().requestedTime());
