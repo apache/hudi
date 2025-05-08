@@ -47,7 +47,7 @@ public class OverwriteWithLatestSparkRecordMerger extends HoodieSparkRecordMerge
 
   @Override
   public Option<Pair<HoodieRecord, Schema>> partialMerge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, Schema readerSchema, TypedProperties props) throws IOException {
-    Option<Pair<HoodieRecord, Schema>> deleteHandlingResult = basicDeleteHandling(older, oldSchema, newer, newSchema, props);
+    Option<Pair<HoodieRecord, Schema>> deleteHandlingResult = handleDeletes(older, oldSchema, newer, newSchema, props);
     if (deleteHandlingResult != null) {
       return deleteHandlingResult;
     }

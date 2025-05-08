@@ -39,7 +39,7 @@ public abstract class HoodieSparkRecordMerger implements HoodieRecordMerger {
    * Basic handling of deletes that is used by many of the spark mergers
    * returns null if merger specific logic should be used
    */
-  protected Option<Pair<HoodieRecord, Schema>> basicDeleteHandling(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) {
+  protected Option<Pair<HoodieRecord, Schema>> handleDeletes(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) {
     ValidationUtils.checkArgument(older.getRecordType() == HoodieRecord.HoodieRecordType.SPARK);
     ValidationUtils.checkArgument(newer.getRecordType() == HoodieRecord.HoodieRecordType.SPARK);
 

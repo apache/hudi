@@ -46,8 +46,16 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
     testPartialUpdate("cow", "avro")
   }
 
+  test("Test partial update with COW and Avro log format and commit time ordering") {
+    testPartialUpdate("cow", "avro", commitTimeOrdering = true)
+  }
+
   test("Test partial update with MOR and Avro log format") {
     testPartialUpdate("mor", "avro")
+  }
+
+  test("Test partial update with MOR and avro log format and commit time ordering") {
+    testPartialUpdate("mor", "avro", commitTimeOrdering = true)
   }
 
   test("Test partial update with MOR and Parquet log format") {
@@ -66,8 +74,16 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
     testPartialUpdateWithInserts("mor", "avro")
   }
 
+  test("Test partial update and insert with MOR and Avro log format and commit time ordering") {
+    testPartialUpdateWithInserts("mor", "avro", commitTimeOrdering = true)
+  }
+
   test("Test partial update and insert with MOR and Parquet log format") {
     testPartialUpdateWithInserts("mor", "parquet")
+  }
+
+  test("Test partial update and insert with MOR and Parquet log format and commit time ordering") {
+    testPartialUpdateWithInserts("mor", "parquet", commitTimeOrdering = true)
   }
 
   test("Test partial update with schema on read enabled") {
@@ -280,6 +296,11 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
         RecordMergeMode.EVENT_TIME_ORDERING.name()
       }
 
+      val preCombineString = if (commitTimeOrdering) {
+        ""
+      } else {
+        "preCombineField = '_ts',"
+      }
       // Create a table with five data fields
       spark.sql(
         s"""
@@ -293,7 +314,7 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
            |tblproperties(
            | type ='$tableType',
            | primaryKey = 'id',
-           | preCombineField = '_ts',
+           | $preCombineString
            | recordMergeMode = '$mergeMode'
            |)
            |location '$basePath'
@@ -334,7 +355,6 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
       if (tableType.equals("mor")) {
         validateLogBlock(basePath, 1, Seq(Seq("price", "_ts")), true)
       }
-
 
       // TODO: [HUDI-9375] get rid of this update and fix the rest of the test accordingly
       // showcase the difference between event time and commit time ordering
@@ -470,6 +490,12 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
 
   def testPartialUpdateWithInserts(tableType: String,
                                    logDataBlockFormat: String): Unit = {
+    testPartialUpdateWithInserts(tableType, logDataBlockFormat, commitTimeOrdering = false)
+  }
+
+  def testPartialUpdateWithInserts(tableType: String,
+                                   logDataBlockFormat: String,
+                                   commitTimeOrdering: Boolean): Unit = {
     withTempDir { tmp =>
       val tableName = generateTableName
       val basePath = tmp.getCanonicalPath + "/" + tableName
@@ -477,6 +503,17 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
       spark.sql(s"set ${DataSourceWriteOptions.ENABLE_MERGE_INTO_PARTIAL_UPDATES.key} = true")
       spark.sql(s"set ${HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key} = $logDataBlockFormat")
       spark.sql(s"set ${HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key} = true")
+      val mergeMode = if (commitTimeOrdering) {
+        RecordMergeMode.COMMIT_TIME_ORDERING.name()
+      } else {
+        RecordMergeMode.EVENT_TIME_ORDERING.name()
+      }
+
+      val preCombineString = if (commitTimeOrdering) {
+        ""
+      } else {
+        "preCombineField = '_ts',"
+      }
 
       // Create a table with five data fields
       spark.sql(
@@ -491,7 +528,8 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
            |tblproperties(
            | type ='$tableType',
            | primaryKey = 'id',
-           | preCombineField = '_ts'
+           | $preCombineString
+           | recordMergeMode = '$mergeMode'
            |)
            |location '$basePath'
         """.stripMargin)

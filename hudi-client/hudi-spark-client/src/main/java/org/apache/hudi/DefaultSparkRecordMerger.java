@@ -43,7 +43,7 @@ public class DefaultSparkRecordMerger extends HoodieSparkRecordMerger {
 
   @Override
   public Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
-    Option<Pair<HoodieRecord, Schema>> deleteHandlingResult = basicDeleteHandling(older, oldSchema, newer, newSchema, props);
+    Option<Pair<HoodieRecord, Schema>> deleteHandlingResult = handleDeletes(older, oldSchema, newer, newSchema, props);
     if (deleteHandlingResult != null) {
       return deleteHandlingResult;
     }
@@ -57,7 +57,7 @@ public class DefaultSparkRecordMerger extends HoodieSparkRecordMerger {
 
   @Override
   public Option<Pair<HoodieRecord, Schema>> partialMerge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, Schema readerSchema, TypedProperties props) throws IOException {
-    Option<Pair<HoodieRecord, Schema>> deleteHandlingResult = basicDeleteHandling(older, oldSchema, newer, newSchema, props);
+    Option<Pair<HoodieRecord, Schema>> deleteHandlingResult = handleDeletes(older, oldSchema, newer, newSchema, props);
     if (deleteHandlingResult != null) {
       return deleteHandlingResult;
     }
