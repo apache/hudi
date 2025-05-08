@@ -175,7 +175,7 @@ class TestStorageBasedLockProvider {
   @Test
   void testTryLockSuccess() {
     long t0 = 1_000L;
-    when(lockProvider.getCurrentTime())
+    when(lockProvider.getCurrentEpochMs())
         .thenReturn(t0);
     when(mockLockService.readCurrentLockFile()).thenReturn(Pair.of(LockGetResult.NOT_EXISTS, Option.empty()));
     StorageLockData data = new StorageLockData(false, t0 + DEFAULT_LOCK_VALIDITY_MS, ownerId);
