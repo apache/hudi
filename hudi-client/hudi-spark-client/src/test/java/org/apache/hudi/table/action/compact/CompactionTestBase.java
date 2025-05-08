@@ -196,6 +196,7 @@ public class CompactionTestBase extends HoodieClientTestBase {
 
     HoodieWriteMetadata<?> compactionMetadata = client.compact(compactionInstantTime);
     client.commitCompaction(compactionInstantTime, compactionMetadata, Option.empty());
+    metaClient.reloadActiveTimeline().containsInstant(compactionInstantTime);
     assertFalse(WriteMarkersFactory.get(cfg.getMarkersType(), table, compactionInstantTime).doesMarkerDirExist());
     List<FileSlice> fileSliceList = getCurrentLatestFileSlices(table);
     assertTrue(fileSliceList.stream().findAny().isPresent(), "Ensure latest file-slices are not empty");
@@ -229,6 +230,7 @@ public class CompactionTestBase extends HoodieClientTestBase {
                                    HoodieWriteConfig cfg, String[] partitions, Set<HoodieFileGroupId> replacedFileIds) throws IOException {
 
     client.commitCompaction(compactionInstantTime, client.compact(compactionInstantTime), Option.of(table));
+    metaClient.reloadActiveTimeline().containsInstant(compactionInstantTime);
     List<FileSlice> fileSliceList = getCurrentLatestFileSlices(table);
     assertTrue(fileSliceList.stream().findAny().isPresent(), "Ensure latest file-slices are not empty");
     assertFalse(fileSliceList.stream()

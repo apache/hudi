@@ -899,6 +899,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
         assertDoesNotThrow(() -> {
           HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client2.compact(pendingCompactionTime);
           client2.commitCompaction(pendingCompactionTime, compactionMetadata, Option.empty());
+          metaClient.reloadActiveTimeline().containsInstant(pendingCompactionTime);
           validInstants.add(pendingCompactionTime);
         });
       }

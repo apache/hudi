@@ -111,6 +111,7 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
           compactionCommit = compactionInstant.get();
           HoodieWriteMetadata result = client.compact(compactionInstant.get());
           client.commitCompaction(compactionInstant.get(), result, Option.empty());
+          metaClient.reloadActiveTimeline().containsInstant(compactionInstant.get());
         }
       }
 
@@ -314,6 +315,7 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
       assertTrue(compactionInstant.isPresent(), "A compaction plan should be scheduled");
       HoodieWriteMetadata result = client.compact(compactionInstant.get());
       client.commitCompaction(compactionInstant.get(), result, Option.empty());
+      metaClient.reloadActiveTimeline().containsInstant(compactionInstant.get());
       savepointCommit = compactionInstant.get();
       client.savepoint("user1", "Savepoint for 3td commit");
 

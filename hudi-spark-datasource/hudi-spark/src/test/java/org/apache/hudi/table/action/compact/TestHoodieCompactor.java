@@ -466,6 +466,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
     writeClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty());
     HoodieWriteMetadata compactMetadata = writeClient.compact(compactionInstantTime);
     writeClient.commitCompaction(compactionInstantTime, compactMetadata, Option.empty());
+    metaClient.reloadActiveTimeline().containsInstant(compactionInstantTime);
     return compactMetadata;
   }
 

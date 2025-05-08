@@ -295,6 +295,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       assertTrue(compactionInstantOpt.isPresent());
       HoodieWriteMetadata compactionWriteMetadata = client.compact(compactionInstantOpt.get());
       client.commitCompaction(compactionInstantOpt.get(), compactionWriteMetadata, Option.empty());
+      metaClient.reloadActiveTimeline().containsInstant(compactionInstantOpt.get());
       HoodieCommitMetadata compactionCommitMetadata = (HoodieCommitMetadata) compactionWriteMetadata.getCommitMetadata().get();
       // no RLI records should be generated for compaction operation.
       assertTrue(convertMetadataToRecordIndexRecords(context, compactionCommitMetadata, writeConfig.getMetadataConfig(),
@@ -475,6 +476,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       assertTrue(compactionInstantOpt.isPresent());
       HoodieWriteMetadata compactionWriteMetadata = client.compact(compactionInstantOpt.get());
       client.commitCompaction(compactionInstantOpt.get(), compactionWriteMetadata, Option.empty());
+      metaClient.reloadActiveTimeline().containsInstant(compactionInstantOpt.get());
       HoodieCommitMetadata compactionCommitMetadata = (HoodieCommitMetadata) compactionWriteMetadata.getCommitMetadata().get();
       // assert SI records
       metaClient = HoodieTableMetaClient.reload(metaClient);

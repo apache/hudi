@@ -620,6 +620,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
       client.scheduleCompactionAtInstant(compactionInstantTime, Option.empty());
       HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client.compact(compactionInstantTime);
       client.commitCompaction(compactionInstantTime, compactionMetadata, Option.empty());
+      metaClient.reloadActiveTimeline().containsInstant(compactionInstantTime);
 
       allFiles = listAllBaseFilesInPath(hoodieTable);
       metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -706,6 +707,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
       client.scheduleCompactionAtInstant(compactionInstantTime, Option.empty());
       HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client.compact(compactionInstantTime);
       client.commitCompaction(compactionInstantTime, compactionMetadata, Option.empty());
+      metaClient.reloadActiveTimeline().containsInstant(compactionInstantTime);
 
       upsertRecords(client, client.createNewInstantTime(), records, dataGen);
       upsertRecords(client, client.createNewInstantTime(), records, dataGen);
@@ -715,6 +717,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
       client.scheduleCompactionAtInstant(compactionInstantTime1, Option.empty());
       HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata1 = client.compact(compactionInstantTime1);
       client.commitCompaction(compactionInstantTime1, compactionMetadata1, Option.empty());
+      metaClient.reloadActiveTimeline().containsInstant(compactionInstantTime1);
 
       upsertRecords(client, client.createNewInstantTime(), records, dataGen);
 
@@ -801,6 +804,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
         client.scheduleCompactionAtInstant(compactionInstantTime, Option.empty());
         HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client.compact(compactionInstantTime);
         client.commitCompaction(compactionInstantTime, compactionMetadata, Option.empty());
+        metaClient.reloadActiveTimeline().containsInstant(compactionInstantTime);
 
         validateRecords(cfg, metaClient, updates3);
         List<HoodieRecord> updates4 = updateAndGetRecords("006", client, dataGen, records);
@@ -1014,7 +1018,8 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
       // Do a compaction
       newCommitTime = writeClient.scheduleCompaction(Option.empty()).get().toString();
       HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = writeClient.compact(newCommitTime);
-      statuses = compactionMetadata.getWriteStatuses();
+      writeClient.commitCompaction(newCommitTime, compactionMetadata, Option.empty());
+      metaClient.reloadActiveTimeline().containsInstant(newCommitTime);
 
       // Trigger a rollback of compaction
       table.getActiveTimeline().reload();
@@ -1109,6 +1114,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
     String instantTime = client.scheduleCompaction(Option.empty()).get().toString();
     HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client.compact(instantTime);
     client.commitCompaction(instantTime, compactionMetadata, Option.empty());
+    metaClient.reloadActiveTimeline().containsInstant(instantTime);
 
     metaClient.reloadActiveTimeline();
     HoodieTable table = HoodieSparkTable.create(cfg, context(), metaClient);

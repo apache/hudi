@@ -174,6 +174,7 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
     // after the compaction, total records should remain the same
     HoodieWriteMetadata result = client.compact(compactionTime);
     client.commitCompaction(compactionTime, result, Option.empty());
+    metaClient.reloadActiveTimeline().containsInstant(compactionTime);
     assertEquals(300, readTableTotalRecordsNum());
   }
 
@@ -333,6 +334,7 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
     }
     HoodieWriteMetadata result = client.compact(compactionInstant);
     client.commitCompaction(compactionInstant, result, Option.empty());
+    metaClient.reloadActiveTimeline().containsInstant(compactionInstant);
     if (runRollback) {
       validateFileListingInMetadataTable();
     }
