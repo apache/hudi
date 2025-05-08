@@ -39,7 +39,7 @@ public class SparkMetadataTableUpsertPartitioner<T> extends SparkHoodiePartition
   private final Map<String, Integer> fileIdToSparkPartitionIndexMap;
 
   public SparkMetadataTableUpsertPartitioner(List<BucketInfo> bucketInfoList, Map<String, Integer> fileIdToSparkPartitionIndexMap) {
-    super(null, null);
+    super(null, null); // passing null since these are never used from {@link SparkHoodiePartitioner}.
     this.bucketInfoList = bucketInfoList;
     this.totalPartitions = bucketInfoList.size();
     this.fileIdToSparkPartitionIndexMap = fileIdToSparkPartitionIndexMap;
@@ -52,6 +52,8 @@ public class SparkMetadataTableUpsertPartitioner<T> extends SparkHoodiePartition
 
   @Override
   public int getPartition(Object key) {
+    // all records to metadata table are prepped. So, we just fetch the fileId from the incoming key and lookup in the map we constructed
+    // to find the index.
     Tuple2<HoodieKey, Option<HoodieRecordLocation>> keyLocation = (Tuple2<HoodieKey, Option<HoodieRecordLocation>>) key;
     HoodieRecordLocation location = keyLocation._2().get();
     return fileIdToSparkPartitionIndexMap.get(location.getFileId());
