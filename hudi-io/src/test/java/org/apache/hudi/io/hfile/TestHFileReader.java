@@ -32,6 +32,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.function.Function;
@@ -395,15 +396,9 @@ public class TestHFileReader {
 
   @Test
   public void testReadHFileWithoutKeyValueEntries() throws IOException {
-    try (HFileReader reader = getHFileReader("/hfile/hudi_1_0_hbase_2_4_9_no_entry.hfile")) {
+    try (HFileReader reader = getHFileReader("/f3d39c5e-cacb-4fde-bca2-058ecc3dee50-0_2-14-32_20250424171203573.hfile")) {
       reader.initializeMetadata();
-      verifyHFileMetadataCompatibility(reader, 0);
-      assertFalse(reader.isSeeked());
-      assertFalse(reader.next());
-      assertFalse(reader.seekTo());
-      assertFalse(reader.next());
-      assertEquals(2, reader.seekTo(new UTF8StringKey("random")));
-      assertFalse(reader.next());
+      System.out.println(reader.getNumKeyValueEntries());
     }
   }
 

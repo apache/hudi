@@ -33,6 +33,7 @@ import org.apache.spark.sql.types.StructType;
 
 import java.io.IOException;
 
+import static org.apache.hudi.common.model.HoodieFileFormat.HFILE;
 import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 import static org.apache.hudi.common.util.ParquetUtils.getCompressionCodecName;
 

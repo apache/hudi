@@ -65,9 +65,11 @@ public class SparkBroadcastManager extends EngineBroadcastManager {
 
   protected Option<SparkFileReader> parquetReaderOpt = Option.empty();
   protected Option<SparkFileReader> orcReaderOpt = Option.empty();
+  protected Option<SparkFileReader> hfileReaderOpt = Option.empty();
   protected Broadcast<SQLConf> sqlConfBroadcast;
   protected Broadcast<SparkFileReader> parquetReaderBroadcast;
   protected Broadcast<SparkFileReader> orcReaderBroadcast;
+  protected Broadcast<SparkFileReader> hfileReaderBroadcast;
   protected Broadcast<SerializableConfiguration> configurationBroadcast;
 
   public SparkBroadcastManager(HoodieEngineContext context, HoodieTableMetaClient metaClient) {
@@ -108,8 +110,11 @@ public class SparkBroadcastManager extends EngineBroadcastManager {
         false, sqlConfBroadcast.getValue(), options, configurationBroadcast.getValue().value()));
     orcReaderOpt = Option.of(SparkAdapterSupport$.MODULE$.sparkAdapter().createOrcFileReader(
         false, sqlConfBroadcast.getValue(), options, configurationBroadcast.getValue().value()));
+    hfileReaderOpt = Option.of(SparkAdapterSupport$.MODULE$.sparkAdapter().createHFileFileReader(
+        false, sqlConfBroadcast.getValue(), options, configurationBroadcast.getValue().value()));
     parquetReaderBroadcast = jsc.broadcast(parquetReaderOpt.get());
     orcReaderBroadcast = jsc.broadcast(orcReaderOpt.get());
+    hfileReaderBroadcast = jsc.broadcast(hfileReaderOpt.get());
   }
 
   @Override
@@ -124,6 +129,9 @@ public class SparkBroadcastManager extends EngineBroadcastManager {
     }
     if (parquetReaderBroadcast.getValue() != null) {
       fileReaders.put("parquet", parquetReaderBroadcast.getValue());
+    }
+    if (hfileReaderBroadcast.getValue() != null) {
+      fileReaders.put("hfile", hfileReaderBroadcast.getValue());
     }
     if (!fileReaders.isEmpty()) {
       List<Filter> filters = new ArrayList<>();
