@@ -51,6 +51,7 @@ import org.mockito.Mockito
 import org.mockito.Mockito.when
 
 import java.util
+
 import scala.collection.JavaConverters._
 
 /**

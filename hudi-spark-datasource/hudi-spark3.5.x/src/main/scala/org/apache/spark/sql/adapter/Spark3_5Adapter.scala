@@ -18,6 +18,7 @@
 package org.apache.spark.sql.adapter
 
 import org.apache.hudi.Spark35HoodieFileScanRDD
+
 import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.api.java.JavaSparkContext

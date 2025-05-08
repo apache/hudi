@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.read.PositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
+
 import org.apache.spark.sql.execution.datasources.parquet.SparkFileReader
 import org.apache.spark.sql.sources.{And, IsNotNull, Or}
 import org.apache.spark.sql.types.{LongType, StringType, StructField, StructType}
@@ -34,7 +35,7 @@ import org.junit.jupiter.api.Test
 import org.mockito.Mockito
 import org.mockito.Mockito.when
 
-import scala.jdk.CollectionConverters.mapAsJavaMapConverter
+import scala.jdk.CollectionConverters._
 
 class TestSparkFileFormatInternalRowReaderContext extends SparkClientFunctionalTestHarness {
 
@@ -84,7 +85,8 @@ class TestSparkFileFormatInternalRowReaderContext extends SparkClientFunctionalT
     val stringValue = "string_value"
     val tableConfig = Mockito.mock(classOf[HoodieTableConfig])
     when(tableConfig.populateMetaFields()).thenReturn(true)
-    val sparkReaderContext = new SparkFileFormatInternalRowReaderContext(readers.asJava, Seq.empty, Seq.empty, storageConf(), tableConfig)
+    val sparkReaderContext = new SparkFileFormatInternalRowReaderContext(
+      readers.asJava, Seq.empty, Seq.empty, storageConf(), tableConfig)
     assertEquals(1, sparkReaderContext.convertValueToEngineType(1))
     assertEquals(1L, sparkReaderContext.convertValueToEngineType(1L))
     assertEquals(1.1f, sparkReaderContext.convertValueToEngineType(1.1f))
