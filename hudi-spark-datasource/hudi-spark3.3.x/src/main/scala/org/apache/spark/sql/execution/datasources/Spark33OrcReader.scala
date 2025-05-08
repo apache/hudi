@@ -19,16 +19,17 @@
 
 package org.apache.spark.sql.execution.datasources
 
-import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.Path
-import org.apache.hadoop.mapreduce.lib.input.FileSplit
-import org.apache.hadoop.mapreduce.task.TaskAttemptContextImpl
-import org.apache.hadoop.mapreduce.{JobID, TaskAttemptID, TaskID, TaskType}
 import org.apache.hudi.common.util
 import org.apache.hudi.internal.schema.InternalSchema
+
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.Path
+import org.apache.hadoop.mapreduce.{JobID, TaskAttemptID, TaskID, TaskType}
+import org.apache.hadoop.mapreduce.lib.input.FileSplit
+import org.apache.hadoop.mapreduce.task.TaskAttemptContextImpl
+import org.apache.orc.{OrcConf, OrcFile, TypeDescription}
 import org.apache.orc.mapred.OrcStruct
 import org.apache.orc.mapreduce.OrcInputFormat
-import org.apache.orc.{OrcConf, OrcFile, TypeDescription}
 import org.apache.spark.TaskContext
 import org.apache.spark.memory.MemoryMode
 import org.apache.spark.sql.HoodieSpark33SchemaUtils.toAttributes
@@ -43,6 +44,10 @@ import org.apache.spark.sql.types._
 import org.apache.spark.sql.vectorized.ColumnarBatch
 import org.apache.spark.util.Utils
 
+/**
+ * ORC reader for Spark 3.3.
+ * The main logic is borrowed from OrcFileFormat.scala
+ */
 class Spark33OrcReader(enableVectorizedReader: Boolean,
                        datetimeRebaseModeInRead: String,
                        int96RebaseModeInRead: String,

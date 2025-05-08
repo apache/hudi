@@ -65,7 +65,7 @@ trait SparkAdapter extends Serializable {
   /**
    * Inject table-valued functions to SparkSessionExtensions
    */
-  def injectTableFunctions(extensions : SparkSessionExtensions): Unit = {}
+  def injectTableFunctions(extensions: SparkSessionExtensions): Unit = {}
 
   /**
    * Returns an instance of [[HoodieCatalogUtils]] providing for common utils operating on Spark's
@@ -136,7 +136,7 @@ trait SparkAdapter extends Serializable {
    * Combine [[PartitionedFile]] to [[FilePartition]] according to `maxSplitBytes`.
    */
   def getFilePartitions(sparkSession: SparkSession, partitionedFiles: Seq[PartitionedFile],
-      maxSplitBytes: Long): Seq[FilePartition]
+                        maxSplitBytes: Long): Seq[FilePartition]
 
   /**
    * Checks whether [[LogicalPlan]] refers to Hudi table, and if it's the case extracts
@@ -234,13 +234,13 @@ trait SparkAdapter extends Serializable {
                               hadoopConf: Configuration): SparkFileReader
 
   /**
-   * Get parquet file reader
+   * Get orc file reader
    *
    * @param vectorized true if vectorized reading is not prohibited due to schema, reading mode, etc
    * @param sqlConf    the [[SQLConf]] used for the read
    * @param options    passed as a param to the file format
    * @param hadoopConf some configs will be set for the hadoopConf
-   * @return parquet file reader
+   * @return orc file reader
    */
   def createOrcFileReader(vectorized: Boolean,
                           sqlConf: SQLConf,
@@ -254,11 +254,10 @@ trait SparkAdapter extends Serializable {
                                         queryExecution: QueryExecution,
                                         name: Option[String] = None)(body: => T): T
 
-
   /**
    * Stop spark context with exit code
    *
-   * @param jssc JavaSparkContext object to shutdown the spark context
+   * @param jssc     JavaSparkContext object to shutdown the spark context
    * @param exitCode passed as a param to shutdown spark context with provided exit code
    * @return
    */

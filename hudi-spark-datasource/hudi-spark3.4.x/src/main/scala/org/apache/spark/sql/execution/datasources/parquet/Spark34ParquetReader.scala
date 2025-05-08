@@ -20,12 +20,11 @@
 package org.apache.spark.sql.execution.datasources.parquet
 
 import org.apache.hudi.internal.schema.InternalSchema
+
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.mapred.FileSplit
 import org.apache.hadoop.mapreduce._
 import org.apache.hadoop.mapreduce.task.TaskAttemptContextImpl
-import org.apache.hudi.common.util
-import org.apache.orc.{OrcFile, Reader, TypeDescription}
 import org.apache.parquet.filter2.compat.FilterCompat
 import org.apache.parquet.filter2.predicate.FilterApi
 import org.apache.parquet.format.converter.ParquetMetadataConverter.SKIP_ROW_GROUPS
@@ -38,10 +37,7 @@ import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.execution.vectorized.OnHeapColumnVector
 import org.apache.spark.sql.vectorized.ColumnarBatch
-
-import scala.collection.JavaConverters._
 
 class Spark34ParquetReader(enableVectorizedReader: Boolean,
                            datetimeRebaseModeInRead: String,
