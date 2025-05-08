@@ -18,18 +18,18 @@
 
 package org.apache.hudi.util;
 
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.util.collection.Triple;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.util.AvroToRowDataConverters.AvroToRowDataConverter;
+import org.apache.hudi.util.RowDataToAvroConverters.RowDataToAvroConverter;
+
 import org.apache.avro.Schema;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
-
-import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.common.util.collection.Triple;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.util.RowDataToAvroConverters.RowDataToAvroConverter;
-import org.apache.hudi.util.AvroToRowDataConverters.AvroToRowDataConverter;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -162,8 +162,12 @@ public class RowDataAvroQueryContexts {
       return getValAsJava(rowData, true);
     }
 
+    public Object getVal(RowData rowData) {
+      return fieldGetter.getFieldOrNull(rowData);
+    }
+
     public Object getValAsJava(RowData rowData, boolean allowsNull) {
-      Object val = this.javaTypeConverter.apply(fieldGetter.getFieldOrNull(rowData));
+      Object val = this.javaTypeConverter.apply(getVal(rowData));
       if (val == null && !allowsNull) {
         throw new HoodieException("The field value can not be null");
       }

@@ -147,8 +147,16 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
   }
 
   @Override
-  public Object getColumnValueAsJava(Schema recordSchema, String column, Properties props) {
-    return getColumnValueAsJava(recordSchema, column, props, true);
+  public Object getColumnValue(Schema recordSchema, String column, Properties props) {
+    boolean utcTimezone = Boolean.parseBoolean(props.getProperty(
+        HoodieStorageConfig.WRITE_UTC_TIMEZONE.key(), HoodieStorageConfig.WRITE_UTC_TIMEZONE.defaultValue().toString()));
+    RowDataQueryContext rowDataQueryContext = RowDataAvroQueryContexts.fromAvroSchema(recordSchema, utcTimezone);
+    return rowDataQueryContext.getFieldQueryContext(column).getVal(data);
+  }
+
+  @Override
+  public Comparable getColumnValueAsJava(Schema recordSchema, String column, Properties props) {
+    return (Comparable) getColumnValueAsJava(recordSchema, column, props, true);
   }
 
   private Object getColumnValueAsJava(Schema recordSchema, String column, Properties props, boolean allowsNull) {
