@@ -1084,6 +1084,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
 
   /**
    * Performs Compaction for the workload stored in instant-time.
+   * By default compaction may not complete. Callers are expected to call {@link #commitCompaction(String, HoodieWriteMetadata, Option)}.
+   * If callers prefer to commit the log compaction, recommendation is to use {@link #compact(String, boolean)} by setting the second arg to true.
    *
    * @param compactionInstantTime Compaction Instant Time
    * @return Collection of WriteStatus to inspect errors and counts
@@ -1126,6 +1128,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
 
   /**
    * Performs Log Compaction for the workload stored in instant-time.
+   * By default log compaction may not complete. Callers are expected to call {@link #commitCompaction(String, HoodieWriteMetadata, Option)}.
+   * If callers prefer to commit the log compaction, recommendation is to use {@link #logCompact(String, boolean)} by setting the second arg to true.
    *
    * @param logCompactionInstantTime Log Compaction Instant Time
    * @return Collection of WriteStatus to inspect errors and counts

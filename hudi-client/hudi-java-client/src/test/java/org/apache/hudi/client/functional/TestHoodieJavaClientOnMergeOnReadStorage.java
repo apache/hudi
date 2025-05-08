@@ -113,11 +113,8 @@ public class TestHoodieJavaClientOnMergeOnReadStorage extends HoodieJavaClientTe
     // Schedule and execute compaction.
     Option<String> timeStamp = client.scheduleCompaction(Option.empty());
     assertTrue(timeStamp.isPresent());
-    client.compact(timeStamp.get());
     HoodieWriteMetadata writeMetadata = client.compact(timeStamp.get());
     client.commitCompaction(timeStamp.get(), writeMetadata, Option.empty());
-
-
     // Verify all the records.
     metaClient.reloadActiveTimeline();
     assertDataInMORTable(config, commitTime, timeStamp.get(), storageConf, Arrays.asList(dataGen.getPartitionPaths()));

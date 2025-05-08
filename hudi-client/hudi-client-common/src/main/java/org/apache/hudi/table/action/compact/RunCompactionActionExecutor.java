@@ -108,7 +108,7 @@ public class RunCompactionActionExecutor<T> extends
       compactor.maybePersist(statuses, context, config, instantTime);
       context.setJobStatus(this.getClass().getSimpleName(), "Preparing compaction metadata: " + config.getTableName());
 
-      HoodieCommitMetadata metadata = new HoodieCommitMetadata();
+      HoodieCommitMetadata metadata = new HoodieCommitMetadata(false);
       metadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, config.getSchema());
       if (schemaPair.getLeft().isPresent()) {
         metadata.addMetadata(SerDeHelper.LATEST_SCHEMA, schemaPair.getLeft().get());

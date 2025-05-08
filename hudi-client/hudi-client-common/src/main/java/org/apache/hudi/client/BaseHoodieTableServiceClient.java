@@ -331,18 +331,24 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     // dereferencing the write dag for compaction for the first time.
     List<HoodieWriteStat> writeStats = triggerWritesAndFetchWriteStats(compactionWriteMetadata);
     // Fetch commit metadata from HoodieWriteMetadata and update HoodieWriteStat
-    HoodieCommitMetadata commitMetadata = compactionWriteMetadata.getCommitMetadata().get();
-    commitMetadata.setCompacted(true);
-    for (HoodieWriteStat stat : writeStats) {
-      commitMetadata.addWriteStat(stat.getPartitionPath(), stat);
-    }
-    compactionWriteMetadata.setCommitted(true);
-    compactionWriteMetadata.setCommitMetadata(Option.of(commitMetadata));
+    stitchHoodieWriteStats(compactionWriteMetadata, writeStats);
     metrics.emitCompactionCompleted();
     LOG.info("Compaction completed. Instant time: {}.", compactionInstantTime);
 
     HoodieTable table = tableOpt.orElseGet(() -> createTable(config, context.getStorageConf()));
-    completeCompaction(commitMetadata, table, compactionInstantTime);
+    completeCompaction(compactionWriteMetadata.getCommitMetadata().get(), table, compactionInstantTime);
+  }
+
+  private HoodieWriteMetadata stitchHoodieWriteStats(HoodieWriteMetadata<O> writeMetadata, List<HoodieWriteStat> writeStats) {
+    // Fetch commit metadata from HoodieWriteMetadata and update HoodieWriteStat
+    HoodieCommitMetadata commitMetadata = writeMetadata.getCommitMetadata().get();
+    commitMetadata.setCompacted(true);
+    for (HoodieWriteStat stat : writeStats) {
+      commitMetadata.addWriteStat(stat.getPartitionPath(), stat);
+    }
+    writeMetadata.setCommitted(true);
+    writeMetadata.setCommitMetadata(Option.of(commitMetadata));
+    return writeMetadata;
   }
 
   protected abstract List<HoodieWriteStat> triggerWritesAndFetchWriteStats(HoodieWriteMetadata<O> writeMetadata);
@@ -383,17 +389,11 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     // dereferencing the write dag for log compaction for the first time.
     List<HoodieWriteStat> writeStats = triggerWritesAndFetchWriteStats(writeMetadata);
     // fetch HoodieCommitMetadata and update HoodieWriteStat
-    HoodieCommitMetadata commitMetadata = writeMetadata.getCommitMetadata().get();
-    for (HoodieWriteStat stat : writeStats) {
-      commitMetadata.addWriteStat(stat.getPartitionPath(), stat);
-    }
-    commitMetadata.setCompacted(true);
-    writeMetadata.setCommitted(true);
-    writeMetadata.setCommitMetadata(Option.of(commitMetadata));
+    stitchHoodieWriteStats(writeMetadata, writeStats);
     metrics.emitCompactionCompleted();
     LOG.info("Log Compaction completed. Instant time: {}.", compactionInstantTime);
     HoodieTable table = tableOpt.orElseGet(() -> createTable(config, context.getStorageConf()));
-    completeLogCompaction(commitMetadata, table, compactionInstantTime);
+    completeLogCompaction(writeMetadata.getCommitMetadata().get(), table, compactionInstantTime);
   }
   
   /**
