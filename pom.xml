@@ -176,7 +176,7 @@
                (hudi.spark.common.modules.*) -->
     <hudi.spark.common.modules.1>hudi-spark3-common</hudi.spark.common.modules.1>
     <hudi.spark.common.modules.2>hudi-spark3.2plus-common</hudi.spark.common.modules.2>
-    <avro.version>1.11.3</avro.version>
+    <avro.version>1.11.4</avro.version>
     <bijection-avro.version>0.9.7</bijection-avro.version>
     <caffeine.version>2.9.1</caffeine.version>
     <commons.io.version>2.11.0</commons.io.version>
@@ -223,7 +223,7 @@
     <disruptor.version>3.4.2</disruptor.version>
     <antlr.version>4.8</antlr.version>
     <aws.sdk.version>2.25.69</aws.sdk.version>
-    <proto.version>3.21.7</proto.version>
+    <proto.version>3.25.5</proto.version>
     <protoc.version>3.21.5</protoc.version>
     <dynamodb.lockclient.version>1.2.0</dynamodb.lockclient.version>
     <zookeeper.version>3.5.7</zookeeper.version>
