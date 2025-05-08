@@ -802,7 +802,7 @@ public class TestHFileReader {
 
   @Test
   public void testReadHFileWithoutKeyValueEntries() throws IOException {
-    try (HFileReader reader = getHFileReader("/hfile/hudi_1_0_hbase_2_4_9_no_entry.hfile")) {
+    try (HFileReader reader = getHFileReader("/f3d39c5e-cacb-4fde-bca2-058ecc3dee50-0_2-14-32_20250424171203573.hfile")) {
       reader.initializeMetadata();
       verifyHFileMetadataCompatibility(reader, 0);
       assertFalse(reader.isSeeked());

@@ -60,6 +60,7 @@ import scala.collection.JavaConverters;
 class SparkReaderContextFactory implements ReaderContextFactory<InternalRow> {
   private final Broadcast<SparkFileReader> parquetReaderBroadcast;
   private final Broadcast<SparkFileReader> orcReaderBroadcast;
+  private final Broadcast<SparkFileReader> hfileReaderBroadcast;
   private final Broadcast<SerializableConfiguration> configurationBroadcast;
   private final Broadcast<HoodieTableConfig> tableConfigBroadcast;
 
@@ -87,7 +88,7 @@ class SparkReaderContextFactory implements ReaderContextFactory<InternalRow> {
     Configuration configs = getHadoopConfiguration(jsc.hadoopConfiguration());
     schemaEvolutionConfigs.forEach(configs::set);
     configurationBroadcast = jsc.broadcast(new SerializableConfiguration(configs));
-    // Broadcast: ParquetReader, OrcReader.
+    // Broadcast: ParquetReader, OrcReader, HFileReader
     // Spark readers have to be instantiated on the driver and broadcast to the executors
     SparkFileReader parquetReader = SparkAdapterSupport$.MODULE$.sparkAdapter().createParquetFileReader(
         false, sqlConf, options, configs);
@@ -95,6 +96,9 @@ class SparkReaderContextFactory implements ReaderContextFactory<InternalRow> {
     SparkFileReader orcReader = SparkAdapterSupport$.MODULE$.sparkAdapter().createOrcFileReader(
         false, sqlConf, options, configs);
     orcReaderBroadcast = jsc.broadcast(orcReader);
+    SparkFileReader hfileReader = SparkAdapterSupport$.MODULE$.sparkAdapter().createHFileFileReader(
+        false, sqlConf, options, configs);
+    hfileReaderBroadcast = jsc.broadcast(hfileReader);
     // Broadcast: TableConfig.
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
     tableConfigBroadcast = jsc.broadcast(tableConfig);
@@ -114,15 +118,20 @@ class SparkReaderContextFactory implements ReaderContextFactory<InternalRow> {
       throw new HoodieException("Table config broadcast is not initialized.");
     }
 
-    SparkFileReader parquetFileReader = parquetReaderBroadcast.getValue();
-    SparkFileReader orcFileReader = orcReaderBroadcast.getValue();
     Map<String, SparkFileReader> fileReaders = new HashMap<>();
+    SparkFileReader parquetFileReader = parquetReaderBroadcast.getValue();
+    if (parquetFileReader != null) {
+      fileReaders.put("parquet", parquetFileReader);
+    }
+    SparkFileReader orcFileReader = orcReaderBroadcast.getValue();
     if (orcFileReader != null) {
       fileReaders.put("orc", orcFileReader);
     }
-    if (orcFileReader != null) {
-      fileReaders.put("parquet", parquetFileReader);
+    SparkFileReader hfileFileReader = hfileReaderBroadcast.getValue();
+    if (hfileFileReader != null) {
+      fileReaders.put("hfile", hfileFileReader);
     }
+
     if (!fileReaders.isEmpty()) {
       List<Filter> filters = Collections.emptyList();
       return new SparkFileFormatInternalRowReaderContext(

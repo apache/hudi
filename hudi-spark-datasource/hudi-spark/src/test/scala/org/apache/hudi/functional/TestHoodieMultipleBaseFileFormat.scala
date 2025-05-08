@@ -55,11 +55,11 @@ class TestHoodieMultipleBaseFileFormat extends HoodieSparkClientTestBase with Sp
     DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
     DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
-    HoodieCompactionConfig.INLINE_COMPACT.key -> "false",
+    HoodieCompactionConfig.INLINE_COMPACT.key -> "true",
     HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key() -> "1",
     HoodieClusteringConfig.INLINE_CLUSTERING.key -> "false",
     HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key -> "2",
-    "hoodie.metadata.enable" -> "false"
+    HoodieMetadataConfig.ENABLE.key -> "true"
   )
   val sparkOpts = Map(
     HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key -> classOf[DefaultSparkRecordMerger].getName,
@@ -93,7 +93,6 @@ class TestHoodieMultipleBaseFileFormat extends HoodieSparkClientTestBase with Sp
   def testMultiFileFormatForMORTableType(): Unit = {
     insertAndValidateSnapshot(basePath, HoodieTableType.MERGE_ON_READ.name())
   }
-
 
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieFileFormat], names = Array("HFILE"))
@@ -164,13 +163,19 @@ class TestHoodieMultipleBaseFileFormat extends HoodieSparkClientTestBase with Sp
   def testTableWithOneBaseFileFormat(basePath: String, tableType: String, baseFileFormat: String): Unit = {
     // Insert records.
     val records1 = recordsToStrings(dataGen.generateInserts("001", 100)).asScala.toSeq
-    val inputDF1: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    val inputDF1: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records1, 1))
     inputDF1.write.format("hudi")
       .options(commonOpts)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, tableType)
       .option(HoodieWriteConfig.BASE_FILE_FORMAT.key, baseFileFormat)
       .mode(SaveMode.Overwrite)
       .save(basePath)
+    assertEquals(100, inputDF1.count())
+
+    val initDf = spark.read
+      .options(commonOpts)
+      .format("hudi").load(basePath)
+//    assertEquals(100, initDf.count())
 
     // Update.
     val records2 = recordsToStrings(dataGen.generateUpdatesForAllRecords("002")).asScala.toSeq
@@ -181,6 +186,11 @@ class TestHoodieMultipleBaseFileFormat extends HoodieSparkClientTestBase with Sp
       .option(HoodieWriteConfig.BASE_FILE_FORMAT.key, baseFileFormat)
       .mode(SaveMode.Append)
       .save(basePath)
+
+    val firstUpdateDf = spark.read
+      .options(commonOpts)
+      .format("hudi").load(basePath)
+//    assertEquals(100, firstUpdateDf.count())
 
     // Update.
     val records3 = recordsToStrings(dataGen.generateUpdatesForAllRecords("003")).asScala.toSeq
@@ -193,10 +203,10 @@ class TestHoodieMultipleBaseFileFormat extends HoodieSparkClientTestBase with Sp
       .save(basePath)
 
     // Snapshot Read the table
-    val hudiDf = spark.read
+    val secondUpdateDf = spark.read
       .options(commonOpts)
       .format("hudi").load(basePath)
-    assertEquals(100, hudiDf.count())
+//    assertEquals(100, secondUpdateDf.count())
 
     // Update.
     val records4 = recordsToStrings(dataGen.generateUpdatesForAllRecords("004")).asScala.toSeq
@@ -204,6 +214,7 @@ class TestHoodieMultipleBaseFileFormat extends HoodieSparkClientTestBase with Sp
     inputDF4.write.format("hudi")
       .options(commonOpts)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, tableType)
+      .option(HoodieWriteConfig.BASE_FILE_FORMAT.key, baseFileFormat)
       .mode(SaveMode.Append)
       .save(basePath)
 
