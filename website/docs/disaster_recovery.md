@@ -25,8 +25,10 @@ will be hitting latest files which has high possibility of getting deleted with 
 
 ## Runbook
 
-Savepoint and restore can only be triggered from `hudi-cli`. Let's walk through an example of how one can take savepoint
-and later restore the state of the table.
+Savepoint and restore can be triggered via [Hudi CLI](/docs/cli) and [SQL Procedures](/docs/procedures). Let's walk through an example of how 
+one can take savepoint and later restore the state of the table.
+
+**Note:** When using the Hudi CLI, we need to specify the *table path*, whereas when using SQL procedures, we need to provide the *table name*.
 
 Let's create a hudi table via `spark-shell` and trigger a batch of inserts.
 
@@ -109,15 +111,58 @@ drwxr-xr-x  2 nsb  wheel    64 Jan 28 16:00 archived
 -rw-r--r--  1 nsb  wheel  4428 Jan 28 16:02 20220128160245447.commit
 ```
 
-Let's trigger a savepoint as of the latest commit. Savepoint can only be done via `hudi-cli`.
+### Savepoint Example
+
+Savepoints can be created via [Hudi CLI](/docs/cli) or [SQL Procedures](/docs/procedures).
+
+Let's trigger a savepoint as of the latest commit.
+
+#### Using Hudi CLI
+
+1. Launch the Hudi CLI.
+2. Specify the SPARK_HOME if it's not specified.
 
 ```sh
+cd hudi-cli
 ./hudi-cli.sh
+set --conf SPARK_HOME=<SPARK_HOME>
+```
 
+3. Connect to the table using the table path for example `/tmp/hudi_trips_cow/`.
+4. Run the `commits show` command to display the commits from the table.
+5. Run the `savepoint create` command by specifying the `commit_time` to create the Savepoint.
+
+```sh
 connect --path /tmp/hudi_trips_cow/
 commits show
-set --conf SPARK_HOME=<SPARK_HOME>
 savepoint create --commit 20220128160245447 --sparkMaster local[2]
+```
+
+:::note NOTE:
+Make sure you replace 20220128160245447 with the latest commit in your table.
+:::
+
+#### Using Spark SQL Procedures
+
+1. Launch the `spark-sql` shell by specifying Spark version and Hudi version. For example,
+
+```shell
+export SPARK_VERSION=3.5
+export HUDI_VERSION=1.0.2
+
+spark-sql --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:$HUDI_VERSION \
+--conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
+--conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' \
+--conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' \
+--conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
+```
+
+2. Run the `show_commits` command to display the commits from the table.
+3. Run the `create_savepoint` command by specifying the commit_time to create the Savepoint.
+
+```sql
+call show_commits(table => 'hudi_trips_cow');
+call create_savepoint(table => 'hudi_trips_cow', commit_time => '20220128160245447');
 ```
 
 :::note NOTE:
@@ -184,8 +229,9 @@ spark.sql("select count(partitionpath, uuid) from  hudi_trips_snapshot").show()
 +--------------------------+
 ```
 
-Let's say something bad happened, and you want to restore your table to an older snapshot. As we called out earlier, we can
-trigger restore only from `hudi-cli`. And do remember to bring down all of your writer processes while doing a restore.
+### Restore Example
+
+Let's say something bad happened, and you want to restore your table to an older snapshot. We can perform a restore operation via [Hudi CLI](/docs/cli) or [SQL Procedures](/docs/procedures). And do remember to bring down all of your writer processes while doing a restore.
 
 Let's checkout timeline once, before we trigger the restore.
 ```shell
@@ -221,15 +267,26 @@ drwxr-xr-x  2 nsb  wheel    64 Jan 28 16:00 archived
 -rw-r--r--  1 nsb  wheel  4428 Jan 28 16:06 20220128160630785.commit
 ```
 
-If you are continuing in the same `hudi-cli` session, you can just execute `refresh` so that table state gets refreshed to
-its latest state. If not, connect to the table again.
+#### Using Hudi CLI
+
+1. Launch the Hudi CLI or use the existing Hudi CLI.
+2. Specify the SPARK_HOME if it's not specified.
 
 ```shell
+cd hudi-cli
 ./hudi-cli.sh
-
-connect --path /tmp/hudi_trips_cow/
-commits show
 set --conf SPARK_HOME=<SPARK_HOME>
+```
+
+3. Connect to the Hudi table using the specified table path, for example `/tmp/hudi_trips_cow/`.
+4. Execute the `refresh` command to update the table state to its latest version.
+5. Run the `savepoints show` command to display the all savepoints.
+6. Run the `savepoint rollback` specifying the savepoint **instant_time** to perform the rollback.
+7. (Optional) Run the `savepoint delete` command to delete the savepoint **instant_time** from the existing savepoints.
+
+```sh
+connect --path /tmp/hudi_trips_cow/
+refresh
 savepoints show
 ╔═══════════════════╗
 ║ SavepointTime     ║
@@ -237,6 +294,36 @@ savepoints show
 ║ 20220128160245447 ║
 ╚═══════════════════╝
 savepoint rollback --savepoint 20220128160245447 --sparkMaster local[2]
+savepoint delete --commit 20220128160245447 --sparkMaster local[2]
+```
+
+:::note NOTE:
+Make sure you replace 20220128160245447 with the latest savepoint in your table.
+:::
+
+#### Using Spark SQL Procedures
+
+1. Launch the `spark-sql` shell by specifying Spark version and Hudi version or use the existing `spark-sql` shell.
+
+```sh
+export SPARK_VERSION=3.5
+export HUDI_VERSION=1.0.2
+
+spark-sql --packages org.apache.hudi:hudi-spark$SPARK_VERSION-bundle_2.12:$HUDI_VERSION \
+--conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
+--conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' \
+--conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' \
+--conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
+```
+
+2. Run the `show_savepoints` command to display all the savepoints from the table.
+3. Run the `rollback_to_savepoint` command by specifying the savepoint **instant_time** to rollback.
+4. (Optional) Run the `delete_savepoint` command to delete the savepoint **instant_time** from the existing savepoints.
+
+```sql
+call show_savepoints(table => 'hudi_trips_cow');
+call rollback_to_savepoint(table => 'hudi_trips_cow', instant_time => '20220128160245447');
+call delete_savepoint(table => 'hudi_trips_cow', instant_time => '20220128160245447');
 ```
 
 :::note NOTE:
@@ -288,11 +375,10 @@ spark.sql("select count(partitionpath, uuid) from  hudi_trips_snapshot").show()
 ```
 
 As you could see, entire table state is restored back to the commit which was savepointed. Users can choose to trigger savepoint
-at regular cadence and keep deleting older savepoints when new ones are created. `hudi-cli` has a command `savepoint delete`
-to assist in deleting a savepoint. Please do remember that cleaner may not clean the files that are savepointed. And so users
-should ensure they delete the savepoints from time to time. If not, the storage reclamation may not happen.
+at regular cadence and keep deleting older savepoints when new ones are created. Please do remember that cleaner may not clean the files 
+that are savepointed. And so users should ensure they delete the savepoints from time to time. If not, the storage reclamation may not happen.
 
-Note: Savepoint and restore for MOR table is available only from 0.11. 
+**Note:** Savepoint and restore for **MOR** table is available only from **0.11**. 
 
 ## Related Resources
 <h3>Videos</h3>
