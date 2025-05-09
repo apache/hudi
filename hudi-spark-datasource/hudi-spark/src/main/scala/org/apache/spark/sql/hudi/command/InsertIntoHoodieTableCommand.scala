@@ -18,8 +18,11 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.{HoodieSparkSqlWriter, SparkAdapterSupport}
+import org.apache.hudi.common.model.HoodieCommitMetadata
+import org.apache.hudi.common.table.timeline.InstantComparison
 import org.apache.hudi.exception.HoodieException
 
+import org.apache.spark.SparkContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HoodieCatalogTable}
@@ -29,8 +32,10 @@ import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project}
 import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.execution.command.DataWritingCommand
 import org.apache.spark.sql.execution.datasources.LogicalRelation
+import org.apache.spark.sql.execution.metric.{SQLMetric, SQLMetrics}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
+import org.apache.spark.sql.hudi.command.HoodieCommandMetrics.updateInsertMetrics
 import org.apache.spark.sql.hudi.command.HoodieLeafRunnableCommand.stripMetaFieldAttributes
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
@@ -56,6 +61,8 @@ case class InsertIntoHoodieTableCommand(logicalRelation: LogicalRelation,
                                         overwrite: Boolean)
   extends DataWritingCommand {
   override def innerChildren: Seq[QueryPlan[_]] = Seq(query)
+  val sparkContext = SparkContext.getActive.get
+  override lazy val metrics: Map[String, SQLMetric] = HoodieCommandMetrics.metrics
 
   override def outputColumnNames: Seq[String] = {
     query.output.map(_.name)
@@ -65,7 +72,8 @@ case class InsertIntoHoodieTableCommand(logicalRelation: LogicalRelation,
     assert(logicalRelation.catalogTable.isDefined, "Missing catalog table")
 
     val table = logicalRelation.catalogTable.get
-    InsertIntoHoodieTableCommand.run(sparkSession, table, plan, partitionSpec, overwrite)
+    InsertIntoHoodieTableCommand.run(sparkSession, table, plan, partitionSpec, overwrite, metrics = metrics)
+    DataWritingCommand.propogateMetrics(sparkContext, this, metrics)
     Seq.empty[Row]
   }
 
@@ -94,7 +102,8 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
           partitionSpec: Map[String, Option[String]],
           overwrite: Boolean,
           refreshTable: Boolean = true,
-          extraOptions: Map[String, String] = Map.empty): Boolean = {
+          extraOptions: Map[String, String] = Map.empty,
+          metrics: Map[String, SQLMetric]): Boolean = {
     val catalogTable = new HoodieCatalogTable(sparkSession, table)
 
     val (mode, isOverWriteTable, isOverWritePartition, staticOverwritePartitionPathOpt) = if (overwrite) {
@@ -105,10 +114,15 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
     val config = buildHoodieInsertConfig(catalogTable, sparkSession, isOverWritePartition, isOverWriteTable, partitionSpec, extraOptions, staticOverwritePartitionPathOpt)
 
     val df = sparkSession.internalCreateDataFrame(query.execute(), query.schema)
-    val (success, _, _, _, _, _) = HoodieSparkSqlWriter.write(sparkSession.sqlContext, mode, config, df)
+    val (success, commitInstantTime, _, _, _, _) = HoodieSparkSqlWriter.write(sparkSession.sqlContext, mode, config, df)
+
 
     if (!success) {
       throw new HoodieException("Insert Into to Hudi table failed")
+    }
+
+    if (success && commitInstantTime.isPresent) {
+      updateInsertMetrics(metrics, catalogTable.metaClient, commitInstantTime.get())
     }
 
     if (success && refreshTable) {
