@@ -2144,7 +2144,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         client.scheduleCompactionAtInstant(newCommitTime, Option.empty());
         HoodieWriteMetadata result = client.compact(newCommitTime);
         client.commitCompaction(newCommitTime, result, Option.empty());
-        metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(newCommitTime);
+        assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(newCommitTime));
         validateMetadata(client);
       }
 
@@ -2167,7 +2167,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         client.scheduleCompactionAtInstant(newCommitTime, Option.empty());
         HoodieWriteMetadata result = client.compact(newCommitTime);
         client.commitCompaction(newCommitTime, result, Option.empty());
-        metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(newCommitTime);
+        assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(newCommitTime));
         validateMetadata(client);
       }
 
@@ -3536,7 +3536,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       assertTrue(metadataWriteClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty()));
       HoodieWriteMetadata result = metadataWriteClient.compact(compactionInstantTime);
       metadataWriteClient.commitCompaction(compactionInstantTime, result, Option.empty());
-      metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(compactionInstantTime);
+      assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(compactionInstantTime));
 
       // verify metadata table
       validateMetadata(client);

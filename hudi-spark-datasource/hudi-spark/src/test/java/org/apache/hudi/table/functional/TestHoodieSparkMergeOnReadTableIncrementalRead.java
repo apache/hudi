@@ -169,7 +169,7 @@ public class TestHoodieSparkMergeOnReadTableIncrementalRead extends SparkClientF
       // perform the scheduled compaction
       HoodieWriteMetadata result = client.compact(compactionCommitTime);
       client.commitCompaction(compactionCommitTime, result, Option.empty());
-      metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(compactionCommitTime);
+      assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(compactionCommitTime));
 
       // verify new write shows up in snapshot mode after compaction is complete
       snapshotROFiles = getROSnapshotFiles(partitionPath);

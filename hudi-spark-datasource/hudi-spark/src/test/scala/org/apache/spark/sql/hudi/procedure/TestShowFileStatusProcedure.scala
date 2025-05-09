@@ -22,9 +22,9 @@ import org.apache.hudi.{HoodieCLIUtils, HoodieDataSourceHelpers}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.util.{Option => HOption}
-
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.spark.sql.hudi.command.procedures.{FileStatus, TimelineType}
+import org.junit.jupiter.api.Assertions.assertTrue
 
 import scala.collection.JavaConverters._
 
@@ -97,7 +97,7 @@ class TestShowFileStatusProcedure extends HoodieSparkProcedureTestBase {
           client.scheduleCompactionAtInstant(newInstant, HOption.empty())
           val result = client.compact(newInstant)
           client.commitCompaction(newInstant, result, HOption.empty())
-          metaClient.reloadActiveTimeline.filterCompletedInstants.containsInstant(newInstant)
+          assertTrue(metaClient.reloadActiveTimeline.filterCompletedInstants.containsInstant(newInstant))
         }
 
         spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002, 1000)")
@@ -203,7 +203,7 @@ class TestShowFileStatusProcedure extends HoodieSparkProcedureTestBase {
           client.scheduleCompactionAtInstant(newInstant, HOption.empty())
           val result = client.compact(newInstant)
           client.commitCompaction(newInstant, result, HOption.empty())
-          metaClient.reloadActiveTimeline.filterCompletedInstants.containsInstant(newInstant)
+          assertTrue(metaClient.reloadActiveTimeline.filterCompletedInstants.containsInstant(newInstant))
         }
 
         spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002, 1000)")

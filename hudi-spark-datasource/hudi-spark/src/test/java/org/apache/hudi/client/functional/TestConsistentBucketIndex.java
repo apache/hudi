@@ -70,6 +70,7 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.config.HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS;
 import static org.apache.hudi.config.HoodieCompactionConfig.INLINE_COMPACT_TRIGGER_STRATEGY;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Test consistent hashing index
@@ -205,7 +206,7 @@ public class TestConsistentBucketIndex extends HoodieSparkClientTestHarness {
     Assertions.assertEquals(400, readRecordsNum(dataGen.getPartitionPaths(), populateMetaFields));
     HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = writeClient.compact(compactionTime);
     writeClient.commitCompaction(compactionTime, compactionMetadata, Option.empty());
-    metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(compactionTime);
+    assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(compactionTime));
     Assertions.assertEquals(400, readRecordsNum(dataGen.getPartitionPaths(), populateMetaFields));
   }
 

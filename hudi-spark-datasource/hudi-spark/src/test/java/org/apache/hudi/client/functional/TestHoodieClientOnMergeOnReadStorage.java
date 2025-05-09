@@ -133,7 +133,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
     assertTrue(timeStamp.isPresent());
     HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionWriteMetadata = client.compact(timeStamp.get());
     client.commitCompaction(timeStamp.get(), compactionWriteMetadata, Option.empty());
-    metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(timeStamp.get());
+    assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(timeStamp.get()));
 
     // Verify all the records.
     metaClient.reloadActiveTimeline();
@@ -173,7 +173,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
     assertTrue(compactionTimeStamp.isPresent());
     HoodieWriteMetadata result = client.compact(compactionTimeStamp.get());
     client.commitCompaction(compactionTimeStamp.get(), result, Option.empty());
-    metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(compactionTimeStamp.get());
+    assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(compactionTimeStamp.get()));
 
     prevCommitTime = compactionTimeStamp.get();
     for (int i = 0; i < 2; i++) {
@@ -342,7 +342,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
     assertTrue(compactionTimeStamp.isPresent());
     HoodieWriteMetadata result = client.compact(compactionTimeStamp.get());
     client.commitCompaction(compactionTimeStamp.get(), result, Option.empty());
-    metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(compactionTimeStamp.get());
+    assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(compactionTimeStamp.get()));
     String prevCommitTime = compactionTimeStamp.get();
 
     // First upsert on  second file slice.
@@ -514,7 +514,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
           assertTrue(compactionTimeStamp.isPresent());
           HoodieWriteMetadata result = client.compact(compactionTimeStamp.get());
           client.commitCompaction(compactionTimeStamp.get(), result, Option.empty());
-          metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(compactionTimeStamp.get());
+          assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(compactionTimeStamp.get()));
           prevCommitTime = compactionTimeStamp.get();
         }
 

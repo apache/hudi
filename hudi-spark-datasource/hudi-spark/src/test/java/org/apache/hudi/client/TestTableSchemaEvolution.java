@@ -183,7 +183,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     assertTrue(client.scheduleCompactionAtInstant("002", Option.empty()));
     HoodieWriteMetadata result = client.compact("002");
     client.commitCompaction("002", result, Option.empty());
-    metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant("002");
+    assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant("002"));
 
     // Updates with same schema is allowed
     final int numUpdateRecords = 5;

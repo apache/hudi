@@ -115,7 +115,7 @@ public class TestHoodieJavaClientOnMergeOnReadStorage extends HoodieJavaClientTe
     assertTrue(timeStamp.isPresent());
     HoodieWriteMetadata writeMetadata = client.compact(timeStamp.get());
     client.commitCompaction(timeStamp.get(), writeMetadata, Option.empty());
-    metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(timeStamp.get());
+    assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(timeStamp.get()));
     // Verify all the records.
     metaClient.reloadActiveTimeline();
     assertDataInMORTable(config, commitTime, timeStamp.get(), storageConf, Arrays.asList(dataGen.getPartitionPaths()));
@@ -158,7 +158,7 @@ public class TestHoodieJavaClientOnMergeOnReadStorage extends HoodieJavaClientTe
     // now run compaction
     HoodieWriteMetadata writeMetadata = client.compact(timeStamp.get());
     client.commitCompaction(timeStamp.get(), writeMetadata, Option.empty());
-    metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(timeStamp.get());
+    assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(timeStamp.get()));
 
     // Verify all the records.
     metaClient.reloadActiveTimeline();

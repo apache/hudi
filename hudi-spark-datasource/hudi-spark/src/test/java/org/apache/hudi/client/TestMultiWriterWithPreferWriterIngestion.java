@@ -60,6 +60,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.config.LockConfiguration.FILESYSTEM_LOCK_PATH_PROP_KEY;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestMultiWriterWithPreferWriterIngestion extends HoodieClientTestBase {
 
@@ -170,7 +171,7 @@ public class TestMultiWriterWithPreferWriterIngestion extends HoodieClientTestBa
       try {
         HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client2.compact(instant5);
         client2.commitCompaction(instant5, compactionMetadata, Option.empty());
-        metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(instant5);
+        assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(instant5));
         validInstants.add(instant5);
       } catch (Exception e2) {
         if (tableType == HoodieTableType.MERGE_ON_READ) {
