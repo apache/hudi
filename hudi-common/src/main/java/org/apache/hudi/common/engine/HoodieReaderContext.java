@@ -20,6 +20,9 @@
 package org.apache.hudi.common.engine;
 
 import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.model.HoodieEmptyRecord;
+import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -264,22 +267,28 @@ public abstract class HoodieReaderContext<T> {
   /**
    * Gets the ordering value in particular type.
    *
-   * @param record An option of record.
+   * @param record An engine specific record.
    * @param schema The Avro schema of the record.
-   * @param orderingFieldName name of the ordering field
+   * @param orderingFieldName name of the ordering field, if any
    * @return The ordering value.
    */
-  public Comparable getOrderingValue(T record,
-                                     Schema schema,
-                                     Option<String> orderingFieldName) {
+  public Comparable getOrderingValue(T record, Schema schema, Option<String> orderingFieldName) {
     if (orderingFieldName.isEmpty()) {
       return DEFAULT_ORDERING_VALUE;
     }
 
     Object value = getValue(record, schema, orderingFieldName.get());
-    Comparable finalOrderingVal = value != null ? convertValueToEngineType((Comparable) value) : DEFAULT_ORDERING_VALUE;
-    return finalOrderingVal;
+    return value != null ? convertValueToEngineType((Comparable) value) : DEFAULT_ORDERING_VALUE;
   }
+
+  /**
+   * Constructs a new {@link HoodieRecord} based on the given buffered record {@link BufferedRecord}.
+   * Safe to assume that the buffered record is not a delete.
+   *
+   * @param bufferedRecord  The {@link BufferedRecord} object with engine-specific row
+   * @return A new instance of {@link HoodieRecord}.
+   */
+  protected abstract HoodieRecord<T> constructHoodieDataRecord(BufferedRecord<T> bufferedRecord);
 
   /**
    * Constructs a new {@link HoodieRecord} based on the given buffered record {@link BufferedRecord}.
@@ -287,7 +296,23 @@ public abstract class HoodieReaderContext<T> {
    * @param bufferedRecord  The {@link BufferedRecord} object with engine-specific row
    * @return A new instance of {@link HoodieRecord}.
    */
-  public abstract HoodieRecord<T> constructHoodieRecord(BufferedRecord<T> bufferedRecord);
+  public HoodieRecord<T> constructHoodieRecord(BufferedRecord<T> bufferedRecord) {
+    if (bufferedRecord.isDelete()) {
+      return new HoodieEmptyRecord<>(
+          new HoodieKey(bufferedRecord.getRecordKey(), null),
+          HoodieOperation.DELETE,
+          bufferedRecord.getOrderingValue(),
+          getRecordType());
+    } else {
+      return constructHoodieDataRecord(bufferedRecord);
+    }
+  }
+
+  /**
+   * Returns the engine's record type
+   * @return a {@link HoodieRecord.HoodieRecordType}
+   */
+  protected abstract HoodieRecord.HoodieRecordType getRecordType();
 
   /**
    * Seals the engine-specific record to make sure the data referenced in memory do not change.

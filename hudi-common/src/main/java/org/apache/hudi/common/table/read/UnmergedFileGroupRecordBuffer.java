@@ -23,7 +23,6 @@ import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.KeySpec;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
@@ -36,9 +35,7 @@ import org.apache.hudi.exception.HoodieException;
 
 import org.apache.avro.Schema;
 
-import java.io.IOException;
 import java.io.Serializable;
-import java.util.Iterator;
 
 public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
   // Used to order the records in the record map.
@@ -52,12 +49,13 @@ public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
       Option<String> partitionNameOverrideOpt,
       Option<String[]> partitionPathFieldOpt,
       TypedProperties props,
-      HoodieReadStats readStats) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, partitionNameOverrideOpt, partitionPathFieldOpt, props, readStats);
+      HoodieReadStats readStats,
+      EngineBasedMerger<T> merger) {
+    super(readerContext, hoodieTableMetaClient, recordMergeMode, partitionNameOverrideOpt, partitionPathFieldOpt, props, readStats, merger);
   }
 
   @Override
-  protected boolean doHasNext() throws IOException {
+  protected boolean doHasNext() {
     ValidationUtils.checkState(baseFileIterator != null, "Base file iterator has not been set yet");
 
     // Output from base file first.
@@ -86,11 +84,6 @@ public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
   }
 
   @Override
-  public Iterator<BufferedRecord<T>> getLogRecordIterator() {
-    return records.values().iterator();
-  }
-
-  @Override
   public BufferType getBufferType() {
     return BufferType.UNMERGED;
   }
@@ -109,25 +102,19 @@ public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
       while (recordIterator.hasNext()) {
         T nextRecord = recordIterator.next();
         BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(nextRecord, schema, readerContext, orderingFieldName, false);
-        processNextDataRecord(bufferedRecord, putIndex++);
+        processNextLogRecord(bufferedRecord, putIndex++);
       }
     }
   }
 
   @Override
-  public void processNextDataRecord(BufferedRecord<T> record, Serializable index) {
+  public void processNextLogRecord(BufferedRecord<T> record, Serializable index) {
     records.put(index, record.toBinary(readerContext));
   }
 
   @Override
   public void processDeleteBlock(HoodieDeleteBlock deleteBlock) {
     // no-op
-  }
-
-  @Override
-  public void processNextDeletedRecord(DeleteRecord deleteRecord, Serializable index) {
-    // never used for now
-    records.put(index, BufferedRecord.forDeleteRecord(deleteRecord, getOrderingValue(readerContext, deleteRecord)));
   }
 
   @Override

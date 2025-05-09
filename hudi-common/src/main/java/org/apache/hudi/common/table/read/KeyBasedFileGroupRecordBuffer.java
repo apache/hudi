@@ -54,8 +54,9 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
                                        Option<String> partitionNameOverrideOpt,
                                        Option<String[]> partitionPathFieldOpt,
                                        TypedProperties props,
-                                       HoodieReadStats readStats) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, partitionNameOverrideOpt, partitionPathFieldOpt, props, readStats);
+                                       HoodieReadStats readStats,
+                                       EngineBasedMerger<T> merger) {
+    super(readerContext, hoodieTableMetaClient, recordMergeMode, partitionNameOverrideOpt, partitionPathFieldOpt, props, readStats, merger);
   }
 
   @Override
@@ -80,18 +81,19 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
         T nextRecord = recordIterator.next();
         boolean isDelete = isBuiltInDeleteRecord(nextRecord) || isCustomDeleteRecord(nextRecord);
         BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(nextRecord, schema, readerContext, orderingFieldName, isDelete);
-        processNextDataRecord(bufferedRecord, bufferedRecord.getRecordKey());
+        processNextLogRecord(bufferedRecord, bufferedRecord.getRecordKey());
       }
     }
   }
 
   @Override
-  public void processNextDataRecord(BufferedRecord<T> record, Serializable recordKey) throws IOException {
-    BufferedRecord<T> existingRecord = records.get(recordKey);
-    Option<BufferedRecord<T>> bufferRecord = doProcessNextDataRecord(record, existingRecord);
-
-    if (bufferRecord.isPresent()) {
-      records.put(recordKey, bufferRecord.get().toBinary(readerContext));
+  public void processNextLogRecord(BufferedRecord<T> newLogRecord, Serializable recordKey) throws IOException {
+    totalLogRecords++;
+    Option<BufferedRecord<T>> existingRecord = Option.ofNullable(records.get(recordKey));
+    BufferedRecord<T> merged = merger.merge(existingRecord, Option.of(newLogRecord), enablePartialMerging);
+    // if merged result is just the existing record, no need to re-seal
+    if (existingRecord.map(existing -> !existing.equals(merged)).orElse(true)) {
+      records.put(recordKey, merged.toBinary(readerContext));
     }
   }
 
@@ -100,17 +102,8 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
     Iterator<DeleteRecord> it = Arrays.stream(deleteBlock.getRecordsToDelete()).iterator();
     while (it.hasNext()) {
       DeleteRecord record = it.next();
-      processNextDeletedRecord(record, record.getRecordKey());
-    }
-  }
-
-  @Override
-  public void processNextDeletedRecord(DeleteRecord deleteRecord, Serializable recordKey) {
-    BufferedRecord<T> existingRecord = records.get(recordKey);
-    Option<DeleteRecord> recordOpt = doProcessNextDeletedRecord(deleteRecord, existingRecord);
-    if (recordOpt.isPresent()) {
-      Comparable orderingValue = getOrderingValue(readerContext, recordOpt.get());
-      records.put(recordKey, BufferedRecord.forDeleteRecord(deleteRecord, orderingValue));
+      String recordKey = record.getRecordKey();
+      processNextLogRecord(BufferedRecord.forDeleteRecord(record, readerContext), recordKey);
     }
   }
 

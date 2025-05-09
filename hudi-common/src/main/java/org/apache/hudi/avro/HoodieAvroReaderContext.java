@@ -26,6 +26,7 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.OverwriteWithLatestMerger;
@@ -33,7 +34,6 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
@@ -63,13 +63,11 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  * This implementation does not rely on a specific engine and can be used in any JVM environment as a result.
  */
 public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> {
-  private final String payloadClass;
 
   public HoodieAvroReaderContext(
       StorageConfiguration<?> storageConfiguration,
       HoodieTableConfig tableConfig) {
     super(storageConfiguration, tableConfig);
-    this.payloadClass = tableConfig.getPayloadClass();
   }
 
   @Override
@@ -124,15 +122,13 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
   }
 
   @Override
-  public HoodieRecord<IndexedRecord> constructHoodieRecord(BufferedRecord<IndexedRecord> bufferedRecord) {
-    if (bufferedRecord.isDelete()) {
-      return SpillableMapUtils.generateEmptyPayload(
-          bufferedRecord.getRecordKey(),
-          null,
-          bufferedRecord.getOrderingValue(),
-          payloadClass);
-    }
-    return new HoodieAvroIndexedRecord(bufferedRecord.getRecord());
+  public HoodieRecord<IndexedRecord> constructHoodieDataRecord(BufferedRecord<IndexedRecord> bufferedRecord) {
+    return new HoodieAvroIndexedRecord(new HoodieKey(bufferedRecord.getRecordKey(), null), bufferedRecord.getRecord());
+  }
+
+  @Override
+  protected HoodieRecord.HoodieRecordType getRecordType() {
+    return HoodieRecord.HoodieRecordType.AVRO;
   }
 
   @Override

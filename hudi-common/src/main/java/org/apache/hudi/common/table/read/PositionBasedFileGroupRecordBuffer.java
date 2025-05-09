@@ -72,8 +72,9 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
                                             Option<String[]> partitionPathFieldOpt,
                                             String baseFileInstantTime,
                                             TypedProperties props,
-                                            HoodieReadStats readStats) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, partitionNameOverrideOpt, partitionPathFieldOpt, props, readStats);
+                                            HoodieReadStats readStats,
+                                            EngineBasedMerger<T> merger) {
+    super(readerContext, hoodieTableMetaClient, recordMergeMode, partitionNameOverrideOpt, partitionPathFieldOpt, props, readStats, merger);
     this.baseFileInstantTime = baseFileInstantTime;
   }
 
@@ -133,7 +134,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
         T evolvedNextRecord = schemaTransformerWithEvolvedSchema.getLeft().apply(nextRecord);
         boolean isDelete = isBuiltInDeleteRecord(evolvedNextRecord) || isCustomDeleteRecord(evolvedNextRecord);
         BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(evolvedNextRecord, schema, readerContext, orderingFieldName, isDelete);
-        processNextDataRecord(bufferedRecord, recordPosition);
+        processNextLogRecord(bufferedRecord, recordPosition);
       }
     }
   }
@@ -172,46 +173,12 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
       super.processDeleteBlock(deleteBlock);
       return;
     }
-
-    switch (recordMergeMode) {
-      case COMMIT_TIME_ORDERING:
-        int commitTimeBasedRecordIndex = 0;
-        DeleteRecord[] deleteRecords = deleteBlock.getRecordsToDelete();
-        for (Long recordPosition : recordPositions) {
-          // IMPORTANT:
-          // use #put for log files with regular order(see HoodieLogFile.LOG_FILE_COMPARATOR);
-          // use #putIfAbsent for log files with reverse order(see HoodieLogFile.LOG_FILE_COMPARATOR_REVERSED),
-          // the delete block would be parsed ahead of a data block if they are in different log files.
-
-          // set up the record key for key-based fallback handling, this is needed
-          // because under hybrid strategy in #doHasNextFallbackBaseRecord, if the record keys are not set up,
-          // this delete-vector could be kept in the records cache(see the check in #fallbackToKeyBasedBuffer),
-          // and these keys would be deleted no matter whether there are following-up inserts/updates.
-          DeleteRecord deleteRecord = deleteRecords[commitTimeBasedRecordIndex++];
-          BufferedRecord<T> record = BufferedRecord.forDeleteRecord(deleteRecord, deleteRecord.getOrderingValue());
-          records.put(recordPosition, record);
-        }
-        return;
-      case EVENT_TIME_ORDERING:
-      case CUSTOM:
-      default:
-        int recordIndex = 0;
-        Iterator<DeleteRecord> it = Arrays.stream(deleteBlock.getRecordsToDelete()).iterator();
-        while (it.hasNext()) {
-          DeleteRecord record = it.next();
-          long recordPosition = recordPositions.get(recordIndex++);
-          processNextDeletedRecord(record, recordPosition);
-        }
-    }
-  }
-
-  @Override
-  public void processNextDeletedRecord(DeleteRecord deleteRecord, Serializable recordPosition) {
-    BufferedRecord<T> existingRecord = records.get(recordPosition);
-    Option<DeleteRecord> recordOpt = doProcessNextDeletedRecord(deleteRecord, existingRecord);
-    if (recordOpt.isPresent()) {
-      Comparable orderingValue = getOrderingValue(readerContext, recordOpt.get());
-      records.put(recordPosition, BufferedRecord.forDeleteRecord(recordOpt.get(), orderingValue));
+    int recordIndex = 0;
+    Iterator<DeleteRecord> it = Arrays.stream(deleteBlock.getRecordsToDelete()).iterator();
+    while (it.hasNext()) {
+      DeleteRecord record = it.next();
+      long recordPosition = recordPositions.get(recordIndex++);
+      processNextLogRecord(BufferedRecord.forDeleteRecord(record, readerContext), recordPosition);
     }
   }
 
@@ -219,7 +186,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
   public boolean containsLogRecord(String recordKey) {
     return records.values().stream()
         .filter(r -> !r.isDelete())
-        .map(r -> readerContext.getRecordKey(r.getRecord(), readerSchema)).anyMatch(recordKey::equals);
+        .map(BufferedRecord::getRecordKey).anyMatch(recordKey::equals);
   }
 
   @Override
@@ -231,28 +198,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
     nextRecordPosition = readerContext.extractRecordPosition(baseRecord, readerSchema,
         ROW_INDEX_TEMPORARY_COLUMN_NAME, nextRecordPosition);
     BufferedRecord<T> logRecordInfo = records.remove(nextRecordPosition++);
-
-    final Pair<Boolean, T> isDeleteAndRecord;
-    T resultRecord = null;
-    if (logRecordInfo != null) {
-      BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(baseRecord, readerSchema, readerContext, orderingFieldName, false);
-      isDeleteAndRecord = merge(bufferedRecord, logRecordInfo);
-      if (!isDeleteAndRecord.getLeft()) {
-        resultRecord = isDeleteAndRecord.getRight();
-        readStats.incrementNumUpdates();
-      } else {
-        readStats.incrementNumDeletes();
-      }
-    } else {
-      resultRecord = baseRecord;
-      readStats.incrementNumInserts();
-    }
-
-    if (resultRecord != null) {
-      nextRecord = readerContext.seal(resultRecord);
-      return true;
-    }
-    return false;
+    return hasNextBaseRecord(baseRecord, logRecordInfo);
   }
 
   private boolean doHasNextFallbackBaseRecord(T baseRecord) throws IOException {
@@ -260,11 +206,11 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
       //see if there is a delete block with record positions
       nextRecordPosition = readerContext.extractRecordPosition(baseRecord, readerSchema,
           ROW_INDEX_TEMPORARY_COLUMN_NAME, nextRecordPosition);
-      BufferedRecord<T> logRecordInfo  = records.remove(nextRecordPosition++);
+      BufferedRecord<T> logRecordInfo = records.remove(nextRecordPosition++);
       if (logRecordInfo != null) {
         //we have a delete that was not to be able to be converted. Since it is the newest version, the record is deleted
         //remove a key based record if it exists
-        records.remove(readerContext.getRecordKey(baseRecord, readerSchema));
+        records.remove(logRecordInfo.getRecordKey());
         return false;
       }
     }
