@@ -165,7 +165,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
             LOCKS_FOLDER_NAME,
             StoragePath.SEPARATOR,
             DEFAULT_TABLE_LOCK_FILE_NAME);
-    this.heartbeatManager = heartbeatManagerLoader.apply(ownerId, heartbeatPollSeconds * 1000, this::renewLock);
+    this.heartbeatManager = heartbeatManagerLoader.apply(ownerId, TimeUnit.SECONDS.toMillis(heartbeatPollSeconds), this::renewLock);
     this.storageLockClient = storageLockClientLoader.apply(ownerId, lockFilePath, properties);
     this.ownerId = ownerId;
     this.logger = logger;
@@ -282,7 +282,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
     }
 
     // Try to acquire the lock
-    StorageLockData newLockData = new StorageLockData(false, System.currentTimeMillis() + lockValiditySecs, ownerId);
+    StorageLockData newLockData = new StorageLockData(false, getCurrentEpochMs() + TimeUnit.SECONDS.toMillis(lockValiditySecs), ownerId);
     Pair<LockUpsertResult, Option<StorageLockFile>> lockUpdateStatus = this.storageLockClient.tryUpsertLockFile(
         newLockData,
         latestLock.getRight());
@@ -452,7 +452,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
       // prevents further data corruption by
       // letting someone else acquire the lock.
       Pair<LockUpsertResult, Option<StorageLockFile>> currentLock = this.storageLockClient.tryUpsertLockFile(
-          new StorageLockData(false, System.currentTimeMillis() + lockValiditySecs, ownerId),
+          new StorageLockData(false, getCurrentEpochMs() + TimeUnit.SECONDS.toMillis(lockValiditySecs), ownerId),
           Option.of(getLock()));
       switch (currentLock.getLeft()) {
         case ACQUIRED_BY_OTHERS:
@@ -470,7 +470,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
           // Only positive outcome
           this.setLock(currentLock.getRight().get());
           logger.info("Owner {}: Lock renewal successful. The renewal completes {} ms before expiration for lock {}.",
-              ownerId, oldExpirationMs - System.currentTimeMillis(), lockFilePath);
+              ownerId, oldExpirationMs - getCurrentEpochMs(), lockFilePath);
           // Let heartbeat continue to renew lock lease again later.
           return true;
         default:
@@ -490,8 +490,8 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
    * Method to calculate whether a timestamp from a distributed source has
    * definitively occurred yet.
    */
-  protected boolean isCurrentTimeCertainlyOlderThanDistributedTime(long epoch) {
-    return System.currentTimeMillis() > epoch + CLOCK_DRIFT_BUFFER_MS;
+  protected boolean isCurrentTimeCertainlyOlderThanDistributedTime(long epochMs) {
+    return getCurrentEpochMs() > epochMs + CLOCK_DRIFT_BUFFER_MS;
   }
 
   private String generateLockStateMessage(LockState state) {
@@ -525,5 +525,10 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
 
   private void logErrorLockState(LockState state, String msg) {
     logger.error(LOCK_STATE_LOGGER_MSG_WITH_INFO, ownerId, lockFilePath, Thread.currentThread(), state, msg);
+  }
+
+  @VisibleForTesting
+  long getCurrentEpochMs() {
+    return System.currentTimeMillis();
   }
 }
