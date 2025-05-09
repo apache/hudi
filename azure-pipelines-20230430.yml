@@ -399,9 +399,6 @@ stages:
       - job: UT_FT_8
         displayName: UT hudi-hadoop-common & Hudi Utilities others
         timeoutInMinutes: '75'
-        # trying with ubuntu 24
-        pool:
-          vmImage: 'ubuntu-24.04'
         steps:
           - task: Docker@2
             displayName: "login to docker hub"
