@@ -509,6 +509,7 @@ object HoodieFileIndex extends Logging {
   }
 
   def getConfigProperties(spark: SparkSession, options: Map[String, String], tableConfig: HoodieTableConfig): TypedProperties = {
+    logInfo("Options provided to the file index are " + options)
     val sqlConf: SQLConf = spark.sessionState.conf
     val properties = TypedProperties.fromMap(options.filter(p => p._2 != null).asJava)
 
@@ -525,6 +526,21 @@ object HoodieFileIndex extends Logging {
       DataSourceReadOptions.FILE_INDEX_LISTING_MODE_OVERRIDE.key, null)
     if (listingModeOverride != null) {
       properties.setProperty(DataSourceReadOptions.FILE_INDEX_LISTING_MODE_OVERRIDE.key, listingModeOverride)
+    }
+
+    var hoodieROTablePathFilterBasedFileListingEnabled = getConfigValue(options, sqlConf,
+      DataSourceReadOptions.FILE_INDEX_LIST_FILE_STATUSES_USING_RO_PATH_FILTER.key, null)
+    if (hoodieROTablePathFilterBasedFileListingEnabled != null) {
+      properties.setProperty(DataSourceReadOptions.FILE_INDEX_LIST_FILE_STATUSES_USING_RO_PATH_FILTER.key,
+        hoodieROTablePathFilterBasedFileListingEnabled)
+    } else {
+      // For 0.14 rollout we also allow passing in the HMS listing config via Spark itself
+      hoodieROTablePathFilterBasedFileListingEnabled = getConfigValue(options, sqlConf,
+        "spark." + DataSourceReadOptions.FILE_INDEX_LIST_FILE_STATUSES_USING_RO_PATH_FILTER.key, null)
+      if (hoodieROTablePathFilterBasedFileListingEnabled != null) {
+        properties.setProperty(DataSourceReadOptions.FILE_INDEX_LIST_FILE_STATUSES_USING_RO_PATH_FILTER.key,
+          hoodieROTablePathFilterBasedFileListingEnabled)
+      }
     }
 
     if (tableConfig != null) {
