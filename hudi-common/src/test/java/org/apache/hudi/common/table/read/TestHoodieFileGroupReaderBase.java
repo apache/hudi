@@ -262,7 +262,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     }
   }
 
-  private Map<String, String> getCommonConfigs(RecordMergeMode recordMergeMode, boolean populateMetaFields) {
+  protected Map<String, String> getCommonConfigs(RecordMergeMode recordMergeMode, boolean populateMetaFields) {
     Map<String, String> configMapping = new HashMap<>();
     configMapping.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), KEY_FIELD_NAME);
     configMapping.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), PARTITION_FIELD_NAME);
@@ -283,7 +283,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     return configMapping;
   }
 
-  private void validateOutputFromFileGroupReader(StorageConfiguration<?> storageConf,
+  protected void validateOutputFromFileGroupReader(StorageConfiguration<?> storageConf,
                                                  String tablePath,
                                                  boolean containsBaseFile,
                                                  int expectedLogFileNum,
@@ -422,15 +422,22 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
           fileSlice.getTotalFileSize(),
           false,
           false)) {
-        fileGroupReader.initRecordIterators();
-        while (fileGroupReader.hasNext()) {
-          actualRecordList.add(fileGroupReader.next());
-        }
+        readWithFileGroupReader(fileGroupReader, actualRecordList, avroSchema);
       } catch (Exception ex) {
         throw new RuntimeException(ex);
       }
     });
     return actualRecordList;
+  }
+
+  protected void readWithFileGroupReader(
+      HoodieFileGroupReader<T> fileGroupReader,
+      List<T> recordList,
+      Schema recordSchema) throws IOException {
+    fileGroupReader.initRecordIterators();
+    while (fileGroupReader.hasNext()) {
+      recordList.add(fileGroupReader.next());
+    }
   }
 
   private boolean shouldValidatePartialRead(FileSlice fileSlice, Schema requestedSchema) {
@@ -445,7 +452,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     return false;
   }
 
-  private List<HoodieRecord> mergeRecordLists(List<HoodieRecord> updates, List<HoodieRecord> existing) {
+  protected List<HoodieRecord> mergeRecordLists(List<HoodieRecord> updates, List<HoodieRecord> existing) {
     Set<String> updatedKeys = updates.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toSet());
     return Stream.concat(updates.stream(), existing.stream().filter(record -> !updatedKeys.contains(record.getRecordKey())))
             .collect(Collectors.toList());

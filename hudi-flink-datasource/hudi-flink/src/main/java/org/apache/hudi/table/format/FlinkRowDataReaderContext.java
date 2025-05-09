@@ -49,6 +49,7 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.AvroToRowDataConverters;
 import org.apache.hudi.util.RowDataAvroQueryContexts;
+import org.apache.hudi.util.RowDataUtils;
 import org.apache.hudi.util.RowProjection;
 import org.apache.hudi.util.SchemaEvolvingRowDataProjection;
 
@@ -59,6 +60,7 @@ import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.binary.BinaryRowData;
 import org.apache.flink.table.data.utils.JoinedRowData;
 import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
+import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
 
 import java.io.IOException;
@@ -109,7 +111,8 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
         (HoodieRowDataParquetReader) HoodieIOFactory.getIOFactory(storage)
             .getReaderFactory(HoodieRecord.HoodieRecordType.FLINK)
             .getFileReader(hoodieConfig, filePath, HoodieFileFormat.PARQUET, Option.empty());
-    return rowDataParquetReader.getRowDataIterator(schemaManager, requiredSchema);
+    DataType rowType = RowDataAvroQueryContexts.fromAvroSchema(dataSchema).getRowType();
+    return rowDataParquetReader.getRowDataIterator(schemaManager, rowType, requiredSchema);
   }
 
   @Override
@@ -120,13 +123,12 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
       case COMMIT_TIME_ORDERING:
         return Option.of(CommitTimeFlinkRecordMerger.INSTANCE);
       default:
-        Option<HoodieRecordMerger> mergerClass =
-            HoodieRecordUtils.createValidRecordMerger(EngineType.FLINK, mergeImplClasses, mergeStrategyId);
-        if (mergerClass.isEmpty()) {
+        Option<HoodieRecordMerger> recordMerger = HoodieRecordUtils.createValidRecordMerger(EngineType.FLINK, mergeImplClasses, mergeStrategyId);
+        if (recordMerger.isEmpty()) {
           throw new HoodieValidationException("No valid flink merger implementation set for `"
               + RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY + "`");
         }
-        return mergerClass;
+        return recordMerger;
     }
   }
 
@@ -158,7 +160,7 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
       RowData record,
       Schema schema,
       Option<String> orderingFieldName) {
-    if (orderingFieldName.isEmpty()) {
+    if (orderingFieldName.isEmpty() || schema.getField(orderingFieldName.get()) == null) {
       return DEFAULT_ORDERING_VALUE;
     }
     RowDataAvroQueryContexts.FieldQueryContext context = RowDataAvroQueryContexts.fromAvroSchema(schema, utcTimezone).getFieldQueryContext(orderingFieldName.get());
@@ -250,7 +252,7 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
 
   @Override
   public GenericRecord convertToAvroRecord(RowData record, Schema schema) {
-    throw new UnsupportedOperationException("FlinkRowDataReaderContext do not support convertToAvroRecord yet.");
+    return (GenericRecord) RowDataAvroQueryContexts.fromAvroSchema(schema).getRowDataToAvroConverter().convert(schema, record);
   }
 
   @Override
@@ -258,5 +260,10 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
     Schema recordSchema = avroRecord.getSchema();
     AvroToRowDataConverters.AvroToRowDataConverter converter = RowDataAvroQueryContexts.fromAvroSchema(recordSchema, utcTimezone).getAvroToRowDataConverter();
     return (RowData) converter.convert(avroRecord);
+  }
+
+  @Override
+  public Comparable convertValueToEngineType(Comparable value) {
+    return (Comparable) RowDataUtils.convertValueToFlinkType(value);
   }
 }

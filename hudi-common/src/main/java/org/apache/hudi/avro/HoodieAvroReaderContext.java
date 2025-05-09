@@ -106,15 +106,12 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
         return Option.of(new OverwriteWithLatestMerger());
       case CUSTOM:
       default:
-        if (mergeStrategyId.equals(HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID)) {
-          return Option.of(HoodieAvroRecordMerger.INSTANCE);
-        }
-        Option<HoodieRecordMerger> mergerClass = HoodieRecordUtils.createValidRecordMerger(EngineType.JAVA, mergeImplClasses, mergeStrategyId);
-        if (mergerClass.isEmpty()) {
+        Option<HoodieRecordMerger> recordMerger = HoodieRecordUtils.createValidRecordMerger(EngineType.JAVA, mergeImplClasses, mergeStrategyId);
+        if (recordMerger.isEmpty()) {
           throw new IllegalArgumentException("No valid merger implementation set for `"
               + RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY + "`");
         }
-        return mergerClass;
+        return recordMerger;
     }
   }
 
