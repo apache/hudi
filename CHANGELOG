@@ -756,3 +756,7 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 --- [2025-05-06 16:04:20] [release-v1.120.0] ---
 [ENG-24929][MINOR] Fix bug in PubsubQueueClient for handling empty response (#1359)
 [AUDIT-1071]: Changelog for release-v1.119.0 (#1358)
+
+--- [2025-05-09 07:51:35] [release-v1.121.0] ---
+[ENG-26687][INTERNAL] Fix LP validity bug (#1364)
+[AUDIT-1071]: Changelog for release-v1.120.0 (#1360)
