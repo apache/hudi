@@ -81,7 +81,7 @@ public class HoodieRowDataParquetReader implements HoodieFileReader<RowData>  {
 
   @Override
   public ClosableIterator<HoodieRecord<RowData>> getRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException {
-    ClosableIterator<RowData> rowDataItr = getRowDataIterator(InternalSchemaManager.DISABLED, requestedSchema);
+    ClosableIterator<RowData> rowDataItr = getRowDataIterator(InternalSchemaManager.DISABLED, getRowType(), requestedSchema);
     readerIterators.add(rowDataItr);
     return new CloseableMappingIterator<>(rowDataItr, HoodieFlinkRecord::new);
   }
@@ -89,12 +89,12 @@ public class HoodieRowDataParquetReader implements HoodieFileReader<RowData>  {
   @Override
   public ClosableIterator<String> getRecordKeyIterator() throws IOException {
     Schema schema = HoodieAvroUtils.getRecordKeySchema();
-    ClosableIterator<RowData> rowDataItr = getRowDataIterator(InternalSchemaManager.DISABLED, schema);
+    ClosableIterator<RowData> rowDataItr = getRowDataIterator(InternalSchemaManager.DISABLED, getRowType(), schema);
     return new CloseableMappingIterator<>(rowDataItr, rowData -> Objects.toString(rowData.getString(0)));
   }
 
-  public ClosableIterator<RowData> getRowDataIterator(InternalSchemaManager internalSchemaManager, Schema requestedSchema) throws IOException {
-    return RecordIterators.getParquetRecordIterator(storage.getConf(), internalSchemaManager, getRowType(), requestedSchema, path);
+  public ClosableIterator<RowData> getRowDataIterator(InternalSchemaManager internalSchemaManager, DataType dataType, Schema requestedSchema) throws IOException {
+    return RecordIterators.getParquetRecordIterator(storage.getConf(), internalSchemaManager, dataType, requestedSchema, path);
   }
 
   @Override
