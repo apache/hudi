@@ -227,6 +227,17 @@ object DataSourceReadOptions {
         " by carefully analyzing provided partition-column predicates and deducing corresponding partition-path prefix from " +
         " them (if possible).")
 
+  val FILE_INDEX_LIST_FILE_STATUSES_USING_RO_PATH_FILTER: ConfigProperty[Boolean] =
+    ConfigProperty.key("hoodie.datasource.read.file.index.list.file.statuses.using.ro.path.filter")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.2.0")
+      .withDocumentation("Controls whether file listing is done using the HoodieROTablePathFilter. " +
+        " This is mainly necessary when the metadata table is not enabled or corrupted and the job " +
+        " is doing recursive calls to fetch the partition paths and the dataset has multiple versions" +
+        " of the same file in the same partition and it could lead to Out of Memory on the driver if" +
+        " the dataset is too large.")
+
   val INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.incr.fallback.fulltablescan.enable")
     .defaultValue("true")

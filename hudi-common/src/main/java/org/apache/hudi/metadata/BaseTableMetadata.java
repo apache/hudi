@@ -43,6 +43,7 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.storage.StoragePathFilter;
 
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -146,6 +147,12 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
   }
 
   @Override
+  public Map<String, List<StoragePathInfo>> getAllFilesInPartitions(Collection<String> partitions,
+                                                                    Option<StoragePathFilter> unused)
+      throws IOException {
+    return getAllFilesInPartitions(partitions);
+  }
+
   public Map<String, List<StoragePathInfo>> getAllFilesInPartitions(Collection<String> partitions)
       throws IOException {
     ValidationUtils.checkArgument(isMetadataTableInitialized);

@@ -22,14 +22,16 @@ import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.SparkHoodieTableFileIndex.{deduceQueryType, extractEqualityPredicatesLiteralValues, generateFieldMap, haveProperPartitionValues, shouldListLazily, shouldUsePartitionPathPrefixAnalysis, shouldValidatePartitionColumns}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.common.config.TypedProperties
+import org.apache.hudi.common.config.{HoodieCommonConfig, TypedProperties}
 import org.apache.hudi.common.model.{FileSlice, HoodieTableQueryType}
 import org.apache.hudi.common.model.HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.util.ReflectionUtils
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY
+import org.apache.hudi.hadoop.HoodieROTableStoragePathFilter
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.internal.schema.Types.RecordType
 import org.apache.hudi.internal.schema.utils.Conversions
@@ -88,6 +90,8 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     deduceQueryType(configProperties),
     queryPaths.asJava,
     toJavaOption(specifiedQueryInstant),
+    configProperties.getBoolean(FILE_INDEX_LIST_FILE_STATUSES_USING_RO_PATH_FILTER.key,
+      FILE_INDEX_LIST_FILE_STATUSES_USING_RO_PATH_FILTER.defaultValue()),
     false,
     false,
     SparkHoodieTableFileIndex.adapt(fileStatusCache),
@@ -439,6 +443,21 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
 
   private def arePartitionPathsUrlEncoded: Boolean =
     metaClient.getTableConfig.getUrlEncodePartitioning.toBoolean
+
+  override protected def getPartitionPathFilter(activeTimeline: HoodieTimeline): org.apache.hudi.common.util.Option[org.apache.hudi.storage.StoragePathFilter] = {
+    if (useROPathFilterForListing && !shouldIncludePendingCommits) {
+      val conf = HadoopFSUtils.getStorageConf(spark.sparkContext.hadoopConfiguration)
+      if (specifiedQueryInstant.isDefined) {
+        conf.set(HoodieCommonConfig.TIMESTAMP_AS_OF.key(), specifiedQueryInstant.get)
+      }
+      org.apache.hudi.common.util.Option.of(
+        new HoodieROTableStoragePathFilter(conf, metaClient,
+          activeTimeline.filterCompletedInstantsOrRewriteTimeline()))
+    } else {
+      org.apache.hudi.common.util.Option.empty()
+    }
+  }
+
 }
 
 object SparkHoodieTableFileIndex extends SparkAdapterSupport {
