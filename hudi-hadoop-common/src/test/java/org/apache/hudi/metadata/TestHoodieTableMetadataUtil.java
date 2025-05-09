@@ -741,6 +741,6 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     // Verify the result
     assertNotNull(result);
     assertTrue(result.isEmpty());
-    verify(metaClient, atLeastOnce()).buildIndexDefinition(any());
+    verify(metaClient, atLeastOnce()).buildIndexDefinitions(any());
   }
 }

@@ -237,7 +237,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   @Override
-  protected void updateColumnsToIndexWithColStats(List<String> columnsToIndex) {
-    new HoodieSparkIndexClient(dataWriteConfig, engineContext).createOrUpdateColumnStatsIndexDefinition(dataMetaClient, columnsToIndex);
+  protected void updateIndexDefinitions(List<HoodieIndexDefinition> indexDefinitions) {
+    new HoodieSparkIndexClient(dataWriteConfig, engineContext).createOrUpdateIndexDefinitions(dataMetaClient, indexDefinitions);
   }
 }

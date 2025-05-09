@@ -58,6 +58,7 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
+import com.beust.jcommander.Strings;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.slf4j.Logger;
@@ -474,17 +475,27 @@ public class HoodieIndexUtils {
   }
 
   /**
-   * Register a metadata index.
+   * Registers a list of metadata indexes.
    * Index definitions are stored in user-specified path or, by default, in .hoodie/.index_defs/index.json.
    * For the first time, the index definition file will be created if not exists.
    * For the second time, the index definition file will be updated if exists.
    * Table Config is updated if necessary.
+   *
+   * @param metaClient
+   * @param indexDefinitions
    */
-  public static void register(HoodieTableMetaClient metaClient, HoodieIndexDefinition indexDefinition) {
-    LOG.info("Registering index {} of using {}", indexDefinition.getIndexName(), indexDefinition.getIndexType());
+  public static void register(HoodieTableMetaClient metaClient, List<HoodieIndexDefinition> indexDefinitions) {
+    if (indexDefinitions.isEmpty()) {
+      return;
+    }
+    LOG.info("Registering: {}",
+        Strings.join(", ",
+            indexDefinitions.stream()
+                .map(indexDefinition -> "index " + indexDefinition.getIndexName() + " of using "
+                    + indexDefinition.getIndexType()).collect(toList())));
     // build HoodieIndexMetadata and then add to index definition file
-    boolean indexDefnUpdated = metaClient.buildIndexDefinition(indexDefinition);
-    if (indexDefnUpdated) {
+    boolean updated = metaClient.buildIndexDefinitions(indexDefinitions);
+    if (updated) {
       String indexMetaPath = metaClient.getIndexDefinitionPath();
       // update table config if necessary
       if (!metaClient.getTableConfig().getProps().containsKey(HoodieTableConfig.RELATIVE_INDEX_DEFINITION_PATH.key())

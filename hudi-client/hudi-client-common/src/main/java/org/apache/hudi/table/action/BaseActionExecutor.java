@@ -23,10 +23,11 @@ import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
 import org.apache.hudi.common.table.timeline.InstantFileNameParser;
+import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -37,6 +38,8 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.HoodieTable;
 
 import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.List;
 
 public abstract class BaseActionExecutor<T, I, K, O, R> implements Serializable {
 
@@ -69,8 +72,9 @@ public abstract class BaseActionExecutor<T, I, K, O, R> implements Serializable 
    * Writes commits metadata to table metadata.
    *
    * @param metadata commit metadata of interest.
+   * @return a list of index definitions to update in the table metadata of the data table
    */
-  protected final void writeTableMetadata(HoodieCommitMetadata metadata, String actionType) {
+  protected final List<HoodieIndexDefinition> writeTableMetadata(HoodieCommitMetadata metadata, String actionType) {
     // Recreate MDT for insert_overwrite_table operation.
     if (table.getConfig().isMetadataTableEnabled()
         && WriteOperationType.INSERT_OVERWRITE_TABLE == metadata.getOperationType()) {
@@ -79,9 +83,11 @@ public abstract class BaseActionExecutor<T, I, K, O, R> implements Serializable 
 
     // MDT should be recreated if it has been deleted for insert_overwrite_table operation.
     Option<HoodieTableMetadataWriter> metadataWriterOpt = table.getMetadataWriter(instantTime);
+    List<HoodieIndexDefinition> indexDefinitionsToUpdate = new ArrayList<>();
     if (metadataWriterOpt.isPresent()) {
       try (HoodieTableMetadataWriter metadataWriter = metadataWriterOpt.get()) {
         metadataWriter.update(metadata, instantTime);
+        indexDefinitionsToUpdate.addAll(metadataWriter.getIndexDefinitionsToUpdate());
       } catch (Exception e) {
         if (e instanceof HoodieException) {
           throw (HoodieException) e;
@@ -90,6 +96,7 @@ public abstract class BaseActionExecutor<T, I, K, O, R> implements Serializable 
         }
       }
     }
+    return indexDefinitionsToUpdate;
   }
 
   /**
