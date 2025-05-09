@@ -515,9 +515,9 @@ public class UtilHelpers {
         try (ResultSet rs = statement.executeQuery()) {
           StructType structType;
           if (Boolean.parseBoolean(options.get("nullable"))) {
-            structType = SparkJdbcUtils.getSchema(rs, dialect, true);
+            structType = SparkJdbcUtils.getSchema(conn, rs, dialect, true);
           } else {
-            structType = SparkJdbcUtils.getSchema(rs, dialect, false);
+            structType = SparkJdbcUtils.getSchema(conn, rs, dialect, false);
           }
           return AvroConversionUtils.convertStructTypeToAvroSchema(structType, table, "hoodie." + table);
         }

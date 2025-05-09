@@ -21,7 +21,7 @@ import org.apache.hudi.{HoodieSchemaUtils, HoodieSparkUtils, SparkAdapterSupport
 import org.apache.hudi.common.util.{ReflectionUtils, ValidationUtils}
 import org.apache.hudi.common.util.ReflectionUtils.loadClass
 
-import org.apache.spark.sql.{AnalysisException, SparkSession}
+import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.catalog.{CatalogStorageFormat, CatalogTable, HoodieCatalogTable}
@@ -36,6 +36,7 @@ import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.{sparkAdapter, MatchCre
 import org.apache.spark.sql.hudi.command._
 import org.apache.spark.sql.hudi.command.HoodieLeafRunnableCommand.stripMetaFieldAttributes
 import org.apache.spark.sql.hudi.command.InsertIntoHoodieTableCommand.alignQueryOutput
+import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 import org.apache.spark.sql.hudi.command.procedures.{HoodieProcedures, Procedure, ProcedureArgs}
 
 import java.util
@@ -55,7 +56,9 @@ object HoodieAnalysis extends SparkAdapterSupport {
     val adaptIngestionTargetLogicalRelations: RuleBuilder = session => AdaptIngestionTargetLogicalRelations(session)
 
     rules += adaptIngestionTargetLogicalRelations
-    val dataSourceV2ToV1FallbackClass = if (HoodieSparkUtils.isSpark3_5)
+    val dataSourceV2ToV1FallbackClass = if (HoodieSparkUtils.isSpark4_0)
+      "org.apache.spark.sql.hudi.analysis.HoodieSpark40DataSourceV2ToV1Fallback"
+    else if (HoodieSparkUtils.isSpark3_5)
       "org.apache.spark.sql.hudi.analysis.HoodieSpark35DataSourceV2ToV1Fallback"
     else if (HoodieSparkUtils.isSpark3_4)
       "org.apache.spark.sql.hudi.analysis.HoodieSpark34DataSourceV2ToV1Fallback"
@@ -66,24 +69,33 @@ object HoodieAnalysis extends SparkAdapterSupport {
     val dataSourceV2ToV1Fallback: RuleBuilder =
       session => instantiateKlass(dataSourceV2ToV1FallbackClass, session)
 
-    val spark3ResolveReferencesClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark3ResolveReferences"
-    val spark3ResolveReferences: RuleBuilder =
-      session => instantiateKlass(spark3ResolveReferencesClass, session)
+    val spark3PlusResolveReferencesClass = if (HoodieSparkUtils.isSpark4)
+      "org.apache.spark.sql.hudi.analysis.HoodieSpark4ResolveReferences"
+    else
+      "org.apache.spark.sql.hudi.analysis.HoodieSpark3ResolveReferences"
+    val spark3PlusResolveReferences: RuleBuilder =
+      session => instantiateKlass(spark3PlusResolveReferencesClass, session)
 
     // NOTE: PLEASE READ CAREFULLY BEFORE CHANGING
     //
     // It's critical for this rules to follow in this order; re-ordering this rules might lead to changes in
     // behavior of Spark's analysis phase (for ex, DataSource V2 to V1 fallback might not kick in before other rules,
     // leading to all relations resolving as V2 instead of current expectation of them being resolved as V1)
-    rules ++= Seq(dataSourceV2ToV1Fallback, spark3ResolveReferences)
+    rules ++= Seq(dataSourceV2ToV1Fallback, spark3PlusResolveReferences)
 
-    if (HoodieSparkUtils.gteqSpark3_5) {
+    if (HoodieSparkUtils.isSpark3_5) {
       rules += (_ => instantiateKlass(
         "org.apache.spark.sql.hudi.analysis.HoodieSpark35ResolveColumnsForInsertInto"))
     }
+    if (HoodieSparkUtils.isSpark4_0) {
+      rules += (_ => instantiateKlass(
+        "org.apache.spark.sql.hudi.analysis.HoodieSpark40ResolveColumnsForInsertInto"))
+    }
 
     val resolveAlterTableCommandsClass =
-      if (HoodieSparkUtils.gteqSpark3_5) {
+      if (HoodieSparkUtils.gteqSpark4_0) {
+        "org.apache.spark.sql.hudi.Spark40ResolveHudiAlterTableCommand"
+      } else if (HoodieSparkUtils.gteqSpark3_5) {
         "org.apache.spark.sql.hudi.Spark35ResolveHudiAlterTableCommand"
       } else if (HoodieSparkUtils.isSpark3_4) {
         "org.apache.spark.sql.hudi.Spark34ResolveHudiAlterTableCommand"
@@ -114,7 +126,14 @@ object HoodieAnalysis extends SparkAdapterSupport {
       session => HoodiePostAnalysisRule(session)
     )
 
-    if (HoodieSparkUtils.isSpark3) {
+    if (HoodieSparkUtils.isSpark4) {
+      val spark4PostHocResolutionClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark4PostAnalysisRule"
+      val spark4PostHocResolution: RuleBuilder =
+        session => instantiateKlass(spark4PostHocResolutionClass, session)
+
+      rules += spark4PostHocResolution
+    } else {
+      // spark 3c
       val spark3PostHocResolutionClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark3PostAnalysisRule"
       val spark3PostHocResolution: RuleBuilder =
         session => instantiateKlass(spark3PostHocResolutionClass, session)
@@ -130,8 +149,9 @@ object HoodieAnalysis extends SparkAdapterSupport {
       // Default rules
     )
 
-    val nestedSchemaPruningClass =
-      if (HoodieSparkUtils.gteqSpark3_5) {
+    val nestedSchemaPruningClass = if (HoodieSparkUtils.gteqSpark4_0) {
+        "org.apache.spark.sql.execution.datasources.Spark40NestedSchemaPruning"
+      } else if (HoodieSparkUtils.gteqSpark3_5) {
         "org.apache.spark.sql.execution.datasources.Spark35NestedSchemaPruning"
       } else if (HoodieSparkUtils.gteqSpark3_4) {
         "org.apache.spark.sql.execution.datasources.Spark34NestedSchemaPruning"
@@ -351,7 +371,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
   }
 
   private[sql] def failAnalysis(msg: String): Nothing = {
-    throw new AnalysisException(msg)
+    throw new HoodieAnalysisException(msg)
   }
 }
 
@@ -498,7 +518,7 @@ case class ResolveImplementations(sparkSession: SparkSession) extends Rule[Logic
       if (builder != null) {
         Option(builder.build)
       } else {
-        throw new AnalysisException(s"procedure: ${name.last} is not exists")
+        throw new HoodieAnalysisException(s"procedure: ${name.last} is not exists")
       }
     } else {
       None

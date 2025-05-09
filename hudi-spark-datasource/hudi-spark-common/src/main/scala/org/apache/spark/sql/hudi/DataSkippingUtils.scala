@@ -28,6 +28,8 @@ import org.apache.spark.sql.catalyst.expressions.{Alias, And, Attribute, Attribu
 import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.hudi.ColumnStatsExpressionUtils._
+import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
+import org.apache.spark.sql.types.StructType
 import org.apache.spark.unsafe.types.UTF8String
 
 import java.util.concurrent.atomic.AtomicBoolean
@@ -405,9 +407,9 @@ object DataSkippingUtils extends Logging {
       case Alias(c, _) => getTargetColNameParts(c)
       case GetStructField(c, _, Some(name)) => getTargetColNameParts(c) :+ name
       case ex: ExtractValue =>
-        throw new AnalysisException(s"convert reference to name failed, Updating nested fields is only supported for StructType: ${ex}.")
+        throw new HoodieAnalysisException(s"convert reference to name failed, Updating nested fields is only supported for StructType: ${ex}.")
       case other =>
-        throw new AnalysisException(s"convert reference to name failed,  Found unsupported expression ${other}")
+        throw new HoodieAnalysisException(s"convert reference to name failed,  Found unsupported expression ${other}")
     }
   }
 

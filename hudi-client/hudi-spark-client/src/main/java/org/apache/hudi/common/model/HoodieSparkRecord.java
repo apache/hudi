@@ -382,7 +382,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
 
     boolean containsMetaFields = hasMetaFields(structType);
     UTF8String[] metaFields = extractMetaFields(data, structType);
-    return new HoodieInternalRow(metaFields, data, containsMetaFields);
+    return SparkAdapterSupport$.MODULE$.sparkAdapter().createInternalRow(metaFields, data, containsMetaFields);
   }
 
   private static UTF8String[] extractMetaFields(InternalRow row, StructType structType) {
