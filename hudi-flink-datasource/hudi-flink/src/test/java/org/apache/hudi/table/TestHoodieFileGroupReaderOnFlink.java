@@ -23,12 +23,14 @@ import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.CustomPayloadForTesting;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.read.TestHoodieFileGroupReaderBase;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieException;
@@ -42,12 +44,17 @@ import org.apache.hudi.util.RowDataAvroQueryContexts;
 import org.apache.hudi.utils.TestData;
 
 import org.apache.avro.Schema;
+import org.apache.avro.SchemaBuilder;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.mockito.Mockito;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -56,8 +63,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.when;
 
 /**
  * Tests {@code HoodieFileGroupReader} with {@code FlinkRowDataReaderContext} on Flink.
@@ -145,6 +155,79 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
         Collections.singletonList(actual),
         Collections.singletonList(expected),
         RowDataAvroQueryContexts.fromAvroSchema(schema).getRowType());
+  }
+
+  @Test
+  public void testGetOrderingValue() {
+    HoodieTableConfig tableConfig = Mockito.mock(HoodieTableConfig.class);
+    when(tableConfig.populateMetaFields()).thenReturn(true);
+    FlinkRowDataReaderContext readerContext =
+        new FlinkRowDataReaderContext(getStorageConf(), () -> InternalSchemaManager.DISABLED, Collections.emptyList(), tableConfig);
+    Schema schema = SchemaBuilder.builder()
+        .record("test")
+        .fields()
+        .requiredString("field1")
+        .optionalString("field2")
+        .optionalLong("ts")
+        .endRecord();
+    GenericRowData rowData = GenericRowData.of(StringData.fromString("f1"), StringData.fromString("f2"), 1000L);
+    assertEquals(1000L, readerContext.getOrderingValue(rowData, schema, Option.of("ts")));
+    assertEquals(DEFAULT_ORDERING_VALUE, readerContext.getOrderingValue(rowData, schema, Option.of("non_existent_col")));
+  }
+
+  @Test
+  public void getRecordKeyFromMetadataFields() {
+    HoodieTableConfig tableConfig = Mockito.mock(HoodieTableConfig.class);
+    when(tableConfig.populateMetaFields()).thenReturn(true);
+    FlinkRowDataReaderContext readerContext =
+        new FlinkRowDataReaderContext(getStorageConf(), () -> InternalSchemaManager.DISABLED, Collections.emptyList(), tableConfig);
+    Schema schema = SchemaBuilder.builder()
+        .record("test")
+        .fields()
+        .requiredString(HoodieRecord.RECORD_KEY_METADATA_FIELD)
+        .optionalString("field2")
+        .endRecord();
+    String key = "my_key";
+    GenericRowData rowData = GenericRowData.of(StringData.fromString(key), StringData.fromString("field2_val"));
+    assertEquals(key, readerContext.getRecordKey(rowData, schema));
+  }
+
+  @Test
+  public void getRecordKeySingleKey() {
+    HoodieTableConfig tableConfig = Mockito.mock(HoodieTableConfig.class);
+    when(tableConfig.populateMetaFields()).thenReturn(false);
+    when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[] {"field1"}));
+    FlinkRowDataReaderContext readerContext =
+        new FlinkRowDataReaderContext(getStorageConf(), () -> InternalSchemaManager.DISABLED, Collections.emptyList(), tableConfig);
+    Schema schema = SchemaBuilder.builder()
+        .record("test")
+        .fields()
+        .requiredString("field1")
+        .optionalString("field2")
+        .endRecord();
+    String key = "key";
+    GenericRowData rowData = GenericRowData.of(StringData.fromString(key), StringData.fromString("other"));
+    assertEquals(key, readerContext.getRecordKey(rowData, schema));
+  }
+
+  @Test
+  public void getRecordKeyWithMultipleKeys() {
+    HoodieTableConfig tableConfig = Mockito.mock(HoodieTableConfig.class);
+    when(tableConfig.populateMetaFields()).thenReturn(false);
+    when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[] {"field1", "field2"}));
+    FlinkRowDataReaderContext readerContext =
+        new FlinkRowDataReaderContext(getStorageConf(), () -> InternalSchemaManager.DISABLED, Collections.emptyList(), tableConfig);
+
+    Schema schema = SchemaBuilder.builder()
+        .record("test")
+        .fields()
+        .requiredString("field1")
+        .requiredString("field2")
+        .requiredString("field3")
+        .endRecord();
+    String key = "field1:va1,field2:__empty__";
+    GenericRowData rowData = GenericRowData.of(StringData.fromString("va1"), StringData.fromString(""), StringData.fromString("other"));
+    assertEquals(key, readerContext.getRecordKey(rowData, schema));
   }
 
   @ParameterizedTest

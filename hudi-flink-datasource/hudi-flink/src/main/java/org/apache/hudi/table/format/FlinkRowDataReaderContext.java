@@ -160,7 +160,7 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
       RowData record,
       Schema schema,
       Option<String> orderingFieldName) {
-    if (orderingFieldName.isEmpty()) {
+    if (orderingFieldName.isEmpty() || schema.getField(orderingFieldName.get()) == null) {
       return DEFAULT_ORDERING_VALUE;
     }
     RowDataAvroQueryContexts.FieldQueryContext context = RowDataAvroQueryContexts.fromAvroSchema(schema, utcTimezone).getFieldQueryContext(orderingFieldName.get());
