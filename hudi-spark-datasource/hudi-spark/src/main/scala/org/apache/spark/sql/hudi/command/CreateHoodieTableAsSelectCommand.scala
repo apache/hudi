@@ -33,6 +33,7 @@ import org.apache.spark.sql.catalyst.plans.QueryPlan
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.execution.command.DataWritingCommand
+import org.apache.spark.sql.execution.metric.SQLMetric
 
 import scala.collection.JavaConverters._
 
@@ -44,6 +45,8 @@ case class CreateHoodieTableAsSelectCommand(
    mode: SaveMode,
    query: LogicalPlan) extends DataWritingCommand {
   override def innerChildren: Seq[QueryPlan[_]] = Seq(query)
+
+  override lazy val metrics: Map[String, SQLMetric] = HoodieCommandMetrics.metrics
 
   override def run(sparkSession: SparkSession, plan: SparkPlan): Seq[Row] = {
     checkState(table.tableType != CatalogTableType.VIEW)
@@ -106,7 +109,8 @@ case class CreateHoodieTableAsSelectCommand(
       )
       val partitionSpec = updatedTable.partitionColumnNames.map((_, None)).toMap
       val success = InsertIntoHoodieTableCommand.run(sparkSession, updatedTable, plan, partitionSpec,
-        mode == SaveMode.Overwrite, refreshTable = false, extraOptions = options)
+        mode == SaveMode.Overwrite, refreshTable = false, extraOptions = options, metrics = metrics)
+      DataWritingCommand.propogateMetrics(sparkSession.sparkContext, this, metrics)
       if (success) {
         // If write success, create the table in catalog if it has not synced to the
         // catalog by the meta sync.
