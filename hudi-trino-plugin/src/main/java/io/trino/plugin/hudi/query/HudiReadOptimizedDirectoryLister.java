@@ -13,6 +13,12 @@
  */
 package io.trino.plugin.hudi.query;
 
+import org.apache.hudi.common.engine.HoodieLocalEngineContext;
+import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.storage.StoragePathInfo;
+
 import io.airlift.log.Logger;
 import io.airlift.units.DataSize;
 import io.trino.filesystem.Location;
@@ -24,11 +30,6 @@ import io.trino.plugin.hudi.HudiFileStatus;
 import io.trino.plugin.hudi.HudiTableHandle;
 import io.trino.plugin.hudi.partition.HiveHudiPartitionInfo;
 import io.trino.plugin.hudi.partition.HudiPartitionInfo;
-import org.apache.hudi.common.engine.HoodieLocalEngineContext;
-import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
-import org.apache.hudi.storage.StoragePathInfo;
 
 import java.util.List;
 import java.util.Map;
@@ -61,7 +62,9 @@ public class HudiReadOptimizedDirectoryLister
             List<String> hivePartitionNames,
             boolean ignoreAbsentPartitions)
     {
-        this.fileSystemView = new HoodieTableFileSystemView(
+        this.fileSystemView = HoodieTableFileSystemView
+            .fileListingBasedFileSystemView(
+                new HoodieLocalEngineContext(metaClient.getStorageConf()),
                 metaClient,
                 metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(),
                 ignoreAbsentPartitions);
