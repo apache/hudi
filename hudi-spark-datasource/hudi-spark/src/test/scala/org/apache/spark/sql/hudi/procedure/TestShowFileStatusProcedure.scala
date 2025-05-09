@@ -22,6 +22,7 @@ import org.apache.hudi.{HoodieCLIUtils, HoodieDataSourceHelpers}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.util.{Option => HOption}
+
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.spark.sql.hudi.command.procedures.{FileStatus, TimelineType}
 import org.junit.jupiter.api.Assertions.assertTrue
