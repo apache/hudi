@@ -148,8 +148,8 @@ public class HoodieIndexConfig extends HoodieConfig {
           + "When true, bucketized bloom filtering is enabled. "
           + "This reduces skew seen in sort based bloom index lookup");
 
-  public static final ConfigProperty<String> BLOOM_INDEX_BUCKETIZED_CHECKING_WITH_DYNAMIC_PARALLELISM = ConfigProperty
-      .key("hoodie.bloom.index.bucketized.checking.with.dynamic.parallelism")
+  public static final ConfigProperty<String> BLOOM_INDEX_BUCKETIZED_CHECKING_ENABLE_DYNAMIC_PARALLELISM = ConfigProperty
+      .key("hoodie.bloom.index.bucketized.checking.enable.dynamic.parallelism")
       .defaultValue("false")
       .markAdvanced()
       .sinceVersion("1.1.0")

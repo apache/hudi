@@ -2124,7 +2124,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public boolean useBloomIndexBucketizedCheckingWithDynamicParallelism() {
-    return getBoolean(HoodieIndexConfig.BLOOM_INDEX_BUCKETIZED_CHECKING_WITH_DYNAMIC_PARALLELISM);
+    return getBoolean(HoodieIndexConfig.BLOOM_INDEX_BUCKETIZED_CHECKING_ENABLE_DYNAMIC_PARALLELISM);
   }
 
   public boolean isBloomIndexFileGroupIdKeySortingEnabled() {
