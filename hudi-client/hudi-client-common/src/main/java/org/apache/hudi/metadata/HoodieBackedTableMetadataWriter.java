@@ -59,6 +59,7 @@ import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -193,8 +194,16 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     ValidationUtils.checkArgument(!initialized || this.metadata != null, "MDT Reader should have been opened post initialization");
   }
 
+  @VisibleForTesting
   List<MetadataPartitionType> getEnabledPartitions(HoodieMetadataConfig metadataConfig, HoodieTableMetaClient metaClient) {
-    return MetadataPartitionType.getEnabledPartitions(metadataConfig, metaClient);
+    if (!metadataConfig.isEnabled()) {
+      return Collections.emptyList();
+    }
+    return MetadataPartitionType.getValidValues().stream()
+        .filter(partitionType -> partitionType.isMetadataPartitionSupported(metaClient)
+            && (partitionType.isMetadataPartitionEnabled(metadataConfig)
+            || partitionType.isMetadataPartitionAvailable(metaClient)))
+        .collect(Collectors.toList());
   }
 
   abstract HoodieTable getTable(HoodieWriteConfig writeConfig, HoodieTableMetaClient metaClient);
@@ -251,7 +260,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   protected boolean initializeIfNeeded(HoodieTableMetaClient dataMetaClient,
                                        Option<String> inflightInstantTimestamp) throws IOException {
     HoodieTimer timer = HoodieTimer.start();
-    List<MetadataPartitionType> metadataPartitionsToInit = new ArrayList<>(MetadataPartitionType.getValidValues().length);
+    List<MetadataPartitionType> metadataPartitionsToInit = new ArrayList<>(MetadataPartitionType.values().length);
 
     try {
       boolean exists = metadataTableExists(dataMetaClient);
@@ -407,15 +416,6 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
     // validate that each index is eligible to be initialized
     Iterator<MetadataPartitionType> iterator = partitionsToInit.iterator();
-    while (iterator.hasNext()) {
-      MetadataPartitionType partitionType = iterator.next();
-      if (partitionType == PARTITION_STATS && !dataMetaClient.getTableConfig().isTablePartitioned()) {
-        LOG.warn("Partition stats index cannot be enabled for a non-partitioned table. Removing from initialization list. Please disable {}",
-            HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key());
-        iterator.remove();
-        this.enabledPartitionTypes.remove(partitionType);
-      }
-    }
 
     Lazy<List<Pair<String, FileSlice>>> lazyLatestMergedPartitionFileSliceList = getLazyLatestMergedPartitionFileSliceList();
     for (MetadataPartitionType partitionType : partitionsToInit) {
