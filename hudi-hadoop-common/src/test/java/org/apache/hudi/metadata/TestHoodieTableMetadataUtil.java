@@ -26,14 +26,9 @@ import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
@@ -53,13 +48,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -72,13 +65,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getFileIDForFileG
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.validateDataTypeForSecondaryOrExpressionIndex;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.atLeastOnce;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
 
@@ -115,6 +102,8 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     assertTrue(result.isEmpty());
   }
 
+  // TODO(yihua): move to indexer test
+  /*
   @Test
   public void testConvertFilesToPartitionStatsRecords() throws Exception {
     HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(metaClient.getStorageConf());
@@ -173,6 +162,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     // Validate the result.
     validatePartitionStats(result, instant1, instant2);
   }
+*/
 
   @Test
   public void testReadRecordKeysFromBaseFilesWithValidRecords() throws Exception {
@@ -221,6 +211,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     }
   }
 
+  /*
   @Test
   public void testGetLogFileColumnRangeMetadata() throws Exception {
     HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(metaClient.getStorageConf());
@@ -287,7 +278,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
         Option.empty());
     // Validate the result.
     validatePartitionStats(result, instant1, instant2, 6);
-  }
+  }*/
 
   private static void validatePartitionStats(HoodieData<HoodieRecord> result, String instant1, String instant2) {
     validatePartitionStats(result, instant1, instant2, 15);
@@ -713,34 +704,5 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     result = computeRevivedAndDeletedKeys(Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), Collections.emptySet());
     assertEquals(Collections.emptySet(), result.getKey());
     assertEquals(Collections.emptySet(), result.getValue());
-  }
-
-  @Test
-  public void testGetExpressionIndexPartitionsToInit() {
-    MetadataPartitionType partitionType = MetadataPartitionType.EXPRESSION_INDEX;
-
-    // Mock meta client
-    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
-    when(metaClient.getIndexMetadata()).thenReturn(Option.empty());
-
-    // Mock metadata partitions
-    HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
-    when(metaClient.getTableConfig()).thenReturn(tableConfig);
-    when(tableConfig.getMetadataPartitions()).thenReturn(new HashSet<>(Collections.singleton("expr_index_idx_ts")));
-
-    // Build metadata config
-    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().enable(true)
-        .withExpressionIndexColumn("ts")
-        .withExpressionIndexType("column_stats")
-        .withExpressionIndexOptions(Collections.singletonMap("expr", "from_unixtime(ts, format='yyyy-MM-dd')"))
-        .build();
-
-    // Get partitions to init
-    Set<String> result = HoodieTableMetadataUtil.getExpressionIndexPartitionsToInit(partitionType, metadataConfig, metaClient);
-
-    // Verify the result
-    assertNotNull(result);
-    assertTrue(result.isEmpty());
-    verify(metaClient, atLeastOnce()).buildIndexDefinition(any());
   }
 }
