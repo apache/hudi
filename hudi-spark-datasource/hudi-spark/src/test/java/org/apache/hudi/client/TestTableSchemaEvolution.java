@@ -35,6 +35,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex.IndexType;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 
@@ -180,7 +181,9 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
 
     // Compact once so we can incrementally read later
     assertTrue(client.scheduleCompactionAtInstant("002", Option.empty()));
-    client.compact("002");
+    HoodieWriteMetadata result = client.compact("002");
+    client.commitCompaction("002", result, Option.empty());
+    assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant("002"));
 
     // Updates with same schema is allowed
     final int numUpdateRecords = 5;
@@ -205,7 +208,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     // with a evolved schema and insertBatch inserts records using the TRIP_EXAMPLE_SCHEMA.
     try {
       writeBatch(client, "005", "004", Option.empty(), "003", numRecords,
-          (String s, Integer a) -> failedRecords, SparkRDDWriteClient::insert, false, numRecords, 2 * numRecords, 5, false, INSTANT_GENERATOR);
+          (String s, Integer a) -> failedRecords, SparkRDDWriteClient::insert, false, numRecords, 2 * numRecords, 5, INSTANT_GENERATOR);
       assertTrue(shouldAllowDroppedColumns);
     } catch (HoodieInsertException e) {
       assertFalse(shouldAllowDroppedColumns);
@@ -224,7 +227,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     // with an evolved schema and insertBatch inserts records using the TRIP_EXAMPLE_SCHEMA.
     final List<HoodieRecord> evolvedRecords = generateInsertsWithSchema("007", numRecords, TRIP_EXAMPLE_SCHEMA_EVOLVED_COL_ADDED);
     writeBatch(client, "007", "006", Option.empty(), initCommitTime, numRecords,
-        (String s, Integer a) -> evolvedRecords, SparkRDDWriteClient::insert, false, numRecords, 3 * numRecords, 7, false, INSTANT_GENERATOR);
+        (String s, Integer a) -> evolvedRecords, SparkRDDWriteClient::insert, false, numRecords, 3 * numRecords, 7, INSTANT_GENERATOR);
 
     // new commit
     checkLatestDeltaCommit("007");
@@ -233,7 +236,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     // Updates with evolved schema is allowed
     final List<HoodieRecord> updateRecords = generateUpdatesWithSchema("008", numUpdateRecords, TRIP_EXAMPLE_SCHEMA_EVOLVED_COL_ADDED);
     writeBatch(client, "008", "007", Option.empty(), initCommitTime,
-        numUpdateRecords, (String s, Integer a) -> updateRecords, SparkRDDWriteClient::upsert, false, numRecords, 4 * numRecords, 8, false, INSTANT_GENERATOR);
+        numUpdateRecords, (String s, Integer a) -> updateRecords, SparkRDDWriteClient::upsert, false, numRecords, 4 * numRecords, 8, INSTANT_GENERATOR);
     // new commit
     checkLatestDeltaCommit("008");
     checkReadRecords("000", 4 * numRecords);
@@ -289,7 +292,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     final List<HoodieRecord> failedRecords = generateInsertsWithSchema("004", numRecords, TRIP_EXAMPLE_SCHEMA_EVOLVED_COL_DROPPED);
     try {
       writeBatch(client, "004", "003", Option.empty(), "003", numRecords,
-          (String s, Integer a) -> failedRecords, SparkRDDWriteClient::insert, true, numRecords, numRecords * 2, 1, false, INSTANT_GENERATOR);
+          (String s, Integer a) -> failedRecords, SparkRDDWriteClient::insert, true, numRecords, numRecords * 2, 1, INSTANT_GENERATOR);
       assertTrue(shouldAllowDroppedColumns);
     } catch (HoodieInsertException e) {
       assertFalse(shouldAllowDroppedColumns);
@@ -308,7 +311,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     // We cannot use insertBatch directly here because we want to insert records
     // with a evolved schema.
     writeBatch(client, "006", "005", Option.empty(), initCommitTime, numRecords,
-        (String s, Integer a) -> evolvedRecords, SparkRDDWriteClient::insert, true, numRecords, 3 * numRecords, 6, false, INSTANT_GENERATOR);
+        (String s, Integer a) -> evolvedRecords, SparkRDDWriteClient::insert, true, numRecords, 3 * numRecords, 6, INSTANT_GENERATOR);
 
     // new commit
     HoodieTimeline curTimeline = metaClient.reloadActiveTimeline().getCommitAndReplaceTimeline().filterCompletedInstants();
@@ -318,7 +321,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     // Updating with evolved schema is allowed
     final List<HoodieRecord> updateRecords = generateUpdatesWithSchema("007", numUpdateRecords, TRIP_EXAMPLE_SCHEMA_EVOLVED_COL_ADDED);
     writeBatch(client, "007", "006", Option.empty(), initCommitTime,
-        numUpdateRecords, (String s, Integer a) -> updateRecords, SparkRDDWriteClient::upsert, true, numUpdateRecords, 3 * numRecords, 7, false, INSTANT_GENERATOR);
+        numUpdateRecords, (String s, Integer a) -> updateRecords, SparkRDDWriteClient::upsert, true, numUpdateRecords, 3 * numRecords, 7, INSTANT_GENERATOR);
     checkReadRecords("000", 3 * numRecords);
 
     // Now try updating w/ the original schema (should succeed)

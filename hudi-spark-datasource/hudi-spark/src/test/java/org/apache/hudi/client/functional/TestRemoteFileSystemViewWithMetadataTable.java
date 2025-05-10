@@ -256,7 +256,6 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieSparkClient
                 ? timelineService.get().getServerPort() : REMOTE_PORT_NUM.defaultValue())
             .build())
         .withEmbeddedTimelineServerReuseEnabled(reuseTimelineServer)
-        .withAutoCommit(false)
         .forTable(tableName)
         .build();
     return new SparkRDDWriteClient(context, writeConfig, timelineService);
