@@ -22,7 +22,6 @@ import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieIndexPartitionInfo;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
-import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.util.Option;
@@ -117,6 +116,4 @@ public interface HoodieTableMetadataWriter<I,O> extends Serializable, AutoClosea
   default void performTableServices(Option<String> inFlightInstantTimestamp) {
     performTableServices(inFlightInstantTimestamp, false);
   }
-
-  BaseHoodieWriteClient<?, I, ?, O> getWriteClient();
 }

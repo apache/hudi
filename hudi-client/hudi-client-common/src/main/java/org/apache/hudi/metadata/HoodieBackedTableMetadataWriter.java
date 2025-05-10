@@ -1762,7 +1762,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     return initialized;
   }
 
-  public BaseHoodieWriteClient<?, I, ?, O> getWriteClient() {
+  protected BaseHoodieWriteClient<?, I, ?, O> getWriteClient() {
     if (writeClient == null) {
       writeClient = initializeWriteClient();
     }
