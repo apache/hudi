@@ -44,7 +44,6 @@ import java.util.stream.Collectors;
  */
 public class HoodieDataSourceInternalBatchWrite implements BatchWrite {
 
-  private final String instantTime;
   private final HoodieWriteConfig writeConfig;
   private final StructType structType;
   private final boolean arePartitionRecordsSorted;
@@ -54,7 +53,6 @@ public class HoodieDataSourceInternalBatchWrite implements BatchWrite {
 
   public HoodieDataSourceInternalBatchWrite(String instantTime, HoodieWriteConfig writeConfig, StructType structType,
                                             SparkSession jss, StorageConfiguration<?> storageConf, Map<String, String> properties, boolean populateMetaFields, boolean arePartitionRecordsSorted) {
-    this.instantTime = instantTime;
     this.writeConfig = writeConfig;
     this.structType = structType;
     this.populateMetaFields = populateMetaFields;
@@ -66,7 +64,7 @@ public class HoodieDataSourceInternalBatchWrite implements BatchWrite {
 
   @Override
   public DataWriterFactory createBatchWriterFactory(PhysicalWriteInfo info) {
-    dataSourceInternalWriterHelper.createInflightCommit();
+    String instantTime = dataSourceInternalWriterHelper.createInflightCommit();
     if (WriteOperationType.BULK_INSERT == dataSourceInternalWriterHelper.getWriteOperationType()) {
       return new HoodieBulkInsertDataInternalWriterFactory(dataSourceInternalWriterHelper.getHoodieTable(),
           writeConfig, instantTime, structType, populateMetaFields, arePartitionRecordsSorted);
