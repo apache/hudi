@@ -188,8 +188,16 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   }
 
   @Override
-  public Object getColumnValueAsJava(Schema recordSchema, String column, Properties props) {
-    throw new UnsupportedOperationException("Unsupported yet for " + this.getClass().getSimpleName());
+  public Object getColumnValue(Schema recordSchema, String column, Properties props) {
+    StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
+    return getValue(structType, column, data);
+  }
+
+  @Override
+  public Comparable getColumnValueAsJava(Schema recordSchema, String column, Properties props) {
+    // TODO(yihua): add conversion for column stats value
+    Object value = getColumnValue(recordSchema, column, props);
+    return (Comparable) value;
   }
 
   @Override
