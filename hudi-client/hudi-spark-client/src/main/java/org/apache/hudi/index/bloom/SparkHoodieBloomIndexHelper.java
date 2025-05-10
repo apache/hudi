@@ -163,8 +163,10 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
     } else if (config.useBloomIndexBucketizedChecking()) {
       Map<HoodieFileGroupId, Long> comparisonsPerFileGroup = computeComparisonsPerFileGroup(
           config, recordsPerPartition, partitionToFileInfo, fileComparisonsRDD, context);
-      Partitioner partitioner = new BucketizedBloomCheckPartitioner(targetParallelism, comparisonsPerFileGroup,
-          config.getBloomIndexKeysPerBucket());
+      Partitioner partitioner = new BucketizedBloomCheckPartitioner(
+          configuredBloomIndexParallelism, inputParallelism, comparisonsPerFileGroup,
+          config.getBloomIndexKeysPerBucket(),
+          config.useBloomIndexBucketizedCheckingWithDynamicParallelism());
 
       keyLookupResultRDD = fileComparisonsRDD.mapToPair(fileGroupAndRecordKey -> new Tuple2<>(fileGroupAndRecordKey, false))
           .repartitionAndSortWithinPartitions(partitioner, new FileGroupIdComparator())

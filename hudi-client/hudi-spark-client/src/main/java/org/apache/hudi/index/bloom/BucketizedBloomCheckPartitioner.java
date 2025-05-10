@@ -70,20 +70,40 @@ public class BucketizedBloomCheckPartitioner extends Partitioner {
   /**
    * Create a partitioner that computes a plan based on provided workload characteristics.
    *
-   * @param targetPartitions maximum number of partitions to target
-   * @param fileGroupToComparisons number of expected comparisons per file group
-   * @param keysPerBucket maximum number of keys to pack in a single bucket
+   * @param configuredBloomIndexParallelism configured bloom index parallelism;
+   *                                        0 means not configured by the user
+   * @param inputParallelism                input parallelism
+   * @param fileGroupToComparisons          number of expected comparisons per file group
+   * @param keysPerBucket                   maximum number of keys to pack in a single bucket
+   * @param shouldUseDynamicParallelism     whether the parallelism should be determined
+   *                                        by the keys per bucket
    */
-  public BucketizedBloomCheckPartitioner(int targetPartitions, Map<HoodieFileGroupId, Long> fileGroupToComparisons,
-      int keysPerBucket) {
+  public BucketizedBloomCheckPartitioner(
+      int configuredBloomIndexParallelism,
+      int inputParallelism,
+      Map<HoodieFileGroupId, Long> fileGroupToComparisons,
+      int keysPerBucket,
+      boolean shouldUseDynamicParallelism) {
     this.fileGroupToPartitions = new HashMap<>();
 
     Map<HoodieFileGroupId, Integer> bucketsPerFileGroup = new HashMap<>();
     // Compute the buckets needed per file group, using simple uniform distribution
     fileGroupToComparisons.forEach((f, c) -> bucketsPerFileGroup.put(f, (int) Math.ceil((c * 1.0) / keysPerBucket)));
     int totalBuckets = bucketsPerFileGroup.values().stream().mapToInt(i -> i).sum();
-    // If totalBuckets > targetPartitions, no need to have extra partitions
-    this.partitions = Math.min(targetPartitions, totalBuckets);
+
+    if (configuredBloomIndexParallelism > 0) {
+      // If bloom index parallelism is configured, the number of buckets is
+      // limited by the configured bloom index parallelism
+      this.partitions = Math.min(configuredBloomIndexParallelism, totalBuckets);
+    } else if (shouldUseDynamicParallelism) {
+      // If bloom index parallelism is not configured, and dynamic buckets are enabled,
+      // honor the number of buckets calculated based on the keys per bucket
+      this.partitions = totalBuckets;
+    } else {
+      // If bloom index parallelism is not configured, and dynamic buckets are disabled,
+      // honor the input parallelism as the max number of buckets to use
+      this.partitions = Math.min(inputParallelism, totalBuckets);
+    }
 
     // PHASE 1 : start filling upto minimum number of buckets into partitions, taking all but one bucket from each file
     // This tries to first optimize for goal 1 above, with knowledge that each partition needs a certain minimum number
