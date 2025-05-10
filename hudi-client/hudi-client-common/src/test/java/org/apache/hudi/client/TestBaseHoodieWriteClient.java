@@ -22,6 +22,7 @@ import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -214,7 +215,7 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
     }
 
     @Override
-    protected void updateColumnsToIndexWithColStats(HoodieTableMetaClient metaClient, List<String> columnsToIndex) {
+    protected void updateIndexDefinitions(HoodieTableMetaClient metaClient, List<HoodieIndexDefinition> indexDefinitions) {
 
     }
   }

@@ -26,6 +26,7 @@ import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.client.utils.TransactionUtils;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.TimeGenerator;
@@ -52,6 +53,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
@@ -268,13 +270,17 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
    * @param table         {@link HoodieTable} of interest.
    * @param instantTime   instant time of the commit.
    * @param metadata      instance of {@link HoodieCommitMetadata}.
+   * @return a list of index definitions to update in the table metadata of the data table
    */
-  protected void writeTableMetadata(HoodieTable table, String instantTime, HoodieCommitMetadata metadata) {
+  protected final List<HoodieIndexDefinition> writeTableMetadata(
+      HoodieTable table, String instantTime, HoodieCommitMetadata metadata) {
     context.setJobStatus(this.getClass().getSimpleName(), "Committing to metadata table: " + config.getTableName());
     Option<HoodieTableMetadataWriter> metadataWriterOpt = table.getMetadataWriter(instantTime);
+    List<HoodieIndexDefinition> indexDefinitionsToUpdate = new ArrayList<>();
     if (metadataWriterOpt.isPresent()) {
       try (HoodieTableMetadataWriter metadataWriter = metadataWriterOpt.get()) {
         metadataWriter.update(metadata, instantTime);
+        indexDefinitionsToUpdate.addAll(metadataWriter.getIndexDefinitionsToUpdate());
       } catch (Exception e) {
         if (e instanceof HoodieException) {
           throw (HoodieException) e;
@@ -283,13 +289,15 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
         }
       }
     }
+    return indexDefinitionsToUpdate;
   }
 
   /**
-   * Updates the cols being indexed with column stats. This is for tracking purpose so that queries can leverage col stats
-   * from MDT only for indexed columns.
-   * @param metaClient instance of {@link HoodieTableMetaClient} of interest.
-   * @param columnsToIndex list of columns to index.
+   * Updates the index definitions in the table metadata of the data table
+   *
+   * @param metaClient       {@link HoodieTableMetaClient} instance
+   * @param indexDefinitions list of index definitions
    */
-  protected abstract void updateColumnsToIndexWithColStats(HoodieTableMetaClient metaClient, List<String> columnsToIndex);
+  protected abstract void updateIndexDefinitions(
+      HoodieTableMetaClient metaClient, List<HoodieIndexDefinition> indexDefinitions);
 }

@@ -98,7 +98,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   @Override
-  protected void updateColumnsToIndexWithColStats(List<String> columnsToIndex) {
+  protected void updateIndexDefinitions(List<HoodieIndexDefinition> indexDefinitions) {
     // no op. HUDI-8801 to fix.
   }
 

@@ -93,7 +93,7 @@ public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetada
   }
 
   @Override
-  protected void updateColumnsToIndexWithColStats(List<String> columnsToIndex) {
+  protected void updateIndexDefinitions(List<HoodieIndexDefinition> indexDefinitions) {
     // no op. HUDI-8801 to fix.
   }
 

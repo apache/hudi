@@ -107,6 +107,7 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.compareTim
 import static org.apache.hudi.metadata.HoodieMetadataWriteUtils.createMetadataWriteConfig;
 import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_NAME_SUFFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getExpressionIndexPartitionsToInit;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightMetadataPartitions;
@@ -154,11 +155,11 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   protected StorageConfiguration<?> storageConf;
   protected final transient HoodieEngineContext engineContext;
   protected final List<MetadataPartitionType> enabledPartitionTypes;
+  private final List<HoodieIndexDefinition> indexDefinitionsToUpdate = new ArrayList<>();
 
   // Is the MDT bootstrapped and ready to be read from
   boolean initialized = false;
   private HoodieTableFileSystemView metadataView;
-
   /**
    * Hudi backed table metadata writer.
    *
@@ -440,6 +441,13 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
             Pair<List<String>, Pair<Integer, HoodieData<HoodieRecord>>> colStatsColumnsAndRecord = initializeColumnStatsPartition(partitionIdToAllFilesMap);
             columnsToIndex = colStatsColumnsAndRecord.getKey();
             fileGroupCountAndRecordsPair = colStatsColumnsAndRecord.getValue();
+            indexDefinitionsToUpdate.add(HoodieIndexDefinition.newBuilder()
+                .withIndexName(PARTITION_NAME_COLUMN_STATS)
+                .withIndexType(PARTITION_NAME_COLUMN_STATS)
+                .withIndexFunction(PARTITION_NAME_COLUMN_STATS)
+                .withSourceFields(columnsToIndex)
+                .withIndexOptions(Collections.EMPTY_MAP)
+                .build());
             partitionName = COLUMN_STATS.getPartitionPath();
             break;
           case RECORD_INDEX:
@@ -503,10 +511,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       // Perform the commit using bulkCommit
       HoodieData<HoodieRecord> records = fileGroupCountAndRecordsPair.getValue();
       bulkCommit(instantTimeForPartition, partitionName, records, fileGroupCount);
-      if (partitionType == COLUMN_STATS) {
-        // initialize Col Stats index definition
-        updateColumnsToIndexWithColStats(columnsToIndex);
-      }
+      updateIndexDefinitions(indexDefinitionsToUpdate);
       dataMetaClient.getTableConfig().setMetadataPartitionState(dataMetaClient, partitionName, true);
       // initialize the metadata reader again so the MDT partition can be read after initialization
       initMetadataReader();
@@ -518,9 +523,10 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
   /**
    * Updates the list of columns to index with col stats index.
-   * @param columnsToIndex list of columns to index.
+   *
+   * @param indexDefinitions index definitions to update
    */
-  protected abstract void updateColumnsToIndexWithColStats(List<String> columnsToIndex);
+  protected abstract void updateIndexDefinitions(List<HoodieIndexDefinition> indexDefinitions);
 
   /**
    * Returns a unique timestamp to use for initializing a MDT partition.
@@ -1756,6 +1762,10 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
   public boolean isInitialized() {
     return initialized;
+  }
+
+  public List<HoodieIndexDefinition> getIndexDefinitionsToUpdate() {
+    return indexDefinitionsToUpdate;
   }
 
   protected BaseHoodieWriteClient<?, I, ?, ?> getWriteClient() {

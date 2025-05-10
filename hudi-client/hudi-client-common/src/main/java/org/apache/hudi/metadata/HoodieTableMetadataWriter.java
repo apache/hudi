@@ -24,6 +24,7 @@ import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
 
@@ -96,6 +97,11 @@ public interface HoodieTableMetadataWriter extends Serializable, AutoCloseable {
    * Returns true if the metadata table is initialized.
    */
   boolean isInitialized();
+
+  /**
+   * @return index definitions to update in the table metadata of the data table
+   */
+  List<HoodieIndexDefinition> getIndexDefinitionsToUpdate();
 
   /**
    * Perform various table services like compaction, cleaning, archiving on the MDT if required.

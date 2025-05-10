@@ -2968,7 +2968,7 @@ public class HoodieTableMetadataUtil {
         indexDefinitionBuilder.withIndexFunction(metadataConfig.getExpressionIndexOptions().getOrDefault(EXPRESSION_OPTION, IDENTITY_TRANSFORM));
       }
 
-      dataMetaClient.buildIndexDefinition(indexDefinitionBuilder.build());
+      dataMetaClient.buildIndexDefinitions(Collections.singletonList(indexDefinitionBuilder.build()));
 
       // Re-fetch the partitions after adding the new definition
       indexPartitionsToInit = getIndexPartitionsToInitBasedOnIndexDefinition(partitionType, dataMetaClient);

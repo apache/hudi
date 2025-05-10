@@ -33,6 +33,7 @@ import org.apache.hudi.common.bootstrap.index.BootstrapIndex;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.BootstrapFileMapping;
+import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -221,7 +222,7 @@ public class SparkBootstrapCommitActionExecutor<T>
   }
 
   @Override
-  protected void updateColumnsToIndexForColumnStats(HoodieTableMetaClient metaClient, List<String> columnsToIndex) {
+  protected void updateIndexDefinitions(List<HoodieIndexDefinition> indexDefinitions) {
     throw new HoodieNotSupportedException("col stats is not supported with bootstrap operation");
   }
 
