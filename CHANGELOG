@@ -763,3 +763,8 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 --- [2025-05-09 07:51:35] [release-v1.121.0] ---
 [ENG-26687][INTERNAL] Fix LP validity bug (#1364)
 [AUDIT-1071]: Changelog for release-v1.120.0 (#1360)
+
+--- [2025-05-10 16:03:54] [release-v1.122.0] ---
+[AUDIT-1366]: Changelog for release-v1.119.1 (#1367)
+[ENG-19422][HUDI-9399] Improve bloom filter bucketizing in Spark (#1365)
+[AUDIT-1363]: Changelog for release-v1.121.0 (#1366)
