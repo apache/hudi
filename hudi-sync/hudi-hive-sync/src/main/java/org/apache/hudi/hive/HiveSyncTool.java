@@ -22,6 +22,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieSyncTableStrategy;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
@@ -184,6 +185,9 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
   }
 
   protected void doSync() {
+    // create database if needed
+    checkAndCreateDatabase();
+
     switch (syncClient.getTableType()) {
       case COPY_ON_WRITE:
         syncHoodieTable(snapshotTableName, false, false);
@@ -233,18 +237,27 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
     LOG.info("Trying to sync hoodie table " + tableName + " with base path " + syncClient.getBasePath()
         + " of type " + syncClient.getTableType());
 
-    // create database if needed
-    checkAndCreateDatabase();
-
     final boolean tableExists = syncClient.tableExists(tableName);
-    // Get the parquet schema for this table looking at the latest commit
-    MessageType schema = syncClient.getStorageSchema(!config.getBoolean(HIVE_SYNC_OMIT_METADATA_FIELDS));
     // if table exists and location of the metastore table doesn't match the hoodie base path, recreate the table
     if (tableExists && !FSUtils.comparePathsWithoutScheme(syncClient.getBasePath(), syncClient.getTableLocation(tableName))) {
       LOG.info("basepath is updated for the table {}", tableName);
       recreateAndSyncHiveTable(tableName, useRealtimeInputFormat, readAsOptimized);
       return;
     }
+
+    // Check if any sync is required
+    if (tableExists && isIncrementalSync()) {
+      Option<String> lastCommitTimeSynced = syncClient.getLastCommitTimeSynced(tableName);
+      Option<String> lastCommitCompletionTimeSynced = syncClient.getLastCommitCompletionTimeSynced(tableName);
+      if (lastCommitTimeSynced.isPresent()) {
+        if (TimelineUtils.getCommitsTimelineAfter(syncClient.getMetaClient(), lastCommitTimeSynced.get(), lastCommitCompletionTimeSynced).countInstants() == 0) {
+          LOG.info("Table {} is already synced with the latest commit {}", tableName, lastCommitTimeSynced.get());
+          return;
+        }
+      }
+    }
+    // Get the parquet schema for this table looking at the latest commit
+    MessageType schema = syncClient.getStorageSchema(!config.getBoolean(HIVE_SYNC_OMIT_METADATA_FIELDS));
 
     boolean schemaChanged;
     boolean propertiesChanged;
@@ -294,7 +307,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
   }
 
   private boolean validateAndSyncPartitions(String tableName, boolean tableExists) {
-    boolean syncIncremental = config.getBoolean(META_SYNC_INCREMENTAL);
+    boolean syncIncremental = isIncrementalSync();
     Option<String> lastCommitTimeSynced = (tableExists && syncIncremental)
         ? syncClient.getLastCommitTimeSynced(tableName) : Option.empty();
     Option<String> lastCommitCompletionTimeSynced = (tableExists && syncIncremental)
@@ -329,6 +342,10 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
       partitionsChanged = syncPartitions(tableName, writtenPartitionsSince, droppedPartitions);
     }
     return partitionsChanged;
+  }
+
+  private boolean isIncrementalSync() {
+    return config.getBoolean(META_SYNC_INCREMENTAL);
   }
 
   protected boolean shouldRecreateAndSyncTable() {
