@@ -1410,6 +1410,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       writeClient.bulkInsertPreppedRecords(preppedRecordInputs, instantTime, bulkInsertPartitioner);
     } else {
       engineContext.setJobStatus(this.getClass().getSimpleName(), String.format("Upserting at %s into metadata table %s", instantTime, metadataWriteConfig.getTableName()));
+      // last argument is required so that we take optimized writes flow for metadata table. 
       writeClient.upsertPreppedRecords(preppedRecordInputs, instantTime);
     }
 
@@ -1766,4 +1767,5 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   }
 
   protected abstract BaseHoodieWriteClient<?, I, ?, ?> initializeWriteClient();
+
 }
