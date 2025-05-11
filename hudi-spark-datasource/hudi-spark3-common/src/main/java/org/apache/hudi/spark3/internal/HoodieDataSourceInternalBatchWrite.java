@@ -21,6 +21,7 @@ package org.apache.hudi.spark3.internal;
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.internal.DataSourceInternalWriterHelper;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -53,7 +54,8 @@ public class HoodieDataSourceInternalBatchWrite implements BatchWrite {
   private Map<String, String> extraMetadata = new HashMap<>();
 
   public HoodieDataSourceInternalBatchWrite(String instantTime, HoodieWriteConfig writeConfig, StructType structType,
-                                            SparkSession jss, StorageConfiguration<?> storageConf, Map<String, String> properties, boolean populateMetaFields, boolean arePartitionRecordsSorted) {
+                                            SparkSession jss, StorageConfiguration<?> storageConf, Map<String, String> properties,
+                                            boolean populateMetaFields, boolean arePartitionRecordsSorted, WriteOperationType writeOperationType) {
     this.instantTime = instantTime;
     this.writeConfig = writeConfig;
     this.structType = structType;
@@ -61,18 +63,16 @@ public class HoodieDataSourceInternalBatchWrite implements BatchWrite {
     this.arePartitionRecordsSorted = arePartitionRecordsSorted;
     this.extraMetadata = DataSourceUtils.getExtraMetadata(properties);
     this.dataSourceInternalWriterHelper = new DataSourceInternalWriterHelper(instantTime, writeConfig, structType,
-        jss, storageConf, extraMetadata);
+        jss, storageConf, extraMetadata, writeOperationType);
   }
 
   @Override
   public DataWriterFactory createBatchWriterFactory(PhysicalWriteInfo info) {
     dataSourceInternalWriterHelper.createInflightCommit();
-    if (WriteOperationType.BULK_INSERT == dataSourceInternalWriterHelper.getWriteOperationType()) {
-      return new HoodieBulkInsertDataInternalWriterFactory(dataSourceInternalWriterHelper.getHoodieTable(),
-          writeConfig, instantTime, structType, populateMetaFields, arePartitionRecordsSorted);
-    } else {
-      throw new IllegalArgumentException("Write Operation Type + " + dataSourceInternalWriterHelper.getWriteOperationType() + " not supported ");
-    }
+    ValidationUtils.checkArgument(allowWriteOperationType(dataSourceInternalWriterHelper.getWriteOperationType()),
+        () -> "Write Operation Type + " + dataSourceInternalWriterHelper.getWriteOperationType() + " not supported");
+    return new HoodieBulkInsertDataInternalWriterFactory(dataSourceInternalWriterHelper.getHoodieTable(),
+        writeConfig, instantTime, structType, populateMetaFields, arePartitionRecordsSorted);
   }
 
   @Override
@@ -95,5 +95,17 @@ public class HoodieDataSourceInternalBatchWrite implements BatchWrite {
   @Override
   public void abort(WriterCommitMessage[] messages) {
     dataSourceInternalWriterHelper.abort();
+  }
+
+  private boolean allowWriteOperationType(WriteOperationType operationType) {
+    switch (operationType) {
+      case BULK_INSERT:
+      case INSERT_OVERWRITE:
+      case INSERT_OVERWRITE_TABLE:
+      case BUCKET_RESCALE:
+        return true;
+      default:
+        return false;
+    }
   }
 }
