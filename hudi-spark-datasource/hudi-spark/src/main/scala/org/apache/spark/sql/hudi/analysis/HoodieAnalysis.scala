@@ -133,7 +133,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
 
       rules += spark4PostHocResolution
     } else {
-      // spark 3c
+      // spark 3
       val spark3PostHocResolutionClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark3PostAnalysisRule"
       val spark3PostHocResolution: RuleBuilder =
         session => instantiateKlass(spark3PostHocResolutionClass, session)

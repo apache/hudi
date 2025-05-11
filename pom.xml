@@ -2633,7 +2633,7 @@
     </profile>
 
     <profile>
-      <id>spark4</id>
+      <id>spark4.0</id>
       <properties>
         <spark4.version>${spark40.version}</spark4.version>
         <spark.version>${spark4.version}</spark.version>

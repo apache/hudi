@@ -362,7 +362,7 @@ jobs:
             sparkProfile: "spark3.4"
             sparkModules: "hudi-spark-datasource/hudi-spark3.4.x"
           - scalaProfile: "scala-2.13"
-            sparkProfile: "spark4"
+            sparkProfile: "spark4.0"
             sparkModules: "hudi-spark-datasource/hudi-spark4.0.x"
 
     steps:
@@ -426,7 +426,7 @@ jobs:
             sparkProfile: "spark3.4"
             sparkModules: "hudi-spark-datasource/hudi-spark3.4.x"
           - scalaProfile: "scala-2.13"
-            sparkProfile: "spark4"
+            sparkProfile: "spark4.0"
             sparkModules: "hudi-spark-datasource/hudi-spark4.0.x"
 
     steps:
@@ -972,7 +972,7 @@ jobs:
             sparkArchive: 'spark-3.5.3/spark-3.5.3-bin-hadoop3.tgz'
             scalaProfile: '-Dscala-2.12 -Dscala.binary.version=2.12'
 
-# TODO: Integration tests on Spark4 do not work on existing hadoop/hive/spark docker images from apachehudi dockerhub repo:
+# TODO: Integration tests on Spark4.0 do not work on existing hadoop/hive/spark docker images from apachehudi dockerhub repo:
 #
 # java.lang.NoSuchFieldError: NVDIMM
 # at org.apache.hudi.integ.testsuite.TestDFSHoodieTestSuiteWriterAdapter.initClass(TestDFSHoodieTestSuiteWriterAdapter.java:67)
@@ -983,7 +983,7 @@ jobs:
 # [ERROR]   TestDFSHoodieDatasetInputReader.initClass:56->UtilitiesTestBase.initTestServices:152 » NoSuchField
 # [ERROR] Tests run: 21, Failures: 0, Errors: 4, Skipped: 2
 
-#          - sparkProfile: 'spark4'
+#          - sparkProfile: 'spark4.0'
 #            sparkArchive: 'spark-4.0.0-preview1/spark-4.0.0-preview1-bin-hadoop3.tgz'
 #            scalaProfile: '-Dscala-2.13 -Dscala.binary.version=2.13'
 
@@ -1047,7 +1047,7 @@ jobs:
             sparkModules: "hudi-spark-datasource/hudi-spark3.5.x"
 
           - scalaProfile: "scala-2.13"
-            sparkProfile: "spark4"
+            sparkProfile: "spark4.0"
             sparkModules: "hudi-spark-datasource/hudi-spark4.0.x"
 
     steps:

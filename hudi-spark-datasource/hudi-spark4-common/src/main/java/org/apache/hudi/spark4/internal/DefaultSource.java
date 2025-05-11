@@ -39,7 +39,7 @@ import static org.apache.spark.sql.HoodieDataTypeUtils.tryOverrideParquetWriteLe
 
 /**
  * DataSource V2 implementation for managing internal write logic. Only called internally.
- * This class is only compatible with datasource V2 API in Spark 3.
+ * This class is only compatible with datasource V2 API in Spark 4.
  */
 public class DefaultSource extends BaseDefaultSource implements TableProvider {
 

@@ -111,12 +111,7 @@ class HoodieCommonSqlParser(session: SparkSession, delegate: ParserInterface)
         throw e.withCommand(command)
       case e: AnalysisException =>
         val position = Origin(e.line, e.startPosition)
-        throw sparkAdapter.newParseException(
-          Option(command),
-          e,
-          position,
-          position
-        )
+        throw sparkAdapter.newParseException(Option(command), e, position, position)
     }
   }
 }

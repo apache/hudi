@@ -593,5 +593,4 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
   public static Map<String, Long> generateExpectedPartitionNumRecords(JavaRDD<HoodieRecord> records) {
     return records.map(record -> record.getPartitionPath()).countByValue();
   }
-
 }

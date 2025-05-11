@@ -115,11 +115,6 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
           Seq("secondary_index_idx_name", "secondary_index", "name"),
           Seq("record_index", "record_index", "")
         )
-        //checkAnswer(s"create index idx_name on $tableName using lucene (name) options(block_size=1024)")()
-        // create index if not exists idx_price on $tableName using lucene (price options(`order`='desc')) options(block_size=512)
-        // would work
-        // original would fail: create index if not exists idx_price on $tableName using lucene (price options(order='desc')) options(block_size=512)
-        //checkAnswer(s"create index idx_price on $tableName using lucene (price options(`order`='desc')) options(block_size=512)")()
 
         spark.sql(s"create index idx_price on $tableName (price)")
         // Create an index with the occupied name

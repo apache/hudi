@@ -643,8 +643,7 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
     val filteredFilesCount = filteredPartitionDirectories.flatMap(s => s.files).size
     val latestDataFilesCount = getLatestDataFilesCount(opts)
     if (shouldPrune) {
-      assertTrue(filteredFilesCount < latestDataFilesCount,
-        "actual filteredFilesCount: " + filteredFilesCount + ", actual latestDataFilesCount: " + latestDataFilesCount)
+      assertTrue(filteredFilesCount < latestDataFilesCount)
     } else {
       assertEquals(filteredFilesCount, latestDataFilesCount)
     }
@@ -653,8 +652,7 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
     fileIndex = HoodieFileIndex(spark, metaClient, None, commonOpts + (DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "false"), includeLogFiles = true)
     val filesCountWithNoSkipping = fileIndex.listFiles(Seq(), Seq(dataFilter)).flatMap(s => s.files).size
     if (shouldPrune) {
-      assertTrue(filteredFilesCount < filesCountWithNoSkipping,
-      "actual filteredFilesCount: " + filteredFilesCount + ", actual filesCountWithNoSkipping: " + filesCountWithNoSkipping)
+      assertTrue(filteredFilesCount < filesCountWithNoSkipping)
     } else {
       assertEquals(filteredFilesCount, filesCountWithNoSkipping)
     }
