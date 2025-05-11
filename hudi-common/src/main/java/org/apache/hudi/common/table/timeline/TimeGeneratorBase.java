@@ -33,7 +33,6 @@ import java.io.Serializable;
 import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
 
-import static org.apache.hudi.common.config.LockConfiguration.DEFAULT_LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS;
 import static org.apache.hudi.common.config.LockConfiguration.DEFAULT_LOCK_ACQUIRE_NUM_RETRIES;
 import static org.apache.hudi.common.config.LockConfiguration.DEFAULT_LOCK_ACQUIRE_WAIT_TIMEOUT_MS;
 import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY;
@@ -76,10 +75,9 @@ public abstract class TimeGeneratorBase implements TimeGenerator, Serializable {
         Integer.parseInt(DEFAULT_LOCK_ACQUIRE_NUM_RETRIES));
     lockAcquireWaitTimeInMs = lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY,
         DEFAULT_LOCK_ACQUIRE_WAIT_TIMEOUT_MS);
-    // The maximum time to wait for each time generation to resolve the clock skew issue on distributed hosts.
-    long maxWaitTimeInMs = lockConfiguration.getConfig().getLong(LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY,
-        Long.parseLong(DEFAULT_LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS));
-    lockRetryHelper = new RetryHelper<>(maxWaitTimeInMs, maxRetries, maxWaitTimeInMs,
+    // The initial time to wait for each time generation to resolve the clock skew issue on distributed hosts.
+    long initialRetryInternal = lockConfiguration.getConfig().getLong(LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY, 200);
+    lockRetryHelper = new RetryHelper<>(initialRetryInternal, maxRetries, initialRetryInternal,
         Arrays.asList(HoodieLockException.class, InterruptedException.class), "acquire timeGenerator lock");
   }
 

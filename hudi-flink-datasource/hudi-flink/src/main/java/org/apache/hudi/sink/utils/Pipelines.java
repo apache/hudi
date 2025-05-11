@@ -487,7 +487,7 @@ public class Pipelines {
 
   public static DataStreamSink<Object> dummySink(DataStream<Object> dataStream) {
     return dataStream.addSink(Pipelines.DummySink.INSTANCE)
-        .setParallelism(1)
+        // keeps the same parallelism to upstream operators to enable partial failover.
         .name("dummy");
   }
 
