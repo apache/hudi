@@ -2629,7 +2629,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     return props.getInteger(WRITES_FILEID_ENCODING, HoodieMetadataPayload.RECORD_INDEX_FIELD_FILEID_ENCODING_UUID);
   }
 
-  public Boolean shouldEnableTimestampOrderinValidation() {
+  public Boolean shouldEnableTimestampOrderingValidation() {
     return getBoolean(ENABLE_TIMESTAMP_ORDERING_VALIDATION);
   }
 
