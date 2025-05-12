@@ -3620,9 +3620,10 @@ public class HoodieWriteConfig extends HoodieConfig {
                 writeConcurrencyMode.name()));
       }
       if (writeConcurrencyMode == WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL) {
+        boolean isMetadataTable = HoodieTableMetadata.isMetadataTable(writeConfig.getBasePath());
         checkArgument(
-            writeConfig.getTableType().equals(HoodieTableType.MERGE_ON_READ) && writeConfig.isSimpleBucketIndex(),
-            "Non-blocking concurrency control requires the MOR table with simple bucket index");
+            writeConfig.getTableType().equals(HoodieTableType.MERGE_ON_READ) && (isMetadataTable || writeConfig.isSimpleBucketIndex()),
+            "Non-blocking concurrency control requires the MOR table with simple bucket index or it has to be Metadata table");
       }
 
       HoodieCleaningPolicy cleaningPolicy = HoodieCleaningPolicy.valueOf(writeConfig.getString(CLEANER_POLICY));
