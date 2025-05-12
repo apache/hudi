@@ -18,8 +18,6 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.{HoodieSparkSqlWriter, SparkAdapterSupport}
-import org.apache.hudi.common.model.HoodieCommitMetadata
-import org.apache.hudi.common.table.timeline.InstantComparison
 import org.apache.hudi.exception.HoodieException
 
 import org.apache.spark.SparkContext
@@ -61,7 +59,6 @@ case class InsertIntoHoodieTableCommand(logicalRelation: LogicalRelation,
                                         overwrite: Boolean)
   extends DataWritingCommand {
   override def innerChildren: Seq[QueryPlan[_]] = Seq(query)
-  val sparkContext = SparkContext.getActive.get
   override lazy val metrics: Map[String, SQLMetric] = HoodieCommandMetrics.metrics
 
   override def outputColumnNames: Seq[String] = {
@@ -73,7 +70,7 @@ case class InsertIntoHoodieTableCommand(logicalRelation: LogicalRelation,
 
     val table = logicalRelation.catalogTable.get
     InsertIntoHoodieTableCommand.run(sparkSession, table, plan, partitionSpec, overwrite, metrics = metrics)
-    DataWritingCommand.propogateMetrics(sparkContext, this, metrics)
+    DataWritingCommand.propogateMetrics(sparkSession.sparkContext, this, metrics)
     Seq.empty[Row]
   }
 
@@ -115,7 +112,6 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
 
     val df = sparkSession.internalCreateDataFrame(query.execute(), query.schema)
     val (success, commitInstantTime, _, _, _, _) = HoodieSparkSqlWriter.write(sparkSession.sqlContext, mode, config, df)
-
 
     if (!success) {
       throw new HoodieException("Insert Into to Hudi table failed")
