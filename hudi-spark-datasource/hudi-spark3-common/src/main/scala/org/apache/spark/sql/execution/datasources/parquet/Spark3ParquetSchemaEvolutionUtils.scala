@@ -171,7 +171,7 @@ class Spark3ParquetSchemaEvolutionUtils(sharedConf: Configuration,
                             int96RebaseTz: String,
                             useOffHeap: Boolean,
                             capacity: Int): VectorizedParquetRecordReader = {
-    if (shouldUseInternalSchema) {
+    if (!typeChangeInfos.isEmpty) {
       new Spark3HoodieVectorizedParquetRecordReader(
         convertTz,
         datetimeRebaseMode,
