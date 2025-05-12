@@ -273,7 +273,6 @@ public class SparkInternalSchemaConverter {
       case TIMESTAMP_MILLIS:
         // todo support TimeStampNTZ
         return TimestampType$.MODULE$;
-
       case STRING:
         return StringType$.MODULE$;
       case UUID:
