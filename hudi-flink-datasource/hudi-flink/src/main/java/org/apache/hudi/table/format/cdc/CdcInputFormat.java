@@ -103,11 +103,10 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
       Configuration conf,
       MergeOnReadTableState tableState,
       List<DataType> fieldTypes,
-      String defaultPartName,
       List<Predicate> predicates,
       long limit,
       boolean emitDelete) {
-    super(conf, tableState, fieldTypes, defaultPartName, predicates, limit, emitDelete, InternalSchemaManager.DISABLED);
+    super(conf, tableState, fieldTypes, predicates, limit, emitDelete, InternalSchemaManager.DISABLED);
   }
 
   @Override
@@ -872,11 +871,6 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
       return this;
     }
 
-    public Builder defaultPartName(String defaultPartName) {
-      this.defaultPartName = defaultPartName;
-      return this;
-    }
-
     public Builder predicates(List<Predicate> predicates) {
       this.predicates = predicates;
       return this;
@@ -893,8 +887,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
     }
 
     public CdcInputFormat build() {
-      return new CdcInputFormat(conf, tableState, fieldTypes,
-          defaultPartName, predicates, limit, emitDelete);
+      return new CdcInputFormat(conf, tableState, fieldTypes, predicates, limit, emitDelete);
     }
   }
 
