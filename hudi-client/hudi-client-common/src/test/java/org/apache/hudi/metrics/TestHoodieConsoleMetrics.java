@@ -50,6 +50,7 @@ public class TestHoodieConsoleMetrics {
     when(writeConfig.isMetricsOn()).thenReturn(true);
     when(metricsConfig.getMetricsReporterType()).thenReturn(MetricsReporterType.CONSOLE);
     when(metricsConfig.getBasePath()).thenReturn("s3://test" + UUID.randomUUID());
+    when(metricsConfig.getMetricReporterMetricsNamePrefix()).thenReturn("hoodie");
     hoodieMetrics = new HoodieMetrics(writeConfig, HoodieTestUtils.getDefaultStorage());
     metrics = hoodieMetrics.getMetrics();
   }
@@ -63,5 +64,13 @@ public class TestHoodieConsoleMetrics {
   public void testRegisterGauge() {
     metrics.registerGauge("metric1", 123L);
     assertEquals("123", metrics.getRegistry().getGauges().get("metric1").getValue().toString());
+  }
+
+  @Test
+  public void testRegisterHistogram() {
+    for (int i = 0; i < 10; i++) {
+      metrics.registerHistogram("histogram1", i);
+    }
+    assertEquals(10, metrics.getRegistry().getHistograms().get("histogram1").getCount());
   }
 }

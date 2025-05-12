@@ -120,6 +120,12 @@ public class HoodieMetricsConfig extends HoodieConfig {
       .sinceVersion("0.14.0")
       .withDocumentation("Turn on/off metrics reporting for log blocks with compaction commit. off by default.");
 
+  public static final ConfigProperty<Boolean> PARTITION_LEVEL_METRICS_ENABLE = ConfigProperty
+      .key(METRIC_PREFIX + ".partition.level.metrics.enable")
+      .defaultValue(false)
+      .sinceVersion("0.15.0")
+      .withDocumentation("Enable partition level metrics. off by default.");
+
   /**
    * @deprecated Use {@link #TURN_METRICS_ON} and its methods instead
    */
@@ -400,6 +406,11 @@ public class HoodieMetricsConfig extends HoodieConfig {
 
     public Builder withLockingMetrics(boolean enable) {
       hoodieMetricsConfig.setValue(LOCK_METRICS_ENABLE, String.valueOf(enable));
+      return this;
+    }
+
+    public Builder withPartitionLevelMetrics(boolean enable) {
+      hoodieMetricsConfig.setValue(PARTITION_LEVEL_METRICS_ENABLE, String.valueOf(enable));
       return this;
     }
 
