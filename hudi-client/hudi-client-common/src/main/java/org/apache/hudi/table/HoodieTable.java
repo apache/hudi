@@ -670,9 +670,11 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     final String commitTime = getPendingRollbackInstantFunc.apply(inflightInstant.getTimestamp()).map(entry
         -> entry.getRollbackInstant().getTimestamp())
         .orElseGet(HoodieActiveTimeline::createNewInstantTime);
+    // if txn manager is non empty, begin txn. remove txn manager from HoodieTable L 159.
     scheduleRollback(commitTime, inflightInstant);
     rollback(context, commitTime, inflightInstant, false, false);
     getActiveTimeline().revertInstantFromInflightToRequested(inflightInstant);
+     // end txn.
   }
 
   /**

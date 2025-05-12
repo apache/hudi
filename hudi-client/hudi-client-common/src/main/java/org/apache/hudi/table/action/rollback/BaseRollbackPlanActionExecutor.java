@@ -136,7 +136,7 @@ public class BaseRollbackPlanActionExecutor<T, I, K, O> extends BaseActionExecut
     if (config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
       // check for concurrent rollbacks. i.e if the commit being rolledback is already rolled back, we can bail out.
       HoodieTableMetaClient reloadedMetaClient = HoodieTableMetaClient.reload(table.getMetaClient());
-      HoodieTimeline reloadedActiveTimeline = reloadedMetaClient.reloadActiveTimeline();
+      HoodieTimeline reloadedActiveTimeline = reloadedMetaClient.getActiveTimeline();
       if (!reloadedActiveTimeline.filterInflightsAndRequested().containsInstant(instantToRollback.getTimestamp())
           && !reloadedActiveTimeline.filterCompletedInstants().containsInstant(instantToRollback.getTimestamp())) {
         // if instant to rollback is already rolled back, we can bail out.
