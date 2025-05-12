@@ -1,0 +1,38 @@
+{
+  "partitionToWriteStats" : {
+    "" : [ {
+      "fileId" : "b1ee44c7-255b-47bf-b788-1e7017790326-0",
+      "path" : "b1ee44c7-255b-47bf-b788-1e7017790326-0_0-80-172_20231105172136406.parquet",
+      "cdcStats" : null,
+      "prevCommit" : "null",
+      "numWrites" : 5000,
+      "numDeletes" : 0,
+      "numUpdateWrites" : 0,
+      "numInserts" : 5000,
+      "totalWriteBytes" : 79392,
+      "totalWriteErrors" : 0,
+      "tempPath" : null,
+      "partitionPath" : "",
+      "totalLogRecords" : 0,
+      "totalLogFilesCompacted" : 0,
+      "totalLogSizeCompacted" : 0,
+      "totalUpdatedRecordsCompacted" : 0,
+      "totalLogBlocks" : 0,
+      "totalCorruptLogBlock" : 0,
+      "totalRollbackBlocks" : 0,
+      "fileSizeInBytes" : 79392,
+      "minEventTime" : null,
+      "maxEventTime" : null,
+      "runtimeStats" : {
+        "totalScanTime" : 0,
+        "totalUpsertTime" : 0,
+        "totalCreateTime" : 700
+      }
+    } ]
+  },
+  "compacted" : false,
+  "extraMetadata" : {
+    "schema" : "{\"type\":\"record\",\"name\":\"Sample\",\"fields\":[{\"name\":\"_c0\",\"type\":\"string\"},{\"name\":\"CustomerKey\",\"type\":\"string\"},{\"name\":\"GeographyKey\",\"type\":\"string\"},{\"name\":\"FirstName\",\"type\":\"string\"},{\"name\":\"LastName\",\"type\":\"string\"},{\"name\":\"BirthDate\",\"type\":\"string\"},{\"name\":\"MaritalStatus\",\"type\":\"string\"},{\"name\":\"Gender\",\"type\":\"string\"},{\"name\":\"YearlyIncome\",\"type\":\"string\"},{\"name\":\"TotalChildren\",\"type\":\"string\"},{\"name\":\"NumberChildrenAtHome\",\"type\":\"string\"},{\"name\":\"Education\",\"type\":\"string\"},{\"name\":\"Occupation\",\"type\":\"string\"},{\"name\":\"HouseOwnerFlag\",\"type\":\"string\"},{\"name\":\"NumberCarsOwned\",\"type\":\"string\"}]}"
+  },
+  "operationType" : "INSERT"
+}

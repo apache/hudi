@@ -1,0 +1,126 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Use compact-test.properties for this yaml file.
+dag_name: mor-async-compact.yaml
+dag_rounds: 4
+dag_intermittent_delay_mins: 0
+dag_content:
+  first_insert:
+    config:
+      record_size: 1000
+      num_partitions_insert: 1
+      repeat_count: 1
+      num_records_insert: 10000
+    type: InsertNode
+    deps: none
+  first_upsert:
+    config:
+      record_size: 1000
+      num_partitions_insert: 1
+      num_records_insert: 300
+      repeat_count: 1
+      num_records_upsert: 2000
+      num_partitions_upsert: 1
+    type: UpsertNode
+    deps: first_insert
+  second_upsert:
+    config:
+      record_size: 1000
+      num_partitions_insert: 1
+      num_records_insert: 300
+      repeat_count: 1
+      num_records_upsert: 2000
+      num_partitions_upsert: 1
+    type: UpsertNode
+    deps: first_upsert
+  third_upsert:
+    config:
+      record_size: 1000
+      num_partitions_insert: 1
+      num_records_insert: 300
+      repeat_count: 1
+      num_records_upsert: 2000
+      num_partitions_upsert: 1
+    type: UpsertNode
+    deps: second_upsert
+  first_validate:
+    config:
+      delete_input_data: false
+    type: ValidateDatasetNode
+    deps: third_upsert
+  first_schedule_compact:
+    config:
+    type: ScheduleCompactNode
+    deps: first_validate
+  fourth_upsert:
+    config:
+      record_size: 1000
+      num_partitions_insert: 1
+      num_records_insert: 300
+      repeat_count: 1
+      num_records_upsert: 2000
+      num_partitions_upsert: 1
+    type: UpsertNode
+    deps: first_schedule_compact
+  fifth_upsert:
+    config:
+      record_size: 1000
+      num_partitions_insert: 1
+      num_records_insert: 300
+      repeat_count: 1
+      num_records_upsert: 2000
+      num_partitions_upsert: 1
+    type: UpsertNode
+    deps: fourth_upsert
+  second_insert:
+    config:
+      record_size: 1000
+      num_partitions_insert: 1
+      repeat_count: 1
+      num_records_insert: 10000
+    type: InsertNode
+    deps: fifth_upsert
+  sixth_upsert:
+    config:
+      record_size: 1000
+      num_partitions_insert: 1
+      num_records_insert: 300
+      repeat_count: 1
+      num_records_upsert: 2000
+      num_partitions_upsert: 1
+    type: UpsertNode
+    deps: second_insert
+  third_validate:
+    config:
+      delete_input_data: false
+    type: ValidateDatasetNode
+    deps: sixth_upsert
+  first_compact:
+    config:
+    type: CompactNode
+    deps: third_validate
+  first_delete:
+    config:
+      num_partitions_delete: 1
+      num_records_delete: 500
+    type: DeleteNode
+    deps: first_compact
+  fifth_validate:
+    config:
+      delete_input_data: false
+    type: ValidateDatasetNode
+    deps: first_delete
