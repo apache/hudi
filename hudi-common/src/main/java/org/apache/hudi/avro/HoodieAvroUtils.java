@@ -48,6 +48,7 @@ import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Conversions;
 import org.apache.avro.Conversions.DecimalConversion;
 import org.apache.avro.JsonProperties;
+import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.LogicalTypes.Decimal;
 import org.apache.avro.Schema;
@@ -101,6 +102,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static org.apache.avro.Schema.Type.ARRAY;
+import static org.apache.avro.Schema.Type.FLOAT;
 import static org.apache.avro.Schema.Type.MAP;
 import static org.apache.avro.Schema.Type.UNION;
 import static org.apache.hudi.avro.AvroSchemaUtils.createNewSchemaFromFieldsWithReference;
@@ -1319,6 +1321,64 @@ public class HoodieAvroUtils {
       default:
         return false;
     }
+  }
+
+  /**
+   * Used to repair the schema after conversion from StructType to avro. Timestamp logical types are assumed
+   * to be micros so we use the table schema to repair that field
+   */
+  public static Schema repairSchema(Schema convertedSchema, Schema tableSchema) {
+    if (convertedSchema.getType() == tableSchema.getType()) {
+      if (convertedSchema.getType() == Schema.Type.RECORD) {
+        List<Schema.Field> fields = new ArrayList<>(convertedSchema.getFields().size());
+        for (Schema.Field convertedField : convertedSchema.getFields()) {
+          Schema.Field tableField = tableSchema.getField(convertedField.name());
+          if (tableField == null) {
+            throw new IllegalArgumentException("Missing field: " + convertedField.name());
+          }
+          fields.add(new Schema.Field(
+              tableField.name(),
+              repairSchema(convertedField.schema(), tableField.schema()),
+              tableField.doc(),
+              tableField.defaultVal()
+          ));
+        }
+        return createNewSchemaFromFieldsWithReference(convertedSchema, fields);
+      } else if (convertedSchema.getType() == Schema.Type.ARRAY) {
+        return Schema.createArray(repairSchema(convertedSchema.getElementType(), tableSchema.getElementType()));
+      } else if (convertedSchema.getType() == Schema.Type.MAP) {
+        return Schema.createMap(repairSchema(convertedSchema.getValueType(), tableSchema.getValueType()));
+      } else if (convertedSchema.getType() == Schema.Type.UNION) {
+        List<Schema> sourceNestedSchemas = convertedSchema.getTypes();
+        List<Schema> targetNestedSchemas = tableSchema.getTypes();
+        if (sourceNestedSchemas.size() != targetNestedSchemas.size()) {
+          throw new IllegalArgumentException("Union sizes do not match.");
+        }
+        List<Schema> types = new ArrayList<>(sourceNestedSchemas.size());
+        for (int i = 0; i < sourceNestedSchemas.size(); i++) {
+          types.add(repairSchema(sourceNestedSchemas.get(i), targetNestedSchemas.get(i)));
+        }
+        return Schema.createUnion(types);
+      }
+    }
+
+    // Only repair timestamp-millis <-> timestamp-micros logical types
+    if (convertedSchema.getType() == Schema.Type.LONG && tableSchema.getType() == Schema.Type.LONG) {
+      LogicalType convertedLogical = convertedSchema.getLogicalType();
+      LogicalType tableLogical = tableSchema.getLogicalType();
+
+      boolean isConvertedTimestampMillis = LogicalTypes.timestampMillis().equals(convertedLogical);
+      boolean isConvertedTimestampMicros = LogicalTypes.timestampMicros().equals(convertedLogical);
+      boolean isTableTimestampMillis = LogicalTypes.timestampMillis().equals(tableLogical);
+      boolean isTableTimestampMicros = LogicalTypes.timestampMicros().equals(tableLogical);
+
+      if ((isConvertedTimestampMillis && isTableTimestampMicros)
+          || (isConvertedTimestampMicros && isTableTimestampMillis)) {
+        return tableSchema;
+      }
+    }
+
+    return convertedSchema;
   }
 
   /**
