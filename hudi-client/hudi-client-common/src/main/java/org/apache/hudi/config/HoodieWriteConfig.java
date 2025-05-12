@@ -860,7 +860,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       .sinceVersion("1.1.0")
       .withDocumentation("Whether to enable streaming write to metadata table or not. With streaming writes, we execute writes to both data table and metadata table "
           + "using one RDD stage boundary. If not, writes to data table and metadata table happens across stage boundaries.");
-  
+
   /**
    * Config key with boolean value that indicates whether record being written during MERGE INTO Spark SQL
    * operation are already prepped.
