@@ -336,7 +336,7 @@ class TestCompactionProcedure extends HoodieSparkProcedureTestBase {
     }
   }
 
-  test("Test Call run_clustering with limit parameter") {
+  test("Test Call run_compaction with limit parameter") {
     withSQLConf("hoodie.compact.inline" -> "false", "hoodie.compact.inline.max.delta.commits" -> "1") {
       withTempDir { tmp =>
         val tableName = generateTableName
@@ -360,7 +360,7 @@ class TestCompactionProcedure extends HoodieSparkProcedureTestBase {
         val conf = new Configuration
         val metaClient = HoodieTestUtils.createMetaClient(new HadoopStorageConfiguration(conf), basePath)
 
-        assert(0 == metaClient.getActiveTimeline.getCompletedReplaceTimeline.getInstants.size())
+        assert(metaClient.getActiveTimeline.getCompletedReplaceTimeline.getInstants.size() == 0)
         assert(metaClient.getActiveTimeline.filterPendingClusteringTimeline().empty())
 
         spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
@@ -373,12 +373,58 @@ class TestCompactionProcedure extends HoodieSparkProcedureTestBase {
 
         spark.sql(s"call run_compaction(table => '$tableName', op => 'schedule')")
         metaClient.reloadActiveTimeline();
-        assert(2 == metaClient.getActiveTimeline.filterPendingCompactionTimeline().getInstants.size())
+        assert(metaClient.getActiveTimeline.filterPendingCompactionTimeline().getInstants.size() == 2)
 
         spark.sql(s"call run_compaction(table => '$tableName', op => 'execute', limit => 1)");
 
         metaClient.reloadActiveTimeline();
-        assert(1 == metaClient.getActiveTimeline.filterPendingCompactionTimeline().getInstants.size())
+        assert(metaClient.getActiveTimeline.filterPendingCompactionTimeline().getInstants.size() == 1)
+      }
+    }
+  }
+
+  test("Test Call run_compaction with scheduleandexcute op") {
+    withSQLConf("hoodie.compact.inline" -> "false", "hoodie.compact.inline.max.delta.commits" -> "1") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        val basePath = s"${tmp.getCanonicalPath}/$tableName"
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | tblproperties (
+             |  type = 'mor',
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts'
+             | )
+             | location '${basePath}'
+       """.stripMargin)
+
+        val conf = new Configuration
+        val metaClient = HoodieTestUtils.createMetaClient(new HadoopStorageConfiguration(conf), basePath)
+
+        assert(metaClient.getActiveTimeline.getCompletedReplaceTimeline.getInstants.size() == 0)
+        assert(metaClient.getActiveTimeline.filterPendingClusteringTimeline().empty())
+
+        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+        spark.sql(s"update $tableName set name = 'a2' where id = 1")
+
+        spark.sql(s"call run_compaction(table => '$tableName', op => 'schedule')")
+
+        metaClient.reloadActiveTimeline();
+        assert(metaClient.getActiveTimeline.filterPendingCompactionTimeline().getInstants.size() == 1)
+
+        spark.sql(s"insert into $tableName values(2, 'b1', 20, 3000)")
+        spark.sql(s"update $tableName set name = 'b3' where id = 2")
+        spark.sql(s"call run_compaction(table => '$tableName', op => 'scheduleandexecute')");
+
+        // scheduleandexecute should run compact on all pending compactions
+        metaClient.reloadActiveTimeline();
+        assert(metaClient.getActiveTimeline.filterPendingCompactionTimeline().getInstants.size() == 0)
       }
     }
   }
