@@ -30,15 +30,14 @@ import org.apache.hudi.common.table.read.HoodieFileGroupReader
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.storage.StorageConfiguration
 import org.apache.hudi.storage.hadoop.{HadoopStorageConfiguration, HoodieHadoopStorage}
-
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hadoop.mapreduce.Job
+import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.JoinedRow
-import org.apache.spark.sql.execution.datasources.HoodieFileGroupReaderBasedFileFormat.{ORC_FILE_EXTENSION, PARQUET_FILE_EXTENSION}
 import org.apache.spark.sql.execution.datasources.orc.OrcFileFormat
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, SparkFileReader}
 import org.apache.spark.sql.execution.vectorized.{OffHeapColumnVector, OnHeapColumnVector}
@@ -161,8 +160,6 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     val dataAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(dataSchema, sanitizedTableName)
     val broadcastedParquetFileReader = spark.sparkContext.broadcast(
       sparkAdapter.createParquetFileReader(supportBatchResult, spark.sessionState.conf, options, augmentedStorageConf.unwrap()))
-    val broadcastedOrcFileReader = spark.sparkContext.broadcast(
-      sparkAdapter.createOrcFileReader(supportBatchCalled, spark.sessionState.conf, options, augmentedStorageConf.unwrap()))
     val broadcastedStorageConf = spark.sparkContext.broadcast(new SerializableConfiguration(augmentedStorageConf.unwrap()))
     val fileIndexProps: TypedProperties = HoodieFileIndex.getConfigProperties(spark, options, null)
 
@@ -175,9 +172,8 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
             sparkAdapter.getSparkPartitionedFileUtils.getPathFromPartitionedFile(file))
           fileSliceMapping.getSlice(filegroupName) match {
             case Some(fileSlice) if !isCount && (requiredSchema.nonEmpty || fileSlice.getLogFiles.findAny().isPresent) =>
-              val fileReaders = new java.util.HashMap[String, SparkFileReader]()
-              fileReaders.put(ORC_FILE_EXTENSION, broadcastedOrcFileReader.value)
-              fileReaders.put(PARQUET_FILE_EXTENSION, broadcastedParquetFileReader.value)
+              val fileReaders = new java.util.HashMap[HoodieFileFormat, SparkFileReader]()
+              fileReaders.put(HoodieFileFormat.PARQUET, broadcastedParquetFileReader.value)
               val metaClient: HoodieTableMetaClient = HoodieTableMetaClient
                 .builder().setConf(storageConf).setBasePath(tablePath).build
               val readerContext = new SparkFileFormatInternalRowReaderContext(
@@ -212,10 +208,8 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
               val filePath = sparkAdapter.getSparkPartitionedFileUtils.getPathFromPartitionedFile(file)
               val baseFileFormat = detectFileFormat(filePath.toString)
               baseFileFormat match {
-                case PARQUET_FILE_EXTENSION => readBaseFile(file, broadcastedParquetFileReader.value, requestedSchema, remainingPartitionSchema, fixedPartitionIndexes,
+                case HoodieFileFormat.PARQUET => readBaseFile(file, broadcastedParquetFileReader.value, requestedSchema, remainingPartitionSchema, fixedPartitionIndexes,
               requiredSchema, partitionSchema, outputSchema, filters, storageConf)
-                case ORC_FILE_EXTENSION => readBaseFile(file, broadcastedOrcFileReader.value, requestedSchema, remainingPartitionSchema, fixedPartitionIndexes,
-                  requiredSchema, partitionSchema, outputSchema, filters, storageConf)
               }
           }
         // CDC queries.
@@ -226,9 +220,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
           val filePath = sparkAdapter.getSparkPartitionedFileUtils.getPathFromPartitionedFile(file)
           val baseFileFormat = detectFileFormat(filePath.toString)
           baseFileFormat match {
-            case PARQUET_FILE_EXTENSION => readBaseFile(file, broadcastedParquetFileReader.value, requestedSchema, remainingPartitionSchema, fixedPartitionIndexes,
-              requiredSchema, partitionSchema, outputSchema, filters, storageConf)
-            case ORC_FILE_EXTENSION => readBaseFile(file, broadcastedOrcFileReader.value, requestedSchema, remainingPartitionSchema, fixedPartitionIndexes,
+            case HoodieFileFormat.PARQUET => readBaseFile(file, broadcastedParquetFileReader.value, requestedSchema, remainingPartitionSchema, fixedPartitionIndexes,
               requiredSchema, partitionSchema, outputSchema, filters, storageConf)
           }
       }
@@ -354,8 +346,8 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     val parquetFormat = new ParquetFileFormat()
     val orcFormat = new OrcFileFormat()
     fileFormat match {
-      case "parquet" => parquetFormat.inferSchema(sparkSession, options, files)
-      case "orc" => orcFormat.inferSchema(sparkSession, options, files)
+      case HoodieFileFormat.PARQUET => parquetFormat.inferSchema(sparkSession, options, files)
+      case HoodieFileFormat.ORC => orcFormat.inferSchema(sparkSession, options, files)
       case _ => throw new UnsupportedOperationException(s"File format $fileFormat is not supported.")
     }
   }
@@ -367,15 +359,10 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     throw new UnsupportedOperationException("Write operations are not supported in this example.")
   }
 
-  private def detectFileFormat(filePath: String): String = {
+  private def detectFileFormat(filePath: String): HoodieFileFormat = {
     // Logic to detect file format based on the filePath or its content.
-    if (filePath.endsWith(".parquet")) PARQUET_FILE_EXTENSION
-    else if (filePath.endsWith(".orc")) ORC_FILE_EXTENSION
-    else ""
+    if (filePath.endsWith(HoodieFileFormat.PARQUET.getFileExtension)) HoodieFileFormat.PARQUET
+    else if (filePath.endsWith(HoodieFileFormat.ORC.getFileExtension)) HoodieFileFormat.ORC
+    else null
   }
-}
-
-object HoodieFileGroupReaderBasedFileFormat {
-  val ORC_FILE_EXTENSION = "orc"
-  val PARQUET_FILE_EXTENSION = "parquet"
 }

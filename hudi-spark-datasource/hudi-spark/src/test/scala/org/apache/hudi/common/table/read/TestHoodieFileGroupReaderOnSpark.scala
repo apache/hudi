@@ -24,7 +24,7 @@ import org.apache.hudi.DataSourceWriteOptions.{OPERATION, PRECOMBINE_FIELD, RECO
 import org.apache.hudi.common.config.{HoodieReaderConfig, RecordMergeMode, TypedProperties}
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
+import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord, WriteOperationType}
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload.{DELETE_KEY, DELETE_MARKER}
 import org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
@@ -34,7 +34,6 @@ import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.storage.{StorageConfiguration, StoragePath}
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
-
 import org.apache.avro.{Schema, SchemaBuilder}
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.{HoodieSparkKryoRegistrar, SparkConf}
@@ -51,7 +50,6 @@ import org.mockito.Mockito
 import org.mockito.Mockito.when
 
 import java.util
-
 import scala.collection.JavaConverters._
 
 /**
@@ -98,8 +96,8 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
 
   override def getHoodieReaderContext(tablePath: String, avroSchema: Schema, storageConf: StorageConfiguration[_], metaClient: HoodieTableMetaClient): HoodieReaderContext[InternalRow] = {
     val reader = sparkAdapter.createParquetFileReader(vectorized = false, spark.sessionState.conf, Map.empty, storageConf.unwrapAs(classOf[Configuration]))
-    val readers = new util.HashMap[String, SparkFileReader]()
-    readers.put("parquet", reader)
+    val readers = new util.HashMap[HoodieFileFormat, SparkFileReader]()
+    readers.put(HoodieFileFormat.PARQUET, reader)
     new SparkFileFormatInternalRowReaderContext(readers, Seq.empty, Seq.empty, getStorageConf, metaClient.getTableConfig)
   }
 
@@ -130,7 +128,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
   @Test
   def testGetOrderingValue(): Unit = {
     val reader = Mockito.mock(classOf[SparkFileReader])
-    val readers: Map[String, SparkFileReader] = Map("parquet" -> reader)
+    val readers: Map[HoodieFileFormat, SparkFileReader] = Map(HoodieFileFormat.PARQUET -> reader)
     val tableConfig = Mockito.mock(classOf[HoodieTableConfig])
     Mockito.when(tableConfig.populateMetaFields()).thenReturn(true)
     val sparkReaderContext = new SparkFileFormatInternalRowReaderContext(readers.asJava, Seq.empty, Seq.empty, getStorageConf, tableConfig)
@@ -265,7 +263,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
   @Test
   def getRecordKeyFromMetadataFields(): Unit = {
     val reader = Mockito.mock(classOf[SparkFileReader])
-    val readers: Map[String, SparkFileReader] = Map("parquet" -> reader)
+    val readers: Map[HoodieFileFormat, SparkFileReader] = Map(HoodieFileFormat.PARQUET -> reader)
     val tableConfig = Mockito.mock(classOf[HoodieTableConfig])
     val storageConf = Mockito.mock(classOf[StorageConfiguration[_]])
     when(tableConfig.populateMetaFields()).thenReturn(true)
@@ -285,7 +283,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
   @Test
   def getRecordKeySingleKey(): Unit = {
     val reader = Mockito.mock(classOf[SparkFileReader])
-    val readers: Map[String, SparkFileReader] = Map("parquet" -> reader)
+    val readers: Map[HoodieFileFormat, SparkFileReader] = Map(HoodieFileFormat.PARQUET -> reader)
     val tableConfig = Mockito.mock(classOf[HoodieTableConfig])
     when(tableConfig.populateMetaFields()).thenReturn(false)
     when(tableConfig.getRecordKeyFields).thenReturn(HOption.of(Array("field1")))
@@ -309,7 +307,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
   @Test
   def getRecordKeyWithMultipleKeys(): Unit = {
     val reader = Mockito.mock(classOf[SparkFileReader])
-    val readers: Map[String, SparkFileReader] = Map("parquet" -> reader)
+    val readers: Map[HoodieFileFormat, SparkFileReader] = Map(HoodieFileFormat.PARQUET -> reader)
     val tableConfig = Mockito.mock(classOf[HoodieTableConfig])
     when(tableConfig.populateMetaFields()).thenReturn(false)
     when(tableConfig.getRecordKeyFields).thenReturn(HOption.of(Array("outer1.field1", "outer1.field2", "outer1.field3")))
@@ -326,7 +324,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
   @Test
   def getNestedValue(): Unit = {
     val reader = Mockito.mock(classOf[SparkFileReader])
-    val readers: Map[String, SparkFileReader] = Map("parquet" -> reader)
+    val readers: Map[HoodieFileFormat, SparkFileReader] = Map(HoodieFileFormat.PARQUET -> reader)
     val tableConfig = Mockito.mock(classOf[HoodieTableConfig])
     when(tableConfig.populateMetaFields()).thenReturn(true)
     val storageConf = Mockito.mock(classOf[StorageConfiguration[_]])

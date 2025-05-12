@@ -21,6 +21,7 @@ package org.apache.spark.sql.hudi
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.storage.StoragePath
+
 import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.api.java.JavaSparkContext
@@ -232,20 +233,6 @@ trait SparkAdapter extends Serializable {
                               sqlConf: SQLConf,
                               options: Map[String, String],
                               hadoopConf: Configuration): SparkFileReader
-
-  /**
-   * Get orc file reader
-   *
-   * @param vectorized true if vectorized reading is not prohibited due to schema, reading mode, etc
-   * @param sqlConf    the [[SQLConf]] used for the read
-   * @param options    passed as a param to the file format
-   * @param hadoopConf some configs will be set for the hadoopConf
-   * @return orc file reader
-   */
-  def createOrcFileReader(vectorized: Boolean,
-                          sqlConf: SQLConf,
-                          options: Map[String, String],
-                          hadoopConf: Configuration): SparkFileReader
 
   /**
    * use new qe execute

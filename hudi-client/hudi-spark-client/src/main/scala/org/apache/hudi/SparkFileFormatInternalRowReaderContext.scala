@@ -24,14 +24,13 @@ import org.apache.hudi.avro.{AvroSchemaUtils, HoodieAvroUtils}
 import org.apache.hudi.avro.AvroSchemaUtils.isNullable
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord}
 import org.apache.hudi.common.table.read.PositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.collection.{CachingIterator, ClosableIterator, Pair => HPair}
 import org.apache.hudi.io.storage.{HoodieSparkFileReaderFactory, HoodieSparkParquetReader}
 import org.apache.hudi.storage.{HoodieStorage, StorageConfiguration, StoragePath}
 import org.apache.hudi.util.CloseableInternalRowIterator
-
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericRecord, IndexedRecord}
 import org.apache.hadoop.conf.Configuration
@@ -61,7 +60,7 @@ import scala.collection.mutable
  * @param filters           spark filters that might be pushed down into the reader
  * @param requiredFilters   filters that are required and should always be used, even in merging situations
  */
-class SparkFileFormatInternalRowReaderContext(fileReaders: java.util.Map[String, SparkFileReader],
+class SparkFileFormatInternalRowReaderContext(fileReaders: java.util.Map[HoodieFileFormat, SparkFileReader],
                                               filters: Seq[Filter],
                                               requiredFilters: Seq[Filter],
                                               storageConfiguration: StorageConfiguration[_],
@@ -97,9 +96,13 @@ class SparkFileFormatInternalRowReaderContext(fileReaders: java.util.Map[String,
       val fileInfo = sparkAdapter.getSparkPartitionedFileUtils
         .createPartitionedFile(InternalRow.empty, filePath, start, length)
       val (readSchema, readFilters) = getSchemaAndFiltersForRead(structType, hasRowIndexField)
-      val fileReader = if (fileInfo.filePath.toString.endsWith("orc")) fileReaders.get("orc") else fileReaders.get("parquet")
-      new CloseableInternalRowIterator(fileReader.read(fileInfo,
-        readSchema, StructType(Seq.empty), getSchemaHandler.getInternalSchemaOpt,
+      val fileReader = if (fileInfo.filePath.toString.endsWith(HoodieFileFormat.PARQUET.getFileExtension)) {
+        fileReaders.get(HoodieFileFormat.PARQUET)
+      } else {
+        throw new RuntimeException("Only parquet file reader is supported for now")
+      }
+      new CloseableInternalRowIterator(fileReader.read(
+        fileInfo, readSchema, StructType(Seq.empty), getSchemaHandler.getInternalSchemaOpt,
         readFilters, storage.getConf.asInstanceOf[StorageConfiguration[Configuration]]))
     }
   }

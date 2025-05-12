@@ -155,20 +155,4 @@ class Spark3_5Adapter extends BaseSpark3Adapter {
   override def stopSparkContext(jssc: JavaSparkContext, exitCode: Int): Unit = {
     jssc.sc.stop(exitCode)
   }
-
-  /**
-   * Get orc file reader
-   *
-   * @param vectorized true if vectorized reading is not prohibited due to schema, reading mode, etc
-   * @param sqlConf    the [[SQLConf]] used for the read
-   * @param options    passed as a param to the file format
-   * @param hadoopConf some configs will be set for the hadoopConf
-   * @return parquet file reader
-   */
-  override def createOrcFileReader(vectorized: Boolean,
-                                   sqlConf: SQLConf,
-                                   options: Map[String, String],
-                                   hadoopConf: Configuration): SparkFileReader = {
-    Spark35OrcReader.build(vectorized, sqlConf, options, hadoopConf)
-  }
 }

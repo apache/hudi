@@ -22,7 +22,7 @@ package org.apache.hudi.common.table.read
 import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkUtils, SparkFileFormatInternalRowReaderContext}
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig}
-import org.apache.hudi.common.model.HoodieTableType
+import org.apache.hudi.common.model.{HoodieFileFormat, HoodieTableType}
 import org.apache.hudi.common.testutils.HoodieTestTable
 import org.apache.hudi.common.util
 import org.apache.hudi.config.HoodieWriteConfig
@@ -30,7 +30,6 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.util.CloseableInternalRowIterator
-
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.parquet.SparkFileReader
@@ -87,8 +86,8 @@ class TestSpark35RecordPositionMetadataColumn extends SparkClientFunctionalTestH
     val props = Map("spark.sql.parquet.enableVectorizedReader" -> "false")
     _spark.conf.set("spark.sql.parquet.enableVectorizedReader", "false")
     val reader = sparkAdapter.createParquetFileReader(vectorized = false, _spark.sessionState.conf, props, hadoopConf)
-    val readers = new java.util.HashMap[String, SparkFileReader]()
-    readers.put("parquet", reader)
+    val readers = new java.util.HashMap[HoodieFileFormat, SparkFileReader]()
+    readers.put(HoodieFileFormat.PARQUET, reader)
 
     val metaClient = getHoodieMetaClient(HadoopFSUtils.getStorageConfWithCopy(_spark.sparkContext.hadoopConfiguration), basePath)
     val allBaseFiles = HoodieTestTable.of(metaClient).listAllBaseFiles

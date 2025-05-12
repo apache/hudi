@@ -21,11 +21,10 @@ package org.apache.spark.execution.datasources.parquet
 
 import org.apache.hudi.SparkFileFormatInternalRowReaderContext
 import org.apache.hudi.SparkFileFormatInternalRowReaderContext.filterIsSafeForBootstrap
-import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.read.PositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
-
 import org.apache.spark.sql.execution.datasources.parquet.SparkFileReader
 import org.apache.spark.sql.sources.{And, IsNotNull, Or}
 import org.apache.spark.sql.types.{LongType, StringType, StructField, StructType}
@@ -81,7 +80,7 @@ class TestSparkFileFormatInternalRowReaderContext extends SparkClientFunctionalT
   @Test
   def testConvertValueToEngineType(): Unit = {
     val reader = Mockito.mock(classOf[SparkFileReader])
-    val readers: Map[String, SparkFileReader] = Map("parquet" -> reader)
+    val readers: Map[HoodieFileFormat, SparkFileReader] = Map(HoodieFileFormat.PARQUET -> reader)
     val stringValue = "string_value"
     val tableConfig = Mockito.mock(classOf[HoodieTableConfig])
     when(tableConfig.populateMetaFields()).thenReturn(true)

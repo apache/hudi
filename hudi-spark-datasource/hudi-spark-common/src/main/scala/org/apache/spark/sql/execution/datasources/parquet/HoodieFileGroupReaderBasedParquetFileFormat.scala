@@ -31,9 +31,9 @@ import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.io.IOUtils
 import org.apache.hudi.storage.StorageConfiguration
 import org.apache.hudi.storage.hadoop.{HadoopStorageConfiguration, HoodieHadoopStorage}
-
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.SparkSession
@@ -48,7 +48,6 @@ import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnarBatchUtils}
 import org.apache.spark.util.SerializableConfiguration
 
 import java.io.Closeable
-
 import scala.collection.JavaConverters.mapAsJavaMapConverter
 
 /**
@@ -166,7 +165,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
             case Some(fileSlice) if !isCount && (requiredSchema.nonEmpty || fileSlice.getLogFiles.findAny().isPresent) =>
               val metaClient: HoodieTableMetaClient = HoodieTableMetaClient
                 .builder().setConf(storageConf).setBasePath(tablePath).build
-              val readers: Map[String, SparkFileReader] = Map("parquet" -> parquetFileReader.value)
+              val readers: Map[HoodieFileFormat, SparkFileReader] = Map(HoodieFileFormat.PARQUET -> parquetFileReader.value)
               val readerContext = new SparkFileFormatInternalRowReaderContext(readers.asJava, filters, requiredFilters, storageConf, metaClient.getTableConfig)
               val props = metaClient.getTableConfig.getProps
               options.foreach(kv => props.setProperty(kv._1, kv._2))
