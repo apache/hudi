@@ -185,7 +185,7 @@
     <apache-rat-plugin.version>0.16.1</apache-rat-plugin.version>
     <scala-maven-plugin.version>3.3.1</scala-maven-plugin.version>
     <scalatest.spark3.version>3.1.0</scalatest.spark3.version>
-    <!-- TODO: Need to upgrade to 3.2.18+ after removing deprecated FunSuite -->
+    <!-- TODO (HUDI-9401): Need to upgrade to 3.2.18+ after removing deprecated FunSuite -->
     <scalatest.spark4.version>3.1.4</scalatest.spark4.version>
     <scalatest.version>${scalatest.spark3.version}</scalatest.version>
     <surefire-log4j.file>log4j2-surefire.properties</surefire-log4j.file>

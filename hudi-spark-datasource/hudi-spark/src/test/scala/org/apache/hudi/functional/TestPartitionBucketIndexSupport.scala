@@ -172,14 +172,7 @@ class TestPartitionBucketIndexSupport extends TestBucketIndexSupport {
 
   def exprFilePathAnswerCheck(bucketIndexSupport: PartitionBucketIndexSupport, exprRaw: String, expectResult: Set[String],
                               allFileStatus: Set[String]): Unit = {
-    // On Spark 4 got org.apache.spark.SparkException:
-    // [PLAN_VALIDATION_FAILED_RULE_EXECUTOR] The input plan of org.apache.spark.sql.internal.BaseSessionStateBuilder$$anon$2 is invalid: Aliases A#2143653L are dangling in the references for plan:
-    // DummyExpressionHolder [(A#2143653L = cast(3 as bigint))]
-    //
-    // Previous schema:
-    // Previous plan: DummyExpressionHolder [(A#2143653L = cast(3 as bigint))]
-    //  SQLSTATE: XXKD0
-    if (!HoodieSparkUtils.gteqSpark4_0) { // TODO fix later
+    if (!HoodieSparkUtils.gteqSpark4_0) { // TODO (HUDI-9403)
       val resolveExpr = HoodieCatalystExpressionUtils.resolveExpr(spark, exprRaw, structSchema)
       val optimizerPlan = spark.sessionState.optimizer.execute(DummyExpressionHolder(Seq(resolveExpr)))
       val optimizerExpr = optimizerPlan.asInstanceOf[DummyExpressionHolder].exprs.head
