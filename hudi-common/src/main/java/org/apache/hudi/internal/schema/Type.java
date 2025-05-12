@@ -62,7 +62,9 @@ public interface Type extends Serializable {
     DATE(Integer.class),
     BOOLEAN(Boolean.class),
     TIME(Long.class),
+    TIME_MILLIS(Long.class),
     TIMESTAMP(Long.class),
+    TIMESTAMP_MILLIS(Long.class),
     DECIMAL(BigDecimal.class),
     UUID(UUID.class);
     private final String name;

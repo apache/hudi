@@ -190,6 +190,30 @@ public class Types {
   /**
    * Time primitive type.
    */
+  public static class TimeMillisType extends PrimitiveType {
+    private static final TimeMillisType INSTANCE = new TimeMillisType();
+
+    public static TimeMillisType get() {
+      return INSTANCE;
+    }
+
+    private TimeMillisType() {
+    }
+
+    @Override
+    public TypeID typeId() {
+      return TypeID.TIME_MILLIS;
+    }
+
+    @Override
+    public String toString() {
+      return "time-millis";
+    }
+  }
+
+  /**
+   * Time primitive type.
+   */
   public static class TimestampType extends PrimitiveType {
     private static final TimestampType INSTANCE = new TimestampType();
 
@@ -208,6 +232,30 @@ public class Types {
     @Override
     public String toString() {
       return "timestamp";
+    }
+  }
+
+  /**
+   * Time primitive type.
+   */
+  public static class TimestampMillisType extends PrimitiveType {
+    private static final TimestampMillisType INSTANCE = new TimestampMillisType();
+
+    public static TimestampMillisType get() {
+      return INSTANCE;
+    }
+
+    private TimestampMillisType() {
+    }
+
+    @Override
+    public TypeID typeId() {
+      return TypeID.TIMESTAMP_MILLIS;
+    }
+
+    @Override
+    public String toString() {
+      return "timestamp-millis";
     }
   }
 
