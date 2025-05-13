@@ -22,17 +22,14 @@ import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{FileSlice, HoodieBaseFile, HoodieFileGroupId, HoodieLogFile}
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
-import org.apache.hudi.testutils.DisabledOnSpark4
 import org.apache.hudi.testutils.HoodieClientTestUtils.getSparkConfForTest
 
 import org.apache.commons.lang.math.RandomUtils.nextInt
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.execution.PartitionedFileUtil
 import org.apache.spark.sql.execution.datasources.FilePartition
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
-@DisabledOnSpark4
 class TestPartitionDirectoryConverter extends SparkAdapterSupport {
 
   val blockSize = 1024
@@ -85,13 +82,7 @@ class TestPartitionDirectoryConverter extends SparkAdapterSupport {
     val partitionOpt = Some(new PartitionPath(partitionPath, partitionValues.toArray))
     val partitionDirectory = PartitionDirectoryConverter.convertFileSlicesToPartitionDirectory(partitionOpt, slices, options)
 
-    val partitionedFiles = partitionDirectory.files.flatMap(file => {
-      // getPath() is very expensive so we only want to call it once in this block:
-      val filePath = file.getPath
-      val isSplitable = false
-      PartitionedFileUtil.splitFiles(spark, file, filePath, isSplitable, maxSplitSize, partitionDirectory.values)
-    })
-
+    val partitionedFiles = sparkAdapter.splitFiles(spark, partitionDirectory, false, maxSplitSize)
     val tasks = sparkAdapter.getFilePartitions(spark, partitionedFiles, maxSplitSize)
     verifyBalanceByNum(tasks, totalRecordNum, logFraction)
     spark.stop()

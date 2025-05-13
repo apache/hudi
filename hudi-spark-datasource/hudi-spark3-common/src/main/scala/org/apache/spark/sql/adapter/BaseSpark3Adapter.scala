@@ -148,4 +148,13 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
                                  stop: Origin): ParseException = {
     new ParseException(command, exception.getMessage, start, stop)
   }
+
+  override def splitFiles(sparkSession: SparkSession,
+                          partitionDirectory: PartitionDirectory,
+                          isSplitable: Boolean,
+                          maxSplitSize: Long): Seq[PartitionedFile] = {
+    partitionDirectory.files.flatMap(file =>
+      PartitionedFileUtil.splitFiles(sparkSession, file, file.getPath, isSplitable, maxSplitSize, partitionDirectory.values)
+    )
+  }
 }

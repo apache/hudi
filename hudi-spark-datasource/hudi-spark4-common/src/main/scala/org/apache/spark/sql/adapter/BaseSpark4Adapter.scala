@@ -169,4 +169,13 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
       }
     }
   }
+
+  override def splitFiles(sparkSession: SparkSession,
+                          partitionDirectory: PartitionDirectory,
+                          isSplitable: Boolean,
+                          maxSplitSize: Long): Seq[PartitionedFile] = {
+    partitionDirectory.files.flatMap(file =>
+      PartitionedFileUtil.splitFiles(file, isSplitable, maxSplitSize, partitionDirectory.values)
+    )
+  }
 }
