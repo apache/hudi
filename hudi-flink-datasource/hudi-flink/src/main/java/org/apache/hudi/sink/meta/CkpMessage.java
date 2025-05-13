@@ -102,6 +102,8 @@ public class CkpMessage implements Serializable, Comparable<CkpMessage> {
     // An instant can be aborted then be reused again, so it has lower priority
     // than COMPLETED
     ABORTED,
+    // Committing instant
+    START_COMPLETE,
     // Committed instant
     COMPLETED
   }
