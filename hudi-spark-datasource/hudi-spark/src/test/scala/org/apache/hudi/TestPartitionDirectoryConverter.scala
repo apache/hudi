@@ -32,6 +32,7 @@ import org.apache.spark.sql.execution.datasources.FilePartition
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
+@DisabledOnSpark4
 class TestPartitionDirectoryConverter extends SparkAdapterSupport {
 
   val blockSize = 1024
@@ -39,7 +40,6 @@ class TestPartitionDirectoryConverter extends SparkAdapterSupport {
   val partitionPath = "p_date=2025-01-01"
   val baseInstant = "20250101010101"
 
-  @DisabledOnSpark4
   @ParameterizedTest
   @ValueSource(doubles = Array(0.1, 0.2, 0.3, 0.5, 0.8, 1.0))
   def testConvertFileSlicesToPartitionDirectory(logFraction: Double): Unit = {
@@ -89,14 +89,7 @@ class TestPartitionDirectoryConverter extends SparkAdapterSupport {
       // getPath() is very expensive so we only want to call it once in this block:
       val filePath = file.getPath
       val isSplitable = false
-      PartitionedFileUtil.splitFiles(
-        spark,
-        file = file,
-        filePath = filePath,
-        isSplitable = isSplitable,
-        maxSplitBytes = maxSplitSize,
-        partitionValues = partitionDirectory.values
-      )
+      PartitionedFileUtil.splitFiles(spark, file, filePath, isSplitable, maxSplitSize, partitionDirectory.values)
     })
 
     val tasks = sparkAdapter.getFilePartitions(spark, partitionedFiles, maxSplitSize)
