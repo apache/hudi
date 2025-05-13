@@ -542,7 +542,7 @@ public class AvroInternalSchemaConverter {
         return LogicalTypes.timeMicros().addToSchema(Schema.create(Schema.Type.LONG));
 
       case TIME_MILLIS:
-        return LogicalTypes.timeMillis().addToSchema(Schema.create(Schema.Type.LONG));
+        return LogicalTypes.timeMillis().addToSchema(Schema.create(Schema.Type.INT));
 
       case TIMESTAMP:
         return LogicalTypes.timestampMicros().addToSchema(Schema.create(Schema.Type.LONG));

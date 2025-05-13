@@ -39,7 +39,9 @@ object HoodieDataTypeUtils {
     StructType.fromString(jsonSchema)
 
   def canUseRowWriter(schema: Schema, conf: Configuration): Boolean = {
-    if (conf.getBoolean(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE, true)) {
+    if (HoodieAvroUtils.hasTimestampMillisField(schema)) {
+      false
+    } else if (conf.getBoolean(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE, true)) {
       // if we can write lists with the old list structure, we can use row writer regardless of decimal precision
       true
     } else if (!HoodieAvroUtils.hasSmallPrecisionDecimalField(schema)) {

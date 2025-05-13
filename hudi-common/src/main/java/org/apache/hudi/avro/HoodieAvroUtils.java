@@ -1255,6 +1255,27 @@ public class HoodieAvroUtils {
     }
   }
 
+  public static boolean hasTimestampMillisField(Schema schema) {
+    switch (schema.getType()) {
+      case RECORD:
+        for (Field field : schema.getFields()) {
+          if (hasTimestampMillisField(field.schema())) {
+            return true;
+          }
+        }
+        return false;
+      case ARRAY:
+      case MAP:
+        return true;
+      case UNION:
+        return hasTimestampMillisField(getActualSchemaFromUnion(schema, null));
+      case LONG:
+        return LogicalTypes.timestampMillis().equals(schema.getLogicalType());
+      default:
+        return false;
+    }
+  }
+
   /**
    * Avro does not support type promotion from numbers to string. This function returns true if
    * it will be necessary to rewrite the record to support this promotion.
