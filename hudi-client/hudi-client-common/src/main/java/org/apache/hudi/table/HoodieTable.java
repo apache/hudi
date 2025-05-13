@@ -150,7 +150,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   protected HoodieTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
     this.config = config;
     this.context = context;
-    this.isMetadataTable = HoodieTableMetadata.isMetadataTable(config.getBasePath());
+    this.isMetadataTable = metaClient.isMetadataTable();
     this.instantGenerator = metaClient.getInstantGenerator();
     this.instantFileNameGenerator = metaClient.getInstantFileNameGenerator();
     this.instantFileNameParser = metaClient.getInstantFileNameParser();
