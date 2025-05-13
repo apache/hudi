@@ -261,6 +261,15 @@ trait SparkAdapter extends Serializable {
    */
   def stopSparkContext(jssc: JavaSparkContext, exitCode: Int): Unit
 
+  /**
+   * Takes a [[ResultSet]] and returns its Catalyst schema.
+   *
+   * @param conn           [[Connection]] instance.
+   * @param resultSet      [[ResultSet]] instance.
+   * @param dialect        [[JdbcDialect]] instance.
+   * @param alwaysNullable If true, all the columns are nullable.
+   * @return A [[StructType]] giving the Catalyst schema.
+   */
   def getSchema(conn: Connection,
                 resultSet: ResultSet,
                 dialect: JdbcDialect,
