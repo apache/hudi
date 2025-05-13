@@ -35,7 +35,6 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -132,8 +131,7 @@ public class HoodieSparkMergeOnReadTable<T> extends HoodieSparkCopyOnWriteTable<
   @Override
   public HoodieWriteMetadata<HoodieData<WriteStatus>> upsertPrepped(HoodieEngineContext context, String instantTime,
                                                                     HoodieData<HoodieRecord<T>> preppedRecords, Option<List<Pair<String, String>>> partitionFileIdPairsOpt) {
-    ValidationUtils.checkArgument(partitionFileIdPairsOpt.isPresent(), "ParitionFileIdPairs is expected to be present with upsert prepped for metadata table");
-    // Uses optimized upsert partitioner for metadata table when all records are upsert and locations are known upfront
+    // upsert partitioner for metadata table when all records are upsert and locations are known upfront
     return new SparkMetadataTableUpsertCommitActionExecutor<>((HoodieSparkEngineContext) context, config, this, instantTime, preppedRecords,
         partitionFileIdPairsOpt.get()).execute();
   }

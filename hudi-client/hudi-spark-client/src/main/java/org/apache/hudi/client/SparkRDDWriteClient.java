@@ -63,6 +63,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
 
+import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
+
 @SuppressWarnings("checkstyle:LineLength")
 public class SparkRDDWriteClient<T> extends
     BaseHoodieWriteClient<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
@@ -159,7 +161,10 @@ public class SparkRDDWriteClient<T> extends
     HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table =
         initTable(WriteOperationType.UPSERT_PREPPED, Option.ofNullable(instantTime));
     table.validateUpsertSchema();
-    preWrite(instantTime, WriteOperationType.UPSERT_PREPPED, table.getMetaClient());
+    if (!(partitionFileIdPairsOpt.isPresent() && partitionFileIdPairsOpt.get().get(0).getKey().equals(FILES.getPartitionPath()))) {
+      // we do not want to call prewrite more than once for the same instant writing to metadata table twice.
+      preWrite(instantTime, WriteOperationType.UPSERT_PREPPED, table.getMetaClient());
+    }
     HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.upsertPrepped(context, instantTime, HoodieJavaRDD.of(preppedRecords), partitionFileIdPairsOpt);
     HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getWriteStatuses()));
     return postWrite(resultRDD, instantTime, table);
