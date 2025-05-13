@@ -48,6 +48,7 @@ import org.apache.hudi.expression.Expression;
 import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+import org.apache.hudi.metadata.TableMetadataFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -436,7 +437,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   private void doRefresh() {
     HoodieTimer timer = HoodieTimer.start();
 
-    resetTableMetadata(createMetadataTable(engineContext, metaClient.getStorage(), metadataConfig, basePath));
+    resetTableMetadata(createMetadataTable(engineContext, metaClient.getStorage(), metaClient.getTableFormat().getMetadataFactory(), metadataConfig, basePath));
 
     // Make sure we reload active timeline
     metaClient.reloadActiveTimeline();
@@ -535,10 +536,11 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   private static HoodieTableMetadata createMetadataTable(
       HoodieEngineContext engineContext,
       HoodieStorage storage,
+      TableMetadataFactory metadataFactory,
       HoodieMetadataConfig metadataConfig,
       StoragePath basePath
   ) {
-    HoodieTableMetadata newTableMetadata = HoodieTableMetadata.create(
+    HoodieTableMetadata newTableMetadata = metadataFactory.create(
         engineContext, storage, metadataConfig, basePath.toString(), true);
     return newTableMetadata;
   }

@@ -138,7 +138,6 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
           clusteringInstant,
           metadata,
           table.getActiveTimeline());
-      // Call Table Format Commit to allow writing supplementary table format.
       table.getMetaClient().getTableFormat().commit(metadata, completedClusteringInstant, table.getContext(), table.getMetaClient(), table.getViewManager());
     } catch (HoodieIOException e) {
       throw new HoodieClusteringException(

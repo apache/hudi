@@ -573,7 +573,7 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
 
   public HoodieTableMetadata metadata(HoodieWriteConfig clientConfig,
                                       HoodieEngineContext hoodieEngineContext) {
-    return HoodieTableMetadata.create(
+    return metaClient.getTableFormat().getMetadataFactory().create(
         hoodieEngineContext, storage, clientConfig.getMetadataConfig(), clientConfig.getBasePath());
   }
 

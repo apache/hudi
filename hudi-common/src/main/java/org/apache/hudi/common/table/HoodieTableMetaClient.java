@@ -18,8 +18,8 @@
 
 package org.apache.hudi.common.table;
 
-import org.apache.hudi.common.HudiPluggableTableFormat;
-import org.apache.hudi.common.PluggableTableFormat;
+import org.apache.hudi.common.NativeTableFormat;
+import org.apache.hudi.common.TableFormat;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetaserverConfig;
@@ -87,7 +87,7 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_STRATEGY_ID;
-import static org.apache.hudi.common.table.HoodieTableConfig.SUPPLEMENTARY_TABLE_FORMAT_CLASS_NAME;
+import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_FORMAT;
 import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_PATH;
 import static org.apache.hudi.common.table.HoodieTableConfig.VERSION;
 import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
@@ -168,7 +168,7 @@ public class HoodieTableMetaClient implements Serializable {
   protected HoodieMetaserverConfig metaserverConfig;
   private HoodieTimeGeneratorConfig timeGeneratorConfig;
   private Option<HoodieIndexMetadata> indexMetadataOpt = Option.empty();
-  private PluggableTableFormat tableFormat;
+  private TableFormat tableFormat;
 
   /**
    * Instantiate HoodieTableMetaClient.
@@ -199,7 +199,7 @@ public class HoodieTableMetaClient implements Serializable {
       throw new TableNotFoundException("Table does not exist");
     }
     this.timelineLayoutVersion = layoutVersion.orElseGet(tableConfigVersion::get);
-    this.tableFormat = tableConfig.getPluggableTableFormat(timelineLayoutVersion);
+    this.tableFormat = tableConfig.getTableFormat(timelineLayoutVersion);
     this.timelineLayout = TimelineLayout.fromVersion(timelineLayoutVersion);
     this.timelinePath = timelineLayout.getTimelinePathProvider().getTimelinePath(tableConfig, this.basePath);
     this.timelineHistoryPath = timelineLayout.getTimelinePathProvider().getTimelineHistoryPath(tableConfig, this.basePath);
@@ -362,7 +362,7 @@ public class HoodieTableMetaClient implements Serializable {
     return timelinePath;
   }
 
-  public PluggableTableFormat getTableFormat() {
+  public TableFormat getTableFormat() {
     return tableFormat;
   }
 
@@ -529,7 +529,7 @@ public class HoodieTableMetaClient implements Serializable {
    * @return Active instants timeline
    */
   public synchronized HoodieActiveTimeline getActiveTimelineForNativeFormat() {
-    return new HudiPluggableTableFormat(activeTimeline.getTimelineLayoutVersion()).getTimelineFactory().createActiveTimeline(this);
+    return new NativeTableFormat(activeTimeline.getTimelineLayoutVersion()).getTimelineFactory().createActiveTimeline(this);
   }
 
   /**
@@ -556,7 +556,7 @@ public class HoodieTableMetaClient implements Serializable {
   private void reloadTimelineLayoutAndPath() {
     this.timelineLayoutVersion = tableConfig.getTimelineLayoutVersion().get();
     this.timelineLayout = TimelineLayout.fromVersion(timelineLayoutVersion);
-    this.tableFormat = tableConfig.getPluggableTableFormat(timelineLayoutVersion);
+    this.tableFormat = tableConfig.getTableFormat(timelineLayoutVersion);
     this.timelinePath = timelineLayout.getTimelinePathProvider().getTimelinePath(tableConfig, basePath);
     this.timelineHistoryPath = timelineLayout.getTimelinePathProvider().getTimelineHistoryPath(tableConfig, basePath);
   }
@@ -1061,7 +1061,7 @@ public class HoodieTableMetaClient implements Serializable {
     private Boolean multipleBaseFileFormatsEnabled;
 
     private String indexDefinitionPath;
-    private String pluggableTableFormatClass;
+    private String tableFormat;
 
     /**
      * Persist the configs that is written at the first time, and should not be changed.
@@ -1261,8 +1261,8 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
-    public TableBuilder setPluggableTableFormatClass(String pluggableTableFormatClass) {
-      this.pluggableTableFormatClass = pluggableTableFormatClass;
+    public TableBuilder setTableFormat(String tableFormat) {
+      this.tableFormat = tableFormat;
       return this;
     }
 
@@ -1547,8 +1547,8 @@ public class HoodieTableMetaClient implements Serializable {
       if (null != indexDefinitionPath) {
         tableConfig.setValue(HoodieTableConfig.RELATIVE_INDEX_DEFINITION_PATH, indexDefinitionPath);
       }
-      if (null != pluggableTableFormatClass) {
-        tableConfig.setValue(SUPPLEMENTARY_TABLE_FORMAT_CLASS_NAME, pluggableTableFormatClass);
+      if (null != tableFormat) {
+        tableConfig.setValue(TABLE_FORMAT, tableFormat);
       }
       return tableConfig.getProps();
     }

@@ -297,7 +297,7 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
     // If metadata table is enabled, do not archive instants which are more recent than the last compaction on the
     // metadata table.
     if (config.isMetadataTableEnabled() && table.getMetaClient().getTableConfig().isMetadataTableAvailable()) {
-      try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(table.getContext(), table.getStorage(), config.getMetadataConfig(), config.getBasePath())) {
+      try (HoodieTableMetadata tableMetadata = table.refreshMetadataTable()) {
         Option<String> latestCompactionTime = tableMetadata.getLatestCompactionTime();
         if (!latestCompactionTime.isPresent()) {
           LOG.info("Not archiving as there is no compaction yet on the metadata table");

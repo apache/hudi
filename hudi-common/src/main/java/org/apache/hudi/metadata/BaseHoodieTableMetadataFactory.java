@@ -24,9 +24,16 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public abstract class BaseHoodieTableMetadataFactory {
+public abstract class TableMetadataFactory {
 
-  protected static Logger LOG = LoggerFactory.getLogger(BaseHoodieTableMetadataFactory.class);
+  protected static Logger LOG = LoggerFactory.getLogger(TableMetadataFactory.class);
+
+  public HoodieTableMetadata create(HoodieEngineContext engineContext,
+                                    HoodieStorage storage,
+                                    HoodieMetadataConfig metadataConfig,
+                                    String datasetBasePath) {
+    return create(engineContext, storage, metadataConfig, datasetBasePath, false);
+  }
 
   public abstract HoodieTableMetadata create(HoodieEngineContext engineContext,
                                              HoodieStorage storage,

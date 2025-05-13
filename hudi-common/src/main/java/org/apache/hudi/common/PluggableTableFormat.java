@@ -25,14 +25,27 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.TimelineFactory;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
+import org.apache.hudi.metadata.TableMetadataFactory;
 
 import java.io.Serializable;
 import java.util.List;
+import java.util.Properties;
 
 /**
  * External Table Format needs to implement this interface
  */
-public interface PluggableTableFormat extends Serializable {
+public interface TableFormat extends Serializable {
+
+  /**
+   * Returns the name of the table format.
+   */
+  String getName();
+
+  /**
+   * Initializes the table format implementation with the properties supplied from {@link org.apache.hudi.common.table.HoodieTableConfig}
+   */
+  default void init(Properties properties) {
+  }
 
   /**
    * Called just after marking the write action as complete in hoodie timeline. Implementation expected to save additional state needed in
@@ -130,5 +143,13 @@ public interface PluggableTableFormat extends Serializable {
       FileSystemViewManager viewManager) {
   }
 
+  /**
+   * Return the timeline factory for table format.
+   */
   TimelineFactory getTimelineFactory();
+
+  /**
+   * Return the table metadata factory for table format.
+   */
+  TableMetadataFactory getMetadataFactory();
 }

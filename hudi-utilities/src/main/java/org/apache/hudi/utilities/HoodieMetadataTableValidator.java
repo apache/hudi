@@ -1758,7 +1758,7 @@ public class HoodieMetadataTableValidator implements Serializable {
         FileSystemViewStorageConfig viewConf = FileSystemViewStorageConfig.newBuilder().fromProperties(props).build();
         ValidationUtils.checkArgument(viewConf.getStorageType().name().equals(viewStorageType), "View storage type not reflected");
         HoodieCommonConfig commonConfig = HoodieCommonConfig.newBuilder().fromProperties(props).build();
-        this.tableMetadata = HoodieTableMetadata.create(
+        this.tableMetadata = metaClient.getTableFormat().getMetadataFactory().create(
             engineContext, metaClient.getStorage(), metadataConfig, metaClient.getBasePath().toString());
         this.fileSystemView = getFileSystemView(engineContext,
             metaClient, metadataConfig, viewConf, commonConfig);

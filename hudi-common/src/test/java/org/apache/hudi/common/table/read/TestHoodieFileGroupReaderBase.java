@@ -48,7 +48,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
-import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.avro.Schema;
@@ -302,7 +301,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
         metadataConfig,
         FileSystemViewStorageConfig.newBuilder().build(),
         HoodieCommonConfig.newBuilder().build(),
-        mc -> HoodieTableMetadata.create(
+        mc -> metaClient.getTableFormat().getMetadataFactory().create(
             engineContext, mc.getStorage(), metadataConfig, tablePath));
     SyncableFileSystemView fsView = viewManager.getFileSystemView(metaClient);
     List<FileSlice> fileSlices = Arrays.stream(partitionPaths).flatMap(fsView::getAllFileSlices).collect(Collectors.toList());
