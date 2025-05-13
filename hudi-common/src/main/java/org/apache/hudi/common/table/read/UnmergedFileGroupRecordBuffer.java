@@ -78,7 +78,7 @@ public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
     if (recordIterator == null || !recordIterator.hasNext()) {
       return false;
     }
-    nextRecord = recordIterator.next();
+    nextRecord = readerContext.seal(recordIterator.next());
     readStats.incrementNumInserts();
     return true;
   }
