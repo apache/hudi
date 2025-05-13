@@ -25,7 +25,7 @@ import org.apache.hudi.storage.StoragePath
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.mapred.JobConf
-import org.apache.spark.{Partition, SerializableWritable, TaskContext}
+import org.apache.spark.SerializableWritable
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.PartitionedFile
@@ -38,22 +38,19 @@ class HoodieBootstrapMORRDD(@transient spark: SparkSession,
                             tableSchema: HoodieTableSchema,
                             requiredSchema: HoodieTableSchema,
                             tableState: HoodieTableState,
-                            @transient splits: Seq[BaseHoodieBootstrapSplit])
+                            @transient partitions: Seq[HoodieDefaultFilePartition])
   extends HoodieBootstrapRDD(spark, bootstrapDataFileReader, bootstrapSkeletonFileReader,
-    regularFileReader, requiredSchema, splits) {
+    regularFileReader, requiredSchema, partitions) {
 
   protected val maxCompactionMemoryInBytes: Long = getMaxCompactionMemoryInBytes(new JobConf(config))
 
   private val hadoopConfBroadcast = spark.sparkContext.broadcast(new SerializableWritable(config))
 
-  override def compute(split: Partition, context: TaskContext): Iterator[InternalRow] = {
-    val bootstrapPartition = split.asInstanceOf[HoodieBootstrapPartition]
-    maybeLog(bootstrapPartition)
-    val bootstrapMORSplit = bootstrapPartition.split.asInstanceOf[HoodieBootstrapMORSplit]
-
+  override protected def splitToIter(fileSplit: BaseHoodieBootstrapSplit): Iterator[InternalRow] = {
+    val bootstrapMORSplit = fileSplit.asInstanceOf[HoodieBootstrapMORSplit]
     if (bootstrapMORSplit.logFiles.isEmpty) {
       //no log files, treat like regular bootstrap
-      getIterator(bootstrapPartition)
+      super.splitToIter(fileSplit)
     } else {
       bootstrapMORSplit.skeletonFile match {
         case Some(skeletonFile) =>
