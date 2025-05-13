@@ -312,9 +312,4 @@ trait SparkAdapter extends Serializable {
                         stop: Origin): ParseException
 
   def compareValues[T <% Comparable[T]](a: T, b: T): Int = a.compareTo(b)
-
-  def splitFiles(sparkSession: SparkSession,
-                 partitionDirectory: PartitionDirectory,
-                 isSplitable: Boolean,
-                 maxSplitSize: Long): Seq[PartitionedFile]
 }

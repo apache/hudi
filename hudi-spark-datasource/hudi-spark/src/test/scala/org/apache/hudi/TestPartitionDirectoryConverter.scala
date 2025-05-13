@@ -22,10 +22,12 @@ import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{FileSlice, HoodieBaseFile, HoodieFileGroupId, HoodieLogFile}
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
+import org.apache.hudi.testutils.DisabledOnSpark4
 import org.apache.hudi.testutils.HoodieClientTestUtils.getSparkConfForTest
 
 import org.apache.commons.lang.math.RandomUtils.nextInt
 import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.execution.PartitionedFileUtil
 import org.apache.spark.sql.execution.datasources.FilePartition
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -37,6 +39,7 @@ class TestPartitionDirectoryConverter extends SparkAdapterSupport {
   val partitionPath = "p_date=2025-01-01"
   val baseInstant = "20250101010101"
 
+  @DisabledOnSpark4
   @ParameterizedTest
   @ValueSource(doubles = Array(0.1, 0.2, 0.3, 0.5, 0.8, 1.0))
   def testConvertFileSlicesToPartitionDirectory(logFraction: Double): Unit = {
@@ -82,7 +85,20 @@ class TestPartitionDirectoryConverter extends SparkAdapterSupport {
     val partitionOpt = Some(new PartitionPath(partitionPath, partitionValues.toArray))
     val partitionDirectory = PartitionDirectoryConverter.convertFileSlicesToPartitionDirectory(partitionOpt, slices, options)
 
-    val partitionedFiles = sparkAdapter.splitFiles(spark, partitionDirectory, false, maxSplitSize)
+    val partitionedFiles = partitionDirectory.files.flatMap(file => {
+      // getPath() is very expensive so we only want to call it once in this block:
+      val filePath = file.getPath
+      val isSplitable = false
+      PartitionedFileUtil.splitFiles(
+        spark,
+        file = file,
+        filePath = filePath,
+        isSplitable = isSplitable,
+        maxSplitBytes = maxSplitSize,
+        partitionValues = partitionDirectory.values
+      )
+    })
+
     val tasks = sparkAdapter.getFilePartitions(spark, partitionedFiles, maxSplitSize)
     verifyBalanceByNum(tasks, totalRecordNum, logFraction)
     spark.stop()

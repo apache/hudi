@@ -71,13 +71,7 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
     // Stats for the reads fetching only _projected_ columns (note how amount of bytes read
     // increases along w/ the # of columns)
     val projectedColumnsReadStats: Array[(String, Long)] =
-      if (HoodieSparkUtils.gteqSpark3_3_2)
-        Array(
-          ("rider", 2363),
-          ("rider,driver", 2463),
-          ("rider,driver,tip_history", 3428))
-      else
-        fail("Only Spark 3 is currently supported")
+      Array(("rider", 2363), ("rider,driver", 2463), ("rider,driver,tip_history", 3428))
 
     // Test COW / Snapshot
     runTest(tableState, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL, "", projectedColumnsReadStats)
