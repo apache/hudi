@@ -47,6 +47,7 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.testutils.DisabledOnSpark4;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
 import org.apache.hadoop.conf.Configuration;
@@ -102,7 +103,7 @@ import static org.mockito.Mockito.when;
  * (see one problem here : https://issues.apache.org/jira/browse/HBASE-15835). Hence, the need to use
  * {@link MethodOrderer.Alphanumeric} to make sure the tests run in order. Please alter the order of tests running carefully.
  */
-@Disabled
+@DisabledOnSpark4 // TODO (HUDI-9408)
 @TestMethodOrder(MethodOrderer.Alphanumeric.class)
 @Tag("functional")
 public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness {
