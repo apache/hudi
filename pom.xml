@@ -2688,7 +2688,7 @@
       </dependencies>
       <activation>
         <property>
-          <name>spark4</name>
+          <name>spark4.0</name>
         </property>
       </activation>
     </profile>
