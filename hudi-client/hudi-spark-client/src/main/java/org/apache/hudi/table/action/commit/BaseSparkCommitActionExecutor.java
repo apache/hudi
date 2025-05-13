@@ -174,6 +174,9 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     }
     final Partitioner partitioner = getPartitioner(workloadProfile);
 
+    // partition using the insert partitioner
+    saveWorkloadProfileMetadataToInflight(workloadProfile, instantTime);
+
     context.setJobStatus(this.getClass().getSimpleName(), "Doing partition and writing data: " + config.getTableName());
     HoodieData<WriteStatus> writeStatuses = mapPartitionsAsRDD(inputRecordsWithClusteringUpdate, partitioner);
     HoodieWriteMetadata<HoodieData<WriteStatus>> result = new HoodieWriteMetadata<>();
@@ -194,8 +197,6 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     WorkloadProfile workloadProfile =
         new WorkloadProfile(buildProfile(inputRecordsWithClusteringUpdate), operationType, table.getIndex().canIndexLogFiles());
     LOG.debug("Input workload profile :{}", workloadProfile);
-    // partition using the insert partitioner
-    saveWorkloadProfileMetadataToInflight(workloadProfile, instantTime);
     return workloadProfile;
   }
 
