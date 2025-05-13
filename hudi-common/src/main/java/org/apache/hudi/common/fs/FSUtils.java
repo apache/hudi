@@ -244,7 +244,8 @@ public class FSUtils {
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
         .enable(useFileListingFromMetadata)
         .build();
-    try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, storage, metadataConfig, basePathStr)) {
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(basePathStr).setConf(storage.getConf()).build();
+    try (HoodieTableMetadata tableMetadata = metaClient.getTableFormat().getMetadataFactory().create(engineContext, storage, metadataConfig, basePathStr)) {
       return tableMetadata.getAllPartitionPaths();
     } catch (Exception e) {
       throw new HoodieException("Error fetching partition paths from metadata table", e);
@@ -255,7 +256,8 @@ public class FSUtils {
                                                   HoodieStorage storage,
                                                   HoodieMetadataConfig metadataConfig,
                                                   String basePathStr) {
-    try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, storage, metadataConfig,
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(basePathStr).setConf(storage.getConf()).build();
+    try (HoodieTableMetadata tableMetadata = metaClient.getTableFormat().getMetadataFactory().create(engineContext, storage, metadataConfig,
         basePathStr)) {
       return tableMetadata.getAllPartitionPaths();
     } catch (Exception e) {
@@ -282,7 +284,8 @@ public class FSUtils {
                                                                         HoodieMetadataConfig metadataConfig,
                                                                         String basePathStr,
                                                                         String[] partitionPaths) {
-    try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, storage, metadataConfig,
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(basePathStr).setConf(storage.getConf()).build();
+    try (HoodieTableMetadata tableMetadata = metaClient.getTableFormat().getMetadataFactory().create(engineContext, storage, metadataConfig,
         basePathStr)) {
       return tableMetadata.getAllFilesInPartitions(Arrays.asList(partitionPaths));
     } catch (Exception ex) {

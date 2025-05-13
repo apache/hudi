@@ -22,7 +22,12 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.storage.HoodieStorage;
 
-public class HoodieTableMetadataFactory extends BaseHoodieTableMetadataFactory {
+public class NativeTableMetadataFactory extends TableMetadataFactory {
+  private static final NativeTableMetadataFactory INSTANCE = new NativeTableMetadataFactory();
+
+  public static NativeTableMetadataFactory getInstance() {
+    return INSTANCE;
+  }
 
   @Override
   public HoodieTableMetadata create(HoodieEngineContext engineContext, HoodieStorage storage,

@@ -21,15 +21,28 @@ package org.apache.hudi.common;
 import org.apache.hudi.common.table.timeline.TimelineFactory;
 import org.apache.hudi.common.table.timeline.TimelineLayout;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
+import org.apache.hudi.metadata.NativeTableMetadataFactory;
+import org.apache.hudi.metadata.TableMetadataFactory;
 
-public class HudiPluggableTableFormat implements PluggableTableFormat {
+public class NativeTableFormat implements TableFormat {
+  public static final String TABLE_FORMAT = "native";
   private final TimelineLayoutVersion timelineLayoutVersion;
 
-  public HudiPluggableTableFormat(TimelineLayoutVersion timelineLayoutVersion) {
+  public NativeTableFormat(TimelineLayoutVersion timelineLayoutVersion) {
     this.timelineLayoutVersion = timelineLayoutVersion;
+  }
+
+  @Override
+  public String getName() {
+    return NativeTableFormat.TABLE_FORMAT;
   }
 
   public TimelineFactory getTimelineFactory() {
     return TimelineLayout.fromVersion(timelineLayoutVersion).getTimelineFactory();
+  }
+
+  @Override
+  public TableMetadataFactory getMetadataFactory() {
+    return NativeTableMetadataFactory.getInstance();
   }
 }

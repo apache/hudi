@@ -1184,7 +1184,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       client.commit(newCommitTime2, writeStatuses);
     }
 
-    HoodieTableMetadata metadataReader = HoodieTableMetadata.create(
+    HoodieTableMetadata metadataReader = metaClient.getTableFormat().getMetadataFactory().create(
         context, storage, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
     Map<String, HoodieRecordGlobalLocation> result = metadataReader
         .readRecordIndex(records1.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()));
@@ -3628,7 +3628,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       allRecords.addAll(secondBatchOfrecords);
 
       // RI should have created mappings for all the records inserted above
-      HoodieTableMetadata metadataReader = HoodieTableMetadata.create(
+      HoodieTableMetadata metadataReader = metaClient.getTableFormat().getMetadataFactory().create(
           context, storage, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
       Map<String, HoodieRecordGlobalLocation> result = metadataReader
           .readRecordIndex(allRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()));
@@ -3645,7 +3645,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       client.commit(deleteTime, jsc.parallelize(writeStatuses));
 
       // RI should not return mappings for deleted records
-      metadataReader = HoodieTableMetadata.create(
+      metadataReader = metaClient.getTableFormat().getMetadataFactory().create(
           context, storage, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
       result = metadataReader.readRecordIndex(allRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()));
       assertEquals(allRecords.size() - recordsToDelete.size(), result.size(), "RI should not have mapping for deleted records");
@@ -3660,12 +3660,12 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       List<WriteStatus> writeStatuses = client.delete(jsc.emptyRDD(), deleteTime).collect();
       client.commit(deleteTime, jsc.parallelize(writeStatuses));
 
-      HoodieTableMetadata metadataReader = HoodieTableMetadata.create(
+      HoodieTableMetadata metadataReader = metaClient.getTableFormat().getMetadataFactory().create(
           context, storage, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
       assertTrue(metadataReader.getLatestCompactionTime().isPresent(), "Compaction should have taken place on MDT");
 
       // RI should not return mappings for deleted records
-      metadataReader = HoodieTableMetadata.create(context, storage, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
+      metadataReader = metaClient.getTableFormat().getMetadataFactory().create(context, storage, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
       Map<String, HoodieRecordGlobalLocation> result = metadataReader.readRecordIndex(allRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()));
       assertEquals(allRecords.size() - keysToDelete.size(), result.size(), "RI should not have mapping for deleted records");
       result.keySet().forEach(mappingKey -> assertFalse(keysToDelete.contains(mappingKey), "RI should not have mapping for deleted records"));
@@ -3676,7 +3676,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       client.commit(reinsertTime, jsc.parallelize(writeStatuses));
 
       // New mappings should have been created for re-inserted records and should map to the new commit time
-      metadataReader = HoodieTableMetadata.create(context, storage, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
+      metadataReader = metaClient.getTableFormat().getMetadataFactory().create(context, storage, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
       result = metadataReader.readRecordIndex(allRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()));
       assertEquals(allRecords.size(), result.size(), "RI should have mappings for re-inserted records");
       for (String reInsertedKey : keysToDelete) {
@@ -4012,7 +4012,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
   public static HoodieTableMetadata metadata(SparkRDDWriteClient client, HoodieStorage storage) {
     HoodieWriteConfig clientConfig = client.getConfig();
-    return HoodieTableMetadata.create(client.getEngineContext(), storage, clientConfig.getMetadataConfig(), clientConfig.getBasePath());
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(clientConfig.getBasePath()).setConf(storage.getConf()).build();
+    return metaClient.getTableFormat().getMetadataFactory().create(client.getEngineContext(), storage, clientConfig.getMetadataConfig(), clientConfig.getBasePath());
   }
 
   private void changeTableVersion(HoodieTableVersion version) throws IOException {

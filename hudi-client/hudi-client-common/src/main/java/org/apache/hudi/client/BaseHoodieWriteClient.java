@@ -304,7 +304,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     writeTableMetadata(table, instantTime, metadata);
     HoodieInstant completedWriteInstant = activeTimeline.saveAsComplete(false,
         table.getMetaClient().createNewInstant(HoodieInstant.State.INFLIGHT, commitActionType, instantTime), Option.of(metadata));
-    // Call Table Format Commit to allow writing supplementary table format.
     table.getMetaClient().getTableFormat().commit(metadata, completedWriteInstant, getEngineContext(), table.getMetaClient(), table.getViewManager());
     // update cols to Index as applicable
     HoodieColumnStatsIndexUtils.updateColsToIndex(table, config, metadata, commitActionType,
