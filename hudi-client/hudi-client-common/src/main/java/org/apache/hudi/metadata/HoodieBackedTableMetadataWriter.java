@@ -1410,7 +1410,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       bulkInsertAndCommit(writeClient, instantTime, preppedRecordInputs, bulkInsertPartitioner);
     } else {
       engineContext.setJobStatus(this.getClass().getSimpleName(), String.format("Upserting at %s into metadata table %s", instantTime, metadataWriteConfig.getTableName()));
-      // last argument is required so that we take optimized writes flow for metadata table. 
+      // to do: fix the last argument is required so that we can support streaming writes to metadata table.
       writeClient.upsertPreppedRecords(preppedRecordInputs, instantTime);
     }
 
