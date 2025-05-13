@@ -30,6 +30,7 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.util.CloseableInternalRowIterator
+
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.parquet.SparkFileReader

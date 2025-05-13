@@ -33,7 +33,7 @@ import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.util.METADATA_COL_ATTR_KEY
 import org.apache.spark.sql.connector.catalog.{V1Table, V2TableWithV1Fallback}
-import org.apache.spark.sql.execution.datasources.{FilePartition, FileScanRDD, HoodieSpark34PartitionedFileUtils, HoodieSparkPartitionedFileUtils, PartitionedFile, Spark34OrcReader}
+import org.apache.spark.sql.execution.datasources.{FilePartition, FileScanRDD, HoodieSpark34PartitionedFileUtils, HoodieSparkPartitionedFileUtils, PartitionedFile}
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark34LegacyHoodieParquetFileFormat, Spark34ParquetReader, SparkFileReader}
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
@@ -149,12 +149,5 @@ class Spark3_4Adapter extends BaseSpark3Adapter {
 
   override def stopSparkContext(jssc: JavaSparkContext, exitCode: Int): Unit = {
     jssc.sc.stop(exitCode)
-  }
-
-  override def createOrcFileReader(vectorized: Boolean,
-                                   sqlConf: SQLConf,
-                                   options: Map[String, String],
-                                   hadoopConf: Configuration): SparkFileReader = {
-    Spark34OrcReader.build(vectorized, sqlConf, options, hadoopConf)
   }
 }

@@ -34,6 +34,7 @@ import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.storage.{StorageConfiguration, StoragePath}
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
+
 import org.apache.avro.{Schema, SchemaBuilder}
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.{HoodieSparkKryoRegistrar, SparkConf}
@@ -50,6 +51,7 @@ import org.mockito.Mockito
 import org.mockito.Mockito.when
 
 import java.util
+
 import scala.collection.JavaConverters._
 
 /**
