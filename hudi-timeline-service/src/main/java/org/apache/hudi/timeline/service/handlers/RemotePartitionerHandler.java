@@ -37,7 +37,7 @@ public class RemotePartitionerHandler extends Handler {
     this.cache = new ConcurrentHashMap<>();
   }
 
-  public int gePartitionIndex(String numBuckets, String partitionPath, String curBucket, String partitionNum) {
+  public int gePartitionIndex(String numBuckets, String partitionPath, String partitionNum) {
     int num = Integer.parseInt(numBuckets);
     int partNum = Integer.parseInt(partitionNum);
 

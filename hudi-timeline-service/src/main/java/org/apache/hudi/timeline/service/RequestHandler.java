@@ -573,7 +573,6 @@ public class RequestHandler {
       int partition = partitionerHandler.gePartitionIndex(
           ctx.queryParamAsClass(RemotePartitionHelper.NUM_BUCKETS_PARAM, String.class).getOrDefault(""),
           ctx.queryParamAsClass(RemotePartitionHelper.PARTITION_PATH_PARAM, String.class).getOrDefault(""),
-          ctx.queryParamAsClass(RemotePartitionHelper.CUR_BUCKET_PARAM, String.class).getOrDefault(""),
           ctx.queryParamAsClass(RemotePartitionHelper.PARTITION_NUM_PARAM, String.class).getOrDefault(""));
       writeValueAsString(ctx, partition);
     }, false));

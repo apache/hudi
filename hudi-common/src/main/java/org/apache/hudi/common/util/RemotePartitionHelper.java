@@ -38,7 +38,6 @@ public class RemotePartitionHelper implements Serializable {
   public static final String URL = "/v1/hoodie/partitioner/getpartitionindex";
   public static final String NUM_BUCKETS_PARAM = "numbuckets";
   public static final String PARTITION_PATH_PARAM = "partitionpath";
-  public static final String CUR_BUCKET_PARAM = "curbucket";
   public static final String PARTITION_NUM_PARAM = "partitionnum";
   private final RetryHelper retryHelper;
   private final String serverHost;
@@ -69,11 +68,10 @@ public class RemotePartitionHelper implements Serializable {
 
     builder.addParameter(NUM_BUCKETS_PARAM, String.valueOf(numBuckets));
     builder.addParameter(PARTITION_PATH_PARAM, partitionPath);
-    builder.addParameter(CUR_BUCKET_PARAM, String.valueOf(curBucket));
     builder.addParameter(PARTITION_NUM_PARAM, String.valueOf(partitionNum));
 
     String url = builder.toString();
-    LOG.info("Sending request : (" + url + ").");
+    LOG.debug("Sending request : (" + url + ").");
     Response response = (Response)(retryHelper != null ? retryHelper.start(() -> Request.Get(url).connectTimeout(timeoutMs).socketTimeout(timeoutMs).execute())
         : Request.Get(url).connectTimeout(timeoutMs).socketTimeout(timeoutMs).execute());
     String content = response.returnContent().asString(Consts.UTF_8);
