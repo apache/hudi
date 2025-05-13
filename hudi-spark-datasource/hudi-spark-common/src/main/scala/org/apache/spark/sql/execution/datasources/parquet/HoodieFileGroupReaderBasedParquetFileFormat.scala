@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.execution.datasources.parquet
 
-import org.apache.hudi.{AvroConversionUtils, HoodieFileIndex, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, HoodieTableSchema, HoodieTableState, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
+import org.apache.hudi.{AvroConversionUtils, HoodieFileIndex, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, HoodieTableSchema, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
 import org.apache.hudi.avro.AvroSchemaUtils
 import org.apache.hudi.cdc.{CDCFileGroupIterator, CDCRelation, HoodieCDCFileGroupSplit}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
@@ -40,7 +40,7 @@ import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjecti
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.JoinedRow
-import org.apache.spark.sql.execution.datasources.{HoodieFormatTrait, PartitionedFile}
+import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.execution.vectorized.{OffHeapColumnVector, OnHeapColumnVector}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.Filter
@@ -51,6 +51,13 @@ import org.apache.spark.util.SerializableConfiguration
 import java.io.Closeable
 
 import scala.collection.JavaConverters.mapAsJavaMapConverter
+
+trait HoodieFormatTrait {
+
+  // Used so that the planner only projects once and does not stack overflow
+  var isProjected: Boolean = false
+  def getRequiredFilters: Seq[Filter]
+}
 
 /**
  * This class utilizes {@link HoodieFileGroupReader} and its related classes to support reading
