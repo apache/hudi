@@ -1147,6 +1147,15 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     getWriteClient().startCommitWithTime(instantTime, HoodieTimeline.DELTA_COMMIT_ACTION);
   }
 
+  public void wrapUpStreamingWriteToMetadataTableAndCompleteCommit(String instantTime, HoodieEngineContext context, List<HoodieWriteStat> metadataWriteStatsSoFar, HoodieCommitMetadata metadata) {
+    List<HoodieWriteStat> allWriteStats = new ArrayList<>(metadataWriteStatsSoFar);
+    allWriteStats.addAll(prepareAndWriteToFILESPartition(context, metadata, instantTime).map(writeStatus -> writeStatus.getStat()).collectAsList());
+    // TODO: Add commit logic for MDT after client APIs are added
+    // finally committing to MDT
+    // getWriteClient().commitStats(instantTime, allWriteStats, Collections.emptyList(), Option.empty(),
+    // HoodieTimeline.DELTA_COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+  }
+
   /**
    *
    */
