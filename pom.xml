@@ -2409,8 +2409,7 @@
                     <bannedDependencies>
                       <excludes combine.children="append">
                         <exclude>*:*_2.11</exclude>
-                        <!-- flink-hadoop-compatibility_2.12 is necessary -->
-                        <!--<exclude>*:*_2.12</exclude>-->
+                        <exclude>*:*_2.12</exclude>
                       </excludes>
                     </bannedDependencies>
                   </rules>
