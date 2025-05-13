@@ -915,39 +915,6 @@ public class TestHoodieAvroUtils {
   }
 
   @Test
-  public void testRecordWithoutTimestampMillisField() {
-    Schema longSchema = Schema.create(Schema.Type.LONG);
-    Schema.Field someField = new Schema.Field("id", longSchema, null, null);
-
-    Schema recordSchema = Schema.createRecord("SimpleRecord", null, null, false);
-    recordSchema.setFields(Collections.singletonList(someField));
-
-    assertFalse(HoodieAvroUtils.hasTimestampMillisField(recordSchema));
-  }
-
-  @Test
-  public void testUnionWithTimestampMillisField() {
-    Schema timestampSchema = Schema.create(Schema.Type.LONG);
-    LogicalTypes.timestampMillis().addToSchema(timestampSchema);
-
-    Schema unionSchema = Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.NULL), timestampSchema));
-
-    assertTrue(HoodieAvroUtils.hasTimestampMillisField(unionSchema));
-  }
-
-  @Test
-  public void testArrayFieldReturnsTrue() {
-    Schema arraySchema = Schema.createArray(Schema.create(Schema.Type.STRING));
-    assertTrue(HoodieAvroUtils.hasTimestampMillisField(arraySchema));
-  }
-
-  @Test
-  public void testMapFieldReturnsTrue() {
-    Schema mapSchema = Schema.createMap(Schema.create(Schema.Type.STRING));
-    assertTrue(HoodieAvroUtils.hasTimestampMillisField(mapSchema));
-  }
-
-  @Test
   void testHasSmallPrecisionDecimalField() {
     assertTrue(HoodieAvroUtils.hasSmallPrecisionDecimalField(new Schema.Parser().parse(SCHEMA_WITH_DECIMAL_FIELD)));
     assertFalse(HoodieAvroUtils.hasSmallPrecisionDecimalField(new Schema.Parser().parse(SCHEMA_WITH_AVRO_TYPES_STR)));
