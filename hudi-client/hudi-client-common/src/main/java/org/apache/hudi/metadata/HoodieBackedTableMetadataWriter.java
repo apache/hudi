@@ -797,10 +797,10 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       final String fileId = fileSlice.getFileId();
       return new HoodieMergedReadHandle(dataWriteConfig, instantTime, hoodieTable, Pair.of(partition, fileSlice.getFileId()),
           Option.of(fileSlice)).getMergedRecords().stream().map(record -> {
-        HoodieRecord record1 = (HoodieRecord) record;
-        return HoodieMetadataPayload.createRecordIndexUpdate(record1.getRecordKey(), partition, fileId,
-            record1.getCurrentLocation().getInstantTime(), 0);
-      }).iterator();
+            HoodieRecord record1 = (HoodieRecord) record;
+            return HoodieMetadataPayload.createRecordIndexUpdate(record1.getRecordKey(), partition, fileId,
+                record1.getCurrentLocation().getInstantTime(), 0);
+          }).iterator();
     });
   }
 
@@ -1150,21 +1150,18 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   public void wrapUpStreamingWriteToMetadataTableAndCompleteCommit(String instantTime, HoodieEngineContext context, List<HoodieWriteStat> metadataWriteStatsSoFar, HoodieCommitMetadata metadata) {
     List<HoodieWriteStat> allWriteStats = new ArrayList<>(metadataWriteStatsSoFar);
     allWriteStats.addAll(prepareAndWriteToFILESPartition(context, metadata, instantTime).map(writeStatus -> writeStatus.getStat()).collectAsList());
-    // TODO: Add commit logic for MDT after client APIs are added
     // finally committing to MDT
-    // getWriteClient().commitStats(instantTime, allWriteStats, Collections.emptyList(), Option.empty(),
-    // HoodieTimeline.DELTA_COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+    getWriteClient().commitStats(instantTime, allWriteStats, Option.empty(), HoodieTimeline.DELTA_COMMIT_ACTION,
+        Collections.emptyMap(), Option.empty());
   }
 
-  /**
-   *
-   */
   public HoodieData<WriteStatus> streamWriteToMetadataPartitions(HoodieData<WriteStatus> writeStatus, String instantTime) {
     // Generate HoodieRecords for MDT partitions which can be generated just by using one WriteStatus
 
     List<MetadataPartitionType> mdtPartitionsToTag = new ArrayList<>(enabledPartitionTypes);
     mdtPartitionsToTag.remove(FILES);
-    HoodieData<Pair<String, HoodieRecord>> perWriteStatusRecords = writeStatus.flatMap(new MetadataIndexGenerator.PerWriteStatsBasedIndexGenerator(mdtPartitionsToTag, dataWriteConfig, storageConf, instantTime));
+    HoodieData<Pair<String, HoodieRecord>> perWriteStatusRecords = writeStatus.flatMap(
+        new MetadataIndexGenerator.PerWriteStatsBasedIndexGenerator(mdtPartitionsToTag, dataWriteConfig, storageConf, instantTime));
 
     // Generate HoodieRecords for MDT partitions which need per hudi partition writeStats in one spark task
     // for eg, partition stats index

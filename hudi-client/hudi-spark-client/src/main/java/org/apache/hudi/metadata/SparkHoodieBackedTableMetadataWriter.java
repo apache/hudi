@@ -118,7 +118,16 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
                                        HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                        HoodieEngineContext engineContext,
                                        Option<String> inflightInstantTimestamp) {
-    super(hadoopConf, writeConfig, failedWritesCleaningPolicy, engineContext, inflightInstantTimestamp);
+    this(hadoopConf, writeConfig, failedWritesCleaningPolicy, engineContext, inflightInstantTimestamp, false);
+  }
+
+  SparkHoodieBackedTableMetadataWriter(StorageConfiguration<?> hadoopConf,
+                                       HoodieWriteConfig writeConfig,
+                                       HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
+                                       HoodieEngineContext engineContext,
+                                       Option<String> inflightInstantTimestamp,
+                                       boolean streamingWrites) {
+    super(hadoopConf, writeConfig, failedWritesCleaningPolicy, engineContext, inflightInstantTimestamp, streamingWrites);
   }
 
   @Override
@@ -184,9 +193,8 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     }
     engineContext.setJobStatus(this.getClass().getSimpleName(), String.format("Upserting at %s into metadata table %s", instantTime, metadataWriteConfig.getTableName()));
     // TODO: Introduce prepped upsert call after client APIs are added
-    // JavaRDD<WriteStatus> metadataWriteStatusesSoFar = getWriteClient().upsertPreppedPartialRecords(mdtRecords, instantTime, initialCall, mdtRecordsHoodieData.getKey());
-    // return metadataWriteStatusesSoFar;
-    return null;
+    JavaRDD<WriteStatus> metadataWriteStatusesSoFar = getWriteClient().upsertPreppedRecords(mdtRecords, instantTime, Option.of(mdtRecordsHoodieData.getKey()));
+    return metadataWriteStatusesSoFar;
   }
 
   /**
