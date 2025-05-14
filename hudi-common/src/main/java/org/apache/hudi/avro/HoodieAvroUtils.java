@@ -1255,6 +1255,11 @@ public class HoodieAvroUtils {
     }
   }
 
+  /**
+   * Checks whether the provided schema contains a timestamp millis field
+   * @param schema input
+   * @return true if a timestamp millis field is present, false otherwise
+   */
   public static boolean hasTimestampMillisField(Schema schema) {
     switch (schema.getType()) {
       case RECORD:
@@ -1265,8 +1270,9 @@ public class HoodieAvroUtils {
         }
         return false;
       case ARRAY:
+        return hasTimestampMillisField(schema.getElementType());
       case MAP:
-        return true;
+        return hasTimestampMillisField(schema.getValueType());
       case UNION:
         return hasTimestampMillisField(getActualSchemaFromUnion(schema, null));
       case LONG:
