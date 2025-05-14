@@ -39,7 +39,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * Implementation of {@link BatchWrite} for datasource "hudi.spark3.internal" to be used in datasource implementation
+ * Implementation of {@link BatchWrite} for datasource "hudi.spark.internal" to be used in datasource implementation
  * of bulk insert.
  */
 public class HoodieDataSourceInternalBatchWrite implements BatchWrite {

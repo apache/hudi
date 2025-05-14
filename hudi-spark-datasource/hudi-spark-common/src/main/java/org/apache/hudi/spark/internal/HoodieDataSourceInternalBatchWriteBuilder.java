@@ -29,7 +29,7 @@ import org.apache.spark.sql.types.StructType;
 import java.util.Map;
 
 /**
- * Implementation of {@link WriteBuilder} for datasource "hudi.spark3.internal" to be used in datasource implementation
+ * Implementation of {@link WriteBuilder} for datasource "hudi.spark.internal" to be used in datasource implementation
  * of bulk insert.
  */
 public class HoodieDataSourceInternalBatchWriteBuilder implements WriteBuilder {

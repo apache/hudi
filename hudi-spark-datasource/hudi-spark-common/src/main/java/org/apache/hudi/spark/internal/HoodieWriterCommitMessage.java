@@ -26,7 +26,7 @@ import org.apache.spark.sql.connector.write.WriterCommitMessage;
 import java.util.List;
 
 /**
- * Hoodie's {@link WriterCommitMessage} used in datasource "hudi.spark3.internal" implementation.
+ * Hoodie's {@link WriterCommitMessage} used in datasource "hudi.spark.internal" implementation.
  */
 public class HoodieWriterCommitMessage extends BaseWriterCommitMessage
     implements WriterCommitMessage {

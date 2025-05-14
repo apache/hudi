@@ -33,7 +33,7 @@ import org.apache.spark.sql.types.StructType;
 import java.io.IOException;
 
 /**
- * Hoodie's Implementation of {@link DataWriter<InternalRow>}. This is used in data source "hudi.spark3.internal" implementation for bulk insert.
+ * Hoodie's Implementation of {@link DataWriter<InternalRow>}. This is used in data source "hudi.spark.internal" implementation for bulk insert.
  */
 public class HoodieBulkInsertDataInternalWriter implements DataWriter<InternalRow> {
 

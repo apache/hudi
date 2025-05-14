@@ -33,7 +33,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Hoodie's Implementation of {@link SupportsWrite}. This is used in data source "hudi.spark3.internal" implementation for bulk insert.
+ * Hoodie's Implementation of {@link SupportsWrite}. This is used in data source "hudi.spark.internal" implementation for bulk insert.
  */
 class HoodieDataSourceInternalTable implements SupportsWrite {
 
