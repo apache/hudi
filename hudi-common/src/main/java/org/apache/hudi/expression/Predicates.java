@@ -236,6 +236,42 @@ public class Predicates {
     }
   }
 
+  public static class StringStartsWithAny implements Predicate {
+    private final Operator operator;
+    private final Expression left;
+    private final List<Expression> right;
+
+    public StringStartsWithAny(Expression left, List<Expression> right) {
+      this.left = left;
+      this.operator = Operator.STARTS_WITH;
+      this.right = right;
+    }
+
+    @Override
+    public List<Expression> getChildren() {
+      List<Expression> children = new ArrayList<>();
+      children.add(left);
+      children.addAll(right);
+      return children;
+    }
+
+    @Override
+    public Operator getOperator() {
+      return operator;
+    }
+
+    @Override
+    public Object eval(StructLike data) {
+      for (Expression e : right) {
+        Expression exp = new StringStartsWith(left, e);
+        if ((boolean) exp.eval(data)) {
+          return true;
+        }
+      }
+      return false;
+    }
+  }
+
   public static class StringContains extends BinaryExpression implements Predicate {
 
     StringContains(Expression left, Expression right) {

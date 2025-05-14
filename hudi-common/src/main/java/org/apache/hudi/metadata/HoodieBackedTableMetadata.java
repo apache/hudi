@@ -22,9 +22,11 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroRecord;
@@ -33,7 +35,9 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.InstantComparison;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
@@ -47,6 +51,8 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.expression.BindVisitor;
 import org.apache.hudi.expression.Expression;
+import org.apache.hudi.expression.Predicate;
+import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.io.storage.HoodieSeekingFileReader;
@@ -57,6 +63,7 @@ import org.apache.hudi.util.Transient;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -68,6 +75,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -95,7 +103,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   private HoodieTableMetaClient metadataMetaClient;
   private Set<String> validInstantTimestamps = null;
   private HoodieTableFileSystemView metadataFileSystemView;
-  // should we reuse the open file handles, across calls
+  // Should we reuse the open file handles, across calls
   private final boolean reuse;
 
   // Readers for the latest file slice corresponding to file groups in the metadata partition
@@ -215,33 +223,58 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
               Pair<HoodieSeekingFileReader<?>, HoodieMetadataLogRecordReader> readers =
                   openReaders(partitionName, fileSlice);
               try {
-                List<Long> timings = new ArrayList<>();
-
-                HoodieSeekingFileReader<?> baseFileReader = readers.getKey();
-                HoodieMetadataLogRecordReader logRecordScanner = readers.getRight();
-
-                if (baseFileReader == null && logRecordScanner == null) {
-                  // TODO: what do we do if both does not exist? should we throw an exception and let caller do the fallback ?
-                  return Collections.emptyIterator();
-                }
-
-                boolean fullKeys = false;
-
-                Map<String, HoodieRecord<HoodieMetadataPayload>> logRecords =
-                    readLogRecords(logRecordScanner, sortedKeyPrefixes, fullKeys, timings);
-
-                Map<String, HoodieRecord<HoodieMetadataPayload>> mergedRecords =
-                    readFromBaseAndMergeWithLogRecords(baseFileReader, sortedKeyPrefixes, fullKeys, logRecords, timings, partitionName);
-
-                LOG.debug("Metadata read for {} keys took [baseFileRead, logMerge] {} ms", sortedKeyPrefixes.size(), timings);
-
-                return mergedRecords.values().iterator();
+                // TODO: Here is we use FG reader to replace with key prefix.
+                Option<HoodieInstant> latestMetadataInstant =
+                    metadataMetaClient.getActiveTimeline().filterCompletedInstants().lastInstant();
+                String latestMetadataInstantTime =
+                    latestMetadataInstant.map(HoodieInstant::requestedTime).orElse(SOLO_COMMIT_TIMESTAMP);
+                Schema schema = HoodieAvroUtils.addMetadataFields(HoodieMetadataRecord.getClassSchema());
+                HoodieFileGroupReader fileGroupReader = getFileGroupReader(
+                    metadataMetaClient.getTableConfig(),
+                    metadataMetaClient.getBasePath().toString(),
+                    latestMetadataInstantTime,
+                    fileSlice,
+                    schema,
+                    schema,
+                    Option.empty(),
+                    metadataMetaClient,
+                    new TypedProperties(),
+                    Collections.emptyList()); // TODO: Any properties?
+                fileGroupReader.initRecordIterators();
+                ClosableIterator it = fileGroupReader.getClosableIterator();
+                return new HoodieRecordIterator(it, partitionName);
               } catch (IOException ioe) {
                 throw new HoodieIOException("Error merging records from metadata table for  " + sortedKeyPrefixes.size() + " key : ", ioe);
               } finally {
                 closeReader(readers);
               }
             });
+  }
+
+  public static class HoodieRecordIterator implements Iterator<HoodieRecord<HoodieMetadataPayload>> {
+    private final ClosableIterator<IndexedRecord> baseIterator;
+    private final String partitionName;
+
+    public HoodieRecordIterator(ClosableIterator<IndexedRecord> baseIterator, String partitionName) {
+      this.baseIterator = baseIterator;
+      this.partitionName = partitionName;
+    }
+
+    @Override
+    public boolean hasNext() {
+      return baseIterator.hasNext();
+    }
+
+    @Override
+    public HoodieRecord<HoodieMetadataPayload> next() {
+      if (!hasNext()) {
+        throw new NoSuchElementException();
+      }
+      HoodieMetadataRecord r = (HoodieMetadataRecord) baseIterator.next();
+      HoodieMetadataPayload payload = new HoodieMetadataPayload(r, r.getKey());
+      HoodieKey key = new HoodieKey(r.getKey(), partitionName);
+      return new HoodieAvroRecord<>(key, payload);
+    }
   }
 
   @Override
@@ -261,6 +294,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     // Lookup keys from each file slice
     if (numFileSlices == 1) {
       // Optimization for a single slice for smaller metadata table partitions
+      // TODO: this is the entrance.
       result = lookupKeysFromFileSlice(partitionName, keys, partitionFileSlices.get(0));
     } else {
       // Parallel lookup for large sized partitions with many file slices
@@ -273,6 +307,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
           return Collections.<String, HoodieRecord<HoodieMetadataPayload>>emptyMap();
         }
         int shardIndex = HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(keysList.get(0), numFileSlices);
+        // TODO: this is the entrance.
         return lookupKeysFromFileSlice(partitionName, keysList, partitionFileSlices.get(shardIndex));
       }, partitionedKeys.size()).forEach(result::putAll);
     }
@@ -311,11 +346,38 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
       // Sort it here once so that we don't need to sort individually for base file and for each individual log files.
       List<String> sortedKeys = new ArrayList<>(keys);
+      // So we use the natural order to sort.
       Collections.sort(sortedKeys);
       boolean fullKeys = true;
       List<Long> timings = new ArrayList<>(1);
-      Map<String, HoodieRecord<HoodieMetadataPayload>> logRecords = readLogRecords(logRecordScanner, sortedKeys, fullKeys, timings);
-      return readFromBaseAndMergeWithLogRecords(baseFileReader, sortedKeys, fullKeys, logRecords, timings, partitionName);
+      // TODO: Here should be the place we read from hfile using fg reader.
+      Option<HoodieInstant> latestMetadataInstant =
+          metadataMetaClient.getActiveTimeline().filterCompletedInstants().lastInstant();
+      String latestMetadataInstantTime =
+          latestMetadataInstant.map(HoodieInstant::requestedTime).orElse(SOLO_COMMIT_TIMESTAMP);
+      Schema schema = HoodieAvroUtils.addMetadataFields(HoodieMetadataRecord.getClassSchema());
+      HoodieFileGroupReader fileGroupReader = getFileGroupReader(
+          metadataMetaClient.getTableConfig(),
+          metadataMetaClient.getBasePath().toString(),
+          latestMetadataInstantTime,
+          fileSlice,
+          schema,
+          schema,
+          Option.empty(),
+          metadataMetaClient,
+          new TypedProperties(),
+          Collections.emptyList()); // TODO: Any properties?
+      fileGroupReader.initRecordIterators();
+      ClosableIterator it = fileGroupReader.getClosableIterator();
+      Map<String, HoodieRecord<HoodieMetadataPayload>> records = new HashMap<>();
+      while (it.hasNext()) {
+        HoodieMetadataRecord r = (HoodieMetadataRecord) it.next();
+        HoodieMetadataPayload payload = new HoodieMetadataPayload(r, r.getKey());
+        HoodieKey key = new HoodieKey(r.getKey(), partitionName);
+        HoodieAvroRecord record = new HoodieAvroRecord(key, payload);
+        records.put(key.getRecordKey(), record);
+      }
+      return records;
     } catch (IOException ioe) {
       throw new HoodieIOException("Error merging records from metadata table for  " + keys.size() + " key : ", ioe);
     } finally {
@@ -325,6 +387,40 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     }
   }
 
+
+
+  private HoodieFileGroupReader<IndexedRecord> getFileGroupReader(HoodieTableConfig tableConfig,
+                                                                  String tablePath,
+                                                                  String latestCommitTime,
+                                                                  FileSlice fileSlice,
+                                                                  Schema dataSchema,
+                                                                  Schema requestedSchema,
+                                                                  Option<InternalSchema> internalSchemaOpt,
+                                                                  HoodieTableMetaClient metaClient,
+                                                                  TypedProperties props,
+                                                                  List<Predicate> predicates) throws IOException {
+    HoodieReaderContext readerContext =
+        new TableMetadataFileGroupReaderContext(storageConf, tableConfig);
+    HoodieFileGroupReader<IndexedRecord> fileGroupReader =
+        new HoodieFileGroupReader<>(
+            readerContext,
+            storage,
+            tablePath,
+            latestCommitTime,
+            fileSlice,
+            dataSchema,
+            requestedSchema,
+            internalSchemaOpt,
+            metaClient,
+            props,
+            0,
+            Long.MAX_VALUE,
+            false);
+    fileGroupReader.initRecordIterators();
+    return fileGroupReader;
+  }
+
+  // TODO: This will be removed.
   private Map<String, HoodieRecord<HoodieMetadataPayload>> readLogRecords(HoodieMetadataLogRecordReader logRecordReader,
                                                                           List<String> sortedKeys,
                                                                           boolean fullKey,
@@ -343,6 +439,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     }
   }
 
+  // TODO: Need to remove this after using FG reader.
   private Map<String, HoodieRecord<HoodieMetadataPayload>> readFromBaseAndMergeWithLogRecords(HoodieSeekingFileReader<?> reader,
                                                                                               List<String> sortedKeys,
                                                                                               boolean fullKeys,
@@ -379,6 +476,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     return records;
   }
 
+  // TODO: this will be removed.
   @SuppressWarnings("unchecked")
   private Map<String, HoodieRecord<HoodieMetadataPayload>> fetchBaseFileRecordsByKeys(HoodieSeekingFileReader reader,
                                                                                       List<String> sortedKeys,
