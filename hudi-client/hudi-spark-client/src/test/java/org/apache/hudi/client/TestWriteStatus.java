@@ -210,6 +210,7 @@ public class TestWriteStatus {
   public void testRemoveMetadataStats() {
     WriteStatus status = new WriteStatus(true, 0.1);
     status.markSuccess(HoodieRecordDelegate.create(new HoodieKey("key", "partition")), Option.empty());
+    //status.markSuccess(new HoodieRecordDelegate(new HoodieKey("key", "partition"), new HoodieRecordLocation(), new HoodieRecordLocation(), false), Option.empty());
     Map<String, HoodieColumnRangeMetadata<Comparable>> stats = new HashMap<>();
     stats.put("field1", HoodieColumnRangeMetadata.<Comparable>create("f1", "field1", 1, 2, 0, 2, 5, 10));
     status.setStat(new HoodieWriteStat());
