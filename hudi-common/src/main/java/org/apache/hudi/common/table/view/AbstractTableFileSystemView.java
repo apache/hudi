@@ -484,7 +484,8 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
         return false;
       } else if (metaClient.getTableConfig().isMultipleBaseFileFormatsEnabled()) {
         return pathName.contains(HoodieFileFormat.PARQUET.getFileExtension())
-            || pathName.contains(HoodieFileFormat.ORC.getFileExtension());
+            || pathName.contains(HoodieFileFormat.ORC.getFileExtension())
+            || pathName.contains(HoodieFileFormat.HFILE.getFileExtension());
       } else {
         return pathName.contains(metaClient.getTableConfig().getBaseFileFormat().getFileExtension());
       }

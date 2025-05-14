@@ -28,9 +28,12 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.table.HoodieTable;
+
+import java.io.IOException;
 
 /**
  * {@link HoodieRecordLocation} fetch handle for all records from {@link HoodieBaseFile} of interest.
@@ -52,7 +55,12 @@ public class HoodieKeyLocationFetchHandle<T, I, K, O> extends HoodieReadHandle<T
   private ClosableIterator<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieBaseFile baseFile) {
     FileFormatUtils fileFormatUtils = HoodieIOFactory.getIOFactory(hoodieTable.getStorage())
         .getFileFormatUtils(baseFile.getStoragePath());
-    return fileFormatUtils.fetchRecordKeysWithPositions(hoodieTable.getStorage(), baseFile.getStoragePath(), keyGeneratorOpt, Option.of(partitionPathBaseFilePair.getKey()));
+    try {
+      return fileFormatUtils.fetchRecordKeysWithPositions(
+          hoodieTable.getStorage(), baseFile.getStoragePath(), keyGeneratorOpt, Option.of(partitionPathBaseFilePair.getKey()));
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to read base file: " + baseFile.getPath(), e);
+    }
   }
 
   public ClosableIterator<Pair<HoodieKey, HoodieRecordLocation>> locations() {

@@ -41,7 +41,7 @@ import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSerializer}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.JoinedRow
 import org.apache.spark.sql.execution.datasources.PartitionedFile
-import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, SparkParquetReader}
+import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, SparkFileReader}
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.{LongType, MetadataBuilder, StructField, StructType}
@@ -55,13 +55,13 @@ import scala.collection.mutable
  *
  * This uses Spark parquet reader to read parquet data files or parquet log blocks.
  *
- * @param parquetFileReader A reader that transforms a [[PartitionedFile]] to an iterator of
+ * @param fileReader A reader that transforms a [[PartitionedFile]] to an iterator of
  *                          [[InternalRow]]. This is required for reading the base file and
  *                          not required for reading a file group with only log files.
  * @param filters           spark filters that might be pushed down into the reader
  * @param requiredFilters   filters that are required and should always be used, even in merging situations
  */
-class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetReader,
+class SparkFileFormatInternalRowReaderContext(fileReaders: java.util.Map[String, SparkFileReader],
                                               filters: Seq[Filter],
                                               requiredFilters: Seq[Filter],
                                               storageConfiguration: StorageConfiguration[_],
@@ -88,16 +88,29 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
       assert(supportsParquetRowIndex())
     }
     val structType = HoodieInternalRowUtils.getCachedSchema(requiredSchema)
+    // Log file reader
+    // TODO: Add support for HFILE reader.
     if (FSUtils.isLogFile(filePath)) {
       new HoodieSparkFileReaderFactory(storage).newParquetFileReader(filePath)
         .asInstanceOf[HoodieSparkParquetReader].getUnsafeRowIterator(structType).asInstanceOf[ClosableIterator[InternalRow]]
     } else {
+      // TODO: Add support for HFile reader.
+      // Base file reader.
       // partition value is empty because the spark parquet reader will append the partition columns to
       // each row if they are given. That is the only usage of the partition values in the reader.
       val fileInfo = sparkAdapter.getSparkPartitionedFileUtils
         .createPartitionedFile(InternalRow.empty, filePath, start, length)
       val (readSchema, readFilters) = getSchemaAndFiltersForRead(structType, hasRowIndexField)
-      new CloseableInternalRowIterator(parquetFileReader.read(fileInfo,
+      val fileReader = if (fileInfo.filePath.toString.endsWith("orc")) {
+        fileReaders.get("orc")
+      } else if (fileInfo.filePath.toString.endsWith("parquet")) {
+        fileReaders.get("parquet")
+      } else if (fileInfo.filePath.toString.endsWith("hfile")) {
+        fileReaders.get("hfile")
+      } else {
+        throw new RuntimeException("Unrecognized file extension from the file path: " + filePath)
+      }
+      new CloseableInternalRowIterator(fileReader.read(fileInfo,
         readSchema, StructType(Seq.empty), getSchemaHandler.getInternalSchemaOpt,
         readFilters, storage.getConf.asInstanceOf[StorageConfiguration[Configuration]]))
     }

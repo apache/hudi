@@ -39,8 +39,8 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.execution.datasources.FileFormat;
-import org.apache.spark.sql.execution.datasources.parquet.SparkParquetReader;
 import org.apache.spark.sql.hudi.SparkAdapter;
+import org.apache.spark.sql.execution.datasources.parquet.SparkFileReader;
 import org.apache.spark.sql.internal.SQLConf;
 import org.apache.spark.sql.sources.Filter;
 import org.apache.spark.util.SerializableConfiguration;
@@ -58,7 +58,9 @@ import scala.collection.JavaConverters;
  * Factory that provides the {@link InternalRow} based {@link HoodieReaderContext} for reading data into the spark native format.
  */
 class SparkReaderContextFactory implements ReaderContextFactory<InternalRow> {
-  private final Broadcast<SparkParquetReader> parquetReaderBroadcast;
+  private final Broadcast<SparkFileReader> parquetReaderBroadcast;
+  private final Broadcast<SparkFileReader> orcReaderBroadcast;
+  private final Broadcast<SparkFileReader> hfileReaderBroadcast;
   private final Broadcast<SerializableConfiguration> configurationBroadcast;
   private final Broadcast<HoodieTableConfig> tableConfigBroadcast;
 
@@ -86,10 +88,17 @@ class SparkReaderContextFactory implements ReaderContextFactory<InternalRow> {
     Configuration configs = getHadoopConfiguration(jsc.hadoopConfiguration());
     schemaEvolutionConfigs.forEach(configs::set);
     configurationBroadcast = jsc.broadcast(new SerializableConfiguration(configs));
-    // Broadcast: ParquetReader.
-    // Spark parquet reader has to be instantiated on the driver and broadcast to the executors
-    SparkParquetReader parquetFileReader = sparkAdapter.createParquetFileReader(false, sqlConf, options, configs);
-    parquetReaderBroadcast = jsc.broadcast(parquetFileReader);
+    // Broadcast: ParquetReader, OrcReader, HFileReader
+    // Spark readers have to be instantiated on the driver and broadcast to the executors
+    SparkFileReader parquetReader = SparkAdapterSupport$.MODULE$.sparkAdapter().createParquetFileReader(
+        false, sqlConf, options, configs);
+    parquetReaderBroadcast = jsc.broadcast(parquetReader);
+    SparkFileReader orcReader = SparkAdapterSupport$.MODULE$.sparkAdapter().createOrcFileReader(
+        false, sqlConf, options, configs);
+    orcReaderBroadcast = jsc.broadcast(orcReader);
+    SparkFileReader hfileReader = SparkAdapterSupport$.MODULE$.sparkAdapter().createHFileFileReader(
+        false, sqlConf, options, configs);
+    hfileReaderBroadcast = jsc.broadcast(hfileReader);
     // Broadcast: TableConfig.
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
     tableConfigBroadcast = jsc.broadcast(tableConfig);
@@ -109,11 +118,24 @@ class SparkReaderContextFactory implements ReaderContextFactory<InternalRow> {
       throw new HoodieException("Table config broadcast is not initialized.");
     }
 
-    SparkParquetReader sparkParquetReader = parquetReaderBroadcast.getValue();
-    if (sparkParquetReader != null) {
+    Map<String, SparkFileReader> fileReaders = new HashMap<>();
+    SparkFileReader parquetFileReader = parquetReaderBroadcast.getValue();
+    if (parquetFileReader != null) {
+      fileReaders.put("parquet", parquetFileReader);
+    }
+    SparkFileReader orcFileReader = orcReaderBroadcast.getValue();
+    if (orcFileReader != null) {
+      fileReaders.put("orc", orcFileReader);
+    }
+    SparkFileReader hfileFileReader = hfileReaderBroadcast.getValue();
+    if (hfileFileReader != null) {
+      fileReaders.put("hfile", hfileFileReader);
+    }
+
+    if (!fileReaders.isEmpty()) {
       List<Filter> filters = Collections.emptyList();
       return new SparkFileFormatInternalRowReaderContext(
-          sparkParquetReader,
+          fileReaders,
           JavaConverters.asScalaBufferConverter(filters).asScala().toSeq(),
           JavaConverters.asScalaBufferConverter(filters).asScala().toSeq(),
           new HadoopStorageConfiguration(configurationBroadcast.getValue().value()),
