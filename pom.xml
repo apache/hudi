@@ -172,7 +172,6 @@
     <spark35.version>3.5.5</spark35.version>
     <spark40.version>4.0.0-preview1</spark40.version>
     <hudi.spark.module>hudi-spark3.5.x</hudi.spark.module>
-    <hudi.spark.common.module>hudi-spark3-common</hudi.spark.common.module>
     <avro.version>1.11.4</avro.version>
     <bijection-avro.version>0.9.8</bijection-avro.version>
     <caffeine.version>2.9.1</caffeine.version>
@@ -2514,7 +2513,6 @@
       </properties>
       <modules>
         <module>hudi-spark-datasource/hudi-spark3.3.x</module>
-        <module>hudi-spark-datasource/hudi-spark3-common</module>
       </modules>
       <activation>
         <property>
@@ -2557,7 +2555,6 @@
       </properties>
       <modules>
         <module>hudi-spark-datasource/hudi-spark3.4.x</module>
-        <module>hudi-spark-datasource/hudi-spark3-common</module>
       </modules>
       <dependencies>
         <dependency>
@@ -2608,7 +2605,6 @@
       </properties>
       <modules>
         <module>hudi-spark-datasource/hudi-spark3.5.x</module>
-        <module>hudi-spark-datasource/hudi-spark3-common</module>
       </modules>
       <dependencies>
         <dependency>
