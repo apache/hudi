@@ -336,7 +336,7 @@ public class TimelineService {
         CountDownLatch countDownLatch = new CountDownLatch(1);
         app.events(event -> event.serverStarted(countDownLatch::countDown));
         app.start(tryPort);
-        ValidationUtils.checkArgument(countDownLatch.await(60, TimeUnit.SECONDS), "Javalin server could not be started");
+        ValidationUtils.checkState(countDownLatch.await(60, TimeUnit.SECONDS), "Javalin server could not be started");
         return app.port();
       } catch (Exception e) {
         if (e instanceof JavalinBindException) {
