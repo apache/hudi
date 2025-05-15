@@ -47,6 +47,7 @@ import org.slf4j.LoggerFactory;
 import javax.annotation.concurrent.NotThreadSafe;
 
 import java.io.IOException;
+import java.util.Collections;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS;
 
@@ -95,7 +96,7 @@ public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends Base
         storage.newInstance(hoodieTable.getMetaClient().getBasePath(), readerContext.getStorageConfiguration()),
         hoodieTable.getMetaClient().getBasePath().toString(), instantTime, fileSlice,
         writeSchemaWithMetaFields, writeSchemaWithMetaFields, internalSchemaOption,
-        hoodieTable.getMetaClient(), props, 0, Long.MAX_VALUE, usePosition, false)) {
+        hoodieTable.getMetaClient(), props, 0, Long.MAX_VALUE, usePosition, Collections.emptyList(), false)) {
       fileGroupReader.initRecordIterators();
       // Reads the records from the file slice
       try (HoodieFileGroupReaderIterator<InternalRow> recordIterator

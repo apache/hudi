@@ -41,6 +41,7 @@ import org.apache.hudi.common.util.collection.EmptyIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.expression.Predicate;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -93,22 +94,21 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   // the allowInflightInstants flag would need to be set to true. This would ensure the HoodieMergedLogRecordReader
   // considers the log records which are inflight.
   private boolean allowInflightInstants;
+  private List<Predicate> filters;
 
-  public HoodieFileGroupReader(HoodieReaderContext<T> readerContext, HoodieStorage storage,
-      String tablePath,
-      String latestCommitTime, FileSlice fileSlice, Schema dataSchema, Schema requestedSchema,
-      Option<InternalSchema> internalSchemaOpt, HoodieTableMetaClient hoodieTableMetaClient,
-      TypedProperties props,
-      long start, long length, boolean shouldUseRecordPosition) {
+  public HoodieFileGroupReader(HoodieReaderContext<T> readerContext, HoodieStorage storage, String tablePath,
+                               String latestCommitTime, FileSlice fileSlice, Schema dataSchema, Schema requestedSchema,
+                               Option<InternalSchema> internalSchemaOpt, HoodieTableMetaClient hoodieTableMetaClient,
+                               TypedProperties props, long start, long length, boolean shouldUseRecordPosition, List<Predicate> filters) {
     this(readerContext, storage, tablePath, latestCommitTime, fileSlice, dataSchema,
         requestedSchema, internalSchemaOpt, hoodieTableMetaClient, props, start, length,
-        shouldUseRecordPosition, false);
+        shouldUseRecordPosition, filters, false);
   }
 
   public HoodieFileGroupReader(HoodieReaderContext<T> readerContext, HoodieStorage storage, String tablePath,
                                String latestCommitTime, FileSlice fileSlice, Schema dataSchema, Schema requestedSchema,
                                Option<InternalSchema> internalSchemaOpt, HoodieTableMetaClient hoodieTableMetaClient, TypedProperties props,
-                               long start, long length, boolean shouldUseRecordPosition, boolean allowInflightInstants) {
+                               long start, long length, boolean shouldUseRecordPosition, List<Predicate> filters, boolean allowInflightInstants) {
     this.readerContext = readerContext;
     this.storage = storage;
     this.hoodieBaseFileOption = fileSlice.getBaseFile();
@@ -150,6 +150,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
         recordMergeMode, props, hoodieBaseFileOption, this.logFiles.isEmpty(),
         isSkipMerge, shouldUseRecordPosition, readStats);
     this.allowInflightInstants = allowInflightInstants;
+    this.filters = filters;
   }
 
   /**

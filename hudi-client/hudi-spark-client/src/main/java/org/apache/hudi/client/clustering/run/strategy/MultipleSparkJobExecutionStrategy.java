@@ -101,6 +101,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -477,7 +478,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
             metaClient.getStorage().newInstance(new StoragePath(basePath), readerContext.getStorageConfiguration()),
             basePath, instantTime, fileSlice, readerSchema, readerSchema, internalSchemaOption,
             metaClient, metaClient.getTableConfig().getProps(),
-            0, Long.MAX_VALUE, usePosition, false);
+            0, Long.MAX_VALUE, usePosition, Collections.emptyList(), false);
         fileGroupReader.initRecordIterators();
         // read records from the FG reader
         return CloseableIteratorListener.addListener(fileGroupReader.getClosableIterator());

@@ -33,6 +33,8 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 
+import java.util.Collections;
+
 public class HoodieFileGroupReaderTestUtils {
   public static HoodieFileGroupReader<IndexedRecord> createFileGroupReader(
       Option<FileSlice> fileSliceOpt,
@@ -116,7 +118,7 @@ public class HoodieFileGroupReaderTestUtils {
       props.setProperty(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.key(), ExternalSpillableMap.DiskMapType.ROCKS_DB.name());
       props.setProperty(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), "false");
       return new HoodieFileGroupReader<>(readerContext, storage, basePath, latestCommitTime, fileSlice,
-          schema, schema, Option.empty(), metaClient, props, start, length, shouldUseRecordPosition, allowInflightCommits);
+          schema, schema, Option.empty(), metaClient, props, start, length, shouldUseRecordPosition, Collections.emptyList(), allowInflightCommits);
     }
   }
 }

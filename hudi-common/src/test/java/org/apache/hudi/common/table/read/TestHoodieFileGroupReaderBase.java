@@ -72,6 +72,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -405,6 +406,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
             1,
             fileSlice.getTotalFileSize(),
             false,
+            Collections.emptyList(),
             false));
       }
       try (HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(
@@ -421,6 +423,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
           0,
           fileSlice.getTotalFileSize(),
           false,
+          Collections.emptyList(),
           false)) {
         readWithFileGroupReader(fileGroupReader, actualRecordList, avroSchema);
       } catch (Exception ex) {
