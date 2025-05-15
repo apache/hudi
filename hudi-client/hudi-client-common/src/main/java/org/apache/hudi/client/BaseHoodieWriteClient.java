@@ -27,12 +27,14 @@ import org.apache.hudi.avro.model.HoodieRestorePlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.callback.HoodieWriteCommitCallback;
 import org.apache.hudi.callback.common.HoodieWriteCommitCallbackMessage;
+import org.apache.hudi.callback.common.WriteStatusHandlerCallback;
 import org.apache.hudi.callback.util.HoodieCommitCallbackFactory;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.heartbeat.HeartbeatUtils;
 import org.apache.hudi.client.utils.TransactionUtils;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
 import org.apache.hudi.common.config.HoodieCommonConfig;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.ActionType;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -208,12 +210,13 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   public boolean commit(String instantTime, O writeStatuses, Option<Map<String, String>> extraMetadata,
                         String commitActionType, Map<String, List<String>> partitionToReplacedFileIds) {
     return commit(instantTime, writeStatuses, extraMetadata, commitActionType, partitionToReplacedFileIds,
-        Option.empty());
+        Option.empty(), new NoOpWriteStatusHandlerCallback());
   }
 
   public abstract boolean commit(String instantTime, O writeStatuses, Option<Map<String, String>> extraMetadata,
                                  String commitActionType, Map<String, List<String>> partitionToReplacedFileIds,
-                                 Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc);
+                                 Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc,
+                                 WriteStatusHandlerCallback writeStatusHandlerCallback);
 
   public boolean commitStats(String instantTime, List<HoodieWriteStat> stats, Option<Map<String, String>> extraMetadata,
                              String commitActionType) {
@@ -1653,5 +1656,13 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         throw new HoodieException(String.format("cannot find schema for current table: %s", config.getBasePath()));
       }
     });
+  }
+
+  static class NoOpWriteStatusHandlerCallback implements WriteStatusHandlerCallback {
+
+    @Override
+    public boolean processWriteStatuses(long totalRecords, long totalErroredRecords, HoodieData<WriteStatus> leanWriteStatuses) {
+      return true;
+    }
   }
 }
