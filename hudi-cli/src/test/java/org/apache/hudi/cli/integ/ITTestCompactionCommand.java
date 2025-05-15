@@ -331,13 +331,15 @@ public class ITTestCompactionCommand extends HoodieCLIIntegrationTestBase {
     int numToDelete = records.size() / 2;
     List<HoodieKey> toBeDeleted = records.stream().map(HoodieRecord::getKey).limit(numToDelete).collect(Collectors.toList());
     JavaRDD<HoodieKey> deleteRecords = jsc.parallelize(toBeDeleted, 1);
-    client.delete(deleteRecords, newCommitTime);
+    client.commit(newCommitTime, client.delete(deleteRecords, newCommitTime));
   }
 
   private JavaRDD<WriteStatus> operateFunc(
       HoodieClientTestBase.Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieRecord>, String> writeFn,
       SparkRDDWriteClient<HoodieAvroPayload> client, JavaRDD<HoodieRecord> writeRecords, String commitTime)
       throws IOException {
-    return writeFn.apply(client, writeRecords, commitTime);
+    List<WriteStatus> writeStatuses = writeFn.apply(client, writeRecords, commitTime).collect();
+    client.commit(commitTime, jsc.parallelize(writeStatuses));
+    return jsc.parallelize(writeStatuses);
   }
 }

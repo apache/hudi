@@ -35,6 +35,7 @@ import org.apache.hudi.integ.testsuite.dag.nodes.DagNode;
 import org.apache.hudi.integ.testsuite.dag.nodes.RollbackNode;
 import org.apache.hudi.integ.testsuite.dag.nodes.ScheduleCompactNode;
 import org.apache.hudi.integ.testsuite.writer.DeltaWriteStats;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
 import org.apache.avro.generic.GenericRecord;
@@ -93,7 +94,6 @@ public abstract class HoodieTestSuiteWriter implements Serializable {
 
     HoodieWriteConfig.Builder builder =
         HoodieWriteConfig.newBuilder().combineInput(true, true).withPath(cfg.targetBasePath)
-            .withAutoCommit(false)
             .withPayloadConfig(HoodiePayloadConfig.newBuilder()
                 .withPayloadOrderingField(cfg.sourceOrderingField)
                 .withPayloadClass(cfg.payloadClassName)
@@ -130,7 +130,7 @@ public abstract class HoodieTestSuiteWriter implements Serializable {
 
   public abstract JavaRDD<WriteStatus> bulkInsert(Option<String> instantTime) throws Exception;
 
-  public abstract JavaRDD<WriteStatus> compact(Option<String> instantTime) throws Exception;
+  public abstract HoodieWriteMetadata<JavaRDD<WriteStatus>> compact(Option<String> instantTime) throws Exception;
 
   public abstract void inlineClustering() throws Exception;
 
@@ -139,8 +139,7 @@ public abstract class HoodieTestSuiteWriter implements Serializable {
   public abstract void commit(JavaRDD<WriteStatus> records, JavaRDD<DeltaWriteStats> generatedDataStats,
                               Option<String> instantTime);
 
-  public abstract void commitCompaction(JavaRDD<WriteStatus> records, JavaRDD<DeltaWriteStats> generatedDataStats,
-                                        Option<String> instantTime) throws Exception;
+  public abstract void commitCompaction(Option<String> instantTime, HoodieWriteMetadata<JavaRDD<WriteStatus>> writeMetadata) throws Exception;
 
   public SparkRDDWriteClient getWriteClient(DagNode dagNode) throws IllegalAccessException {
     if (cfg.useDeltaStreamer & !allowWriteClientAccess(dagNode)) {

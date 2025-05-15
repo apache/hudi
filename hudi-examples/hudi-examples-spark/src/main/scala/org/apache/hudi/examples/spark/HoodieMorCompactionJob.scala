@@ -71,7 +71,8 @@ object HoodieMorCompactionJob {
     val client = new SparkRDDWriteClient[HoodieRecordPayload[Nothing]](new HoodieSparkEngineContext(spark.sparkContext), cfg)
     try {
       val instant = client.scheduleCompaction(Option.empty())
-      client.compact(instant.get())
+      val result = client.compact(instant.get())
+      client.commitCompaction(instant.get(), result, org.apache.hudi.common.util.Option.empty())
       client.clean()
     } catch {
       case e: Exception => System.err.println(s"Compaction failed due to", e)

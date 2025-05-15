@@ -95,7 +95,7 @@ public class JavaUpsertPreppedDeltaCommitActionExecutor<T> extends BaseJavaDelta
       throw new HoodieUpsertException("Failed to upsert for commit time " + instantTime, e);
     }
 
-    updateIndexAndCommitIfNeeded(allWriteStatuses, result);
+    updateIndexAndMaybeRunPreCommitValidations(allWriteStatuses, result);
     return result;
   }
 }

@@ -98,7 +98,7 @@ public class TestSimpleTransactionDirectMarkerBasedDetectionStrategyWithZKLockPr
         .withEarlyConflictDetectionEnable(true)
         .withEarlyConflictDetectionStrategy(SimpleTransactionDirectMarkerBasedDetectionStrategy.class.getName())
         .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(ZookeeperBasedLockProvider.class).build())
-        .withAutoCommit(false).withProperties(properties)
+        .withProperties(properties)
         .build();
   }
 
@@ -126,8 +126,9 @@ public class TestSimpleTransactionDirectMarkerBasedDetectionStrategyWithZKLockPr
     JavaRDD<WriteStatus> writeStatusList1 =  client1.insert(writeRecords1, nextCommitTime1);
     assertTrue(client1.commit(nextCommitTime1, writeStatusList1), "Commit should succeed");
 
-    final SparkRDDWriteClient client2 = getHoodieWriteClient(config);
-    final SparkRDDWriteClient client3 = getHoodieWriteClient(config);
+    final SparkRDDWriteClient client2 = getHoodieWriteClient(config, true);
+    // We do not want to close client2 so setting shouldCloseOlderClient to false while creating client3
+    final SparkRDDWriteClient client3 = getHoodieWriteClient(config, false);
     final Function2<List<HoodieRecord>, String, Integer> recordGenFunction2 =
         generateWrapRecordsFn(false, config, dataGen::generateUniqueUpdates);
 
@@ -155,6 +156,9 @@ public class TestSimpleTransactionDirectMarkerBasedDetectionStrategyWithZKLockPr
     assertDoesNotThrow(() -> {
       client2.commit(nextCommitTime2, writeStatusList2);
     });
+
+    client2.close();
+    client3.close();
   }
 
 }
