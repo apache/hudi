@@ -86,6 +86,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   protected final HoodieReadStats readStats;
   protected final boolean shouldCheckCustomDeleteMarker;
   protected final boolean shouldCheckBuiltInDeleteMarker;
+  protected final boolean emitDelete;
   protected ClosableIterator<T> baseFileIterator;
   protected Iterator<BufferedRecord<T>> logRecordIterator;
   protected T nextRecord;
@@ -99,7 +100,8 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
                                   RecordMergeMode recordMergeMode,
                                   TypedProperties props,
                                   HoodieReadStats readStats,
-                                  Option<String> orderingFieldName) {
+                                  Option<String> orderingFieldName,
+                                  boolean emitDelete) {
     this.readerContext = readerContext;
     this.readerSchema = AvroSchemaCache.intern(readerContext.getSchemaHandler().getRequiredSchema());
     this.recordMergeMode = recordMergeMode;
@@ -120,6 +122,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
     boolean isBitCaskDiskMapCompressionEnabled = props.getBoolean(DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(),
         DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue());
     this.readStats = readStats;
+    this.emitDelete = emitDelete;
     try {
       // Store merged records for all versions for this log file, set the in-memory footprint to maxInMemoryMapSize
       this.records = new ExternalSpillableMap<>(maxMemorySizeInBytes, spillableMapBasePath, new DefaultSizeEstimator<>(),
@@ -161,6 +164,15 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
     Object columnValue = readerContext.getValue(
         record, readerSchema, HOODIE_IS_DELETED_FIELD);
     return columnValue != null && readerContext.castToBoolean(columnValue);
+  }
+
+  protected final boolean isDeleteHoodieOperation(T record) {
+    int hoodieOperationPos = readerContext.getSchemaHandler().getHoodieOperationPos();
+    if (hoodieOperationPos < 0) {
+      return false;
+    }
+    String hoodieOperation = readerContext.getMetaFieldValue(record, hoodieOperationPos);
+    return hoodieOperation != null && HoodieOperation.isDeleteRecord(hoodieOperation);
   }
 
   @Override
@@ -539,15 +551,24 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
 
   protected boolean hasNextBaseRecord(T baseRecord, BufferedRecord<T> logRecordInfo) throws IOException {
     if (logRecordInfo != null) {
-      BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(baseRecord, readerSchema, readerContext, orderingFieldName, false);
-      Pair<Boolean, T> isDeleteAndRecord = merge(bufferedRecord, logRecordInfo);
+      BufferedRecord<T> baseRecordInfo = BufferedRecord.forRecordWithContext(baseRecord, readerSchema, readerContext, orderingFieldName, false);
+      Pair<Boolean, T> isDeleteAndRecord = merge(baseRecordInfo, logRecordInfo);
       if (!isDeleteAndRecord.getLeft()) {
         // Updates
         nextRecord = readerContext.seal(isDeleteAndRecord.getRight());
         readStats.incrementNumUpdates();
         return true;
+      } else if (emitDelete) {
+        // emit Deletes
+        T mergedRecord = isDeleteAndRecord.getRight();
+        if (mergedRecord == null) {
+          mergedRecord = readerContext.getRecordKeyRow(baseRecordInfo.getRecordKey());
+        }
+        nextRecord = mergedRecord == null ? null : readerContext.seal(mergedRecord);
+        readStats.incrementNumDeletes();
+        return nextRecord != null;
       } else {
-        // Deletes
+        // not emit Deletes
         readStats.incrementNumDeletes();
         return false;
       }
@@ -570,6 +591,13 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
         nextRecord = nextRecordInfo.getRecord();
         readStats.incrementNumInserts();
         return true;
+      } else if (emitDelete) {
+        nextRecord = nextRecordInfo.getRecord();
+        if (nextRecord == null) {
+          nextRecord = readerContext.getRecordKeyRow(nextRecordInfo.getRecordKey());
+        }
+        readStats.incrementNumDeletes();
+        return nextRecord != null;
       } else {
         readStats.incrementNumDeletes();
       }

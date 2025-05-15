@@ -982,6 +982,7 @@ public class TestData {
   /**
    * Returns the scanner to read avro log files.
    */
+  @Deprecated
   private static HoodieMergedLogRecordScanner getScanner(
       HoodieStorage storage,
       String basePath,

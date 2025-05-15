@@ -23,6 +23,7 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -160,11 +161,14 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
       firstRecordReader = recordReader;
     }
     ClosableIterator<ArrayWritable> recordIterator = new RecordReaderValueIterator<>(recordReader);
-    if (modifiedDataSchema.equals(requiredSchema)) {
+    if (!modifiedDataSchema.equals(requiredSchema)) {
+      // record reader puts the required columns in the positions of the data schema and nulls the rest of the columns
+      recordIterator = new CloseableMappingIterator<>(recordIterator, projectRecord(modifiedDataSchema, requiredSchema));
+    }
+    if (FSUtils.isLogFile(filePath)) {
       return recordIterator;
     }
-    // record reader puts the required columns in the positions of the data schema and nulls the rest of the columns
-    return new CloseableMappingIterator<>(recordIterator, projectRecord(modifiedDataSchema, requiredSchema));
+    return applyInstantRangeFilter(recordIterator, requiredSchema);
   }
 
   @Override
@@ -175,6 +179,11 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   @Override
   public GenericRecord convertToAvroRecord(ArrayWritable record, Schema schema) {
     return objectInspectorCache.serialize(record, schema);
+  }
+
+  @Override
+  public ArrayWritable getRecordKeyRow(String recordKey) {
+    throw new UnsupportedOperationException("Not supported for " + this.getClass().getSimpleName());
   }
 
   @Override
@@ -200,6 +209,11 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   @Override
   public Object getValue(ArrayWritable record, Schema schema, String fieldName) {
     return StringUtils.isNullOrEmpty(fieldName) ? null : objectInspectorCache.getValue(record, schema, fieldName);
+  }
+
+  @Override
+  public String getMetaFieldValue(ArrayWritable record, int pos) {
+    return record.get()[pos].toString();
   }
 
   @Override
