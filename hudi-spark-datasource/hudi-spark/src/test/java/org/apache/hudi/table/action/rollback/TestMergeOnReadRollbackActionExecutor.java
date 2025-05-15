@@ -112,10 +112,8 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     assertEquals(1, secondPartitionCommit2LogFiles.size());
     HoodieTable table = this.getHoodieTable(metaClient, cfg);
 
+    // create client so that timeline server starts. Timeline server calls are made by BaseRollbackPlanActionExecutor used below.
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
-      // create client so that timeline server starts. Timeline server calls are made by BaseRollbackPlanActionExecutor used below.
-      // Wait for embedded timeline server port to be ready
-      Thread.sleep(1000);
       //2. rollback
       HoodieInstant rollBackInstant = INSTANT_GENERATOR.createNewInstant(isUsingMarkers ? HoodieInstant.State.INFLIGHT : HoodieInstant.State.COMPLETED,
           HoodieTimeline.DELTA_COMMIT_ACTION, "002");
@@ -296,8 +294,6 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
 
     // Start a client so that timeline server starts. Timeline server calls are made by BaseRollbackPlanActionExecutor used below.
     client = getHoodieWriteClient(cfg);
-    // Sleep for 1 second to ensure the timeline server port is listening
-    Thread.sleep(1000);
     try {
       //3. rollback the update to partition1 and partition2
       HoodieInstant rollBackInstant = INSTANT_GENERATOR.createNewInstant(isUsingMarkers ? HoodieInstant.State.INFLIGHT : HoodieInstant.State.COMPLETED,

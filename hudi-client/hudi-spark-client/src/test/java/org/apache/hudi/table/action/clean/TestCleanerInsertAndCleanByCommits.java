@@ -249,9 +249,11 @@ public class TestCleanerInsertAndCleanByCommits extends SparkClientFunctionalTes
           commitTimes.remove(lastInstant.requestedTime());
         }
 
-        Set<String> expected = expectedInstantTimeMap.getOrDefault(Pair.of(partitionPath, fileGroup.getFileGroupId().getFileId()), Collections.emptySet());
-        Set<String> actual = commitTimes;
-        assertEquals(expected, actual, "Only contain acceptable versions of file should be present");
+        assertEquals(
+            expectedInstantTimeMap.get(
+                Pair.of(partitionPath, fileGroup.getFileGroupId().getFileId())),
+            commitTimes,
+            "Only contain acceptable versions of file should be present");
       }
     }
   }
