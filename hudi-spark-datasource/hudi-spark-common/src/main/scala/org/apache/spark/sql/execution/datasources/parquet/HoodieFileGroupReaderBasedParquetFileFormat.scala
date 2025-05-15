@@ -49,6 +49,7 @@ import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnarBatchUtils}
 import org.apache.spark.util.SerializableConfiguration
 
 import java.io.Closeable
+import java.util.Collections
 
 import scala.collection.JavaConverters.mapAsJavaMapConverter
 
