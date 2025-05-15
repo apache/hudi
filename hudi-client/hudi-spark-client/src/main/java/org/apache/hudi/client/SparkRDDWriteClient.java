@@ -109,8 +109,7 @@ public class SparkRDDWriteClient<T> extends
     // When streaming writes are enabled, data table's WriteStatus is expected to contain all stats required to generate metadata table records and so each object will be larger.
     // Here all additional stats and error records are dropped to retain only the required information and prevent collecting large objects on the driver.
     List<SlimWriteStats> slimWriteStatsList = writeStatuses
-        .map(writeStatus -> new SlimWriteStats(writeStatus.isMetadataTable(), writeStatus.getTotalRecords(), writeStatus.getTotalErrorRecords(),
-            writeStatus.getStat())).collect();
+        .map(writeStatus -> new SlimWriteStats(writeStatus.isMetadataTable(), writeStatus.getTotalRecords(), writeStatus.getTotalErrorRecords(), writeStatus.getStat())).collect();
     // Compute stats for the data table writes and invoke callback
     AtomicLong totalRecords = new AtomicLong(0);
     AtomicLong totalErrorRecords = new AtomicLong(0);
@@ -132,6 +131,7 @@ public class SparkRDDWriteClient<T> extends
     if (canProceed) {
       // when streaming writes are enabled, writeStatuses is a mix of data table write status and mdt write status
       List<HoodieWriteStat> dataTableHoodieWriteStats = slimWriteStatsList.stream().filter(entry -> !entry.isMetadataTable()).map(SlimWriteStats::getWriteStat).collect(Collectors.toList());
+      List<HoodieWriteStat> partialMetadataHoodieWriteStatsSoFar = slimWriteStatsList.stream().filter(entry -> entry.isMetadataTable).map(slimWriteStats -> slimWriteStats.getWriteStat()).collect(Collectors.toList());
       return commitStats(instantTime, dataTableHoodieWriteStats, extraMetadata, commitActionType,
           partitionToReplacedFileIds, extraPreCommitFunc);
     } else {
