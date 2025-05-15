@@ -30,6 +30,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -238,10 +239,10 @@ public class ITTestSchemaEvolution {
   }
 
   private void changeTableSchema(TableOptions tableOptions, boolean shouldCompactBeforeSchemaChanges) throws IOException {
-    try (HoodieFlinkWriteClient<?> writeClient = FlinkWriteClients.createWriteClient(tableOptions.toConfig())) {
+    Configuration conf = tableOptions.toConfig();
+    try (HoodieFlinkWriteClient<?> writeClient = FlinkWriteClients.createWriteClient(conf)) {
       if (shouldCompactBeforeSchemaChanges) {
-        Option<String> compactionInstant = writeClient.scheduleCompaction(Option.empty());
-        writeClient.compact(compactionInstant.get());
+        doCompact(conf);
       }
 
       Schema intType = SchemaBuilder.unionOf().nullType().and().intType().endUnion();
@@ -287,11 +288,15 @@ public class ITTestSchemaEvolution {
       writeClient.addColumn("new_array_col", arrayType);
       writeClient.addColumn("new_map_col", mapType);
 
+      writeClient.reOrderColPosition("partition", "new_map_col", AFTER);
+
       // perform comprehensive evolution on a struct column by reordering field positions
       writeClient.updateColumnType("f_struct.f0", Types.DecimalType.get(20, 0));
       writeClient.reOrderColPosition("f_struct.f0", "f_struct.drop_add", AFTER);
       writeClient.updateColumnType("f_row_map.value.f0", Types.DecimalType.get(20, 0));
       writeClient.reOrderColPosition("f_row_map.value.f0", "f_row_map.value.drop_add", AFTER);
+    } catch (Exception e) {
+      throw new HoodieException(e);
     }
   }
 

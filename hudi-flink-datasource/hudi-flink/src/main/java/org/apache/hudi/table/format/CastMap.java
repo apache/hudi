@@ -19,7 +19,8 @@
 package org.apache.hudi.table.format;
 
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.table.format.TypeConverters.TypeConverter;
+import org.apache.hudi.util.TypeConverters;
+import org.apache.hudi.util.TypeConverters.TypeConverter;
 import org.apache.hudi.util.RowDataCastProjection;
 import org.apache.hudi.util.RowDataProjection;
 

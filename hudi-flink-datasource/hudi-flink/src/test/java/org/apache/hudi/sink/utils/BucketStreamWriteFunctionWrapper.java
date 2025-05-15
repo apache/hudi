@@ -22,12 +22,9 @@ import org.apache.hudi.client.model.HoodieFlinkInternalRow;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.sink.RowDataStreamWriteFunction;
 import org.apache.hudi.sink.StreamWriteFunction;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
-import org.apache.hudi.sink.bucket.RowDataBucketStreamWriteFunction;
 import org.apache.hudi.sink.bucket.BucketStreamWriteFunction;
-import org.apache.hudi.sink.common.AbstractStreamWriteFunction;
 import org.apache.hudi.sink.common.AbstractWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.transform.RowDataToHoodieFunction;
@@ -59,7 +56,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * A wrapper class to manipulate the instance of {@link BucketStreamWriteFunction} or {@link RowDataBucketStreamWriteFunction} for testing.
+ * A wrapper class to manipulate the instance of {@link BucketStreamWriteFunction} for testing.
  *
  * @param <I> Input type
  */
@@ -82,7 +79,7 @@ public class BucketStreamWriteFunctionWrapper<I> implements TestFunctionWrapper<
   /**
    * Stream write function.
    */
-  protected AbstractStreamWriteFunction writeFunction;
+  protected StreamWriteFunction writeFunction;
 
   private CompactFunctionWrapper compactFunctionWrapper;
 
@@ -149,11 +146,7 @@ public class BucketStreamWriteFunctionWrapper<I> implements TestFunctionWrapper<
   }
 
   public Map<String, List<HoodieRecord>> getDataBuffer() {
-    if (OptionsResolver.supportRowDataAppend(conf)) {
-      return ((RowDataStreamWriteFunction) writeFunction).getDataBuffer();
-    } else {
-      return ((StreamWriteFunction) writeFunction).getDataBuffer();
-    }
+    return writeFunction.getDataBuffer();
   }
 
   public void checkpointFunction(long checkpointId) throws Exception {
@@ -231,11 +224,7 @@ public class BucketStreamWriteFunctionWrapper<I> implements TestFunctionWrapper<
     coordinator.handleEventFromOperator(0, getNextEvent());
   }
 
-  protected AbstractStreamWriteFunction createWriteFunction() {
-    if (OptionsResolver.supportRowDataAppend(conf)) {
-      return new RowDataBucketStreamWriteFunction(conf, rowType);
-    } else {
-      return new BucketStreamWriteFunction(conf, rowType);
-    }
+  protected StreamWriteFunction createWriteFunction() {
+    return new BucketStreamWriteFunction(conf, rowType);
   }
 }

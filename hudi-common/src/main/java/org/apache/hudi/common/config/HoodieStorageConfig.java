@@ -385,6 +385,10 @@ public class HoodieStorageConfig extends HoodieConfig {
     super();
   }
 
+  public String getBloomFilterType() {
+    return getString(BLOOM_FILTER_TYPE);
+  }
+
   public static HoodieStorageConfig.Builder newBuilder() {
     return new Builder();
   }

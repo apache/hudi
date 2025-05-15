@@ -276,12 +276,18 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       // NOTE: Once Records are added to map (spillable-map), DO NOT change it as they won't persist
       keyToNewRecords.put(record.getRecordKey(), record);
     }
-    LOG.info("Number of entries in MemoryBasedMap => "
-        + ((ExternalSpillableMap) keyToNewRecords).getInMemoryMapNumEntries()
-        + ", Total size in bytes of MemoryBasedMap => "
-        + ((ExternalSpillableMap) keyToNewRecords).getCurrentInMemoryMapSize() + ", Number of entries in BitCaskDiskMap => "
-        + ((ExternalSpillableMap) keyToNewRecords).getDiskBasedMapNumEntries() + ", Size of file spilled to disk => "
-        + ((ExternalSpillableMap) keyToNewRecords).getSizeOfFileOnDiskInBytes());
+    if (keyToNewRecords instanceof ExternalSpillableMap) {
+      LOG.info("Number of entries in MemoryBasedMap => "
+          + ((ExternalSpillableMap) keyToNewRecords).getInMemoryMapNumEntries()
+          + ", Total size in bytes of MemoryBasedMap => "
+          + ((ExternalSpillableMap) keyToNewRecords).getCurrentInMemoryMapSize() + ", Number of entries in BitCaskDiskMap => "
+          + ((ExternalSpillableMap) keyToNewRecords).getDiskBasedMapNumEntries() + ", Size of file spilled to disk => "
+          + ((ExternalSpillableMap) keyToNewRecords).getSizeOfFileOnDiskInBytes());
+    }
+  }
+
+  public boolean isEmptyNewRecords() {
+    return keyToNewRecords.isEmpty();
   }
 
   protected boolean writeUpdateRecord(HoodieRecord<T> newRecord, HoodieRecord<T> oldRecord, Option<HoodieRecord> combineRecordOpt, Schema writerSchema) throws IOException {
@@ -413,15 +419,15 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
   }
 
   protected void writeToFile(HoodieKey key, HoodieRecord<T> record, Schema schema, Properties prop, boolean shouldPreserveRecordMetadata) throws IOException {
-    // NOTE: `FILENAME_METADATA_FIELD` has to be rewritten to correctly point to the
-    //       file holding this record even in cases when overall metadata is preserved
-    MetadataValues metadataValues = new MetadataValues().setFileName(newFilePath.getName());
-    HoodieRecord populatedRecord = record.prependMetaFields(schema, writeSchemaWithMetaFields, metadataValues, prop);
-
     if (shouldPreserveRecordMetadata) {
+      // NOTE: `FILENAME_METADATA_FIELD` has to be rewritten to correctly point to the
+      //       file holding this record even in cases when overall metadata is preserved
+      HoodieRecord populatedRecord = updateFileName(record, schema, writeSchemaWithMetaFields, newFilePath.getName(), prop);
       fileWriter.write(key.getRecordKey(), populatedRecord, writeSchemaWithMetaFields);
     } else {
-      fileWriter.writeWithMetadata(key, populatedRecord, writeSchemaWithMetaFields);
+      // rewrite the record to include metadata fields in schema, and the values will be set later.
+      record = record.prependMetaFields(schema, writeSchemaWithMetaFields, new MetadataValues(), config.getProps());
+      fileWriter.writeWithMetadata(key, record, writeSchemaWithMetaFields);
     }
   }
 
@@ -440,6 +446,11 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       HoodieRecord<T> hoodieRecord = newRecordsItr.next();
       writeInsertRecord(hoodieRecord);
     }
+  }
+
+  protected HoodieRecord<T> updateFileName(HoodieRecord<T> record, Schema schema, Schema targetSchema, String fileName, Properties prop) {
+    MetadataValues metadataValues = new MetadataValues().setFileName(fileName);
+    return record.prependMetaFields(schema, targetSchema, metadataValues, prop);
   }
 
   @Override

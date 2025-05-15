@@ -20,7 +20,6 @@ package org.apache.hudi.table.format.cdc;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
@@ -34,7 +33,6 @@ import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.table.log.HoodieCDCLogRecordIterator;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
-import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -368,11 +366,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
           ? null
           : RowDataProjection.instance(tableState.getRequiredRowType(), tableState.getRequiredPositions());
 
-      List<String> mergers = Arrays.stream(flinkConf.getString(FlinkOptions.RECORD_MERGER_IMPLS).split(","))
-          .map(String::trim)
-          .distinct()
-          .collect(Collectors.toList());
-      this.recordMerger = HoodieRecordUtils.createRecordMerger(split.getTablePath(), EngineType.FLINK, mergers, flinkConf.getString(FlinkOptions.RECORD_MERGER_STRATEGY_ID));
+      this.recordMerger = StreamerUtil.getRecordMergerForReader(flinkConf, split.getTablePath());
       this.payloadProps = StreamerUtil.getPayloadConfig(flinkConf).getProps();
       initImages(cdcFileSplit);
     }

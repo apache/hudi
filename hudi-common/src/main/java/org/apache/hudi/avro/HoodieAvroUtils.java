@@ -1296,6 +1296,9 @@ public class HoodieAvroUtils {
       case STRING:
       case BYTES:
         return needsRewriteToString(writerSchema, false);
+      case DOUBLE:
+        // To maintain precision, you need to convert Float -> String -> Double
+        return writerSchema.getType().equals(Schema.Type.FLOAT);
       default:
         return false;
     }

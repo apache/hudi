@@ -31,13 +31,16 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
+import org.apache.avro.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Properties;
 
 /**
  * A {@link HoodieMergeHandle} that supports MERGE write incrementally(small data buffers).
@@ -151,6 +154,20 @@ public class FlinkMergeHandle<T, I, K, O>
     } catch (IOException e) {
       throw new HoodieException("Checking existing path for merge handle error: " + newFilePath, e);
     }
+  }
+
+  @Override
+  protected HoodieRecord<T> updateFileName(HoodieRecord<T> record, Schema schema, Schema targetSchema, String fileName, Properties prop) {
+    // update specific meta field: FILENAME_METADATA_FIELD
+    return record.updateMetaField(schema, HoodieRecord.FILENAME_META_FIELD_ORD, fileName);
+  }
+
+  @Override
+  protected void initializeIncomingRecordsMap() {
+    LOG.info("Initialize on-heap keyToNewRecords for incoming records.");
+    // the incoming records are already buffered on heap and the underlying bytes are managed by memory pool
+    // in Flink write buffer, so there is no need to use ExternalSpillableMap.
+    this.keyToNewRecords = new HashMap<>();
   }
 
   /**

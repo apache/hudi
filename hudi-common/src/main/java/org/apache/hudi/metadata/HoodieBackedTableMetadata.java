@@ -93,7 +93,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   private final String metadataBasePath;
 
   private HoodieTableMetaClient metadataMetaClient;
-
+  private Set<String> validInstantTimestamps = null;
   private HoodieTableFileSystemView metadataFileSystemView;
   // should we reuse the open file handles, across calls
   private final boolean reuse;
@@ -139,11 +139,13 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         this.isMetadataTableInitialized = false;
         this.metadataMetaClient = null;
         this.metadataFileSystemView = null;
+        this.validInstantTimestamps = null;
       } catch (Exception e) {
         LOG.error("Failed to initialize metadata table at path {}", metadataBasePath, e);
         this.isMetadataTableInitialized = false;
         this.metadataMetaClient = null;
         this.metadataFileSystemView = null;
+        this.validInstantTimestamps = null;
       }
     }
   }
@@ -464,6 +466,13 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     return Pair.of(baseFileReader, baseFileOpenMs);
   }
 
+  private Set<String> getValidInstantTimestamps() {
+    if (validInstantTimestamps == null) {
+      validInstantTimestamps = HoodieTableMetadataUtil.getValidInstantTimestamps(dataMetaClient, metadataMetaClient);
+    }
+    return validInstantTimestamps;
+  }
+
   public Pair<HoodieMetadataLogRecordReader, Long> getLogRecordScanner(List<HoodieLogFile> logFiles,
                                                                        String partitionName,
                                                                        Option<Boolean> allowFullScanOverride,
@@ -476,8 +485,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
     // Only those log files which have a corresponding completed instant on the dataset should be read
     // This is because the metadata table is updated before the dataset instants are committed.
-    Set<String> validInstantTimestamps = HoodieTableMetadataUtil
-        .getValidInstantTimestamps(dataMetaClient, metadataMetaClient);
+    Set<String> validInstantTimestamps = getValidInstantTimestamps();
 
     Option<HoodieInstant> latestMetadataInstant = metadataMetaClient.getActiveTimeline().filterCompletedInstants().lastInstant();
     String latestMetadataInstantTime = latestMetadataInstant.map(HoodieInstant::requestedTime).orElse(SOLO_COMMIT_TIMESTAMP);
@@ -628,6 +636,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       }
       metadataFileSystemView = null;
     }
+    validInstantTimestamps = null;
     // the cached reader has max instant time restriction, they should be cleared
     // because the metadata timeline may have changed.
     closePartitionReaders();

@@ -23,7 +23,6 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -35,6 +34,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hadoop.utils.HoodieArrayWritableAvroUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 import org.apache.hudi.hadoop.utils.ObjectInspectorCache;
@@ -188,15 +188,12 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
         return Option.of(new OverwriteWithLatestHiveRecordMerger());
       case CUSTOM:
       default:
-        if (mergeStrategyId.equals(HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID)) {
-          return Option.of(HoodieAvroRecordMerger.INSTANCE);
-        }
-        Option<HoodieRecordMerger> mergerClass = HoodieRecordUtils.createValidRecordMerger(EngineType.JAVA, mergeImplClasses, mergeStrategyId);
-        if (mergerClass.isEmpty()) {
+        Option<HoodieRecordMerger> recordMerger = HoodieRecordUtils.createValidRecordMerger(EngineType.JAVA, mergeImplClasses, mergeStrategyId);
+        if (recordMerger.isEmpty()) {
           throw new IllegalArgumentException("No valid hive merger implementation set for `"
               + RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY + "`");
         }
-        return mergerClass;
+        return recordMerger;
     }
   }
 
@@ -241,9 +238,13 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   public ClosableIterator<ArrayWritable> mergeBootstrapReaders(ClosableIterator<ArrayWritable> skeletonFileIterator,
                                                                Schema skeletonRequiredSchema,
                                                                ClosableIterator<ArrayWritable> dataFileIterator,
-                                                               Schema dataRequiredSchema) {
+                                                               Schema dataRequiredSchema,
+                                                               List<Pair<String, Object>> partitionFieldsAndValues) {
     int skeletonLen = skeletonRequiredSchema.getFields().size();
     int dataLen = dataRequiredSchema.getFields().size();
+    int[] partitionFieldPositions = partitionFieldsAndValues.stream()
+        .map(pair -> dataRequiredSchema.getField(pair.getKey()).pos()).mapToInt(Integer::intValue).toArray();
+    Writable[] convertedPartitionValues = partitionFieldsAndValues.stream().map(Pair::getValue).toArray(Writable[]::new);
     return new ClosableIterator<ArrayWritable>() {
 
       private final ArrayWritable returnWritable = new ArrayWritable(Writable.class);
@@ -260,6 +261,11 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
       public ArrayWritable next() {
         Writable[] skeletonWritable = skeletonFileIterator.next().get();
         Writable[] dataWritable = dataFileIterator.next().get();
+        for (int i = 0; i < partitionFieldPositions.length; i++) {
+          if (dataWritable[partitionFieldPositions[i]] == null) {
+            dataWritable[partitionFieldPositions[i]] = convertedPartitionValues[i];
+          }
+        }
         Writable[] mergedWritable = new Writable[skeletonLen + dataLen];
         System.arraycopy(skeletonWritable, 0, mergedWritable, 0, skeletonLen);
         System.arraycopy(dataWritable, 0, mergedWritable, skeletonLen, dataLen);

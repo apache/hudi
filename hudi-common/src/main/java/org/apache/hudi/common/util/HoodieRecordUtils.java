@@ -86,6 +86,9 @@ public class HoodieRecordUtils {
 
   public static Option<HoodieRecordMerger> createValidRecordMerger(EngineType engineType,
                                                                    String mergerImpls, String recordMergerStrategy) {
+    if (recordMergerStrategy.equals(HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID)) {
+      return Option.of(HoodieAvroRecordMerger.INSTANCE);
+    }
     return createValidRecordMerger(engineType,ConfigUtils.split2List(mergerImpls), recordMergerStrategy);
   }
 

@@ -18,7 +18,6 @@
 
 package org.apache.hudi.io.v2;
 
-import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
@@ -37,9 +36,7 @@ import org.apache.hudi.io.MiniBatchHandle;
 import org.apache.hudi.io.log.block.HoodieFlinkAvroDataBlock;
 import org.apache.hudi.io.log.block.HoodieFlinkParquetDataBlock;
 import org.apache.hudi.io.storage.ColumnRangeMetadataProvider;
-import org.apache.hudi.io.storage.row.HoodieFlinkIOFactory;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
-import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.commit.BucketType;
 import org.apache.hudi.util.Lazy;
@@ -84,16 +81,6 @@ public class RowDataLogWriteHandle<T, I, K, O>
       BucketType bucketType,
       TaskContextSupplier taskContextSupplier) {
     super(config, instantTime, hoodieTable, partitionPath, fileId, bucketType, recordItr, taskContextSupplier);
-    initWriteConf(storage.getConf(), config);
-  }
-
-  private void initWriteConf(StorageConfiguration<?> storageConf, HoodieWriteConfig writeConfig) {
-    storageConf.set(
-        HoodieStorageConfig.WRITE_UTC_TIMEZONE.key(),
-        writeConfig.getString(HoodieStorageConfig.WRITE_UTC_TIMEZONE.key()));
-    storageConf.set(
-        HoodieStorageConfig.HOODIE_IO_FACTORY_CLASS.key(),
-        HoodieFlinkIOFactory.class.getName());
   }
 
   @Override

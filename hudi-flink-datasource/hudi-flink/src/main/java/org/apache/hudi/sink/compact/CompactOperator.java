@@ -23,6 +23,7 @@ import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.HoodieFlinkTable;
@@ -37,7 +38,6 @@ import org.apache.hudi.table.action.compact.HoodieFlinkMergeOnReadTableCompactor
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.util.CompactionUtil;
 import org.apache.hudi.util.FlinkWriteClients;
-import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
@@ -184,8 +184,11 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
       // CAUTION: reuse the meta client so that the timeline is updated
       Supplier<InternalSchemaManager> internalSchemaManager = () -> InternalSchemaManager.get(conf, metaClient);
       // initialize storage conf lazily.
-      StorageConfiguration<?> readerConf = StreamerUtil.storageConfForFileGroupReader(writeClient.getEngineContext().getStorageConf(), conf);
+      StorageConfiguration<?> readerConf = writeClient.getEngineContext().getStorageConf();
       return Option.of(new FlinkRowDataReaderContext(readerConf, internalSchemaManager, Collections.emptyList(), metaClient.getTableConfig()));
+    } else {
+      // always using avro record merger for legacy compaction since log scanner do not support rowdata reading yet.
+      writeClient.getConfig().setRecordMergerClass(HoodieAvroRecordMerger.class.getName());
     }
     return Option.empty();
   }

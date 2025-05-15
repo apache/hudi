@@ -34,7 +34,6 @@ parameters:
       - 'hudi-spark-datasource'
       - 'hudi-spark-datasource/hudi-spark'
       - 'hudi-spark-datasource/hudi-spark3.5.x'
-      - 'hudi-spark-datasource/hudi-spark3-common'
       - 'hudi-spark-datasource/hudi-spark-common'
   - name: job10UTModules
     type: object
@@ -52,7 +51,6 @@ parameters:
       - '!hudi-spark-datasource'
       - '!hudi-spark-datasource/hudi-spark'
       - '!hudi-spark-datasource/hudi-spark3.5.x'
-      - '!hudi-spark-datasource/hudi-spark3-common'
       - '!hudi-spark-datasource/hudi-spark-common'
       - '!hudi-utilities'
   - name: job10FTModules
@@ -399,9 +397,6 @@ stages:
       - job: UT_FT_8
         displayName: UT hudi-hadoop-common & Hudi Utilities others
         timeoutInMinutes: '75'
-        # trying with ubuntu 24
-        pool:
-          vmImage: 'ubuntu-24.04'
         steps:
           - task: Docker@2
             displayName: "login to docker hub"

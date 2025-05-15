@@ -97,6 +97,11 @@ class NoOpTableMetadata implements HoodieTableMetadata {
   }
 
   @Override
+  public Map<Pair<String, String>, List<HoodieMetadataColumnStats>> getColumnStats(List<Pair<String, String>> partitionNameFileNameList, List<String> columnNames) throws HoodieMetadataException {
+    throw new HoodieMetadataException("Unsupported operation: getColumnsStats!");
+  }
+
+  @Override
   public Map<String, HoodieRecordGlobalLocation> readRecordIndex(List<String> recordKeys) {
     throw new HoodieMetadataException("Unsupported operation: readRecordIndex!");
   }

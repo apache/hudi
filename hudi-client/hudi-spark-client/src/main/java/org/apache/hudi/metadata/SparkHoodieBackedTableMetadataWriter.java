@@ -18,7 +18,6 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.hudi.index.HoodieSparkIndexClient;
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
@@ -41,6 +40,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
+import org.apache.hudi.index.HoodieSparkIndexClient;
 import org.apache.hudi.index.expression.HoodieSparkExpressionIndex;
 import org.apache.hudi.index.expression.HoodieSparkExpressionIndex.ExpressionIndexComputationMetadata;
 import org.apache.hudi.metrics.DistributedRegistry;
@@ -198,7 +198,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     // with the expression index records from the unmodified files to get the new partition stat records
     HoodieSparkExpressionIndex.ExpressionIndexComputationMetadata expressionIndexComputationMetadata =
         SparkMetadataWriterUtils.getExprIndexRecords(partitionFilePathPairs, indexDefinition, dataMetaClient, parallelism, readerSchema, instantTime, engineContext, dataWriteConfig,
-            metadataWriteConfig, partitionRecordsFunctionOpt);
+            partitionRecordsFunctionOpt);
     return expressionIndexComputationMetadata.getPartitionStatRecordsOption().isPresent()
         ? expressionIndexComputationMetadata.getExpressionIndexRecords().union(expressionIndexComputationMetadata.getPartitionStatRecordsOption().get())
         : expressionIndexComputationMetadata.getExpressionIndexRecords();
@@ -211,7 +211,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
                                                                Schema readerSchema, StorageConfiguration<?> storageConf,
                                                                String instantTime) {
     ExpressionIndexComputationMetadata expressionIndexComputationMetadata = SparkMetadataWriterUtils.getExprIndexRecords(partitionFilePathAndSizeTriplet, indexDefinition,
-        metaClient, parallelism, readerSchema, instantTime, engineContext, dataWriteConfig, metadataWriteConfig,
+        metaClient, parallelism, readerSchema, instantTime, engineContext, dataWriteConfig,
         Option.of(rangeMetadata ->
             HoodieTableMetadataUtil.collectAndProcessExprIndexPartitionStatRecords(rangeMetadata, true, Option.of(indexDefinition.getIndexName()))));
     HoodieData<HoodieRecord> exprIndexRecords = expressionIndexComputationMetadata.getExpressionIndexRecords();

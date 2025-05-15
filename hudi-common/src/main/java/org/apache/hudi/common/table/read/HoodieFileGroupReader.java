@@ -31,6 +31,7 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.PartitionPathParser;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordReader;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
@@ -49,6 +50,8 @@ import org.apache.avro.Schema;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
@@ -71,6 +74,8 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   private final HoodieReaderContext<T> readerContext;
   private final Option<HoodieBaseFile> hoodieBaseFileOption;
   private final List<HoodieLogFile> logFiles;
+  private final String partitionPath;
+  private final Option<String[]> partitionPathFields;
   private final HoodieStorage storage;
   private final TypedProperties props;
   // Byte offset to start reading from the base file
@@ -112,6 +117,8 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     this.start = start;
     this.length = length;
     HoodieTableConfig tableConfig = hoodieTableMetaClient.getTableConfig();
+    this.partitionPath = fileSlice.getPartitionPath();
+    this.partitionPathFields = tableConfig.getPartitionFields();
     RecordMergeMode recordMergeMode = tableConfig.getRecordMergeMode();
     String mergeStrategyId = tableConfig.getRecordMergeStrategyId();
     if (!tableConfig.getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
@@ -228,8 +235,22 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       if (start != 0) {
         throw new IllegalArgumentException("Filegroup reader is doing bootstrap merge but we are not reading from the start of the base file");
       }
+      PartitionPathParser partitionPathParser = new PartitionPathParser();
+      Object[] partitionValues = partitionPathParser.getPartitionFieldVals(partitionPathFields, partitionPath, readerContext.getSchemaHandler().getTableSchema());
+      // filter out the partition values that are not required by the data schema
+      List<Pair<String, Object>> partitionPathFieldsAndValues = partitionPathFields.map(partitionFields -> {
+        Schema dataSchema = dataFileIterator.get().getRight();
+        List<Pair<String, Object>> filterFieldsAndValues = new ArrayList<>(partitionFields.length);
+        for (int i = 0; i < partitionFields.length; i++) {
+          String field = partitionFields[i];
+          if (dataSchema.getField(field) != null) {
+            filterFieldsAndValues.add(Pair.of(field, readerContext.convertValueToEngineType((Comparable) partitionValues[i])));
+          }
+        }
+        return filterFieldsAndValues;
+      }).orElseGet(Collections::emptyList);
       return readerContext.mergeBootstrapReaders(skeletonFileIterator.get().getLeft(), skeletonFileIterator.get().getRight(),
-          dataFileIterator.get().getLeft(), dataFileIterator.get().getRight());
+          dataFileIterator.get().getLeft(), dataFileIterator.get().getRight(), partitionPathFieldsAndValues);
     }
   }
 
@@ -253,7 +274,11 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       return Option.of(Pair.of(readerContext.getFileRecordIterator(fileStoragePathInfo, 0, file.getFileLen(),
           readerContext.getSchemaHandler().createSchemaFromFields(allFields), requiredSchema, storage), requiredSchema));
     } else {
-      return Option.of(Pair.of(readerContext.getFileRecordIterator(file.getStoragePath(), 0, file.getFileLen(),
+      // If the base file length passed in is invalid, i.e., -1,
+      // the file group reader fetches the length from the file system
+      long fileLength = file.getFileLen() >= 0
+          ? file.getFileLen() : storage.getPathInfo(file.getStoragePath()).getLength();
+      return Option.of(Pair.of(readerContext.getFileRecordIterator(file.getStoragePath(), 0, fileLength,
           readerContext.getSchemaHandler().createSchemaFromFields(allFields), requiredSchema, storage), requiredSchema));
     }
   }

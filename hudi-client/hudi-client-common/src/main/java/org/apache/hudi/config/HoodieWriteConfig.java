@@ -2055,7 +2055,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public String getBloomFilterType() {
-    return getString(HoodieStorageConfig.BLOOM_FILTER_TYPE);
+    return getStorageConfig().getBloomFilterType();
   }
 
   public int getDynamicBloomFilterMaxNumEntries() {
@@ -2121,6 +2121,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean useBloomIndexBucketizedChecking() {
     return getBoolean(HoodieIndexConfig.BLOOM_INDEX_BUCKETIZED_CHECKING);
+  }
+
+  public boolean useBloomIndexBucketizedCheckingWithDynamicParallelism() {
+    return getBoolean(HoodieIndexConfig.BLOOM_INDEX_BUCKETIZED_CHECKING_ENABLE_DYNAMIC_PARALLELISM);
   }
 
   public boolean isBloomIndexFileGroupIdKeySortingEnabled() {

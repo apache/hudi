@@ -148,6 +148,20 @@ public class HoodieIndexConfig extends HoodieConfig {
           + "When true, bucketized bloom filtering is enabled. "
           + "This reduces skew seen in sort based bloom index lookup");
 
+  public static final ConfigProperty<String> BLOOM_INDEX_BUCKETIZED_CHECKING_ENABLE_DYNAMIC_PARALLELISM = ConfigProperty
+      .key("hoodie.bloom.index.bucketized.checking.enable.dynamic.parallelism")
+      .defaultValue("false")
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Only applies if index type is BLOOM and the bucketized bloom filtering "
+          + "is enabled. When true, the index parallelism is determined by the number of file "
+          + "groups to look up and the number of keys per bucket to split comparisons within a "
+          + "file group; otherwise, the index parallelism is limited by the input parallelism. "
+          + "PLEASE NOTE that if the bloom index parallelism (" + BLOOM_INDEX_PARALLELISM.key()
+          + ") is configured, the bloom index parallelism takes effect instead of the input "
+          + "parallelism and always limits the number of buckets calculated based on the number "
+          + "of keys per bucket in the bucketized bloom filtering.");
+
   public static final ConfigProperty<String> BLOOM_INDEX_FILE_GROUP_ID_KEY_SORTING = ConfigProperty
       .key("hoodie.bloom.index.fileid.key.sorting.enable")
       .defaultValue("false")

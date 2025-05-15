@@ -39,6 +39,8 @@ import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.avro.Conversions;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
@@ -1219,7 +1221,11 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     private final String partitionPath;
     private final String riderValue;
 
-    public RecordIdentifier(String recordKey, String partitionPath, String orderingVal, String riderValue) {
+    @JsonCreator
+    public RecordIdentifier(@JsonProperty("recordKey") String recordKey,
+                            @JsonProperty("partitionPath") String partitionPath,
+                            @JsonProperty("orderingVal") String orderingVal,
+                            @JsonProperty("riderValue") String riderValue) {
       this.recordKey = recordKey;
       this.orderingVal = orderingVal;
       this.partitionPath = partitionPath;
@@ -1253,6 +1259,22 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     @Override
     public int hashCode() {
       return Objects.hash(recordKey, orderingVal, partitionPath, riderValue);
+    }
+
+    public String getRecordKey() {
+      return recordKey;
+    }
+
+    public String getOrderingVal() {
+      return orderingVal;
+    }
+
+    public String getPartitionPath() {
+      return partitionPath;
+    }
+
+    public String getRiderValue() {
+      return riderValue;
     }
   }
 }

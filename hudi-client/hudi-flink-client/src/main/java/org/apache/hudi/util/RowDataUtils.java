@@ -20,12 +20,15 @@ package org.apache.hudi.util;
 
 import org.apache.flink.table.data.DecimalData;
 import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.types.logical.LocalZonedTimestampType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.TimestampType;
 
+import java.math.BigDecimal;
 import java.nio.ByteBuffer;
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.function.Function;
@@ -64,7 +67,7 @@ public class RowDataUtils {
       case SMALLINT:
         return fieldVal -> ((Short) fieldVal).intValue();
       case DATE:
-        return fieldVal -> LocalDate.ofEpochDay((Long) fieldVal);
+        return fieldVal -> LocalDate.ofEpochDay((Integer) fieldVal);
       case CHAR:
       case VARCHAR:
         return Object::toString;
@@ -100,6 +103,36 @@ public class RowDataUtils {
       default:
         return fieldVal -> fieldVal;
     }
+  }
+
+  /**
+   * Convert the native Java object to the corresponding value of Flink type.
+   *
+   * @param value Java object
+   *
+   * @return Value of Flink type
+   */
+  public static Object convertValueToFlinkType(Object value) {
+    if (value == null) {
+      return null;
+    }
+    if (value instanceof String) {
+      return StringData.fromString((String) value);
+    }
+    if (value instanceof BigDecimal) {
+      BigDecimal decimalVal = (BigDecimal) value;
+      return DecimalData.fromBigDecimal(decimalVal, decimalVal.precision(), decimalVal.scale());
+    }
+    if (value instanceof Timestamp) {
+      return TimestampData.fromTimestamp((Timestamp) value);
+    }
+    if (value instanceof LocalDate) {
+      return (int)(((LocalDate) value).toEpochDay());
+    }
+    if (value instanceof ByteBuffer) {
+      return ((ByteBuffer) value).array();
+    }
+    return value;
   }
 
   /**

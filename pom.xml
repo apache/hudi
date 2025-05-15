@@ -169,7 +169,6 @@
     <spark34.version>3.4.3</spark34.version>
     <spark35.version>3.5.5</spark35.version>
     <hudi.spark.module>hudi-spark3.5.x</hudi.spark.module>
-    <hudi.spark.common.module>hudi-spark3-common</hudi.spark.common.module>
     <avro.version>1.11.4</avro.version>
     <bijection-avro.version>0.9.8</bijection-avro.version>
     <caffeine.version>2.9.1</caffeine.version>
@@ -713,6 +712,7 @@
               <exclude>**/test/resources/*.commit</exclude>
               <exclude>**/test/resources/**/*.txt</exclude>
               <exclude>**/test/resources/**/*.avsc</exclude>
+              <exclude>**/test/resources/**/.zip</exclude>
               <exclude>**/target/**</exclude>
               <exclude>**/generated-sources/**</exclude>
               <exclude>.github/**</exclude>
@@ -2503,7 +2503,6 @@
       </properties>
       <modules>
         <module>hudi-spark-datasource/hudi-spark3.3.x</module>
-        <module>hudi-spark-datasource/hudi-spark3-common</module>
       </modules>
       <activation>
         <property>
@@ -2546,7 +2545,6 @@
       </properties>
       <modules>
         <module>hudi-spark-datasource/hudi-spark3.4.x</module>
-        <module>hudi-spark-datasource/hudi-spark3-common</module>
       </modules>
       <dependencies>
         <dependency>
@@ -2597,7 +2595,6 @@
       </properties>
       <modules>
         <module>hudi-spark-datasource/hudi-spark3.5.x</module>
-        <module>hudi-spark-datasource/hudi-spark3-common</module>
       </modules>
       <dependencies>
         <dependency>

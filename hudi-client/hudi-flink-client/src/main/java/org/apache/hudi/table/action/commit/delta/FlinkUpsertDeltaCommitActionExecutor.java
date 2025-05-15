@@ -18,37 +18,68 @@
 
 package org.apache.hudi.table.action.commit.delta;
 
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.FlinkAppendHandle;
+import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
-import org.apache.hudi.table.action.commit.FlinkWriteHelper;
+import org.apache.hudi.table.action.commit.BaseFlinkCommitActionExecutor;
+import org.apache.hudi.table.action.commit.BucketInfo;
 
+import java.time.Duration;
+import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 
 /**
- * Flink upsert delta commit action executor.
+ * Flink RowData upsert delta commit action executor.
  */
-public class FlinkUpsertDeltaCommitActionExecutor<T>
-    extends BaseFlinkDeltaCommitActionExecutor<T> {
-  private final List<HoodieRecord<T>> inputRecords;
+public class FlinkUpsertDeltaCommitActionExecutor<T> extends BaseFlinkCommitActionExecutor<T> {
+
+  private final Iterator<HoodieRecord<T>> inputRecords;
 
   public FlinkUpsertDeltaCommitActionExecutor(HoodieEngineContext context,
-                                              FlinkAppendHandle<?, ?, ?, ?> writeHandle,
+                                              HoodieWriteHandle<?, ?, ?, ?> writeHandle,
+                                              BucketInfo bucketInfo,
                                               HoodieWriteConfig config,
                                               HoodieTable table,
                                               String instantTime,
-                                              List<HoodieRecord<T>> inputRecords) {
-    super(context, writeHandle, config, table, instantTime, WriteOperationType.UPSERT);
+                                              Iterator<HoodieRecord<T>> inputRecords) {
+    super(context, writeHandle, bucketInfo, config, table, instantTime, WriteOperationType.UPSERT);
     this.inputRecords = inputRecords;
   }
 
   @Override
+  public Iterator<List<WriteStatus>> handleUpdate(String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr) {
+    return handleWrite();
+  }
+
+  @Override
+  public Iterator<List<WriteStatus>> handleInsert(String idPfx, Iterator<HoodieRecord<T>> recordItr) {
+    return handleWrite();
+  }
+
+  /**
+   * When using RowData writing mode for MOR upsert path, same write logic is used for UPSERT and INSERT operation.
+   */
+  private Iterator<List<WriteStatus>> handleWrite() {
+    FlinkAppendHandle logWriteHandle = (FlinkAppendHandle) writeHandle;
+    logWriteHandle.doAppend();
+    List<WriteStatus> writeStatuses = logWriteHandle.close();
+    return Collections.singletonList(writeStatuses).iterator();
+  }
+
+  @Override
   public HoodieWriteMetadata execute() {
-    return FlinkWriteHelper.newInstance().write(instantTime, inputRecords, context, table,
-        config.shouldCombineBeforeUpsert(), config.getUpsertShuffleParallelism(), this, operationType);
+    // no need for index lookup duration from flink executor.
+    // Instant lookupBegin = Instant.now();
+    // Duration indexLookupDuration = Duration.between(lookupBegin, Instant.now());
+    HoodieWriteMetadata result = this.execute(inputRecords, bucketInfo);
+    result.setIndexLookupDuration(Duration.ZERO);
+    return result;
   }
 }
