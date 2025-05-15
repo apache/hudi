@@ -153,6 +153,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
 
     JavaRDD<WriteStatus> statuses = insertFn.apply(client, writeRecords, newCommitTime);
     statuses = context.getJavaSparkContext().parallelize(statuses.collect(), 1);
+    client.commit(newCommitTime, statuses, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
     // verify that there is a commit
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTimeline timeline = TIMELINE_FACTORY.createActiveTimeline(metaClient).getCommitAndReplaceTimeline();
