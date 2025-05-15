@@ -36,6 +36,7 @@ import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
@@ -52,6 +53,8 @@ import org.apache.hudi.table.format.FormatUtils;
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.table.format.RecordIterators;
 import org.apache.hudi.util.AvroToRowDataConverters;
+import org.apache.hudi.util.FlinkClientUtil;
+import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.RowDataProjection;
 import org.apache.hudi.util.RowDataToAvroConverters;
 import org.apache.hudi.util.StreamerUtil;
@@ -155,7 +158,15 @@ public class MergeOnReadInputFormat
 
   protected final InternalSchemaManager internalSchemaManager;
 
+  /**
+   * The table metadata client
+   */
   private transient HoodieTableMetaClient metaClient;
+
+  /**
+   * The hoodie write configuration.
+   */
+  private transient HoodieWriteConfig writeConfig;
 
   protected MergeOnReadInputFormat(
       Configuration conf,
@@ -190,7 +201,8 @@ public class MergeOnReadInputFormat
     this.currentReadCount = 0L;
     this.closed = false;
     this.hadoopConf = HadoopConfigurations.getHadoopConf(this.conf);
-    this.metaClient = StreamerUtil.metaClientForReader(conf, hadoopConf);
+    this.metaClient = StreamerUtil.metaClientForReader(this.conf, hadoopConf);
+    this.writeConfig = FlinkWriteClients.getHoodieClientConfig(this.conf);
     this.iterator = initIterator(split);
     mayShiftInputSplit(split);
   }
@@ -442,8 +454,10 @@ public class MergeOnReadInputFormat
     final Schema requiredSchema = new Schema.Parser().parse(tableState.getRequiredAvroSchema());
 
     FileSlice fileSlice = new FileSlice(
+        // partitionPath is not needed for FG reader on Flink
         new HoodieFileGroupId("", split.getFileId()),
-        split.getLatestCommit(),
+        // baseInstantTime in FileSlice is not used in FG reader
+        "",
         split.getBasePath().map(HoodieBaseFile::new).orElse(null),
         split.getLogPaths().map(logFiles -> logFiles.stream().map(HoodieLogFile::new).collect(Collectors.toList())).orElse(Collections.emptyList()));
 
@@ -453,9 +467,8 @@ public class MergeOnReadInputFormat
             () -> internalSchemaManager,
             predicates,
             metaClient.getTableConfig());
-    TypedProperties typedProperties = new TypedProperties();
-    metaClient.getTableConfig().getProps().forEach(typedProperties::putIfAbsent);
-    typedProperties.put(HoodieReaderConfig.MERGE_TYPE.key(), HoodieReaderConfig.REALTIME_SKIP_MERGE);
+    TypedProperties typedProps = FlinkClientUtil.getMergedTableAndWriteProps(metaClient.getTableConfig(), writeConfig);
+    typedProps.put(HoodieReaderConfig.MERGE_TYPE.key(), HoodieReaderConfig.REALTIME_SKIP_MERGE);
 
     try (HoodieFileGroupReader<RowData> fileGroupReader = new HoodieFileGroupReader<>(
         readerContext,
@@ -467,7 +480,7 @@ public class MergeOnReadInputFormat
         requiredSchema,
         Option.ofNullable(internalSchemaManager.getQuerySchema()),
         metaClient,
-        typedProperties,
+        typedProps,
         0,
         Long.MAX_VALUE,
         false)) {
