@@ -129,7 +129,6 @@ public class TestDataSourceReadWithDeletes extends SparkClientFunctionalTestHarn
         .withPath(basePath)
         .withSchema(jsonSchema)
         .withParallelism(2, 2)
-        .withAutoCommit(false)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withMaxNumDeltaCommitsBeforeCompaction(1).build())
         .withStorageConfig(HoodieStorageConfig.newBuilder()
