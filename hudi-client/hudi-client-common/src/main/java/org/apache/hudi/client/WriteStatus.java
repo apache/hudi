@@ -193,6 +193,10 @@ public class WriteStatus implements Serializable {
     this.stat.removeRecordStats();
   }
 
+  public void dropErrorRecords() {
+    failedRecords.clear();
+  }
+
   public String getFileId() {
     return fileId;
   }
