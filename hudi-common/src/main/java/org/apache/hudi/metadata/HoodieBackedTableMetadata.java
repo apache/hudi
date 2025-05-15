@@ -38,6 +38,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.InstantComparison;
@@ -279,6 +280,12 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     String latestMetadataInstantTime =
         latestMetadataInstant.map(HoodieInstant::requestedTime).orElse(SOLO_COMMIT_TIMESTAMP);
     Schema schema = HoodieAvroUtils.addMetadataFields(HoodieMetadataRecord.getClassSchema());
+    // Only those log files which have a corresponding completed instant on the dataset should be read
+    // This is because the metadata table is updated before the dataset instants are committed.
+    Set<String> validInstantTimestamps = getValidInstantTimestamps();
+    InstantRange instantRange = InstantRange.builder()
+        .rangeType(InstantRange.RangeType.EXACT_MATCH)
+        .explicitInstants(validInstantTimestamps).build();
     HoodieFileGroupReader fileGroupReader = getFileGroupReader(
         metadataMetaClient.getTableConfig(),
         metadataMetaClient.getBasePath().toString(),
@@ -289,7 +296,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         Option.empty(),
         metadataMetaClient,
         new TypedProperties(),
-        Collections.emptyList()); // TODO: Any properties?
+        Collections.emptyList());
+    fileGroupReader.setInstantRange(Option.of(instantRange));
     fileGroupReader.initRecordIterators();
     ClosableIterator it = fileGroupReader.getClosableIterator();
     return new HoodieRecordIterator(it, partitionName, sortedKeyPrefixes);
@@ -411,7 +419,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       boolean fullKeys = true;
       List<Long> timings = new ArrayList<>(1);
       Map<String, HoodieRecord<HoodieMetadataPayload>> logRecords = readLogRecords(logRecordScanner, sortedKeys, fullKeys, timings);
-      return readFromBaseAndMergeWithLogRecords(baseFileReader, sortedKeys, fullKeys, logRecords, timings, partitionName);
+      Map<String, HoodieRecord<HoodieMetadataPayload>> finalRecords = readFromBaseAndMergeWithLogRecords(baseFileReader, sortedKeys, fullKeys, logRecords, timings, partitionName);
+      return finalRecords;
     } catch (IOException ioe) {
       throw new HoodieIOException("Error merging records from metadata table for  " + keys.size() + " key : ", ioe);
     } finally {
@@ -434,6 +443,13 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       String latestMetadataInstantTime =
           latestMetadataInstant.map(HoodieInstant::requestedTime).orElse(SOLO_COMMIT_TIMESTAMP);
       Schema schema = HoodieAvroUtils.addMetadataFields(HoodieMetadataRecord.getClassSchema());
+      // Only those log files which have a corresponding completed instant on the dataset should be read
+      // This is because the metadata table is updated before the dataset instants are committed.
+      Set<String> validInstantTimestamps = getValidInstantTimestamps();
+      InstantRange instantRange = InstantRange.builder()
+          .rangeType(InstantRange.RangeType.EXACT_MATCH)
+          .explicitInstants(validInstantTimestamps).build();
+
       HoodieFileGroupReader fileGroupReader = getFileGroupReader(
           metadataMetaClient.getTableConfig(),
           metadataMetaClient.getBasePath().toString(),
@@ -444,7 +460,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
           Option.empty(),
           metadataMetaClient,
           new TypedProperties(),
-          Collections.emptyList()); // TODO: Any properties?
+          Collections.emptyList());
+      fileGroupReader.setInstantRange(Option.of(instantRange));
       fileGroupReader.initRecordIterators();
       ClosableIterator it = fileGroupReader.getClosableIterator();
       Map<String, HoodieRecord<HoodieMetadataPayload>> records = new HashMap<>();
@@ -468,6 +485,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   /**
    * This is a temporary solution. We should create a reader to generate HoodieMetadataRecord
    * record directly.
+   * TODO: We should have a specific hfile writer for SpecialRecord instead of GenericRecord.
    * @param from
    * @return
    * @throws IOException
@@ -850,35 +868,32 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   }
 
   private HoodieFileGroupReader<HoodieMetadataRecord> getFileGroupReader(HoodieTableConfig tableConfig,
-                                                                  String tablePath,
-                                                                  String latestCommitTime,
-                                                                  FileSlice fileSlice,
-                                                                  Schema dataSchema,
-                                                                  Schema requestedSchema,
-                                                                  Option<InternalSchema> internalSchemaOpt,
-                                                                  HoodieTableMetaClient metaClient,
-                                                                  TypedProperties props,
-                                                                  List<Predicate> filters) throws IOException {
+                                                                         String tablePath,
+                                                                         String latestCommitTime,
+                                                                         FileSlice fileSlice,
+                                                                         Schema dataSchema,
+                                                                         Schema requestedSchema,
+                                                                         Option<InternalSchema> internalSchemaOpt,
+                                                                         HoodieTableMetaClient metaClient,
+                                                                         TypedProperties props,
+                                                                         List<Predicate> filters) throws IOException {
     HoodieReaderContext readerContext =
         new HoodieAvroReaderContext(storageConf, tableConfig);
-    HoodieFileGroupReader<HoodieMetadataRecord> fileGroupReader =
-        new HoodieFileGroupReader<>(
-            readerContext,
-            metadataMetaClient.getStorage(),
-            tablePath,
-            latestCommitTime,
-            fileSlice,
-            dataSchema,
-            requestedSchema,
-            internalSchemaOpt,
-            metaClient,
-            props,
-            0,
-            Long.MAX_VALUE,
-            false,
-            filters,
-            false);
-    fileGroupReader.initRecordIterators();
-    return fileGroupReader;
+    return new HoodieFileGroupReader<>(
+        readerContext,
+        metadataMetaClient.getStorage(),
+        tablePath,
+        latestCommitTime,
+        fileSlice,
+        dataSchema,
+        requestedSchema,
+        internalSchemaOpt,
+        metaClient,
+        props,
+        0,
+        Long.MAX_VALUE,
+        false,
+        filters,
+        false);
   }
 }
