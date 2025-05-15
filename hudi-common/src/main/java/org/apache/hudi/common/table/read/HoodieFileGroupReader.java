@@ -34,6 +34,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.PartitionPathParser;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordReader;
+import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -98,6 +99,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   // the allowInflightInstants flag would need to be set to true. This would ensure the HoodieMergedLogRecordReader
   // considers the log records which are inflight.
   private final boolean allowInflightInstants;
+  private Option<InstantRange> instantRange = Option.empty();
 
   /**
    * Constructs an instance of the HoodieFileGroupReader.
@@ -306,6 +308,10 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     }
   }
 
+  public void setInstantRange(Option<InstantRange> instantRange) {
+    this.instantRange = instantRange;
+  }
+
   /**
    * @return {@code true} if the next record exists; {@code false} otherwise.
    * @throws IOException on reader error.
@@ -342,6 +348,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
         .withHoodieReaderContext(readerContext)
         .withStorage(storage)
         .withLogFiles(logFiles)
+        .withInstantRange(instantRange)
         .withReverseReader(false)
         .withBufferSize(getIntWithAltKeys(props, HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE))
         .withInstantRange(readerContext.getInstantRange())
