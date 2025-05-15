@@ -38,6 +38,7 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 
@@ -55,9 +56,9 @@ public class SimpleConcurrentFileWritesConflictResolutionStrategy
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
     // To find which instants are conflicting, we apply the following logic
     // 1. Get completed instants timeline only for commits that have happened since the last successful write.
-    // 2. Get any scheduled or completed compaction or clustering operations that have started and/or finished
-    // after the current instant. We need to check for write conflicts since they may have mutated the same files
-    // that are being newly created by the current write.
+    // 2. Get any scheduled or completed compaction that have started and/or finished after the current instant.
+    // 3. Get any completed replace commit that happened since the last successful write and any pending replace commit.
+    // We need to check for write conflicts since they may have mutated the same files that are being newly created by the current write.
     Stream<HoodieInstant> completedCommitsInstantStream = activeTimeline
         .getCommitsTimeline()
         .filterCompletedInstants()
@@ -67,8 +68,7 @@ public class SimpleConcurrentFileWritesConflictResolutionStrategy
     Stream<HoodieInstant> compactionAndClusteringPendingTimeline = activeTimeline
         .filterPendingReplaceClusteringAndCompactionTimeline()
         .filter(instant -> ClusteringUtils.isClusteringInstant(activeTimeline, instant, metaClient.getInstantGenerator())
-            || HoodieTimeline.COMPACTION_ACTION.equals(instant.getAction()))
-        .findInstantsAfter(currentInstant.requestedTime())
+            || (!HoodieTimeline.CLUSTERING_ACTION.equals(instant.getAction()) && compareTimestamps(instant.requestedTime(), GREATER_THAN, currentInstant.requestedTime())))
         .getInstantsAsStream();
     return Stream.concat(completedCommitsInstantStream, compactionAndClusteringPendingTimeline);
   }
