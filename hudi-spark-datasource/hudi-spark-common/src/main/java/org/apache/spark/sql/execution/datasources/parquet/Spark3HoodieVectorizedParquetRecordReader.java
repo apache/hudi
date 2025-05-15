@@ -170,17 +170,14 @@ public class Spark3HoodieVectorizedParquetRecordReader extends VectorizedParquet
   public boolean nextKeyValue() throws IOException {
     resultBatch();
 
-    if (returnColumnarBatch)  {
+    if (returnColumnarBatch) {
       return nextBatch();
+    } else if (batchIdx >= numBatched && !nextBatch()) {
+      return false;
+    } else {
+      ++batchIdx;
+      return true;
     }
-
-    if (batchIdx >= numBatched) {
-      if (!nextBatch()) {
-        return false;
-      }
-    }
-    ++batchIdx;
-    return true;
   }
 }
 
