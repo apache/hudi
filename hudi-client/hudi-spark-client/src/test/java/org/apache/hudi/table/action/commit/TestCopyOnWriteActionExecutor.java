@@ -79,6 +79,7 @@ import java.io.Serializable;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -87,6 +88,7 @@ import java.util.Properties;
 import java.util.UUID;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTime;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
@@ -198,7 +200,8 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
 
     // Insert new records
     final HoodieSparkCopyOnWriteTable cowTable = table;
-    writeClient.insert(jsc.parallelize(records, 1), firstCommitTime);
+    JavaRDD<WriteStatus> writeStatusJavaRDD = writeClient.insert(jsc.parallelize(records, 1), firstCommitTime);
+    writeClient.commit(firstCommitTime, writeStatusJavaRDD, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
 
     FileStatus[] allFiles = getIncrementalFiles(partitionPath, "0", -1);
     assertEquals(1, allFiles.length);
@@ -238,7 +241,8 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
     Thread.sleep(1000);
     metaClient = HoodieTableMetaClient.reload(metaClient);
     String newCommitTime = writeClient.startCommit();
-    List<WriteStatus> statuses = writeClient.upsert(jsc.parallelize(updatedRecords), newCommitTime).collect();
+    writeStatusJavaRDD = writeClient.upsert(jsc.parallelize(updatedRecords), newCommitTime);
+    writeClient.commit(newCommitTime, writeStatusJavaRDD, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
 
     allFiles = getIncrementalFiles(partitionPath, firstCommitTime, -1);
     assertEquals(1, allFiles.length);
@@ -268,6 +272,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
     }
     updatedReader.close();
     // Also check the numRecordsWritten
+    List<WriteStatus> statuses = writeStatusJavaRDD.collect();
     WriteStatus writeStatus = statuses.get(0);
     assertEquals(1, statuses.size(), "Should be only one file generated");
     assertEquals(4, writeStatus.getStat().getNumWrites());// 3 rewritten records + 1 new record
@@ -547,7 +552,8 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
 
     // Insert new records
     final JavaRDD<HoodieRecord> inputRecords = generateTestRecordsForBulkInsert(jsc, 50);
-    writeClient.bulkInsert(inputRecords, instantTime);
+    JavaRDD<WriteStatus> writeStatusJavaRDD = writeClient.bulkInsert(inputRecords, instantTime);
+    writeClient.commit(instantTime, writeStatusJavaRDD, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
 
     // Partition metafile should be created
     StoragePath partitionPath = new StoragePath(

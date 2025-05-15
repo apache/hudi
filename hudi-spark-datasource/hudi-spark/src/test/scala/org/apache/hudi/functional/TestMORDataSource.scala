@@ -1352,7 +1352,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
 
     // NOTE: this executes the compaction to write the compacted base files, and leaves the
     // compaction instant still inflight, emulating a compaction action that is in progress
-    client.compact(compactionInstant)
+    client.compact(compactionInstant).getWriteStatuses.collect();
     client.close()
 
     // Third batch with all updates

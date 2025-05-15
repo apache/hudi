@@ -46,7 +46,7 @@ class TestStreamSourceReadByStateTransitionTime extends TestStreamingSource {
           .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)
 
         val writeConfig = HoodieWriteConfig.newBuilder()
-          .withEngineType(EngineType.SPARK)
+            .withEngineType(EngineType.SPARK)
           .withPath(tablePath)
           .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
           .withCleanConfig(HoodieCleanConfig.newBuilder()
@@ -65,7 +65,7 @@ class TestStreamSourceReadByStateTransitionTime extends TestStreamingSource {
 
         WriteClientTestUtils.startCommitWithTime(writeClient, instantTime1)
         WriteClientTestUtils.startCommitWithTime(writeClient, instantTime2)
-        writeClient.insert(records2.toJavaRDD().asInstanceOf[JavaRDD[HoodieRecord[Nothing]]], instantTime2)
+        writeClient.commit(instantTime2, writeClient.insert(records2.toJavaRDD().asInstanceOf[JavaRDD[HoodieRecord[Nothing]]], instantTime2))
         val df = spark.readStream
           .format("hudi")
           .load(tablePath)
@@ -76,7 +76,7 @@ class TestStreamSourceReadByStateTransitionTime extends TestStreamingSource {
           assertCountMatched(15, true),
 
           AssertOnQuery { _ =>
-            writeClient.insert(records1.toJavaRDD().asInstanceOf[JavaRDD[HoodieRecord[Nothing]]], instantTime1)
+            writeClient.commit(instantTime1, writeClient.insert(records1.toJavaRDD().asInstanceOf[JavaRDD[HoodieRecord[Nothing]]], instantTime1))
             true
           },
           AssertOnQuery { q => q.processAllAvailable(); true },

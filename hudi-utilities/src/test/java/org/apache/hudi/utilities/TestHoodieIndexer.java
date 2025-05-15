@@ -497,9 +497,10 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
       String instant = writeClient.createNewInstantTime();
       WriteClientTestUtils.startCommitWithTime(writeClient, instant);
       List<HoodieRecord> records = DATA_GENERATOR.generateInserts(instant, 100);
-      JavaRDD<WriteStatus> result = writeClient.upsert(jsc().parallelize(records, 1), instant);
-      List<WriteStatus> statuses = result.collect();
-      assertNoWriteErrors(statuses);
+      JavaRDD<WriteStatus> writeStatuses = writeClient.upsert(jsc().parallelize(records, 1), instant);
+      writeStatuses = jsc().parallelize(writeStatuses.collect(), 1);
+      writeClient.commit(instant, writeStatuses);
+      assertNoWriteErrors(writeStatuses.collect());
     }
   }
 
@@ -550,9 +551,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
       String instant = writeClient.createNewInstantTime();
       WriteClientTestUtils.startCommitWithTime(writeClient, instant);
       List<HoodieRecord> records = DATA_GENERATOR.generateInserts(instant, 100);
-      JavaRDD<WriteStatus> result = writeClient.upsert(jsc().parallelize(records, 1), instant);
-      List<WriteStatus> statuses = result.collect();
-      assertNoWriteErrors(statuses);
+      writeClient.commit(instant, writeClient.upsert(jsc().parallelize(records, 1), instant));
     }
 
     // validate partitions built successfully
@@ -604,9 +603,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
       String instant = writeClient.createNewInstantTime();
       WriteClientTestUtils.startCommitWithTime(writeClient, instant);
       List<HoodieRecord> records = DATA_GENERATOR.generateInserts(instant, 100);
-      JavaRDD<WriteStatus> result = writeClient.upsert(jsc().parallelize(records, 1), instant);
-      List<WriteStatus> statuses = result.collect();
-      assertNoWriteErrors(statuses);
+      writeClient.commit(instant, writeClient.upsert(jsc().parallelize(records, 1), instant));
     }
 
     // validate files partition built successfully
