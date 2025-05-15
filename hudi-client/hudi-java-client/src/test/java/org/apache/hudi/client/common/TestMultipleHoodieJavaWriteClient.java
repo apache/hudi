@@ -164,7 +164,6 @@ public class TestMultipleHoodieJavaWriteClient {
             .forTable(tableName)
             .withIndexConfig(
                 HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
-            .withAutoCommit(false)
             .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder().withStorageType(FileSystemViewStorageType.MEMORY).build())
             .withLockConfig(
                 HoodieLockConfig.newBuilder()

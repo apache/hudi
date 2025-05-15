@@ -182,7 +182,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     context.setJobStatus(this.getClass().getSimpleName(), "Doing partition and writing data: " + config.getTableName());
     HoodieData<WriteStatus> writeStatuses = mapPartitionsAsRDD(inputRecordsWithClusteringUpdate, partitioner);
     HoodieWriteMetadata<HoodieData<WriteStatus>> result = new HoodieWriteMetadata<>();
-    updateIndexAndCommitIfNeeded(writeStatuses, result);
+    updateIndexAndMaybeRunPreCommitValidations(writeStatuses, result);
     if (sourceReadAndIndexTimer.isPresent()) {
       result.setSourceReadAndIndexDurationMs(sourceReadAndIndexDurationMs);
     }
@@ -277,10 +277,10 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     return statuses;
   }
 
-  protected void updateIndexAndCommitIfNeeded(HoodieData<WriteStatus> writeStatusRDD, HoodieWriteMetadata<HoodieData<WriteStatus>> result) {
+  protected void updateIndexAndMaybeRunPreCommitValidations(HoodieData<WriteStatus> writeStatusRDD, HoodieWriteMetadata<HoodieData<WriteStatus>> result) {
     updateIndex(writeStatusRDD, result);
     result.setPartitionToReplaceFileIds(getPartitionToReplacedFileIds(result));
-    commitOnAutoCommit(result);
+    runPrecommitValidators(result);
   }
 
   @Override
