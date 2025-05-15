@@ -391,7 +391,12 @@ public class HoodieTestUtils {
 
   public static StoragePath getCompleteInstantPath(HoodieStorage storage, StoragePath parent,
                                                    String instantTime, String action) {
-    return getCompleteInstantFileInfo(storage, parent, instantTime, action).getPath();
+    return getCompleteInstantPath(storage, parent, instantTime, action, HoodieTableVersion.current());
+  }
+
+  public static StoragePath getCompleteInstantPath(HoodieStorage storage, StoragePath parent,
+                                                   String instantTime, String action, HoodieTableVersion tableVersion) {
+    return getCompleteInstantFileInfo(storage, parent, instantTime, action, tableVersion).getPath();
   }
 
   public static <T> byte[] convertMetadataToByteArray(T metadata) {
@@ -401,9 +406,16 @@ public class HoodieTestUtils {
   private static StoragePathInfo getCompleteInstantFileInfo(HoodieStorage storage,
                                                             StoragePath parent,
                                                             String instantTime, String action) {
+    return getCompleteInstantFileInfo(storage, parent, instantTime, action, HoodieTableVersion.current());
+  }
+
+  private static StoragePathInfo getCompleteInstantFileInfo(HoodieStorage storage,
+                                                            StoragePath parent,
+                                                            String instantTime, String action,
+                                                            HoodieTableVersion tableVersion) {
     try {
       String actionSuffix = "." + action;
-      StoragePath wildcardPath = new StoragePath(parent, instantTime + "_*" + actionSuffix);
+      StoragePath wildcardPath = new StoragePath(parent, tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT) ? instantTime + "_*" + actionSuffix :  instantTime + actionSuffix);
       List<StoragePathInfo> pathInfoList = storage.globEntries(wildcardPath);
       if (pathInfoList.size() != 1) {
         throw new IOException("Error occur when finding path " + wildcardPath);

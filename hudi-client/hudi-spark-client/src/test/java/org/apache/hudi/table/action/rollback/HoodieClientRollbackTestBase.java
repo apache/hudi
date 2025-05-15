@@ -59,49 +59,53 @@ public class HoodieClientRollbackTestBase extends HoodieClientTestBase {
         storage, new String[] {DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH},
         basePath);
     SparkRDDWriteClient client = getHoodieWriteClient(cfg);
-    /**
-     * Write 1 (only inserts)
-     */
-    String newCommitTime = "001";
-    client.startCommitWithTime(newCommitTime);
-    List<HoodieRecord> records = dataGen.generateInsertsContainsAllPartitions(newCommitTime, 2);
-    JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
-    JavaRDD<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime);
-    Assertions.assertNoWriteErrors(statuses.collect());
-    client.commit(newCommitTime, statuses);
+    try {
+      /**
+       * Write 1 (only inserts)
+       */
+      String newCommitTime = "001";
+      client.startCommitWithTime(newCommitTime);
+      List<HoodieRecord> records = dataGen.generateInsertsContainsAllPartitions(newCommitTime, 2);
+      JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
+      List<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime).collect();
+      Assertions.assertNoWriteErrors(statuses);
+      client.commit(newCommitTime, jsc.parallelize(statuses));
 
-    /**
-     * Write 2 (updates)
-     */
-    newCommitTime = "002";
-    client.startCommitWithTime(newCommitTime);
-    records = dataGen.generateUpdates(newCommitTime, records);
-    statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime);
-    Assertions.assertNoWriteErrors(statuses.collect());
-    if (commitSecondUpsert) {
-      client.commit(newCommitTime, statuses);
-    }
+      /**
+       * Write 2 (updates)
+       */
+      newCommitTime = "002";
+      client.startCommitWithTime(newCommitTime);
+      records = dataGen.generateUpdates(newCommitTime, records);
+      statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
+      Assertions.assertNoWriteErrors(statuses);
+      if (commitSecondUpsert) {
+        client.commit(newCommitTime, jsc.parallelize(statuses));
+      }
 
 
-    //2. assert file group and get the first partition file slice
-    HoodieTable table = this.getHoodieTable(metaClient, cfg);
-    SyncableFileSystemView fsView = getFileSystemViewWithUnCommittedSlices(table.getMetaClient());
-    List<HoodieFileGroup> firstPartitionCommit2FileGroups = fsView.getAllFileGroups(DEFAULT_FIRST_PARTITION_PATH).collect(Collectors.toList());
-    assertEquals(1, firstPartitionCommit2FileGroups.size());
-    firstPartitionCommit2FileSlices.addAll(firstPartitionCommit2FileGroups.get(0).getAllFileSlices().collect(Collectors.toList()));
-    //3. assert file group and get the second partition file slice
-    List<HoodieFileGroup> secondPartitionCommit2FileGroups = fsView.getAllFileGroups(DEFAULT_SECOND_PARTITION_PATH).collect(Collectors.toList());
-    assertEquals(1, secondPartitionCommit2FileGroups.size());
-    secondPartitionCommit2FileSlices.addAll(secondPartitionCommit2FileGroups.get(0).getAllFileSlices().collect(Collectors.toList()));
+      //2. assert file group and get the first partition file slice
+      HoodieTable table = this.getHoodieTable(metaClient, cfg);
+      SyncableFileSystemView fsView = getFileSystemViewWithUnCommittedSlices(table.getMetaClient());
+      List<HoodieFileGroup> firstPartitionCommit2FileGroups = fsView.getAllFileGroups(DEFAULT_FIRST_PARTITION_PATH).collect(Collectors.toList());
+      assertEquals(1, firstPartitionCommit2FileGroups.size());
+      firstPartitionCommit2FileSlices.addAll(firstPartitionCommit2FileGroups.get(0).getAllFileSlices().collect(Collectors.toList()));
+      //3. assert file group and get the second partition file slice
+      List<HoodieFileGroup> secondPartitionCommit2FileGroups = fsView.getAllFileGroups(DEFAULT_SECOND_PARTITION_PATH).collect(Collectors.toList());
+      assertEquals(1, secondPartitionCommit2FileGroups.size());
+      secondPartitionCommit2FileSlices.addAll(secondPartitionCommit2FileGroups.get(0).getAllFileSlices().collect(Collectors.toList()));
 
-    //4. assert file slice
-    HoodieTableType tableType = this.getTableType();
-    if (tableType.equals(HoodieTableType.COPY_ON_WRITE)) {
-      assertEquals(2, firstPartitionCommit2FileSlices.size());
-      assertEquals(2, secondPartitionCommit2FileSlices.size());
-    } else {
-      assertEquals(1, firstPartitionCommit2FileSlices.size());
-      assertEquals(1, secondPartitionCommit2FileSlices.size());
+      //4. assert file slice
+      HoodieTableType tableType = this.getTableType();
+      if (tableType.equals(HoodieTableType.COPY_ON_WRITE)) {
+        assertEquals(2, firstPartitionCommit2FileSlices.size());
+        assertEquals(2, secondPartitionCommit2FileSlices.size());
+      } else {
+        assertEquals(1, firstPartitionCommit2FileSlices.size());
+        assertEquals(1, secondPartitionCommit2FileSlices.size());
+      }
+    } finally {
+      client.close();
     }
   }
 
@@ -115,53 +119,42 @@ public class HoodieClientRollbackTestBase extends HoodieClientTestBase {
     HoodieTestDataGenerator.writePartitionMetadataDeprecated(
         storage, new String[] {DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH},
         basePath);
-    SparkRDDWriteClient client = getHoodieWriteClient(cfg);
-    /**
-     * Write 1 (upsert)
-     */
-    String newCommitTime = "001";
-    List<HoodieRecord> records = dataGen.generateInsertsContainsAllPartitions(newCommitTime, 2);
-    JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
-    client.startCommitWithTime(newCommitTime);
-    JavaRDD<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime);
-    Assertions.assertNoWriteErrors(statuses.collect());
-    client.commit(newCommitTime, statuses);
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
+      /**
+       * Write 1 (upsert)
+       */
+      String newCommitTime = "001";
+      List<HoodieRecord> records = dataGen.generateInsertsContainsAllPartitions(newCommitTime, 2);
+      JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
+      client.startCommitWithTime(newCommitTime);
+      JavaRDD<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime);
+      Assertions.assertNoWriteErrors(statuses.collect());
+      client.commit(newCommitTime, statuses);
 
-    // get fileIds written
-    HoodieTable table = this.getHoodieTable(metaClient, cfg);
-    SyncableFileSystemView fsView = getFileSystemViewWithUnCommittedSlices(table.getMetaClient());
-    List<HoodieFileGroup> firstPartitionCommit1FileGroups = fsView.getAllFileGroups(DEFAULT_FIRST_PARTITION_PATH).collect(Collectors.toList());
-    assertEquals(1, firstPartitionCommit1FileGroups.size());
-    Set<String> partition1Commit1FileIds = firstPartitionCommit1FileGroups.get(0).getAllFileSlices().map(FileSlice::getFileId).collect(Collectors.toSet());
-    List<HoodieFileGroup> secondPartitionCommit1FileGroups = fsView.getAllFileGroups(DEFAULT_SECOND_PARTITION_PATH).collect(Collectors.toList());
-    assertEquals(1, secondPartitionCommit1FileGroups.size());
-    Set<String> partition2Commit1FileIds = secondPartitionCommit1FileGroups.get(0).getAllFileSlices().map(FileSlice::getFileId).collect(Collectors.toSet());
+      // get fileIds written
+      HoodieTable table = this.getHoodieTable(metaClient, cfg);
+      SyncableFileSystemView fsView = getFileSystemViewWithUnCommittedSlices(table.getMetaClient());
+      List<HoodieFileGroup> firstPartitionCommit1FileGroups = fsView.getAllFileGroups(DEFAULT_FIRST_PARTITION_PATH).collect(Collectors.toList());
+      assertEquals(1, firstPartitionCommit1FileGroups.size());
+      Set<String> partition1Commit1FileIds = firstPartitionCommit1FileGroups.get(0).getAllFileSlices().map(FileSlice::getFileId).collect(Collectors.toSet());
+      List<HoodieFileGroup> secondPartitionCommit1FileGroups = fsView.getAllFileGroups(DEFAULT_SECOND_PARTITION_PATH).collect(Collectors.toList());
+      assertEquals(1, secondPartitionCommit1FileGroups.size());
+      Set<String> partition2Commit1FileIds = secondPartitionCommit1FileGroups.get(0).getAllFileSlices().map(FileSlice::getFileId).collect(Collectors.toSet());
 
-    /**
-     * Write 2 (one insert_overwrite)
-     */
-    String commitActionType = HoodieTimeline.REPLACE_COMMIT_ACTION;
-    newCommitTime = "002";
-    records = dataGen.generateInsertsContainsAllPartitions(newCommitTime, 2);
-    writeRecords = jsc.parallelize(records, 1);
-    WriteClientTestUtils.startCommitWithTime(client, newCommitTime, commitActionType);
-    HoodieWriteResult result = client.insertOverwrite(writeRecords, newCommitTime);
-    statuses = result.getWriteStatuses();
-    Assertions.assertNoWriteErrors(statuses.collect());
-    if (commitSecondInsertOverwrite) {
-      client.commit(newCommitTime, statuses, Option.empty(), commitActionType, result.getPartitionToReplaceFileIds());
+      /**
+       * Write 2 (one insert_overwrite)
+       */
+      String commitActionType = HoodieTimeline.REPLACE_COMMIT_ACTION;
+      newCommitTime = "002";
+      records = dataGen.generateInsertsContainsAllPartitions(newCommitTime, 2);
+      writeRecords = jsc.parallelize(records, 1);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime, commitActionType);
+      HoodieWriteResult result = client.insertOverwrite(writeRecords, newCommitTime);
+      statuses = result.getWriteStatuses();
+      Assertions.assertNoWriteErrors(statuses.collect());
+      if (commitSecondInsertOverwrite) {
+        client.commit(newCommitTime, statuses, Option.empty(), commitActionType, result.getPartitionToReplaceFileIds());
+      }
     }
-    metaClient.reloadActiveTimeline();
-    // get new fileIds written as part of insert_overwrite
-    fsView = getFileSystemViewWithUnCommittedSlices(metaClient);
-    List<HoodieFileGroup> firstPartitionCommit2FileGroups = fsView.getAllFileGroups(DEFAULT_FIRST_PARTITION_PATH)
-        .filter(fg -> !partition1Commit1FileIds.contains(fg.getFileGroupId().getFileId())).collect(Collectors.toList());
-    firstPartitionCommit2FileSlices.addAll(firstPartitionCommit2FileGroups.get(0).getAllFileSlices().collect(Collectors.toList()));
-    List<HoodieFileGroup> secondPartitionCommit2FileGroups = fsView.getAllFileGroups(DEFAULT_SECOND_PARTITION_PATH)
-        .filter(fg -> !partition2Commit1FileIds.contains(fg.getFileGroupId().getFileId())).collect(Collectors.toList());
-    secondPartitionCommit2FileSlices.addAll(secondPartitionCommit2FileGroups.get(0).getAllFileSlices().collect(Collectors.toList()));
-
-    assertEquals(1, firstPartitionCommit2FileSlices.size());
-    assertEquals(1, secondPartitionCommit2FileSlices.size());
   }
 }
