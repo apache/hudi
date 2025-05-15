@@ -116,9 +116,9 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   }
 
   private HoodieFileGroupReader(HoodieReaderContext<T> readerContext, HoodieStorage storage, String tablePath,
-                               String latestCommitTime, FileSlice fileSlice, Schema dataSchema, Schema requestedSchema,
-                               Option<InternalSchema> internalSchemaOpt, HoodieTableMetaClient hoodieTableMetaClient, TypedProperties props,
-                               long start, long length, boolean shouldUseRecordPosition, boolean allowInflightInstants, boolean emitDelete) {
+                                String latestCommitTime, FileSlice fileSlice, Schema dataSchema, Schema requestedSchema,
+                                Option<InternalSchema> internalSchemaOpt, HoodieTableMetaClient hoodieTableMetaClient, TypedProperties props,
+                                long start, long length, boolean shouldUseRecordPosition, boolean allowInflightInstants, boolean emitDelete) {
     this.readerContext = readerContext;
     this.storage = storage;
     this.hoodieBaseFileOption = fileSlice.getBaseFile();

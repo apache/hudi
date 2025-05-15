@@ -82,9 +82,10 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       Schema requiredSchema,
       HoodieStorage storage
   ) throws IOException {
+    HoodieFileFormat fileFormat = detectFileFormat(filePath);
     HoodieAvroFileReader reader = (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(storage)
         .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(new HoodieConfig(),
-            filePath, HoodieFileFormat.PARQUET, Option.empty());
+            filePath, fileFormat, Option.empty());
     return reader.getIndexedRecordIterator(dataSchema, requiredSchema);
   }
 
@@ -225,6 +226,15 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       currentRecord = (IndexedRecord) value;
     }
     return null;
+  }
+
+  private HoodieFileFormat detectFileFormat(StoragePath filePath) {
+    for (HoodieFileFormat fileFormat : HoodieFileFormat.values()) {
+      if (filePath.getFileExtension().equals(fileFormat.getFileExtension())) {
+        return fileFormat;
+      }
+    }
+    throw new RuntimeException("Unrecognized file extension: " + filePath);
   }
 
   /**
