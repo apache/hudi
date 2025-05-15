@@ -31,7 +31,6 @@ import org.apache.spark.sql.vectorized.ColumnVector;
 import org.apache.spark.sql.vectorized.ColumnarBatch;
 
 import java.io.IOException;
-import java.lang.reflect.Field;
 import java.time.ZoneId;
 import java.util.HashMap;
 import java.util.Map;
@@ -56,7 +55,12 @@ public class Spark3HoodieVectorizedParquetRecordReader extends VectorizedParquet
   // The memory mode of the columnarBatch.
   private final MemoryMode memoryMode;
 
-  private Field batchIdxField;
+  /**
+   * Batch of rows that we assemble and the current index we've returned. Every time this
+   * batch is used up (batchIdx == numBatched), we populated the batch.
+   */
+  private int batchIdx = 0;
+  private int numBatched = 0;
 
   public Spark3HoodieVectorizedParquetRecordReader(
       ZoneId convertTz,
@@ -138,7 +142,8 @@ public class Spark3HoodieVectorizedParquetRecordReader extends VectorizedParquet
     if (idToColumnVectors != null) {
       idToColumnVectors.entrySet().stream().forEach(e -> e.getValue().reset());
     }
-    resultBatch();
+    numBatched = resultBatch().numRows();
+    batchIdx = 0;
     return result;
   }
 
@@ -158,19 +163,24 @@ public class Spark3HoodieVectorizedParquetRecordReader extends VectorizedParquet
       return columnarBatch == null ? super.getCurrentValue() : columnarBatch;
     }
 
-    return columnarBatch == null ? super.getCurrentValue() : columnarBatch.getRow(batchIdxFromSuper() - 1);
+    return columnarBatch == null ? super.getCurrentValue() : columnarBatch.getRow(batchIdx - 1);
   }
 
-  private int batchIdxFromSuper() {
-    try {
-      if (batchIdxField == null) {
-        batchIdxField = VectorizedParquetRecordReader.class.getDeclaredField("batchIdx");
-        batchIdxField.setAccessible(true);
-      }
-      return (Integer) batchIdxField.get(this);
-    } catch (NoSuchFieldException | IllegalAccessException e) {
-      throw new RuntimeException(e);
+  @Override
+  public boolean nextKeyValue() throws IOException {
+    resultBatch();
+
+    if (returnColumnarBatch)  {
+      return nextBatch();
     }
+
+    if (batchIdx >= numBatched) {
+      if (!nextBatch()) {
+        return false;
+      }
+    }
+    ++batchIdx;
+    return true;
   }
 }
 
