@@ -23,7 +23,7 @@ import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 
-class Spark3RowSerDe(val encoder: ExpressionEncoder[Row]) extends SparkRowSerDe {
+class SparkBaseRowSerDe(val encoder: ExpressionEncoder[Row]) extends SparkRowSerDe {
 
   private val deserializer: ExpressionEncoder.Deserializer[Row] = encoder.createDeserializer()
   private val serializer: ExpressionEncoder.Serializer[Row] = encoder.createSerializer()
