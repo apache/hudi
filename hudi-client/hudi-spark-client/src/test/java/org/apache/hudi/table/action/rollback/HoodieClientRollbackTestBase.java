@@ -47,10 +47,8 @@ import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_S
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class HoodieClientRollbackTestBase extends HoodieClientTestBase {
-  protected void twoUpsertCommitDataWithTwoPartitions(List<FileSlice> firstPartitionCommit2FileSlices,
-                                                      List<FileSlice> secondPartitionCommit2FileSlices,
-                                                      HoodieWriteConfig cfg,
-                                                      boolean commitSecondUpsert) throws IOException {
+  protected void twoUpsertCommitDataWithTwoPartitions(List<FileSlice> firstPartitionCommit2FileSlices, List<FileSlice> secondPartitionCommit2FileSlices,
+                                                      HoodieWriteConfig cfg, boolean commitSecondUpsert, SparkRDDWriteClient client) throws IOException {
     //just generate two partitions
     dataGen = new HoodieTestDataGenerator(
         new String[] {DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH});
@@ -58,54 +56,49 @@ public class HoodieClientRollbackTestBase extends HoodieClientTestBase {
     HoodieTestDataGenerator.writePartitionMetadataDeprecated(
         storage, new String[] {DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH},
         basePath);
-    SparkRDDWriteClient client = getHoodieWriteClient(cfg);
-    try {
-      /**
-       * Write 1 (only inserts)
-       */
-      String newCommitTime = "001";
-      client.startCommitWithTime(newCommitTime);
-      List<HoodieRecord> records = dataGen.generateInsertsContainsAllPartitions(newCommitTime, 2);
-      JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
-      List<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime).collect();
-      Assertions.assertNoWriteErrors(statuses);
+    /**
+     * Write 1 (only inserts)
+     */
+    String newCommitTime = "001";
+    client.startCommitWithTime(newCommitTime);
+    List<HoodieRecord> records = dataGen.generateInsertsContainsAllPartitions(newCommitTime, 2);
+    JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
+    List<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime).collect();
+    Assertions.assertNoWriteErrors(statuses);
+    client.commit(newCommitTime, jsc.parallelize(statuses));
+
+    /**
+     * Write 2 (updates)
+     */
+    newCommitTime = "002";
+    client.startCommitWithTime(newCommitTime);
+    records = dataGen.generateUpdates(newCommitTime, records);
+    statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
+    Assertions.assertNoWriteErrors(statuses);
+    if (commitSecondUpsert) {
       client.commit(newCommitTime, jsc.parallelize(statuses));
-
-      /**
-       * Write 2 (updates)
-       */
-      newCommitTime = "002";
-      client.startCommitWithTime(newCommitTime);
-      records = dataGen.generateUpdates(newCommitTime, records);
-      statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
-      Assertions.assertNoWriteErrors(statuses);
-      if (commitSecondUpsert) {
-        client.commit(newCommitTime, jsc.parallelize(statuses));
-      }
+    }
 
 
-      //2. assert file group and get the first partition file slice
-      HoodieTable table = this.getHoodieTable(metaClient, cfg);
-      SyncableFileSystemView fsView = getFileSystemViewWithUnCommittedSlices(table.getMetaClient());
-      List<HoodieFileGroup> firstPartitionCommit2FileGroups = fsView.getAllFileGroups(DEFAULT_FIRST_PARTITION_PATH).collect(Collectors.toList());
-      assertEquals(1, firstPartitionCommit2FileGroups.size());
-      firstPartitionCommit2FileSlices.addAll(firstPartitionCommit2FileGroups.get(0).getAllFileSlices().collect(Collectors.toList()));
-      //3. assert file group and get the second partition file slice
-      List<HoodieFileGroup> secondPartitionCommit2FileGroups = fsView.getAllFileGroups(DEFAULT_SECOND_PARTITION_PATH).collect(Collectors.toList());
-      assertEquals(1, secondPartitionCommit2FileGroups.size());
-      secondPartitionCommit2FileSlices.addAll(secondPartitionCommit2FileGroups.get(0).getAllFileSlices().collect(Collectors.toList()));
+    //2. assert file group and get the first partition file slice
+    HoodieTable table = this.getHoodieTable(metaClient, cfg);
+    SyncableFileSystemView fsView = getFileSystemViewWithUnCommittedSlices(table.getMetaClient());
+    List<HoodieFileGroup> firstPartitionCommit2FileGroups = fsView.getAllFileGroups(DEFAULT_FIRST_PARTITION_PATH).collect(Collectors.toList());
+    assertEquals(1, firstPartitionCommit2FileGroups.size());
+    firstPartitionCommit2FileSlices.addAll(firstPartitionCommit2FileGroups.get(0).getAllFileSlices().collect(Collectors.toList()));
+    //3. assert file group and get the second partition file slice
+    List<HoodieFileGroup> secondPartitionCommit2FileGroups = fsView.getAllFileGroups(DEFAULT_SECOND_PARTITION_PATH).collect(Collectors.toList());
+    assertEquals(1, secondPartitionCommit2FileGroups.size());
+    secondPartitionCommit2FileSlices.addAll(secondPartitionCommit2FileGroups.get(0).getAllFileSlices().collect(Collectors.toList()));
 
-      //4. assert file slice
-      HoodieTableType tableType = this.getTableType();
-      if (tableType.equals(HoodieTableType.COPY_ON_WRITE)) {
-        assertEquals(2, firstPartitionCommit2FileSlices.size());
-        assertEquals(2, secondPartitionCommit2FileSlices.size());
-      } else {
-        assertEquals(1, firstPartitionCommit2FileSlices.size());
-        assertEquals(1, secondPartitionCommit2FileSlices.size());
-      }
-    } finally {
-      client.close();
+    //4. assert file slice
+    HoodieTableType tableType = this.getTableType();
+    if (tableType.equals(HoodieTableType.COPY_ON_WRITE)) {
+      assertEquals(2, firstPartitionCommit2FileSlices.size());
+      assertEquals(2, secondPartitionCommit2FileSlices.size());
+    } else {
+      assertEquals(1, firstPartitionCommit2FileSlices.size());
+      assertEquals(1, secondPartitionCommit2FileSlices.size());
     }
   }
 
