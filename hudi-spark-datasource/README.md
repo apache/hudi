@@ -23,6 +23,7 @@ This repo contains the code that integrate Hudi with Spark. The repo is split in
 `hudi-spark3.3.x`
 `hudi-spark3.4.x`
 `hudi-spark3.5.x`
+`hudi-spark4.0.x`
 `hudi-spark3-common`
 `hudi-spark-common`
 
@@ -30,6 +31,7 @@ This repo contains the code that integrate Hudi with Spark. The repo is split in
 * hudi-spark3.3.x is the module that contains the code that compatible with spark3.3.x versions.
 * hudi-spark3.4.x is the module that contains the code that compatible with spark 3.4.x versions.
 * hudi-spark3.5.x is the module that contains the code that compatible with spark 3.5.x versions.
+* hudi-spark4.0.x is the module that contains the code that compatible with spark 4.0.x versions.
 * hudi-spark3-common is the module that contains the code that would be reused between spark3.x versions.
 * hudi-spark-common is the module that contains the code that would be reused between spark3.x versions.
 
