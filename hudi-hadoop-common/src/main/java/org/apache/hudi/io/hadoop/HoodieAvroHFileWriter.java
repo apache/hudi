@@ -27,9 +27,15 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieDuplicateKeyException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
+import org.apache.hudi.io.hfile.HFileContext;
+import org.apache.hudi.io.hfile.HFileWriter;
+import org.apache.hudi.io.hfile.HFileWriterImpl;
 import org.apache.hudi.io.storage.HoodieAvroFileWriter;
 import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
+import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -38,16 +44,12 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.HColumnDescriptor;
-import org.apache.hadoop.hbase.KeyValue;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
-import org.apache.hadoop.hbase.io.hfile.HFile;
-import org.apache.hadoop.hbase.io.hfile.HFileContext;
-import org.apache.hadoop.hbase.io.hfile.HFileContextBuilder;
-import org.apache.hadoop.io.Writable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.io.DataInput;
-import java.io.DataOutput;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
@@ -64,6 +66,7 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 public class HoodieAvroHFileWriter
     implements HoodieAvroFileWriter {
   private static final AtomicLong RECORD_INDEX_COUNT = new AtomicLong(1);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieAvroHFileWriter.class);
   private final Path file;
   private final HoodieHFileConfig hfileConfig;
   private final boolean isWrapperFileSystem;
@@ -73,7 +76,7 @@ public class HoodieAvroHFileWriter
   private final TaskContextSupplier taskContextSupplier;
   private final boolean populateMetaFields;
   private final Option<Schema.Field> keyFieldSchema;
-  private HFile.Writer writer;
+  private HFileWriter writer;
   private String minRecordKey;
   private String maxRecordKey;
   private String prevRecordKey;
@@ -101,9 +104,9 @@ public class HoodieAvroHFileWriter
     this.taskContextSupplier = taskContextSupplier;
     this.populateMetaFields = populateMetaFields;
 
-    HFileContext context = new HFileContextBuilder().withBlockSize(hfileConfig.getBlockSize())
-        .withCompression(hfileConfig.getCompressionAlgorithm())
-        .withCellComparator(hfileConfig.getHFileComparator())
+    HFileContext context = new HFileContext.Builder()
+        .blockSize(hfileConfig.getBlockSize())
+        .compressionCodec(hfileConfig.getCompressionCodec())
         .build();
 
     conf.set(CacheConfig.PREFETCH_BLOCKS_ON_OPEN_KEY,
@@ -111,15 +114,15 @@ public class HoodieAvroHFileWriter
     conf.set(HColumnDescriptor.CACHE_DATA_IN_L1, String.valueOf(hfileConfig.shouldCacheDataInL1()));
     conf.set(DROP_BEHIND_CACHE_COMPACTION_KEY,
         String.valueOf(hfileConfig.shouldDropBehindCacheCompaction()));
-    CacheConfig cacheConfig = new CacheConfig(conf);
-    this.writer = HFile.getWriterFactory(conf, cacheConfig)
-        .withPath(fs, this.file)
-        .withFileContext(context)
-        .create();
 
-    writer.appendFileInfo(getUTF8Bytes(HoodieAvroHFileReaderImplBase.SCHEMA_KEY),
-        getUTF8Bytes(schema.toString()));
+    StorageConfiguration<Configuration> storageConf = new HadoopStorageConfiguration(conf);
+    StoragePath filePath = new StoragePath(this.file.toUri());
+    OutputStream outputStream =  HoodieStorageUtils.getStorage(filePath, storageConf).create(filePath);
+    this.writer = new HFileWriterImpl(context, outputStream);
+
     this.prevRecordKey = "";
+    writer.appendFileInfo(
+        HoodieAvroHFileReaderImplBase.SCHEMA_KEY, getUTF8Bytes(schema.toString()));
   }
 
   @Override
@@ -149,7 +152,8 @@ public class HoodieAvroHFileWriter
     if (keyFieldSchema.isPresent()) {
       GenericRecord keyExcludedRecord = (GenericRecord) record;
       int keyFieldPos = this.keyFieldSchema.get().pos();
-      boolean isKeyAvailable = (record.get(keyFieldPos) != null && !(record.get(keyFieldPos).toString().isEmpty()));
+      boolean isKeyAvailable = (record.get(keyFieldPos) != null
+          && !(record.get(keyFieldPos).toString().isEmpty()));
       if (isKeyAvailable) {
         Object originalKey = keyExcludedRecord.get(keyFieldPos);
         keyExcludedRecord.put(keyFieldPos, EMPTY_STRING);
@@ -161,9 +165,7 @@ public class HoodieAvroHFileWriter
     if (!isRecordSerialized) {
       value = HoodieAvroUtils.avroToBytes((GenericRecord) record);
     }
-
-    KeyValue kv = new KeyValue(getUTF8Bytes(recordKey), null, null, value);
-    writer.append(kv);
+    writer.append(recordKey, value);
 
     if (hfileConfig.useBloomFilter()) {
       hfileConfig.getBloomFilter().add(recordKey);
@@ -185,25 +187,17 @@ public class HoodieAvroHFileWriter
       if (maxRecordKey == null) {
         maxRecordKey = "";
       }
-      writer.appendFileInfo(getUTF8Bytes(HoodieAvroHFileReaderImplBase.KEY_MIN_RECORD),
-          getUTF8Bytes(minRecordKey));
-      writer.appendFileInfo(getUTF8Bytes(HoodieAvroHFileReaderImplBase.KEY_MAX_RECORD),
-          getUTF8Bytes(maxRecordKey));
-      writer.appendFileInfo(getUTF8Bytes(HoodieAvroHFileReaderImplBase.KEY_BLOOM_FILTER_TYPE_CODE),
+      writer.appendFileInfo(
+          HoodieAvroHFileReaderImplBase.KEY_MIN_RECORD, getUTF8Bytes(minRecordKey));
+      writer.appendFileInfo(
+          HoodieAvroHFileReaderImplBase.KEY_MAX_RECORD, getUTF8Bytes(maxRecordKey));
+      writer.appendFileInfo(
+          HoodieAvroHFileReaderImplBase.KEY_BLOOM_FILTER_TYPE_CODE,
           getUTF8Bytes(bloomFilter.getBloomFilterTypeCode().toString()));
-      writer.appendMetaBlock(HoodieAvroHFileReaderImplBase.KEY_BLOOM_FILTER_META_BLOCK,
-          new Writable() {
-            @Override
-            public void write(DataOutput out) throws IOException {
-              out.write(getUTF8Bytes(bloomFilter.serializeToString()));
-            }
-
-            @Override
-            public void readFields(DataInput in) throws IOException {
-            }
-          });
+      writer.appendMetaInfo(
+          HoodieAvroHFileReaderImplBase.KEY_BLOOM_FILTER_META_BLOCK,
+          getUTF8Bytes(bloomFilter.serializeToString()));
     }
-
     writer.close();
     writer = null;
   }
