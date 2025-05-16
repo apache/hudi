@@ -30,7 +30,7 @@ import org.apache.spark.sql.execution.command.DataWritingCommand
 import org.apache.spark.sql.execution.metric.SQLMetric
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isMetaField
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
-import org.apache.spark.sql.hudi.command.HoodieCommandMetrics.updateInsertMetrics
+import org.apache.spark.sql.hudi.command.HoodieCommandMetrics.updateCommitMetrics
 import org.apache.spark.sql.hudi.command.HoodieLeafRunnableCommand.stripMetaFieldAttributes
 
 case class DeleteHoodieTableCommand(catalogTable: HoodieCatalogTable, query: LogicalPlan, config: Map[String, String]) extends DataWritingCommand
@@ -50,8 +50,8 @@ case class DeleteHoodieTableCommand(catalogTable: HoodieCatalogTable, query: Log
     logInfo(s"Executing 'DELETE FROM' command for $tableId")
     val df = sparkSession.internalCreateDataFrame(queryPlan.execute(), queryPlan.schema)
     val (success, commitInstantTime, _, _, _, _) = HoodieSparkSqlWriter.write(sparkSession.sqlContext, SaveMode.Append, config, df)
-    if(success) {
-      updateInsertMetrics(metrics, catalogTable.metaClient, commitInstantTime.get())
+    if (success && commitInstantTime.isPresent) {
+      updateCommitMetrics(metrics, catalogTable.metaClient, commitInstantTime.get())
       DataWritingCommand.propogateMetrics(sparkSession.sparkContext, this, metrics)
     }
     sparkSession.catalog.refreshTable(tableId)

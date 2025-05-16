@@ -35,7 +35,7 @@ import org.apache.spark.sql.execution.metric.SQLMetric
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.failAnalysis
-import org.apache.spark.sql.hudi.command.HoodieCommandMetrics.updateInsertMetrics
+import org.apache.spark.sql.hudi.command.HoodieCommandMetrics.updateCommitMetrics
 
 case class UpdateHoodieTableCommand(ut: UpdateTable, query: LogicalPlan) extends DataWritingCommand
   with SparkAdapterSupport with ProvidesHoodieConfig {
@@ -63,8 +63,8 @@ case class UpdateHoodieTableCommand(ut: UpdateTable, query: LogicalPlan) extends
 
     val df = sparkSession.internalCreateDataFrame(plan.execute(), plan.schema)
     val (success, commitInstantTime, _, _, _, _) = HoodieSparkSqlWriter.write(sparkSession.sqlContext, SaveMode.Append, config, df)
-    if(success) {
-      updateInsertMetrics(metrics, catalogTable.metaClient, commitInstantTime.get())
+    if (success && commitInstantTime.isPresent) {
+      updateCommitMetrics(metrics, catalogTable.metaClient, commitInstantTime.get())
       DataWritingCommand.propogateMetrics(sparkSession.sparkContext, this, metrics)
     }
 

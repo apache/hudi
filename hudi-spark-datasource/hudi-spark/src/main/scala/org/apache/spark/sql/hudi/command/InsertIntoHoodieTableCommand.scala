@@ -33,7 +33,7 @@ import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.execution.metric.{SQLMetric, SQLMetrics}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
-import org.apache.spark.sql.hudi.command.HoodieCommandMetrics.updateInsertMetrics
+import org.apache.spark.sql.hudi.command.HoodieCommandMetrics.updateCommitMetrics
 import org.apache.spark.sql.hudi.command.HoodieLeafRunnableCommand.stripMetaFieldAttributes
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
@@ -118,7 +118,7 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
     }
 
     if (success && commitInstantTime.isPresent) {
-      updateInsertMetrics(metrics, catalogTable.metaClient, commitInstantTime.get())
+      updateCommitMetrics(metrics, catalogTable.metaClient, commitInstantTime.get())
     }
 
     if (success && refreshTable) {

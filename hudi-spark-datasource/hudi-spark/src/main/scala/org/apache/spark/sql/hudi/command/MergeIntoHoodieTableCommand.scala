@@ -50,7 +50,7 @@ import org.apache.spark.sql.execution.metric.SQLMetric
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig.{combineOptions, getPartitionPathFieldWriteConfig}
-import org.apache.spark.sql.hudi.command.HoodieCommandMetrics.updateInsertMetrics
+import org.apache.spark.sql.hudi.command.HoodieCommandMetrics.updateCommitMetrics
 import org.apache.spark.sql.hudi.command.MergeIntoHoodieTableCommand._
 import org.apache.spark.sql.hudi.command.PartialAssignmentMode.PartialAssignmentMode
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload
@@ -501,8 +501,10 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
     if (!success) {
       throw new HoodieException("Merge into Hoodie table command failed")
     }
-    updateInsertMetrics(metrics, hoodieCatalogTable.metaClient, commitInstantTime.get())
-    DataWritingCommand.propogateMetrics(sparkSession.sparkContext, this, metrics)
+    if (commitInstantTime.isPresent) {
+      updateCommitMetrics(metrics, hoodieCatalogTable.metaClient, commitInstantTime.get())
+      DataWritingCommand.propogateMetrics(sparkSession.sparkContext, this, metrics)
+    }
   }
 
   private def isPartialUpdateActionForMOR(parameters: Map[String, String]) = {
