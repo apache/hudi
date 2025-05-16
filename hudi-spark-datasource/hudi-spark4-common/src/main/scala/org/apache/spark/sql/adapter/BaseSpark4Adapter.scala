@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.adapter
 
-import org.apache.hudi.{AvroConversionUtils, DefaultSource, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, Spark4HoodiePartitionCDCFileGroupMapping, Spark4HoodiePartitionFileSliceMapping, Spark4RowSerDe}
+import org.apache.hudi.{AvroConversionUtils, DefaultSource, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, Spark4HoodiePartitionCDCFileGroupMapping, Spark4HoodiePartitionFileSliceMapping, SparkBaseRowSerDe}
 import org.apache.hudi.client.model.{HoodieInternalRow, Spark4HoodieInternalRow}
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
@@ -65,7 +65,7 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
   def getCatalogUtils: HoodieSpark4CatalogUtils
 
   override def createSparkRowSerDe(schema: StructType): SparkRowSerDe = {
-    new Spark4RowSerDe(getCatalystExpressionUtils.getEncoder(schema))
+    new SparkBaseRowSerDe(getCatalystExpressionUtils.getEncoder(schema))
   }
 
   override def getAvroSchemaConverters: HoodieAvroSchemaConverters = HoodieSparkAvroSchemaConverters
