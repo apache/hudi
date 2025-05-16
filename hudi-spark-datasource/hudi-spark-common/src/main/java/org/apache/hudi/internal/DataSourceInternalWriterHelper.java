@@ -38,6 +38,7 @@ import org.apache.spark.sql.types.StructType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -84,8 +85,9 @@ public class DataSourceInternalWriterHelper {
   public void commit(List<WriteStatus> writeStatuses) {
     try {
       List<HoodieWriteStat> writeStatList = writeStatuses.stream().map(WriteStatus::getStat).collect(Collectors.toList());
-      writeClient.commitStats(instantTime, writeStatList, Option.of(extraMetadata),
-          CommitUtils.getCommitActionType(operationType, metaClient.getTableType()));
+      writeClient.commitStats(instantTime, writeStatList, Collections.emptyList(), Option.of(extraMetadata),
+          CommitUtils.getCommitActionType(operationType, metaClient.getTableType()), Collections.emptyMap(), Option.empty(),
+          true);
     } catch (Exception ioe) {
       throw new HoodieException(ioe.getMessage(), ioe);
     } finally {

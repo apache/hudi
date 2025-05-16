@@ -1564,7 +1564,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     } else {
       engineContext.setJobStatus(this.getClass().getSimpleName(), String.format("Upserting at %s into metadata table %s", instantTime, metadataWriteConfig.getTableName()));
       // to do: fix the last argument is required so that we can support streaming writes to metadata table.
-      writeClient.upsertPreppedRecords(preppedRecordInputs, instantTime);
+      upsertAndCommit(writeClient, instantTime, preppedRecordInputs);
     }
 
     metadataMetaClient.reloadActiveTimeline();

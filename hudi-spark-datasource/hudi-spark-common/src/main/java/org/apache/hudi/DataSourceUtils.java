@@ -22,6 +22,7 @@ import org.apache.hudi.callback.common.WriteStatusHandlerCallback;
 import org.apache.hudi.client.HoodieWriteResult;
 import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.SparkRDDWriteClientCommitCoordinator;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.data.HoodieData;
@@ -212,7 +213,10 @@ public class DataSourceUtils {
 
   public static SparkRDDWriteClient createHoodieClient(JavaSparkContext jssc, String schemaStr, String basePath,
                                                        String tblName, Map<String, String> parameters) {
-    return new SparkRDDWriteClient<>(new HoodieSparkEngineContext(jssc), createHoodieConfig(schemaStr, basePath, tblName, parameters));
+    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jssc);
+    HoodieWriteConfig writeConfig = createHoodieConfig(schemaStr, basePath, tblName, parameters);
+    SparkRDDWriteClient sparkRDDWriteClient = new SparkRDDWriteClient<>(engineContext, writeConfig);
+    return writeConfig.isMetadataTableEnabled() ? new SparkRDDWriteClientCommitCoordinator(engineContext, writeConfig, sparkRDDWriteClient) : sparkRDDWriteClient;
   }
 
   public static HoodieWriteResult doWriteOperation(SparkRDDWriteClient client, JavaRDD<HoodieRecord> hoodieRecords,
