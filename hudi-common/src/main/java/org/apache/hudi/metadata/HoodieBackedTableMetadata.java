@@ -230,11 +230,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         getEngineContext().parallelize(partitionFileSlices))
         .flatMap(
             (SerializableFunction<FileSlice, Iterator<HoodieRecord<HoodieMetadataPayload>>>) fileSlice -> {
-              if (!metadataConfig.isFileGroupReaderEnabled()) {
-                return getByKeyPrefixes(fileSlice, sortedKeyPrefixes, partitionName);
-              } else {
-                return getByKeyPrefixesWithFileGroupReader(fileSlice, sortedKeyPrefixes, partitionName);
-              }
+              return getByKeyPrefixesWithFileGroupReader(fileSlice, sortedKeyPrefixes, partitionName);
             });
   }
 
@@ -317,6 +313,10 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
     @Override
     public boolean hasNext() {
+      if (metadataRecord != null) {
+        return true;
+      }
+
       while (baseIterator.hasNext()) {
         try {
           metadataRecord = transform((GenericRecord) baseIterator.next());
@@ -339,6 +339,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       }
       HoodieMetadataPayload payload = new HoodieMetadataPayload(metadataRecord, metadataRecord.getKey());
       HoodieKey key = new HoodieKey(metadataRecord.getKey(), partitionName);
+      metadataRecord = null;
+
       return new HoodieAvroRecord<>(key, payload);
     }
   }
