@@ -21,7 +21,6 @@ package org.apache.spark.sql.hudi
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.storage.StoragePath
-
 import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.api.java.JavaSparkContext
@@ -37,7 +36,7 @@ import org.apache.spark.sql.catalyst.util.DateFormatter
 import org.apache.spark.sql.catalyst.{InternalRow, TableIdentifier}
 import org.apache.spark.sql.execution.QueryExecution
 import org.apache.spark.sql.execution.datasources._
-import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, SparkParquetReader}
+import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, SparkFileReader}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.parser.HoodieExtendedParserInterface
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
@@ -66,7 +65,7 @@ trait SparkAdapter extends Serializable {
   /**
    * Inject table-valued functions to SparkSessionExtensions
    */
-  def injectTableFunctions(extensions : SparkSessionExtensions): Unit = {}
+  def injectTableFunctions(extensions: SparkSessionExtensions): Unit = {}
 
   /**
    * Returns an instance of [[HoodieCatalogUtils]] providing for common utils operating on Spark's
@@ -137,7 +136,7 @@ trait SparkAdapter extends Serializable {
    * Combine [[PartitionedFile]] to [[FilePartition]] according to `maxSplitBytes`.
    */
   def getFilePartitions(sparkSession: SparkSession, partitionedFiles: Seq[PartitionedFile],
-      maxSplitBytes: Long): Seq[FilePartition]
+                        maxSplitBytes: Long): Seq[FilePartition]
 
   /**
    * Checks whether [[LogicalPlan]] refers to Hudi table, and if it's the case extracts
@@ -232,7 +231,21 @@ trait SparkAdapter extends Serializable {
   def createParquetFileReader(vectorized: Boolean,
                               sqlConf: SQLConf,
                               options: Map[String, String],
-                              hadoopConf: Configuration): SparkParquetReader
+                              hadoopConf: Configuration): SparkFileReader
+
+  /**
+   * Get orc file reader
+   *
+   * @param vectorized true if vectorized reading is not prohibited due to schema, reading mode, etc
+   * @param sqlConf    the [[SQLConf]] used for the read
+   * @param options    passed as a param to the file format
+   * @param hadoopConf some configs will be set for the hadoopConf
+   * @return orc file reader
+   */
+  def createOrcFileReader(vectorized: Boolean,
+                          sqlConf: SQLConf,
+                          options: Map[String, String],
+                          hadoopConf: Configuration): SparkFileReader
 
   /**
    * use new qe execute
@@ -241,11 +254,10 @@ trait SparkAdapter extends Serializable {
                                         queryExecution: QueryExecution,
                                         name: Option[String] = None)(body: => T): T
 
-
   /**
    * Stop spark context with exit code
    *
-   * @param jssc JavaSparkContext object to shutdown the spark context
+   * @param jssc     JavaSparkContext object to shutdown the spark context
    * @param exitCode passed as a param to shutdown spark context with provided exit code
    * @return
    */
