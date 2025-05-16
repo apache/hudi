@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hudi.callback.common.WriteStatusHandlerCallback;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
@@ -143,7 +144,7 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
 
     @Override
     public boolean commit(String instantTime, String writeStatuses, Option<Map<String, String>> extraMetadata, String commitActionType, Map<String, List<String>> partitionToReplacedFileIds,
-                          Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc) {
+                          Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc, WriteStatusHandlerCallback writeStatusHandlerCallback) {
       return false;
     }
 
