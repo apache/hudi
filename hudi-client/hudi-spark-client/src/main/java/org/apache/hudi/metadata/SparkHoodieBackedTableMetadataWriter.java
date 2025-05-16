@@ -186,13 +186,6 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   @Override
-  protected void upsertAndCommit(BaseHoodieWriteClient<?, JavaRDD<HoodieRecord>, ?, JavaRDD<WriteStatus>> writeClient, String instantTime, JavaRDD<HoodieRecord> preppedRecordInputs,
-                                 List<HoodieFileGroupId> mdtFileGroupsIdsToUpdate) {
-    JavaRDD<WriteStatus> writeStatusJavaRDD = ((SparkRDDMetadataWriteClient)writeClient).upsertPreppedRecords(preppedRecordInputs, instantTime, Option.of(mdtFileGroupsIdsToUpdate));
-    writeClient.commit(instantTime, writeStatusJavaRDD, Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap());
-  }
-
-  @Override
   protected void bulkCommit(
       String instantTime, String partitionName, HoodieData<HoodieRecord> records,
       int fileGroupCount) {
