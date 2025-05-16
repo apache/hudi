@@ -62,6 +62,7 @@ import org.apache.flink.table.data.utils.JoinedRowData;
 import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
+import org.apache.flink.types.RowKind;
 
 import java.io.IOException;
 import java.util.List;
@@ -259,7 +260,13 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
   public RowData convertAvroRecord(IndexedRecord avroRecord) {
     Schema recordSchema = avroRecord.getSchema();
     AvroToRowDataConverters.AvroToRowDataConverter converter = RowDataAvroQueryContexts.fromAvroSchema(recordSchema, utcTimezone).getAvroToRowDataConverter();
-    return (RowData) converter.convert(avroRecord);
+    RowData rowData = (RowData) converter.convert(avroRecord);
+    Schema.Field operationField = recordSchema.getField(HoodieRecord.OPERATION_METADATA_FIELD);
+    if (operationField != null) {
+      HoodieOperation operation = HoodieOperation.fromName(rowData.getString(operationField.pos()).toString());
+      rowData.setRowKind(RowKind.fromByteValue(operation.getValue()));
+    }
+    return rowData;
   }
 
   @Override
