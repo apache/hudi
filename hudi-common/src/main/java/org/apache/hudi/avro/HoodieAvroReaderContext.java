@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -52,6 +53,7 @@ import org.apache.avro.generic.IndexedRecord;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -229,12 +231,16 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
   }
 
   private HoodieFileFormat detectFileFormat(StoragePath filePath) {
+    if (FSUtils.isLogFile(filePath.getName())) {
+      return HoodieFileFormat.HOODIE_LOG;
+    }
     for (HoodieFileFormat fileFormat : HoodieFileFormat.values()) {
       if (filePath.getFileExtension().equals(fileFormat.getFileExtension())) {
         return fileFormat;
       }
     }
-    throw new RuntimeException("Unrecognized file extension: " + filePath);
+    throw new NoSuchElementException(
+        "Unrecognized file extension: " + filePath.getFileExtension());
   }
 
   /**
