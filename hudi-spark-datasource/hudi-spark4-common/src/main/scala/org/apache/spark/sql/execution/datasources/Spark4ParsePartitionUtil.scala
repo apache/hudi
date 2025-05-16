@@ -18,7 +18,7 @@
 package org.apache.spark.sql.execution.datasources
 
 import org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH
-import org.apache.hudi.spark4.internal.ReflectUtil
+import org.apache.hudi.spark.internal.ReflectUtil
 
 import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.catalyst.InternalRow

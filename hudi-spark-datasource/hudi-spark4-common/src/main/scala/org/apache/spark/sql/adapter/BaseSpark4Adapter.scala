@@ -25,7 +25,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit
 import org.apache.hudi.common.util.JsonUtils
 import org.apache.hudi.common.util.collection.{FlatLists, Spark4FlatLists}
-import org.apache.hudi.spark4.internal.ReflectUtil
+import org.apache.hudi.spark.internal.ReflectUtil
 import org.apache.hudi.storage.StoragePath
 
 import org.apache.avro.Schema
