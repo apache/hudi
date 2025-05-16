@@ -29,6 +29,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
@@ -59,26 +60,27 @@ public class HoodieClientRollbackTestBase extends HoodieClientTestBase {
     /**
      * Write 1 (only inserts)
      */
-    String newCommitTime = "001";
+    String newCommitTime = InProcessTimeGenerator.createNewInstantTime();
     client.startCommitWithTime(newCommitTime);
     List<HoodieRecord> records = dataGen.generateInsertsContainsAllPartitions(newCommitTime, 2);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
-    List<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime).collect();
-    Assertions.assertNoWriteErrors(statuses);
-    client.commit(newCommitTime, jsc.parallelize(statuses));
+    JavaRDD<WriteStatus> rawStatuses = client.upsert(writeRecords, newCommitTime);
+    JavaRDD<WriteStatus> statuses = jsc.parallelize(rawStatuses.collect(), 1);
+    client.commit(newCommitTime, statuses);
+    Assertions.assertNoWriteErrors(statuses.collect());
 
     /**
      * Write 2 (updates)
      */
-    newCommitTime = "002";
+    newCommitTime = InProcessTimeGenerator.createNewInstantTime();
     client.startCommitWithTime(newCommitTime);
     records = dataGen.generateUpdates(newCommitTime, records);
-    statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
-    Assertions.assertNoWriteErrors(statuses);
+    rawStatuses = client.upsert(jsc.parallelize(records, 1), newCommitTime);
+    statuses = jsc.parallelize(rawStatuses.collect(), 1);
     if (commitSecondUpsert) {
-      client.commit(newCommitTime, jsc.parallelize(statuses));
+      client.commit(newCommitTime, statuses);
     }
-
+    Assertions.assertNoWriteErrors(statuses.collect());
 
     //2. assert file group and get the first partition file slice
     HoodieTable table = this.getHoodieTable(metaClient, cfg);
