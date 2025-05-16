@@ -21,7 +21,6 @@ package org.apache.hudi.table.action.commit;
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.CommitMetadataResolverFactory;
-import org.apache.hudi.client.HoodieColumnStatsIndexUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.client.utils.TransactionUtils;
@@ -30,11 +29,11 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileGroupId;
+import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -42,7 +41,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CommitUtils;
-import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -231,19 +229,20 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
               table.getMetaClient().getTableType(), getCommitActionType())
           .reconcileMetadataForMissingFiles(
               config, context, table, instantTime, result.getCommitMetadata().get());
-      writeTableMetadata(metadata, actionType);
+      List<HoodieIndexDefinition> indexDefinitionsToUpdate = writeTableMetadata(metadata, actionType);
       // cannot serialize maps with null values
       metadata.getExtraMetadata().entrySet().removeIf(entry -> entry.getValue() == null);
       activeTimeline.saveAsComplete(false,
           table.getMetaClient().createNewInstant(State.INFLIGHT, actionType, instantTime), Option.of(metadata));
       LOG.info("Committed " + instantTime);
       result.setCommitMetadata(Option.of(metadata));
-      // update cols to Index as applicable
+      updateIndexDefinitions(indexDefinitionsToUpdate);
+      /*
       HoodieColumnStatsIndexUtils.updateColsToIndex(table, config, metadata, actionType,
           (Functions.Function2<HoodieTableMetaClient, List<String>, Void>) (metaClient, columnsToIndex) -> {
-            updateColumnsToIndexForColumnStats(metaClient, columnsToIndex);
+            updateIndexDefinitions(metaClient, columnsToIndex);
             return null;
-          });
+          });*/
     } catch (HoodieIOException e) {
       throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime,
           e);
@@ -251,11 +250,11 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
   }
 
   /**
-   * Updates the list of columns indexed with col stats index in Metadata table.
-   * @param metaClient instance of {@link HoodieTableMetaClient} of interest.
-   * @param columnsToIndex list of columns to index.
+   * Updates the index definitions in the table metadata of the data table
+   *
+   * @param indexDefinitions list of index definitions
    */
-  protected abstract void updateColumnsToIndexForColumnStats(HoodieTableMetaClient metaClient, List<String> columnsToIndex);
+  protected abstract void updateIndexDefinitions(List<HoodieIndexDefinition> indexDefinitions);
 
   /**
    * Finalize Write operation.

@@ -19,6 +19,7 @@
 
 package org.apache.hudi.table.action.index;
 
+import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 
 import java.util.List;
@@ -38,10 +39,10 @@ public abstract class BaseHoodieIndexClient {
   /**
    * Creates or updated the col stats index definition.
    *
-   * @param metaClient     data table's {@link HoodieTableMetaClient} instance.
-   * @param columnsToIndex list of columns to index.
+   * @param metaClient       data table's {@link HoodieTableMetaClient} instance.
+   * @param indexDefinitions index definitions to update
    */
-  public abstract void createOrUpdateColumnStatsIndexDefinition(HoodieTableMetaClient metaClient, List<String> columnsToIndex);
+  public abstract void createOrUpdateIndexDefinitions(HoodieTableMetaClient metaClient, List<HoodieIndexDefinition> indexDefinitions);
 
   /**
    * Drop an index. By default, ignore drop if index does not exist.

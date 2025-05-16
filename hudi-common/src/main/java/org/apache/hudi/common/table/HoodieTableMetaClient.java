@@ -226,29 +226,32 @@ public class HoodieTableMetaClient implements Serializable {
    * For instance, if index definition is mutable (like column stats), list of source columns (or list of columns to index) could also change.
    * If an index definition is present for the index name, it will be updated only when there is difference between present and new index definition.
    *
+   * @param indexDefinitions index definitions to update
    * @return true if index definition is updated.
    */
-  public boolean buildIndexDefinition(HoodieIndexDefinition indexDefinition) {
-    String indexName = indexDefinition.getIndexName();
+  public boolean buildIndexDefinitions(List<HoodieIndexDefinition> indexDefinitions) {
     String indexMetaPath = getIndexDefinitionPath();
     boolean updateIndexDefn = true;
-    if (indexMetadataOpt.isPresent()) {
-      // if index definition is present, lets check for difference and only update if required.
-      if (indexMetadataOpt.get().getIndexDefinitions().containsKey(indexName)) {
-        if (!indexMetadataOpt.get().getIndexDefinitions().get(indexName).getSourceFields().equals(indexDefinition.getSourceFields())) {
-          LOG.info("List of columns to index is changing. Old value {}. New value {}", indexMetadataOpt.get().getIndexDefinitions().get(indexName).getSourceFields(),
-              indexDefinition.getSourceFields());
-          indexMetadataOpt.get().getIndexDefinitions().put(indexName, indexDefinition);
+    for (HoodieIndexDefinition indexDefinition : indexDefinitions) {
+      String indexName = indexDefinition.getIndexName();
+      if (indexMetadataOpt.isPresent()) {
+        // if index definition is present, lets check for difference and only update if required.
+        if (indexMetadataOpt.get().getIndexDefinitions().containsKey(indexName)) {
+          if (!indexMetadataOpt.get().getIndexDefinitions().get(indexName).getSourceFields().equals(indexDefinition.getSourceFields())) {
+            LOG.info("List of columns to index is changing. Old value {}. New value {}", indexMetadataOpt.get().getIndexDefinitions().get(indexName).getSourceFields(),
+                indexDefinition.getSourceFields());
+            indexMetadataOpt.get().getIndexDefinitions().put(indexName, indexDefinition);
+          } else {
+            updateIndexDefn = false;
+          }
         } else {
-          updateIndexDefn = false;
+          indexMetadataOpt.get().getIndexDefinitions().put(indexName, indexDefinition);
         }
       } else {
-        indexMetadataOpt.get().getIndexDefinitions().put(indexName, indexDefinition);
+        Map<String, HoodieIndexDefinition> indexDefinitionMap = new HashMap<>();
+        indexDefinitionMap.put(indexName, indexDefinition);
+        indexMetadataOpt = Option.of(new HoodieIndexMetadata(indexDefinitionMap));
       }
-    } else {
-      Map<String, HoodieIndexDefinition> indexDefinitionMap = new HashMap<>();
-      indexDefinitionMap.put(indexName, indexDefinition);
-      indexMetadataOpt = Option.of(new HoodieIndexMetadata(indexDefinitionMap));
     }
     if (updateIndexDefn) {
       try {

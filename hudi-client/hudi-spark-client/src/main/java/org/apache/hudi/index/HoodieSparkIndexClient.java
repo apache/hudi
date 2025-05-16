@@ -128,16 +128,17 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
   }
 
   @Override
-  public void createOrUpdateColumnStatsIndexDefinition(HoodieTableMetaClient metaClient, List<String> columnsToIndex) {
+  public void createOrUpdateIndexDefinitions(HoodieTableMetaClient metaClient, List<HoodieIndexDefinition> indexDefinitions) {
+    /*
     HoodieIndexDefinition indexDefinition = HoodieIndexDefinition.newBuilder()
         .withIndexName(PARTITION_NAME_COLUMN_STATS)
         .withIndexType(PARTITION_NAME_COLUMN_STATS)
         .withIndexFunction(PARTITION_NAME_COLUMN_STATS)
-        .withSourceFields(columnsToIndex)
+        .withSourceFields(indexDefinitions)
         .withIndexOptions(Collections.EMPTY_MAP)
-        .build();
+        .build();*/
     LOG.info("Registering Or Updating the index " + PARTITION_NAME_COLUMN_STATS);
-    register(metaClient, indexDefinition);
+    register(metaClient, indexDefinitions);
   }
 
   private void createExpressionOrSecondaryIndex(HoodieTableMetaClient metaClient, String userIndexName, String indexType,
@@ -147,7 +148,7 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
         || !metaClient.getIndexMetadata().isPresent()
         || !metaClient.getIndexMetadata().get().getIndexDefinitions().containsKey(indexDefinition.getIndexName())) {
       LOG.info("Index definition is not present. Registering the index first");
-      register(metaClient, indexDefinition);
+      register(metaClient, Collections.singletonList(indexDefinition));
     }
 
     ValidationUtils.checkState(metaClient.getIndexMetadata().isPresent(), "Index definition is not present");
