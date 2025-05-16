@@ -53,7 +53,6 @@ import org.apache.avro.generic.IndexedRecord;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
-import java.util.NoSuchElementException;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -67,12 +66,17 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  */
 public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> {
   private final String payloadClass;
+  private HoodieFileFormat dataBlockFormat = HoodieFileFormat.PARQUET;
 
   public HoodieAvroReaderContext(
       StorageConfiguration<?> storageConfiguration,
       HoodieTableConfig tableConfig) {
     super(storageConfiguration, tableConfig);
     this.payloadClass = tableConfig.getPayloadClass();
+    if (tableConfig.getLogFileFormat() != null
+        && tableConfig.getLogFileFormat() != HoodieFileFormat.HOODIE_LOG) {
+      dataBlockFormat = tableConfig.getLogFileFormat();
+    }
   }
 
   @Override
@@ -231,16 +235,18 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
   }
 
   private HoodieFileFormat detectFileFormat(StoragePath filePath) {
-    if (FSUtils.isLogFile(filePath.getName())) {
-      return HoodieFileFormat.HOODIE_LOG;
-    }
-    for (HoodieFileFormat fileFormat : HoodieFileFormat.values()) {
-      if (filePath.getFileExtension().equals(fileFormat.getFileExtension())) {
-        return fileFormat;
+    try {
+      HoodieFileFormat format = HoodieFileFormat.fromFileExtension(filePath.getFileExtension());
+      if (format == HoodieFileFormat.HOODIE_LOG) {
+        return dataBlockFormat;
       }
+      return format;
+    } catch (Exception e) {
+      if (FSUtils.isLogFile(filePath)) {
+        return dataBlockFormat;
+      }
+      throw new IllegalArgumentException("Invalid file path: " + filePath, e);
     }
-    throw new NoSuchElementException(
-        "Unrecognized file extension: " + filePath.getFileExtension());
   }
 
   /**
