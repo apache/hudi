@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hudi.callback.common.WriteStatusHandlerCallback;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.client.utils.TransactionUtils;
 import org.apache.hudi.common.data.HoodieListData;
@@ -103,7 +104,8 @@ public class HoodieFlinkWriteClient<T>
   @Override
   public boolean commit(String instantTime, List<WriteStatus> writeStatuses, Option<Map<String, String>> extraMetadata,
                         String commitActionType, Map<String, List<String>> partitionToReplacedFileIds,
-                        Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc) {
+                        Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc,
+                        WriteStatusHandlerCallback writeStatusHandlerCallback) {
     List<HoodieWriteStat> writeStats = writeStatuses.parallelStream().map(WriteStatus::getStat).collect(Collectors.toList());
     // for eager flush, multiple write stat may share one file path.
     List<HoodieWriteStat> merged = writeStats.stream()
@@ -370,7 +372,7 @@ public class HoodieFlinkWriteClient<T>
   }
 
   @Override
-  protected HoodieWriteMetadata<List<WriteStatus>> compact(String compactionInstantTime, boolean shouldComplete) {
+  public HoodieWriteMetadata<List<WriteStatus>> compact(String compactionInstantTime, boolean shouldComplete) {
     // only used for metadata table, the compaction happens in single thread
     return tableServiceClient.compact(compactionInstantTime, shouldComplete);
   }

@@ -18,10 +18,14 @@
 
 package org.apache.hudi;
 
+import org.apache.hudi.callback.common.WriteStatusHandlerCallback;
 import org.apache.hudi.client.HoodieWriteResult;
 import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.SparkRDDWriteClientCommitCoordinator;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
@@ -57,6 +61,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 import scala.Tuple2;
@@ -186,7 +191,7 @@ public class DataSourceUtils {
     // insert/bulk-insert combining to be true, if filtering for duplicates
     boolean combineInserts = Boolean.parseBoolean(parameters.get(DataSourceWriteOptions.INSERT_DROP_DUPS().key()));
     HoodieWriteConfig.Builder builder = HoodieWriteConfig.newBuilder()
-        .withPath(basePath).withAutoCommit(false).combineInput(combineInserts, true);
+        .withPath(basePath).combineInput(combineInserts, true);
     if (schemaStr != null) {
       builder = builder.withSchema(schemaStr);
     }
@@ -208,7 +213,10 @@ public class DataSourceUtils {
 
   public static SparkRDDWriteClient createHoodieClient(JavaSparkContext jssc, String schemaStr, String basePath,
                                                        String tblName, Map<String, String> parameters) {
-    return new SparkRDDWriteClient<>(new HoodieSparkEngineContext(jssc), createHoodieConfig(schemaStr, basePath, tblName, parameters));
+    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jssc);
+    HoodieWriteConfig writeConfig = createHoodieConfig(schemaStr, basePath, tblName, parameters);
+    SparkRDDWriteClient sparkRDDWriteClient = new SparkRDDWriteClient<>(engineContext, writeConfig);
+    return writeConfig.isMetadataTableEnabled() ? new SparkRDDWriteClientCommitCoordinator(engineContext, writeConfig, sparkRDDWriteClient) : sparkRDDWriteClient;
   }
 
   public static HoodieWriteResult doWriteOperation(SparkRDDWriteClient client, JavaRDD<HoodieRecord> hoodieRecords,
@@ -343,5 +351,41 @@ public class DataSourceUtils {
         .withProps(parameters).build();
     return handleDuplicates(
         new HoodieSparkEngineContext(jssc), incomingHoodieRecords, writeConfig, failOnDuplicates);
+  }
+
+  static class SparkDataSourceWriteStatusHandlerCallback implements WriteStatusHandlerCallback {
+
+    private final WriteOperationType writeOperationType;
+    private final AtomicBoolean hasErrored;
+
+    public SparkDataSourceWriteStatusHandlerCallback(WriteOperationType writeOperationType, AtomicBoolean hasErrored) {
+      this.writeOperationType = writeOperationType;
+      this.hasErrored = hasErrored;
+    }
+
+    @Override
+    public boolean processWriteStatuses(long totalRecords, long totalErroredRecords, HoodieData<WriteStatus> leanWriteStatuses) {
+      if (totalErroredRecords > 0) {
+        LOG.error("%s failed with errors", writeOperationType);
+        if (LOG.isTraceEnabled()) {
+          LOG.trace("Printing out the top 100 errors");
+          List<WriteStatus> erroredWriteStatueses = leanWriteStatuses.filter(WriteStatus::hasErrors).collectAsList();
+          if (!erroredWriteStatueses.isEmpty()) {
+            hasErrored.set(true);
+          }
+          erroredWriteStatueses.subList(0, Math.max(erroredWriteStatueses.size(), 100)).forEach(leanWriteStatus -> {
+            LOG.trace("Global error " + leanWriteStatus.getGlobalError());
+            if (!leanWriteStatus.getErrors().isEmpty()) {
+              leanWriteStatus.getErrors().forEach((k, v) -> {
+                LOG.trace("Error for key %s : %s ", k, v);
+              });
+            }
+          });
+        }
+        return false;
+      } else {
+        return true;
+      }
+    }
   }
 }

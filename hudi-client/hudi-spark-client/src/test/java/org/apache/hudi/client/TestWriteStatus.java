@@ -19,7 +19,10 @@
 package org.apache.hudi.client;
 
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.util.Option;
 
@@ -201,5 +204,33 @@ public class TestWriteStatus {
     Throwable t = new Exception("some error in writing");
     status.setGlobalError(t);
     assertEquals(t, status.getGlobalError());
+  }
+
+  @Test
+  public void testRemoveMetadataStats() {
+    WriteStatus status = new WriteStatus(true, 0.1);
+    status.markSuccess(HoodieRecordDelegate.create(new HoodieKey("key", "partition")), Option.empty());
+    Map<String, HoodieColumnRangeMetadata<Comparable>> stats = new HashMap<>();
+    stats.put("field1", HoodieColumnRangeMetadata.<Comparable>create("f1", "field1", 1, 2, 0, 2, 5, 10));
+    status.setStat(new HoodieWriteStat());
+    status.getStat().putRecordsStats(stats);
+    assertEquals(1, status.getWrittenRecordDelegates().size());
+    assertEquals(1, status.getStat().getColumnStats().get().size());
+
+    // Remove metadata stats
+    status.removeMetadataStats();
+    assertEquals(0, status.getWrittenRecordDelegates().size());
+    assertTrue(status.getStat().getColumnStats().isEmpty());
+  }
+
+  @Test
+  public void testDropErrorRecords() {
+    WriteStatus status = new WriteStatus(true, 0.1);
+    status.markFailure("key", "partition", new Exception());
+    assertEquals(1, status.getFailedRecords().size());
+
+    // Drop error records
+    status.dropErrorRecords();
+    assertEquals(0, status.getFailedRecords().size());
   }
 }
