@@ -29,7 +29,6 @@ import org.apache.hudi.common.table.timeline.dto.CompactionOpDTO;
 import org.apache.hudi.common.table.timeline.dto.FileGroupDTO;
 import org.apache.hudi.common.table.timeline.dto.FileSliceDTO;
 import org.apache.hudi.common.table.timeline.dto.InstantDTO;
-import org.apache.hudi.common.table.timeline.dto.InstantStateDTO;
 import org.apache.hudi.common.table.timeline.dto.TimelineDTO;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView;
@@ -41,7 +40,6 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.timeline.service.handlers.BaseFileHandler;
 import org.apache.hudi.timeline.service.handlers.FileSliceHandler;
-import org.apache.hudi.timeline.service.handlers.InstantStateHandler;
 import org.apache.hudi.timeline.service.handlers.MarkerHandler;
 import org.apache.hudi.timeline.service.handlers.TimelineHandler;
 
@@ -85,7 +83,6 @@ public class RequestHandler {
   private final FileSliceHandler sliceHandler;
   private final BaseFileHandler dataFileHandler;
   private final MarkerHandler markerHandler;
-  private final InstantStateHandler instantStateHandler;
   private final Registry metricsRegistry = Registry.getRegistry("TimelineService");
   private final ScheduledExecutorService asyncResultService;
 
@@ -103,11 +100,6 @@ public class RequestHandler {
           conf, timelineServiceConfig, hoodieEngineContext, viewManager, metricsRegistry);
     } else {
       this.markerHandler = null;
-    }
-    if (timelineServiceConfig.enableInstantStateRequests) {
-      this.instantStateHandler = new InstantStateHandler(conf, timelineServiceConfig, viewManager);
-    } else {
-      this.instantStateHandler = null;
     }
     if (timelineServiceConfig.async) {
       this.asyncResultService = Executors.newSingleThreadScheduledExecutor();
@@ -183,19 +175,12 @@ public class RequestHandler {
             .getOrThrow(e -> new HoodieException("INCLUDE_FILES_IN_PENDING_COMPACTION_PARAM is invalid")));
   }
 
-  private static String getInstantStateDirPathParam(Context ctx) {
-    return ctx.queryParam(InstantStateHandler.INSTANT_STATE_DIR_PATH_PARAM);
-  }
-
   public void register() {
     registerDataFilesAPI();
     registerFileSlicesAPI();
     registerTimelineAPI();
     if (markerHandler != null) {
       registerMarkerAPI();
-    }
-    if (instantStateHandler != null) {
-      registerInstantStateAPI();
     }
   }
 
@@ -541,20 +526,6 @@ public class RequestHandler {
     app.post(MarkerOperation.DELETE_MARKER_DIR_URL, new ViewHandler(ctx -> {
       metricsRegistry.add("DELETE_MARKER_DIR", 1);
       boolean success = markerHandler.deleteMarkers(getMarkerDirParam(ctx));
-      writeValueAsString(ctx, success);
-    }, false));
-  }
-
-  private void registerInstantStateAPI() {
-    app.get(InstantStateHandler.ALL_INSTANT_STATE_URL, new ViewHandler(ctx -> {
-      metricsRegistry.add("ALL_INSTANT_STATE", 1);
-      List<InstantStateDTO> instantStates = instantStateHandler.getAllInstantStates(getInstantStateDirPathParam(ctx));
-      writeValueAsString(ctx, instantStates);
-    }, false));
-
-    app.post(InstantStateHandler.REFRESH_INSTANT_STATE, new ViewHandler(ctx -> {
-      metricsRegistry.add("REFRESH_INSTANT_STATE", 1);
-      boolean success = instantStateHandler.refresh(getInstantStateDirPathParam(ctx));
       writeValueAsString(ctx, success);
     }, false));
   }
