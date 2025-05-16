@@ -156,7 +156,7 @@ public class UtilHelpers {
     List<HoodieException> nonMatchingConstructorExceptions = new ArrayList<>();
     for (Pair<Class<?>[], Object[]> constructor : sourceConstructorAndArgs) {
       try {
-        return ReflectionUtils.loadClass(sourceClass, constructor.getLeft(), constructor.getRight());
+        return (Source) ReflectionUtils.loadClass(sourceClass, constructor.getLeft(), constructor.getRight());
       } catch (HoodieException e) {
         if (e.getCause() instanceof NoSuchMethodException) {
           // If the cause is a NoSuchMethodException, ignore
