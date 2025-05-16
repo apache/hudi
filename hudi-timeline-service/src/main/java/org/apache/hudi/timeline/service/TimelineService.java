@@ -404,7 +404,7 @@ public class TimelineService {
   }
 
   public void close() {
-    LOG.info("Closing Timeline Service");
+    LOG.info("Closing Timeline Service with port " + serverPort);
     if (requestHandler != null) {
       this.requestHandler.stop();
     }
@@ -413,7 +413,7 @@ public class TimelineService {
       this.app = null;
     }
     this.fsViewsManager.close();
-    LOG.info("Closed Timeline Service");
+    LOG.info("Closed Timeline Service with port " + serverPort);
   }
 
   public void unregisterBasePath(String basePath) {

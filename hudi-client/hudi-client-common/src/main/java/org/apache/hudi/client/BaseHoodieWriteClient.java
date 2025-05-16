@@ -78,6 +78,7 @@ import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils;
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -139,6 +140,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   protected Set<String> pendingInflightAndRequestedInstants = Collections.emptySet();
 
   protected BaseHoodieTableServiceClient<?, ?, O> tableServiceClient;
+  protected boolean isMetadataTable;
 
   /**
    * Create a write client, with new hudi index.
@@ -169,6 +171,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     this.index = createIndex(writeConfig);
     this.upgradeDowngradeHelper = upgradeDowngradeHelper;
     this.metrics.emitIndexTypeMetrics(config.getIndexType().ordinal());
+    this.isMetadataTable = HoodieTableMetadata.isMetadataTable(config.getBasePath());
   }
 
   protected abstract HoodieIndex<?, ?> createIndex(HoodieWriteConfig writeConfig);
@@ -411,6 +414,19 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @return Collection of WriteStatus to inspect errors and counts
    */
   public abstract O upsertPreppedRecords(I preppedRecords, final String instantTime);
+
+  /**
+   * Upserts the given prepared records into the Hoodie table, at the supplied instantTime.
+   * <p>
+   * This implementation requires that the input records are already tagged, and de-duped if needed.
+   *
+   * @param preppedRecords Prepared HoodieRecords to upsert
+   * @param instantTime Instant time of the commit
+   * @return Collection of WriteStatus to inspect errors and counts
+   */
+  public O upsertPreppedRecords(I preppedRecords, final String instantTime, Option<List<Pair<String, String>>> partitionFileIdPairsOpt) {
+    return upsertPreppedRecords(preppedRecords, instantTime);
+  }
 
   /**
    * Inserts the given HoodieRecords, into the table. This API is intended to be used for normal writes.
@@ -1084,6 +1100,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
 
   /**
    * Performs Compaction for the workload stored in instant-time.
+   * By default compaction may not complete. Callers are expected to call {@link #commitCompaction(String, HoodieWriteMetadata, Option)}.
+   * If callers prefer to commit the log compaction, recommendation is to use {@link #compact(String, boolean)} by setting the second arg to true.
    *
    * @param compactionInstantTime Compaction Instant Time
    * @return Collection of WriteStatus to inspect errors and counts
@@ -1092,26 +1110,18 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     if (shouldDelegateToTableServiceManager(config, ActionType.compaction)) {
       throw new UnsupportedOperationException("Compaction should be delegated to table service manager instead of direct run.");
     }
-    return compact(compactionInstantTime, config.shouldAutoCommit());
-  }
-
-  /**
-   * Commit a compaction operation. Allow passing additional meta-data to be stored in commit instant file.
-   *
-   * @param compactionInstantTime Compaction Instant Time
-   * @param metadata All the metadata that gets stored along with a commit
-   * @param extraMetadata Extra Metadata to be stored
-   */
-  public void commitCompaction(String compactionInstantTime, HoodieCommitMetadata metadata,
-                               Option<Map<String, String>> extraMetadata) {
-    tableServiceClient.commitCompaction(compactionInstantTime, metadata, extraMetadata);
+    return compact(compactionInstantTime, false);
   }
 
   /**
    * Commit Compaction and track metrics.
    */
-  protected void completeCompaction(HoodieCommitMetadata metadata, HoodieTable table, String compactionCommitTime) {
+  public void completeCompaction(HoodieCommitMetadata metadata, HoodieTable table, String compactionCommitTime) {
     tableServiceClient.completeCompaction(metadata, table, compactionCommitTime);
+  }
+
+  public void commitCompaction(String compactionInstantTime, HoodieWriteMetadata<O> compactionWriteMetadata, Option<HoodieTable> tableOpt) {
+    tableServiceClient.commitCompaction(compactionInstantTime, compactionWriteMetadata, tableOpt);
   }
 
   /**
@@ -1134,33 +1144,25 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
 
   /**
    * Performs Log Compaction for the workload stored in instant-time.
+   * By default log compaction may not complete. Callers are expected to call {@link #commitCompaction(String, HoodieWriteMetadata, Option)}.
+   * If callers prefer to commit the log compaction, recommendation is to use {@link #logCompact(String, boolean)} by setting the second arg to true.
    *
    * @param logCompactionInstantTime Log Compaction Instant Time
    * @return Collection of WriteStatus to inspect errors and counts
    */
   public HoodieWriteMetadata<O> logCompact(String logCompactionInstantTime) {
-    return logCompact(logCompactionInstantTime, config.shouldAutoCommit());
-  }
-
-  /**
-   * Commit a log compaction operation. Allow passing additional meta-data to be stored in commit instant file.
-   *
-   * @param logCompactionInstantTime Log Compaction Instant Time
-   * @param metadata All the metadata that gets stored along with a commit
-   * @param extraMetadata Extra Metadata to be stored
-   */
-  public void commitLogCompaction(String logCompactionInstantTime, HoodieCommitMetadata metadata,
-                                  Option<Map<String, String>> extraMetadata) {
-    HoodieTable table = createTable(config);
-    extraMetadata.ifPresent(m -> m.forEach(metadata::addMetadata));
-    completeLogCompaction(metadata, table, logCompactionInstantTime);
+    return logCompact(logCompactionInstantTime, false);
   }
 
   /**
    * Commit Log Compaction and track metrics.
-   */
+   **/
   protected void completeLogCompaction(HoodieCommitMetadata metadata, HoodieTable table, String logCompactionCommitTime) {
     tableServiceClient.completeLogCompaction(metadata, table, logCompactionCommitTime);
+  }
+
+  public void completeLogCompaction(String compactionInstantTime, HoodieWriteMetadata<O> compactionWriteMetadata, Option<HoodieTable> tableOpt) {
+    tableServiceClient.commitLogCompaction(compactionInstantTime, compactionWriteMetadata, tableOpt);
   }
 
   /**
@@ -1169,7 +1171,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param compactionInstantTime Compaction Instant Time
    * @return Collection of Write Status
    */
-  protected HoodieWriteMetadata<O> compact(String compactionInstantTime, boolean shouldComplete) {
+  public HoodieWriteMetadata<O> compact(String compactionInstantTime, boolean shouldComplete) {
     HoodieTable table = createTable(config);
     preWrite(compactionInstantTime, WriteOperationType.COMPACT, table.getMetaClient());
     return tableServiceClient.compact(table, compactionInstantTime, shouldComplete);
@@ -1190,7 +1192,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param logCompactionInstantTime Compaction Instant Time
    * @return Collection of Write Status
    */
-  protected HoodieWriteMetadata<O> logCompact(String logCompactionInstantTime, boolean shouldComplete) {
+  public HoodieWriteMetadata<O> logCompact(String logCompactionInstantTime, boolean shouldComplete) {
     HoodieTable table = createTable(config);
     preWrite(logCompactionInstantTime, WriteOperationType.LOG_COMPACT, table.getMetaClient());
     return tableServiceClient.logCompact(logCompactionInstantTime, shouldComplete);

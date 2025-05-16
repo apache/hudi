@@ -24,7 +24,6 @@ import org.apache.hudi.avro.model.HoodieIndexPartitionInfo;
 import org.apache.hudi.avro.model.HoodieIndexPlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.SparkRDDWriteClient;
-import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.FileSlice;
@@ -44,7 +43,6 @@ import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.testutils.providers.SparkProvider;
 
-import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -72,7 +70,6 @@ import static org.apache.hudi.metadata.MetadataPartitionType.EXPRESSION_INDEX;
 import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
 import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
 import static org.apache.hudi.metadata.MetadataPartitionType.SECONDARY_INDEX;
-import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.apache.hudi.utilities.HoodieIndexer.DROP_INDEX;
 import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE;
 import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE_AND_EXECUTE;
@@ -496,9 +493,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
       String instant = writeClient.createNewInstantTime();
       writeClient.startCommitWithTime(instant);
       List<HoodieRecord> records = DATA_GENERATOR.generateInserts(instant, 100);
-      JavaRDD<WriteStatus> result = writeClient.upsert(jsc().parallelize(records, 1), instant);
-      List<WriteStatus> statuses = result.collect();
-      assertNoWriteErrors(statuses);
+      writeClient.commit(instant, writeClient.upsert(jsc().parallelize(records, 1), instant));
     }
   }
 
@@ -549,9 +544,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
       String instant = writeClient.createNewInstantTime();
       writeClient.startCommitWithTime(instant);
       List<HoodieRecord> records = DATA_GENERATOR.generateInserts(instant, 100);
-      JavaRDD<WriteStatus> result = writeClient.upsert(jsc().parallelize(records, 1), instant);
-      List<WriteStatus> statuses = result.collect();
-      assertNoWriteErrors(statuses);
+      writeClient.commit(instant, writeClient.upsert(jsc().parallelize(records, 1), instant));
     }
 
     // validate partitions built successfully
@@ -603,9 +596,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
       String instant = writeClient.createNewInstantTime();
       writeClient.startCommitWithTime(instant);
       List<HoodieRecord> records = DATA_GENERATOR.generateInserts(instant, 100);
-      JavaRDD<WriteStatus> result = writeClient.upsert(jsc().parallelize(records, 1), instant);
-      List<WriteStatus> statuses = result.collect();
-      assertNoWriteErrors(statuses);
+      writeClient.commit(instant, writeClient.upsert(jsc().parallelize(records, 1), instant));
     }
 
     // validate files partition built successfully

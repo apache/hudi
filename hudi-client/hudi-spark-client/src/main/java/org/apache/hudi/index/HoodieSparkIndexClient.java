@@ -202,7 +202,6 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
           .withPath(metaClient.getBasePath())
           .withProperties(props)
           .withEmbeddedTimelineServerEnabled(false)
-          .withAutoCommit(false)
           .withSchema(schemaStr)
           .withEngineType(EngineType.SPARK).build();
       return new SparkRDDWriteClient(engineContextOpt.get(), localWriteConfig, Option.empty());
