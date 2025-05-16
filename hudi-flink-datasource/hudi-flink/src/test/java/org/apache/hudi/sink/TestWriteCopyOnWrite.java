@@ -106,7 +106,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .checkpoint(1)
         .assertEmptyEvent()
         .subTaskFails(0)
-        .noCompleteInstant()
+        .assertInstantRecommit()
         // write a commit and check the result
         .consume(TestData.DATA_SET_INSERT)
         .checkpoint(2)
@@ -114,15 +114,27 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .checkpointComplete(2)
         .checkWrittenData(EXPECTED1)
         // triggers task 0 failover, there is no pending instant that needs to recommit,
-        // the task sends an empty bootstrap event to trigger initialization of a new instant.
-        .subTaskFails(0, 0)
+        // the task sends an empty bootstrap event to trigger cleaning of legacy events.
+        .subTaskFails(0, 1)
         .assertEmptyEvent()
+        .checkpoint(3)
+        .assertEmptyEvent()
+        // 1. triggers a new checkpoint;
+        // 2. triggers task 0 failover, there is no pending instant that needs to recommit,
+        // the task sends an empty bootstrap event to trigger cleaning of legacy events;
+        // 3. triggers a checkpoint ack to simulate a following-up checkpoint success,
+        // the handling of the checkpoint ack event would recommit 3.
+        .subTaskFails(0, 2)
+        .assertEmptyEvent()
+        .checkpointComplete(4)
+        .checkCompletedInstantCount(3)
         // rollback the last complete instant to inflight state, to simulate an instant commit failure
         // while executing the post action of a checkpoint success notification event, the whole job should then
         // trigger a failover.
         .rollbackLastCompleteInstantToInflight()
         .jobFailover()
         .assertNextEvent()
+        // another checkpoint ack event would trigger the recommit of restored instant.
         .checkLastPendingInstantCompleted()
         .end();
   }
@@ -160,9 +172,9 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
     // open the function and ingest data
     preparePipeline()
         // triggers subtask failure for multiple times to simulate partial failover, for partial over,
-        // we allow the task to reuse the pending instant for data flushing, no metadata event should be sent
+        // a metadata event should be sent to override the corrupt metadata on coordinator
         .subTaskFails(0, 1)
-        .assertNoEvent()
+        .assertEmptyEvent()
         // the subtask reuses the pending instant
         .checkpoint(3)
         .assertNextEvent()
@@ -170,19 +182,20 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         // it will send an event to the coordinator
         .restartCoordinator()
         .subTaskFails(0, 2)
-        // the subtask can not fetch the instant to write until a new instant is initialized
-        .checkpointThrows(4, "Timeout(1000ms) while waiting for instant initialize")
         .assertEmptyEvent()
-        .subTaskFails(0, 3)
-        // the last checkpoint instant was rolled back by subTaskFails(0, 2)
-        // with EAGER cleaning strategy
-        .assertNoEvent()
+        // the subtask can still fetch the instant to write, an instant request is issued during checkpoint
         .checkpoint(4)
+        .assertNextEvent()
+        .subTaskFails(0, 3)
+        // the last checkpoint instant was not rolled back by subTaskFails(0, 2)
+        // with LAZY cleaning strategy
+        .assertEmptyEvent()
+        .checkpoint(5)
         .assertNextEvent()
         .subTaskFails(0, 4)
         // the last checkpoint instant can not be rolled back by subTaskFails(0, 4) with INSERT write operationType
         // because last data has been snapshot by checkpoint complete but instant has not been committed
-        // so we need re-commit it
+        // so we need recommit it
         .assertEmptyEvent()
         .end();
   }
@@ -520,16 +533,15 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
     conf.setDouble(FlinkOptions.WRITE_TASK_MAX_SIZE, 200.0006); // 630 bytes buffer size
     preparePipeline(conf)
         .consume(TestData.DATA_SET_INSERT)
-        .emptyEventBuffer()
+        .initialEventBuffer()
         .checkpoint(1)
-        .assertConfirming()
         .handleEvents(4)
         .checkpointComplete(1)
+        // requested instant with checkpoint id as 1
         .consume(TestData.DATA_SET_INSERT)
-        .assertNotConfirming()
         .checkpoint(2)
-        .assertConsumeThrows(TestData.DATA_SET_INSERT,
-            "Timeout(1000ms) while waiting for instant initialize")
+        // requested instant with checkpoint id as 2
+        .consume(TestData.DATA_SET_INSERT)
         .end();
   }
 
@@ -548,13 +560,15 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
     } else {
       TestHarness pipeline1 = preparePipeline(conf)
           .consume(TestData.DATA_SET_INSERT_DUPLICATES)
-          .assertEmptyDataFiles();
+          .assertEmptyDataFiles()
+          .checkpoint(1)
+          .assertNextEvent();
       // now start pipeline2 and commit the txn
       Configuration conf2 = conf.clone();
       conf2.setString(FlinkOptions.WRITE_CLIENT_ID, "2");
       TestHarness pipeline2 = preparePipeline(conf2)
           .consume(TestData.DATA_SET_INSERT_DUPLICATES)
-          .assertEmptyDataFiles()
+          .assertDataFilesExists()
           .checkpoint(1)
           .assertNextEvent()
           .checkpointComplete(1)
@@ -575,9 +589,6 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   }
 
   private void validateConcurrentCommit(TestHarness pipeline) throws Exception {
-    pipeline
-        .checkpoint(1)
-        .assertNextEvent();
     if (OptionsResolver.isNonBlockingConcurrencyControl(conf)) {
       // NB-CC(non-blocking concurrency control) allows concurrent modification of the same fileGroup
       pipeline
@@ -608,18 +619,20 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
       try {
         pipeline1 = preparePipeline(conf)
             .consume(TestData.DATA_SET_INSERT_DUPLICATES)
-            .assertEmptyDataFiles();
+            .assertEmptyDataFiles()
+            .checkpoint(1)
+            .assertNextEvent();
         // now start pipeline2 and suspend the txn commit
         Configuration conf2 = conf.clone();
         conf2.setString(FlinkOptions.WRITE_CLIENT_ID, "2");
         pipeline2 = preparePipeline(conf2)
             .consume(TestData.DATA_SET_INSERT_DUPLICATES)
-            .assertEmptyDataFiles();
+            .assertDataFilesExists()
+            .checkpoint(1)
+            .assertNextEvent();
 
         // step to commit the 1st txn, should succeed
-        pipeline1.checkpoint(1)
-            .assertNextEvent()
-            .checkpointComplete(1)
+        pipeline1.checkpointComplete(1)
             .checkWrittenData(EXPECTED3, 1);
 
         // step to commit the 2nd txn
@@ -676,11 +689,11 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .checkpoint(1)
         .assertNextEvent()
         .checkpointComplete(1)
-        .subTaskFails(0, 0)
+        .subTaskFails(0, 1)
         .assertEmptyEvent()
         .rollbackLastCompleteInstantToInflight()
         .jobFailover()
-        .subTaskFails(0, 1)
+        .subTaskFails(0, 2)
         // the last checkpoint instant was not rolled back by subTaskFails(0, 1)
         // with LAZY cleaning strategy because clean action could roll back failed writes.
         .assertNextEvent()

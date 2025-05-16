@@ -108,21 +108,6 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     this.writeStatuses.clear();
   }
 
-  protected void sendBootstrapEvent() {
-    int attemptId = getRuntimeContext().getAttemptNumber();
-    if (attemptId > 0) {
-      // either a partial or global failover, reuses the current inflight instant
-      if (this.currentInstant != null && !metaClient.getActiveTimeline().filterCompletedInstants().containsInstant(currentInstant)) {
-        LOG.info("Recover task[{}] for instant [{}] with attemptId [{}]", taskID, this.currentInstant, attemptId);
-        this.currentInstant = null;
-        return;
-      }
-      // the JM may have also been rebooted, sends the bootstrap event either
-    }
-    this.eventGateway.sendEventToCoordinator(WriteMetadataEvent.emptyBootstrap(taskID));
-    LOG.info("Send bootstrap write metadata event to coordinator, task[{}].", taskID);
-  }
-
   // -------------------------------------------------------------------------
   //  GetterSetter
   // -------------------------------------------------------------------------
@@ -158,6 +143,7 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     }
     final WriteMetadataEvent event = WriteMetadataEvent.builder()
         .taskID(taskID)
+        .checkpointId(this.checkpointId)
         .instantTime(this.currentInstant)
         .writeStatus(writeStatus)
         .lastBatch(true)
@@ -167,8 +153,6 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
     // nullify the write helper for next ckp
     this.writerHelper = null;
     this.writeStatuses.addAll(writeStatus);
-    // blocks flushing until the coordinator starts a new instant
-    this.confirming = true;
     writeMetrics.endDataFlush();
     writeMetrics.resetAfterCommit();
   }

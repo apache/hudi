@@ -104,8 +104,6 @@ public class InsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
     this.coordinator.setExecutor(new MockCoordinatorExecutor(coordinatorContext));
 
     setupWriteFunction();
-    // handle the bootstrap event
-    coordinator.handleEventFromOperator(0, getNextEvent());
 
     if (asyncClustering) {
       clusteringFunctionWrapper.openFunction();
@@ -118,6 +116,11 @@ public class InsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
 
   public WriteMetadataEvent[] getEventBuffer() {
     return this.coordinator.getEventBuffer();
+  }
+
+  @Override
+  public WriteMetadataEvent[] getEventBuffer(long checkpointId) {
+    return this.coordinator.getEventBuffer(checkpointId);
   }
 
   public OperatorEvent getNextEvent() {
@@ -209,6 +212,7 @@ public class InsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
     writeFunction.setOperatorEventGateway(gateway);
     writeFunction.initializeState(this.stateInitializationContext);
     writeFunction.open(conf);
+    writeFunction.setCorrespondent(new MockCorrespondent(this.coordinator));
     // set up subtask gateway
     coordinator.subtaskReady(0, subtaskGateway);
   }

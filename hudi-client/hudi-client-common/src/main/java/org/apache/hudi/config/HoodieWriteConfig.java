@@ -506,18 +506,6 @@ public class HoodieWriteConfig extends HoodieConfig {
       .sinceVersion("0.9.0")
       .withDocumentation(MarkerType.class);
 
-  public static final ConfigProperty<Boolean> INSTANT_STATE_TIMELINE_SERVER_BASED = ConfigProperty
-      .key("hoodie.instant_state.timeline_server_based.enabled")
-      .defaultValue(false)
-      .sinceVersion("1.0.0")
-      .withDocumentation("If enabled, writers get instant state from timeline server rather than requesting DFS directly");
-
-  public static final ConfigProperty<Integer> INSTANT_STATE_TIMELINE_SERVER_BASED_FORCE_REFRESH_REQUEST_NUMBER = ConfigProperty
-      .key("hoodie.instant_state.timeline_server_based.force_refresh.request.number")
-      .defaultValue(100)
-      .sinceVersion("1.0.0")
-      .withDocumentation("Number of requests to trigger instant state cache refreshing");
-
   public static final ConfigProperty<Integer> MARKERS_TIMELINE_SERVER_BASED_BATCH_NUM_THREADS = ConfigProperty
       .key("hoodie.markers.timeline_server_based.batch.num_threads")
       .defaultValue(20)
@@ -1524,14 +1512,6 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public int getFinalizeWriteParallelism() {
     return getInt(FINALIZE_WRITE_PARALLELISM_VALUE);
-  }
-
-  public boolean isTimelineServerBasedInstantStateEnabled() {
-    return getBoolean(INSTANT_STATE_TIMELINE_SERVER_BASED);
-  }
-
-  public int getTimelineServerBasedInstantStateForceRefreshRequestNumber() {
-    return getInt(INSTANT_STATE_TIMELINE_SERVER_BASED_FORCE_REFRESH_REQUEST_NUMBER);
   }
 
   public MarkerType getMarkersType() {
@@ -3363,11 +3343,6 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withEmbeddedTimelineServerPort(int port) {
       writeConfig.setValue(EMBEDDED_TIMELINE_SERVER_PORT_NUM, String.valueOf(port));
-      return this;
-    }
-
-    public Builder withTimelineServerBasedInstantStateEnable(boolean enable) {
-      writeConfig.setValue(INSTANT_STATE_TIMELINE_SERVER_BASED, String.valueOf(enable));
       return this;
     }
 

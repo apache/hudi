@@ -106,7 +106,9 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
             TimestampData.fromEpochMillis(1), StringData.fromString("par1")));
     TestHarness pipeline1 = preparePipeline(conf)
         .consume(dataset1)
-        .assertEmptyDataFiles();
+        .assertEmptyDataFiles()
+        .checkpoint(1)
+        .assertNextEvent();
 
     // start pipeline2 and insert record: [id1,null,23,1,par1], suspend the tx commit
     Configuration conf2 = conf.clone();
@@ -117,24 +119,22 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
             TimestampData.fromEpochMillis(2), StringData.fromString("par1")));
     TestHarness pipeline2 = preparePipeline(conf2)
         .consume(dataset2)
-        .assertEmptyDataFiles();
+        .assertEmptyBaseFiles()
+        .checkpoint(1)
+        .assertNextEvent();
 
     // step to commit the 1st txn
-    pipeline1.checkpoint(1)
-        .assertNextEvent()
-        .checkpointComplete(1);
+    pipeline1.checkpointComplete(1);
 
     // step to commit the 2nd txn
-    pipeline2.checkpoint(1)
-        .assertNextEvent()
-        .checkpointComplete(1);
+    pipeline2.checkpointComplete(1);
 
     // snapshot result is [(id1,Danny,23,2,par1)] after two writers finish to commit
     Map<String, String> tmpSnapshotResult = Collections.singletonMap("par1", "[id1,par1,id1,Danny,23,2,par1]");
     pipeline2.checkWrittenData(tmpSnapshotResult, 1);
 
     // There is no base file in partition dir because there is no compaction yet.
-    pipeline1.assertEmptyDataFiles();
+    pipeline1.assertEmptyBaseFiles();
 
     // schedule compaction outside all writers
     try (HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf, TestUtils.getMockRuntimeContext())) {
@@ -181,7 +181,9 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
             TimestampData.fromEpochMillis(1), StringData.fromString("par1")));
     TestHarness pipeline1 = preparePipeline(conf)
         .consume(dataset1)
-        .assertEmptyDataFiles();
+        .assertEmptyDataFiles()
+        .checkpoint(1)
+        .assertNextEvent();
 
     // start pipeline2 and insert record: [id2,Stephen,34,2,par1], suspend the tx commit
     Configuration conf2 = conf.clone();
@@ -193,16 +195,13 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
             TimestampData.fromEpochMillis(2), StringData.fromString("par1")));
     TestHarness pipeline2 = preparePipeline(conf2)
         .consume(dataset2)
-        .assertEmptyDataFiles();
+        .assertEmptyBaseFiles()
+        // step to flush the 2nd data, but not commit yet
+        .checkpoint(1)
+        .assertNextEvent();
 
     // step to commit the 1st txn
-    pipeline1.checkpoint(1)
-        .assertNextEvent()
-        .checkpointComplete(1);
-
-    // step to flush the 2nd data, but not commit yet
-    pipeline2.checkpoint(1)
-        .assertNextEvent();
+    pipeline1.checkpointComplete(1);
 
     // schedule compaction outside all writers
     try (HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf, TestUtils.getMockRuntimeContext())) {
@@ -256,7 +255,9 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
             TimestampData.fromEpochMillis(1), StringData.fromString("par1")));
     TestHarness pipeline1 = preparePipeline(conf)
         .consume(dataset1)
-        .assertEmptyDataFiles();
+        .assertEmptyDataFiles()
+        .checkpoint(1)
+        .assertNextEvent();
 
     // start pipeline2 and bulk insert record: [id1,null,23,1,par1], suspend the tx commit
     Configuration conf2 = conf.clone();
@@ -267,21 +268,20 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
             StringData.fromString("id1"), null, 23,
             TimestampData.fromEpochMillis(2), StringData.fromString("par1")));
     TestHarness pipeline2 = preparePipeline(conf2)
-        .consume(dataset2);
+        .consume(dataset2)
+        .endInput();
 
     // step to commit the 1st txn
-    pipeline1.checkpoint(1)
-        .assertNextEvent()
-        .checkpointComplete(1);
+    pipeline1.checkpointComplete(1);
 
     // step to commit the 2nd txn, should throw exception
-    pipeline2.endInputThrows(HoodieWriteConflictException.class, "Cannot resolve conflicts");
+    pipeline2.endInputCompleteThrows(HoodieWriteConflictException.class, "Cannot resolve conflicts");
     pipeline1.end();
     pipeline2.end();
   }
 
-  // case1: txn1 is upsert writer, txn2 is bulk_insert writer.
-  //                       |----- txn1 ------|
+  // case2: txn1 is bulk_insert writer, txn2 is upsert writer.
+  //               |----- txn1 ------|
   //      |----------- txn2 -----------|
   // both two txn would success to commit
   @Test
@@ -302,7 +302,8 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
             StringData.fromString("id1"), StringData.fromString("Danny"), null,
             TimestampData.fromEpochMillis(1), StringData.fromString("par1")));
     TestHarness pipeline1 = preparePipeline(conf1)
-        .consume(dataset1);
+        .consume(dataset1)
+        .endInput();
 
     // start pipeline2 and insert record: [id1,null,23,2,par1], suspend the tx commit
     Configuration conf2 = conf.clone();
@@ -312,15 +313,15 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
             StringData.fromString("id1"), null, 23,
             TimestampData.fromEpochMillis(2), StringData.fromString("par1")));
     TestHarness pipeline2 = preparePipeline(conf2)
-        .consume(dataset2);
+        .consume(dataset2)
+        .checkpoint(1)
+        .assertNextEvent();
 
     // step to commit the 1st txn
-    pipeline1.endInput();
+    pipeline1.endInputComplete();
 
     // step to commit the 2nd data
-    pipeline2.checkpoint(1)
-        .assertNextEvent()
-        .checkpointComplete(1);
+    pipeline2.checkpointComplete(1);
 
     // snapshot result is [(id1,Danny,23,2,par1)] after two writers finish to commit
     Map<String, String> tmpSnapshotResult = Collections.singletonMap("par1", "[id1,par1,id1,Danny,23,2,par1]");

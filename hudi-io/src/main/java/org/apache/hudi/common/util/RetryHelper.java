@@ -76,7 +76,7 @@ public class RetryHelper<T, R extends Exception> implements Serializable {
 
   public RetryHelper(long maxRetryIntervalMs, int maxRetryNumbers, long initialRetryIntervalMs, String retryExceptions, String taskInfo) {
     this(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptions);
-    this.taskInfo = taskInfo;
+    this.taskInfo = taskInfo == null ? "None" : taskInfo;
   }
 
   public RetryHelper<T, R> tryWith(CheckedFunction<T, R> func) {
@@ -102,7 +102,7 @@ public class RetryHelper<T, R extends Exception> implements Serializable {
           LOG.error(message, e);
           throw e;
         }
-        LOG.warn("Catch Exception for " + taskInfo + ", will retry after " + waitTime + " ms.", e);
+        LOG.warn("Catch Exception for " + taskInfo + ", current retry number " + retries + ", will retry after " + waitTime + " ms.", e);
         try {
           Thread.sleep(waitTime);
         } catch (InterruptedException ex) {
