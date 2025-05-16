@@ -877,6 +877,47 @@ public class TestHoodieAvroUtils {
   }
 
   @Test
+  public void testHasTimestampMillisField() {
+    Schema longWithTimestampMillis = Schema.create(Schema.Type.LONG);
+    LogicalTypes.timestampMillis().addToSchema(longWithTimestampMillis);
+
+    Schema longWithTimestampMicros = Schema.create(Schema.Type.LONG);
+    LogicalTypes.timestampMicros().addToSchema(longWithTimestampMicros);
+
+    Schema plainLong = Schema.create(Schema.Type.LONG);
+    Schema plainString = Schema.create(Schema.Type.STRING);
+
+    // test simple types
+    assertTrue(HoodieAvroUtils.hasTimestampMillisField(longWithTimestampMillis));
+    assertFalse(HoodieAvroUtils.hasTimestampMillisField(longWithTimestampMicros));
+    assertFalse(HoodieAvroUtils.hasTimestampMillisField(plainLong));
+    assertFalse(HoodieAvroUtils.hasTimestampMillisField(plainString));
+
+    // test records
+    Schema recordWithTimestampMillis = Schema.createRecord("RecordWithTSMillis", null, null, false);
+    recordWithTimestampMillis.setFields(Arrays.asList(new Schema.Field("tsmicros", longWithTimestampMicros, null, null),
+        new Schema.Field("tsmillis", longWithTimestampMillis, null, null), new Schema.Field("longfield", plainLong, null, null),
+        new Schema.Field("stringfield", plainString, null, null)));
+    assertTrue(HoodieAvroUtils.hasTimestampMillisField(recordWithTimestampMillis));
+    Schema recordWithoutTimestampMillis = Schema.createRecord("RecordWithoutTSMillis", null, null, false);
+    recordWithoutTimestampMillis.setFields(Arrays.asList(new Schema.Field("stringfield", plainString, null, null),
+        new Schema.Field("tsmicros", longWithTimestampMicros, null, null), new Schema.Field("longfield", plainLong, null, null)));
+    assertFalse(HoodieAvroUtils.hasTimestampMillisField(recordWithoutTimestampMillis));
+
+    // test arrays
+    assertTrue(HoodieAvroUtils.hasTimestampMillisField(Schema.createArray(recordWithTimestampMillis)));
+    assertFalse(HoodieAvroUtils.hasTimestampMillisField(Schema.createArray(recordWithoutTimestampMillis)));
+
+    // test maps
+    assertTrue(HoodieAvroUtils.hasTimestampMillisField(Schema.createMap(recordWithTimestampMillis)));
+    assertFalse(HoodieAvroUtils.hasTimestampMillisField(Schema.createMap(recordWithoutTimestampMillis)));
+
+    // test unions
+    assertTrue(HoodieAvroUtils.hasTimestampMillisField(Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.NULL), recordWithTimestampMillis))));
+    assertFalse(HoodieAvroUtils.hasTimestampMillisField(Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.NULL), recordWithoutTimestampMillis))));
+  }
+
+  @Test
   void testHasSmallPrecisionDecimalField() {
     assertTrue(HoodieAvroUtils.hasSmallPrecisionDecimalField(new Schema.Parser().parse(SCHEMA_WITH_DECIMAL_FIELD)));
     assertFalse(HoodieAvroUtils.hasSmallPrecisionDecimalField(new Schema.Parser().parse(SCHEMA_WITH_AVRO_TYPES_STR)));
