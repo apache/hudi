@@ -18,20 +18,25 @@
 
 package org.apache.hudi.sink.utils;
 
+import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.sink.event.CommitAckEvent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
-import org.apache.hudi.sink.meta.CkpMetadata;
 import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 import org.apache.hudi.utils.TestUtils;
 
@@ -41,6 +46,9 @@ import org.apache.flink.table.data.RowData;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.hamcrest.MatcherAssert;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
 import java.io.IOException;
@@ -60,7 +68,6 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -119,6 +126,30 @@ public class TestWriteBase {
   //  Inner Class
   // -------------------------------------------------------------------------
 
+  protected Configuration conf;
+
+  @TempDir
+  protected File tempFile;
+
+  @BeforeEach
+  public void before() {
+    conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.setString(FlinkOptions.TABLE_TYPE, getTableType().name());
+    setUp(conf);
+  }
+
+  /**
+   * Override to have custom configuration.
+   */
+  protected void setUp(Configuration conf) {
+    // for subclass extension
+  }
+
+  @AfterEach
+  public void after() {
+    conf = null;
+  }
+
   /**
    * Utils to composite the test stages.
    */
@@ -132,8 +163,6 @@ public class TestWriteBase {
     private Configuration conf;
     private TestFunctionWrapper<RowData> pipeline;
 
-    private CkpMetadata ckpMetadata;
-
     private String lastPending;
     private String lastComplete;
 
@@ -144,7 +173,7 @@ public class TestWriteBase {
       this.pipeline = TestData.getWritePipeline(this.basePath, conf);
       // open the function and ingest data
       this.pipeline.openFunction();
-      this.ckpMetadata = CkpMetadata.getInstance(conf);
+      HoodieWriteConfig writeConfig = this.pipeline.getCoordinator().getWriteClient().getConfig();
       return this;
     }
 
@@ -164,10 +193,27 @@ public class TestWriteBase {
      * Assert the event buffer is empty.
      */
     public TestHarness emptyEventBuffer() {
-      assertTrue(
-          this.pipeline.getEventBuffer().length == 1
-              && this.pipeline.getEventBuffer()[0] == null,
-          "The coordinator events buffer expect to be empty");
+      assertNull(this.pipeline.getEventBuffer(), "The coordinator events buffer expect to be empty");
+      return this;
+    }
+
+    /**
+     * Assert the event buffer is in initial state.
+     */
+    public TestHarness initialEventBuffer() {
+      assertNull(this.pipeline.getEventBuffer()[0], "The coordinator events buffer expect to be initialized");
+      return this;
+    }
+
+    /**
+     * Assert the next event exists and handle over it to the coordinator.
+     */
+    public TestHarness assertNextSubTaskEvent() {
+      final OperatorEvent nextEvent = this.pipeline.getNextSubTaskEvent();
+      if (nextEvent != null) {
+        MatcherAssert.assertThat("The Coordinator expect to send an event", nextEvent, instanceOf(CommitAckEvent.class));
+        this.pipeline.getWriteFunction().handleOperatorEvent(nextEvent);
+      }
       return this;
     }
 
@@ -177,11 +223,19 @@ public class TestWriteBase {
     public TestHarness assertNextEvent() {
       final OperatorEvent nextEvent = this.pipeline.getNextEvent();
       MatcherAssert.assertThat("The operator expect to send an event", nextEvent, instanceOf(WriteMetadataEvent.class));
+      WriteMetadataEvent metadataEvent = (WriteMetadataEvent) nextEvent;
       this.pipeline.getCoordinator().handleEventFromOperator(0, nextEvent);
       if (!((WriteMetadataEvent) nextEvent).isBootstrap()) {
         assertNotNull(this.pipeline.getEventBuffer()[0], "The coordinator missed the event");
       } else {
-        assertNull(this.pipeline.getEventBuffer()[0], "The coordinator should reset event buffer because of the instant initialization");
+        WriteMetadataEvent[] eventBuffer = this.pipeline.getEventBuffer(metadataEvent.getCheckpointId());
+        if (metadataEvent.getInstantTime().equals(WriteMetadataEvent.BOOTSTRAP_INSTANT)) {
+          assertTrue(eventBuffer == null || eventBuffer[metadataEvent.getTaskID()] == null,
+              "The coordinator should reset the redundant events");
+        } else {
+          assertNull(eventBuffer,
+              "The coordinator should reset event buffer because of the instant recommit");
+        }
       }
       return this;
     }
@@ -215,14 +269,22 @@ public class TestWriteBase {
     public TestHarness assertEmptyEvent() {
       final OperatorEvent nextEvent = this.pipeline.getNextEvent();
       MatcherAssert.assertThat("The operator expect to send an event", nextEvent, instanceOf(WriteMetadataEvent.class));
-      List<WriteStatus> writeStatuses = ((WriteMetadataEvent) nextEvent).getWriteStatuses();
+      WriteMetadataEvent metadataEvent = (WriteMetadataEvent) nextEvent;
+      List<WriteStatus> writeStatuses = metadataEvent.getWriteStatuses();
       assertNotNull(writeStatuses);
       MatcherAssert.assertThat(writeStatuses.size(), is(0));
       this.pipeline.getCoordinator().handleEventFromOperator(0, nextEvent);
-      if (!((WriteMetadataEvent) nextEvent).isBootstrap()) {
+      if (!metadataEvent.isBootstrap()) {
         assertNotNull(this.pipeline.getEventBuffer()[0], "The coordinator missed the event");
       } else {
-        assertNull(this.pipeline.getEventBuffer()[0], "The coordinator should reset event buffer because of the instant initialization");
+        WriteMetadataEvent[] eventBuffer = this.pipeline.getEventBuffer(metadataEvent.getCheckpointId());
+        if (metadataEvent.getInstantTime().equals(WriteMetadataEvent.BOOTSTRAP_INSTANT)) {
+          assertTrue(eventBuffer == null || eventBuffer[metadataEvent.getTaskID()] == null,
+              "The coordinator should reset the redundant events");
+        } else {
+          assertNull(eventBuffer,
+              "The coordinator should reset event buffer because of the instant recommit");
+        }
       }
       return this;
     }
@@ -260,6 +322,15 @@ public class TestWriteBase {
       return this;
     }
 
+    /**
+     * Stop the timeline server.
+     */
+    public TestHarness stopTimelineServer() {
+      HoodieFlinkWriteClient<?> client = pipeline.getCoordinator().getWriteClient();
+      client.getTimelineServer().ifPresent(embeddedTimelineService -> embeddedTimelineService.stopForBasePath(client.getConfig().getBasePath()));
+      return this;
+    }
+
     public TestHarness allDataFlushed() {
       Map<String, List<HoodieRecord>> dataBuffer = this.pipeline.getDataBuffer();
       assertThat("All data should be flushed out", dataBuffer.size(), is(0));
@@ -285,11 +356,39 @@ public class TestWriteBase {
     public TestHarness checkpointComplete(long checkpointId) {
       this.lastPending = lastPendingInstant();
       this.pipeline.checkpointComplete(checkpointId);
-      // started a new instant already
-      String newInflight = checkInflightInstant();
       checkInstantState(HoodieInstant.State.COMPLETED, lastPending);
       this.lastComplete = lastPending;
-      this.lastPending = newInflight; // refresh last pending instant
+      this.lastPending = ""; // refresh last pending instant
+      return this;
+    }
+
+    /**
+     * Flush data and commit using endInput. Asserts the commit would fail.
+     */
+    public void endInputCompleteThrows(Class<?> cause, String msg) {
+      final OperatorEvent nextEvent = this.pipeline.getNextEvent();
+      this.pipeline.getCoordinator().handleEventFromOperator(0, nextEvent);
+      assertTrue(this.pipeline.getCoordinatorContext().isJobFailed(), "Job should have been failed");
+      Throwable throwable = this.pipeline.getCoordinatorContext().getJobFailureReason().getCause();
+      assertThat(throwable, instanceOf(cause));
+      assertThat(throwable.getMessage(), containsString(msg));
+    }
+
+    /**
+     * Flush data and commit using endInput.
+     */
+    public TestHarness endInput() {
+      // this triggers the data write and event send
+      this.pipeline.endInput();
+      return this;
+    }
+
+    /**
+     * Mark the pipeline end input as complete.
+     */
+    public TestHarness endInputComplete() {
+      final OperatorEvent nextEvent = this.pipeline.getNextEvent();
+      this.pipeline.getCoordinator().handleEventFromOperator(0, nextEvent);
       return this;
     }
 
@@ -312,9 +411,12 @@ public class TestWriteBase {
     public TestHarness emptyCheckpoint(long checkpointId) {
       String lastPending = lastPendingInstant();
       this.pipeline.checkpointComplete(checkpointId);
-      // last pending instant was reused
-      assertEquals(this.lastPending, lastPending);
-      checkInstantState(HoodieInstant.State.COMPLETED, lastComplete);
+      if (!OptionsResolver.allowCommitOnEmptyBatch(this.conf)) {
+        checkInstantState(HoodieInstant.State.COMPLETED, lastComplete);
+      } else {
+        checkInstantState(HoodieInstant.State.COMPLETED, lastPending);
+        this.lastComplete = lastPending;
+      }
       return this;
     }
 
@@ -326,7 +428,7 @@ public class TestWriteBase {
       assertFalse(this.pipeline.getCoordinatorContext().isJobFailed(),
           "The last checkpoint was aborted, ignore the events");
       // no complete instant
-      checkInstantState(HoodieInstant.State.COMPLETED, null);
+      assertNull(lastCompleteInstant(), "No complete instant");
       return this;
     }
 
@@ -347,7 +449,7 @@ public class TestWriteBase {
       assertEmptyEvent();
 
       String instant2 = lastPendingInstant();
-      assertNotEquals(instant2, instant1, "The previous instant should be rolled back when starting new instant");
+      assertEquals(instant2, instant1, "The previous instant should not be rolled back when subTask restart");
       return this;
     }
 
@@ -365,9 +467,17 @@ public class TestWriteBase {
       return this;
     }
 
-    public TestHarness noCompleteInstant() {
+    public TestHarness assertInstantRecommit() {
       // no complete instant
-      checkInstantState(HoodieInstant.State.COMPLETED, null);
+      assertNotNull(lastCompleteInstant(), "The instant should recommit");
+      return this;
+    }
+
+    /**
+     * Asserts the data files are non-empty.
+     */
+    public TestHarness assertDataFilesExists() {
+      assertTrue(fileExists(false), "Data files should have been created");
       return this;
     }
 
@@ -375,19 +485,33 @@ public class TestWriteBase {
      * Asserts the data files are empty.
      */
     public TestHarness assertEmptyDataFiles() {
-      assertFalse(fileExists(), "No data files should have been created");
+      assertFalse(fileExists(false), "No data files should have been created");
       return this;
     }
 
-    private boolean fileExists() {
+    /**
+     * Asserts the data files are empty.
+     */
+    public TestHarness assertEmptyBaseFiles() {
+      assertFalse(fileExists(true), "No data files should have been created");
+      return this;
+    }
+
+    private boolean fileExists(boolean ignoreLogs) {
       List<File> dirsToCheck = new ArrayList<>();
       dirsToCheck.add(baseFile);
       while (!dirsToCheck.isEmpty()) {
         File dir = dirsToCheck.remove(0);
         for (File file : Objects.requireNonNull(dir.listFiles())) {
-          if (!file.getName().startsWith(".")) {
-            if (file.isDirectory()) {
+          if (file.isDirectory()) {
+            if (!file.getName().startsWith(".")) {
               dirsToCheck.add(file);
+            }
+          } else {
+            if (ignoreLogs) {
+              if (!file.getName().startsWith(".")) {
+                return true;
+              }
             } else {
               return true;
             }
@@ -441,25 +565,19 @@ public class TestWriteBase {
       return this;
     }
 
-    public TestHarness assertConfirming() {
-      assertTrue(this.pipeline.isConforming(),
-          "The write function should be waiting for the instant to commit");
-      return this;
-    }
-
-    public TestHarness assertNotConfirming() {
-      assertFalse(this.pipeline.isConforming(),
-          "The write function should finish waiting for the instant to commit");
-      return this;
-    }
-
     public TestHarness rollbackLastCompleteInstantToInflight() throws Exception {
       HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
-      Option<HoodieInstant> lastCompletedInstant = metaClient.getActiveTimeline().filterCompletedInstants().lastInstant();
-      HoodieActiveTimeline.deleteInstantFile(metaClient.getFs(), metaClient.getMetaPath(), lastCompletedInstant.get());
+      HoodieTimeline timeline = OptionsResolver.isMorTable(conf)
+          ? metaClient.getActiveTimeline().getDeltaCommitTimeline()
+          : metaClient.getActiveTimeline().getCommitTimeline();
+      Option<HoodieInstant> lastCompletedInstant = timeline
+          .filterCompletedInstants().lastInstant();
+      HoodieActiveTimeline.deleteInstantFile(
+          metaClient.getFs(), metaClient.getMetaPath(), lastCompletedInstant.get());
       // refresh the heartbeat in case it is timed out.
-      OutputStream outputStream =
-          metaClient.getFs().create(new Path(HoodieTableMetaClient.getHeartbeatFolderPath(basePath) + Path.SEPARATOR + this.lastComplete), true);
+      OutputStream outputStream = metaClient.getFs().create(new Path(
+          HoodieTableMetaClient.getHeartbeatFolderPath(basePath)
+              + Path.SEPARATOR + this.lastComplete), true);
       outputStream.close();
       this.lastPending = this.lastComplete;
       this.lastComplete = lastCompleteInstant();
@@ -467,6 +585,7 @@ public class TestWriteBase {
     }
 
     public TestHarness checkLastPendingInstantCompleted() {
+      this.pipeline.checkpointComplete(3);
       checkInstantState(HoodieInstant.State.COMPLETED, this.lastPending);
       this.lastComplete = lastPending;
       this.lastPending = lastPendingInstant();
@@ -477,8 +596,8 @@ public class TestWriteBase {
      * Used to simulate the use case that the coordinator has not finished a new instant initialization,
      * while the write task fails intermittently.
      */
-    public TestHarness coordinatorFails() throws Exception {
-      this.pipeline.coordinatorFails();
+    public TestHarness restartCoordinator() throws Exception {
+      this.pipeline.restartCoordinator();
       return this;
     }
 
@@ -488,31 +607,25 @@ public class TestWriteBase {
     }
 
     private String lastPendingInstant() {
-      return this.ckpMetadata.lastPendingInstant();
-    }
-
-    private String checkInflightInstant() {
-      final String instant = this.ckpMetadata.lastPendingInstant();
-      assertNotNull(instant);
-      return instant;
+      return this.pipeline.getCoordinator().getInstant();
     }
 
     private void checkInstantState(HoodieInstant.State state, String instantStr) {
-      final String instant;
+      HoodieActiveTimeline timeline = StreamerUtil.createMetaClient(conf).getActiveTimeline();
       switch (state) {
         case REQUESTED:
-          instant = lastPendingInstant();
+          assertTrue(timeline.filterInflightsAndRequested().containsInstant(instantStr));
           break;
         case COMPLETED:
-          instant = lastCompleteInstant();
+          assertTrue(timeline.filterCompletedInstants().containsInstant(instantStr));
           break;
         default:
           throw new AssertionError("Unexpected state");
       }
-      assertThat(instant, is(instantStr));
     }
 
     protected String lastCompleteInstant() {
+      // fetch the instant from timeline.
       return OptionsResolver.isMorTable(conf)
           ? TestUtils.getLastDeltaCompleteInstant(basePath)
           : TestUtils.getLastCompleteInstant(basePath, HoodieTimeline.COMMIT_ACTION);
@@ -523,5 +636,21 @@ public class TestWriteBase {
       assertEquals(count, TestUtils.getCompletedInstantCount(basePath, isMor ? HoodieTimeline.DELTA_COMMIT_ACTION : HoodieTimeline.COMMIT_ACTION));
       return this;
     }
+  }
+
+  // -------------------------------------------------------------------------
+  //  Utilities
+  // -------------------------------------------------------------------------
+
+  protected TestHarness preparePipeline() throws Exception {
+    return preparePipeline(conf);
+  }
+
+  protected TestHarness preparePipeline(Configuration conf) throws Exception {
+    return TestHarness.instance().preparePipeline(tempFile, conf);
+  }
+
+  protected HoodieTableType getTableType() {
+    return HoodieTableType.COPY_ON_WRITE;
   }
 }

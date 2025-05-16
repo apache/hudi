@@ -189,10 +189,10 @@ public class EmbeddedTimelineService {
 
   private void setHostAddr(String embeddedTimelineServiceHostAddr) {
     if (embeddedTimelineServiceHostAddr != null) {
-      LOG.info("Overriding hostIp to (" + embeddedTimelineServiceHostAddr + ") found in spark-conf. It was " + this.hostAddr);
+      LOG.info("Overriding hostIp to (" + embeddedTimelineServiceHostAddr + ") found in write conf. It was " + this.hostAddr);
       this.hostAddr = embeddedTimelineServiceHostAddr;
     } else {
-      LOG.warn("Unable to find driver bind address from spark config");
+      LOG.warn("Unable to find driver bind address from write config, use current host name");
       this.hostAddr = NetworkUtils.getHostname();
     }
   }
@@ -265,7 +265,10 @@ public class EmbeddedTimelineService {
     private final boolean isMetadataEnabled;
     private final boolean isEarlyConflictDetectionEnable;
 
-    public TimelineServiceIdentifier(String hostAddr, MarkerType markerType, boolean isMetadataEnabled, boolean isEarlyConflictDetectionEnable) {
+    public TimelineServiceIdentifier(String hostAddr,
+                                     MarkerType markerType,
+                                     boolean isMetadataEnabled,
+                                     boolean isEarlyConflictDetectionEnable) {
       this.hostAddr = hostAddr;
       this.markerType = markerType;
       this.isMetadataEnabled = isMetadataEnabled;

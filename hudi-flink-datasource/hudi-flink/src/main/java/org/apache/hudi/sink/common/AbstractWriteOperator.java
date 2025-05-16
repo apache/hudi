@@ -18,6 +18,8 @@
 
 package org.apache.hudi.sink.common;
 
+import org.apache.hudi.sink.event.Correspondent;
+
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.runtime.operators.coordination.OperatorEventGateway;
 import org.apache.flink.runtime.operators.coordination.OperatorEventHandler;
@@ -37,6 +39,10 @@ public abstract class AbstractWriteOperator<I>
   public AbstractWriteOperator(AbstractWriteFunction<I> function) {
     super(function);
     this.function = function;
+  }
+
+  public void setCorrespondent(Correspondent correspondent) {
+    this.function.setCorrespondent(correspondent);
   }
 
   public void setOperatorEventGateway(OperatorEventGateway operatorEventGateway) {

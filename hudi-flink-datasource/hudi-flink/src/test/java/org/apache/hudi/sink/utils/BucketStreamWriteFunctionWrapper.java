@@ -24,6 +24,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.StreamWriteFunction;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.bucket.BucketStreamWriteFunction;
+import org.apache.hudi.sink.common.AbstractWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.transform.RowDataToHoodieFunction;
 import org.apache.hudi.util.AvroSchemaConverter;
@@ -138,6 +139,11 @@ public class BucketStreamWriteFunctionWrapper<I> implements TestFunctionWrapper<
     return this.coordinator.getEventBuffer();
   }
 
+  @Override
+  public WriteMetadataEvent[] getEventBuffer(long checkpointId) {
+    return this.coordinator.getEventBuffer(checkpointId);
+  }
+
   public OperatorEvent getNextEvent() {
     return this.gateway.getNextEvent();
   }
@@ -182,12 +188,13 @@ public class BucketStreamWriteFunctionWrapper<I> implements TestFunctionWrapper<
     return coordinator;
   }
 
-  public MockOperatorCoordinatorContext getCoordinatorContext() {
-    return coordinatorContext;
+  @Override
+  public AbstractWriteFunction getWriteFunction() {
+    return writeFunction;
   }
 
-  public boolean isConforming() {
-    return this.writeFunction.isConfirming();
+  public MockOperatorCoordinatorContext getCoordinatorContext() {
+    return coordinatorContext;
   }
 
   // -------------------------------------------------------------------------
@@ -200,9 +207,7 @@ public class BucketStreamWriteFunctionWrapper<I> implements TestFunctionWrapper<
     writeFunction.setOperatorEventGateway(gateway);
     writeFunction.initializeState(this.stateInitializationContext);
     writeFunction.open(conf);
-
-    // handle the bootstrap event
-    coordinator.handleEventFromOperator(0, getNextEvent());
+    writeFunction.setCorrespondent(new MockCorrespondent(this.coordinator));
   }
 
   protected StreamWriteFunction<HoodieRecord<?>> createWriteFunction() {
