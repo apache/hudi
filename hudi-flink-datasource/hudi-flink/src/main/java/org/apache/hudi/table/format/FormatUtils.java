@@ -19,22 +19,12 @@
 package org.apache.hudi.table.format;
 
 import org.apache.hudi.common.config.ConfigProperty;
-import org.apache.hudi.common.config.HoodieMemoryConfig;
-import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.model.HoodieOperation;
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
-import org.apache.hudi.common.table.log.HoodieUnMergedLogRecordScanner;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
-import org.apache.hudi.common.util.Functions;
-import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
-import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
-import org.apache.hudi.common.util.queue.FunctionBasedQueueProducer;
-import org.apache.hudi.common.util.queue.HoodieProducer;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieIOException;
@@ -44,7 +34,6 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.util.FlinkWriteClients;
-import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -55,13 +44,9 @@ import org.apache.flink.types.RowKind;
 import org.apache.hadoop.conf.Configuration;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Locale;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * Utilities for format.
@@ -173,87 +158,9 @@ public class FormatUtils {
         .withBitCaskDiskMapCompressionEnabled(writeConfig.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
         .withSpillableMapBasePath(writeConfig.getSpillableMapBasePath())
         .withInstantRange(split.getInstantRange())
-        .withOperationField(flinkConf.getBoolean(FlinkOptions.CHANGELOG_ENABLED))
+        .withOperationField(flinkConf.get(FlinkOptions.CHANGELOG_ENABLED))
         .withRecordMerger(writeConfig.getRecordMerger())
         .build();
-  }
-
-  /**
-   * Utility to read and buffer the records in the unMerged log record scanner.
-   */
-  public static class BoundedMemoryRecords {
-    // Executor that runs the above producers in parallel
-    private final BoundedInMemoryExecutor<HoodieRecord<?>, HoodieRecord<?>, ?> executor;
-
-    // Iterator for the buffer consumer
-    private final Iterator<HoodieRecord<?>> iterator;
-
-    public BoundedMemoryRecords(
-        MergeOnReadInputSplit split,
-        Schema logSchema,
-        InternalSchema internalSchema,
-        Configuration hadoopConf,
-        org.apache.flink.configuration.Configuration flinkConf) {
-      List<String> mergers = Arrays.stream(flinkConf.getString(FlinkOptions.RECORD_MERGER_IMPLS).split(","))
-          .map(String::trim)
-          .distinct()
-          .collect(Collectors.toList());
-      HoodieRecordMerger merger = HoodieRecordUtils.createRecordMerger(
-          split.getTablePath(), EngineType.FLINK, mergers, flinkConf.getString(FlinkOptions.RECORD_MERGER_STRATEGY_ID));
-      HoodieUnMergedLogRecordScanner.Builder scannerBuilder =
-          HoodieUnMergedLogRecordScanner.newBuilder()
-              .withStorage(HoodieStorageUtils.getStorage(
-                  split.getTablePath(), HadoopFSUtils.getStorageConf(hadoopConf)))
-          .withBasePath(split.getTablePath())
-          .withLogFilePaths(split.getLogPaths().get())
-          .withReaderSchema(logSchema)
-          .withInternalSchema(internalSchema)
-          .withLatestInstantTime(split.getLatestCommit())
-          .withReverseReader(false)
-          .withBufferSize(
-              flinkConf.getInteger(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE.key(),
-                  HoodieMemoryConfig.DEFAULT_MR_MAX_DFS_STREAM_BUFFER_SIZE))
-          .withInstantRange(split.getInstantRange())
-          .withRecordMerger(merger);
-
-      this.executor = new BoundedInMemoryExecutor<>(
-          StreamerUtil.getMaxCompactionMemoryInBytes(flinkConf),
-          getParallelProducers(scannerBuilder),
-          Option.empty(),
-          Function.identity(),
-          new DefaultSizeEstimator<>(),
-          Functions.noop());
-      this.iterator = this.executor.getRecordIterator();
-
-      // Start reading and buffering
-      this.executor.startProducingAsync();
-    }
-
-    public Iterator<HoodieRecord<?>> getRecordsIterator() {
-      return this.iterator;
-    }
-
-    /**
-     * Setup log and parquet reading in parallel. Both write to central buffer.
-     */
-    private List<HoodieProducer<HoodieRecord<?>>> getParallelProducers(
-        HoodieUnMergedLogRecordScanner.Builder scannerBuilder
-    ) {
-      List<HoodieProducer<HoodieRecord<?>>> producers = new ArrayList<>();
-      producers.add(new FunctionBasedQueueProducer<>(queue -> {
-        HoodieUnMergedLogRecordScanner scanner =
-            scannerBuilder.withLogRecordScannerCallback(queue::insertRecord).build();
-        // Scan all the delta-log files, filling in the queue
-        scanner.scan();
-        return null;
-      }));
-
-      return producers;
-    }
-
-    public void close() {
-      this.executor.shutdownNow();
-    }
   }
 
   public static HoodieMergedLogRecordScanner logScanner(
@@ -316,9 +223,5 @@ public class FormatUtils {
     Option<String> rawValue = getRawValueWithAltKeys(conf, configProperty);
     boolean defaultValue = configProperty.hasDefaultValue() && Boolean.parseBoolean(configProperty.defaultValue().toString());
     return rawValue.map(Boolean::parseBoolean).orElse(defaultValue);
-  }
-
-  private static Boolean string2Boolean(String s) {
-    return "true".equals(s.toLowerCase(Locale.ROOT));
   }
 }

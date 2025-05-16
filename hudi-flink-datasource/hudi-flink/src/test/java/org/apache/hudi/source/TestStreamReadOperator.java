@@ -57,7 +57,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.configuration.FlinkOptions.PARTITION_DEFAULT_NAME;
 import static org.apache.hudi.configuration.FlinkOptions.TABLE_TYPE;
 import static org.apache.hudi.configuration.FlinkOptions.TABLE_TYPE_MERGE_ON_READ;
 import static org.hamcrest.CoreMatchers.is;
@@ -267,7 +266,7 @@ public class TestStreamReadOperator {
         .config(conf)
         .tableState(hoodieTableState)
         .fieldTypes(rowDataType.getChildren())
-        .defaultPartName(PARTITION_DEFAULT_NAME.defaultValue()).limit(1000L)
+        .limit(1000L)
         .emitDelete(true)
         .build();
 

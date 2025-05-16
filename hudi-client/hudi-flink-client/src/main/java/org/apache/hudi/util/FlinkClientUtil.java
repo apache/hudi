@@ -18,7 +18,10 @@
 
 package org.apache.hudi.util;
 
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 
 import org.apache.flink.api.java.hadoop.mapred.utils.HadoopUtils;
@@ -88,5 +91,20 @@ public class FlinkClientUtil {
       return hadoopConfiguration;
     }
     return null;
+  }
+
+  /**
+   * Get merged {@link TypedProperties} from {@link HoodieTableConfig} and {@link HoodieWriteConfig}.
+   *
+   * @param tableConfig The hoodie table configuration
+   * @param writeConfig the hoodie write configuration
+   *
+   * @return Merged {@link TypedProperties} from {@link HoodieTableConfig} and {@link HoodieWriteConfig}
+   */
+  public static TypedProperties getMergedTableAndWriteProps(HoodieTableConfig tableConfig, HoodieWriteConfig writeConfig) {
+    TypedProperties props = new TypedProperties();
+    props.putAll(tableConfig.getProps());
+    writeConfig.getProps().forEach(props::putIfAbsent);
+    return props;
   }
 }

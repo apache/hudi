@@ -35,6 +35,7 @@ import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.io.BaseFileGroupReaderBasedMergeHandle;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.util.FlinkClientUtil;
 
 import org.apache.avro.Schema;
 import org.apache.flink.table.data.RowData;
@@ -78,9 +79,7 @@ public class FlinkFileGroupReaderBasedMergeHandle<T, I, K, O> extends BaseFileGr
     if (!StringUtils.isNullOrEmpty(config.getInternalSchema())) {
       internalSchemaOption = SerDeHelper.fromJson(config.getInternalSchema());
     }
-    TypedProperties props = new TypedProperties();
-    hoodieTable.getMetaClient().getTableConfig().getProps().forEach(props::putIfAbsent);
-    config.getProps().forEach(props::putIfAbsent);
+    TypedProperties props = FlinkClientUtil.getMergedTableAndWriteProps(hoodieTable.getMetaClient().getTableConfig(), config);
     // Initializes file group reader
     try (HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(
         readerContext,
