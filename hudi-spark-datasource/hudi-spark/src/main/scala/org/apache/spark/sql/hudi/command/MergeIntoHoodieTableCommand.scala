@@ -46,9 +46,11 @@ import org.apache.spark.sql.catalyst.plans.{LeftOuter, QueryPlan}
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.execution.command.DataWritingCommand
+import org.apache.spark.sql.execution.metric.SQLMetric
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig.{combineOptions, getPartitionPathFieldWriteConfig}
+import org.apache.spark.sql.hudi.command.HoodieCommandMetrics.updateCommitMetrics
 import org.apache.spark.sql.hudi.command.MergeIntoHoodieTableCommand._
 import org.apache.spark.sql.hudi.command.PartialAssignmentMode.PartialAssignmentMode
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload
@@ -119,6 +121,8 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
   override def outputColumnNames: Seq[String] = {
     query.output.map(_.name)
   }
+
+  override lazy val metrics: Map[String, SQLMetric] = HoodieCommandMetrics.metrics
 
   override protected def withNewChildInternal(newChild: LogicalPlan): LogicalPlan = copy(query = newChild)
 
@@ -493,9 +497,13 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
       PAYLOAD_ORIGINAL_AVRO_PAYLOAD -> hoodieCatalogTable.tableConfig.getPayloadClass
     )
 
-    val (success, _, _, _, _, _) = HoodieSparkSqlWriter.write(sparkSession.sqlContext, SaveMode.Append, writeParams, sourceDF)
+    val (success, commitInstantTime, _, _, _, _) = HoodieSparkSqlWriter.write(sparkSession.sqlContext, SaveMode.Append, writeParams, sourceDF)
     if (!success) {
       throw new HoodieException("Merge into Hoodie table command failed")
+    }
+    if (commitInstantTime.isPresent) {
+      updateCommitMetrics(metrics, hoodieCatalogTable.metaClient, commitInstantTime.get())
+      DataWritingCommand.propogateMetrics(sparkSession.sparkContext, this, metrics)
     }
   }
 
