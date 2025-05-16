@@ -18,30 +18,43 @@
 
 package org.apache.hudi.table.format.mor;
 
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieFileGroupId;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.log.InstantRange;
+import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieUpsertException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.source.ExpressionPredicates.Predicate;
 import org.apache.hudi.table.format.FilePathUtils;
+import org.apache.hudi.table.format.FlinkRowDataReaderContext;
 import org.apache.hudi.table.format.FormatUtils;
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.table.format.RecordIterators;
 import org.apache.hudi.util.AvroToRowDataConverters;
+import org.apache.hudi.util.FlinkClientUtil;
+import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.RowDataProjection;
 import org.apache.hudi.util.RowDataToAvroConverters;
 import org.apache.hudi.util.StreamerUtil;
@@ -66,12 +79,14 @@ import org.apache.flink.types.RowKind;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.HOODIE_COMMIT_TIME_COL_POS;
@@ -112,11 +127,6 @@ public class MergeOnReadInputFormat
   private final List<DataType> fieldTypes;
 
   /**
-   * Default partition name when the field value is null.
-   */
-  private final String defaultPartName;
-
-  /**
    * Required field positions.
    */
   private final int[] requiredPos;
@@ -148,11 +158,20 @@ public class MergeOnReadInputFormat
 
   protected final InternalSchemaManager internalSchemaManager;
 
+  /**
+   * The table metadata client
+   */
+  private transient HoodieTableMetaClient metaClient;
+
+  /**
+   * The hoodie write configuration.
+   */
+  private transient HoodieWriteConfig writeConfig;
+
   protected MergeOnReadInputFormat(
       Configuration conf,
       MergeOnReadTableState tableState,
       List<DataType> fieldTypes,
-      String defaultPartName,
       List<Predicate> predicates,
       long limit,
       boolean emitDelete,
@@ -161,7 +180,6 @@ public class MergeOnReadInputFormat
     this.tableState = tableState;
     this.fieldNames = tableState.getRowType().getFieldNames();
     this.fieldTypes = fieldTypes;
-    this.defaultPartName = defaultPartName;
     // Needs improvement: this requiredPos is only suitable for parquet reader,
     // because we need to
     this.requiredPos = tableState.getRequiredPositions();
@@ -183,6 +201,8 @@ public class MergeOnReadInputFormat
     this.currentReadCount = 0L;
     this.closed = false;
     this.hadoopConf = HadoopConfigurations.getHadoopConf(this.conf);
+    this.metaClient = StreamerUtil.metaClientForReader(this.conf, hadoopConf);
+    this.writeConfig = FlinkWriteClients.getHoodieClientConfig(this.conf);
     this.iterator = initIterator(split);
     mayShiftInputSplit(split);
   }
@@ -423,48 +443,52 @@ public class MergeOnReadInputFormat
     };
   }
 
+  /**
+   * Get record iterator using {@link HoodieFileGroupReader}.
+   *
+   * @param split input split
+   * @return {@link RowData} iterator.
+   */
   private ClosableIterator<RowData> getUnMergedLogFileIterator(MergeOnReadInputSplit split) {
     final Schema tableSchema = new Schema.Parser().parse(tableState.getAvroSchema());
     final Schema requiredSchema = new Schema.Parser().parse(tableState.getRequiredAvroSchema());
-    final GenericRecordBuilder recordBuilder = new GenericRecordBuilder(requiredSchema);
-    final AvroToRowDataConverters.AvroToRowDataConverter avroToRowDataConverter =
-        AvroToRowDataConverters.createRowConverter(tableState.getRequiredRowType(), conf.getBoolean(FlinkOptions.READ_UTC_TIMEZONE));
-    final FormatUtils.BoundedMemoryRecords records = new FormatUtils.BoundedMemoryRecords(split, tableSchema, internalSchemaManager.getQuerySchema(), hadoopConf, conf);
-    final Iterator<HoodieRecord<?>> recordsIterator = records.getRecordsIterator();
 
-    return new ClosableIterator<RowData>() {
-      private RowData currentRecord;
+    FileSlice fileSlice = new FileSlice(
+        // partitionPath is not needed for FG reader on Flink
+        new HoodieFileGroupId("", split.getFileId()),
+        // baseInstantTime in FileSlice is not used in FG reader
+        "",
+        split.getBasePath().map(HoodieBaseFile::new).orElse(null),
+        split.getLogPaths().map(logFiles -> logFiles.stream().map(HoodieLogFile::new).collect(Collectors.toList())).orElse(Collections.emptyList()));
 
-      @Override
-      public boolean hasNext() {
-        while (recordsIterator.hasNext()) {
-          final HoodieAvroRecord<?> hoodieRecord = (HoodieAvroRecord) recordsIterator.next();
-          Option<IndexedRecord> curAvroRecord = getInsertVal(hoodieRecord, tableSchema);
-          if (curAvroRecord.isPresent()) {
-            final IndexedRecord avroRecord = curAvroRecord.get();
-            GenericRecord requiredAvroRecord = buildAvroRecordBySchema(
-                avroRecord,
-                requiredSchema,
-                requiredPos,
-                recordBuilder);
-            currentRecord = (RowData) avroToRowDataConverter.convert(requiredAvroRecord);
-            FormatUtils.setRowKind(currentRecord, avroRecord, tableState.getOperationPos());
-            return true;
-          }
-        }
-        return false;
-      }
+    FlinkRowDataReaderContext readerContext =
+        new FlinkRowDataReaderContext(
+            HadoopFSUtils.getStorageConf(hadoopConf),
+            () -> internalSchemaManager,
+            predicates,
+            metaClient.getTableConfig());
+    TypedProperties typedProps = FlinkClientUtil.getMergedTableAndWriteProps(metaClient.getTableConfig(), writeConfig);
+    typedProps.put(HoodieReaderConfig.MERGE_TYPE.key(), HoodieReaderConfig.REALTIME_SKIP_MERGE);
 
-      @Override
-      public RowData next() {
-        return currentRecord;
-      }
-
-      @Override
-      public void close() {
-        records.close();
-      }
-    };
+    try (HoodieFileGroupReader<RowData> fileGroupReader = new HoodieFileGroupReader<>(
+        readerContext,
+        metaClient.getStorage(),
+        split.getTablePath(),
+        split.getLatestCommit(),
+        fileSlice,
+        tableSchema,
+        requiredSchema,
+        Option.ofNullable(internalSchemaManager.getQuerySchema()),
+        metaClient,
+        typedProps,
+        0,
+        Long.MAX_VALUE,
+        false)) {
+      fileGroupReader.initRecordIterators();
+      return fileGroupReader.getClosableIterator();
+    } catch (IOException e) {
+      throw new HoodieUpsertException("Failed to compact file slice: " + fileSlice, e);
+    }
   }
 
   protected static Option<IndexedRecord> getInsertVal(HoodieAvroRecord<?> hoodieRecord, Schema tableSchema) {
@@ -835,7 +859,6 @@ public class MergeOnReadInputFormat
     protected Configuration conf;
     protected MergeOnReadTableState tableState;
     protected List<DataType> fieldTypes;
-    protected String defaultPartName;
     protected List<Predicate> predicates;
     protected long limit = -1;
     protected boolean emitDelete = false;
@@ -853,11 +876,6 @@ public class MergeOnReadInputFormat
 
     public Builder fieldTypes(List<DataType> fieldTypes) {
       this.fieldTypes = fieldTypes;
-      return this;
-    }
-
-    public Builder defaultPartName(String defaultPartName) {
-      this.defaultPartName = defaultPartName;
       return this;
     }
 
@@ -882,8 +900,8 @@ public class MergeOnReadInputFormat
     }
 
     public MergeOnReadInputFormat build() {
-      return new MergeOnReadInputFormat(conf, tableState, fieldTypes,
-          defaultPartName, predicates, limit, emitDelete, internalSchemaManager);
+      return new MergeOnReadInputFormat(conf, tableState,
+          fieldTypes, predicates, limit, emitDelete, internalSchemaManager);
     }
   }
 
