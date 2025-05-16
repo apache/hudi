@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -91,6 +92,7 @@ import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -1329,6 +1331,27 @@ public class TestInputFormat {
     expected.put("par1", "[id1,par1,id1,Danny,23,2,par1]");
     // check result from base file
     TestData.checkWrittenData(tempFile, expected, expected.size());
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableType.class)
+  void testStreamWriteAndReadWithUpgrade(HoodieTableType tableType) throws Exception {
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.WRITE_TABLE_VERSION.key(), HoodieTableVersion.SIX.versionCode() + "");
+    // init and write data with table version SIX
+    beforeEach(tableType, options);
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    assertSame(HoodieTableVersion.SIX, tableSource.getMetaClient().getTableConfig().getTableVersion());
+
+    // write another batch of data with table version EIGHT
+    conf.set(FlinkOptions.WRITE_TABLE_VERSION, HoodieTableVersion.EIGHT.versionCode());
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    this.tableSource = getTableSource(conf);
+    assertSame(HoodieTableVersion.EIGHT, tableSource.getMetaClient().getTableConfig().getTableVersion());
+
+    InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat();
+    List<RowData> result = readData(inputFormat);
+    TestData.assertRowDataEquals(result, TestData.DATA_SET_INSERT);
   }
 
   // -------------------------------------------------------------------------
