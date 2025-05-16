@@ -18,7 +18,6 @@
 
 package org.apache.hudi.commit;
 
-import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
@@ -26,7 +25,6 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieInternalConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.internal.DataSourceInternalWriterHelper;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
@@ -63,16 +61,8 @@ public class DatasetBulkInsertCommitActionExecutor extends BaseDatasetBulkInsert
 
     String targetFormat;
     Map<String, String> customOpts = new HashMap<>(1);
-    if (HoodieSparkUtils.isSpark3()) {
-      targetFormat = "org.apache.hudi.spark.internal";
-      customOpts.put(HoodieInternalConfig.BULKINSERT_INPUT_DATA_SCHEMA_DDL.key(), records.schema().json());
-    } else if (HoodieSparkUtils.isSpark4()) {
-      targetFormat = "org.apache.hudi.spark4.internal";
-      customOpts.put(HoodieInternalConfig.BULKINSERT_INPUT_DATA_SCHEMA_DDL.key(), records.schema().json());
-    } else {
-      throw new HoodieException("Bulk insert using row writer is not supported with current Spark version."
-          + " To use row writer please switch to spark 3");
-    }
+    targetFormat = "org.apache.hudi.spark.internal";
+    customOpts.put(HoodieInternalConfig.BULKINSERT_INPUT_DATA_SCHEMA_DDL.key(), records.schema().json());
 
     records.write().format(targetFormat)
         .option(DataSourceInternalWriterHelper.INSTANT_TIME_OPT_KEY, instantTime)
