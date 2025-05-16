@@ -21,8 +21,6 @@ package org.apache.hudi.callback.common;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
 
-import java.util.List;
-
 /**
  * WriteStatus handler callback to assist caller to process errors if any. Caller can dictate if we wanted to proceed with the commit or not by means of the return
  * value of the call back (processWriteStatuses). We noticed that sometimes callers invoke the dag just to process it there are any errors before proceeding with the commit.

@@ -26,6 +26,7 @@ import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
@@ -317,7 +318,7 @@ public class TestHoodieMetadataBase extends HoodieJavaClientTestHarness {
   }
 
   protected HoodieWriteConfig getMetadataWriteConfig(HoodieWriteConfig writeConfig) {
-    return HoodieMetadataWriteUtils.createMetadataWriteConfig(writeConfig, HoodieFailedWritesCleaningPolicy.LAZY);
+    return HoodieMetadataWriteUtils.createMetadataWriteConfig(writeConfig, HoodieFailedWritesCleaningPolicy.LAZY, HoodieTableVersion.EIGHT);
   }
 
   protected HoodieTableMetaClient createMetaClientForMetadataTable() {
