@@ -222,9 +222,11 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
     List<FileSlice> firstPartitionCommit2FileSlices = new ArrayList<>();
     List<FileSlice> secondPartitionCommit2FileSlices = new ArrayList<>();
     HoodieWriteConfig cfg = getConfigBuilder().withRollbackUsingMarkers(isUsingMarkers).build();
+    SparkRDDWriteClient client = getHoodieWriteClient(cfg);
     this.insertOverwriteCommitDataWithTwoPartitions(firstPartitionCommit2FileSlices, secondPartitionCommit2FileSlices, cfg, !isUsingMarkers);
     HoodieTable table = this.getHoodieTable(metaClient, cfg);
     performRollbackAndValidate(isUsingMarkers, cfg, table, firstPartitionCommit2FileSlices, secondPartitionCommit2FileSlices);
+    client.close();
   }
 
   @ParameterizedTest
@@ -234,10 +236,12 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
     List<FileSlice> firstPartitionCommit2FileSlices = new ArrayList<>();
     List<FileSlice> secondPartitionCommit2FileSlices = new ArrayList<>();
     HoodieWriteConfig cfg = getConfigBuilder().withRollbackUsingMarkers(isUsingMarkers).build();
-    this.twoUpsertCommitDataWithTwoPartitions(firstPartitionCommit2FileSlices, secondPartitionCommit2FileSlices, cfg, !isUsingMarkers);
+    SparkRDDWriteClient client = getHoodieWriteClient(cfg);
+    this.twoUpsertCommitDataWithTwoPartitions(firstPartitionCommit2FileSlices, secondPartitionCommit2FileSlices, cfg, !isUsingMarkers, client);
     metaClient.reloadActiveTimeline();
     HoodieTable table = this.getHoodieTable(metaClient, cfg);
     performRollbackAndValidate(isUsingMarkers, cfg, table, firstPartitionCommit2FileSlices, secondPartitionCommit2FileSlices);
+    client.close();
   }
 
   /**
@@ -288,64 +292,62 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
                                           List<FileSlice> firstPartitionCommit2FileSlices,
                                           List<FileSlice> secondPartitionCommit2FileSlices) throws IOException, InterruptedException {
     // Create a client to start timeline service needed by the rollback action executor
-    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
-      // Sleep for timeline service to start listening on the port
-      Thread.sleep(1000);
-      //2. rollback
-      HoodieInstant commitInstant;
-      if (isUsingMarkers) {
-        commitInstant = table.getActiveTimeline().getCommitAndReplaceTimeline().filterInflights().lastInstant().get();
-      } else {
-        commitInstant = table.getCompletedCommitTimeline().lastInstant().get();
-      }
-
-      BaseRollbackPlanActionExecutor copyOnWriteRollbackPlanActionExecutor =
-          new BaseRollbackPlanActionExecutor(context, table.getConfig(), table, "003", commitInstant, false,
-              table.getConfig().shouldRollbackUsingMarkers(), false);
-      HoodieRollbackPlan hoodieRollbackPlan = (HoodieRollbackPlan) copyOnWriteRollbackPlanActionExecutor.execute().get();
-      CopyOnWriteRollbackActionExecutor copyOnWriteRollbackActionExecutor = new CopyOnWriteRollbackActionExecutor(context, cfg, table, "003", commitInstant, false,
-          false);
-      Map<String, HoodieRollbackPartitionMetadata> rollbackMetadata = copyOnWriteRollbackActionExecutor.execute().getPartitionMetadata();
-
-      //3. assert the rollback stat
-      assertEquals(2, rollbackMetadata.size());
-      for (Map.Entry<String, HoodieRollbackPartitionMetadata> entry : rollbackMetadata.entrySet()) {
-        HoodieRollbackPartitionMetadata meta = entry.getValue();
-        assertTrue(meta.getFailedDeleteFiles() == null
-            || meta.getFailedDeleteFiles().size() == 0);
-        assertTrue(meta.getSuccessDeleteFiles() == null
-            || meta.getSuccessDeleteFiles().size() == 1);
-      }
-
-      //4. assert filegroup after rollback, and compare to the rollbackstat
-      // assert the first partition file group and file slice
-      List<HoodieFileGroup> firstPartitionRollBack1FileGroups = table.getFileSystemView().getAllFileGroups(DEFAULT_FIRST_PARTITION_PATH).collect(Collectors.toList());
-      assertEquals(1, firstPartitionRollBack1FileGroups.size());
-      List<FileSlice> firstPartitionRollBack1FileSlices = firstPartitionRollBack1FileGroups.get(0).getAllFileSlices().collect(Collectors.toList());
-      assertEquals(1, firstPartitionRollBack1FileSlices.size());
-
-      firstPartitionCommit2FileSlices.removeAll(firstPartitionRollBack1FileSlices);
-      assertEquals(1, firstPartitionCommit2FileSlices.size());
-      assertEquals(firstPartitionCommit2FileSlices.get(0).getBaseFile().get().getPath(),
-          this.storage.getScheme() + ":"
-              + rollbackMetadata.get(DEFAULT_FIRST_PARTITION_PATH).getSuccessDeleteFiles().get(0));
-
-
-      // assert the second partition file group and file slice
-      List<HoodieFileGroup> secondPartitionRollBack1FileGroups = table.getFileSystemView().getAllFileGroups(DEFAULT_SECOND_PARTITION_PATH).collect(Collectors.toList());
-      assertEquals(1, secondPartitionRollBack1FileGroups.size());
-      List<FileSlice> secondPartitionRollBack1FileSlices = secondPartitionRollBack1FileGroups.get(0).getAllFileSlices().collect(Collectors.toList());
-      assertEquals(1, secondPartitionRollBack1FileSlices.size());
-
-      // assert the second partition rollback file is equals rollBack1SecondPartitionStat
-      secondPartitionCommit2FileSlices.removeAll(secondPartitionRollBack1FileSlices);
-      assertEquals(1, secondPartitionCommit2FileSlices.size());
-      assertEquals(secondPartitionCommit2FileSlices.get(0).getBaseFile().get().getPath(),
-          this.storage.getScheme() + ":"
-              + rollbackMetadata.get(DEFAULT_SECOND_PARTITION_PATH).getSuccessDeleteFiles().get(0));
-
-      assertFalse(WriteMarkersFactory.get(cfg.getMarkersType(), table, commitInstant.requestedTime()).doesMarkerDirExist());
+    // Sleep for timeline service to start listening on the port
+    Thread.sleep(1000);
+    //2. rollback
+    HoodieInstant commitInstant;
+    if (isUsingMarkers) {
+      commitInstant = table.getActiveTimeline().getCommitAndReplaceTimeline().filterInflights().lastInstant().get();
+    } else {
+      commitInstant = table.getCompletedCommitTimeline().lastInstant().get();
     }
+
+    BaseRollbackPlanActionExecutor copyOnWriteRollbackPlanActionExecutor =
+        new BaseRollbackPlanActionExecutor(context, table.getConfig(), table, "003", commitInstant, false,
+            table.getConfig().shouldRollbackUsingMarkers(), false);
+    HoodieRollbackPlan hoodieRollbackPlan = (HoodieRollbackPlan) copyOnWriteRollbackPlanActionExecutor.execute().get();
+    CopyOnWriteRollbackActionExecutor copyOnWriteRollbackActionExecutor = new CopyOnWriteRollbackActionExecutor(context, cfg, table, "003", commitInstant, false,
+        false);
+    Map<String, HoodieRollbackPartitionMetadata> rollbackMetadata = copyOnWriteRollbackActionExecutor.execute().getPartitionMetadata();
+
+    //3. assert the rollback stat
+    assertEquals(2, rollbackMetadata.size());
+    for (Map.Entry<String, HoodieRollbackPartitionMetadata> entry : rollbackMetadata.entrySet()) {
+      HoodieRollbackPartitionMetadata meta = entry.getValue();
+      assertTrue(meta.getFailedDeleteFiles() == null
+          || meta.getFailedDeleteFiles().size() == 0);
+      assertTrue(meta.getSuccessDeleteFiles() == null
+          || meta.getSuccessDeleteFiles().size() == 1);
+    }
+
+    //4. assert filegroup after rollback, and compare to the rollbackstat
+    // assert the first partition file group and file slice
+    List<HoodieFileGroup> firstPartitionRollBack1FileGroups = table.getFileSystemView().getAllFileGroups(DEFAULT_FIRST_PARTITION_PATH).collect(Collectors.toList());
+    assertEquals(1, firstPartitionRollBack1FileGroups.size());
+    List<FileSlice> firstPartitionRollBack1FileSlices = firstPartitionRollBack1FileGroups.get(0).getAllFileSlices().collect(Collectors.toList());
+    assertEquals(1, firstPartitionRollBack1FileSlices.size());
+
+    firstPartitionCommit2FileSlices.removeAll(firstPartitionRollBack1FileSlices);
+    assertEquals(1, firstPartitionCommit2FileSlices.size());
+    assertEquals(firstPartitionCommit2FileSlices.get(0).getBaseFile().get().getPath(),
+        this.storage.getScheme() + ":"
+            + rollbackMetadata.get(DEFAULT_FIRST_PARTITION_PATH).getSuccessDeleteFiles().get(0));
+
+
+    // assert the second partition file group and file slice
+    List<HoodieFileGroup> secondPartitionRollBack1FileGroups = table.getFileSystemView().getAllFileGroups(DEFAULT_SECOND_PARTITION_PATH).collect(Collectors.toList());
+    assertEquals(1, secondPartitionRollBack1FileGroups.size());
+    List<FileSlice> secondPartitionRollBack1FileSlices = secondPartitionRollBack1FileGroups.get(0).getAllFileSlices().collect(Collectors.toList());
+    assertEquals(1, secondPartitionRollBack1FileSlices.size());
+
+    // assert the second partition rollback file is equals rollBack1SecondPartitionStat
+    secondPartitionCommit2FileSlices.removeAll(secondPartitionRollBack1FileSlices);
+    assertEquals(1, secondPartitionCommit2FileSlices.size());
+    assertEquals(secondPartitionCommit2FileSlices.get(0).getBaseFile().get().getPath(),
+        this.storage.getScheme() + ":"
+            + rollbackMetadata.get(DEFAULT_SECOND_PARTITION_PATH).getSuccessDeleteFiles().get(0));
+
+    assertFalse(WriteMarkersFactory.get(cfg.getMarkersType(), table, commitInstant.requestedTime()).doesMarkerDirExist());
   }
 
   @Test
