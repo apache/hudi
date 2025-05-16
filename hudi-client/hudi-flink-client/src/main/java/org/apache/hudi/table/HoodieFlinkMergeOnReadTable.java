@@ -133,7 +133,7 @@ public class HoodieFlinkMergeOnReadTable<T>
       HoodieEngineContext context, String logCompactionInstantTime) {
     RunCompactionActionExecutor logCompactionExecutor = new RunCompactionActionExecutor(context, config, this,
         logCompactionInstantTime, new HoodieFlinkMergeOnReadTableCompactor<>(), this, WriteOperationType.LOG_COMPACT);
-    return logCompactionExecutor.execute();
+    return convertMetadata(logCompactionExecutor.execute());
   }
 
   @Override

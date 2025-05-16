@@ -38,6 +38,7 @@ import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieCompactionConfig;
@@ -45,6 +46,7 @@ import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.testutils.Assertions;
@@ -100,8 +102,12 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     //1. prepare data and assert data result
     List<FileSlice> firstPartitionCommit2FileSlices = new ArrayList<>();
     List<FileSlice> secondPartitionCommit2FileSlices = new ArrayList<>();
-    HoodieWriteConfig cfg = getConfigBuilder().withRollbackUsingMarkers(isUsingMarkers).withAutoCommit(false).build();
-    twoUpsertCommitDataWithTwoPartitions(firstPartitionCommit2FileSlices, secondPartitionCommit2FileSlices, cfg, !isUsingMarkers);
+    HoodieWriteConfig cfg = getConfigBuilder()
+        .withRollbackUsingMarkers(isUsingMarkers)
+        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder().withRemoteTimelineClientRetry(true).build())
+        .build();
+    SparkRDDWriteClient client = getHoodieWriteClient(cfg);
+    twoUpsertCommitDataWithTwoPartitions(firstPartitionCommit2FileSlices, secondPartitionCommit2FileSlices, cfg, !isUsingMarkers, client);
     List<HoodieLogFile> firstPartitionCommit2LogFiles = new ArrayList<>();
     List<HoodieLogFile> secondPartitionCommit2LogFiles = new ArrayList<>();
     firstPartitionCommit2FileSlices.get(0).getLogFiles().collect(Collectors.toList()).forEach(logFile -> firstPartitionCommit2LogFiles.add(logFile));
@@ -111,17 +117,19 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     HoodieTable table = this.getHoodieTable(metaClient, cfg);
 
     //2. rollback
+    String timestampToRollback = metaClient.reloadActiveTimeline().lastInstant().get().requestedTime();
+    String rollbackTime = InProcessTimeGenerator.createNewInstantTime();
     HoodieInstant rollBackInstant = INSTANT_GENERATOR.createNewInstant(isUsingMarkers ? HoodieInstant.State.INFLIGHT : HoodieInstant.State.COMPLETED,
-        HoodieTimeline.DELTA_COMMIT_ACTION, "002");
+        HoodieTimeline.DELTA_COMMIT_ACTION, timestampToRollback);
     BaseRollbackPlanActionExecutor mergeOnReadRollbackPlanActionExecutor =
-        new BaseRollbackPlanActionExecutor(context, cfg, table, "003", rollBackInstant, false,
+        new BaseRollbackPlanActionExecutor(context, cfg, table, rollbackTime, rollBackInstant, false,
             cfg.shouldRollbackUsingMarkers(), false);
     mergeOnReadRollbackPlanActionExecutor.execute().get();
     MergeOnReadRollbackActionExecutor mergeOnReadRollbackActionExecutor = new MergeOnReadRollbackActionExecutor(
         context,
         cfg,
         table,
-        "003",
+        rollbackTime,
         rollBackInstant,
         true,
         false);
@@ -155,7 +163,8 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     List<HoodieLogFile> secondPartitionRollBackLogFiles = secondPartitionRollBack1FileSlice.getLogFiles().collect(Collectors.toList());
     assertEquals(0, secondPartitionRollBackLogFiles.size());
 
-    assertFalse(WriteMarkersFactory.get(cfg.getMarkersType(), table, "002").doesMarkerDirExist());
+    assertFalse(WriteMarkersFactory.get(cfg.getMarkersType(), table, timestampToRollback).doesMarkerDirExist());
+    client.close();
   }
 
   @ParameterizedTest
@@ -165,11 +174,13 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     List<FileSlice> firstPartitionCommit2FileSlices = new ArrayList<>();
     List<FileSlice> secondPartitionCommit2FileSlices = new ArrayList<>();
     HoodieWriteConfig cfg = getConfigBuilder()
-        .withRollbackUsingMarkers(false).withAutoCommit(false)
-        .withMetadataConfig(
-            HoodieMetadataConfig.newBuilder().enable(true).build())
+        .withRollbackUsingMarkers(false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build())
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().withLogCompactionBlocksThreshold(1).build())
+        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder().withRemoteTimelineClientRetry(true).build())
         .build();
-    twoUpsertCommitDataWithTwoPartitions(firstPartitionCommit2FileSlices, secondPartitionCommit2FileSlices, cfg, true);
+    SparkRDDWriteClient client = getHoodieWriteClient(cfg);
+    twoUpsertCommitDataWithTwoPartitions(firstPartitionCommit2FileSlices, secondPartitionCommit2FileSlices, cfg, true, client);
     List<HoodieLogFile> firstPartitionCommit2LogFiles = new ArrayList<>();
     List<HoodieLogFile> secondPartitionCommit2LogFiles = new ArrayList<>();
     firstPartitionCommit2FileSlices.get(0).getLogFiles().collect(Collectors.toList()).forEach(logFile -> firstPartitionCommit2LogFiles.add(logFile));
@@ -183,41 +194,45 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
             .withLogCompactionBlocksThreshold(1)
             .withMaxNumDeltaCommitsBeforeCompaction(1)
             .withInlineCompactionTriggerStrategy(CompactionTriggerStrategy.NUM_COMMITS).build())
-        .withRollbackUsingMarkers(false).withAutoCommit(false)
+        .withRollbackUsingMarkers(false)
         .withMetadataConfig(
             HoodieMetadataConfig.newBuilder().enable(false).build())
+        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder().withRemoteTimelineClientRetry(true).build())
         .build();
 
     String action = HoodieTimeline.LOG_COMPACTION_ACTION;
     if (isComplete) {
-      cfg.setValue(HoodieWriteConfig.AUTO_COMMIT_ENABLE.key(), "true");
       action = HoodieTimeline.DELTA_COMMIT_ACTION;
     }
-    SparkRDDWriteClient client = getHoodieWriteClient(cfg);
-    client.scheduleLogCompactionAtInstant("003", Option.empty());
-    client.logCompact("003");
+    String logCompactionTime = InProcessTimeGenerator.createNewInstantTime();
+    client.scheduleLogCompactionAtInstant(logCompactionTime, Option.empty());
+    HoodieWriteMetadata writeMetadata = client.logCompact(logCompactionTime);
+    if (isComplete) {
+      client.commitLogCompaction(logCompactionTime, writeMetadata, Option.empty());
+    }
 
     //3. rollback log compact
     metaClient.reloadActiveTimeline();
     HoodieInstant rollBackInstant = INSTANT_GENERATOR.createNewInstant(!isComplete ? HoodieInstant.State.INFLIGHT : HoodieInstant.State.COMPLETED,
-        action, "003");
+        action, logCompactionTime);
     HoodieTable table = this.getHoodieTable(metaClient, cfg);
+    String rollbackTime = InProcessTimeGenerator.createNewInstantTime();
     BaseRollbackPlanActionExecutor mergeOnReadRollbackPlanActionExecutor =
-        new BaseRollbackPlanActionExecutor(context, cfg, table, "004", rollBackInstant, false,
+        new BaseRollbackPlanActionExecutor(context, cfg, table, rollbackTime, rollBackInstant, false,
             cfg.shouldRollbackUsingMarkers(), false);
     mergeOnReadRollbackPlanActionExecutor.execute().get();
     MergeOnReadRollbackActionExecutor mergeOnReadRollbackActionExecutor = new MergeOnReadRollbackActionExecutor(
         context,
         cfg,
         table,
-        "004",
+        rollbackTime,
         rollBackInstant,
         true,
         false);
     //4. assert the rollback stat
     final HoodieRollbackMetadata execute = mergeOnReadRollbackActionExecutor.execute();
     Map<String, HoodieRollbackPartitionMetadata> rollbackMetadata = execute.getPartitionMetadata();
-    assertEquals(2, rollbackMetadata.size());
+    assertEquals(isComplete ? 2 : 0, rollbackMetadata.size());
 
     for (Map.Entry<String, HoodieRollbackPartitionMetadata> entry : rollbackMetadata.entrySet()) {
       HoodieRollbackPartitionMetadata meta = entry.getValue();
@@ -246,13 +261,17 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     List<HoodieLogFile> secondPartitionRollBackLogFiles = secondPartitionRollBack1FileSlice.getLogFiles().collect(Collectors.toList());
     assertEquals(1, secondPartitionRollBackLogFiles.size());
 
-    assertFalse(WriteMarkersFactory.get(cfg.getMarkersType(), table, "003").doesMarkerDirExist());
+    assertFalse(WriteMarkersFactory.get(cfg.getMarkersType(), table, logCompactionTime).doesMarkerDirExist());
+    client.close();
   }
 
   @Test
-  public void testMergeOnReadRestoreCompactionCommit() throws IOException {
+  public void testMergeOnReadRestoreCompactionCommit() throws IOException, InterruptedException {
     boolean isUsingMarkers = false;
-    HoodieWriteConfig cfg = getConfigBuilder().withRollbackUsingMarkers(isUsingMarkers).withAutoCommit(false).build();
+    HoodieWriteConfig cfg = getConfigBuilder()
+        .withRollbackUsingMarkers(isUsingMarkers)
+        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder().withRemoteTimelineClientRetry(true).build())
+        .build();
 
     // 1. ingest data to partition 3.
     //just generate two partitions
@@ -264,18 +283,19 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     /**
      * Write 1 (only inserts)
      */
-    String newCommitTime = "0000001";
+    String newCommitTime = InProcessTimeGenerator.createNewInstantTime();
     client.startCommitWithTime(newCommitTime);
     List<HoodieRecord> records = dataGenPartition3.generateInsertsContainsAllPartitions(newCommitTime, 2);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
-    JavaRDD<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime);
-    Assertions.assertNoWriteErrors(statuses.collect());
+    JavaRDD<WriteStatus> rawStatuses = client.upsert(writeRecords, newCommitTime);
+    JavaRDD<WriteStatus> statuses = jsc.parallelize(rawStatuses.collect(), 1);
     client.commit(newCommitTime, statuses);
+    Assertions.assertNoWriteErrors(statuses.collect());
 
     //2. Ingest inserts + upserts to partition 1 and 2. we will eventually rollback both these commits using restore flow.
     List<FileSlice> firstPartitionCommit2FileSlices = new ArrayList<>();
     List<FileSlice> secondPartitionCommit2FileSlices = new ArrayList<>();
-    twoUpsertCommitDataWithTwoPartitions(firstPartitionCommit2FileSlices, secondPartitionCommit2FileSlices, cfg, !isUsingMarkers);
+    twoUpsertCommitDataWithTwoPartitions(firstPartitionCommit2FileSlices, secondPartitionCommit2FileSlices, cfg, !isUsingMarkers, client);
     List<HoodieLogFile> firstPartitionCommit2LogFiles = new ArrayList<>();
     List<HoodieLogFile> secondPartitionCommit2LogFiles = new ArrayList<>();
     firstPartitionCommit2FileSlices.get(0).getLogFiles().collect(Collectors.toList()).forEach(logFile -> firstPartitionCommit2LogFiles.add(logFile));
@@ -285,37 +305,41 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     HoodieTable table = this.getHoodieTable(metaClient, cfg);
 
     //3. rollback the update to partition1 and partition2
+    String timestampToRollback = metaClient.reloadActiveTimeline().lastInstant().get().requestedTime();
+    String rollbackTime = InProcessTimeGenerator.createNewInstantTime();
     HoodieInstant rollBackInstant = INSTANT_GENERATOR.createNewInstant(isUsingMarkers ? HoodieInstant.State.INFLIGHT : HoodieInstant.State.COMPLETED,
-        HoodieTimeline.DELTA_COMMIT_ACTION, "002");
+        HoodieTimeline.DELTA_COMMIT_ACTION, timestampToRollback);
     BaseRollbackPlanActionExecutor mergeOnReadRollbackPlanActionExecutor =
-        new BaseRollbackPlanActionExecutor(context, cfg, table, "003", rollBackInstant, false,
+        new BaseRollbackPlanActionExecutor(context, cfg, table, rollbackTime, rollBackInstant, false,
             cfg.shouldRollbackUsingMarkers(), true);
     mergeOnReadRollbackPlanActionExecutor.execute().get();
     MergeOnReadRollbackActionExecutor mergeOnReadRollbackActionExecutor = new MergeOnReadRollbackActionExecutor(
         context,
         cfg,
         table,
-        "003",
+        rollbackTime,
         rollBackInstant,
         true,
         false);
     //3. assert the rollback stat
     Map<String, HoodieRollbackPartitionMetadata> rollbackMetadata = mergeOnReadRollbackActionExecutor.execute().getPartitionMetadata();
     assertEquals(2, rollbackMetadata.size());
-    assertFalse(WriteMarkersFactory.get(cfg.getMarkersType(), table, "002").doesMarkerDirExist());
+    assertFalse(WriteMarkersFactory.get(cfg.getMarkersType(), table, timestampToRollback).doesMarkerDirExist());
 
-    // rollback 001 as well. this time since its part of the restore, entire file slice should be deleted and not just log files (for partition1 and partition2)
+    // rollback first instant as well. this time since its part of the restore, entire file slice should be deleted and not just log files (for partition1 and partition2)
+    timestampToRollback = metaClient.reloadActiveTimeline().getCommitsTimeline().lastInstant().get().requestedTime();
+    rollbackTime = InProcessTimeGenerator.createNewInstantTime();
     HoodieInstant rollBackInstant1 = INSTANT_GENERATOR.createNewInstant(isUsingMarkers ? HoodieInstant.State.INFLIGHT : HoodieInstant.State.COMPLETED,
-        HoodieTimeline.DELTA_COMMIT_ACTION, "001");
+        HoodieTimeline.DELTA_COMMIT_ACTION, timestampToRollback);
     BaseRollbackPlanActionExecutor mergeOnReadRollbackPlanActionExecutor1 =
-        new BaseRollbackPlanActionExecutor(context, cfg, table, "004", rollBackInstant1, false,
+        new BaseRollbackPlanActionExecutor(context, cfg, table, rollbackTime, rollBackInstant1, false,
             cfg.shouldRollbackUsingMarkers(), true);
     mergeOnReadRollbackPlanActionExecutor1.execute().get();
     MergeOnReadRollbackActionExecutor mergeOnReadRollbackActionExecutor1 = new MergeOnReadRollbackActionExecutor(
         context,
         cfg,
         table,
-        "004",
+        rollbackTime,
         rollBackInstant1,
         true,
         false);
@@ -326,6 +350,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     assertEquals(0, table.getFileSystemView().getAllFileGroups(DEFAULT_SECOND_PARTITION_PATH).count());
     // and only 3rd partition should have valid file groups.
     assertTrue(table.getFileSystemView().getAllFileGroups(DEFAULT_THIRD_PARTITION_PATH).count() > 0);
+    client.close();
   }
 
   @Test
@@ -345,14 +370,14 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
         .withEmbeddedTimelineServerEnabled(true).withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withEnableBackupForRemoteFileSystemView(false) // Fail test if problem connecting to timeline-server
             .build())
-        .withRollbackUsingMarkers(false).withAutoCommit(false).build();
+        .withRollbackUsingMarkers(false).build();
 
     //1. prepare data
     new HoodieTestDataGenerator().writePartitionMetadata(storage,
         new String[] {DEFAULT_FIRST_PARTITION_PATH}, basePath);
     SparkRDDWriteClient client = getHoodieWriteClient(cfg);
     // Write 1 (only inserts)
-    String newCommitTime = "001";
+    String newCommitTime = InProcessTimeGenerator.createNewInstantTime();
     client.startCommitWithTime(newCommitTime);
     List<HoodieRecord> records = dataGen.generateInsertsForPartition(newCommitTime, 2, DEFAULT_FIRST_PARTITION_PATH);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
@@ -371,7 +396,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     String generatedFileID = firstPartitionCommit2FileGroups.get(0).getFileGroupId().getFileId();
 
     // check hoodieCommitMeta
-    HoodieInstant instant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "001");
+    HoodieInstant instant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, newCommitTime);
     HoodieCommitMetadata commitMetadata =
         table.getMetaClient().getCommitTimeline().readCommitMetadata(instant);
     List<HoodieWriteStat> firstPartitionWriteStat = commitMetadata.getPartitionToWriteStats().get(DEFAULT_FIRST_PARTITION_PATH);
@@ -385,7 +410,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     });
 
     // Write 2 (inserts)
-    newCommitTime = "002";
+    newCommitTime = InProcessTimeGenerator.createNewInstantTime();
     client.startCommitWithTime(newCommitTime);
     List<HoodieRecord> updateRecords = Collections.singletonList(dataGen.generateUpdateRecord(records.get(0).getKey(), newCommitTime));
     List<HoodieRecord> insertRecordsInSamePartition = dataGen.generateInsertsForPartition(newCommitTime, 2, DEFAULT_FIRST_PARTITION_PATH);
@@ -415,16 +440,17 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     assertEquals(2, hoodieWriteStatOptionList.get(0).getNumInserts());
 
     // Rollback
-    HoodieInstant rollBackInstant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "002");
+    HoodieInstant rollBackInstant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, newCommitTime);
+    String rollbackTimestamp = InProcessTimeGenerator.createNewInstantTime();
     BaseRollbackPlanActionExecutor mergeOnReadRollbackPlanActionExecutor =
-        new BaseRollbackPlanActionExecutor(context, cfg, table, "003", rollBackInstant, false,
+        new BaseRollbackPlanActionExecutor(context, cfg, table, rollbackTimestamp, rollBackInstant, false,
             cfg.shouldRollbackUsingMarkers(), false);
     mergeOnReadRollbackPlanActionExecutor.execute().get();
     MergeOnReadRollbackActionExecutor mergeOnReadRollbackActionExecutor = new MergeOnReadRollbackActionExecutor(
         context,
         cfg,
         table,
-        "003",
+        rollbackTimestamp,
         rollBackInstant,
         true,
         false);
@@ -457,9 +483,10 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
         .withRollbackUsingMarkers(false)
         .withPath(basePath).build();
     try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
-      client.startCommitWithTime("001");
-      client.insert(jsc.emptyRDD(), "001");
-      client.rollback("001");
+      String newCommitTime = InProcessTimeGenerator.createNewInstantTime();
+      client.startCommitWithTime(newCommitTime);
+      client.insert(jsc.emptyRDD(), newCommitTime);
+      client.rollback(newCommitTime);
     }
   }
 }

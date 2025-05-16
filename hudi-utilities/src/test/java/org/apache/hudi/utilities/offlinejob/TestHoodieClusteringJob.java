@@ -173,7 +173,6 @@ public class TestHoodieClusteringJob extends HoodieOfflineJobTestBase {
         .withSchema(TRIP_EXAMPLE_SCHEMA)
         .withParallelism(2, 2)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
-        .withAutoCommit(false)
         .withClusteringConfig(HoodieClusteringConfig.newBuilder()
             .withInlineClustering(false)
             .withScheduleInlineClustering(false)

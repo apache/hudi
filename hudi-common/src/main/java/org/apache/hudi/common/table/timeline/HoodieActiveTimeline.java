@@ -64,6 +64,8 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
 
   void createRequestedCommitWithReplaceMetadata(String instantTime, String actionType);
 
+  String createCompletionTime();
+
   /**
    * Save Completed instant in active timeline.
    * @param instant Instant to be saved.
@@ -78,6 +80,8 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    * @param metadata metadata to write into the instant file
    */
   <T> void saveAsComplete(boolean shouldLock, HoodieInstant instant, Option<T> metadata);
+
+  <T> void saveAsComplete(boolean shouldLock, HoodieInstant instant, Option<T> metadata, Option<String> completionTimeOpt);
 
   /**
    * Delete Compaction requested instant file from timeline.

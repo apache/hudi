@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
@@ -46,10 +47,8 @@ import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_S
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class HoodieClientRollbackTestBase extends HoodieClientTestBase {
-  protected void twoUpsertCommitDataWithTwoPartitions(List<FileSlice> firstPartitionCommit2FileSlices,
-                                                      List<FileSlice> secondPartitionCommit2FileSlices,
-                                                      HoodieWriteConfig cfg,
-                                                      boolean commitSecondUpsert) throws IOException {
+  protected void twoUpsertCommitDataWithTwoPartitions(List<FileSlice> firstPartitionCommit2FileSlices, List<FileSlice> secondPartitionCommit2FileSlices,
+                                                      HoodieWriteConfig cfg, boolean commitSecondUpsert, SparkRDDWriteClient client) throws IOException {
     //just generate two partitions
     dataGen = new HoodieTestDataGenerator(
         new String[] {DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH});
@@ -57,30 +56,30 @@ public class HoodieClientRollbackTestBase extends HoodieClientTestBase {
     HoodieTestDataGenerator.writePartitionMetadataDeprecated(
         storage, new String[] {DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH},
         basePath);
-    SparkRDDWriteClient client = getHoodieWriteClient(cfg);
     /**
      * Write 1 (only inserts)
      */
-    String newCommitTime = "001";
+    String newCommitTime = InProcessTimeGenerator.createNewInstantTime();
     client.startCommitWithTime(newCommitTime);
     List<HoodieRecord> records = dataGen.generateInsertsContainsAllPartitions(newCommitTime, 2);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
-    JavaRDD<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime);
-    Assertions.assertNoWriteErrors(statuses.collect());
+    JavaRDD<WriteStatus> rawStatuses = client.upsert(writeRecords, newCommitTime);
+    JavaRDD<WriteStatus> statuses = jsc.parallelize(rawStatuses.collect(), 1);
     client.commit(newCommitTime, statuses);
+    Assertions.assertNoWriteErrors(statuses.collect());
 
     /**
      * Write 2 (updates)
      */
-    newCommitTime = "002";
+    newCommitTime = InProcessTimeGenerator.createNewInstantTime();
     client.startCommitWithTime(newCommitTime);
     records = dataGen.generateUpdates(newCommitTime, records);
-    statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime);
-    Assertions.assertNoWriteErrors(statuses.collect());
+    rawStatuses = client.upsert(jsc.parallelize(records, 1), newCommitTime);
+    statuses = jsc.parallelize(rawStatuses.collect(), 1);
     if (commitSecondUpsert) {
       client.commit(newCommitTime, statuses);
     }
-
+    Assertions.assertNoWriteErrors(statuses.collect());
 
     //2. assert file group and get the first partition file slice
     HoodieTable table = this.getHoodieTable(metaClient, cfg);
@@ -114,53 +113,54 @@ public class HoodieClientRollbackTestBase extends HoodieClientTestBase {
     HoodieTestDataGenerator.writePartitionMetadataDeprecated(
         storage, new String[] {DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH},
         basePath);
-    SparkRDDWriteClient client = getHoodieWriteClient(cfg);
-    /**
-     * Write 1 (upsert)
-     */
-    String newCommitTime = "001";
-    List<HoodieRecord> records = dataGen.generateInsertsContainsAllPartitions(newCommitTime, 2);
-    JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
-    client.startCommitWithTime(newCommitTime);
-    JavaRDD<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime);
-    Assertions.assertNoWriteErrors(statuses.collect());
-    client.commit(newCommitTime, statuses);
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
+      /**
+       * Write 1 (upsert)
+       */
+      String newCommitTime = "001";
+      List<HoodieRecord> records = dataGen.generateInsertsContainsAllPartitions(newCommitTime, 2);
+      JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
+      client.startCommitWithTime(newCommitTime);
+      JavaRDD<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime);
+      Assertions.assertNoWriteErrors(statuses.collect());
+      client.commit(newCommitTime, statuses);
 
-    // get fileIds written
-    HoodieTable table = this.getHoodieTable(metaClient, cfg);
-    SyncableFileSystemView fsView = getFileSystemViewWithUnCommittedSlices(table.getMetaClient());
-    List<HoodieFileGroup> firstPartitionCommit1FileGroups = fsView.getAllFileGroups(DEFAULT_FIRST_PARTITION_PATH).collect(Collectors.toList());
-    assertEquals(1, firstPartitionCommit1FileGroups.size());
-    Set<String> partition1Commit1FileIds = firstPartitionCommit1FileGroups.get(0).getAllFileSlices().map(FileSlice::getFileId).collect(Collectors.toSet());
-    List<HoodieFileGroup> secondPartitionCommit1FileGroups = fsView.getAllFileGroups(DEFAULT_SECOND_PARTITION_PATH).collect(Collectors.toList());
-    assertEquals(1, secondPartitionCommit1FileGroups.size());
-    Set<String> partition2Commit1FileIds = secondPartitionCommit1FileGroups.get(0).getAllFileSlices().map(FileSlice::getFileId).collect(Collectors.toSet());
+      // get fileIds written
+      HoodieTable table = this.getHoodieTable(metaClient, cfg);
+      SyncableFileSystemView fsView = getFileSystemViewWithUnCommittedSlices(table.getMetaClient());
+      List<HoodieFileGroup> firstPartitionCommit1FileGroups = fsView.getAllFileGroups(DEFAULT_FIRST_PARTITION_PATH).collect(Collectors.toList());
+      assertEquals(1, firstPartitionCommit1FileGroups.size());
+      Set<String> partition1Commit1FileIds = firstPartitionCommit1FileGroups.get(0).getAllFileSlices().map(FileSlice::getFileId).collect(Collectors.toSet());
+      List<HoodieFileGroup> secondPartitionCommit1FileGroups = fsView.getAllFileGroups(DEFAULT_SECOND_PARTITION_PATH).collect(Collectors.toList());
+      assertEquals(1, secondPartitionCommit1FileGroups.size());
+      Set<String> partition2Commit1FileIds = secondPartitionCommit1FileGroups.get(0).getAllFileSlices().map(FileSlice::getFileId).collect(Collectors.toSet());
 
-    /**
-     * Write 2 (one insert_overwrite)
-     */
-    String commitActionType = HoodieTimeline.REPLACE_COMMIT_ACTION;
-    newCommitTime = "002";
-    records = dataGen.generateInsertsContainsAllPartitions(newCommitTime, 2);
-    writeRecords = jsc.parallelize(records, 1);
-    client.startCommitWithTime(newCommitTime, commitActionType);
-    HoodieWriteResult result = client.insertOverwrite(writeRecords, newCommitTime);
-    statuses = result.getWriteStatuses();
-    Assertions.assertNoWriteErrors(statuses.collect());
-    if (commitSecondInsertOverwrite) {
-      client.commit(newCommitTime, statuses, Option.empty(), commitActionType, result.getPartitionToReplaceFileIds());
+      /**
+       * Write 2 (one insert_overwrite)
+       */
+      String commitActionType = HoodieTimeline.REPLACE_COMMIT_ACTION;
+      newCommitTime = "002";
+      records = dataGen.generateInsertsContainsAllPartitions(newCommitTime, 2);
+      writeRecords = jsc.parallelize(records, 1);
+      client.startCommitWithTime(newCommitTime, commitActionType);
+      HoodieWriteResult result = client.insertOverwrite(writeRecords, newCommitTime);
+      statuses = result.getWriteStatuses();
+      Assertions.assertNoWriteErrors(statuses.collect());
+      if (commitSecondInsertOverwrite) {
+        client.commit(newCommitTime, statuses, Option.empty(), commitActionType, result.getPartitionToReplaceFileIds());
+      }
+      metaClient.reloadActiveTimeline();
+      // get new fileIds written as part of insert_overwrite
+      fsView = getFileSystemViewWithUnCommittedSlices(metaClient);
+      List<HoodieFileGroup> firstPartitionCommit2FileGroups = fsView.getAllFileGroups(DEFAULT_FIRST_PARTITION_PATH)
+          .filter(fg -> !partition1Commit1FileIds.contains(fg.getFileGroupId().getFileId())).collect(Collectors.toList());
+      firstPartitionCommit2FileSlices.addAll(firstPartitionCommit2FileGroups.get(0).getAllFileSlices().collect(Collectors.toList()));
+      List<HoodieFileGroup> secondPartitionCommit2FileGroups = fsView.getAllFileGroups(DEFAULT_SECOND_PARTITION_PATH)
+          .filter(fg -> !partition2Commit1FileIds.contains(fg.getFileGroupId().getFileId())).collect(Collectors.toList());
+      secondPartitionCommit2FileSlices.addAll(secondPartitionCommit2FileGroups.get(0).getAllFileSlices().collect(Collectors.toList()));
+
+      assertEquals(1, firstPartitionCommit2FileSlices.size());
+      assertEquals(1, secondPartitionCommit2FileSlices.size());
     }
-    metaClient.reloadActiveTimeline();
-    // get new fileIds written as part of insert_overwrite
-    fsView = getFileSystemViewWithUnCommittedSlices(metaClient);
-    List<HoodieFileGroup> firstPartitionCommit2FileGroups = fsView.getAllFileGroups(DEFAULT_FIRST_PARTITION_PATH)
-        .filter(fg -> !partition1Commit1FileIds.contains(fg.getFileGroupId().getFileId())).collect(Collectors.toList());
-    firstPartitionCommit2FileSlices.addAll(firstPartitionCommit2FileGroups.get(0).getAllFileSlices().collect(Collectors.toList()));
-    List<HoodieFileGroup> secondPartitionCommit2FileGroups = fsView.getAllFileGroups(DEFAULT_SECOND_PARTITION_PATH)
-        .filter(fg -> !partition2Commit1FileIds.contains(fg.getFileGroupId().getFileId())).collect(Collectors.toList());
-    secondPartitionCommit2FileSlices.addAll(secondPartitionCommit2FileGroups.get(0).getAllFileSlices().collect(Collectors.toList()));
-
-    assertEquals(1, firstPartitionCommit2FileSlices.size());
-    assertEquals(1, secondPartitionCommit2FileSlices.size());
   }
 }
