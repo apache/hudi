@@ -18,7 +18,7 @@
 package org.apache.spark.sql.execution.datasources.parquet
 
 import org.apache.hudi.{AvroConversionUtils, HoodieFileIndex, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, HoodieTableSchema, HoodieTableState, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
-import org.apache.hudi.avro.AvroSchemaUtils
+import org.apache.hudi.avro.{AvroSchemaUtils, HoodieAvroUtils}
 import org.apache.hudi.cdc.{CDCFileGroupIterator, CDCRelation, HoodieCDCFileGroupSplit}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
@@ -32,6 +32,7 @@ import org.apache.hudi.io.IOUtils
 import org.apache.hudi.storage.StorageConfiguration
 import org.apache.hudi.storage.hadoop.{HadoopStorageConfiguration, HoodieHadoopStorage}
 
+import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.spark.api.java.JavaSparkContext
@@ -70,7 +71,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
                                                   isMOR: Boolean,
                                                   isBootstrap: Boolean,
                                                   isIncremental: Boolean,
-                                                  isCDC: Boolean,
+                                                  avroTableSchema: Schema,
                                                   validCommits: String,
                                                   shouldUseRecordPosition: Boolean,
                                                   requiredFilters: Seq[Filter]
@@ -152,8 +153,8 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
 
     // schema that we want fg reader to output to us
     val requestedSchema = StructType(requiredSchema.fields ++ partitionSchema.fields.filter(f => mandatoryFields.contains(f.name)))
-    val requestedAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(requestedSchema, sanitizedTableName)
-    val dataAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(dataSchema, sanitizedTableName)
+    val requestedAvroSchema = HoodieAvroUtils.repairSchema(AvroConversionUtils.convertStructTypeToAvroSchema(requestedSchema, sanitizedTableName), avroTableSchema)
+    val dataAvroSchema = HoodieAvroUtils.repairSchema(AvroConversionUtils.convertStructTypeToAvroSchema(dataSchema, sanitizedTableName), avroTableSchema)
     val parquetFileReader = spark.sparkContext.broadcast(sparkAdapter.createParquetFileReader(supportBatchResult,
       spark.sessionState.conf, options, augmentedStorageConf.unwrap()))
     val broadcastedStorageConf = spark.sparkContext.broadcast(new SerializableConfiguration(augmentedStorageConf.unwrap()))
