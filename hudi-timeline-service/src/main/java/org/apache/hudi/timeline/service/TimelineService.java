@@ -25,7 +25,6 @@ import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 
@@ -41,8 +40,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 
 /**
  * A standalone timeline service exposing File-System View interfaces to clients.
@@ -333,10 +330,7 @@ public class TimelineService {
       int tryPort = port == 0 ? port : (port + attempt - 1024) % (65536 - 1024) + 1024;
       try {
         createApp();
-        CountDownLatch countDownLatch = new CountDownLatch(1);
-        app.events(event -> event.serverStarted(countDownLatch::countDown));
         app.start(tryPort);
-        ValidationUtils.checkState(countDownLatch.await(60, TimeUnit.SECONDS), "Javalin server could not be started");
         return app.port();
       } catch (Exception e) {
         if (e instanceof JavalinBindException) {
