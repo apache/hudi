@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -64,12 +65,17 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  */
 public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> {
   private final String payloadClass;
+  private HoodieFileFormat dataBlockFormat = HoodieFileFormat.PARQUET;
 
   public HoodieAvroReaderContext(
       StorageConfiguration<?> storageConfiguration,
       HoodieTableConfig tableConfig) {
     super(storageConfiguration, tableConfig);
     this.payloadClass = tableConfig.getPayloadClass();
+    if (tableConfig.getLogFileFormat() != null
+        && tableConfig.getLogFileFormat() != HoodieFileFormat.HOODIE_LOG) {
+      dataBlockFormat = tableConfig.getLogFileFormat();
+    }
   }
 
   @Override
@@ -81,9 +87,10 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       Schema requiredSchema,
       HoodieStorage storage
   ) throws IOException {
+    HoodieFileFormat fileFormat = detectFileFormat(filePath);
     HoodieAvroFileReader reader = (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(storage)
         .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(new HoodieConfig(),
-            filePath, HoodieFileFormat.PARQUET, Option.empty());
+            filePath, fileFormat, Option.empty());
     return reader.getIndexedRecordIterator(dataSchema, requiredSchema);
   }
 
@@ -213,6 +220,21 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       currentRecord = (IndexedRecord) value;
     }
     return null;
+  }
+
+  private HoodieFileFormat detectFileFormat(StoragePath filePath) {
+    try {
+      HoodieFileFormat format = HoodieFileFormat.fromFileExtension(filePath.getFileExtension());
+      if (format == HoodieFileFormat.HOODIE_LOG) {
+        return dataBlockFormat;
+      }
+      return format;
+    } catch (Exception e) {
+      if (FSUtils.isLogFile(filePath)) {
+        return dataBlockFormat;
+      }
+      throw new IllegalArgumentException("Invalid file path: " + filePath, e);
+    }
   }
 
   /**

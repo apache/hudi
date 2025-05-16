@@ -47,6 +47,7 @@ import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util
+import java.util.Collections
 import java.util.function.Supplier
 
 import scala.collection.JavaConverters._
@@ -240,6 +241,7 @@ class PartitionBucketIndexManager extends BaseProcedure
             0,
             java.lang.Long.MAX_VALUE,
             HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS.defaultValue(),
+            Collections.emptyList(),
             false)
           fileGroupReader.initRecordIterators()
           val iterator = fileGroupReader.getClosableIterator.asInstanceOf[HoodieFileGroupReader.HoodieFileGroupReaderIterator[InternalRow]]
