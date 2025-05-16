@@ -72,6 +72,9 @@ public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
       if (logBlock instanceof HoodieDataBlock) {
         HoodieDataBlock dataBlock = (HoodieDataBlock) logBlock;
         Pair<ClosableIterator<T>, Schema> iteratorSchemaPair = getRecordsIterator(dataBlock, Option.empty());
+        if (recordIterator != null) {
+          recordIterator.close();
+        }
         recordIterator = iteratorSchemaPair.getLeft();
       }
     }
@@ -116,5 +119,13 @@ public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
   @Override
   public boolean containsLogRecord(String recordKey) {
     throw new UnsupportedOperationException("Not supported for " + this.getClass().getSimpleName());
+  }
+
+  @Override
+  public void close() {
+    if (recordIterator != null) {
+      recordIterator.close();
+    }
+    super.close();
   }
 }
