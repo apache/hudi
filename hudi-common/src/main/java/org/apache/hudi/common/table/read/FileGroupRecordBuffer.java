@@ -92,7 +92,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   protected final boolean shouldCheckBuiltInDeleteMarker;
   protected ClosableIterator<T> baseFileIterator;
   protected Iterator<BufferedRecord<T>> logRecordIterator;
-  protected T nextRecord;
+  protected BufferedRecord<T> nextRecord;
   protected boolean enablePartialMerging = false;
   protected InternalSchema internalSchema;
   protected HoodieTableMetaClient hoodieTableMetaClient;
@@ -197,8 +197,8 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   }
 
   @Override
-  public final T next() {
-    T record = nextRecord;
+  public final BufferedRecord<T> next() {
+    BufferedRecord<T> record = nextRecord;
     nextRecord = null;
     return record;
   }
@@ -554,12 +554,13 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   }
 
   protected boolean hasNextBaseRecord(T baseRecord, BufferedRecord<T> logRecordInfo) throws IOException {
+    BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(baseRecord, readerSchema, readerContext, orderingFieldName, false);
     if (logRecordInfo != null) {
-      BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(baseRecord, readerSchema, readerContext, orderingFieldName, false);
       Pair<Boolean, T> isDeleteAndRecord = merge(bufferedRecord, logRecordInfo);
       if (!isDeleteAndRecord.getLeft()) {
         // Updates
-        nextRecord = readerContext.seal(isDeleteAndRecord.getRight());
+        nextRecord = BufferedRecord.forRecordWithContext(isDeleteAndRecord.getRight(), readerSchema, readerContext, orderingFieldName, false);
+        nextRecord.toBinary(readerContext);
         readStats.incrementNumUpdates();
         return true;
       } else {
@@ -570,7 +571,8 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
     }
 
     // Inserts
-    nextRecord = readerContext.seal(baseRecord);
+    nextRecord = bufferedRecord;
+    bufferedRecord.toBinary(readerContext);
     readStats.incrementNumInserts();
     return true;
   }
@@ -583,7 +585,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
     while (logRecordIterator.hasNext()) {
       BufferedRecord<T> nextRecordInfo = logRecordIterator.next();
       if (!nextRecordInfo.isDelete()) {
-        nextRecord = nextRecordInfo.getRecord();
+        nextRecord = nextRecordInfo;
         readStats.incrementNumInserts();
         return true;
       } else {

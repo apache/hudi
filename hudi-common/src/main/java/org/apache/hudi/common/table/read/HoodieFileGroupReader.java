@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -305,10 +306,12 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   /**
    * @return The next record after calling {@link #hasNext}.
    */
-  public T next() {
-    T nextVal = recordBuffer == null ? baseFileIterator.next() : recordBuffer.next();
+  public BufferedRecord<T> next() {
+    BufferedRecord<T> nextVal = recordBuffer == null
+        ? BufferedRecord.forRecordWithContext(baseFileIterator.next(), readerContext.getSchemaHandler().getRequiredSchema(), readerContext, recordBuffer.orderingFieldName, false)
+        : recordBuffer.next();
     if (outputConverter.isPresent()) {
-      return outputConverter.get().apply(nextVal);
+      return nextVal.applyDataTransform(outputConverter.get());
     }
     return nextVal;
   }
@@ -350,6 +353,44 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     return new HoodieFileGroupReaderIterator<>(this);
   }
 
+  public ClosableIterator<HoodieRecord<T>> getClosableHoodieRecordIterator() {
+    return new HoodieFileGroupReaderHoodieRecordIterator<>(this);
+  }
+
+  public static class HoodieFileGroupReaderHoodieRecordIterator<T> implements ClosableIterator<HoodieRecord<T>> {
+    private final HoodieFileGroupReader<T> reader;
+
+    public HoodieFileGroupReaderHoodieRecordIterator(HoodieFileGroupReader<T> reader) {
+      this.reader = reader;
+    }
+
+    @Override
+    public boolean hasNext() {
+      try {
+        return reader.hasNext();
+      } catch (IOException e) {
+        throw new HoodieIOException("Failed to read record", e);
+      }
+    }
+
+    @Override
+    public HoodieRecord<T> next() {
+      return reader.readerContext.constructHoodieRecord(reader.next());
+    }
+
+    @Override
+    public void close() {
+      if (reader != null) {
+        try {
+          reader.close();
+        } catch (IOException e) {
+          throw new HoodieIOException("Failed to close the reader", e);
+        }
+      }
+    }
+
+  }
+
   public static class HoodieFileGroupReaderIterator<T> implements ClosableIterator<T> {
     private HoodieFileGroupReader<T> reader;
 
@@ -368,7 +409,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
 
     @Override
     public T next() {
-      return reader.next();
+      return reader.next().getRecord();
     }
 
     @Override

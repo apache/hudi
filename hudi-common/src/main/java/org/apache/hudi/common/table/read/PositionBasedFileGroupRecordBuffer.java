@@ -249,7 +249,8 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
     }
 
     if (resultRecord != null) {
-      nextRecord = readerContext.seal(resultRecord);
+      nextRecord = BufferedRecord.forRecordWithContext(resultRecord, readerSchema, readerContext, orderingFieldName, false);
+      nextRecord.toBinary(readerContext);
       return true;
     }
     return false;
