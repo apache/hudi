@@ -116,6 +116,7 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
@@ -152,17 +153,29 @@ public class UtilHelpers {
     sourceConstructorAndArgs.add(Pair.of(constructorArgsMetrics, new Object[] {cfg, jssc, sparkSession, streamContext.getSchemaProvider(), metrics}));
     sourceConstructorAndArgs.add(Pair.of(constructorArgs, new Object[] {cfg, jssc, sparkSession, streamContext.getSchemaProvider()}));
 
-    HoodieException sourceClassLoadException = null;
+    List<HoodieException> nonMatchingConstructorExceptions = new ArrayList<>();
     for (Pair<Class<?>[], Object[]> constructor : sourceConstructorAndArgs) {
       try {
         return (Source) ReflectionUtils.loadClass(sourceClass, constructor.getLeft(), constructor.getRight());
       } catch (HoodieException e) {
-        sourceClassLoadException = e;
+        if (e.getCause() instanceof NoSuchMethodException) {
+          // If the cause is a NoSuchMethodException, ignore
+          continue;
+        }
+        nonMatchingConstructorExceptions.add(e);
+        String constructorSignature = Arrays.stream(constructor.getLeft())
+            .map(Class::getSimpleName)
+            .collect(Collectors.joining(", ", "[", "]"));
+        LOG.error("Unexpected error while loading source class {} with constructor signature {}", sourceClass, constructorSignature, e);
       } catch (Throwable t) {
-        throw new IOException("Could not load source class " + sourceClass, t);
+        throw new IOException("Could not load source class due to unexpected error " + sourceClass, t);
       }
     }
-    throw new IOException("Could not load source class " + sourceClass, sourceClassLoadException);
+
+    // Rather than throw the last failure, we will only throw failures that did not occur due to NoSuchMethodException.
+    IOException ioe = new IOException("Could not load any source class for " + sourceClass);
+    nonMatchingConstructorExceptions.forEach(ioe::addSuppressed);
+    throw ioe;
   }
 
   public static JsonKafkaSourcePostProcessor createJsonKafkaSourcePostProcessor(String postProcessorClassNames, TypedProperties props) throws IOException {
