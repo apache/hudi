@@ -976,8 +976,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     CleanerUtils.rollbackFailedWrites(config.getFailedWritesCleanPolicy(),
         HoodieTimeline.COMMIT_ACTION, () -> tableServiceClient.rollbackFailedWrites(metaClient));
 
-    txnManager.beginTransaction(Option.empty(), Option.empty());
+    txnManager.beginTransaction(Option.empty(), lastCompletedTxnAndMetadata.map(Pair::getLeft));
     String instantTime;
+    HoodieInstant instant = null;
     try {
       instantTime = providedInstantTime.orElseGet(() -> createNewInstantTime(false));
       LOG.info("Generate a new instant time: {} action: {}", instantTime, actionType);
@@ -993,12 +994,13 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       }
 
       if (ClusteringUtils.isClusteringOrReplaceCommitAction(actionType)) {
-        metaClient.getActiveTimeline().createRequestedCommitWithReplaceMetadata(instantTime, actionType);
+        instant = metaClient.getActiveTimeline().createRequestedCommitWithReplaceMetadata(instantTime, actionType);
       } else {
-        metaClient.getActiveTimeline().createNewInstant(metaClient.createNewInstant(HoodieInstant.State.REQUESTED, actionType, instantTime));
+        instant = metaClient.createNewInstant(State.REQUESTED, actionType, instantTime);
+        metaClient.getActiveTimeline().createNewInstant(instant);
       }
     } finally {
-      txnManager.endTransaction(Option.empty());
+      txnManager.endTransaction(Option.ofNullable(instant));
     }
     return instantTime;
   }

@@ -90,13 +90,20 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
 
   protected BaseHoodieClient(HoodieEngineContext context, HoodieWriteConfig clientConfig,
                              Option<EmbeddedTimelineService> timelineServer) {
-    this(context, clientConfig, timelineServer, new TransactionManager(clientConfig, HoodieStorageUtils.getStorage(clientConfig.getBasePath(), context.getStorageConf())),
-        TimeGenerators.getTimeGenerator(clientConfig.getTimeGeneratorConfig(), context.getStorageConf()));
+    this(context, clientConfig, timelineServer, buildTransactionManager(context, clientConfig), buildTimeGenerator(context, clientConfig));
+  }
+
+  private static TimeGenerator buildTimeGenerator(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
+    return TimeGenerators.getTimeGenerator(clientConfig.getTimeGeneratorConfig(), context.getStorageConf());
+  }
+
+  private static TransactionManager buildTransactionManager(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
+    return new TransactionManager(clientConfig, HoodieStorageUtils.getStorage(clientConfig.getBasePath(), context.getStorageConf()));
   }
 
   @VisibleForTesting
   BaseHoodieClient(HoodieEngineContext context, HoodieWriteConfig clientConfig,
-                             Option<EmbeddedTimelineService> timelineServer, TransactionManager transactionManager, TimeGenerator timeGenerator) {
+                   Option<EmbeddedTimelineService> timelineServer, TransactionManager transactionManager, TimeGenerator timeGenerator) {
     this.storageConf = context.getStorageConf();
     this.storage = HoodieStorageUtils.getStorage(clientConfig.getBasePath(), storageConf);
     this.context = context;
