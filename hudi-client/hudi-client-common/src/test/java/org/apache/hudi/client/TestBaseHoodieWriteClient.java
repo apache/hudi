@@ -19,17 +19,24 @@
 package org.apache.hudi.client;
 
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimeGenerator;
+import org.apache.hudi.common.table.timeline.versioning.v2.InstantComparatorV2;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -40,8 +47,12 @@ import org.apache.hudi.table.HoodieTable;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
+import org.mockito.Mockito;
 
 import java.io.IOException;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
@@ -114,16 +125,29 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
             .build())
         .build();
 
+    HoodieInstantTimeGenerator.setCommitTimeZone(HoodieTimelineTimeZone.UTC);
+    TransactionManager transactionManager = mock(TransactionManager.class);
+    TimeGenerator timeGenerator = mock(TimeGenerator.class);
+
+    Instant now = Instant.now().truncatedTo(ChronoUnit.SECONDS).plusSeconds(1);
+    when(timeGenerator.generateTime(true)).thenReturn(now.toEpochMilli());
     HoodieTable<String, String, String, String> table = mock(HoodieTable.class);
     BaseHoodieTableServiceClient<String, String, String> tableServiceClient = mock(BaseHoodieTableServiceClient.class);
-    TestWriteClient writeClient = new TestWriteClient(writeConfig, table, Option.empty(), tableServiceClient);
+    TestWriteClient writeClient = new TestWriteClient(writeConfig, table, Option.empty(), tableServiceClient, transactionManager, timeGenerator);
 
-    writeClient.startCommitWithTime("001", "commit");
+    writeClient.startCommit();
 
     HoodieTimeline writeTimeline = metaClient.getActiveTimeline().getWriteTimeline();
     assertTrue(writeTimeline.lastInstant().isPresent());
     assertEquals("commit", writeTimeline.lastInstant().get().getAction());
-    assertEquals("001", writeTimeline.lastInstant().get().requestedTime());
+    String commitTime = HoodieTestDataGenerator.getCommitTimeAtUTC(now.getEpochSecond());
+    assertEquals(commitTime, writeTimeline.lastInstant().get().requestedTime());
+    HoodieInstant expectedInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieActiveTimeline.COMMIT_ACTION, commitTime, InstantComparatorV2.COMPLETION_TIME_BASED_COMPARATOR);
+
+    InOrder inOrder = Mockito.inOrder(transactionManager, timeGenerator);
+    inOrder.verify(transactionManager).beginTransaction(Option.empty(), Option.empty());
+    inOrder.verify(timeGenerator).generateTime(true);
+    inOrder.verify(transactionManager).endTransaction(Option.of(expectedInstant));
   }
 
   private static class TestWriteClient extends BaseHoodieWriteClient<String, String, String, String> {
@@ -132,6 +156,13 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
     public TestWriteClient(HoodieWriteConfig writeConfig, HoodieTable<String, String, String, String> table, Option<EmbeddedTimelineService> timelineService,
                            BaseHoodieTableServiceClient<String, String, String> tableServiceClient) {
       super(new HoodieLocalEngineContext(getDefaultStorageConf()), writeConfig, timelineService, null);
+      this.table = table;
+      this.tableServiceClient = tableServiceClient;
+    }
+
+    public TestWriteClient(HoodieWriteConfig writeConfig, HoodieTable<String, String, String, String> table, Option<EmbeddedTimelineService> timelineService,
+                           BaseHoodieTableServiceClient<String, String, String> tableServiceClient, TransactionManager transactionManager, TimeGenerator timeGenerator) {
+      super(new HoodieLocalEngineContext(getDefaultStorageConf()), writeConfig, timelineService, null, transactionManager, timeGenerator);
       this.table = table;
       this.tableServiceClient = tableServiceClient;
     }

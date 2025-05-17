@@ -145,11 +145,12 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
   }
 
   @Override
-  public void createRequestedCommitWithReplaceMetadata(String instantTime, String actionType) {
+  public HoodieInstant createRequestedCommitWithReplaceMetadata(String instantTime, String actionType) {
     HoodieInstant instant = instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED, actionType, instantTime);
     LOG.info("Creating a new instant " + instant);
     // Create the request replace file
     createFileInMetaPath(instantFileNameGenerator.getFileName(instant), Option.of(new HoodieRequestedReplaceMetadata()), false);
+    return instant;
   }
 
   @Override
