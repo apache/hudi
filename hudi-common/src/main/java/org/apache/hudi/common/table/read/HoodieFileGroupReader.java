@@ -40,6 +40,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.CachingIterator;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.EmptyIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.Triple;
@@ -56,7 +57,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
@@ -332,14 +332,6 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     return nextVal;
   }
 
-  /**
-   * @return The next record as a {@link HoodieRecord}.
-   */
-  public HoodieRecord<T> nextHoodieRecord() {
-    BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(next(), readerContext.getSchemaHandler().getRequestedSchema(), readerContext, orderingFieldName, false);
-    return readerContext.constructHoodieRecord(bufferedRecord, partitionPath);
-  }
-
   private void scanLogFiles() {
     String path = readerContext.getTablePath();
     try (HoodieMergedLogRecordReader<T> logRecordReader = HoodieMergedLogRecordReader.<T>newBuilder()
@@ -375,21 +367,24 @@ public final class HoodieFileGroupReader<T> implements Closeable {
 
   public ClosableIterator<T> getClosableIterator() throws IOException {
     initRecordIterators();
-    return new HoodieFileGroupReaderIterator<>(this, this::next);
+    return new HoodieFileGroupReaderIterator<>(this);
   }
 
+  /**
+   * @return An iterator over the records that wraps the engine-specific record in a HoodieRecord.
+   */
   public ClosableIterator<HoodieRecord<T>> getClosableHoodieRecordIterator() {
-    return new HoodieFileGroupReaderIterator<>(this, this::nextHoodieRecord);
+    return new CloseableMappingIterator<>(getClosableIterator(), nextRecord -> {
+      BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(nextRecord, readerContext.getSchemaHandler().getRequestedSchema(), readerContext, orderingFieldName, false);
+      return readerContext.constructHoodieRecord(bufferedRecord, partitionPath);
+    });
   }
 
-  private static class HoodieFileGroupReaderIterator<T, U> implements ClosableIterator<U> {
-    private final HoodieFileGroupReader<T> reader;
-    private final Supplier<U> recordSupplier;
+  public static class HoodieFileGroupReaderIterator<T> implements ClosableIterator<T> {
+    private HoodieFileGroupReader<T> reader;
 
-    HoodieFileGroupReaderIterator(HoodieFileGroupReader<T> reader,
-                                  Supplier<U> recordSupplier) {
+    public HoodieFileGroupReaderIterator(HoodieFileGroupReader<T> reader) {
       this.reader = reader;
-      this.recordSupplier = recordSupplier;
     }
 
     @Override
@@ -402,16 +397,20 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     }
 
     @Override
-    public U next() {
-      return recordSupplier.get();
+    public T next() {
+      return reader.next();
     }
 
     @Override
     public void close() {
-      try {
-        reader.close();
-      } catch (IOException e) {
-        throw new HoodieIOException("Failed to close the reader", e);
+      if (reader != null) {
+        try {
+          reader.close();
+        } catch (IOException e) {
+          throw new HoodieIOException("Failed to close the reader", e);
+        } finally {
+          this.reader = null;
+        }
       }
     }
   }
