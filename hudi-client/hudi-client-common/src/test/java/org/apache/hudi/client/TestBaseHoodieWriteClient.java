@@ -34,6 +34,7 @@ import org.apache.hudi.common.table.timeline.TimeGenerator;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -48,6 +49,8 @@ import org.mockito.InOrder;
 import org.mockito.Mockito;
 
 import java.io.IOException;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
@@ -123,7 +126,9 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
     HoodieInstantTimeGenerator.setCommitTimeZone(HoodieTimelineTimeZone.UTC);
     TransactionManager transactionManager = mock(TransactionManager.class);
     TimeGenerator timeGenerator = mock(TimeGenerator.class);
-    when(timeGenerator.generateTime(true)).thenReturn(1598594400000L);
+
+    Instant now = Instant.now().truncatedTo(ChronoUnit.SECONDS).plusSeconds(1);
+    when(timeGenerator.generateTime(true)).thenReturn(now.toEpochMilli());
     HoodieTable<String, String, String, String> table = mock(HoodieTable.class);
     BaseHoodieTableServiceClient<String, String, String> tableServiceClient = mock(BaseHoodieTableServiceClient.class);
     TestWriteClient writeClient = new TestWriteClient(writeConfig, table, Option.empty(), tableServiceClient, transactionManager, timeGenerator);
@@ -133,7 +138,7 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
     HoodieTimeline writeTimeline = metaClient.getActiveTimeline().getWriteTimeline();
     assertTrue(writeTimeline.lastInstant().isPresent());
     assertEquals("commit", writeTimeline.lastInstant().get().getAction());
-    assertEquals("20200828060000000", writeTimeline.lastInstant().get().requestedTime());
+    assertEquals(HoodieTestDataGenerator.getCommitTimeAtUTC(now.getEpochSecond()), writeTimeline.lastInstant().get().requestedTime());
 
     InOrder inOrder = Mockito.inOrder(transactionManager, timeGenerator);
     inOrder.verify(transactionManager).beginTransaction(Option.empty(), Option.empty());
