@@ -242,7 +242,7 @@ class PartitionBucketIndexManager extends BaseProcedure
             HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS.defaultValue(),
             false)
           fileGroupReader.initRecordIterators()
-          val iterator = fileGroupReader.getClosableIterator.asInstanceOf[HoodieFileGroupReader.HoodieFileGroupReaderIterator[InternalRow]]
+          val iterator = fileGroupReader.getClosableIterator
           CloseableIteratorListener.addListener(iterator)
           iterator.asScala
         })
