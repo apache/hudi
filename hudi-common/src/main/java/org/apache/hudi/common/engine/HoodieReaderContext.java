@@ -285,9 +285,10 @@ public abstract class HoodieReaderContext<T> {
    * Constructs a new {@link HoodieRecord} based on the given buffered record {@link BufferedRecord}.
    *
    * @param bufferedRecord  The {@link BufferedRecord} object with engine-specific row
+   * @param partitionPath   The partition path of the record
    * @return A new instance of {@link HoodieRecord}.
    */
-  public abstract HoodieRecord<T> constructHoodieRecord(BufferedRecord<T> bufferedRecord);
+  public abstract HoodieRecord<T> constructHoodieRecord(BufferedRecord<T> bufferedRecord, String partitionPath);
 
   /**
    * Seals the engine-specific record to make sure the data referenced in memory do not change.
