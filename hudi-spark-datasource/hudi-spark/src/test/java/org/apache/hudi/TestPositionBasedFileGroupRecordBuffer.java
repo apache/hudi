@@ -40,7 +40,6 @@ import org.apache.hudi.common.table.read.TestHoodieFileGroupReaderOnSpark;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -82,7 +81,7 @@ public class TestPositionBasedFileGroupRecordBuffer extends TestHoodieFileGroupR
     writeConfigs.put(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "parquet");
     writeConfigs.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
     writeConfigs.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partition_path");
-    writeConfigs.put("hoodie.datasource.write.precombine.field",mergeMode.equals(RecordMergeMode.COMMIT_TIME_ORDERING) ? "" : "timestamp");
+    writeConfigs.put("hoodie.datasource.write.precombine.field", mergeMode.equals(RecordMergeMode.COMMIT_TIME_ORDERING) ? "" : "timestamp");
     writeConfigs.put("hoodie.payload.ordering.field", "timestamp");
     writeConfigs.put(HoodieTableConfig.HOODIE_TABLE_NAME_KEY, "hoodie_test");
     writeConfigs.put("hoodie.insert.shuffle.parallelism", "4");
@@ -106,11 +105,8 @@ public class TestPositionBasedFileGroupRecordBuffer extends TestHoodieFileGroupR
 
     metaClient = createMetaClient(getStorageConf(), getBasePath());
     avroSchema = new TableSchemaResolver(metaClient).getTableAvroSchema();
-    Option<String[]> partitionFields = metaClient.getTableConfig().getPartitionFields();
-    Option<String> partitionNameOpt = StringUtils.isNullOrEmpty(partitionPaths[0])
-        ? Option.empty() : Option.of(partitionPaths[0]);
 
-    HoodieReaderContext ctx = getHoodieReaderContext(getBasePath(), avroSchema, getStorageConf(), metaClient);
+    HoodieReaderContext<InternalRow> ctx = getHoodieReaderContext(getBasePath(), avroSchema, getStorageConf(), metaClient);
     ctx.setTablePath(getBasePath());
     ctx.setLatestCommitTime(metaClient.createNewInstantTime());
     ctx.setShouldMergeUseRecordPosition(true);
@@ -139,11 +135,10 @@ public class TestPositionBasedFileGroupRecordBuffer extends TestHoodieFileGroupR
         ctx,
         metaClient,
         mergeMode,
-        partitionNameOpt,
-        partitionFields,
         baseFileInstantTime,
         props,
-        readStats);
+        readStats,
+        Option.of("timestamp"));
   }
 
   public Map<HoodieLogBlock.HeaderMetadataType, String> getHeader(boolean shouldWriteRecordPositions,
