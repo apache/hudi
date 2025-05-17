@@ -288,7 +288,6 @@ class TestFileGroupRecordBuffer {
             readerContext,
             hoodieTableMetaClient,
             RecordMergeMode.COMMIT_TIME_ORDERING,
-            "",
             props,
             readStats,
             Option.empty());
@@ -301,7 +300,6 @@ class TestFileGroupRecordBuffer {
             readerContext,
             hoodieTableMetaClient,
             RecordMergeMode.COMMIT_TIME_ORDERING,
-            "",
             props,
             readStats,
             Option.empty());
@@ -323,7 +321,6 @@ class TestFileGroupRecordBuffer {
             readerContext,
             hoodieTableMetaClient,
             RecordMergeMode.COMMIT_TIME_ORDERING,
-            "",
             props,
             readStats,
             Option.empty());

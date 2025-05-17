@@ -68,12 +68,11 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
   public PositionBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
                                             HoodieTableMetaClient hoodieTableMetaClient,
                                             RecordMergeMode recordMergeMode,
-                                            String partitionPath,
                                             String baseFileInstantTime,
                                             TypedProperties props,
                                             HoodieReadStats readStats,
                                             Option<String> orderingFieldName) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, partitionPath, props, readStats, orderingFieldName);
+    super(readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, orderingFieldName);
     this.baseFileInstantTime = baseFileInstantTime;
   }
 

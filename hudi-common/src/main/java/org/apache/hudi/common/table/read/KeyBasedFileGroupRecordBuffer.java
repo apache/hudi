@@ -51,11 +51,10 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
   public KeyBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
                                        HoodieTableMetaClient hoodieTableMetaClient,
                                        RecordMergeMode recordMergeMode,
-                                       String partitionPath,
                                        TypedProperties props,
                                        HoodieReadStats readStats,
                                        Option<String> orderingFieldName) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, partitionPath, props, readStats, orderingFieldName);
+    super(readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, orderingFieldName);
   }
 
   @Override

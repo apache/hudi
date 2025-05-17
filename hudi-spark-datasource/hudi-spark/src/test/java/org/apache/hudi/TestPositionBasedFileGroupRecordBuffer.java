@@ -135,7 +135,6 @@ public class TestPositionBasedFileGroupRecordBuffer extends TestHoodieFileGroupR
         ctx,
         metaClient,
         mergeMode,
-        partitionPath,
         baseFileInstantTime,
         props,
         readStats,

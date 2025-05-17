@@ -78,7 +78,6 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   protected final HoodieReaderContext<T> readerContext;
   protected final Schema readerSchema;
   protected final Option<String> orderingFieldName;
-  protected final String partitionPath;
   protected final RecordMergeMode recordMergeMode;
   protected final Option<HoodieRecordMerger> recordMerger;
   protected final Option<String> payloadClass;
@@ -98,13 +97,11 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   protected FileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
                                   HoodieTableMetaClient hoodieTableMetaClient,
                                   RecordMergeMode recordMergeMode,
-                                  String partitionPath,
                                   TypedProperties props,
                                   HoodieReadStats readStats,
                                   Option<String> orderingFieldName) {
     this.readerContext = readerContext;
     this.readerSchema = AvroSchemaCache.intern(readerContext.getSchemaHandler().getRequiredSchema());
-    this.partitionPath = partitionPath;
     this.recordMergeMode = recordMergeMode;
     this.recordMerger = readerContext.getRecordMerger();
     if (recordMerger.isPresent() && recordMerger.get().getMergingStrategy().equals(PAYLOAD_BASED_MERGE_STRATEGY_UUID)) {
@@ -230,9 +227,9 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
         //  and use the record merge mode to control how to merge partial updates
         // Merge and store the combined record
         Option<Pair<HoodieRecord, Schema>> combinedRecordAndSchemaOpt = recordMerger.get().partialMerge(
-            readerContext.constructHoodieRecord(existingRecord, partitionPath),
+            readerContext.constructHoodieRecord(existingRecord),
             readerContext.getSchemaFromBufferRecord(existingRecord),
-            readerContext.constructHoodieRecord(newRecord, partitionPath),
+            readerContext.constructHoodieRecord(newRecord),
             readerContext.getSchemaFromBufferRecord(newRecord),
             readerSchema,
             props);
@@ -282,9 +279,9 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
               return Option.empty();
             } else {
               Option<Pair<HoodieRecord, Schema>> combinedRecordAndSchemaOpt = recordMerger.get().merge(
-                  readerContext.constructHoodieRecord(existingRecord, partitionPath),
+                  readerContext.constructHoodieRecord(existingRecord),
                   readerContext.getSchemaFromBufferRecord(existingRecord),
-                  readerContext.constructHoodieRecord(newRecord, partitionPath),
+                  readerContext.constructHoodieRecord(newRecord),
                   readerContext.getSchemaFromBufferRecord(newRecord),
                   props);
 
@@ -410,8 +407,8 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
       // TODO(HUDI-7843): decouple the merging logic from the merger
       //  and use the record merge mode to control how to merge partial updates
       Option<Pair<HoodieRecord, Schema>> mergedRecord = recordMerger.get().partialMerge(
-          readerContext.constructHoodieRecord(olderRecord, partitionPath), readerContext.getSchemaFromBufferRecord(olderRecord),
-          readerContext.constructHoodieRecord(newerRecord, partitionPath), readerContext.getSchemaFromBufferRecord(newerRecord),
+          readerContext.constructHoodieRecord(olderRecord), readerContext.getSchemaFromBufferRecord(olderRecord),
+          readerContext.constructHoodieRecord(newerRecord), readerContext.getSchemaFromBufferRecord(newerRecord),
           readerSchema, props);
 
       if (mergedRecord.isPresent()
@@ -477,8 +474,8 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
               }
             }
             Option<Pair<HoodieRecord, Schema>> mergedRecord = recordMerger.get().merge(
-                readerContext.constructHoodieRecord(olderRecord, partitionPath), readerContext.getSchemaFromBufferRecord(olderRecord),
-                readerContext.constructHoodieRecord(newerRecord, partitionPath), readerContext.getSchemaFromBufferRecord(newerRecord), props);
+                readerContext.constructHoodieRecord(olderRecord), readerContext.getSchemaFromBufferRecord(olderRecord),
+                readerContext.constructHoodieRecord(newerRecord), readerContext.getSchemaFromBufferRecord(newerRecord), props);
             if (mergedRecord.isPresent()
                 && !mergedRecord.get().getLeft().isDelete(mergedRecord.get().getRight(), props)) {
               HoodieRecord hoodieRecord = mergedRecord.get().getLeft();
