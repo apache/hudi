@@ -73,6 +73,7 @@ public abstract class HoodieReaderContext<T> {
   private Boolean hasBootstrapBaseFile = null;
   private Boolean needsBootstrapMerge = null;
   private Boolean shouldMergeUseRecordPosition = null;
+  protected String partitionPath;
 
   // for encoding and decoding schemas to the spillable map
   private final LocalAvroSchemaCache localAvroSchemaCache = LocalAvroSchemaCache.getInstance();
@@ -127,6 +128,10 @@ public abstract class HoodieReaderContext<T> {
 
   public void setHasLogFiles(boolean hasLogFiles) {
     this.hasLogFiles = hasLogFiles;
+  }
+
+  public void setPartitionPath(String partitionPath) {
+    this.partitionPath = partitionPath;
   }
 
   // Getter and Setter for hasBootstrapBaseFile
@@ -285,10 +290,9 @@ public abstract class HoodieReaderContext<T> {
    * Constructs a new {@link HoodieRecord} based on the given buffered record {@link BufferedRecord}.
    *
    * @param bufferedRecord  The {@link BufferedRecord} object with engine-specific row
-   * @param partitionPath   The partition path of the record
    * @return A new instance of {@link HoodieRecord}.
    */
-  public abstract HoodieRecord<T> constructHoodieRecord(BufferedRecord<T> bufferedRecord, String partitionPath);
+  public abstract HoodieRecord<T> constructHoodieRecord(BufferedRecord<T> bufferedRecord);
 
   /**
    * Seals the engine-specific record to make sure the data referenced in memory do not change.

@@ -147,6 +147,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     boolean isSkipMerge = ConfigUtils.getStringWithAltKeys(props, HoodieReaderConfig.MERGE_TYPE, true).equalsIgnoreCase(HoodieReaderConfig.REALTIME_SKIP_MERGE);
     readerContext.setShouldMergeUseRecordPosition(shouldUseRecordPosition && !isSkipMerge);
     readerContext.setHasLogFiles(!this.logFiles.isEmpty());
+    readerContext.setPartitionPath(partitionPath);
     if (readerContext.getHasLogFiles() && start != 0) {
       throw new IllegalArgumentException("Filegroup reader is doing log file merge but not reading from the start of the base file");
     }
@@ -188,13 +189,13 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       return null;
     } else if (isSkipMerge) {
       return new UnmergedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, recordMergeMode, partitionPath, props, readStats);
+          readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats);
     } else if (shouldUseRecordPosition && baseFileOption.isPresent()) {
       return new PositionBasedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, recordMergeMode, partitionPath, baseFileOption.get().getCommitTime(), props, readStats, orderingFieldName);
+          readerContext, hoodieTableMetaClient, recordMergeMode, baseFileOption.get().getCommitTime(), props, readStats, orderingFieldName);
     } else {
       return new KeyBasedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, recordMergeMode, partitionPath, props, readStats, orderingFieldName);
+          readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, orderingFieldName);
     }
   }
 
@@ -376,7 +377,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   public ClosableIterator<HoodieRecord<T>> getClosableHoodieRecordIterator() {
     return new CloseableMappingIterator<>(getClosableIterator(), nextRecord -> {
       BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(nextRecord, readerContext.getSchemaHandler().getRequestedSchema(), readerContext, orderingFieldName, false);
-      return readerContext.constructHoodieRecord(bufferedRecord, partitionPath);
+      return readerContext.constructHoodieRecord(bufferedRecord);
     });
   }
 
