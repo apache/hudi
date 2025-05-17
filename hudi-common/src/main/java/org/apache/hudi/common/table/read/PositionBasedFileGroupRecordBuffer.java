@@ -68,12 +68,12 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
   public PositionBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
                                             HoodieTableMetaClient hoodieTableMetaClient,
                                             RecordMergeMode recordMergeMode,
-                                            Option<String> partitionNameOverrideOpt,
-                                            Option<String[]> partitionPathFieldOpt,
+                                            String partitionPath,
                                             String baseFileInstantTime,
                                             TypedProperties props,
-                                            HoodieReadStats readStats) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, partitionNameOverrideOpt, partitionPathFieldOpt, props, readStats);
+                                            HoodieReadStats readStats,
+                                            Option<String> orderingFieldName) {
+    super(readerContext, hoodieTableMetaClient, recordMergeMode, partitionPath, props, readStats, orderingFieldName);
     this.baseFileInstantTime = baseFileInstantTime;
   }
 
@@ -249,7 +249,8 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
     }
 
     if (resultRecord != null) {
-      nextRecord = readerContext.seal(resultRecord);
+      nextRecord = BufferedRecord.forRecordWithContext(resultRecord, readerSchema, readerContext, orderingFieldName, false);
+      nextRecord.toBinary(readerContext);
       return true;
     }
     return false;

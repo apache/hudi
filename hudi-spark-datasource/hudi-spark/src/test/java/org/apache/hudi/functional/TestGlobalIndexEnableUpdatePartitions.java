@@ -215,7 +215,7 @@ public class TestGlobalIndexEnableUpdatePartitions extends SparkClientFunctional
       List<HoodieRecord> updatesAtEpoch15 = getUpdates(updatesAtEpoch5, p3, 15, payloadClass);
       client.startCommitWithTime(commitTimeAtEpoch15);
       assertNoWriteErrors(client.upsert(jsc().parallelize(updatesAtEpoch15, 2), commitTimeAtEpoch15).collect());
-      // for the same bug pointed out earlier, (ignoring rollbacks while determining last instant while reading log records), this tests the HoodieMergedReadHandle.
+      // for the same bug pointed out earlier, (ignoring rollbacks while determining last instant while reading log records), this tests the HoodieFileGroupReader.
       readTableAndValidate(metaClient, new int[] {4, 5, 6, 7}, p1, 0);
       readTableAndValidate(metaClient, new int[] {0, 1, 2, 3}, p3, 15);
 
@@ -224,7 +224,7 @@ public class TestGlobalIndexEnableUpdatePartitions extends SparkClientFunctional
       List<HoodieRecord> updatesAtEpoch20 = getUpdates(updatesAtEpoch5.subList(0, 2), p1, 20, payloadClass);
       client.startCommitWithTime(commitTimeAtEpoch20);
       assertNoWriteErrors(client.upsert(jsc().parallelize(updatesAtEpoch20, 1), commitTimeAtEpoch20).collect());
-      // for the same bug pointed out earlier, (ignoring rollbacks while determining last instant while reading log records), this tests the HoodieMergedReadHandle.
+      // for the same bug pointed out earlier, (ignoring rollbacks while determining last instant while reading log records), this tests the HoodieFileGroupReader.
       Map<String, Long> expectedTsMap = new HashMap<>();
       Arrays.stream(new int[] {0, 1}).forEach(entry -> expectedTsMap.put(String.valueOf(entry), 20L));
       Arrays.stream(new int[] {4, 5, 6, 7}).forEach(entry -> expectedTsMap.put(String.valueOf(entry), 0L));
