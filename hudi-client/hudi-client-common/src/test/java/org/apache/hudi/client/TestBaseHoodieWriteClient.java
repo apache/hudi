@@ -28,9 +28,11 @@ import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimeGenerator;
+import org.apache.hudi.common.table.timeline.versioning.v2.InstantComparatorV2;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
@@ -138,12 +140,14 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
     HoodieTimeline writeTimeline = metaClient.getActiveTimeline().getWriteTimeline();
     assertTrue(writeTimeline.lastInstant().isPresent());
     assertEquals("commit", writeTimeline.lastInstant().get().getAction());
-    assertEquals(HoodieTestDataGenerator.getCommitTimeAtUTC(now.getEpochSecond()), writeTimeline.lastInstant().get().requestedTime());
+    String commitTime = HoodieTestDataGenerator.getCommitTimeAtUTC(now.getEpochSecond());
+    assertEquals(commitTime, writeTimeline.lastInstant().get().requestedTime());
+    HoodieInstant expectedInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieActiveTimeline.COMMIT_ACTION, commitTime, InstantComparatorV2.COMPLETION_TIME_BASED_COMPARATOR);
 
     InOrder inOrder = Mockito.inOrder(transactionManager, timeGenerator);
     inOrder.verify(transactionManager).beginTransaction(Option.empty(), Option.empty());
     inOrder.verify(timeGenerator).generateTime(true);
-    inOrder.verify(transactionManager).endTransaction(Option.empty());
+    inOrder.verify(transactionManager).endTransaction(Option.of(expectedInstant));
   }
 
   private static class TestWriteClient extends BaseHoodieWriteClient<String, String, String, String> {
