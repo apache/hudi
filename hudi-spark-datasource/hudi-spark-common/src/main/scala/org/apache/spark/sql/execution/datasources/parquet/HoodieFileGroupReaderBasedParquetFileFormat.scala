@@ -31,9 +31,9 @@ import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.io.IOUtils
 import org.apache.hudi.storage.StorageConfiguration
 import org.apache.hudi.storage.hadoop.{HadoopStorageConfiguration, HoodieHadoopStorage}
-
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.common.util.collection.ClosableIterator
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.SparkSession
@@ -48,7 +48,6 @@ import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnarBatchUtils}
 import org.apache.spark.util.SerializableConfiguration
 
 import java.io.Closeable
-
 import scala.collection.JavaConverters.mapAsJavaMapConverter
 
 trait HoodieFormatTrait {
@@ -240,7 +239,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
       props)
   }
 
-  private def appendPartitionAndProject(iter: HoodieFileGroupReader.HoodieFileGroupReaderIterator[InternalRow],
+  private def appendPartitionAndProject(iter: ClosableIterator[InternalRow],
                                         inputSchema: StructType,
                                         partitionSchema: StructType,
                                         to: StructType,
@@ -263,14 +262,14 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
     }
   }
 
-  private def projectSchema(iter: HoodieFileGroupReader.HoodieFileGroupReaderIterator[InternalRow],
+  private def projectSchema(iter: ClosableIterator[InternalRow],
                             from: StructType,
                             to: StructType): Iterator[InternalRow] = {
     val unsafeProjection = generateUnsafeProjection(from, to)
     makeCloseableFileGroupMappingRecordIterator(iter, d => unsafeProjection(d))
   }
 
-  private def makeCloseableFileGroupMappingRecordIterator(closeableFileGroupRecordIterator: HoodieFileGroupReader.HoodieFileGroupReaderIterator[InternalRow],
+  private def makeCloseableFileGroupMappingRecordIterator(closeableFileGroupRecordIterator: ClosableIterator[InternalRow],
                                                           mappingFunction: Function[InternalRow, InternalRow]): Iterator[InternalRow] = {
     CloseableIteratorListener.addListener(closeableFileGroupRecordIterator)
     new Iterator[InternalRow] with Closeable {
