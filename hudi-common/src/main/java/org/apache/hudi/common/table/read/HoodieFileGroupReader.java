@@ -36,6 +36,7 @@ import org.apache.hudi.common.table.PartitionPathParser;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordReader;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.CachingIterator;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.EmptyIterator;
@@ -54,6 +55,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
@@ -77,6 +79,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   private final List<HoodieLogFile> logFiles;
   private final String partitionPath;
   private final Option<String[]> partitionPathFields;
+  private final Option<String> orderingFieldName;
   private final HoodieStorage storage;
   private final TypedProperties props;
   // Byte offset to start reading from the base file
@@ -146,6 +149,16 @@ public final class HoodieFileGroupReader<T> implements Closeable {
         ? new PositionBasedSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, tableConfig, props)
         : new FileGroupReaderSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, tableConfig, props));
     this.outputConverter = readerContext.getSchemaHandler().getOutputConverter();
+    this.orderingFieldName = recordMergeMode == RecordMergeMode.COMMIT_TIME_ORDERING
+        ? Option.empty()
+        : Option.ofNullable(ConfigUtils.getOrderingField(props))
+        .or(() -> {
+          String preCombineField = hoodieTableMetaClient.getTableConfig().getPreCombineField();
+          if (StringUtils.isNullOrEmpty(preCombineField)) {
+            return Option.empty();
+          }
+          return Option.of(preCombineField);
+        });
     this.readStats = new HoodieReadStats();
     this.recordBuffer = getRecordBuffer(readerContext, hoodieTableMetaClient,
         recordMergeMode, props, hoodieBaseFileOption, this.logFiles.isEmpty(),
@@ -156,27 +169,26 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   /**
    * Initialize correct record buffer
    */
-  private static FileGroupRecordBuffer getRecordBuffer(HoodieReaderContext readerContext,
-                                                       HoodieTableMetaClient hoodieTableMetaClient,
-                                                       RecordMergeMode recordMergeMode,
-                                                       TypedProperties props,
-                                                       Option<HoodieBaseFile> baseFileOption,
-                                                       boolean hasNoLogFiles,
-                                                       boolean isSkipMerge,
-                                                       boolean shouldUseRecordPosition,
-                                                       HoodieReadStats readStats) {
+  private FileGroupRecordBuffer<T> getRecordBuffer(HoodieReaderContext<T> readerContext,
+                                                   HoodieTableMetaClient hoodieTableMetaClient,
+                                                   RecordMergeMode recordMergeMode,
+                                                   TypedProperties props,
+                                                   Option<HoodieBaseFile> baseFileOption,
+                                                   boolean hasNoLogFiles,
+                                                   boolean isSkipMerge,
+                                                   boolean shouldUseRecordPosition,
+                                                   HoodieReadStats readStats) {
     if (hasNoLogFiles) {
       return null;
     } else if (isSkipMerge) {
       return new UnmergedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, recordMergeMode, Option.empty(), Option.empty(), props, readStats);
+          readerContext, hoodieTableMetaClient, recordMergeMode, partitionPath, props, readStats);
     } else if (shouldUseRecordPosition && baseFileOption.isPresent()) {
       return new PositionBasedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, recordMergeMode, Option.empty(),
-          Option.empty(), baseFileOption.get().getCommitTime(), props, readStats);
+          readerContext, hoodieTableMetaClient, recordMergeMode, partitionPath, baseFileOption.get().getCommitTime(), props, readStats, orderingFieldName);
     } else {
       return new KeyBasedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, recordMergeMode, Option.empty(), Option.empty(), props, readStats);
+          readerContext, hoodieTableMetaClient, recordMergeMode, partitionPath, props, readStats, orderingFieldName);
     }
   }
 
@@ -306,14 +318,21 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   /**
    * @return The next record after calling {@link #hasNext}.
    */
-  public BufferedRecord<T> next() {
-    BufferedRecord<T> nextVal = recordBuffer == null
-        ? BufferedRecord.forRecordWithContext(baseFileIterator.next(), readerContext.getSchemaHandler().getRequiredSchema(), readerContext, recordBuffer.orderingFieldName, false)
-        : recordBuffer.next();
-    if (outputConverter.isPresent()) {
-      return nextVal.applyDataTransform(outputConverter.get());
+  public T next() {
+    T nextVal = recordBuffer == null ? baseFileIterator.next() : recordBuffer.next().getRecord();
+    return outputConverter.map(converter -> converter.apply(nextVal)).orElse(nextVal);
+  }
+
+  HoodieRecord<T> nextHoodieRecord() {
+    BufferedRecord<T> bufferedRecord;
+    if (recordBuffer == null) {
+      T nextVal = baseFileIterator.next();
+      bufferedRecord = BufferedRecord.forRecordWithContext(nextVal, readerContext.getSchemaHandler().getRequestedSchema(), readerContext, orderingFieldName, false);
+    } else {
+      bufferedRecord = recordBuffer.next();
     }
-    return nextVal;
+    BufferedRecord<T> convertedRecord = outputConverter.map(converter -> bufferedRecord.applyDataTransform(converter)).orElse(bufferedRecord);
+    return readerContext.constructHoodieRecord(convertedRecord, partitionPath);
   }
 
   private void scanLogFiles() {
@@ -349,19 +368,22 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     }
   }
 
-  public HoodieFileGroupReaderIterator<T> getClosableIterator() {
-    return new HoodieFileGroupReaderIterator<>(this);
+  public ClosableIterator<T> getClosableIterator() {
+    return new HoodieFileGroupReaderIterator<>(this, this::next);
   }
 
   public ClosableIterator<HoodieRecord<T>> getClosableHoodieRecordIterator() {
-    return new HoodieFileGroupReaderHoodieRecordIterator<>(this);
+    return new HoodieFileGroupReaderIterator<>(this, this::nextHoodieRecord);
   }
 
-  public static class HoodieFileGroupReaderHoodieRecordIterator<T> implements ClosableIterator<HoodieRecord<T>> {
+  static class HoodieFileGroupReaderIterator<T, U> implements ClosableIterator<U> {
     private final HoodieFileGroupReader<T> reader;
+    private final Supplier<U> recordSupplier;
 
-    public HoodieFileGroupReaderHoodieRecordIterator(HoodieFileGroupReader<T> reader) {
+    HoodieFileGroupReaderIterator(HoodieFileGroupReader<T> reader,
+                                         Supplier<U> recordSupplier) {
       this.reader = reader;
+      this.recordSupplier = recordSupplier;
     }
 
     @Override
@@ -374,54 +396,16 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     }
 
     @Override
-    public HoodieRecord<T> next() {
-      return reader.readerContext.constructHoodieRecord(reader.next());
+    public U next() {
+      return recordSupplier.get();
     }
 
     @Override
     public void close() {
-      if (reader != null) {
-        try {
-          reader.close();
-        } catch (IOException e) {
-          throw new HoodieIOException("Failed to close the reader", e);
-        }
-      }
-    }
-
-  }
-
-  public static class HoodieFileGroupReaderIterator<T> implements ClosableIterator<T> {
-    private HoodieFileGroupReader<T> reader;
-
-    public HoodieFileGroupReaderIterator(HoodieFileGroupReader<T> reader) {
-      this.reader = reader;
-    }
-
-    @Override
-    public boolean hasNext() {
       try {
-        return reader.hasNext();
+        reader.close();
       } catch (IOException e) {
-        throw new HoodieIOException("Failed to read record", e);
-      }
-    }
-
-    @Override
-    public T next() {
-      return reader.next().getRecord();
-    }
-
-    @Override
-    public void close() {
-      if (reader != null) {
-        try {
-          reader.close();
-        } catch (IOException e) {
-          throw new HoodieIOException("Failed to close the reader", e);
-        } finally {
-          this.reader = null;
-        }
+        throw new HoodieIOException("Failed to close the reader", e);
       }
     }
   }

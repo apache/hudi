@@ -158,7 +158,7 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
     if (!fileGroupReader.hasNext()) {
       return false;
     }
-    value.set(fileGroupReader.next().getRecord().get());
+    value.set(fileGroupReader.next().get());
     reverseProjection.apply(value);
     return true;
   }

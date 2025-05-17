@@ -436,7 +436,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       Schema recordSchema) throws IOException {
     fileGroupReader.initRecordIterators();
     while (fileGroupReader.hasNext()) {
-      recordList.add(fileGroupReader.next().getRecord());
+      recordList.add(fileGroupReader.next());
     }
   }
 
