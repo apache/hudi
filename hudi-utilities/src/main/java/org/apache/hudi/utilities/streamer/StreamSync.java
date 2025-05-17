@@ -473,8 +473,7 @@ public class StreamSync implements Serializable, Closeable {
         InputBatch inputBatch = inputBatchAndUseRowWriter.getLeft();
         boolean useRowWriter = inputBatchAndUseRowWriter.getRight();
         initializeWriteClientAndRetryTableServices(inputBatch, metaClient);
-        String instantTime = startCommit(metaClient, !autoGenerateRecordKeys);
-        result = writeToSinkAndDoMetaSync(instantTime, inputBatch, useRowWriter, metrics, overallTimerContext);
+        result = writeToSinkAndDoMetaSync(metaClient, inputBatch, useRowWriter, metrics, overallTimerContext);
       }
       // refresh schemas if need be before next batch
       if (schemaProvider != null) {
@@ -783,18 +782,19 @@ public class StreamSync implements Serializable, Closeable {
   /**
    * Perform Hoodie Write. Run Cleaner, schedule compaction and syncs to hive if needed.
    *
-   * @param instantTime         instant time to use for ingest.
+   * @param metaClient          meta client for the table
    * @param inputBatch          input batch that contains the records, checkpoint, and schema provider
    * @param useRowWriter        whether to use row writer
    * @param metrics             Metrics
    * @param overallTimerContext Timer Context
    * @return Option Compaction instant if one is scheduled
    */
-  private Pair<Option<String>, JavaRDD<WriteStatus>> writeToSinkAndDoMetaSync(String instantTime, InputBatch inputBatch,
+  private Pair<Option<String>, JavaRDD<WriteStatus>> writeToSinkAndDoMetaSync(HoodieTableMetaClient metaClient, InputBatch inputBatch,
                                                                               boolean useRowWriter,
                                                                               HoodieIngestionMetrics metrics,
                                                                               Timer.Context overallTimerContext) {
     boolean releaseResourcesInvoked = false;
+    String instantTime = startCommit(metaClient, !autoGenerateRecordKeys);
     try {
       Option<String> scheduledCompactionInstant = Option.empty();
       // write to hudi and fetch result
@@ -954,7 +954,7 @@ public class StreamSync implements Serializable, Closeable {
       writeClientWriteResult = new WriteClientWriteResult(executor.execute(df, !HoodieStreamerUtils.getPartitionColumns(props).isEmpty()).getWriteStatuses());
     } else {
       HoodieRecordType recordType = createRecordMerger(props).getRecordType();
-      Option<JavaRDD<HoodieRecord>> recordsOption = HoodieStreamerUtils.createHoodieRecords(cfg, props, inputBatch.getBatch(), schemaProvider,
+      Option<JavaRDD<HoodieRecord>> recordsOption = HoodieStreamerUtils.createHoodieRecords(cfg, props, inputBatch.getBatch(), inputBatch.getSchemaProvider(),
           recordType, autoGenerateRecordKeys, instantTime, errorTableWriter);
       JavaRDD<HoodieRecord> records = recordsOption.orElseGet(() -> hoodieSparkContext.emptyRDD());
       // filter dupes if needed
