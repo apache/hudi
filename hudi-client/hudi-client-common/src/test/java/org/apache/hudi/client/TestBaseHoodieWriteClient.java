@@ -118,12 +118,12 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
     BaseHoodieTableServiceClient<String, String, String> tableServiceClient = mock(BaseHoodieTableServiceClient.class);
     TestWriteClient writeClient = new TestWriteClient(writeConfig, table, Option.empty(), tableServiceClient);
 
-    writeClient.startCommitWithTime("001", "commit");
+    String instantTime = writeClient.startCommit("commit");
 
     HoodieTimeline writeTimeline = metaClient.getActiveTimeline().getWriteTimeline();
     assertTrue(writeTimeline.lastInstant().isPresent());
     assertEquals("commit", writeTimeline.lastInstant().get().getAction());
-    assertEquals("001", writeTimeline.lastInstant().get().requestedTime());
+    assertEquals(instantTime, writeTimeline.lastInstant().get().requestedTime());
   }
 
   private static class TestWriteClient extends BaseHoodieWriteClient<String, String, String, String> {
