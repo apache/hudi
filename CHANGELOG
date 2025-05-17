@@ -772,3 +772,7 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 --- [2025-05-14 02:56:26] [release-v1.123.0] ---
 [ENG-26948][INTERNAL] Add backcompat support for INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES (#1371)
 [AUDIT-1071]: Changelog for release-v1.122.0 (#1368)
+
+--- [2025-05-17 04:33:34] [release-v1.124.0] ---
+[ENG-6982][HUDI-9148] Refactor error handling for UtilHelpers#CreateSource (#1374)
+[AUDIT-1071]: Changelog for release-v1.123.0 (#1372)
