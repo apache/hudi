@@ -159,7 +159,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
       metadataMetaClient.reloadActiveTimeline();
     }
 
-    writeClient.startCommitForMetadataTable(instantTime, HoodieActiveTimeline.DELTA_COMMIT_ACTION);
+    writeClient.startCommitForMetadataTable(metadataMetaClient, instantTime, HoodieActiveTimeline.DELTA_COMMIT_ACTION);
     preWrite(instantTime);
 
     List<WriteStatus> statuses = isInitializing
