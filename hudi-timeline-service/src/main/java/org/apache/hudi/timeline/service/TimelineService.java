@@ -112,7 +112,7 @@ public class TimelineService {
     public boolean enableMarkerRequests = false;
 
     @Parameter(names = {"--enable-remote-partitioner"}, description = "Enable remote partitioner")
-    public boolean enableRemotePartitioner = true;
+    public boolean enableRemotePartitioner = false;
 
     @Parameter(names = {"--enable-instant-state-requests"}, description = "Enable handling of instant state requests")
     public boolean enableInstantStateRequests = false;
@@ -198,7 +198,7 @@ public class TimelineService {
       private Long maxAllowableHeartbeatIntervalInMs = 120000L;
 
       private int instantStateForceRefreshRequestNumber = 100;
-      private boolean enableRemotePartitioner = true;
+      private boolean enableRemotePartitioner = false;
 
       public Builder() {
       }
