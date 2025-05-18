@@ -97,6 +97,11 @@
                   <include>com.github.davidmoten:hilbert-curve</include>
                   <include>com.github.ben-manes.caffeine:caffeine</include>
                   <include>org.apache.parquet:parquet-avro</include>
+                  <include>org.apache.parquet:parquet-common</include>
+                  <include>org.apache.parquet:parquet-hadoop</include>
+                  <include>org.apache.parquet:parquet-column</include>
+                  <include>org.apache.parquet:parquet-format-structures</include>
+                  <include>org.apache.parquet:parquet-encoding</include>
                   <include>com.twitter:chill-protobuf</include>
 
                   <include>io.dropwizard.metrics:metrics-core</include>
