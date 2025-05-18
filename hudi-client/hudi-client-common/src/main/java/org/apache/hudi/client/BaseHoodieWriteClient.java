@@ -981,9 +981,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     HoodieInstant instant = null;
     try {
       instantTime = providedInstantTime.orElseGet(() -> createNewInstantTime(false));
-      LOG.info("Generate a new instant time: {} action: {}", instantTime, actionType);
       // check there are no inflight restore before starting a new commit.
-      HoodieTimeline inflightRestoreTimeline = metaClient.reloadActiveTimeline().getRestoreTimeline().filterInflightsAndRequested();
+      HoodieTimeline inflightRestoreTimeline = metaClient.getActiveTimeline().getRestoreTimeline().filterInflightsAndRequested();
       ValidationUtils.checkArgument(inflightRestoreTimeline.countInstants() == 0,
           () -> "Found pending restore in active timeline. Please complete the restore fully before proceeding. As of now, "
               + "table could be in an inconsistent state. Pending restores: "
