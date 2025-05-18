@@ -2431,7 +2431,7 @@
                    hudi-hadoop-mr, for ex). Since these Hudi modules might be used from w/in the execution engine(s)
                    bringing these file-formats as dependencies as well, we need to make sure that versions are
                    synchronized to avoid classpath ambiguity -->
-        <parquet.version>1.13.1</parquet.version>
+        <parquet.version>1.15.1</parquet.version>
         <orc.spark.version>1.9.1</orc.spark.version>
         <avro.version>1.11.4</avro.version>
         <antlr.version>4.9.3</antlr.version>
@@ -2489,7 +2489,7 @@
                    hudi-hadoop-mr, for ex). Since these Hudi modules might be used from w/in the execution engine(s)
                    bringing these file-formats as dependencies as well, we need to make sure that versions are
                    synchronized to avoid classpath ambiguity -->
-        <parquet.version>1.12.2</parquet.version>
+        <parquet.version>1.15.1</parquet.version>
         <orc.spark.version>1.7.8</orc.spark.version>
         <avro.version>1.11.4</avro.version>
         <antlr.version>4.8</antlr.version>
@@ -2529,7 +2529,7 @@
                    hudi-hadoop-mr, for ex). Since these Hudi modules might be used from w/in the execution engine(s)
                    bringing these file-formats as dependencies as well, we need to make sure that versions are
                    synchronized to avoid classpath ambiguity -->
-        <parquet.version>1.12.3</parquet.version>
+        <parquet.version>1.15.1</parquet.version>
         <orc.spark.version>1.8.3</orc.spark.version>
         <avro.version>1.11.4</avro.version>
         <antlr.version>4.9.3</antlr.version>
@@ -2579,7 +2579,7 @@
                    hudi-hadoop-mr, for ex). Since these Hudi modules might be used from w/in the execution engine(s)
                    bringing these file-formats as dependencies as well, we need to make sure that versions are
                    synchronized to avoid classpath ambiguity -->
-        <parquet.version>1.13.1</parquet.version>
+        <parquet.version>1.15.1</parquet.version>
         <orc.spark.version>1.9.1</orc.spark.version>
         <avro.version>1.11.4</avro.version>
         <antlr.version>4.9.3</antlr.version>
