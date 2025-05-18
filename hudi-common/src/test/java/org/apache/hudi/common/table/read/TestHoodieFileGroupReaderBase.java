@@ -68,6 +68,7 @@ import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
+import java.io.UncheckedIOException;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -479,12 +480,12 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
           false)) {
         fileGroupReader.initRecordIterators();
         try (ClosableIterator<HoodieRecord<T>> iter = fileGroupReader.getClosableHoodieRecordIterator()) {
-            while (iter.hasNext()) {
-                actualRecordList.add(iter.next());
-            }
+          while (iter.hasNext()) {
+            actualRecordList.add(iter.next());
+          }
         }
-      } catch (Exception ex) {
-        throw new RuntimeException(ex);
+      } catch (IOException ex) {
+        throw new UncheckedIOException(ex);
       }
     });
     return actualRecordList;
