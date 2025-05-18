@@ -18,6 +18,8 @@
 
 package org.apache.hudi.client.transaction;
 
+import org.apache.hudi.avro.model.HoodieClusteringPlan;
+import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieMetadataWrapper;
@@ -84,6 +86,38 @@ public class ConcurrentOperation {
     init(instant);
   }
 
+  /**
+   * Construct a ConcurrentOperation object for a compaction plan that is not yet persisted to the timeline.
+   * This is used to detect potential conflicts with other operations.
+   * @param compactionPlan the potential compaction plan
+   * @param requestedInstantTime the requested instant time for the compaction
+   */
+  public ConcurrentOperation(HoodieCompactionPlan compactionPlan, String requestedInstantTime) {
+    this.commitMetadataOption = Option.empty();
+    this.metadataWrapper = null;
+    this.actionState = HoodieInstant.State.REQUESTED.name();
+    this.actionType = COMPACTION_ACTION;
+    this.operationType = WriteOperationType.COMPACT;
+    this.instantTime = requestedInstantTime;
+    this.mutatedPartitionAndFileIds = getPartitionAndFileIdsFromCompactionPlan(compactionPlan);
+  }
+
+  /**
+   * Construct a ConcurrentOperation object for a clustering plan that is not yet persisted to the timeline.
+   * This is used to detect potential conflicts with other operations.
+   * @param clusteringPlan the potential clustering plan
+   * @param requestedInstantTime the requested instant time for the clustering
+   */
+  public ConcurrentOperation(HoodieClusteringPlan clusteringPlan, String requestedInstantTime) {
+    this.commitMetadataOption = Option.empty();
+    this.metadataWrapper = null;
+    this.actionState = HoodieInstant.State.REQUESTED.name();
+    this.actionType = CLUSTERING_ACTION;
+    this.operationType = WriteOperationType.CLUSTER;
+    this.instantTime = requestedInstantTime;
+    this.mutatedPartitionAndFileIds = getPartitionAndFileIdsFromClusteringPlan(clusteringPlan);
+  }
+
   public String getInstantActionState() {
     return actionState;
   }
@@ -113,10 +147,7 @@ public class ConcurrentOperation {
       switch (getInstantActionType()) {
         case COMPACTION_ACTION:
           this.operationType = WriteOperationType.COMPACT;
-          this.mutatedPartitionAndFileIds = this.metadataWrapper.getMetadataFromTimeline().getHoodieCompactionPlan().getOperations()
-              .stream()
-              .map(operation -> Pair.of(operation.getPartitionPath(), operation.getFileId()))
-              .collect(Collectors.toSet());
+          this.mutatedPartitionAndFileIds = getPartitionAndFileIdsFromCompactionPlan(this.metadataWrapper.getMetadataFromTimeline().getHoodieCompactionPlan());
           break;
         case COMMIT_ACTION:
         case DELTA_COMMIT_ACTION:
@@ -184,11 +215,21 @@ public class ConcurrentOperation {
   }
 
   private static Set<Pair<String, String>> getPartitionAndFileIdsFromRequestedReplaceMetadata(HoodieRequestedReplaceMetadata requestedReplaceMetadata) {
-    return requestedReplaceMetadata
-        .getClusteringPlan().getInputGroups()
+    return getPartitionAndFileIdsFromClusteringPlan(requestedReplaceMetadata.getClusteringPlan());
+  }
+
+  private static Set<Pair<String, String>> getPartitionAndFileIdsFromClusteringPlan(HoodieClusteringPlan clusteringPlan) {
+    return clusteringPlan.getInputGroups()
         .stream()
         .flatMap(ig -> ig.getSlices().stream())
         .map(fileSlice -> Pair.of(fileSlice.getPartitionPath(), fileSlice.getFileId()))
+        .collect(Collectors.toSet());
+  }
+
+  private static Set<Pair<String, String>> getPartitionAndFileIdsFromCompactionPlan(HoodieCompactionPlan compactionPlan) {
+    return compactionPlan.getOperations()
+        .stream()
+        .map(operation -> Pair.of(operation.getPartitionPath(), operation.getFileId()))
         .collect(Collectors.toSet());
   }
 
