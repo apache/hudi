@@ -556,7 +556,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       // Base file is filtered out of the file-slice as the corresponding compaction
       // instant not completed yet.
       FileSlice transformed = new FileSlice(fileSlice.getPartitionPath(), fileSlice.getBaseInstantTime(), fileSlice.getFileId());
-      fileSlice.getLogFiles().forEach(transformed::addLogFile);
+      fileSlice.getLogFiles().forEach(logFile -> transformed.addLogFile(logFile, Option.empty()));
       if (transformed.isEmpty() && !includeEmptyFileSlice) {
         return Stream.of();
       }
@@ -581,7 +581,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       // instant has not completed yet.
       FileSlice transformed = new FileSlice(fileSlice.getPartitionPath(), fileSlice.getBaseInstantTime(), fileSlice.getFileId());
       committedBaseFile.ifPresent(transformed::setBaseFile);
-      committedLogFiles.forEach(transformed::addLogFile);
+      committedLogFiles.forEach(logFile -> transformed.addLogFile(logFile, Option.empty()));
       if (transformed.isEmpty() && !includeEmptyFileSlice) {
         return Stream.of();
       }
@@ -603,7 +603,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       // instant has not completed yet.
       FileSlice transformed = new FileSlice(fileSlice.getPartitionPath(), fileSlice.getBaseInstantTime(), fileSlice.getFileId());
       fileSlice.getBaseFile().ifPresent(transformed::setBaseFile);
-      committedLogFiles.forEach(transformed::addLogFile);
+      committedLogFiles.forEach(logFile -> transformed.addLogFile(logFile, Option.empty()));
       return transformed;
     }
     return fileSlice;
@@ -1524,8 +1524,8 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       merged.setBaseFile(penultimateSlice.getBaseFile().get());
     }
     // Add Log files from penultimate and last slices
-    penultimateSlice.getLogFiles().forEach(merged::addLogFile);
-    lastSlice.getLogFiles().forEach(merged::addLogFile);
+    penultimateSlice.getLogFiles().forEach(logFile -> merged.addLogFile(logFile, Option.empty()));
+    lastSlice.getLogFiles().forEach(logFile -> merged.addLogFile(logFile, Option.empty()));
     return merged;
   }
 
@@ -1572,7 +1572,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
         latestSlice.getFileId());
 
     // add log files from the latest slice to the earliest
-    fileSlices.forEach(slice -> slice.getLogFiles().forEach(merged::addLogFile));
+    fileSlices.forEach(slice -> slice.getLogFiles().forEach(logFile -> merged.addLogFile(logFile, Option.empty())));
     return Option.of(merged);
   }
 

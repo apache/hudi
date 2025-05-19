@@ -22,6 +22,7 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
+import org.apache.hudi.common.util.Option;
 
 import org.junit.jupiter.api.Test;
 
@@ -99,7 +100,7 @@ public class TestFileSliceMetricUtils {
       String logFilePath = "." + UUID.randomUUID().toString() + "_20170101134598.log." + logVersion;
       HoodieLogFile logFile = new HoodieLogFile(logFilePath);
       logFile.setFileLen(logFileLen);
-      slice.addLogFile(logFile);
+      slice.addLogFile(logFile, Option.empty());
       logVersion++;
     }
     return slice;

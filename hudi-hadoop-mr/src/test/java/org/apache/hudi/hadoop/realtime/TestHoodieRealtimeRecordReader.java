@@ -244,7 +244,7 @@ public class TestHoodieRealtimeRecordReader {
         FileCreateUtilsLegacy.createDeltaCommit(COMMIT_METADATA_SER_DE, basePath.toString(), instantTime, commitMetadata);
 
         // create a split with baseFile (parquet file written earlier) and new log file(s)
-        fileSlice.addLogFile(writer.getLogFile());
+        fileSlice.addLogFile(writer.getLogFile(), Option.empty());
         HoodieRealtimeFileSplit split = new HoodieRealtimeFileSplit(
             new FileSplit(new Path(partitionDir + "/fileid0_1-0-1_" + baseInstant + ".parquet"), 0, 1, baseJobConf),
             basePath.toUri().toString(), fileSlice.getLogFiles().sorted(HoodieLogFile.getLogFileComparator())
@@ -882,7 +882,7 @@ public class TestHoodieRealtimeRecordReader {
               schema.toString(), HoodieTimeline.COMMIT_ACTION);
       FileCreateUtilsLegacy.createDeltaCommit(COMMIT_METADATA_SER_DE, basePath.toString(), instantTime, commitMetadata);
       // create a split with new log file(s)
-      fileSlice.addLogFile(new HoodieLogFile(writer.getLogFile().getPath(), size));
+      fileSlice.addLogFile(new HoodieLogFile(writer.getLogFile().getPath(), size), Option.empty());
       RealtimeFileStatus realtimeFileStatus = new RealtimeFileStatus(
           new FileStatus(writer.getLogFile().getFileSize(), false, 1, 1, 0,
               new Path(writer.getLogFile().getPath().toUri())),

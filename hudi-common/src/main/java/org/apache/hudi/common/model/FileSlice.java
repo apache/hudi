@@ -18,10 +18,15 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.timeline.CompletionTimeQueryView;
 import org.apache.hudi.common.table.timeline.InstantComparison;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 
 import java.io.Serializable;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.TreeSet;
@@ -52,7 +57,7 @@ public class FileSlice implements Serializable {
    * List of appendable log files with real time data - Sorted with greater log version first - Always empty for
    * copy_on_write storage.
    */
-  private final TreeSet<HoodieLogFile> logFiles;
+  private final TreeSet<HoodieLogFileEntry> logFiles;
 
   public FileSlice(FileSlice fileSlice) {
     this(fileSlice, true);
@@ -62,9 +67,9 @@ public class FileSlice implements Serializable {
     this.baseInstantTime = fileSlice.baseInstantTime;
     this.baseFile = fileSlice.baseFile != null ? new HoodieBaseFile(fileSlice.baseFile) : null;
     this.fileGroupId = fileSlice.fileGroupId;
-    this.logFiles = new TreeSet<>(HoodieLogFile.getReverseLogFileComparator());
+    this.logFiles = new TreeSet<>(HoodieLogFileEntry.getLogFileEntryComparator());
     if (includeLogFiles) {
-      fileSlice.logFiles.forEach(lf -> this.logFiles.add(new HoodieLogFile(lf)));
+      fileSlice.logFiles.forEach(logFileEntry -> this.logFiles.add(new HoodieLogFileEntry(logFileEntry)));
     }
   }
 
@@ -76,24 +81,29 @@ public class FileSlice implements Serializable {
     this.fileGroupId = fileGroupId;
     this.baseInstantTime = baseInstantTime;
     this.baseFile = null;
-    this.logFiles = new TreeSet<>(HoodieLogFile.getReverseLogFileComparator());
+    this.logFiles = new TreeSet<>(HoodieLogFileEntry.getLogFileEntryComparator());
   }
 
   public FileSlice(HoodieFileGroupId fileGroupId, String baseInstantTime,
-                   HoodieBaseFile baseFile, List<HoodieLogFile> logFiles) {
+                   HoodieBaseFile baseFile, List<HoodieLogFile> logFiles, HoodieTableMetaClient metaClient) {
     this.fileGroupId = fileGroupId;
     this.baseInstantTime = baseInstantTime;
     this.baseFile = baseFile;
-    this.logFiles = new TreeSet<>(HoodieLogFile.getReverseLogFileComparator());
-    this.logFiles.addAll(logFiles);
+    this.logFiles = new TreeSet<>(HoodieLogFileEntry.getLogFileEntryComparator());
+    if (metaClient.getTableConfig().getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
+      CompletionTimeQueryView completionTimeQueryView = metaClient.getTimelineLayout().getTimelineFactory().createCompletionTimeQueryView(metaClient);
+      logFiles.forEach(lf -> this.logFiles.add(new HoodieLogFileEntry(lf, completionTimeQueryView.getCompletionTime(baseInstantTime, lf.getDeltaCommitTime()))));
+    } else {
+      logFiles.forEach(lf -> this.logFiles.add(new HoodieLogFileEntry(lf, Option.empty())));
+    }
   }
 
   public void setBaseFile(HoodieBaseFile baseFile) {
     this.baseFile = baseFile;
   }
 
-  public void addLogFile(HoodieLogFile logFile) {
-    this.logFiles.add(logFile);
+  public void addLogFile(HoodieLogFile logFile, Option<String> completionTime) {
+    this.logFiles.add(new HoodieLogFileEntry(logFile, completionTime));
   }
 
   public FileSlice withLogFiles(boolean includeLogFiles) {
@@ -113,7 +123,7 @@ public class FileSlice implements Serializable {
   }
 
   public Stream<HoodieLogFile> getLogFiles() {
-    return logFiles.stream();
+    return logFiles.stream().map(HoodieLogFileEntry::getLogFile);
   }
 
   public String getBaseInstantTime() {
@@ -137,7 +147,7 @@ public class FileSlice implements Serializable {
   }
 
   public Option<HoodieLogFile> getLatestLogFile() {
-    return Option.fromJavaOptional(logFiles.stream().findFirst());
+    return Option.fromJavaOptional(logFiles.stream().map(HoodieLogFileEntry::getLogFile).findFirst());
   }
 
   public long getTotalFileSize() {
@@ -198,7 +208,7 @@ public class FileSlice implements Serializable {
 
   private long convertLogFilesSizeToExpectedParquetSize(double logFileFraction) {
     long totalSizeOfLogFiles =
-        logFiles.stream()
+        logFiles.stream().map(HoodieLogFileEntry::getLogFile)
             .map(HoodieLogFile::getFileSize)
             .filter(size -> size > 0)
             .reduce(Long::sum)
@@ -207,5 +217,44 @@ public class FileSlice implements Serializable {
     // We can then just get the parquet equivalent size of these log files, compare that with
     // {@link config.getParquetMaxFileSize()} and decide if there is scope to insert more rows
     return (long) (totalSizeOfLogFiles * logFileFraction);
+  }
+
+  private static class HoodieLogFileEntry {
+    HoodieLogFile logFile;
+    Option<String> completionTime;
+
+    private HoodieLogFileEntry(HoodieLogFile logFile, Option<String> completionTime) {
+      this.logFile = logFile;
+      this.completionTime = completionTime;
+    }
+
+    public HoodieLogFileEntry(HoodieLogFileEntry logFileEntry) {
+      this.logFile = new HoodieLogFile(logFileEntry.logFile);
+      this.completionTime = logFileEntry.completionTime;
+    }
+
+    private static Comparator<HoodieLogFileEntry> getLogFileEntryComparator() {
+      return (entry1, entry2) -> {
+        ValidationUtils.checkArgument(entry1.completionTime.isPresent() == entry2.completionTime.isPresent(),
+            String.format("We expect either all log files or no log file to have completion time %s %s", entry1, entry2));
+        if (entry1.completionTime.isPresent()) {
+          String completionTime1 = entry1.completionTime.get();
+          String completionTime2 = entry2.completionTime.get();
+          int comparisonResult = completionTime1.compareTo(completionTime2);
+          return comparisonResult != 0 ? comparisonResult : HoodieLogFile.getReverseLogFileComparator().compare(entry1.logFile, entry2.logFile);
+        } else {
+          return HoodieLogFile.getReverseLogFileComparator().compare(entry1.logFile, entry2.logFile);
+        }
+      };
+    }
+
+    private HoodieLogFile getLogFile() {
+      return logFile;
+    }
+
+    @Override
+    public String toString() {
+      return String.format("{log file: %s, completionTime: %s}", logFile.toString(), completionTime);
+    }
   }
 }

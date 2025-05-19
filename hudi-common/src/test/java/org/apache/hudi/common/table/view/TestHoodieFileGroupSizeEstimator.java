@@ -50,7 +50,7 @@ class TestHoodieFileGroupSizeEstimator {
     // setup mocks
     HoodieFileGroupId fileGroupId = new HoodieFileGroupId("path1", UUID.randomUUID().toString());
     List<FileSlice> fileSlices = Collections.singletonList(new FileSlice(fileGroupId, "001",
-        new HoodieBaseFile("/tmp/" + FSUtils.makeBaseFileName("001", "1-0-1", fileGroupId.getFileId(), "parquet")), Collections.emptyList()));
+        new HoodieBaseFile("/tmp/" + FSUtils.makeBaseFileName("001", "1-0-1", fileGroupId.getFileId(), "parquet")), Collections.emptyList(), metaClient));
     when(fileGroup1.getFileGroupId()).thenReturn(fileGroupId);
     when(fileGroup1.getAllFileSlices()).thenReturn(fileSlices.stream()).thenReturn(fileSlices.stream());
 
@@ -71,7 +71,7 @@ class TestHoodieFileGroupSizeEstimator {
     // setup mocks
     HoodieFileGroupId fileGroupId = new HoodieFileGroupId("path1", UUID.randomUUID().toString());
     List<FileSlice> fileSlices = IntStream.range(1, 100).mapToObj(i -> new FileSlice(fileGroupId, "001",
-        new HoodieBaseFile("/tmp/" + FSUtils.makeBaseFileName("00" + i, "1-0-1", fileGroupId.getFileId(), "parquet")), Collections.emptyList()))
+        new HoodieBaseFile("/tmp/" + FSUtils.makeBaseFileName("00" + i, "1-0-1", fileGroupId.getFileId(), "parquet")), Collections.emptyList(), metaClient))
         .collect(Collectors.toList());
     when(fileGroup1.getFileGroupId()).thenReturn(fileGroupId);
     when(fileGroup1.getAllFileSlices()).thenReturn(fileSlices.stream()).thenReturn(fileSlices.stream());

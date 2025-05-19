@@ -53,8 +53,8 @@ class TestHoodieFileSliceSerializer {
     HoodieLogFile logFile4 = new HoodieLogFile("/dummy/base/" + FSUtils.makeLogFileName("fileId-2", HoodieLogFile.DELTA_EXTENSION, "002", 2, "1-0-1"));
 
     List<FileSlice> fileSliceList = Arrays.asList(
-        new FileSlice(new HoodieFileGroupId("partition1", "fileId-1"), "001", baseFile1, Arrays.asList(logFile1, logFile2)),
-        new FileSlice(new HoodieFileGroupId("partition2", "fileId-2"), "001", baseFile2, Arrays.asList(logFile3, logFile4)),
+        new FileSlice(new HoodieFileGroupId("partition1", "fileId-1"), "001", baseFile1, Arrays.asList(logFile1, logFile2), metaClient),
+        new FileSlice(new HoodieFileGroupId("partition2", "fileId-2"), "001", baseFile2, Arrays.asList(logFile3, logFile4), metaClient),
         new FileSlice("partition3", "002", "fileId-3")
     );
 

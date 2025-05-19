@@ -49,9 +49,9 @@ class TestHoodieFileGroupSerializer {
     String fileId2 = UUID.randomUUID().toString();
     HoodieInstant instant1 = new HoodieInstant(HoodieInstant.State.COMPLETED, "commit", "001", InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
     FileSlice fileSlice1 = new FileSlice(new HoodieFileGroupId(partition, fileId1), instant1.requestedTime(),
-        new HoodieBaseFile("/tmp/" + FSUtils.makeBaseFileName(instant1.requestedTime(), "1-0-1", fileId1, "parquet")), Collections.emptyList());
+        new HoodieBaseFile("/tmp/" + FSUtils.makeBaseFileName(instant1.requestedTime(), "1-0-1", fileId1, "parquet")), Collections.emptyList(), metaClient);
     FileSlice fileSlice2 = new FileSlice(new HoodieFileGroupId(partition, fileId2), instant1.requestedTime(),
-        new HoodieBaseFile("/tmp/" + FSUtils.makeBaseFileName(instant1.requestedTime(), "1-0-1", fileId2, "parquet")), Collections.emptyList());
+        new HoodieBaseFile("/tmp/" + FSUtils.makeBaseFileName(instant1.requestedTime(), "1-0-1", fileId2, "parquet")), Collections.emptyList(), metaClient);
     HoodieTimeline mockTimeline1 = new MockHoodieTimeline(Collections.singletonList(instant1));
 
     HoodieFileGroup hoodieFileGroup1 = new HoodieFileGroup(partition, fileId1, mockTimeline1);
@@ -64,7 +64,7 @@ class TestHoodieFileGroupSerializer {
     HoodieInstant instant2 = new HoodieInstant(HoodieInstant.State.COMPLETED, "commit", "002", InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
     HoodieTimeline mockTimeline2 = new MockHoodieTimeline(Collections.singletonList(instant2));
     FileSlice fileSlice3 = new FileSlice(new HoodieFileGroupId(partition, fileId3), instant1.requestedTime(),
-        new HoodieBaseFile("/tmp/" + FSUtils.makeBaseFileName(instant2.requestedTime(), "1-0-1", fileId3, "parquet")), Collections.emptyList());
+        new HoodieBaseFile("/tmp/" + FSUtils.makeBaseFileName(instant2.requestedTime(), "1-0-1", fileId3, "parquet")), Collections.emptyList(), metaClient);
     HoodieFileGroup hoodieFileGroup3 = new HoodieFileGroup(partition, fileId3, mockTimeline2);
     hoodieFileGroup3.addFileSlice(fileSlice3);
 

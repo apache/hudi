@@ -384,7 +384,7 @@ public class HoodieFileSliceTestUtils {
     // Assemble the FileSlice finally.
     HoodieFileGroupId fileGroupId = new HoodieFileGroupId(partitionPath, fileId);
     String baseInstantTime = baseFile == null ? null : baseFile.getCommitTime();
-    return new FileSlice(fileGroupId, baseInstantTime, baseFile, logFiles);
+    return new FileSlice(fileGroupId, baseInstantTime, baseFile, logFiles, metaClient);
   }
 
   /**

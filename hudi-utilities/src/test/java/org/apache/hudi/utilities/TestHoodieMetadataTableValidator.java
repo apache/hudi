@@ -995,7 +995,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
         originalFileSlice.getFileGroupId(),
         TimelineUtils.generateInstantTime(true, timeGenerator),
         originalFileSlice.getBaseFile().get(),
-        originalFileSlice.getLogFiles().collect(Collectors.toList()));
+        originalFileSlice.getLogFiles().collect(Collectors.toList()), metaClient);
     listMdt.set(i, mismatchFileSlice);
     exception = assertThrows(
         HoodieValidationException.class,
@@ -1013,7 +1013,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
         originalFileSlice.getFileGroupId(),
         originalFileSlice.getBaseInstantTime(),
         generateRandomBaseFile().getLeft(),
-        originalFileSlice.getLogFiles().collect(Collectors.toList()));
+        originalFileSlice.getLogFiles().collect(Collectors.toList()), metaClient);
     listMdt.set(i, mismatchFileSlice);
     exception = assertThrows(
         HoodieValidationException.class,
@@ -1135,11 +1135,11 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     logFileList.add(generateRandomLogFile(fileId, logInstantTime2));
     FileSlice fileSlice = new FileSlice(
         new HoodieFileGroupId(partition, fileId), baseInstantTime,
-        baseFilePair.getLeft(), logFileList);
+        baseFilePair.getLeft(), logFileList, metaClient);
     return Pair.of(fileSlice,
         new FileSlice(new HoodieFileGroupId(partition, fileId),
             new String(baseInstantTime), baseFilePair.getRight(),
-            logFileList.stream().map(HoodieLogFile::new).collect(Collectors.toList())));
+            logFileList.stream().map(HoodieLogFile::new).collect(Collectors.toList()), metaClient));
   }
 
   private HoodieLogFile generateRandomLogFile(String fileId, String instantTime) {
@@ -1518,7 +1518,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
 
       FileSlice slice = new FileSlice(new HoodieFileGroupId(partition, fileId), baseInstantTime);
       slice.setBaseFile(baseFile);
-      logFiles.forEach(slice::addLogFile);
+      logFiles.forEach(logFile -> slice.addLogFile(logFile, Option.empty()));
       mdtFileSlices.add(slice);
 
       // Add to FS list for first 15 entries

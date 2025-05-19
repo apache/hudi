@@ -177,14 +177,16 @@ public class TestHoodieFileGroup {
 
     HoodieLogFile logFile1 = new HoodieLogFile(new StoragePath(getLogFileName("001")));
     fileGroup.addLogFile(queryView, logFile1);
+    Option<String> completionTimeOpt = queryView.getCompletionTime(fileGroup.getAllFileSlices().findFirst().get().getBaseInstantTime(), logFile1.getDeltaCommitTime());
     assertThat("no base file in the file group, returns the delta commit instant itself",
-        fileGroup.getBaseInstantTime(queryView, logFile1), is("001"));
+        fileGroup.getBaseInstantTime(completionTimeOpt, logFile1), is("001"));
     assertThat(collectFileSlices(fileGroup), is("001"));
 
     HoodieLogFile logFile2 = new HoodieLogFile(new StoragePath(getLogFileName("002")));
     fileGroup.addLogFile(queryView, logFile2);
+    completionTimeOpt = queryView.getCompletionTime(fileGroup.getAllFileSlices().findFirst().get().getBaseInstantTime(), logFile2.getDeltaCommitTime());
     assertThat("no base file in the file group, returns the earliest delta commit instant",
-        fileGroup.getBaseInstantTime(queryView, logFile2), is("001"));
+        fileGroup.getBaseInstantTime(completionTimeOpt, logFile2), is("001"));
     assertThat(collectFileSlices(fileGroup), is("001"));
 
     fileGroup.addNewFileSliceAtInstant("003");
@@ -193,8 +195,9 @@ public class TestHoodieFileGroup {
 
     HoodieLogFile logFile3 = new HoodieLogFile(new StoragePath(getLogFileName("004")));
     fileGroup.addLogFile(queryView, logFile3);
+    completionTimeOpt = queryView.getCompletionTime(fileGroup.getAllFileSlices().findFirst().get().getBaseInstantTime(), logFile3.getDeltaCommitTime());
     assertThat("Assign the log file to maximum base instant time that less than or equals its completion time",
-        fileGroup.getBaseInstantTime(queryView, logFile2), is("003"));
+        fileGroup.getBaseInstantTime(completionTimeOpt, logFile2), is("003"));
     assertThat(collectFileSlices(fileGroup), is("001,003"));
 
     // now add the base files
@@ -203,9 +206,10 @@ public class TestHoodieFileGroup {
 
     assertThat(collectFileSlices(fileGroup), is("001,003,005"));
 
+    completionTimeOpt = queryView.getCompletionTime(fileGroup.getAllFileSlices().findFirst().get().getBaseInstantTime(), logFile2.getDeltaCommitTime());
     // check the delta commit that takes a long time to finish
     assertThat("no base file in the file group, returns the earliest delta commit instant",
-        fileGroup.getBaseInstantTime(queryView, logFile2), is("005"));
+        fileGroup.getBaseInstantTime(completionTimeOpt, logFile2), is("005"));
   }
 
   private CompletionTimeQueryViewV2 getMockCompletionTimeQueryView(MockHoodieTimeline activeTimeline) {

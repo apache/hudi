@@ -41,7 +41,7 @@ class TestDefaultSerializer {
     String fileId1 = UUID.randomUUID().toString();
     HoodieInstant instant1 = new HoodieInstant(HoodieInstant.State.COMPLETED, "commit", "001", InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
     FileSlice fileSlice = new FileSlice(new HoodieFileGroupId(partition, fileId1), instant1.requestedTime(),
-        new HoodieBaseFile("/tmp/" + FSUtils.makeBaseFileName(instant1.requestedTime(), "1-0-1", fileId1, "parquet")), Collections.emptyList());
+        new HoodieBaseFile("/tmp/" + FSUtils.makeBaseFileName(instant1.requestedTime(), "1-0-1", fileId1, "parquet")), Collections.emptyList(), metaClient);
 
     DefaultSerializer<FileSlice> serializer = new DefaultSerializer<>();
     byte[] serializedValue = serializer.serialize(fileSlice);

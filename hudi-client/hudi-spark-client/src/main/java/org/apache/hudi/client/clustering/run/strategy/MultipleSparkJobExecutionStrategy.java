@@ -505,7 +505,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
     String baseInstantTime = baseFileExists ? baseFile.getCommitTime() : logFiles.get(0).getDeltaCommitTime();
     FileSlice fileSlice = new FileSlice(partitionPath, baseInstantTime, clusteringOperation.getFileId());
     fileSlice.setBaseFile(baseFile);
-    logFiles.forEach(fileSlice::addLogFile);
+    logFiles.forEach(logFile -> fileSlice.addLogFile(logFile, Option.empty()));
     return fileSlice;
   }
 

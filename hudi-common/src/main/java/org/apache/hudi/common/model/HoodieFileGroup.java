@@ -109,20 +109,20 @@ public class HoodieFileGroup implements Serializable {
    * <p>CAUTION: the log file must be added in sequence of the delta commit time.
    */
   public void addLogFile(CompletionTimeQueryView completionTimeQueryView, HoodieLogFile logFile) {
-    String baseInstantTime = getBaseInstantTime(completionTimeQueryView, logFile);
+    Option<String> completionTimeOpt = completionTimeQueryView.getCompletionTime(fileSlices.firstKey(), logFile.getDeltaCommitTime());
+    String baseInstantTime = getBaseInstantTime(completionTimeOpt, logFile);
     if (!fileSlices.containsKey(baseInstantTime)) {
       fileSlices.put(baseInstantTime, new FileSlice(fileGroupId, baseInstantTime));
     }
-    fileSlices.get(baseInstantTime).addLogFile(logFile);
+    fileSlices.get(baseInstantTime).addLogFile(logFile, completionTimeOpt);
   }
 
   @VisibleForTesting
-  public String getBaseInstantTime(CompletionTimeQueryView completionTimeQueryView, HoodieLogFile logFile) {
+  public String getBaseInstantTime(Option<String> completionTimeOpt, HoodieLogFile logFile) {
     if (fileSlices.isEmpty()) {
       // no base file in the file group, use the log file delta commit time.
       return logFile.getDeltaCommitTime();
     }
-    Option<String> completionTimeOpt = completionTimeQueryView.getCompletionTime(fileSlices.firstKey(), logFile.getDeltaCommitTime());
     if (completionTimeOpt.isPresent()) {
       for (String commitTime : fileSlices.keySet()) {
         // find the largest commit time that is smaller than the log delta commit completion time

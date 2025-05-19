@@ -459,7 +459,7 @@ public class MergeOnReadInputFormat
         // baseInstantTime in FileSlice is not used in FG reader
         "",
         split.getBasePath().map(HoodieBaseFile::new).orElse(null),
-        split.getLogPaths().map(logFiles -> logFiles.stream().map(HoodieLogFile::new).collect(Collectors.toList())).orElse(Collections.emptyList()));
+        split.getLogPaths().map(logFiles -> logFiles.stream().map(HoodieLogFile::new).collect(Collectors.toList())).orElse(Collections.emptyList()), metaClient);
 
     FlinkRowDataReaderContext readerContext =
         new FlinkRowDataReaderContext(

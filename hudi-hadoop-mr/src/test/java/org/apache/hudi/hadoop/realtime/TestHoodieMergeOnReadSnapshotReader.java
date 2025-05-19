@@ -138,7 +138,7 @@ public class TestHoodieMergeOnReadSnapshotReader {
         new HoodieFileGroupId(partitionPath, FILE_ID),
         baseInstant,
         new HoodieBaseFile(storage.getPathInfo(new StoragePath(baseFilePath))),
-        new ArrayList<>());
+        new ArrayList<>(), metaClient);
     logVersionsWithAction.forEach(logVersionWithAction -> {
       try {
         // update files or generate new log file
@@ -165,7 +165,7 @@ public class TestHoodieMergeOnReadSnapshotReader {
         writer.close();
         assertTrue(size > 0, "block - size should be > 0");
         FileCreateUtilsLegacy.createDeltaCommit(COMMIT_METADATA_SER_DE, basePath.toString(), instantTime, commitMetadata);
-        fileSlice.addLogFile(writer.getLogFile());
+        fileSlice.addLogFile(writer.getLogFile(), Option.empty());
 
         HoodieMergeOnReadSnapshotReader snapshotReader = new HoodieMergeOnReadSnapshotReader(
             basePath.toString(),
