@@ -20,6 +20,7 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
@@ -123,7 +124,9 @@ public class HFileUtils extends FileFormatUtils {
     try {
       Configuration conf = storage.getConf().unwrapCopyAs(Configuration.class);
       conf.addResource(HadoopFSUtils.getFs(filePath.toString(), conf).getConf());
-      HoodieNativeAvroHFileReader reader = new HoodieNativeAvroHFileReader(storage, filePath, Option.empty());
+      HoodieNativeAvroHFileReader reader = (HoodieNativeAvroHFileReader) HoodieIOFactory.getIOFactory(storage)
+          .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
+          .getFileReader(new HoodieConfig(), filePath);
       ClosableIterator<String> keyIterator = reader.getRecordKeyIterator();
       return new ClosableIterator<HoodieKey>() {
         @Override

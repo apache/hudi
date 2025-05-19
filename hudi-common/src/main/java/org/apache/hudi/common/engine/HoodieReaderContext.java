@@ -20,6 +20,7 @@
 package org.apache.hudi.common.engine;
 
 import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -31,6 +32,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableFilterIterator;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.expression.Predicate;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -68,6 +70,9 @@ import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIEL
 public abstract class HoodieReaderContext<T> {
   private final StorageConfiguration<?> storageConfiguration;
   private final BiFunction<T, Schema, String> recordKeyExtractor;
+  protected final HoodieFileFormat baseFileFormat;
+  // For general predicate pushdown.
+  protected final Option<Predicate> filter;
   private FileGroupReaderSchemaHandler<T> schemaHandler = null;
   private String tablePath = null;
   private String latestCommitTime = null;
@@ -83,10 +88,13 @@ public abstract class HoodieReaderContext<T> {
   private final LocalAvroSchemaCache localAvroSchemaCache = LocalAvroSchemaCache.getInstance();
 
   protected HoodieReaderContext(StorageConfiguration<?> storageConfiguration,
-                                HoodieTableConfig tableConfig) {
+                                HoodieTableConfig tableConfig,
+                                Option<Predicate> filter) {
     this.storageConfiguration = storageConfiguration;
     this.recordKeyExtractor = tableConfig.populateMetaFields() ? metadataKeyExtractor() : virtualKeyExtractor(tableConfig.getRecordKeyFields()
         .orElseThrow(() -> new IllegalArgumentException("No record keys specified and meta fields are not populated")));
+    this.baseFileFormat = tableConfig.getBaseFileFormat();
+    this.filter = filter;
   }
 
   // Getter and Setter for schemaHandler
@@ -167,6 +175,10 @@ public abstract class HoodieReaderContext<T> {
 
   public StorageConfiguration<?> getStorageConfiguration() {
     return storageConfiguration;
+  }
+
+  public Option<Predicate> getFilter() {
+    return filter;
   }
 
   /**

@@ -79,7 +79,7 @@ public class TestHoodieFileGroupReaderInflightCommit extends HoodieFileGroupRead
     initMetaClient();
     initTestDataGenerator(new String[]{PARTITION_PATH});
     testTable = HoodieTestTable.of(metaClient);
-    readerContext = new HoodieAvroReaderContext(storageConf, metaClient.getTableConfig());
+    readerContext = new HoodieAvroReaderContext(storageConf, metaClient.getTableConfig(), Option.empty());
     readerContext.setRecordMerger(Option.of(new HoodieAvroRecordTestMerger()));
     setUpMockCommits();
   }
