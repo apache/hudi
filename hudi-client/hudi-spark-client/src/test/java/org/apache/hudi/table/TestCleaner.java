@@ -154,6 +154,8 @@ public class TestCleaner extends HoodieCleanerTestBase {
     JavaRDD<WriteStatus> statuses = insertFn.apply(client, writeRecords, newCommitTime);
     statuses = context.getJavaSparkContext().parallelize(statuses.collect(), 1);
     client.commit(newCommitTime, statuses, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+    assertNoWriteErrors(statuses.collect());
+
     // verify that there is a commit
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTimeline timeline = TIMELINE_FACTORY.createActiveTimeline(metaClient).getCommitAndReplaceTimeline();
@@ -230,13 +232,9 @@ public class TestCleaner extends HoodieCleanerTestBase {
 
       final Function2<List<HoodieRecord>, String, Integer> recordInsertGenWrappedFunction =
           generateWrapRecordsFn(isPreppedAPI, cfg, dataGen::generateInserts);
-
-      Pair<String, JavaRDD<WriteStatus>> result = insertFirstBigBatchForClientCleanerTest(context, metaClient, client, recordInsertGenWrappedFunction, insertFn);
-      client.commit(result.getLeft(), result.getRight());
-      assertNoWriteErrors(result.getRight().collect());
+      insertFirstBigBatchForClientCleanerTest(context, metaClient, client, recordInsertGenWrappedFunction, insertFn);
 
       HoodieTable table = HoodieSparkTable.create(client.getConfig(), context, metaClient);
-
       assertTrue(table.getCompletedCleanTimeline().empty());
 
       insertFirstFailedBigBatchForClientCleanerTest(context, client, recordInsertGenWrappedFunction, insertFn);
@@ -514,10 +512,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
 
     final Function2<List<HoodieRecord>, String, Integer> recordInsertGenWrappedFunction =
         generateWrapRecordsFn(isPreppedAPI, cfg, dataGen::generateInserts);
-
-    Pair<String, JavaRDD<WriteStatus>> result = insertFirstBigBatchForClientCleanerTest(context, metaClient, client, recordInsertGenWrappedFunction, insertFn);
-    client.commit(result.getLeft(), result.getRight());
-    assertNoWriteErrors(result.getRight().collect());
+    insertFirstBigBatchForClientCleanerTest(context, metaClient, client, recordInsertGenWrappedFunction, insertFn);
 
     HoodieTable table = HoodieSparkTable.create(client.getConfig(), context, metaClient);
     assertTrue(table.getCompletedCleanTimeline().empty());

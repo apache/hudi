@@ -32,6 +32,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
@@ -221,9 +222,12 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
     //1. prepare data and assert data result
     List<FileSlice> firstPartitionCommit2FileSlices = new ArrayList<>();
     List<FileSlice> secondPartitionCommit2FileSlices = new ArrayList<>();
-    HoodieWriteConfig cfg = getConfigBuilder().withRollbackUsingMarkers(isUsingMarkers).build();
+    HoodieWriteConfig cfg = getConfigBuilder()
+        .withRollbackUsingMarkers(isUsingMarkers)
+        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder().withRemoteTimelineClientRetry(true).build())
+        .build();
     SparkRDDWriteClient client = getHoodieWriteClient(cfg);
-    this.insertOverwriteCommitDataWithTwoPartitions(firstPartitionCommit2FileSlices, secondPartitionCommit2FileSlices, cfg, !isUsingMarkers);
+    this.insertOverwriteCommitDataWithTwoPartitions(firstPartitionCommit2FileSlices, secondPartitionCommit2FileSlices, cfg, !isUsingMarkers, client);
     HoodieTable table = this.getHoodieTable(metaClient, cfg);
     performRollbackAndValidate(isUsingMarkers, cfg, table, firstPartitionCommit2FileSlices, secondPartitionCommit2FileSlices);
     client.close();
