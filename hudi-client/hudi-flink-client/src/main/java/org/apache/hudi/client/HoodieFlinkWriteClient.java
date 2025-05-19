@@ -32,7 +32,6 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieNotSupportedException;
@@ -48,7 +47,6 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.commit.BucketInfo;
 import org.apache.hudi.table.action.commit.BucketType;
 import org.apache.hudi.table.upgrade.FlinkUpgradeDowngradeHelper;
-import org.apache.hudi.table.upgrade.UpgradeDowngrade;
 import org.apache.hudi.util.WriteStatMerger;
 
 import com.codahale.metrics.Timer;
@@ -415,14 +413,13 @@ public class HoodieFlinkWriteClient<T>
   }
 
   /**
-   * Upgrade downgrade the Hoodie table.
+   * Try upgrade the Hoodie table.
    *
    * <p>This action should only be executed once for each commit.
    * The modification of the table properties is not thread safe.
    */
-  public void upgradeDowngrade(String instantTime, HoodieTableMetaClient metaClient) {
-    new UpgradeDowngrade(metaClient, config, context, FlinkUpgradeDowngradeHelper.getInstance())
-        .run(HoodieTableVersion.current(), instantTime);
+  public void tryUpgrade(String instantTime, HoodieTableMetaClient metaClient) {
+    tryUpgrade(metaClient, Option.ofNullable(instantTime));
   }
 
   /**
