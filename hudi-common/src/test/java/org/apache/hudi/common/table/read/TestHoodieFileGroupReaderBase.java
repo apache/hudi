@@ -391,43 +391,32 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     }
     fileSlices.forEach(fileSlice -> {
       if (shouldValidatePartialRead(fileSlice, avroSchema)) {
-        assertThrows(IllegalArgumentException.class, () -> new HoodieFileGroupReader<>(
-            getHoodieReaderContext(tablePath, avroSchema, storageConf, metaClient),
-            metaClient.getStorage(),
-            tablePath,
-            metaClient.getActiveTimeline().lastInstant().get().requestedTime(),
-            fileSlice,
-            avroSchema,
-            avroSchema,
-            Option.empty(),
-            metaClient,
-            props,
-            1,
-            fileSlice.getTotalFileSize(),
-            false,
-            false));
+        assertThrows(IllegalArgumentException.class, () -> getHoodieFileGroupReader(storageConf, tablePath, metaClient, avroSchema, fileSlice, props));
       }
-      try (HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(
-          getHoodieReaderContext(tablePath, avroSchema, storageConf, metaClient),
-          metaClient.getStorage(),
-          tablePath,
-          metaClient.getActiveTimeline().lastInstant().get().requestedTime(),
-          fileSlice,
-          avroSchema,
-          avroSchema,
-          Option.empty(),
-          metaClient,
-          props,
-          0,
-          fileSlice.getTotalFileSize(),
-          false,
-          false)) {
+      try (HoodieFileGroupReader<T> fileGroupReader = getHoodieFileGroupReader(storageConf, tablePath, metaClient, avroSchema, fileSlice, props)) {
         readWithFileGroupReader(fileGroupReader, actualRecordList, avroSchema);
       } catch (Exception ex) {
         throw new RuntimeException(ex);
       }
     });
     return actualRecordList;
+  }
+
+  private HoodieFileGroupReader<T> getHoodieFileGroupReader(StorageConfiguration<?> storageConf, String tablePath, HoodieTableMetaClient metaClient, Schema avroSchema, FileSlice fileSlice,
+                                                                      TypedProperties props) {
+    return HoodieFileGroupReader.<T>newBuilder()
+        .withReaderContext(getHoodieReaderContext(tablePath, avroSchema, storageConf, metaClient))
+        .withHoodieTableMetaClient(metaClient)
+        .withLatestCommitTime(metaClient.getActiveTimeline().lastInstant().get().requestedTime())
+        .withFileSlice(fileSlice)
+        .withDataSchema(avroSchema)
+        .withRequestedSchema(avroSchema)
+        .withProps(props)
+        .withStart(0)
+        .withLength(fileSlice.getTotalFileSize())
+        .withShouldUseRecordPosition(false)
+        .withAllowInflightInstants(false)
+        .build();
   }
 
   protected void readWithFileGroupReader(

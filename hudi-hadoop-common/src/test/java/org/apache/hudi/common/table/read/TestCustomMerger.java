@@ -133,64 +133,68 @@ public class TestCustomMerger extends HoodieFileGroupReaderTestHarness {
   @ValueSource(booleans = {true, false})
   public void testWithOneLogFile(boolean useRecordPositions) throws IOException, InterruptedException {
     shouldWritePositions = Arrays.asList(useRecordPositions, useRecordPositions);
-    ClosableIterator<IndexedRecord> iterator = getFileGroupIterator(2, useRecordPositions);
-    List<String> leftKeysExpected =
-        Arrays.asList("6", "7", "8", "9", "10");
-    List<String> leftKeysActual = new ArrayList<>();
-    while (iterator.hasNext()) {
-      leftKeysActual.add(iterator.next()
-          .get(AVRO_SCHEMA.getField(ROW_KEY).pos())
-          .toString());
+    try (ClosableIterator<IndexedRecord> iterator = getFileGroupIterator(2, useRecordPositions)) {
+      List<String> leftKeysExpected =
+          Arrays.asList("6", "7", "8", "9", "10");
+      List<String> leftKeysActual = new ArrayList<>();
+      while (iterator.hasNext()) {
+        leftKeysActual.add(iterator.next()
+            .get(AVRO_SCHEMA.getField(ROW_KEY).pos())
+            .toString());
+      }
+      assertEquals(leftKeysExpected, leftKeysActual);
     }
-    assertEquals(leftKeysExpected, leftKeysActual);
   }
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testWithTwoLogFiles(boolean useRecordPositions) throws IOException, InterruptedException {
     shouldWritePositions = Arrays.asList(useRecordPositions, useRecordPositions, useRecordPositions);
-    ClosableIterator<IndexedRecord> iterator = getFileGroupIterator(3, useRecordPositions);
-    List<String> leftKeysExpected =
-        Arrays.asList("1", "3", "6", "7", "8", "9", "10");
-    List<String> leftKeysActual = new ArrayList<>();
-    while (iterator.hasNext()) {
-      leftKeysActual.add(iterator.next()
-          .get(AVRO_SCHEMA.getField(ROW_KEY).pos())
-          .toString());
+    try (ClosableIterator<IndexedRecord> iterator = getFileGroupIterator(3, useRecordPositions)) {
+      List<String> leftKeysExpected =
+          Arrays.asList("1", "3", "6", "7", "8", "9", "10");
+      List<String> leftKeysActual = new ArrayList<>();
+      while (iterator.hasNext()) {
+        leftKeysActual.add(iterator.next()
+            .get(AVRO_SCHEMA.getField(ROW_KEY).pos())
+            .toString());
+      }
+      assertEquals(leftKeysExpected, leftKeysActual);
     }
-    assertEquals(leftKeysExpected, leftKeysActual);
   }
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testWithThreeLogFiles(boolean useRecordPositions) throws IOException, InterruptedException {
     shouldWritePositions = Arrays.asList(useRecordPositions, useRecordPositions, useRecordPositions, useRecordPositions);
-    ClosableIterator<IndexedRecord> iterator = getFileGroupIterator(4, useRecordPositions);
-    // The records with keys 6 and 8 are deletes with lower ordering val
-    List<String> leftKeysExpected =
-        Arrays.asList("1", "3", "6", "7", "8", "9", "10");
-    List<String> leftKeysActual = new ArrayList<>();
-    while (iterator.hasNext()) {
-      leftKeysActual.add(iterator.next()
-          .get(AVRO_SCHEMA.getField(ROW_KEY).pos())
-          .toString());
+    try (ClosableIterator<IndexedRecord> iterator = getFileGroupIterator(4, useRecordPositions)) {
+      // The records with keys 6 and 8 are deletes with lower ordering val
+      List<String> leftKeysExpected =
+          Arrays.asList("1", "3", "6", "7", "8", "9", "10");
+      List<String> leftKeysActual = new ArrayList<>();
+      while (iterator.hasNext()) {
+        leftKeysActual.add(iterator.next()
+            .get(AVRO_SCHEMA.getField(ROW_KEY).pos())
+            .toString());
+      }
+      assertEquals(leftKeysExpected, leftKeysActual);
     }
-    assertEquals(leftKeysExpected, leftKeysActual);
   }
 
   @Test
   public void testWithFourLogFiles() throws IOException, InterruptedException {
     shouldWritePositions = Arrays.asList(false, false, false, false, false);
-    ClosableIterator<IndexedRecord> iterator = getFileGroupIterator(5);
-    List<String> leftKeysExpected =
-        Arrays.asList("1", "3", "5", "7", "9");
-    List<String> leftKeysActual = new ArrayList<>();
-    while (iterator.hasNext()) {
-      leftKeysActual.add(iterator.next()
-          .get(AVRO_SCHEMA.getField(ROW_KEY).pos())
-          .toString());
+    try (ClosableIterator<IndexedRecord> iterator = getFileGroupIterator(5)) {
+      List<String> leftKeysExpected =
+          Arrays.asList("1", "3", "5", "7", "9");
+      List<String> leftKeysActual = new ArrayList<>();
+      while (iterator.hasNext()) {
+        leftKeysActual.add(iterator.next()
+            .get(AVRO_SCHEMA.getField(ROW_KEY).pos())
+            .toString());
+      }
+      assertEquals(leftKeysExpected, leftKeysActual);
     }
-    assertEquals(leftKeysExpected, leftKeysActual);
   }
 
   @ParameterizedTest
@@ -198,16 +202,17 @@ public class TestCustomMerger extends HoodieFileGroupReaderTestHarness {
   public void testPositionMergeFallback(boolean log1haspositions, boolean log2haspositions,
                                         boolean log3haspositions, boolean log4haspositions) throws IOException, InterruptedException {
     shouldWritePositions = Arrays.asList(true, log1haspositions, log2haspositions, log3haspositions, log4haspositions);
-    ClosableIterator<IndexedRecord> iterator = getFileGroupIterator(5, true);
-    List<String> leftKeysExpected =
-        Arrays.asList("1", "3", "5", "7", "9");
-    List<String> leftKeysActual = new ArrayList<>();
-    while (iterator.hasNext()) {
-      leftKeysActual.add(iterator.next()
-          .get(AVRO_SCHEMA.getField(ROW_KEY).pos())
-          .toString());
+    try (ClosableIterator<IndexedRecord> iterator = getFileGroupIterator(5, true)) {
+      List<String> leftKeysExpected =
+          Arrays.asList("1", "3", "5", "7", "9");
+      List<String> leftKeysActual = new ArrayList<>();
+      while (iterator.hasNext()) {
+        leftKeysActual.add(iterator.next()
+            .get(AVRO_SCHEMA.getField(ROW_KEY).pos())
+            .toString());
+      }
+      assertEquals(leftKeysExpected, leftKeysActual);
     }
-    assertEquals(leftKeysExpected, leftKeysActual);
   }
 
   //generate all possible combos of 4 booleans
