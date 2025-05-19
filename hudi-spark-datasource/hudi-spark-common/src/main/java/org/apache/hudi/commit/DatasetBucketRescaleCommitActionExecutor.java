@@ -44,7 +44,6 @@ public class DatasetBucketRescaleCommitActionExecutor extends DatasetBulkInsertO
   private final String expression;
   private final String rule;
   private final int bucketNumber;
-  private PartitionBucketIndexHashingConfig hashingConfig;
 
   public DatasetBucketRescaleCommitActionExecutor(HoodieWriteConfig config,
                                                   SparkRDDWriteClient writeClient) {
@@ -59,7 +58,7 @@ public class DatasetBucketRescaleCommitActionExecutor extends DatasetBulkInsertO
    */
   @Override
   protected BulkInsertPartitioner<Dataset<Row>> getPartitioner(boolean populateMetaFields, boolean isTablePartitioned) {
-    return new BucketIndexBulkInsertPartitionerWithRows(writeClient.getConfig(), hashingConfig);
+    return new BucketIndexBulkInsertPartitionerWithRows(writeClient.getConfig(), expression, rule, bucketNumber);
   }
 
   /**
@@ -68,7 +67,7 @@ public class DatasetBucketRescaleCommitActionExecutor extends DatasetBulkInsertO
   @Override
   protected void preExecute() {
     super.preExecute();
-    hashingConfig = new PartitionBucketIndexHashingConfig(expression,
+    PartitionBucketIndexHashingConfig hashingConfig = new PartitionBucketIndexHashingConfig(expression,
         bucketNumber, rule, PartitionBucketIndexHashingConfig.CURRENT_VERSION, instantTime);
     boolean res = PartitionBucketIndexHashingConfig.saveHashingConfig(hashingConfig, table.getMetaClient());
     ValidationUtils.checkArgument(res);
