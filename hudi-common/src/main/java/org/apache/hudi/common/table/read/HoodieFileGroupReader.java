@@ -443,7 +443,6 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     public Builder<T> withHoodieTableMetaClient(HoodieTableMetaClient hoodieTableMetaClient) {
       this.hoodieTableMetaClient = hoodieTableMetaClient;
       this.tablePath = hoodieTableMetaClient.getBasePath().toString();
-      this.storage = hoodieTableMetaClient.getStorage();
       return this;
     }
 
@@ -474,14 +473,18 @@ public final class HoodieFileGroupReader<T> implements Closeable {
 
     public HoodieFileGroupReader<T> build() {
       ValidationUtils.checkArgument(readerContext != null, "Reader context is required");
-      ValidationUtils.checkArgument(storage != null, "Storage is required");
+      ValidationUtils.checkArgument(hoodieTableMetaClient != null, "Hoodie table meta client is required");
       ValidationUtils.checkArgument(tablePath != null, "Table path is required");
+      // set the storage with the readerContext's storage configuration
+      this.storage = hoodieTableMetaClient.getStorage().newInstance(new StoragePath(tablePath), readerContext.getStorageConfiguration());
+
+      ValidationUtils.checkArgument(storage != null, "Storage is required");
       ValidationUtils.checkArgument(latestCommitTime != null, "Latest commit time is required");
       ValidationUtils.checkArgument(fileSlice != null, "File slice is required");
       ValidationUtils.checkArgument(dataSchema != null, "Data schema is required");
       ValidationUtils.checkArgument(requestedSchema != null, "Requested schema is required");
-      ValidationUtils.checkArgument(hoodieTableMetaClient != null, "Hoodie table meta client is required");
       ValidationUtils.checkArgument(props != null, "Props is required");
+
 
       return new HoodieFileGroupReader<>(
           readerContext, storage, tablePath, latestCommitTime, fileSlice,
