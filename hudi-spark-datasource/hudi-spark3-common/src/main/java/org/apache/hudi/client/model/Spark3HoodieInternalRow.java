@@ -23,16 +23,6 @@ import org.apache.spark.unsafe.types.UTF8String;
 
 public class Spark3HoodieInternalRow extends HoodieInternalRow {
 
-  public Spark3HoodieInternalRow(UTF8String commitTime,
-      UTF8String commitSeqNumber,
-      UTF8String recordKey,
-      UTF8String partitionPath,
-      UTF8String fileName,
-      InternalRow sourceRow,
-      boolean sourceContainsMetaFields) {
-    super(commitTime, commitSeqNumber, recordKey, partitionPath, fileName, sourceRow, sourceContainsMetaFields);
-  }
-
   public Spark3HoodieInternalRow(UTF8String[] metaFields,
       InternalRow sourceRow,
       boolean sourceContainsMetaFields) {

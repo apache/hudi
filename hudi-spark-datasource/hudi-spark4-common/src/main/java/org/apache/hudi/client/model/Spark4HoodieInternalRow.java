@@ -24,16 +24,6 @@ import org.apache.spark.unsafe.types.VariantVal;
 
 public class Spark4HoodieInternalRow extends HoodieInternalRow {
 
-  public Spark4HoodieInternalRow(UTF8String commitTime,
-      UTF8String commitSeqNumber,
-      UTF8String recordKey,
-      UTF8String partitionPath,
-      UTF8String fileName,
-      InternalRow sourceRow,
-      boolean sourceContainsMetaFields) {
-    super(commitTime, commitSeqNumber, recordKey, partitionPath, fileName, sourceRow, sourceContainsMetaFields);
-  }
-
   public Spark4HoodieInternalRow(UTF8String[] metaFields,
       InternalRow sourceRow,
       boolean sourceContainsMetaFields) {

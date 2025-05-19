@@ -64,25 +64,6 @@ public abstract class HoodieInternalRow extends InternalRow {
    */
   protected final boolean sourceContainsMetaFields;
 
-  public HoodieInternalRow(UTF8String commitTime,
-                           UTF8String commitSeqNumber,
-                           UTF8String recordKey,
-                           UTF8String partitionPath,
-                           UTF8String fileName,
-                           InternalRow sourceRow,
-                           boolean sourceContainsMetaFields) {
-    this.metaFields = new UTF8String[] {
-        commitTime,
-        commitSeqNumber,
-        recordKey,
-        partitionPath,
-        fileName
-    };
-
-    this.sourceRow = sourceRow;
-    this.sourceContainsMetaFields = sourceContainsMetaFields;
-  }
-
   public HoodieInternalRow(UTF8String[] metaFields,
                            InternalRow sourceRow,
                            boolean sourceContainsMetaFields) {

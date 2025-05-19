@@ -67,11 +67,13 @@ public class TestHoodieInternalRow {
 
     InternalRow row = new GenericInternalRow(values);
     HoodieInternalRow hoodieInternalRow = SparkAdapterSupport$.MODULE$.sparkAdapter().createInternalRow(
-        UTF8String.fromString("commitTime"),
-        UTF8String.fromString("commitSeqNo"),
-        UTF8String.fromString("recordKey"),
-        UTF8String.fromString("partitionPath"),
-        UTF8String.fromString("fileName"),
+        new UTF8String[] {
+            UTF8String.fromString("commitTime"),
+            UTF8String.fromString("commitSeqNo"),
+            UTF8String.fromString("recordKey"),
+            UTF8String.fromString("partitionPath"),
+            UTF8String.fromString("fileName")
+        },
         row,
         true);
 
@@ -84,11 +86,13 @@ public class TestHoodieInternalRow {
     Object[] values = getRandomValue(true);
     InternalRow row = new GenericInternalRow(values);
     HoodieInternalRow hoodieInternalRow = SparkAdapterSupport$.MODULE$.sparkAdapter().createInternalRow(
-        UTF8String.fromString("commitTime"),
-        UTF8String.fromString("commitSeqNo"),
-        UTF8String.fromString("recordKey"),
-        UTF8String.fromString("partitionPath"),
-        UTF8String.fromString("fileName"),
+        new UTF8String[] {
+            UTF8String.fromString("commitTime"),
+            UTF8String.fromString("commitSeqNo"),
+            UTF8String.fromString("recordKey"),
+            UTF8String.fromString("partitionPath"),
+            UTF8String.fromString("fileName")
+        },
         row,
         true);
 
@@ -120,19 +124,23 @@ public class TestHoodieInternalRow {
     Object[] values = getRandomValue(true);
     InternalRow row = new GenericInternalRow(values);
     HoodieInternalRow hoodieInternalRow1 = SparkAdapterSupport$.MODULE$.sparkAdapter().createInternalRow(
-        UTF8String.fromString("commitTime"),
-        UTF8String.fromString("commitSeqNo"),
-        UTF8String.fromString("recordKey"),
-        UTF8String.fromString("partitionPath"),
-        UTF8String.fromString("fileName"),
+        new UTF8String[] {
+            UTF8String.fromString("commitTime"),
+            UTF8String.fromString("commitSeqNo"),
+            UTF8String.fromString("recordKey"),
+            UTF8String.fromString("partitionPath"),
+            UTF8String.fromString("fileName")
+        },
         row,
         true);
     HoodieInternalRow hoodieInternalRow2 = SparkAdapterSupport$.MODULE$.sparkAdapter().createInternalRow(
-        UTF8String.fromString("commitTime"),
-        UTF8String.fromString("commitSeqNo"),
-        UTF8String.fromString("recordKey"),
-        UTF8String.fromString("partitionPath"),
-        UTF8String.fromString("fileName"),
+        new UTF8String[] {
+            UTF8String.fromString("commitTime"),
+            UTF8String.fromString("commitSeqNo"),
+            UTF8String.fromString("recordKey"),
+            UTF8String.fromString("partitionPath"),
+            UTF8String.fromString("fileName")
+        },
         row,
         false);
     assertEquals(row.numFields(), hoodieInternalRow1.numFields());
@@ -147,11 +155,13 @@ public class TestHoodieInternalRow {
 
       InternalRow row = new GenericInternalRow(values);
       HoodieInternalRow hoodieInternalRow = SparkAdapterSupport$.MODULE$.sparkAdapter().createInternalRow(
-          UTF8String.fromString("commitTime"),
-          UTF8String.fromString("commitSeqNo"),
-          UTF8String.fromString("recordKey"),
-          UTF8String.fromString("partitionPath"),
-          UTF8String.fromString("fileName"),
+          new UTF8String[] {
+              UTF8String.fromString("commitTime"),
+              UTF8String.fromString("commitSeqNo"),
+              UTF8String.fromString("recordKey"),
+              UTF8String.fromString("partitionPath"),
+              UTF8String.fromString("fileName")
+          },
           row,
           true);
 
@@ -177,11 +187,13 @@ public class TestHoodieInternalRow {
       Object[] values = getRandomValue(true);
       InternalRow row = new GenericInternalRow(values);
       HoodieInternalRow hoodieInternalRow = SparkAdapterSupport$.MODULE$.sparkAdapter().createInternalRow(
-          UTF8String.fromString("commitTime"),
-          UTF8String.fromString("commitSeqNo"),
-          UTF8String.fromString("recordKey"),
-          UTF8String.fromString("partitionPath"),
-          UTF8String.fromString("fileName"),
+          new UTF8String[] {
+              UTF8String.fromString("commitTime"),
+              UTF8String.fromString("commitSeqNo"),
+              UTF8String.fromString("recordKey"),
+              UTF8String.fromString("partitionPath"),
+              UTF8String.fromString("fileName")
+          },
           row,
           true);
 

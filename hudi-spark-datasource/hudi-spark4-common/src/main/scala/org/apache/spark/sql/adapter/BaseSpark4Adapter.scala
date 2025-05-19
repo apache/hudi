@@ -122,16 +122,6 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
 
   override def createComparableList(t: Array[AnyRef]): FlatLists.ComparableList[Comparable[HoodieRecord[_]]] = Spark4FlatLists.ofComparableArray(t)
 
-  override def createInternalRow(commitTime: UTF8String,
-                                 commitSeqNumber: UTF8String,
-                                 recordKey: UTF8String,
-                                 partitionPath: UTF8String,
-                                 fileName: UTF8String,
-                                 sourceRow: InternalRow,
-                                 sourceContainsMetaFields: Boolean): HoodieInternalRow = {
-    new Spark4HoodieInternalRow(commitTime, commitSeqNumber, recordKey, partitionPath, fileName, sourceRow, sourceContainsMetaFields)
-  }
-
   override def createInternalRow(metaFields: Array[UTF8String],
                                  sourceRow: InternalRow,
                                  sourceContainsMetaFields: Boolean): HoodieInternalRow = {

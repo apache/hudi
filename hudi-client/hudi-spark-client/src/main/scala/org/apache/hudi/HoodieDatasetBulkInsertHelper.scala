@@ -110,15 +110,15 @@ object HoodieDatasetBulkInsertHelper
 
           iter.map { row =>
             // auto generate record keys if needed
-            val recordKey = keyGenerator.getRecordKey(row, schema)
-            val partitionPath = keyGenerator.getPartitionPath(row, schema)
-            val commitTimestamp = UTF8String.EMPTY_UTF8
-            val commitSeqNo = UTF8String.EMPTY_UTF8
-            val filename = UTF8String.EMPTY_UTF8
+            val metaFields = new Array[UTF8String](5)
+            metaFields(2) = keyGenerator.getRecordKey(row, schema)
+            metaFields(3) = keyGenerator.getPartitionPath(row, schema)
+            metaFields(0) = UTF8String.EMPTY_UTF8
+            metaFields(1) = UTF8String.EMPTY_UTF8
+            metaFields(4) = UTF8String.EMPTY_UTF8
 
             // TODO use mutable row, avoid re-allocating
-            sparkAdapter.createInternalRow(
-              commitTimestamp, commitSeqNo, recordKey, partitionPath, filename, row, false)
+            sparkAdapter.createInternalRow(metaFields, row, false)
           }
         }, SQLConf.get)
       }

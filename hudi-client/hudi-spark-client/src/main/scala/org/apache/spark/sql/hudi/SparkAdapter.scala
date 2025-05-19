@@ -288,14 +288,6 @@ trait SparkAdapter extends Serializable {
    */
   def createComparableList(t: Array[AnyRef]): FlatLists.ComparableList[Comparable[HoodieRecord[_]]] = FlatLists.ofComparableArray(t)
 
-  def createInternalRow(commitTime: UTF8String,
-                        commitSeqNumber: UTF8String,
-                        recordKey: UTF8String,
-                        partitionPath: UTF8String,
-                        fileName: UTF8String,
-                        sourceRow: InternalRow,
-                        sourceContainsMetaFields: Boolean): HoodieInternalRow
-
   def createInternalRow(metaFields: Array[UTF8String],
                         sourceRow: InternalRow,
                         sourceContainsMetaFields: Boolean): HoodieInternalRow

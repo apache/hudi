@@ -116,16 +116,6 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
 
   def stopSparkContext(jssc: JavaSparkContext, exitCode: Int): Unit
 
-  override def createInternalRow(commitTime: UTF8String,
-                                commitSeqNumber: UTF8String,
-                                recordKey: UTF8String,
-                                partitionPath: UTF8String,
-                                fileName: UTF8String,
-                                sourceRow: InternalRow,
-                                sourceContainsMetaFields: Boolean): HoodieInternalRow = {
-    new Spark3HoodieInternalRow(commitTime, commitSeqNumber, recordKey, partitionPath, fileName, sourceRow, sourceContainsMetaFields)
-  }
-
   override def createInternalRow(metaFields: Array[UTF8String],
                                 sourceRow: InternalRow,
                                 sourceContainsMetaFields: Boolean): HoodieInternalRow = {
