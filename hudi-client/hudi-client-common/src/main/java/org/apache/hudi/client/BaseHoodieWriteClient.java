@@ -974,7 +974,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   @VisibleForTesting
   void startCommitWithTime(String instantTime, String actionType) {
     HoodieTableMetaClient metaClient = createMetaClient(true);
-    startCommitWithTime(instantTime, actionType, metaClient);
+    startCommitWithTime(Option.of(instantTime), actionType, metaClient);
   }
 
   /**
