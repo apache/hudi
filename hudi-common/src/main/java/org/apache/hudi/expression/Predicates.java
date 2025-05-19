@@ -89,6 +89,10 @@ public class Predicates {
     return new Not(expr);
   }
 
+  public static StringStartsWithAny startsWithAny(Expression left, List<Expression> right) {
+    return new StringStartsWithAny(left, right);
+  }
+
   public static class TrueExpression extends LeafExpression implements Predicate {
 
     private static final TrueExpression INSTANCE = new TrueExpression();

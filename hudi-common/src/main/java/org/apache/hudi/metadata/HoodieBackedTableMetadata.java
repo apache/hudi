@@ -53,8 +53,9 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.expression.BindVisitor;
 import org.apache.hudi.expression.Expression;
+import org.apache.hudi.expression.Literal;
 import org.apache.hudi.expression.Predicate;
-import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.expression.Predicates;
 import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.io.storage.HoodieSeekingFileReader;
@@ -64,21 +65,11 @@ import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.util.Transient;
 
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.avro.io.DatumReader;
-import org.apache.avro.io.DatumWriter;
-import org.apache.avro.io.Decoder;
-import org.apache.avro.io.DecoderFactory;
-import org.apache.avro.io.Encoder;
-import org.apache.avro.io.EncoderFactory;
-import org.apache.avro.reflect.ReflectData;
-import org.apache.avro.specific.SpecificDatumReader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -98,6 +89,7 @@ import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADAT
 import static org.apache.hudi.common.util.CollectionUtils.toStream;
 import static org.apache.hudi.common.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
+import static org.apache.hudi.metadata.HoodieMetadataPayload.KEY_FIELD_NAME;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_FILES;
@@ -234,40 +226,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
             });
   }
 
-  private Iterator<HoodieRecord<HoodieMetadataPayload>> getByKeyPrefixes(FileSlice fileSlice,
-                                                                         List<String> sortedKeyPrefixes,
-                                                                         String partitionName) {
-    // NOTE: Since this will be executed by executors, we can't access previously cached
-    //       readers, and therefore have to always open new ones
-    Pair<HoodieSeekingFileReader<?>, HoodieMetadataLogRecordReader> readers =
-        openReaders(partitionName, fileSlice);
-    try {
-      List<Long> timings = new ArrayList<>();
-      HoodieSeekingFileReader<?> baseFileReader = readers.getKey();
-      HoodieMetadataLogRecordReader logRecordScanner = readers.getRight();
-
-      if (baseFileReader == null && logRecordScanner == null) {
-        // TODO: what do we do if both does not exist? should we throw an exception and let caller do the fallback ?
-        return Collections.emptyIterator();
-      }
-      boolean fullKeys = false;
-
-      Map<String, HoodieRecord<HoodieMetadataPayload>> logRecords =
-          readLogRecords(logRecordScanner, sortedKeyPrefixes, fullKeys, timings);
-      Map<String, HoodieRecord<HoodieMetadataPayload>> mergedRecords =
-          readFromBaseAndMergeWithLogRecords(baseFileReader, sortedKeyPrefixes, fullKeys, logRecords, timings, partitionName);
-
-      LOG.debug("Metadata read for {} keys took [baseFileRead, logMerge] {} ms", sortedKeyPrefixes.size(), timings);
-
-      return mergedRecords.values().iterator();
-    } catch (IOException ioe) {
-      throw new HoodieIOException("Error merging records from metadata table for  " + sortedKeyPrefixes.size() + " key : ", ioe);
-    } finally {
-      closeReader(readers);
-    }
-  }
-
-  // TODO: add predicate support.
   private Iterator<HoodieRecord<HoodieMetadataPayload>> getByKeyPrefixesWithFileGroupReader(FileSlice fileSlice,
                                                                                             List<String> sortedKeyPrefixes,
                                                                                             String partitionName) throws IOException {
@@ -282,28 +240,35 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     InstantRange instantRange = InstantRange.builder()
         .rangeType(InstantRange.RangeType.EXACT_MATCH)
         .explicitInstants(validInstantTimestamps).build();
-    HoodieFileGroupReader fileGroupReader = getFileGroupReader(
+    HoodieFileGroupReader<IndexedRecord> fileGroupReader = getFileGroupReader(
         metadataMetaClient.getTableConfig(),
-        metadataMetaClient.getBasePath().toString(),
         latestMetadataInstantTime,
         fileSlice,
         schema,
         schema,
-        Option.empty(),
         metadataMetaClient,
         new TypedProperties(),
-        Collections.emptyList());
+        Option.of(transformKeyPrefixesToPredicate(sortedKeyPrefixes)));
     fileGroupReader.setInstantRange(Option.of(instantRange));
-    fileGroupReader.initRecordIterators();
-    ClosableIterator it = fileGroupReader.getClosableIterator();
+    ClosableIterator<IndexedRecord> it = fileGroupReader.getClosableIterator();
     return new HoodieRecordIterator(it, partitionName, sortedKeyPrefixes);
+  }
+
+  private Predicate transformKeysToPredicate(List<String> keys) {
+    List<Expression> right = keys.stream().map(k -> Literal.from(k)).collect(Collectors.toList());
+    return Predicates.in(null, right);
+  }
+
+  private Predicate transformKeyPrefixesToPredicate(List<String> keyPrefixes) {
+    List<Expression> right = keyPrefixes.stream().map(kp -> Literal.from(kp)).collect(Collectors.toList());
+    return Predicates.startsWithAny(null, right);
   }
 
   public static class HoodieRecordIterator implements Iterator<HoodieRecord<HoodieMetadataPayload>> {
     private final ClosableIterator<IndexedRecord> baseIterator;
     private final String partitionName;
     private final List<String> sortedKeyPrefixes;
-    private HoodieMetadataRecord metadataRecord;
+    private GenericRecord metadataRecord;
 
     public HoodieRecordIterator(ClosableIterator<IndexedRecord> baseIterator, String partitionName, List<String> sortedKeyPrefixes) {
       this.baseIterator = baseIterator;
@@ -317,19 +282,12 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         return true;
       }
 
-      while (baseIterator.hasNext()) {
-        try {
-          metadataRecord = transform((GenericRecord) baseIterator.next());
-        } catch (IOException e) {
-          throw new RuntimeException(e);
-        }
-        boolean found = sortedKeyPrefixes.stream().anyMatch(p -> metadataRecord.getKey().startsWith(p));
-        if (found) {
-          return true;
-        }
+      if (baseIterator.hasNext()) {
+        metadataRecord = (GenericRecord) baseIterator.next();
+        return true;
+      } else {
+        return false;
       }
-      metadataRecord = null;
-      return false;
     }
 
     @Override
@@ -337,8 +295,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       if (metadataRecord == null) {
         throw new NoSuchElementException();
       }
-      HoodieMetadataPayload payload = new HoodieMetadataPayload(metadataRecord, metadataRecord.getKey());
-      HoodieKey key = new HoodieKey(metadataRecord.getKey(), partitionName);
+      HoodieKey key = new HoodieKey(metadataRecord.get(KEY_FIELD_NAME).toString(), partitionName);
+      HoodieMetadataPayload payload = new HoodieMetadataPayload(Option.of(metadataRecord));
       metadataRecord = null;
 
       return new HoodieAvroRecord<>(key, payload);
@@ -452,59 +410,30 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
           .rangeType(InstantRange.RangeType.EXACT_MATCH)
           .explicitInstants(validInstantTimestamps).build();
 
-      HoodieFileGroupReader fileGroupReader = getFileGroupReader(
+      HoodieFileGroupReader<IndexedRecord> fileGroupReader = getFileGroupReader(
           metadataMetaClient.getTableConfig(),
-          metadataMetaClient.getBasePath().toString(),
           latestMetadataInstantTime,
           fileSlice,
           schema,
           schema,
-          Option.empty(),
           metadataMetaClient,
           new TypedProperties(),
-          Collections.emptyList());
+          Option.of(transformKeysToPredicate(sortedKeys)));
       fileGroupReader.setInstantRange(Option.of(instantRange));
-      fileGroupReader.initRecordIterators();
-      ClosableIterator it = fileGroupReader.getClosableIterator();
-      Map<String, HoodieRecord<HoodieMetadataPayload>> records = new HashMap<>();
-      while (it.hasNext()) {
-        HoodieMetadataRecord r = transform((GenericRecord) it.next());
-        // Remove bad results.
-        if (!keys.contains(r.getKey())) {
-          continue;
+      try (ClosableIterator<IndexedRecord> it = fileGroupReader.getClosableIterator()) {
+        Map<String, HoodieRecord<HoodieMetadataPayload>> records = new HashMap<>();
+        while (it.hasNext()) {
+          GenericRecord metadataRecord = (GenericRecord) it.next();
+          String key = metadataRecord.get(KEY_FIELD_NAME).toString();
+          HoodieMetadataPayload payload = new HoodieMetadataPayload(Option.of(metadataRecord));
+          HoodieKey hoodieKey = new HoodieKey(key, partitionName);
+          records.put(key, new HoodieAvroRecord<>(hoodieKey, payload));
         }
-        HoodieMetadataPayload payload = new HoodieMetadataPayload(r, r.getKey());
-        HoodieKey key = new HoodieKey(r.getKey(), partitionName);
-        HoodieAvroRecord record = new HoodieAvroRecord(key, payload);
-        records.put(key.getRecordKey(), record);
+        return records;
       }
-      return records;
     } catch (IOException e) {
       throw new HoodieIOException("Error merging records from metadata table for  " + keys.size() + " keys : ", e);
     }
-  }
-
-  /**
-   * This is a temporary solution. We should create a reader to generate HoodieMetadataRecord
-   * record directly.
-   * TODO: We should have a specific hfile writer for SpecialRecord instead of GenericRecord.
-   * @param from
-   * @return
-   * @throws IOException
-   */
-  private static HoodieMetadataRecord transform(GenericRecord from) throws IOException {
-    // Serialize the GenericRecord to binary
-    ByteArrayOutputStream out = new ByteArrayOutputStream();
-    DatumWriter<GenericRecord> writer = new GenericDatumWriter<>(from.getSchema());
-    Encoder encoder = EncoderFactory.get().binaryEncoder(out, null);
-    writer.write(from, encoder);
-    encoder.flush();
-
-    // Deserialize it back as a SpecificRecord
-    DatumReader<HoodieMetadataRecord> reader = new SpecificDatumReader<>(from.getSchema(),
-        ReflectData.get().getSchema(HoodieMetadataRecord.class));
-    Decoder decoder = DecoderFactory.get().binaryDecoder(out.toByteArray(), null);
-    return reader.read(null, decoder);
   }
 
   private Map<String, HoodieRecord<HoodieMetadataPayload>> readLogRecords(HoodieMetadataLogRecordReader logRecordReader,
@@ -574,7 +503,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
           .map(record -> {
             GenericRecord data = (GenericRecord) record.getData();
             // populateMetaFields is hardcoded to false for the metadata table so key must be extracted from the `key` field
-            String recordKey = (String) data.get(HoodieMetadataPayload.KEY_FIELD_NAME);
+            String recordKey = (String) data.get(KEY_FIELD_NAME);
             return Pair.of(recordKey, composeRecord(data, recordKey, partitionName));
           })
           .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
@@ -869,33 +798,27 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         .collect(Collectors.groupingBy(Pair::getKey, Collectors.mapping(Pair::getValue, Collectors.toSet())));
   }
 
-  private HoodieFileGroupReader<HoodieMetadataRecord> getFileGroupReader(HoodieTableConfig tableConfig,
-                                                                         String tablePath,
-                                                                         String latestCommitTime,
-                                                                         FileSlice fileSlice,
-                                                                         Schema dataSchema,
-                                                                         Schema requestedSchema,
-                                                                         Option<InternalSchema> internalSchemaOpt,
-                                                                         HoodieTableMetaClient metaClient,
-                                                                         TypedProperties props,
-                                                                         List<Predicate> filters) throws IOException {
-    HoodieReaderContext readerContext =
-        new HoodieAvroReaderContext(storageConf, tableConfig);
-    return new HoodieFileGroupReader<>(
-        readerContext,
-        metadataMetaClient.getStorage(),
-        tablePath,
-        latestCommitTime,
-        fileSlice,
-        dataSchema,
-        requestedSchema,
-        internalSchemaOpt,
-        metaClient,
-        props,
-        0,
-        Long.MAX_VALUE,
-        false,
-        filters,
-        false);
+  private HoodieFileGroupReader<IndexedRecord> getFileGroupReader(HoodieTableConfig tableConfig,
+                                                                  String latestCommitTime,
+                                                                  FileSlice fileSlice,
+                                                                  Schema dataSchema,
+                                                                  Schema requestedSchema,
+                                                                  HoodieTableMetaClient metaClient,
+                                                                  TypedProperties props,
+                                                                  Option<Predicate> filter) throws IOException {
+    HoodieReaderContext<IndexedRecord> readerContext =
+        new HoodieAvroReaderContext(storageConf, tableConfig, filter);
+    return HoodieFileGroupReader.<IndexedRecord>newBuilder()
+        .withReaderContext(readerContext)
+        .withHoodieTableMetaClient(metaClient)
+        .withLatestCommitTime(latestCommitTime)
+        .withFileSlice(fileSlice)
+        .withDataSchema(dataSchema)
+        .withRequestedSchema(requestedSchema)
+        .withProps(props)
+        .withStart(0)
+        .withLength(Long.MAX_VALUE)
+        .withShouldUseRecordPosition(false)
+        .build();
   }
 }

@@ -90,7 +90,7 @@ public abstract class HoodieAvroHFileReaderImplBase extends HoodieAvroFileReader
   public abstract ClosableIterator<IndexedRecord> getIndexedRecordsByKeyPrefixIterator(
       List<String> sortedKeyPrefixes, Schema readerSchema) throws IOException;
 
-  protected static GenericRecord deserialize(final byte[] keyBytes,
+  protected static IndexedRecord deserialize(final byte[] keyBytes,
                                              final byte[] valueBytes,
                                              Schema writerSchema,
                                              Schema readerSchema) throws IOException {
@@ -98,7 +98,7 @@ public abstract class HoodieAvroHFileReaderImplBase extends HoodieAvroFileReader
         keyBytes, 0, keyBytes.length, valueBytes, 0, valueBytes.length, writerSchema, readerSchema);
   }
 
-  protected static GenericRecord deserialize(final byte[] keyBytes, int keyOffset, int keyLength,
+  protected static IndexedRecord deserialize(final byte[] keyBytes, int keyOffset, int keyLength,
                                              final byte[] valueBytes, int valueOffset, int valueLength,
                                              Schema writerSchema,
                                              Schema readerSchema) throws IOException {
@@ -111,11 +111,10 @@ public abstract class HoodieAvroHFileReaderImplBase extends HoodieAvroFileReader
         record.put(keyFieldSchema.pos(), fromUTF8Bytes(keyBytes, keyOffset, keyLength));
       }
     });
-
     return record;
   }
 
-  private static Option<Schema.Field> getKeySchema(Schema schema) {
+  static Option<Schema.Field> getKeySchema(Schema schema) {
     return Option.ofNullable(schema.getField(KEY_FIELD_NAME));
   }
 }

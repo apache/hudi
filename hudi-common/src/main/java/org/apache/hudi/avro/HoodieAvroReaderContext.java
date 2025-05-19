@@ -23,10 +23,8 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
-import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
@@ -39,7 +37,10 @@ import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.expression.Expression;
+import org.apache.hudi.expression.Predicate;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
+import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -66,17 +67,13 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  */
 public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> {
   private final String payloadClass;
-  private HoodieFileFormat dataBlockFormat = HoodieFileFormat.PARQUET;
 
   public HoodieAvroReaderContext(
       StorageConfiguration<?> storageConfiguration,
-      HoodieTableConfig tableConfig) {
-    super(storageConfiguration, tableConfig);
+      HoodieTableConfig tableConfig,
+      Option<Predicate> filter) {
+    super(storageConfiguration, tableConfig, filter);
     this.payloadClass = tableConfig.getPayloadClass();
-    if (tableConfig.getLogFileFormat() != null
-        && tableConfig.getLogFileFormat() != HoodieFileFormat.HOODIE_LOG) {
-      dataBlockFormat = tableConfig.getLogFileFormat();
-    }
   }
 
   @Override
@@ -86,13 +83,29 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       long length,
       Schema dataSchema,
       Schema requiredSchema,
-      HoodieStorage storage
-  ) throws IOException {
-    HoodieFileFormat fileFormat = detectFileFormat(filePath);
+      HoodieStorage storage) throws IOException {
     HoodieAvroFileReader reader = (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(storage)
         .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(new HoodieConfig(),
-            filePath, fileFormat, Option.empty());
-    return reader.getIndexedRecordIterator(dataSchema, requiredSchema);
+            filePath, baseFileFormat, Option.empty());
+    if (filter.isEmpty()) {
+      return reader.getIndexedRecordIterator(dataSchema, requiredSchema);
+    } else {
+      // Currently predicate is only supported for HFile reader.
+      if (!(reader instanceof HoodieAvroHFileReaderImplBase)) {
+        return reader.getIndexedRecordIterator(dataSchema, requiredSchema);
+      } else {
+        // For HFile reader, only two predicates are supported: IN and StringStartsWithAny.
+        HoodieAvroHFileReaderImplBase hfileReader = (HoodieAvroHFileReaderImplBase) reader;
+        List<Expression> children = filter.get().getChildren();
+        List<String> keysOrPrefixes = children.subList(1, children.size())
+            .stream().map(e -> (String) e.eval(null)).collect(Collectors.toList());
+        if (filter.get().getOperator().equals(Expression.Operator.IN)) { // With keys.
+          return hfileReader.getIndexedRecordsByKeysIterator(keysOrPrefixes, requiredSchema);
+        } else {  // With key prefixes.
+          return hfileReader.getIndexedRecordsByKeyPrefixIterator(keysOrPrefixes, requiredSchema);
+        }
+      }
+    }
   }
 
   @Override
@@ -232,21 +245,6 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       currentRecord = (IndexedRecord) value;
     }
     return null;
-  }
-
-  private HoodieFileFormat detectFileFormat(StoragePath filePath) {
-    try {
-      HoodieFileFormat format = HoodieFileFormat.fromFileExtension(filePath.getFileExtension());
-      if (format == HoodieFileFormat.HOODIE_LOG) {
-        return dataBlockFormat;
-      }
-      return format;
-    } catch (Exception e) {
-      if (FSUtils.isLogFile(filePath)) {
-        return dataBlockFormat;
-      }
-      throw new IllegalArgumentException("Invalid file path: " + filePath, e);
-    }
   }
 
   /**

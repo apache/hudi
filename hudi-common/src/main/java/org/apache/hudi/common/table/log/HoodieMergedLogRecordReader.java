@@ -27,6 +27,8 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.expression.Expression;
+import org.apache.hudi.expression.Predicate;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
@@ -156,13 +158,31 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
     // Do the scan and merge
     timer.startTimer();
 
-    scanInternal(Option.empty(), false);
+    Option<KeySpec> keySpecOpt = createKeySpec(readerContext.getFilter());
+    scanInternal(keySpecOpt, false);
 
     this.totalTimeTakenToReadAndMergeBlocks = timer.endTimer();
     this.numMergedRecordsInLog = recordBuffer.size();
 
     LOG.info("Number of log files scanned => {}", logFilePaths.size());
     LOG.info("Number of entries in Map => {}", recordBuffer.size());
+  }
+
+  private Option<KeySpec> createKeySpec(Option<Predicate> filter) {
+    if (filter.isEmpty()) {
+      return Option.empty();
+    }
+    List<Expression> children = filter.get().getChildren();
+    List<Expression> rightChildren = children.subList(1, children.size());
+    List<String> keyOrPrefixes = rightChildren.stream()
+        .map(e -> (String) e.eval(null)).collect(Collectors.toList());
+    if (filter.get().getOperator() == Expression.Operator.IN) {
+      return Option.of(new FullKeySpec(keyOrPrefixes));
+    } else if (filter.get().getOperator() == Expression.Operator.STARTS_WITH) {
+      return Option.of(new PrefixKeySpec(keyOrPrefixes));
+    } else {
+      return Option.empty();
+    }
   }
 
   @Override

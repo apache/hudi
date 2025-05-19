@@ -24,6 +24,7 @@ import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -43,7 +44,6 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.Lazy;
 
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -81,6 +81,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
   // In-memory cache for meta info
   private final Map<String, byte[]> metaInfoMap;
   private final Lazy<Schema> schema;
+  private boolean isMetadataFile;
   private boolean isMetaInfoLoaded = false;
   private long numKeyValueEntries = -1L;
 
@@ -90,6 +91,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
     this.bytesContent = Option.empty();
     this.metaInfoMap = new HashMap<>();
     this.schema = schemaOption.map(Lazy::eagerly).orElseGet(() -> Lazy.lazily(this::fetchSchema));
+    this.isMetadataFile = path.toString().contains(HoodieTableMetaClient.METAFOLDER_NAME);
   }
 
   public HoodieNativeAvroHFileReader(HoodieStorage storage, byte[] content, Option<Schema> schemaOption) {
@@ -98,6 +100,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
     this.bytesContent = Option.of(content);
     this.metaInfoMap = new HashMap<>();
     this.schema = schemaOption.map(Lazy::eagerly).orElseGet(() -> Lazy.lazily(this::fetchSchema));
+    this.isMetadataFile = path.toString().contains(HoodieTableMetaClient.METAFOLDER_NAME);
   }
 
   @Override
@@ -242,7 +245,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
     }
   }
 
-  private static GenericRecord getRecordFromKeyValue(KeyValue keyValue,
+  private static IndexedRecord getRecordFromKeyValue(KeyValue keyValue,
                                                      Schema writerSchema,
                                                      Schema readerSchema) throws IOException {
     byte[] bytes = keyValue.getBytes();
@@ -558,11 +561,10 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
               return false;
             }
             byte[] bytes = keyValue.getBytes();
-            next =
-                deserialize(
-                    bytes, keyValue.getKeyContentOffset(), keyValue.getKeyContentLength(),
-                    bytes, keyValue.getValueOffset(), keyValue.getValueLength(),
-                    writerSchema, readerSchema);
+            next = deserialize(
+                bytes, keyValue.getKeyContentOffset(), keyValue.getKeyContentLength(),
+                bytes, keyValue.getValueOffset(), keyValue.getValueLength(),
+                writerSchema, readerSchema);
             // In case scanner is not able to advance, it means we reached EOF
             eof = !reader.next();
           } catch (IOException e) {

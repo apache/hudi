@@ -299,13 +299,13 @@ class TestFileGroupRecordBuffer {
     props.setProperty(DELETE_KEY, customDeleteKey);
     props.setProperty(DELETE_MARKER, customDeleteValue);
     keyBasedBuffer = new KeyBasedFileGroupRecordBuffer(
-            readerContext,
-            hoodieTableMetaClient,
-            RecordMergeMode.COMMIT_TIME_ORDERING,
-            props,
-            readStats,
-            Option.empty(),
-            false);
+        readerContext,
+        hoodieTableMetaClient,
+        RecordMergeMode.COMMIT_TIME_ORDERING,
+        props,
+        readStats,
+        Option.empty(),
+        false);
     when(readerContext.getValue(any(), any(), any())).thenReturn("i");
     assertFalse(keyBasedBuffer.isCustomDeleteRecord(record));
     when(readerContext.getValue(any(), any(), any())).thenReturn("d");
