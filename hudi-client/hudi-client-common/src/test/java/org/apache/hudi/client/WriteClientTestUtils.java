@@ -18,11 +18,13 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hudi.common.util.Option;
+
 public class WriteClientTestUtils {
   private WriteClientTestUtils() {
   }
 
   public static void startCommitWithTime(BaseHoodieWriteClient<?, ?, ?, ?> writeClient, String instantTime, String actionType) {
-    writeClient.startCommitWithTime(instantTime, actionType);
+    writeClient.startCommit(Option.of(instantTime), actionType, writeClient.createMetaClient(false));
   }
 }
