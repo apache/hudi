@@ -357,7 +357,7 @@ public abstract class HoodieReaderContext<T> {
    * @return A new instance of {@link HoodieRecord}.
    */
   public HoodieRecord<T> constructHoodieRecord(BufferedRecord<T> bufferedRecord) {
-    if (bufferedRecord.isDelete()) {
+    if (bufferedRecord.getRecord() == null) {
       return new HoodieEmptyRecord<>(
           new HoodieKey(bufferedRecord.getRecordKey(), null),
           HoodieOperation.DELETE,

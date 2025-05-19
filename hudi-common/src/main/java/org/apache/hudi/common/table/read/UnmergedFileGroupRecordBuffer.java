@@ -37,7 +37,6 @@ import org.apache.avro.Schema;
 import java.io.Serializable;
 import java.util.ArrayDeque;
 import java.util.Deque;
-import java.util.Iterator;
 
 public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
 
@@ -96,17 +95,12 @@ public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
   }
 
   @Override
-  public void processNextDataRecord(BufferedRecord<T> record, Serializable index) {
+  public void processNextLogRecord(BufferedRecord<T> record, Serializable index) {
     // no-op
   }
 
   @Override
   public void processDeleteBlock(HoodieDeleteBlock deleteBlock) {
-    // no-op
-  }
-
-  @Override
-  public void processNextDeletedRecord(DeleteRecord deleteRecord, Serializable index) {
     // no-op
   }
 
