@@ -391,9 +391,9 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     }
     fileSlices.forEach(fileSlice -> {
       if (shouldValidatePartialRead(fileSlice, avroSchema)) {
-        assertThrows(IllegalArgumentException.class, () -> getHoodieFileGroupReader(storageConf, tablePath, metaClient, avroSchema, fileSlice, props));
+        assertThrows(IllegalArgumentException.class, () -> getHoodieFileGroupReader(storageConf, tablePath, metaClient, avroSchema, fileSlice, 1, props));
       }
-      try (HoodieFileGroupReader<T> fileGroupReader = getHoodieFileGroupReader(storageConf, tablePath, metaClient, avroSchema, fileSlice, props)) {
+      try (HoodieFileGroupReader<T> fileGroupReader = getHoodieFileGroupReader(storageConf, tablePath, metaClient, avroSchema, fileSlice, 0, props)) {
         readWithFileGroupReader(fileGroupReader, actualRecordList, avroSchema);
       } catch (Exception ex) {
         throw new RuntimeException(ex);
@@ -403,7 +403,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
   }
 
   private HoodieFileGroupReader<T> getHoodieFileGroupReader(StorageConfiguration<?> storageConf, String tablePath, HoodieTableMetaClient metaClient, Schema avroSchema, FileSlice fileSlice,
-                                                                      TypedProperties props) {
+                                                            int start, TypedProperties props) {
     return HoodieFileGroupReader.<T>newBuilder()
         .withReaderContext(getHoodieReaderContext(tablePath, avroSchema, storageConf, metaClient))
         .withHoodieTableMetaClient(metaClient)
@@ -412,7 +412,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
         .withDataSchema(avroSchema)
         .withRequestedSchema(avroSchema)
         .withProps(props)
-        .withStart(0)
+        .withStart(start)
         .withLength(fileSlice.getTotalFileSize())
         .withShouldUseRecordPosition(false)
         .withAllowInflightInstants(false)
@@ -423,7 +423,6 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       HoodieFileGroupReader<T> fileGroupReader,
       List<T> recordList,
       Schema recordSchema) throws IOException {
-    fileGroupReader.initRecordIterators();
     while (fileGroupReader.hasNext()) {
       recordList.add(fileGroupReader.next());
     }

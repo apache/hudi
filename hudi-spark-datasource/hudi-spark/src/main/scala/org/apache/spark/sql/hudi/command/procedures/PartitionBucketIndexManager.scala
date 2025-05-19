@@ -238,7 +238,6 @@ class PartitionBucketIndexManager extends BaseProcedure
             .withProps(metaClient.getTableConfig.getProps)
             .withShouldUseRecordPosition(false)
             .build()
-          fileGroupReader.initRecordIterators()
           val iterator = fileGroupReader.getClosableIterator
           CloseableIteratorListener.addListener(iterator)
           iterator.asScala

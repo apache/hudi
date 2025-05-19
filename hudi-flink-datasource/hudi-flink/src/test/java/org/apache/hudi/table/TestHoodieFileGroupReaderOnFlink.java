@@ -123,7 +123,6 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
       List<RowData> recordList,
       Schema recordSchema) throws IOException {
     RowDataSerializer rowDataSerializer = RowDataAvroQueryContexts.getRowDataSerializer(recordSchema);
-    fileGroupReader.initRecordIterators();
     while (fileGroupReader.hasNext()) {
       RowData rowData = rowDataSerializer.copy(fileGroupReader.next());
       recordList.add(rowData);

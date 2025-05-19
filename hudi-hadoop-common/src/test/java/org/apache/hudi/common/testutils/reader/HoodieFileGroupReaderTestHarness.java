@@ -157,7 +157,6 @@ public class HoodieFileGroupReaderTestHarness extends HoodieCommonTestHarness {
         .withAllowInflightInstants(allowInflightCommits)
         .build();
 
-    fileGroupReader.initRecordIterators();
     return fileGroupReader.getClosableIterator();
   }
 }

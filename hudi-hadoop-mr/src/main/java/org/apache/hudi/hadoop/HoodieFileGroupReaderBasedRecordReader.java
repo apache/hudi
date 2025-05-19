@@ -153,7 +153,6 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
         .withLength(fileSplit.getLength())
         .withShouldUseRecordPosition(false)
         .build();
-    this.fileGroupReader.initRecordIterators();
     // it expects the partition columns to be at the end
     Schema outputSchema = HoodieAvroUtils.generateProjectionSchema(tableSchema,
         Stream.concat(tableSchema.getFields().stream().map(f -> f.name().toLowerCase(Locale.ROOT)).filter(n -> !partitionColumns.contains(n)),

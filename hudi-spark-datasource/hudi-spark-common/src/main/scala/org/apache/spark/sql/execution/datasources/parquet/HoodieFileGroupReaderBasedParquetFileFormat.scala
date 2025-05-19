@@ -182,7 +182,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
               } else {
                 0
               }
-              val reader = HoodieFileGroupReader.newBuilder()[InternalRow]
+              val reader = HoodieFileGroupReader.newBuilder()
                 .withReaderContext(readerContext)
                 .withHoodieTableMetaClient(metaClient)
                 .withLatestCommitTime(queryTimestamp)
@@ -195,7 +195,6 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
                 .withLength(baseFileLength)
                 .withShouldUseRecordPosition(shouldUseRecordPosition)
                 .build()
-              reader.initRecordIterators()
               // Append partition values to rows and project to output schema
               appendPartitionAndProject(
                 reader.getClosableIterator,

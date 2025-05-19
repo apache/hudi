@@ -85,7 +85,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   private final long length;
   // Core structure to store and process records.
   private final FileGroupRecordBuffer<T> recordBuffer;
-  private ClosableIterator<T> baseFileIterator;
+  private final ClosableIterator<T> baseFileIterator;
   private final Option<UnaryOperator<T>> outputConverter;
   private final HoodieReadStats readStats;
   // Allows to consider inflight instants while merging log records using HoodieMergedLogRecordReader
@@ -156,6 +156,19 @@ public final class HoodieFileGroupReader<T> implements Closeable {
         recordMergeMode, props, hoodieBaseFileOption, this.logFiles.isEmpty(),
         isSkipMerge, shouldUseRecordPosition, readStats);
     this.allowInflightInstants = allowInflightInstants;
+    // Initialize internal iterators on the base and log files.
+    try {
+      ClosableIterator<T> iter = makeBaseFileIterator();
+      if (logFiles.isEmpty()) {
+        this.baseFileIterator = CachingIterator.wrap(iter, readerContext);
+      } else {
+        this.baseFileIterator = iter;
+        scanLogFiles();
+        recordBuffer.setBaseFileIterator(baseFileIterator);
+      }
+    } catch (IOException ex) {
+      throw new HoodieIOException("Failed to initialize file group reader", ex);
+    }
   }
 
   /**
@@ -182,20 +195,6 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     } else {
       return new KeyBasedFileGroupRecordBuffer<>(
           readerContext, hoodieTableMetaClient, recordMergeMode, Option.empty(), Option.empty(), props, readStats);
-    }
-  }
-
-  /**
-   * Initialize internal iterators on the base and log files.
-   */
-  public void initRecordIterators() throws IOException {
-    ClosableIterator<T> iter = makeBaseFileIterator();
-    if (logFiles.isEmpty()) {
-      this.baseFileIterator = CachingIterator.wrap(iter, readerContext);
-    } else {
-      this.baseFileIterator = iter;
-      scanLogFiles();
-      recordBuffer.setBaseFileIterator(baseFileIterator);
     }
   }
 

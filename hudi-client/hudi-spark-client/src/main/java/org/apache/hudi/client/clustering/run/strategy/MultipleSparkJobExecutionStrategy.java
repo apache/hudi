@@ -477,7 +477,6 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
             .withReaderContext(readerContext).withHoodieTableMetaClient(metaClient).withLatestCommitTime(instantTime)
             .withFileSlice(fileSlice).withDataSchema(readerSchema).withRequestedSchema(readerSchema).withInternalSchema(internalSchemaOption)
             .withShouldUseRecordPosition(usePosition).build();
-        fileGroupReader.initRecordIterators();
         // read records from the FG reader
         return CloseableIteratorListener.addListener(fileGroupReader.getClosableIterator());
       }

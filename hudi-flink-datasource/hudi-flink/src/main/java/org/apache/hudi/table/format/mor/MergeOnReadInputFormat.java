@@ -481,7 +481,6 @@ public class MergeOnReadInputFormat
         .withProps(typedProps)
         .withShouldUseRecordPosition(false)
         .build()) {
-      fileGroupReader.initRecordIterators();
       return fileGroupReader.getClosableIterator();
     } catch (IOException e) {
       throw new HoodieUpsertException("Failed to compact file slice: " + fileSlice, e);
