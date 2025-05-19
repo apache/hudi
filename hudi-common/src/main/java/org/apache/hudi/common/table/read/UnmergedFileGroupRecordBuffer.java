@@ -22,6 +22,7 @@ package org.apache.hudi.common.table.read;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.KeySpec;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
@@ -95,12 +96,17 @@ public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
   }
 
   @Override
-  public void processNextLogRecord(BufferedRecord<T> record, Serializable index) {
+  public void processNextDataRecord(BufferedRecord<T> record, Serializable index) {
     // no-op
   }
 
   @Override
   public void processDeleteBlock(HoodieDeleteBlock deleteBlock) {
+    // no-op
+  }
+
+  @Override
+  public void processNextDeletedRecord(DeleteRecord deleteRecord, Serializable index) {
     // no-op
   }
 

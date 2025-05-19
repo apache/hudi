@@ -124,7 +124,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
         T nextRecord = recordIterator.next();
 
         // Skip a record if it is not contained in the specified keys.
-        if (shouldSkip(nextRecord, dataBlock.getKeyFieldName(), isFullKey, keys, dataBlock.getSchema())) {
+        if (shouldSkip(nextRecord, isFullKey, keys, dataBlock.getSchema())) {
           recordIndex++;
           continue;
         }
@@ -134,7 +134,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
 
         boolean isDelete = isBuiltInDeleteRecord(evolvedNextRecord) || isCustomDeleteRecord(evolvedNextRecord) || isDeleteHoodieOperation(evolvedNextRecord);
         BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(evolvedNextRecord, schema, readerContext, orderingFieldName, isDelete);
-        processNextLogRecord(bufferedRecord, recordPosition);
+        processNextDataRecord(bufferedRecord, recordPosition);
       }
     }
   }
@@ -146,7 +146,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
     for (Serializable position : positions) {
       BufferedRecord<T> entry = records.get(position);
       String recordKey = entry.getRecordKey();
-      if (entry.getRecord() != null || recordKey != null) {
+      if (!entry.isDelete() || recordKey != null) {
 
         records.put(recordKey, entry);
         records.remove(position);
@@ -178,7 +178,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
     while (it.hasNext()) {
       DeleteRecord record = it.next();
       long recordPosition = recordPositions.get(recordIndex++);
-      processNextLogRecord(BufferedRecord.forDeleteRecord(record, readerContext), recordPosition);
+      processNextDeletedRecord(record, recordPosition);
     }
   }
 
@@ -222,13 +222,13 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
    * 1. A set of pre-specified keys exists.
    * 2. The key of the record is not contained in the set.
    */
-  protected boolean shouldSkip(T record, String keyFieldName, boolean isFullKey, Set<String> keys, Schema writerSchema) {
+  protected boolean shouldSkip(T record, boolean isFullKey, Set<String> keys, Schema writerSchema) {
     // No keys are specified. Cannot skip at all.
     if (keys.isEmpty()) {
       return false;
     }
 
-    String recordKey = readerContext.getValue(record, writerSchema, keyFieldName).toString();
+    String recordKey = readerContext.getRecordKey(record, writerSchema);
     // Can not extract the record key, throw.
     if (recordKey == null || recordKey.isEmpty()) {
       throw new HoodieKeyException("Can not extract the key for a record");

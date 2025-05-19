@@ -81,13 +81,13 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
         T nextRecord = recordIterator.next();
         boolean isDelete = isBuiltInDeleteRecord(nextRecord) || isCustomDeleteRecord(nextRecord) || isDeleteHoodieOperation(nextRecord);
         BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(nextRecord, schema, readerContext, orderingFieldName, isDelete);
-        processNextLogRecord(bufferedRecord, bufferedRecord.getRecordKey());
+        processNextDataRecord(bufferedRecord, bufferedRecord.getRecordKey());
       }
     }
   }
 
   @Override
-  public void processNextLogRecord(BufferedRecord<T> newLogRecord, Serializable recordKey) throws IOException {
+  public void processNextDataRecord(BufferedRecord<T> newLogRecord, Serializable recordKey) throws IOException {
     totalLogRecords++;
     Option<BufferedRecord<T>> existingRecord = Option.ofNullable(records.get(recordKey));
     BufferedRecord<T> merged = merger.merge(existingRecord, Option.of(newLogRecord), enablePartialMerging);
@@ -103,7 +103,19 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
     while (it.hasNext()) {
       DeleteRecord record = it.next();
       String recordKey = record.getRecordKey();
-      processNextLogRecord(BufferedRecord.forDeleteRecord(record, readerContext), recordKey);
+      processNextDeletedRecord(record, recordKey);
+    }
+  }
+
+  @Override
+  public void processNextDeletedRecord(DeleteRecord record, Serializable index) throws IOException {
+    totalLogRecords++;
+    BufferedRecord<T> deleteRecord = BufferedRecord.forDeleteRecord(record, readerContext);
+    Option<BufferedRecord<T>> existingRecord = Option.ofNullable(records.get(index));
+    BufferedRecord<T> merged = merger.merge(existingRecord, Option.of(deleteRecord), enablePartialMerging);
+    // if merged result is just the existing record, no need to re-seal
+    if (existingRecord.map(existing -> !existing.equals(merged)).orElse(true)) {
+      records.put(index, merged.toBinary(readerContext));
     }
   }
 

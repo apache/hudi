@@ -23,7 +23,6 @@ import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.KeySpec;
@@ -59,7 +58,6 @@ import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_
 import static org.apache.hudi.common.config.HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE;
 import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE;
 import static org.apache.hudi.common.config.HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH;
-import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 import static org.apache.hudi.common.model.HoodieRecord.HOODIE_IS_DELETED_FIELD;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.INSTANT_TIME;
 
@@ -202,11 +200,6 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   }
 
   @Override
-  public Iterator<BufferedRecord<T>> getLogRecordIterator() {
-    return records.values().iterator();
-  }
-
-  @Override
   public void close() {
     records.close();
   }
@@ -327,16 +320,5 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
     Schema evolvedSchema = schemaEvolutionTransformerOpt.map(Pair::getRight)
         .orElseGet(dataBlock::getSchema);
     return Pair.of(transformer, evolvedSchema);
-  }
-
-  static boolean isCommitTimeOrderingValue(Comparable orderingValue) {
-    return orderingValue == null || orderingValue.equals(DEFAULT_ORDERING_VALUE);
-  }
-
-  static Comparable getOrderingValue(HoodieReaderContext readerContext,
-                                     DeleteRecord deleteRecord) {
-    return isCommitTimeOrderingValue(deleteRecord.getOrderingValue())
-        ? DEFAULT_ORDERING_VALUE
-        : readerContext.convertValueToEngineType(deleteRecord.getOrderingValue());
   }
 }

@@ -90,7 +90,9 @@ public class BufferedRecord<T> implements Serializable {
   }
 
   public static <T> BufferedRecord<T> forDeleteRecord(DeleteRecord deleteRecord, HoodieReaderContext<T> readerContext) {
-    return new BufferedRecord<>(deleteRecord.getRecordKey(), readerContext.convertValueToEngineType(deleteRecord.getOrderingValue()), null, null, true);
+    Comparable orderingValue = deleteRecord.getOrderingValue() == null || deleteRecord.getOrderingValue().equals(DEFAULT_ORDERING_VALUE) ? DEFAULT_ORDERING_VALUE :
+        readerContext.convertValueToEngineType(deleteRecord.getOrderingValue());
+    return new BufferedRecord<>(deleteRecord.getRecordKey(), orderingValue, null, null, true);
   }
 
   public BufferedRecord<T> asDeleteRecord() {

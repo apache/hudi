@@ -19,6 +19,7 @@
 
 package org.apache.hudi.common.table.read;
 
+import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.table.log.KeySpec;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
@@ -27,7 +28,6 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.Iterator;
 import java.util.Map;
 
 public interface HoodieFileGroupRecordBuffer<T> {
@@ -57,11 +57,11 @@ public interface HoodieFileGroupRecordBuffer<T> {
   /**
    * Process a next record in a log data block.
    *
-   * @param record
-   * @param index
+   * @param record Buffered record
+   * @param index  Record key or position
    * @throws Exception
    */
-  void processNextLogRecord(BufferedRecord<T> record, Serializable index) throws IOException;
+  void processNextDataRecord(BufferedRecord<T> record, Serializable index) throws IOException;
 
   /**
    * Process a log delete block, and store the resulting records into the buffer.
@@ -70,6 +70,11 @@ public interface HoodieFileGroupRecordBuffer<T> {
    * @throws IOException
    */
   void processDeleteBlock(HoodieDeleteBlock deleteBlock) throws IOException;
+
+  /**
+   * Process next delete record.
+   */
+  void processNextDeletedRecord(DeleteRecord record, Serializable index) throws IOException;
 
   /**
    * Check if a record exists in the buffered records.
@@ -85,11 +90,6 @@ public interface HoodieFileGroupRecordBuffer<T> {
    * @return the total number of log records processed.
    */
   long getTotalLogRecords();
-
-  /**
-   * @return An iterator on the log records.
-   */
-  Iterator<BufferedRecord<T>> getLogRecordIterator();
 
   /**
    * @return The underlying data stored in the buffer.

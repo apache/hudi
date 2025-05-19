@@ -52,7 +52,6 @@ import java.util.List;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
 import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
-import static org.apache.hudi.common.table.read.FileGroupRecordBuffer.getOrderingValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -66,7 +65,7 @@ import static org.mockito.Mockito.when;
  * Tests {@link FileGroupRecordBuffer}
  */
 class TestFileGroupRecordBuffer {
-  private String schemaString = "{"
+  private final String schemaString = "{"
       + "\"type\": \"record\","
       + "\"name\": \"EventRecord\","
       + "\"namespace\": \"com.example.avro\","
@@ -77,7 +76,7 @@ class TestFileGroupRecordBuffer {
       + "{\"name\": \"_hoodie_is_deleted\", \"type\": \"boolean\"}"
       + "]"
       + "}";
-  private Schema schema = new Schema.Parser().parse(schemaString);
+  private final Schema schema = new Schema.Parser().parse(schemaString);
   private final HoodieReaderContext<IndexedRecord> readerContext = mock(HoodieReaderContext.class);
   private final EngineBasedMerger<IndexedRecord> merger = mock(EngineBasedMerger.class);
   private final FileGroupReaderSchemaHandler schemaHandler =
@@ -97,14 +96,14 @@ class TestFileGroupRecordBuffer {
   void testGetOrderingValueFromDeleteRecord() {
     DeleteRecord deleteRecord = mock(DeleteRecord.class);
     mockDeleteRecord(deleteRecord, null);
-    assertEquals(DEFAULT_ORDERING_VALUE, getOrderingValue(readerContext, deleteRecord));
+    assertEquals(DEFAULT_ORDERING_VALUE, BufferedRecord.forDeleteRecord(deleteRecord, readerContext).getOrderingValue());
     mockDeleteRecord(deleteRecord, DEFAULT_ORDERING_VALUE);
-    assertEquals(DEFAULT_ORDERING_VALUE, getOrderingValue(readerContext, deleteRecord));
+    assertEquals(DEFAULT_ORDERING_VALUE, BufferedRecord.forDeleteRecord(deleteRecord, readerContext).getOrderingValue());
     String orderingValue = "xyz";
     String convertedValue = "_xyz";
     mockDeleteRecord(deleteRecord, orderingValue);
     when(readerContext.convertValueToEngineType(orderingValue)).thenReturn(convertedValue);
-    assertEquals(convertedValue, getOrderingValue(readerContext, deleteRecord));
+    assertEquals(convertedValue, BufferedRecord.forDeleteRecord(deleteRecord, readerContext).getOrderingValue());
   }
 
   @ParameterizedTest
