@@ -81,7 +81,15 @@ public class EngineBasedMerger<T> {
     }
     BufferedRecord<T> older = olderOption.get();
     BufferedRecord<T> newer = newerOption.get();
-
+    // First check if either record is a delete record and handle this case
+    if (older.isDelete() || newer.isDelete()) {
+      if (recordMergeMode == RecordMergeMode.COMMIT_TIME_ORDERING) {
+        return newer;
+      } else {
+        return getNewerRecordWithEventTimeOrdering(older, newer);
+      }
+    }
+    // If both records are not deletes, then they can be merged with partial or standard merging
     if (enablePartialMerging) {
       // TODO(HUDI-7843): decouple the merging logic from the merger
       //  and use the record merge mode to control how to merge partial updates
@@ -106,15 +114,9 @@ public class EngineBasedMerger<T> {
         case COMMIT_TIME_ORDERING:
           return newer;
         case EVENT_TIME_ORDERING:
-          return getNewerRecordWithEventTimeOrdering(newer, older);
+          return getNewerRecordWithEventTimeOrdering(older, newer);
         case CUSTOM:
         default:
-          if (older.isDelete() || newer.isDelete()) {
-            // IMPORTANT:
-            // this is needed when the fallback HoodieAvroRecordMerger got used, the merger would
-            // return Option.empty when the new payload data is empty(a delete) and ignores its ordering value directly.
-            return getNewerRecordWithEventTimeOrdering(newer, older);
-          }
           Option<BufferedRecord<T>> mergeResult;
           if (payloadClass.isPresent()) {
             Option<Pair<HoodieRecord, Schema>> mergedRecord = getMergedRecord(older, newer);
@@ -135,7 +137,7 @@ public class EngineBasedMerger<T> {
     }
   }
 
-  private static <T> BufferedRecord<T> getNewerRecordWithEventTimeOrdering(BufferedRecord<T> newer, BufferedRecord<T> older) {
+  private static <T> BufferedRecord<T> getNewerRecordWithEventTimeOrdering(BufferedRecord<T> older, BufferedRecord<T> newer) {
     if (newer.isCommitTimeOrderingDelete()) {
       return newer;
     }
@@ -189,6 +191,6 @@ public class EngineBasedMerger<T> {
     if (recordMerger.map(merger -> merger.getMergingStrategy().equals(HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID)).orElse(false)) {
       return newer.asDeleteRecord();
     }
-    return getNewerRecordWithEventTimeOrdering(newer, older).asDeleteRecord();
+    return getNewerRecordWithEventTimeOrdering(older, newer).asDeleteRecord();
   }
 }
