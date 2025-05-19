@@ -62,7 +62,7 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    */
   void createNewInstant(HoodieInstant instant);
 
-  void createRequestedCommitWithReplaceMetadata(String instantTime, String actionType);
+  HoodieInstant createRequestedCommitWithReplaceMetadata(String instantTime, String actionType);
 
   /**
    * Save Completed instant in active timeline.
