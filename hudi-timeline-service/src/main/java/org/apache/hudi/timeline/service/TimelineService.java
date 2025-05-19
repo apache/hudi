@@ -111,8 +111,8 @@ public class TimelineService {
     @Parameter(names = {"--enable-marker-requests", "-em"}, description = "Enable handling of marker-related requests")
     public boolean enableMarkerRequests = false;
 
-    @Parameter(names = {"--enable-instant-state-requests"}, description = "Enable handling of instant state requests")
-    public boolean enableInstantStateRequests = false;
+    @Parameter(names = {"--enable-remote-partitioner"}, description = "Enable remote partitioner")
+    public boolean enableRemotePartitioner = false;
 
     @Parameter(names = {"--marker-batch-threads", "-mbt"}, description = "Number of threads to use for batch processing marker creation requests")
     public int markerBatchNumThreads = 20;
@@ -158,10 +158,6 @@ public class TimelineService {
             + "Instants whose heartbeat is greater than the current value will not be used in early conflict detection.")
     public Long maxAllowableHeartbeatIntervalInMs = 120000L;
 
-    @Parameter(names = {"--instant-state-force-refresh-request-number"}, description =
-        "Used for timeline-server-based instant state requests, every N read requests will trigger instant state refreshing")
-    public Integer instantStateForceRefreshRequestNumber = 100;
-
     @Parameter(names = {"--help", "-h"})
     public Boolean help = false;
 
@@ -183,7 +179,6 @@ public class TimelineService {
       private boolean async = false;
       private boolean compress = true;
       private boolean enableMarkerRequests = false;
-      private boolean enableInstantStateRequests = false;
       private int markerBatchNumThreads = 20;
       private long markerBatchIntervalMs = 50L;
       private int markerParallelism = 100;
@@ -193,8 +188,7 @@ public class TimelineService {
       private Long asyncConflictDetectorInitialDelayMs = 0L;
       private Long asyncConflictDetectorPeriodMs = 30000L;
       private Long maxAllowableHeartbeatIntervalInMs = 120000L;
-
-      private int instantStateForceRefreshRequestNumber = 100;
+      private boolean enableRemotePartitioner = false;
 
       public Builder() {
       }
@@ -249,6 +243,11 @@ public class TimelineService {
         return this;
       }
 
+      public Builder enableRemotePartitioner(boolean enableRemotePartitioner) {
+        this.enableRemotePartitioner = enableRemotePartitioner;
+        return this;
+      }
+
       public Builder markerBatchNumThreads(int markerBatchNumThreads) {
         this.markerBatchNumThreads = markerBatchNumThreads;
         return this;
@@ -294,16 +293,6 @@ public class TimelineService {
         return this;
       }
 
-      public Builder enableInstantStateRequests(boolean enableCkpInstantStateRequests) {
-        this.enableInstantStateRequests = enableCkpInstantStateRequests;
-        return this;
-      }
-
-      public Builder instantStateForceRefreshRequestNumber(int instantStateForceRefreshRequestNumber) {
-        this.instantStateForceRefreshRequestNumber = instantStateForceRefreshRequestNumber;
-        return this;
-      }
-
       public Config build() {
         Config config = new Config();
         config.serverPort = this.serverPort;
@@ -316,6 +305,7 @@ public class TimelineService {
         config.async = this.async;
         config.compress = this.compress;
         config.enableMarkerRequests = this.enableMarkerRequests;
+        config.enableRemotePartitioner = this.enableRemotePartitioner;
         config.markerBatchNumThreads = this.markerBatchNumThreads;
         config.markerBatchIntervalMs = this.markerBatchIntervalMs;
         config.markerParallelism = this.markerParallelism;
@@ -325,8 +315,6 @@ public class TimelineService {
         config.asyncConflictDetectorInitialDelayMs = this.asyncConflictDetectorInitialDelayMs;
         config.asyncConflictDetectorPeriodMs = this.asyncConflictDetectorPeriodMs;
         config.maxAllowableHeartbeatIntervalInMs = this.maxAllowableHeartbeatIntervalInMs;
-        config.enableInstantStateRequests = this.enableInstantStateRequests;
-        config.instantStateForceRefreshRequestNumber = this.instantStateForceRefreshRequestNumber;
         return config;
       }
     }

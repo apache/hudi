@@ -38,13 +38,12 @@ import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.sink.bootstrap.aggregate.BootstrapAggFunction;
-import org.apache.hudi.sink.meta.CkpMetadata;
-import org.apache.hudi.sink.meta.CkpMetadataFactory;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.format.FormatUtils;
 import org.apache.hudi.util.FlinkTables;
 import org.apache.hudi.util.FlinkWriteClients;
+import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.avro.Schema;
 import org.apache.flink.annotation.VisibleForTesting;
@@ -88,8 +87,6 @@ public class BootstrapOperator
 
   protected HoodieTable<?, ?, ?, ?> hoodieTable;
 
-  private CkpMetadata ckpMetadata;
-
   protected final Configuration conf;
 
   protected transient org.apache.hadoop.conf.Configuration hadoopConf;
@@ -108,7 +105,7 @@ public class BootstrapOperator
 
   @Override
   public void snapshotState(StateSnapshotContext context) throws Exception {
-    lastInstantTime = this.ckpMetadata.lastPendingInstant();
+    lastInstantTime = StreamerUtil.getLastCompletedInstant(StreamerUtil.createMetaClient(this.conf));
     if (null != lastInstantTime) {
       instantState.update(Collections.singletonList(lastInstantTime));
     }
@@ -132,7 +129,6 @@ public class BootstrapOperator
     this.hadoopConf = HadoopConfigurations.getHadoopConf(this.conf);
     this.writeConfig = FlinkWriteClients.getHoodieClientConfig(this.conf, false, true, true);
     this.hoodieTable = FlinkTables.createTable(writeConfig, hadoopConf, getRuntimeContext());
-    this.ckpMetadata = CkpMetadataFactory.getCkpMetadata(writeConfig, conf);
     this.aggregateManager = getRuntimeContext().getGlobalAggregateManager();
 
     preLoadIndexRecords();

@@ -30,6 +30,7 @@ import org.apache.hudi.callback.common.HoodieWriteCommitCallbackMessage;
 import org.apache.hudi.callback.util.HoodieCommitCallbackFactory;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.heartbeat.HeartbeatUtils;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.client.utils.TransactionUtils;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
 import org.apache.hudi.common.config.HoodieCommonConfig;
@@ -50,6 +51,7 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimeGenerator;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
@@ -58,6 +60,7 @@ import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -166,6 +169,19 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
                                Option<EmbeddedTimelineService> timelineService,
                                SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     super(context, writeConfig, timelineService);
+    this.index = createIndex(writeConfig);
+    this.upgradeDowngradeHelper = upgradeDowngradeHelper;
+    this.metrics.emitIndexTypeMetrics(config.getIndexType().ordinal());
+  }
+
+  @VisibleForTesting
+  BaseHoodieWriteClient(HoodieEngineContext context,
+                        HoodieWriteConfig writeConfig,
+                        Option<EmbeddedTimelineService> timelineService,
+                        SupportsUpgradeDowngrade upgradeDowngradeHelper,
+                        TransactionManager transactionManager,
+                        TimeGenerator timeGenerator) {
+    super(context, writeConfig, timelineService, transactionManager, timeGenerator);
     this.index = createIndex(writeConfig);
     this.upgradeDowngradeHelper = upgradeDowngradeHelper;
     this.metrics.emitIndexTypeMetrics(config.getIndexType().ordinal());
@@ -929,9 +945,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * Provides a new commit time for a write operation (insert/update/delete/insert_overwrite/insert_overwrite_table) with specified action.
    */
   public String startCommit(String actionType, HoodieTableMetaClient metaClient) {
-    String instantTime = createNewInstantTime();
-    startCommitWithTime(instantTime, actionType, metaClient);
-    return instantTime;
+    return startCommitWithTime(Option.empty(), actionType, metaClient);
   }
 
   /**
@@ -940,7 +954,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   public void startCommitWithTime(String instantTime) {
     HoodieTableMetaClient metaClient = createMetaClient(true);
-    startCommitWithTime(instantTime, metaClient.getCommitActionType(), metaClient);
+    startCommitWithTime(Option.of(instantTime), metaClient.getCommitActionType(), metaClient);
   }
 
   /**
@@ -948,13 +962,13 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   public void startCommitWithTime(String instantTime, String actionType) {
     HoodieTableMetaClient metaClient = createMetaClient(true);
-    startCommitWithTime(instantTime, actionType, metaClient);
+    startCommitWithTime(Option.of(instantTime), actionType, metaClient);
   }
 
   /**
    * Starts a new commit time for a write operation (insert/update/delete) with specified action.
    */
-  private void startCommitWithTime(String instantTime, String actionType, HoodieTableMetaClient metaClient) {
+  private String startCommitWithTime(Option<String> providedInstantTime, String actionType, HoodieTableMetaClient metaClient) {
     if (needsUpgrade(metaClient)) {
       // unclear what instant to use, since upgrade does have a given instant.
       executeUsingTxnManager(Option.empty(), () -> tryUpgrade(metaClient, Option.empty()));
@@ -962,24 +976,32 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     CleanerUtils.rollbackFailedWrites(config.getFailedWritesCleanPolicy(),
         HoodieTimeline.COMMIT_ACTION, () -> tableServiceClient.rollbackFailedWrites(metaClient));
 
-    LOG.info("Generate a new instant time: {} action: {}", instantTime, actionType);
-    // check there are no inflight restore before starting a new commit.
-    HoodieTimeline inflightRestoreTimeline = metaClient.getActiveTimeline().getRestoreTimeline().filterInflightsAndRequested();
-    ValidationUtils.checkArgument(inflightRestoreTimeline.countInstants() == 0,
-        () -> "Found pending restore in active timeline. Please complete the restore fully before proceeding. As of now, "
-            + "table could be in an inconsistent state. Pending restores: "
-            + Arrays.toString(inflightRestoreTimeline.getInstantsAsStream().map(HoodieInstant::requestedTime).toArray()));
+    txnManager.beginTransaction(Option.empty(), lastCompletedTxnAndMetadata.map(Pair::getLeft));
+    String instantTime;
+    HoodieInstant instant = null;
+    try {
+      instantTime = providedInstantTime.orElseGet(() -> createNewInstantTime(false));
+      // check there are no inflight restore before starting a new commit.
+      HoodieTimeline inflightRestoreTimeline = metaClient.getActiveTimeline().getRestoreTimeline().filterInflightsAndRequested();
+      ValidationUtils.checkArgument(inflightRestoreTimeline.countInstants() == 0,
+          () -> "Found pending restore in active timeline. Please complete the restore fully before proceeding. As of now, "
+              + "table could be in an inconsistent state. Pending restores: "
+              + Arrays.toString(inflightRestoreTimeline.getInstantsAsStream().map(HoodieInstant::requestedTime).toArray()));
 
-    if (config.getFailedWritesCleanPolicy().isLazy()) {
-      this.heartbeatClient.start(instantTime);
-    }
+      if (config.getFailedWritesCleanPolicy().isLazy()) {
+        this.heartbeatClient.start(instantTime);
+      }
 
-    if (ClusteringUtils.isClusteringOrReplaceCommitAction(actionType)) {
-      metaClient.getActiveTimeline().createRequestedCommitWithReplaceMetadata(instantTime, actionType);
-    } else {
-      metaClient.getActiveTimeline().createNewInstant(metaClient.createNewInstant(HoodieInstant.State.REQUESTED, actionType,
-          instantTime));
+      if (ClusteringUtils.isClusteringOrReplaceCommitAction(actionType)) {
+        instant = metaClient.getActiveTimeline().createRequestedCommitWithReplaceMetadata(instantTime, actionType);
+      } else {
+        instant = metaClient.createNewInstant(State.REQUESTED, actionType, instantTime);
+        metaClient.getActiveTimeline().createNewInstant(instant);
+      }
+    } finally {
+      txnManager.endTransaction(Option.ofNullable(instant));
     }
+    return instantTime;
   }
 
   /**
@@ -1623,8 +1645,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         () -> SerDeHelper.inheritSchemas(getInternalSchema(schemaUtil), ""));
     Schema schema = AvroInternalSchemaConverter.convert(newSchema, getAvroRecordQualifiedName(config.getTableName()));
     String commitActionType = CommitUtils.getCommitActionType(WriteOperationType.ALTER_SCHEMA, metaClient.getTableType());
-    String instantTime = createNewInstantTime();
-    startCommitWithTime(instantTime, commitActionType, metaClient);
+    String instantTime = startCommit(commitActionType, metaClient);
     config.setSchema(schema.toString());
     HoodieActiveTimeline timeLine = metaClient.getActiveTimeline();
     HoodieInstant requested = metaClient.createNewInstant(State.REQUESTED, commitActionType, instantTime);
