@@ -33,7 +33,7 @@ class TestHoodieCommandMetrics extends HoodieSparkSqlTestBase {
     assert(metrics != null)
     assert(metrics.size == 10)
 
-    HoodieCommandMetrics.updateInsertMetrics(metrics, mockedCommitMetadata())
+    HoodieCommandMetrics.updateCommitMetrics(metrics, mockedCommitMetadata())
     assertResult(1L)(metrics(HoodieCommandMetrics.NUM_PARTITION_KEY).value)
     assertResult(2L)(metrics(HoodieCommandMetrics.NUM_INSERT_FILE_KEY).value)
     assertResult(3L)(metrics(HoodieCommandMetrics.NUM_UPDATE_FILE_KEY).value)

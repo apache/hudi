@@ -174,12 +174,6 @@ public class EmbeddedTimelineService {
       timelineServiceConfBuilder.enableRemotePartitioner(true);
     }
 
-    if (writeConfig.isTimelineServerBasedInstantStateEnabled()) {
-      timelineServiceConfBuilder
-          .instantStateForceRefreshRequestNumber(writeConfig.getTimelineServerBasedInstantStateForceRefreshRequestNumber())
-          .enableInstantStateRequests(true);
-    }
-
     this.serviceConfig = timelineServiceConfBuilder.build();
 
     server = timelineServiceCreator.create(context, storageConf.newInstance(), serviceConfig, viewManager);
@@ -195,10 +189,10 @@ public class EmbeddedTimelineService {
 
   private void setHostAddr(String embeddedTimelineServiceHostAddr) {
     if (embeddedTimelineServiceHostAddr != null) {
-      LOG.info("Overriding hostIp to (" + embeddedTimelineServiceHostAddr + ") found in spark-conf. It was " + this.hostAddr);
+      LOG.info("Overriding hostIp to (" + embeddedTimelineServiceHostAddr + ") found in write conf. It was " + this.hostAddr);
       this.hostAddr = embeddedTimelineServiceHostAddr;
     } else {
-      LOG.warn("Unable to find driver bind address from spark config");
+      LOG.warn("Unable to find driver bind address from write config, use current host name");
       this.hostAddr = NetworkUtils.getHostname();
     }
   }
@@ -262,7 +256,7 @@ public class EmbeddedTimelineService {
 
   private static TimelineServiceIdentifier getTimelineServiceIdentifier(String hostAddr, HoodieWriteConfig writeConfig) {
     return new TimelineServiceIdentifier(hostAddr, writeConfig.getMarkersType(), writeConfig.isMetadataTableEnabled(),
-        writeConfig.isEarlyConflictDetectionEnable(), writeConfig.isTimelineServerBasedInstantStateEnabled());
+        writeConfig.isEarlyConflictDetectionEnable());
   }
 
   static class TimelineServiceIdentifier {
@@ -270,15 +264,15 @@ public class EmbeddedTimelineService {
     private final MarkerType markerType;
     private final boolean isMetadataEnabled;
     private final boolean isEarlyConflictDetectionEnable;
-    private final boolean isTimelineServerBasedInstantStateEnabled;
 
-    public TimelineServiceIdentifier(String hostAddr, MarkerType markerType, boolean isMetadataEnabled, boolean isEarlyConflictDetectionEnable,
-                                     boolean isTimelineServerBasedInstantStateEnabled) {
+    public TimelineServiceIdentifier(String hostAddr,
+                                     MarkerType markerType,
+                                     boolean isMetadataEnabled,
+                                     boolean isEarlyConflictDetectionEnable) {
       this.hostAddr = hostAddr;
       this.markerType = markerType;
       this.isMetadataEnabled = isMetadataEnabled;
       this.isEarlyConflictDetectionEnable = isEarlyConflictDetectionEnable;
-      this.isTimelineServerBasedInstantStateEnabled = isTimelineServerBasedInstantStateEnabled;
     }
 
     @Override
@@ -292,7 +286,7 @@ public class EmbeddedTimelineService {
       TimelineServiceIdentifier that = (TimelineServiceIdentifier) o;
       if (this.hostAddr != null && that.hostAddr != null) {
         return isMetadataEnabled == that.isMetadataEnabled && isEarlyConflictDetectionEnable == that.isEarlyConflictDetectionEnable
-            && isTimelineServerBasedInstantStateEnabled == that.isTimelineServerBasedInstantStateEnabled && hostAddr.equals(that.hostAddr) && markerType == that.markerType;
+            && hostAddr.equals(that.hostAddr) && markerType == that.markerType;
       } else {
         return (hostAddr == null && that.hostAddr == null);
       }
@@ -300,7 +294,7 @@ public class EmbeddedTimelineService {
 
     @Override
     public int hashCode() {
-      return Objects.hash(hostAddr, markerType, isMetadataEnabled, isEarlyConflictDetectionEnable, isTimelineServerBasedInstantStateEnabled);
+      return Objects.hash(hostAddr, markerType, isMetadataEnabled, isEarlyConflictDetectionEnable);
     }
   }
 }

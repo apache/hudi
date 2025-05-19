@@ -19,7 +19,6 @@
 
 package org.apache.hudi.common.table.read;
 
-import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
@@ -28,22 +27,23 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.KeySpec;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.exception.HoodieException;
 
 import org.apache.avro.Schema;
 
-import java.io.IOException;
 import java.io.Serializable;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.Iterator;
 
 public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
-  // Used to order the records in the record map.
-  private Long putIndex = 0L;
-  private Long getIndex = 0L;
+
+  private final Deque<HoodieLogBlock> currentInstantLogBlocks;
+  private ClosableIterator<T> recordIterator;
 
   public UnmergedFileGroupRecordBuffer(
       HoodieReaderContext<T> readerContext,
@@ -54,10 +54,11 @@ public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
       TypedProperties props,
       HoodieReadStats readStats) {
     super(readerContext, hoodieTableMetaClient, recordMergeMode, partitionNameOverrideOpt, partitionPathFieldOpt, props, readStats);
+    this.currentInstantLogBlocks = new ArrayDeque<>();
   }
 
   @Override
-  protected boolean doHasNext() throws IOException {
+  protected boolean doHasNext() {
     ValidationUtils.checkState(baseFileIterator != null, "Base file iterator has not been set yet");
 
     // Output from base file first.
@@ -66,28 +67,28 @@ public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
       return true;
     }
 
-    // Output records based on the index to preserve the order.
-    if (!records.isEmpty()) {
-      BufferedRecord<T> nextRecordInfo = records.remove(getIndex++);
-
-      if (nextRecordInfo == null) {
-        throw new HoodieException("Row index should be continuous!");
+    while ((recordIterator == null || !recordIterator.hasNext()) && !currentInstantLogBlocks.isEmpty()) {
+      HoodieLogBlock logBlock = currentInstantLogBlocks.pop();
+      if (logBlock instanceof HoodieDataBlock) {
+        HoodieDataBlock dataBlock = (HoodieDataBlock) logBlock;
+        Pair<ClosableIterator<T>, Schema> iteratorSchemaPair = getRecordsIterator(dataBlock, Option.empty());
+        if (recordIterator != null) {
+          recordIterator.close();
+        }
+        recordIterator = iteratorSchemaPair.getLeft();
       }
-
-      if (!nextRecordInfo.isDelete()) {
-        nextRecord = nextRecordInfo.getRecord();
-      } else {
-        throw new IllegalStateException("No deletes should exist in unmerged reading mode");
-      }
-      return true;
     }
-
-    return false;
+    if (recordIterator == null || !recordIterator.hasNext()) {
+      return false;
+    }
+    nextRecord = readerContext.seal(recordIterator.next());
+    readStats.incrementNumInserts();
+    return true;
   }
 
   @Override
   public Iterator<BufferedRecord<T>> getLogRecordIterator() {
-    return records.values().iterator();
+    throw new UnsupportedOperationException("Not supported for " + this.getClass().getSimpleName());
   }
 
   @Override
@@ -97,26 +98,12 @@ public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
 
   @Override
   public void processDataBlock(HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt) {
-    Pair<ClosableIterator<T>, Schema> recordsIteratorSchemaPair =
-        getRecordsIterator(dataBlock, keySpecOpt);
-    if (dataBlock.containsPartialUpdates()) {
-      throw new HoodieException("Partial update is not supported for unmerged record read");
-    }
-
-    Schema schema = AvroSchemaCache.intern(recordsIteratorSchemaPair.getRight());
-
-    try (ClosableIterator<T> recordIterator = recordsIteratorSchemaPair.getLeft()) {
-      while (recordIterator.hasNext()) {
-        T nextRecord = recordIterator.next();
-        BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(nextRecord, schema, readerContext, orderingFieldName, false);
-        processNextDataRecord(bufferedRecord, putIndex++);
-      }
-    }
+    this.currentInstantLogBlocks.add(dataBlock);
   }
 
   @Override
   public void processNextDataRecord(BufferedRecord<T> record, Serializable index) {
-    records.put(index, record.toBinary(readerContext));
+    // no-op
   }
 
   @Override
@@ -126,12 +113,19 @@ public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
 
   @Override
   public void processNextDeletedRecord(DeleteRecord deleteRecord, Serializable index) {
-    // never used for now
-    records.put(index, BufferedRecord.forDeleteRecord(deleteRecord, getOrderingValue(readerContext, deleteRecord)));
+    // no-op
   }
 
   @Override
   public boolean containsLogRecord(String recordKey) {
-    return records.containsKey(recordKey);
+    throw new UnsupportedOperationException("Not supported for " + this.getClass().getSimpleName());
+  }
+
+  @Override
+  public void close() {
+    if (recordIterator != null) {
+      recordIterator.close();
+    }
+    super.close();
   }
 }

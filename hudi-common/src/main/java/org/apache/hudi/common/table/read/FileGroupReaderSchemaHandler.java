@@ -247,6 +247,10 @@ public class FileGroupReaderSchemaHandler<T> {
     if (customDeleteMarkerKeyAndValue.isPresent()) {
       requiredFields.add(customDeleteMarkerKeyAndValue.get().getLeft());
     }
+    // Add _hoodie_operation if it exists in table schema
+    if (tableSchema.getField(HoodieRecord.OPERATION_METADATA_FIELD) != null) {
+      requiredFields.add(HoodieRecord.OPERATION_METADATA_FIELD);
+    }
 
     return requiredFields.toArray(new String[0]);
   }

@@ -534,7 +534,6 @@ public class HoodieTableSource implements
         // use the explicit fields' data type because the AvroSchemaConverter
         // is not very stable.
         .fieldTypes(rowDataType.getChildren())
-        .defaultPartName(conf.getString(FlinkOptions.PARTITION_DEFAULT_NAME))
         .predicates(this.predicates)
         .limit(this.limit)
         .emitDelete(false) // the change logs iterator can handle the DELETE records
@@ -561,7 +560,6 @@ public class HoodieTableSource implements
         // use the explicit fields' data type because the AvroSchemaConverter
         // is not very stable.
         .fieldTypes(rowDataType.getChildren())
-        .defaultPartName(conf.getString(FlinkOptions.PARTITION_DEFAULT_NAME))
         .predicates(this.predicates)
         .limit(this.limit)
         .emitDelete(emitDelete)

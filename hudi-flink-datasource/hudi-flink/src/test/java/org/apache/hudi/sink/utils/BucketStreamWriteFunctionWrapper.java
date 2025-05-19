@@ -141,6 +141,11 @@ public class BucketStreamWriteFunctionWrapper<I> implements TestFunctionWrapper<
     return this.coordinator.getEventBuffer();
   }
 
+  @Override
+  public WriteMetadataEvent[] getEventBuffer(long checkpointId) {
+    return this.coordinator.getEventBuffer(checkpointId);
+  }
+
   public OperatorEvent getNextEvent() {
     return this.gateway.getNextEvent();
   }
@@ -205,10 +210,6 @@ public class BucketStreamWriteFunctionWrapper<I> implements TestFunctionWrapper<
     return coordinatorContext;
   }
 
-  public boolean isConforming() {
-    return this.writeFunction.isConfirming();
-  }
-
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
@@ -219,9 +220,7 @@ public class BucketStreamWriteFunctionWrapper<I> implements TestFunctionWrapper<
     writeFunction.setOperatorEventGateway(gateway);
     writeFunction.initializeState(this.stateInitializationContext);
     writeFunction.open(conf);
-
-    // handle the bootstrap event
-    coordinator.handleEventFromOperator(0, getNextEvent());
+    writeFunction.setCorrespondent(new MockCorrespondent(this.coordinator));
   }
 
   protected StreamWriteFunction createWriteFunction() {

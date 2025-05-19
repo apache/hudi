@@ -29,30 +29,30 @@ import scala.collection.JavaConverters._
 
 object HoodieCommandMetrics {
 
-  def updateInsertMetrics(metrics: Map[String, SQLMetric], metaClient: HoodieTableMetaClient, commitInstantTime: String): Unit = {
+  def updateCommitMetrics(metrics: Map[String, SQLMetric], metaClient: HoodieTableMetaClient, commitInstantTime: String): Unit = {
     val timeline = metaClient.getActiveTimeline.reload().getCommitsTimeline()
     val commitInstant = timeline.getInstants.asScala
       .filter(instant => InstantComparison.EQUALS.test(instant.requestedTime(), commitInstantTime))
     commitInstant.map { commit: HoodieInstant =>
       val metadata = timeline.readCommitMetadata(commit)
-      updateInsertMetrics(metrics, metadata)
+      updateCommitMetrics(metrics, metadata)
     }
   }
 
-  def updateInsertMetrics(metrics: Map[String, SQLMetric], metadata: HoodieCommitMetadata): Unit = {
-    updateInsertMetric(metrics, NUM_PARTITION_KEY, metadata.fetchTotalPartitionsWritten())
-    updateInsertMetric(metrics, NUM_INSERT_FILE_KEY, metadata.fetchTotalFilesInsert())
-    updateInsertMetric(metrics, NUM_UPDATE_FILE_KEY, metadata.fetchTotalFilesUpdated())
-    updateInsertMetric(metrics, NUM_WRITE_ROWS_KEY, metadata.fetchTotalRecordsWritten())
-    updateInsertMetric(metrics, NUM_UPDATE_ROWS_KEY, metadata.fetchTotalUpdateRecordsWritten())
-    updateInsertMetric(metrics, NUM_INSERT_ROWS_KEY, metadata.fetchTotalInsertRecordsWritten())
-    updateInsertMetric(metrics, NUM_DELETE_ROWS_KEY, metadata.getTotalRecordsDeleted())
-    updateInsertMetric(metrics, NUM_OUTPUT_BYTES_KEY, metadata.fetchTotalBytesWritten())
-    updateInsertMetric(metrics, INSERT_TIME, metadata.getTotalCreateTime())
-    updateInsertMetric(metrics, UPSERT_TIME, metadata.getTotalUpsertTime())
+  def updateCommitMetrics(metrics: Map[String, SQLMetric], metadata: HoodieCommitMetadata): Unit = {
+    updateCommitMetric(metrics, NUM_PARTITION_KEY, metadata.fetchTotalPartitionsWritten())
+    updateCommitMetric(metrics, NUM_INSERT_FILE_KEY, metadata.fetchTotalFilesInsert())
+    updateCommitMetric(metrics, NUM_UPDATE_FILE_KEY, metadata.fetchTotalFilesUpdated())
+    updateCommitMetric(metrics, NUM_WRITE_ROWS_KEY, metadata.fetchTotalRecordsWritten())
+    updateCommitMetric(metrics, NUM_UPDATE_ROWS_KEY, metadata.fetchTotalUpdateRecordsWritten())
+    updateCommitMetric(metrics, NUM_INSERT_ROWS_KEY, metadata.fetchTotalInsertRecordsWritten())
+    updateCommitMetric(metrics, NUM_DELETE_ROWS_KEY, metadata.getTotalRecordsDeleted())
+    updateCommitMetric(metrics, NUM_OUTPUT_BYTES_KEY, metadata.fetchTotalBytesWritten())
+    updateCommitMetric(metrics, INSERT_TIME, metadata.getTotalCreateTime())
+    updateCommitMetric(metrics, UPSERT_TIME, metadata.getTotalUpsertTime())
   }
 
-  private def updateInsertMetric(metrics: Map[String, SQLMetric], name: String, value: Long): Unit = {
+  private def updateCommitMetric(metrics: Map[String, SQLMetric], name: String, value: Long): Unit = {
     val metric = metrics.get(name)
     metric.foreach(_.set(value))
   }
