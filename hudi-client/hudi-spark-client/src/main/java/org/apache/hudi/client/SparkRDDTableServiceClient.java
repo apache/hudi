@@ -23,9 +23,12 @@ import org.apache.hudi.client.utils.SparkReleaseResources;
 import org.apache.hudi.client.utils.SparkValidatorUtils;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -36,17 +39,63 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.spark.api.java.JavaRDD;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<HoodieData<HoodieRecord<T>>, HoodieData<WriteStatus>, JavaRDD<WriteStatus>> {
+
+  protected Option<WriteToMetadataTableHandler> writeToMetadataTableHandlerOpt = Option.empty();
   protected SparkRDDTableServiceClient(HoodieEngineContext context,
                                        HoodieWriteConfig clientConfig,
                                        Option<EmbeddedTimelineService> timelineService) {
     super(context, clientConfig, timelineService);
   }
 
+  protected void setWriteToMetadataTableHandler(WriteToMetadataTableHandler writeToMetadataTableHandler) {
+    this.writeToMetadataTableHandlerOpt = Option.of(writeToMetadataTableHandler);
+  }
+
   @Override
-  protected List<HoodieWriteStat> triggerWritesAndFetchWriteStats(HoodieWriteMetadata<JavaRDD<WriteStatus>> writeMetadata) {
-    return writeMetadata.getWriteStatuses().map(writeStatus -> writeStatus.getStat()).collect();
+  protected Pair<List<HoodieWriteStat>, List<HoodieWriteStat>> triggerWritesAndFetchWriteStats(HoodieWriteMetadata<JavaRDD<WriteStatus>> tableServiceWriteMetadata) {
+    List<Pair<Boolean, HoodieWriteStat>> writeStats = tableServiceWriteMetadata.getWriteStatuses().map(writeStatus ->
+        Pair.of(writeStatus.isMetadataTable(), writeStatus.getStat())).collect();
+    List<HoodieWriteStat> dataTableWriteStats = writeStats.stream().filter(entry -> !entry.getKey()).map(Pair::getValue).collect(Collectors.toList());
+    List<HoodieWriteStat> mdtWriteStats = writeStats.stream().filter(Pair::getKey).map(Pair::getValue).collect(Collectors.toList());
+    if (isMetadataTable) {
+      // incase the current table is metadata table, for new partition instantiation we end up calling this commit method. On which case,
+      // we could only see metadataTableWriteStats and no dataTableWriteStats. So, we need to reverse the list here so that we can proceed onto commit in current table as a
+      // data table (where current is actually referring to a metadata table).
+      ValidationUtils.checkArgument(dataTableWriteStats.isEmpty(), "For new partition initialization in Metadata,"
+          + "we do not expect any writes having WriteStatus referring to data table. ");
+      dataTableWriteStats.clear();
+      dataTableWriteStats.addAll(mdtWriteStats);
+      mdtWriteStats.clear();
+    }
+    return Pair.of(dataTableWriteStats, mdtWriteStats);
+  }
+
+  @Override
+  protected HoodieWriteMetadata<HoodieData<WriteStatus>> mayBeStreamWriteToMetadataTable(HoodieTable table, HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata, String instantTime) {
+    if (!isMetadataTable && config.isMetadataTableEnabled() && config.isStreamingWritesToMetadataEnabled(table.getMetaClient().getTableConfig().getTableVersion())) {
+      if (!writeToMetadataTableHandlerOpt.isPresent()) {
+        System.out.println("Asdf");
+      }
+      ValidationUtils.checkArgument(writeToMetadataTableHandlerOpt.isPresent(), "When streaming writes to metadata table is enabled, write to metadata table handler should be set");
+      return writeToMetadataTableHandlerOpt.get().streamWriteToMetadataTable(table, writeMetadata, instantTime);
+    } else {
+      return writeMetadata;
+    }
+  }
+
+  @Override
+  protected void writeToMetadataTable(HoodieTable table, String instantTime, HoodieCommitMetadata metadata, List<HoodieWriteStat> metadataWriteStatsSoFar) {
+    boolean streamingWritesToMetadataTableEnabled = !isMetadataTable && config.isMetadataTableEnabled()
+        && config.isStreamingWritesToMetadataEnabled(table.getMetaClient().getTableConfig().getTableVersion());
+    if (streamingWritesToMetadataTableEnabled) {
+      writeToMetadataTableHandlerOpt.get().writeToMetadataTable(table, instantTime, metadataWriteStatsSoFar, metadata);
+    } else {
+      // legacy write DAG to metadata table.
+      writeTableMetadata(table, instantTime, metadata);
+    }
   }
 
   @Override

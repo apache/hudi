@@ -68,6 +68,10 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
+/**
+ * Commit coordinator across data table and metadata table when streaming writes to metadata table is enabled.
+ * @param <T>
+ */
 public class SparkRDDWriteClientCommitCoordinator<T> extends SparkRDDWriteClient<T> {
   private static final Logger LOG = LoggerFactory.getLogger(SparkRDDWriteClientCommitCoordinator.class);
 

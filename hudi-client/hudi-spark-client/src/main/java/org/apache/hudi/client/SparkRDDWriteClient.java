@@ -43,7 +43,6 @@ import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieSparkIndexClient;
 import org.apache.hudi.index.SparkHoodieIndexFactory;
-import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.SparkMetadataWriterFactory;
@@ -75,9 +74,6 @@ public class SparkRDDWriteClient<T> extends
   private static final Logger LOG = LoggerFactory.getLogger(SparkRDDWriteClient.class);
   protected Option<WriteToMetadataTableHandler> writeToMetadataTableHandlerOpt = Option.empty();
 
-  // true if current write client is representing metadata table.
-  protected final boolean isMetadataTable;
-
   public SparkRDDWriteClient(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
     this(context, clientConfig, Option.empty());
   }
@@ -86,7 +82,6 @@ public class SparkRDDWriteClient<T> extends
                              Option<EmbeddedTimelineService> timelineService) {
     super(context, writeConfig, timelineService, SparkUpgradeDowngradeHelper.getInstance());
     this.tableServiceClient = getTableServiceClient(writeConfig);
-    isMetadataTable = HoodieTableMetadata.isMetadataTable(config.getBasePath());
   }
 
   protected void setWriteToMetadataTableHandler(WriteToMetadataTableHandler writeToMetadataTableHandler) {
@@ -94,10 +89,9 @@ public class SparkRDDWriteClient<T> extends
   }
 
   protected BaseHoodieTableServiceClient getTableServiceClient(HoodieWriteConfig writeConfig) {
-    /*return isMetadataTable || !config.isMetadataTableEnabled() ? new SparkRDDTableServiceClient<T>(context, writeConfig, getTimelineServer()) :
+    return isMetadataTable || !config.isMetadataTableEnabled() ? new SparkRDDTableServiceClient<T>(context, writeConfig, getTimelineServer()) :
         new SparkRDDTableServiceClientCommitCoordinator<>(context, writeConfig, getTimelineServer(),
-            new SparkRDDTableServiceClient<T>(context, writeConfig, getTimelineServer()));*/
-    return new SparkRDDTableServiceClient<T>(context, writeConfig, getTimelineServer());
+            new SparkRDDTableServiceClient<T>(context, writeConfig, getTimelineServer()));
   }
 
   @Override
@@ -364,7 +358,7 @@ public class SparkRDDWriteClient<T> extends
   private HoodieWriteMetadata<HoodieData<WriteStatus>> maybeStreamWriteToMetadataTable(HoodieWriteMetadata<HoodieData<WriteStatus>> result,
                                                                                        HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table,
                                                                                        String instantTime) {
-    if (config.isMetadataTableEnabled() && config.isStreamingWritesToMetadataEnabled(table.getMetaClient().getTableConfig().getTableVersion())) {
+    if (!isMetadataTable && config.isMetadataTableEnabled() && config.isStreamingWritesToMetadataEnabled(table.getMetaClient().getTableConfig().getTableVersion())) {
       ValidationUtils.checkArgument(writeToMetadataTableHandlerOpt.isPresent(), "When streaming writes are enabled, Write To Metadata handler has to be set");
       return writeToMetadataTableHandlerOpt.get().streamWriteToMetadataTable(table, result, instantTime);
     } else {
