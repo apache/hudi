@@ -22,14 +22,16 @@ import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.table.HoodieTableConfig
-import org.apache.hudi.common.table.view.FileSystemViewStorageConfig
+import org.apache.hudi.common.table.view.{FileSystemViewManager, FileSystemViewStorageConfig}
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.index.HoodieIndex
 import org.apache.hudi.index.bucket.BucketIdentifier
 import org.apache.hudi.index.bucket.partition.NumBucketsFunction
 import org.apache.hudi.keygen.{ComplexKeyGenerator, NonpartitionedKeyGenerator}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
+import org.apache.hudi.timeline.service.TimelineService
 
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericData
@@ -84,12 +86,25 @@ class TestBucketIndexSupport extends HoodieSparkClientTestBase with PredicateHel
 
   @Test
   def testBucketIndexRemotePartitioner(): Unit = {
-    initTimelineService()
-    timelineService.startService()
     val numBuckets = 511
-    val config = HoodieWriteConfig.newBuilder.withPath(basePath).withIndexConfig(HoodieIndexConfig.newBuilder().withBucketNum(numBuckets.toString).build())
-      .withFileSystemViewConfig(FileSystemViewStorageConfig
-        .newBuilder.withRemoteServerPort(timelineService.getServerPort).build).build
+    val config = HoodieWriteConfig.newBuilder
+      .withPath(basePath).
+      withIndexConfig(HoodieIndexConfig.newBuilder()
+        .withBucketNum(numBuckets.toString)
+        .enableBucketRemotePartitioner(true).build())
+      .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder
+        .withRemoteServerPort(incrementTimelineServicePortToUse).build)
+      .build
+
+    val timelineService = new TimelineService(context, HadoopFSUtils.getStorageConf,
+      TimelineService.Config.builder.enableMarkerRequests(true).enableRemotePartitioner(true)
+      .serverPort(config.getViewStorageConfig.getRemoteViewServerPort).build,
+      FileSystemViewManager.createViewManager(context, config.getMetadataConfig, config.getViewStorageConfig, config.getCommonConfig))
+
+    timelineService.startService
+    this.timelineService = timelineService
+
+    timelineService.startService()
     val numBucketsFunction = NumBucketsFunction.fromWriteConfig(config)
     val partitionNum = 1533
     val partitioner = BucketPartitionUtils.getRemotePartitioner(config.getViewStorageConfig, numBucketsFunction, partitionNum)

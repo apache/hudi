@@ -305,7 +305,7 @@ public class HoodieIndexConfig extends HoodieConfig {
       .key("hoodie.bucket.index.remote.partitioner.enable")
       .defaultValue(false)
       .withDocumentation("Use Remote Partitioner using centralized allocation of partition "
-          + "IDs to do repartition based on bucket aiming to resolve data skew.");
+          + "IDs to do repartition based on bucket aiming to resolve data skew. Default local hash partitioner");
 
   public static final ConfigProperty<String> BUCKET_INDEX_PARTITION_RULE_TYPE = ConfigProperty
       .key("hoodie.bucket.index.partition.rule.type")
@@ -731,6 +731,11 @@ public class HoodieIndexConfig extends HoodieConfig {
 
     public Builder withBucketMaxNum(int bucketMaxNum) {
       hoodieIndexConfig.setValue(BUCKET_INDEX_MAX_NUM_BUCKETS, String.valueOf(bucketMaxNum));
+      return this;
+    }
+
+    public Builder enableBucketRemotePartitioner(boolean enableRemotePartitioner) {
+      hoodieIndexConfig.setValue(BUCKET_PARTITIONER, String.valueOf(enableRemotePartitioner));
       return this;
     }
 
