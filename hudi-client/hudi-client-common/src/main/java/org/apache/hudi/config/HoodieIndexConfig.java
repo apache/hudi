@@ -301,6 +301,12 @@ public class HoodieIndexConfig extends HoodieConfig {
       .withDocumentation("Only applies if index type is BUCKET. Determine the number of buckets in the hudi table, "
           + "and each partition is divided to N buckets.");
 
+  public static final ConfigProperty<Boolean> BUCKET_PARTITIONER = ConfigProperty
+      .key("hoodie.bucket.index.remote.partitioner.enable")
+      .defaultValue(false)
+      .withDocumentation("Use Remote Partitioner using centralized allocation of partition "
+          + "IDs to do repartition based on bucket aiming to resolve data skew. Default local hash partitioner");
+
   public static final ConfigProperty<String> BUCKET_INDEX_PARTITION_RULE_TYPE = ConfigProperty
       .key("hoodie.bucket.index.partition.rule.type")
       .defaultValue(PartitionBucketIndexRule.REGEX.name)
@@ -725,6 +731,11 @@ public class HoodieIndexConfig extends HoodieConfig {
 
     public Builder withBucketMaxNum(int bucketMaxNum) {
       hoodieIndexConfig.setValue(BUCKET_INDEX_MAX_NUM_BUCKETS, String.valueOf(bucketMaxNum));
+      return this;
+    }
+
+    public Builder enableBucketRemotePartitioner(boolean enableRemotePartitioner) {
+      hoodieIndexConfig.setValue(BUCKET_PARTITIONER, String.valueOf(enableRemotePartitioner));
       return this;
     }
 

@@ -22,20 +22,26 @@ import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.table.HoodieTableConfig
-import org.apache.hudi.config.HoodieIndexConfig
+import org.apache.hudi.common.table.view.{FileSystemViewManager, FileSystemViewStorageConfig}
+import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.index.HoodieIndex
 import org.apache.hudi.index.bucket.BucketIdentifier
+import org.apache.hudi.index.bucket.partition.NumBucketsFunction
 import org.apache.hudi.keygen.{ComplexKeyGenerator, NonpartitionedKeyGenerator}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
+import org.apache.hudi.timeline.service.TimelineService
 
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericData
-import org.apache.spark.sql.{HoodieCatalystExpressionUtils, SparkSession}
+import org.apache.spark.sql.{BucketPartitionUtils, HoodieCatalystExpressionUtils, SparkSession}
 import org.apache.spark.sql.catalyst.encoders.DummyExpressionHolder
 import org.apache.spark.sql.catalyst.expressions.PredicateHelper
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag, Test}
+
+import java.util
 
 @Tag("functional")
 class TestBucketIndexSupport extends HoodieSparkClientTestBase with PredicateHelper {
@@ -76,6 +82,52 @@ class TestBucketIndexSupport extends HoodieSparkClientTestBase with PredicateHel
   @AfterEach
   override def tearDown() = {
     cleanupSparkContexts()
+  }
+
+  @Test
+  def testBucketIndexRemotePartitioner(): Unit = {
+    val numBuckets = 511
+    val config = HoodieWriteConfig.newBuilder
+      .withPath(basePath).
+      withIndexConfig(HoodieIndexConfig.newBuilder()
+        .withBucketNum(numBuckets.toString)
+        .enableBucketRemotePartitioner(true).build())
+      .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder
+        .withRemoteServerPort(incrementTimelineServicePortToUse).build)
+      .build
+
+    val timelineService = new TimelineService(context, HadoopFSUtils.getStorageConf,
+      TimelineService.Config.builder.enableMarkerRequests(true).enableRemotePartitioner(true)
+      .serverPort(config.getViewStorageConfig.getRemoteViewServerPort).build,
+      FileSystemViewManager.createViewManager(context, config.getMetadataConfig, config.getViewStorageConfig, config.getCommonConfig))
+
+    timelineService.startService
+    this.timelineService = timelineService
+
+    timelineService.startService()
+    val numBucketsFunction = NumBucketsFunction.fromWriteConfig(config)
+    val partitionNum = 1533
+    val partitioner = BucketPartitionUtils.getRemotePartitioner(config.getViewStorageConfig, numBucketsFunction, partitionNum)
+    val dataPartitions = List("dt=20250501", "dt=20250502", "dt=20250503", "dt=20250504", "dt=20250505", "dt=20250506")
+    val res = new util.HashMap[Int, Int]
+    dataPartitions.foreach(dataPartition => {
+      for (i <- 1 to numBuckets) {
+        // for bucket id from 1 to numBuckets
+        // mock 1000 spark partitions
+        val sparkPartition = partitioner.getPartition((dataPartition, i))
+        if (res.containsKey(sparkPartition)) {
+          val value = res.get(sparkPartition) + 1
+          res.put(sparkPartition, value)
+        } else {
+          res.put(sparkPartition, 1)
+        }
+      }
+    })
+    timelineService.close()
+
+    res.values().stream().forEach(value => {
+      assert(value == (numBuckets*dataPartitions.size/partitionNum))
+    })
   }
 
   @Test

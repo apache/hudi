@@ -170,6 +170,10 @@ public class EmbeddedTimelineService {
                   * writeConfig.getHoodieClientHeartbeatTolerableMisses());
     }
 
+    if (writeConfig.isUsingRemotePartitioner()) {
+      timelineServiceConfBuilder.enableRemotePartitioner(true);
+    }
+
     this.serviceConfig = timelineServiceConfBuilder.build();
 
     server = timelineServiceCreator.create(context, storageConf.newInstance(), serviceConfig, viewManager);
