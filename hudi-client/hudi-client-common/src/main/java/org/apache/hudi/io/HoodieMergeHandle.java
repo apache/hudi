@@ -68,7 +68,6 @@ import java.util.NoSuchElementException;
 import java.util.Properties;
 import java.util.Set;
 
-@SuppressWarnings("Duplicates")
 /**
  * Handle to merge incoming records to those in storage.
  * <p>
@@ -97,6 +96,7 @@ import java.util.Set;
  *
  * </p>
  */
+@SuppressWarnings("Duplicates")
 @NotThreadSafe
 public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O> {
 

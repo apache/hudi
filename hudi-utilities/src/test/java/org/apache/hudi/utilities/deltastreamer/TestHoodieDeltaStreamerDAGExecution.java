@@ -69,7 +69,7 @@ public class TestHoodieDeltaStreamerDAGExecution extends HoodieDeltaStreamerTest
   @Test
   public void testCompactionDoesNotTriggerRepeatedDAG() throws Exception {
     // Configure 3 transformers of same type. 2nd transformer has no suffix
-    StageListener stageListener = new StageListener("org.apache.hudi.table.action.compact.RunCompactionActionExecutor.execute");
+    StageListener stageListener = new StageListener("collect at SparkRDDTableServiceClient");
     sparkSession.sparkContext().addSparkListener(stageListener);
     List<String> configs = Arrays.asList("hoodie.compact.inline.max.delta.commits=1", "hoodie.compact.inline=true");
     runDeltaStreamer(WriteOperationType.UPSERT, true, Option.of(configs));
@@ -114,7 +114,7 @@ public class TestHoodieDeltaStreamerDAGExecution extends HoodieDeltaStreamerTest
 
     @Override
     public void onStageCompleted(SparkListenerStageCompleted stageCompleted) {
-      if (stageCompleted.stageInfo().details().contains(eventToTrack)) {
+      if (stageCompleted.stageInfo().name().contains(eventToTrack)) {
         triggerCount += 1;
       }
     }

@@ -70,6 +70,7 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.config.HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS;
 import static org.apache.hudi.config.HoodieCompactionConfig.INLINE_COMPACT_TRIGGER_STRATEGY;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Test consistent hashing index
@@ -113,7 +114,6 @@ public class TestConsistentBucketIndex extends HoodieSparkClientTestHarness {
             .withBucketIndexEngineType(HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING)
             .withBucketNum("8")
             .build())
-        .withAutoCommit(false)
         .build();
     writeClient = getHoodieWriteClient(config);
     index = writeClient.getIndex();
@@ -205,7 +205,8 @@ public class TestConsistentBucketIndex extends HoodieSparkClientTestHarness {
     writeData(writeClient.createNewInstantTime(), 200, true);
     Assertions.assertEquals(400, readRecordsNum(dataGen.getPartitionPaths(), populateMetaFields));
     HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = writeClient.compact(compactionTime);
-    writeClient.commitCompaction(compactionTime, compactionMetadata.getCommitMetadata().get(), Option.empty());
+    writeClient.commitCompaction(compactionTime, compactionMetadata, Option.empty());
+    assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(compactionTime));
     Assertions.assertEquals(400, readRecordsNum(dataGen.getPartitionPaths(), populateMetaFields));
   }
 

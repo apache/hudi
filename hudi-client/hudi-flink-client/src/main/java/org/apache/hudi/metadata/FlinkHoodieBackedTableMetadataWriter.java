@@ -22,6 +22,7 @@ import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
@@ -54,7 +55,7 @@ import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.EAGE
 /**
  * Flink hoodie backed table metadata writer.
  */
-public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetadataWriter<List<HoodieRecord>> {
+public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetadataWriter<List<HoodieRecord>, List<WriteStatus>> {
   private static final Logger LOG = LoggerFactory.getLogger(FlinkHoodieBackedTableMetadataWriter.class);
 
   public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf, HoodieWriteConfig writeConfig,
@@ -110,6 +111,11 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   @Override
   protected List<HoodieRecord> convertHoodieDataToEngineSpecificData(HoodieData<HoodieRecord> records) {
     return records.collectAsList();
+  }
+
+  @Override
+  protected HoodieData<WriteStatus> convertEngineSpecificDataToHoodieData(List<WriteStatus> records) {
+    return HoodieListData.lazy(records);
   }
 
   @Override
@@ -183,7 +189,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   @Override
-  public BaseHoodieWriteClient<?, List<HoodieRecord>, ?, ?> initializeWriteClient() {
+  public BaseHoodieWriteClient<?, List<HoodieRecord>, ?, List<WriteStatus>> initializeWriteClient() {
     return new HoodieFlinkWriteClient(engineContext, metadataWriteConfig);
   }
 
@@ -197,6 +203,23 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
                                                                HoodieTableMetaClient metaClient, int parallelism, Schema readerSchema, StorageConfiguration<?> storageConf,
                                                                String instantTime) {
     throw new HoodieNotSupportedException("Flink metadata table does not support expression index yet.");
+  }
+
+  protected void bulkInsertAndCommit(BaseHoodieWriteClient<?, List<HoodieRecord>, ?, List<WriteStatus>> writeClient, String instantTime, List<HoodieRecord> preppedRecordInputs,
+                                     Option<BulkInsertPartitioner> bulkInsertPartitioner) {
+    List<WriteStatus> writeStatusJavaRDD = writeClient.bulkInsertPreppedRecords(preppedRecordInputs, instantTime, bulkInsertPartitioner);
+    writeClient.commit(instantTime, writeStatusJavaRDD);
+  }
+
+  @Override
+  protected void upsertAndCommit(BaseHoodieWriteClient<?, List<HoodieRecord>, ?, List<WriteStatus>> writeClient, String instantTime, List<HoodieRecord> preppedRecordInputs) {
+    List<WriteStatus> writeStatusJavaRDD = writeClient.upsertPreppedRecords(preppedRecordInputs, instantTime);
+    writeClient.commit(instantTime, writeStatusJavaRDD);
+  }
+
+  @Override
+  MetadataIndexGenerator getMetadataIndexGenerator() {
+    return null;
   }
 
   @Override

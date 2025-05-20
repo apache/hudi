@@ -43,6 +43,7 @@ import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.timeline.versioning.v2.InstantGeneratorV2;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.HoodieFileReader;
@@ -111,7 +112,7 @@ public class ClusteringUtils {
   public static Option<HoodieInstant> getRequestedClusteringInstant(String timestamp, HoodieActiveTimeline activeTimeline, InstantGenerator factory) {
     HoodieTimeline pendingReplaceOrClusterTimeline = activeTimeline.filterPendingReplaceOrClusteringTimeline();
     HoodieInstant requestedInstant = factory.getClusteringCommitRequestedInstant(timestamp);
-    if (pendingReplaceOrClusterTimeline.containsInstant(requestedInstant)) {
+    if (pendingReplaceOrClusterTimeline.containsInstant(timestamp)) {
       return Option.of(requestedInstant);
     }
     requestedInstant = factory.getReplaceCommitRequestedInstant(timestamp);
@@ -246,6 +247,19 @@ public class ClusteringUtils {
    */
   public static Option<Pair<HoodieInstant, HoodieClusteringPlan>> getClusteringPlan(HoodieTableMetaClient metaClient, HoodieInstant pendingReplaceInstant) {
     return getClusteringPlan(metaClient.getActiveTimeline(), pendingReplaceInstant, metaClient.getInstantGenerator());
+  }
+
+  /**
+   * Returns clustering plan for pending clustering operation with given clustering timestamp
+   * @param metaClient HoodieTableMetaClient
+   * @param clusteringCommitTime Timestamp of clustering operation
+   * @return HoodieClusteringPlan for the corresponding clustering operation
+   */
+  public static HoodieClusteringPlan getPendingClusteringPlan(HoodieTableMetaClient metaClient, String clusteringCommitTime) {
+    return getClusteringPlan(
+        metaClient, getRequestedClusteringInstant(clusteringCommitTime, metaClient.getActiveTimeline(), metaClient.getInstantGenerator()).get())
+        .map(Pair::getRight).orElseThrow(() -> new HoodieClusteringException(
+            "Unable to read clustering plan for instant: " + clusteringCommitTime));
   }
 
   /**
@@ -502,5 +516,4 @@ public class ClusteringUtils {
       throw new HoodieIOException("Error reading base file " + dataFilePath, e);
     }
   }
-
 }

@@ -276,15 +276,13 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
   protected Stream<HoodieBaseFile> insertRecordsToMORTable(HoodieTableMetaClient metaClient, List<HoodieRecord> records,
                                                  SparkRDDWriteClient client, HoodieWriteConfig cfg, String commitTime,
                                                            boolean doExplicitCommit) throws IOException {
-    HoodieTableMetaClient reloadedMetaClient = HoodieTableMetaClient.reload(metaClient);
-
     JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
     JavaRDD<WriteStatus> statusesRdd = client.insert(writeRecords, commitTime);
     List<WriteStatus> statuses = statusesRdd.collect();
     assertNoWriteErrors(statuses);
-    if (doExplicitCommit) {
-      client.commit(commitTime, statusesRdd);
-    }
+    client.commit(commitTime, jsc().parallelize(statuses));
+
+    HoodieTableMetaClient reloadedMetaClient = HoodieTableMetaClient.reload(metaClient);
     assertFileSizesEqual(statuses, status -> FSUtils.getFileSize(
         reloadedMetaClient.getStorage(),
         new StoragePath(reloadedMetaClient.getBasePath(), status.getStat().getPath())));
@@ -332,9 +330,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
     List<WriteStatus> statuses = statusesRdd.collect();
     // Verify there are no errors
     assertNoWriteErrors(statuses);
-    if (doExplicitCommit) {
-      client.commit(commitTime, statusesRdd);
-    }
+    client.commit(commitTime, statusesRdd);
     assertFileSizesEqual(statuses, status -> FSUtils.getFileSize(
         reloadedMetaClient.getStorage(),
         new StoragePath(reloadedMetaClient.getBasePath(), status.getStat().getPath())));
@@ -403,7 +399,6 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
       long compactionSmallFileSize, HoodieClusteringConfig clusteringConfig) {
     return HoodieWriteConfig.newBuilder().withPath(basePath()).withSchema(TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .withDeleteParallelism(2)
-        .withAutoCommit(autoCommit)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(compactionSmallFileSize)
             .withInlineCompaction(false).withMaxNumDeltaCommitsBeforeCompaction(1).build())
         .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(1024 * 1024 * 1024).parquetMaxFileSize(1024 * 1024 * 1024).build())
