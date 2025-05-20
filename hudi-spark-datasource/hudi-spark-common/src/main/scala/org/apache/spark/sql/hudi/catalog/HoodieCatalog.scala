@@ -43,7 +43,7 @@ import org.apache.spark.sql.connector.catalog.TableChange.{AddColumn, ColumnChan
 import org.apache.spark.sql.connector.expressions.{FieldReference, IdentityTransform, Transform}
 import org.apache.spark.sql.execution.datasources.DataSource
 import org.apache.spark.sql.hudi.{HoodieSqlCommonUtils, ProvidesHoodieConfig}
-import org.apache.spark.sql.hudi.analysis.HoodieSpark3Analysis.HoodieV1OrV2Table
+import org.apache.spark.sql.hudi.analysis.HoodieSparkBaseAnalysis.HoodieV1OrV2Table
 import org.apache.spark.sql.hudi.catalog.HoodieCatalog.{buildPartitionTransforms, isTablePartitioned}
 import org.apache.spark.sql.hudi.command._
 import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException

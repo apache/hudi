@@ -32,7 +32,7 @@ import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.StructType
 
-trait HoodieSpark3CatalystPlanUtils extends HoodieCatalystPlansUtils {
+trait HoodieSparkBaseCatalystPlanUtils extends HoodieCatalystPlansUtils {
 
   /**
    * Instantiates [[ProjectionOverSchema]] utility
@@ -58,7 +58,6 @@ trait HoodieSpark3CatalystPlanUtils extends HoodieCatalystPlansUtils {
     Join(left, right, joinType, None, JoinHint.NONE)
   }
 
-
   override def unapplyCreateTableLikeCommand(plan: LogicalPlan): Option[(TableIdentifier, TableIdentifier, CatalogStorageFormat, Option[String], Map[String, String], Boolean)] = {
     plan match {
       case CreateTableLikeCommand(targetTable, sourceTable, fileFormat, provider, properties, ifNotExists) =>
@@ -81,7 +80,7 @@ trait HoodieSpark3CatalystPlanUtils extends HoodieCatalystPlansUtils {
   override def createProjectForByNameQuery(lr: LogicalRelation, plan: LogicalPlan): Option[LogicalPlan] = None
 }
 
-object HoodieSpark3CatalystPlanUtils extends SparkAdapterSupport {
+object HoodieSparkBaseCatalystPlanUtils extends SparkAdapterSupport {
 
   /**
    * This is an extractor to accommodate for [[ResolvedTable]] signature change in Spark 3.2
@@ -89,7 +88,7 @@ object HoodieSpark3CatalystPlanUtils extends SparkAdapterSupport {
   object MatchResolvedTable {
     def unapply(plan: LogicalPlan): Option[(TableCatalog, Identifier, Table)] =
       sparkAdapter.getCatalystPlanUtils match {
-        case spark3Utils: HoodieSpark3CatalystPlanUtils => spark3Utils.unapplyResolvedTable(plan)
+        case sparkCatalystPlanUtils: HoodieSparkBaseCatalystPlanUtils => sparkCatalystPlanUtils.unapplyResolvedTable(plan)
         case _ => None
       }
   }
