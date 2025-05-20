@@ -750,7 +750,6 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     final int parallelism = Math.min(partitionFileSlicePairs.size(), recordIndexMaxParallelism);
     ReaderContextFactory<T> readerContextFactory = engineContext.getReaderContextFactory(metaClient);
     return engineContext.parallelize(partitionFileSlicePairs, parallelism).flatMap(partitionAndFileSlice -> {
-
       final String partition = partitionAndFileSlice.getKey();
       final FileSlice fileSlice = partitionAndFileSlice.getValue();
       final String fileId = fileSlice.getFileId();
@@ -767,6 +766,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
           .withRequestedSchema(requestedSchema)
           .withInternalSchema(internalSchemaOption)
           .withShouldUseRecordPosition(false)
+          .withProps(metaClient.getTableConfig().getProps())
           .build();
       String baseFileInstantTime = fileSlice.getBaseFile().get().getCommitTime();
       return new CloseableMappingIterator<>(fileGroupReader.getClosableIterator(), record -> {
