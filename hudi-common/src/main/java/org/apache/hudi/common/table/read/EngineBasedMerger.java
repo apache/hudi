@@ -73,6 +73,9 @@ public class EngineBasedMerger<T> {
   }
 
   boolean shouldProcessDelete(DeleteRecord deleteRecord, BufferedRecord<T> existingRecord) {
+    if (existingRecord == null) {
+      return true;
+    }
     switch (recordMergeMode) {
       case COMMIT_TIME_ORDERING:
         return true;

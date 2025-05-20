@@ -325,7 +325,11 @@ class TestEngineBasedMerger {
         Arguments.of(HARD_DELETE, deleteRecordAtT3, RecordMergeMode.CUSTOM, false),
         // delete record with same ordering value is processed
         Arguments.of(T1, deleteRecordAtT1, RecordMergeMode.EVENT_TIME_ORDERING, true),
-        Arguments.of(T1, deleteRecordAtT1, RecordMergeMode.CUSTOM, true));
+        Arguments.of(T1, deleteRecordAtT1, RecordMergeMode.CUSTOM, true),
+        // null existing record means delete should be processed
+        Arguments.of(null, deleteRecordAtT1, RecordMergeMode.COMMIT_TIME_ORDERING, true),
+        Arguments.of(null, deleteRecordAtT1, RecordMergeMode.EVENT_TIME_ORDERING, true),
+        Arguments.of(null, deleteRecordAtT1, RecordMergeMode.CUSTOM, true));
   }
 
   @ParameterizedTest
