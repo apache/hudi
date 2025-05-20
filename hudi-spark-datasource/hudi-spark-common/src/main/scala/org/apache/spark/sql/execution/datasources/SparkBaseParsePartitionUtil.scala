@@ -39,7 +39,7 @@ import scala.collection.mutable.ArrayBuffer
 import scala.util.Try
 import scala.util.control.NonFatal
 
-object Spark4ParsePartitionUtil extends SparkParsePartitionUtil {
+object SparkBaseParsePartitionUtil extends SparkParsePartitionUtil {
 
   private val cache = new ConcurrentHashMap[ZoneId, (DateFormatter, TimestampFormatter)](1)
 

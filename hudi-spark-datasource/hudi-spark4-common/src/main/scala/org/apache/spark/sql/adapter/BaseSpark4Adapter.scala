@@ -68,7 +68,7 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
 
   override def getAvroSchemaConverters: HoodieAvroSchemaConverters = HoodieSparkAvroSchemaConverters
 
-  override def getSparkParsePartitionUtil: SparkParsePartitionUtil = Spark4ParsePartitionUtil
+  override def getSparkParsePartitionUtil: SparkParsePartitionUtil = SparkBaseParsePartitionUtil
 
   override def getDateFormatter(tz: TimeZone): DateFormatter = {
     cache.computeIfAbsent(tz.toZoneId, zoneId => ReflectUtil.getDateFormatter(zoneId))
