@@ -90,12 +90,8 @@ object HoodieAnalysis extends SparkAdapterSupport {
     }
 
     val resolveAlterTableCommandsClass =
-      if (HoodieSparkUtils.gteqSpark4_0) {
-        "org.apache.spark.sql.hudi.Spark40ResolveHudiAlterTableCommand"
-      } else if (HoodieSparkUtils.gteqSpark3_5) {
-        "org.apache.spark.sql.hudi.Spark35ResolveHudiAlterTableCommand"
-      } else if (HoodieSparkUtils.isSpark3_4) {
-        "org.apache.spark.sql.hudi.Spark34ResolveHudiAlterTableCommand"
+      if (HoodieSparkUtils.gteqSpark3_4) {
+        "org.apache.spark.sql.hudi.SparkBaseResolveHudiAlterTableCommand"
       } else if (HoodieSparkUtils.isSpark3_3) {
         "org.apache.spark.sql.hudi.Spark33ResolveHudiAlterTableCommand"
       } else {

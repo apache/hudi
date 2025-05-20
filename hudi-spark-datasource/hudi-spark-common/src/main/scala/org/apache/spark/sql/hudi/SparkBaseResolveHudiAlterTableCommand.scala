@@ -30,7 +30,7 @@ import org.apache.spark.sql.hudi.command.{AlterTableCommand => HudiAlterTableCom
   * Rule to mostly resolve, normalize and rewrite column names based on case sensitivity.
   * for alter table column commands.
   */
-class Spark34ResolveHudiAlterTableCommand(sparkSession: SparkSession) extends Rule[LogicalPlan] {
+class SparkBaseResolveHudiAlterTableCommand(sparkSession: SparkSession) extends Rule[LogicalPlan] {
 
   def apply(plan: LogicalPlan): LogicalPlan = {
     if (ProvidesHoodieConfig.isSchemaEvolutionEnabled(sparkSession)) {
