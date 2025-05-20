@@ -310,7 +310,7 @@ class TestEngineBasedMerger {
   }
 
   private static Stream<Arguments> shouldProcessDelete() {
-    DeleteRecord deleteRecordAtT1= DeleteRecord.create("key", "partition", 1);
+    DeleteRecord deleteRecordAtT1 = DeleteRecord.create("key", "partition", 1);
     DeleteRecord deleteRecordAtT2 = DeleteRecord.create("key", "partition", 2);
     DeleteRecord deleteRecordAtT3 = DeleteRecord.create("key", "partition", 3);
     return Stream.of(

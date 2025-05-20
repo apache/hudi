@@ -44,6 +44,7 @@ import org.apache.avro.generic.IndexedRecord;
 import java.io.IOException;
 import java.util.Objects;
 
+import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
 
 /**
@@ -89,7 +90,7 @@ public class EngineBasedMerger<T> {
         Comparable deleteOrderingVal = deleteRecord.getOrderingValue();
         // Checks the ordering value does not equal to 0
         // because we use 0 as the default value which means natural order
-        boolean chooseExisting = !deleteOrderingVal.equals(0)
+        boolean chooseExisting = !deleteOrderingVal.equals(DEFAULT_ORDERING_VALUE)
             && ReflectionUtils.isSameClass(existingOrderingVal, deleteOrderingVal)
             && existingOrderingVal.compareTo(deleteOrderingVal) > 0;
         return !chooseExisting;
