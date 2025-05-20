@@ -69,19 +69,16 @@ object HoodieAnalysis extends SparkAdapterSupport {
     val dataSourceV2ToV1Fallback: RuleBuilder =
       session => instantiateKlass(dataSourceV2ToV1FallbackClass, session)
 
-    val spark3PlusResolveReferencesClass = if (HoodieSparkUtils.isSpark4)
-      "org.apache.spark.sql.hudi.analysis.HoodieSpark4ResolveReferences"
-    else
-      "org.apache.spark.sql.hudi.analysis.HoodieSpark3ResolveReferences"
-    val spark3PlusResolveReferences: RuleBuilder =
-      session => instantiateKlass(spark3PlusResolveReferencesClass, session)
+    val sparkBaseResolveReferencesClass = "org.apache.spark.sql.hudi.analysis.HoodieSparkBaseResolveReferences"
+    val sparkBaseResolveReferences: RuleBuilder =
+      session => instantiateKlass(sparkBaseResolveReferencesClass, session)
 
     // NOTE: PLEASE READ CAREFULLY BEFORE CHANGING
     //
     // It's critical for this rules to follow in this order; re-ordering this rules might lead to changes in
     // behavior of Spark's analysis phase (for ex, DataSource V2 to V1 fallback might not kick in before other rules,
     // leading to all relations resolving as V2 instead of current expectation of them being resolved as V1)
-    rules ++= Seq(dataSourceV2ToV1Fallback, spark3PlusResolveReferences)
+    rules ++= Seq(dataSourceV2ToV1Fallback, sparkBaseResolveReferences)
 
     if (HoodieSparkUtils.isSpark3_5) {
       rules += (_ => instantiateKlass(
@@ -126,20 +123,10 @@ object HoodieAnalysis extends SparkAdapterSupport {
       session => HoodiePostAnalysisRule(session)
     )
 
-    if (HoodieSparkUtils.isSpark4) {
-      val spark4PostHocResolutionClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark4PostAnalysisRule"
-      val spark4PostHocResolution: RuleBuilder =
-        session => instantiateKlass(spark4PostHocResolutionClass, session)
-
-      rules += spark4PostHocResolution
-    } else {
-      // spark 3
-      val spark3PostHocResolutionClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark3PostAnalysisRule"
-      val spark3PostHocResolution: RuleBuilder =
-        session => instantiateKlass(spark3PostHocResolutionClass, session)
-
-      rules += spark3PostHocResolution
-    }
+    val sparkBasePostHocResolutionClass = "org.apache.spark.sql.hudi.analysis.HoodieSparkBasePostAnalysisRule"
+    val sparkBasePostHocResolution: RuleBuilder =
+      session => instantiateKlass(sparkBasePostHocResolutionClass, session)
+    rules += sparkBasePostHocResolution
 
     rules.toSeq
   }
