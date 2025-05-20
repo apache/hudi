@@ -289,6 +289,7 @@ public class HoodieIndexUtils {
           .withRequestedSchema(dataSchema)
           .withInternalSchema(internalSchemaOption)
           .withShouldUseRecordPosition(false)
+          .withProps(metaClient.getTableConfig().getProps())
           .build();
       try {
         final HoodieRecordLocation currentLocation = new HoodieRecordLocation(fileSlice.getBaseInstantTime(), fileSlice.getFileId());
