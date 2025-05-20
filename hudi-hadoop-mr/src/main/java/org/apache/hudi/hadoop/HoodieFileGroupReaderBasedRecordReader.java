@@ -32,6 +32,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.hadoop.realtime.RealtimeSplit;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
@@ -97,7 +98,7 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
   }
 
   private final HiveHoodieReaderContext readerContext;
-  private final HoodieFileGroupReader<ArrayWritable> fileGroupReader;
+  private final ClosableIterator<ArrayWritable> recordIterator;
   private final ArrayWritable arrayWritable;
   private final NullWritable nullWritable = NullWritable.get();
   private final InputSplit inputSplit;
@@ -141,7 +142,7 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
       }
     }
     LOG.debug("Creating HoodieFileGroupReaderRecordReader with tableBasePath={}, latestCommitTime={}, fileSplit={}", tableBasePath, latestCommitTime, fileSplit.getPath());
-    this.fileGroupReader = HoodieFileGroupReader.<ArrayWritable>newBuilder()
+    this.recordIterator = HoodieFileGroupReader.<ArrayWritable>newBuilder()
         .withReaderContext(readerContext)
         .withHoodieTableMetaClient(metaClient)
         .withLatestCommitTime(latestCommitTime)
@@ -152,7 +153,8 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
         .withStart(fileSplit.getStart())
         .withLength(fileSplit.getLength())
         .withShouldUseRecordPosition(false)
-        .build();
+        .build()
+        .getClosableIterator();
     // it expects the partition columns to be at the end
     Schema outputSchema = HoodieAvroUtils.generateProjectionSchema(tableSchema,
         Stream.concat(tableSchema.getFields().stream().map(f -> f.name().toLowerCase(Locale.ROOT)).filter(n -> !partitionColumns.contains(n)),
@@ -162,10 +164,10 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
 
   @Override
   public boolean next(NullWritable key, ArrayWritable value) throws IOException {
-    if (!fileGroupReader.hasNext()) {
+    if (!recordIterator.hasNext()) {
       return false;
     }
-    value.set(fileGroupReader.next().get());
+    value.set(recordIterator.next().get());
     reverseProjection.apply(value);
     return true;
   }
@@ -187,7 +189,7 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
 
   @Override
   public void close() throws IOException {
-    fileGroupReader.close();
+    recordIterator.close();
   }
 
   @Override

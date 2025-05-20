@@ -48,6 +48,7 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -423,8 +424,10 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       HoodieFileGroupReader<T> fileGroupReader,
       List<T> recordList,
       Schema recordSchema) throws IOException {
-    while (fileGroupReader.hasNext()) {
-      recordList.add(fileGroupReader.next());
+    try (ClosableIterator<T> fileGroupReaderIterator = fileGroupReader.getClosableIterator()) {
+      while (fileGroupReaderIterator.hasNext()) {
+        recordList.add(fileGroupReaderIterator.next());
+      }
     }
   }
 

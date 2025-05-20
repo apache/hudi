@@ -293,7 +293,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
    * @return {@code true} if the next record exists; {@code false} otherwise.
    * @throws IOException on reader error.
    */
-  public boolean hasNext() throws IOException {
+  boolean hasNext() throws IOException {
     if (recordBuffer == null) {
       return baseFileIterator.hasNext();
     } else {
@@ -311,7 +311,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   /**
    * @return The next record after calling {@link #hasNext}.
    */
-  public T next() {
+  T next() {
     T nextVal = recordBuffer == null ? baseFileIterator.next() : recordBuffer.next();
     if (outputConverter.isPresent()) {
       return outputConverter.get().apply(nextVal);
