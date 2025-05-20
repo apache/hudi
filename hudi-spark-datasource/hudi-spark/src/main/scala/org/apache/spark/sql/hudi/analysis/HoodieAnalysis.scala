@@ -56,16 +56,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
     val adaptIngestionTargetLogicalRelations: RuleBuilder = session => AdaptIngestionTargetLogicalRelations(session)
 
     rules += adaptIngestionTargetLogicalRelations
-    val dataSourceV2ToV1FallbackClass = if (HoodieSparkUtils.isSpark4_0)
-      "org.apache.spark.sql.hudi.analysis.HoodieSpark40DataSourceV2ToV1Fallback"
-    else if (HoodieSparkUtils.isSpark3_5)
-      "org.apache.spark.sql.hudi.analysis.HoodieSpark35DataSourceV2ToV1Fallback"
-    else if (HoodieSparkUtils.isSpark3_4)
-      "org.apache.spark.sql.hudi.analysis.HoodieSpark34DataSourceV2ToV1Fallback"
-    else {
-      // Spark 3.3.x
-      "org.apache.spark.sql.hudi.analysis.HoodieSpark33DataSourceV2ToV1Fallback"
-    }
+    val dataSourceV2ToV1FallbackClass = "org.apache.spark.sql.hudi.analysis.HoodieSparkDataSourceV2ToV1Fallback"
     val dataSourceV2ToV1Fallback: RuleBuilder =
       session => instantiateKlass(dataSourceV2ToV1FallbackClass, session)
 
