@@ -729,11 +729,11 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
    * @return
    */
   private static <T> HoodieData<HoodieRecord> readRecordKeysFromFileSliceSnapshot(HoodieEngineContext engineContext,
-                                                                              List<Pair<String, FileSlice>> partitionFileSlicePairs,
-                                                                              int recordIndexMaxParallelism,
-                                                                              String activeModule,
-                                                                              HoodieTableMetaClient metaClient,
-                                                                              HoodieWriteConfig dataWriteConfig) {
+                                                                                  List<Pair<String, FileSlice>> partitionFileSlicePairs,
+                                                                                  int recordIndexMaxParallelism,
+                                                                                  String activeModule,
+                                                                                  HoodieTableMetaClient metaClient,
+                                                                                  HoodieWriteConfig dataWriteConfig) {
     if (partitionFileSlicePairs.isEmpty()) {
       return engineContext.emptyHoodieData();
     }
