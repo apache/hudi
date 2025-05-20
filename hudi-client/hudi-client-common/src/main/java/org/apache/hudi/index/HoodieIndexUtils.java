@@ -267,10 +267,7 @@ public class HoodieIndexUtils {
     if (instantTime.isEmpty()) {
       return hoodieTable.getContext().emptyHoodieData();
     }
-    return partitionLocations.flatMap(p
-        -> {
-      Schema dataSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getWriteSchema()), config.allowOperationMetadataField());
-      Option<InternalSchema> internalSchemaOption = SerDeHelper.fromJson(config.getInternalSchema());
+    return partitionLocations.flatMap(p -> {
       Option<FileSlice> fileSliceOption = Option.fromJavaOptional(hoodieTable
           .getHoodieView()
           .getLatestMergedFileSlicesBeforeOrOn(p.getLeft(), instantTime.get())
@@ -279,14 +276,21 @@ public class HoodieIndexUtils {
       if (fileSliceOption.isEmpty()) {
         return Collections.emptyIterator();
       }
+      Schema dataSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getWriteSchema()), config.allowOperationMetadataField());
+      Option<InternalSchema> internalSchemaOption = SerDeHelper.fromJson(config.getInternalSchema());
       FileSlice fileSlice = fileSliceOption.get();
       HoodieReaderContext<R> readerContext = readerContextFactory.getContext();
-      HoodieFileGroupReader<R> fileGroupReader = new HoodieFileGroupReader<>(readerContext,
-          metaClient.getStorage(), metaClient.getBasePath().toString(), instantTime.get(), fileSlice, dataSchema, dataSchema, internalSchemaOption,
-          metaClient, metaClient.getTableConfig().getProps(),
-          0, Long.MAX_VALUE, false, false);
+      HoodieFileGroupReader<R> fileGroupReader = HoodieFileGroupReader.<R>newBuilder()
+          .withReaderContext(readerContext)
+          .withHoodieTableMetaClient(metaClient)
+          .withLatestCommitTime(instantTime.get())
+          .withFileSlice(fileSlice)
+          .withDataSchema(dataSchema)
+          .withRequestedSchema(dataSchema)
+          .withInternalSchema(internalSchemaOption)
+          .withShouldUseRecordPosition(false)
+          .build();
       try {
-        fileGroupReader.initRecordIterators();
         final HoodieRecordLocation currentLocation = new HoodieRecordLocation(fileSlice.getBaseInstantTime(), fileSlice.getFileId());
         return new CloseableMappingIterator<>(fileGroupReader.getClosableHoodieRecordIterator(), hoodieRecord -> {
           hoodieRecord.unseal();

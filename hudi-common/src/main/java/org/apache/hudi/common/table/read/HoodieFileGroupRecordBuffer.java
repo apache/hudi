@@ -120,7 +120,7 @@ public interface HoodieFileGroupRecordBuffer<T> {
    *
    * @return output the next merged record.
    */
-  BufferedRecord<T> next();
+  T next();
 
   void close();
 }

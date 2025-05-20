@@ -758,11 +758,16 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       Schema dataSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(dataWriteConfig.getWriteSchema()), dataWriteConfig.allowOperationMetadataField());
       Schema requestedSchema = metaClient.getTableConfig().populateMetaFields() ? getRecordKeySchema() : dataSchema;
       Option<InternalSchema> internalSchemaOption = SerDeHelper.fromJson(dataWriteConfig.getInternalSchema());
-      HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(readerContext,
-          metaClient.getStorage(), metaClient.getBasePath().toString(), instantTime.get(), fileSlice, dataSchema, requestedSchema, internalSchemaOption,
-          metaClient, metaClient.getTableConfig().getProps(),
-          0, Long.MAX_VALUE, false, false);
-      fileGroupReader.initRecordIterators();
+      HoodieFileGroupReader<T> fileGroupReader = HoodieFileGroupReader.<T>newBuilder()
+          .withReaderContext(readerContext)
+          .withHoodieTableMetaClient(metaClient)
+          .withFileSlice(fileSlice)
+          .withLatestCommitTime(instantTime.get())
+          .withDataSchema(dataSchema)
+          .withRequestedSchema(requestedSchema)
+          .withInternalSchema(internalSchemaOption)
+          .withShouldUseRecordPosition(false)
+          .build();
       String baseFileInstantTime = fileSlice.getBaseFile().get().getCommitTime();
       return new CloseableMappingIterator<>(fileGroupReader.getClosableIterator(), record -> {
         String recordKey = readerContext.getRecordKey(record, requestedSchema);
