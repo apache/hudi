@@ -23,6 +23,8 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroRecord;
@@ -39,16 +41,20 @@ import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieMetadataIndexException;
-import org.apache.hudi.io.HoodieMergedReadHandle;
+import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
@@ -251,15 +257,47 @@ public class HoodieIndexUtils {
    */
   private static <R> HoodieData<HoodieRecord<R>> getExistingRecords(
       HoodieData<Pair<String, String>> partitionLocations, HoodieWriteConfig config, HoodieTable hoodieTable) {
-    final Option<String> instantTime = hoodieTable
-        .getMetaClient()
+    HoodieTableMetaClient metaClient = hoodieTable.getMetaClient();
+    final Option<String> instantTime = metaClient
         .getActiveTimeline() // we need to include all actions and completed
         .filterCompletedInstants()
         .lastInstant()
         .map(HoodieInstant::requestedTime);
+    ReaderContextFactory<R> readerContextFactory = hoodieTable.getContext().getReaderContextFactory(metaClient);
+    if (instantTime.isEmpty()) {
+      return hoodieTable.getContext().emptyHoodieData();
+    }
     return partitionLocations.flatMap(p
-        -> new HoodieMergedReadHandle(config, instantTime, hoodieTable, Pair.of(p.getKey(), p.getValue()))
-        .getMergedRecords().iterator());
+        -> {
+      Schema dataSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getWriteSchema()), config.allowOperationMetadataField());
+      Option<InternalSchema> internalSchemaOption = SerDeHelper.fromJson(config.getInternalSchema());
+      Option<FileSlice> fileSliceOption = Option.fromJavaOptional(hoodieTable
+          .getHoodieView()
+          .getLatestMergedFileSlicesBeforeOrOn(p.getLeft(), instantTime.get())
+          .filter(fileSlice -> fileSlice.getFileId().equals(p.getRight()))
+          .findFirst());
+      if (fileSliceOption.isEmpty()) {
+        return Collections.emptyIterator();
+      }
+      FileSlice fileSlice = fileSliceOption.get();
+      HoodieReaderContext<R> readerContext = readerContextFactory.getContext();
+      HoodieFileGroupReader<R> fileGroupReader = new HoodieFileGroupReader<>(readerContext,
+          metaClient.getStorage(), metaClient.getBasePath().toString(), instantTime.get(), fileSlice, dataSchema, dataSchema, internalSchemaOption,
+          metaClient, metaClient.getTableConfig().getProps(),
+          0, Long.MAX_VALUE, false, false);
+      try {
+        fileGroupReader.initRecordIterators();
+        final HoodieRecordLocation currentLocation = new HoodieRecordLocation(fileSlice.getBaseInstantTime(), fileSlice.getFileId());
+        return new CloseableMappingIterator<>(fileGroupReader.getClosableHoodieRecordIterator(), hoodieRecord -> {
+          hoodieRecord.unseal();
+          hoodieRecord.setCurrentLocation(currentLocation);
+          hoodieRecord.seal();
+          return hoodieRecord;
+        });
+      } catch (IOException ex) {
+        throw new HoodieIOException("Unable to read file slice " + fileSlice, ex);
+      }
+    });
   }
 
   /**
@@ -320,7 +358,7 @@ public class HoodieIndexUtils {
   }
 
   /**
-   * Merge the incoming record with the matching existing record loaded via {@link HoodieMergedReadHandle}. The existing record is the latest version in the table.
+   * Merge the incoming record with the matching existing record loaded via {@link HoodieFileGroupReader}. The existing record is the latest version in the table.
    */
   private static <R> Option<HoodieRecord<R>> mergeIncomingWithExistingRecord(
       HoodieRecord<R> incoming,

@@ -122,7 +122,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
   }
 
   @Override
-  public HoodieRecord<IndexedRecord> constructHoodieRecord(BufferedRecord<IndexedRecord> bufferedRecord) {
+  public HoodieRecord<IndexedRecord> constructHoodieRecord(BufferedRecord<IndexedRecord> bufferedRecord, String partitionPath) {
     if (bufferedRecord.isDelete()) {
       return SpillableMapUtils.generateEmptyPayload(
           bufferedRecord.getRecordKey(),

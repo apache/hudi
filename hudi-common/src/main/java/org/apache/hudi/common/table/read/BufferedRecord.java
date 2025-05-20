@@ -30,6 +30,7 @@ import org.apache.avro.Schema;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Properties;
+import java.util.function.UnaryOperator;
 
 import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 
@@ -104,6 +105,13 @@ public class BufferedRecord<T> implements Serializable {
   public BufferedRecord<T> toBinary(HoodieReaderContext<T> readerContext) {
     if (record != null) {
       record = readerContext.seal(readerContext.toBinaryRow(readerContext.getSchemaFromBufferRecord(this), record));
+    }
+    return this;
+  }
+
+  public BufferedRecord<T> applyDataTransform(UnaryOperator<T> transform) {
+    if (record != null) {
+      record = transform.apply(record);
     }
     return this;
   }

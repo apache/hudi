@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.client.model.HoodieInternalRow;
 import org.apache.hudi.common.util.ConfigUtils;
@@ -33,6 +34,7 @@ import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.sql.HoodieInternalRowUtils;
 import org.apache.spark.sql.HoodieUnsafeRowUtils;
 import org.apache.spark.sql.HoodieUnsafeRowUtils.NestedFieldPath;
@@ -52,6 +54,8 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 
 import scala.Function1;
 
@@ -76,6 +80,8 @@ import static org.apache.spark.sql.types.DataTypes.StringType;
  *
  */
 public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
+  private static final Map<Pair<StructType, Schema>, Function<InternalRow, GenericRecord>>
+      AVRO_CONVERTER_CACHE = new ConcurrentHashMap<>();
 
   /**
    * Record copy operation to avoid double copying. InternalRow do not need to copy twice.
@@ -307,7 +313,14 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
 
   @Override
   public Option<HoodieAvroIndexedRecord> toIndexedRecord(Schema recordSchema, Properties prop) {
-    throw new UnsupportedOperationException();
+    if (data == null) {
+      return Option.empty();
+    }
+    GenericRecord convertedRecord = AVRO_CONVERTER_CACHE.computeIfAbsent(Pair.of(schema, recordSchema), pair -> {
+      StructType structType = schema == null ? AvroConversionUtils.convertAvroSchemaToStructType(recordSchema) : schema;
+      return data -> AvroConversionUtils.createInternalRowToAvroConverter(structType, recordSchema, false).apply(data);
+    }).apply(data);
+    return Option.of(new HoodieAvroIndexedRecord(key, convertedRecord));
   }
 
   @Override

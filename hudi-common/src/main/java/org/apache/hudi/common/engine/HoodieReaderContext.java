@@ -292,7 +292,7 @@ public abstract class HoodieReaderContext<T> {
    * @param bufferedRecord  The {@link BufferedRecord} object with engine-specific row
    * @return A new instance of {@link HoodieRecord}.
    */
-  public abstract HoodieRecord<T> constructHoodieRecord(BufferedRecord<T> bufferedRecord);
+  public abstract HoodieRecord<T> constructHoodieRecord(BufferedRecord<T> bufferedRecord, String partitionPath);
 
   /**
    * Seals the engine-specific record to make sure the data referenced in memory do not change.
