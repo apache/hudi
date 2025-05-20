@@ -21,7 +21,6 @@ package org.apache.hudi.utilities;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.SparkJdbcUtils;
 import org.apache.hudi.client.SparkRDDWriteClient;
-import org.apache.hudi.client.SparkRDDWriteClientCommitCoordinator;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider;
@@ -404,9 +403,7 @@ public class UtilHelpers {
             .withSchema(schemaStr).combineInput(true, true).withCompactionConfig(compactionConfig)
             .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
             .withProps(properties).build();
-    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
-    SparkRDDWriteClient sparkRDDWriteClient = new SparkRDDWriteClient(engineContext, config);
-    return config.isMetadataTableEnabled() ? new SparkRDDWriteClientCommitCoordinator<>(engineContext, config, sparkRDDWriteClient) : sparkRDDWriteClient;
+    return new SparkRDDWriteClient<>(new HoodieSparkEngineContext(jsc), config);
   }
 
   public static int handleErrors(JavaSparkContext jsc, String instantTime, JavaRDD<WriteStatus> writeResponse) {

@@ -308,7 +308,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
 
   protected void writeToMetadataTable(boolean skipStreamingWritesToMetadataTable, HoodieWriteConfig config, HoodieTable table, WriteOperationType writeOperationType,
                                     String instantTime, List<HoodieWriteStat> metadataWriteStatsSoFar, HoodieCommitMetadata metadata) {
-    if (config.isMetadataTableEnabled()) {
+    if (!isMetadataTable && config.isMetadataTableEnabled()) {
       writeTableMetadata(table, instantTime, metadata);
     }
   }
@@ -1465,9 +1465,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     // Calling this here releases any resources used by your index, so make sure to finish any related operations
     // before this point
     this.index.close();
-    if (this.tableServiceClient != null) {
-      this.tableServiceClient.close();
-    }
+    this.tableServiceClient.close();
   }
 
   public void setWriteTimer(String commitType) {

@@ -69,13 +69,13 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
   protected final transient HoodieStorage storage;
   protected final transient HoodieEngineContext context;
   protected final transient StorageConfiguration<?> storageConf;
+  protected final transient HoodieMetrics metrics;
   protected final HoodieWriteConfig config;
   protected final String basePath;
+  protected final HoodieHeartbeatClient heartbeatClient;
   protected final TransactionManager txnManager;
+  protected final boolean isMetadataTable;
   private final TimeGenerator timeGenerator;
-  protected HoodieHeartbeatClient heartbeatClient;
-  protected transient HoodieMetrics metrics;
-  protected boolean isMetadataTable;
 
   /**
    * Timeline Server has the same lifetime as that of Client. Any operations done on the same timeline service will be
@@ -99,7 +99,9 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
     this.isMetadataTable = HoodieTableMetadata.isMetadataTable(config.getBasePath());
     this.timelineServer = timelineServer;
     shouldStopTimelineServer = !timelineServer.isPresent();
-    startHeartBeatClient(clientConfig);
+    this.heartbeatClient = new HoodieHeartbeatClient(storage, this.basePath,
+        clientConfig.getHoodieClientHeartbeatIntervalInMs(),
+        clientConfig.getHoodieClientHeartbeatTolerableMisses());
     this.metrics = new HoodieMetrics(config, storage);
     this.txnManager = new TransactionManager(config, storage);
     this.timeGenerator = TimeGenerators.getTimeGenerator(
@@ -109,12 +111,6 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
     runClientInitCallbacks();
   }
 
-  protected void startHeartBeatClient(HoodieWriteConfig clientConfig) {
-    this.heartbeatClient = new HoodieHeartbeatClient(storage, this.basePath,
-        clientConfig.getHoodieClientHeartbeatIntervalInMs(),
-        clientConfig.getHoodieClientHeartbeatTolerableMisses());
-  }
-
   /**
    * Releases any resources used by the client.
    */
@@ -122,9 +118,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
   public void close() {
     stopEmbeddedServerView(true);
     this.context.setJobStatus("", "");
-    if (heartbeatClient != null) {
-      this.heartbeatClient.close();
-    }
+    this.heartbeatClient.close();
     this.txnManager.close();
   }
 

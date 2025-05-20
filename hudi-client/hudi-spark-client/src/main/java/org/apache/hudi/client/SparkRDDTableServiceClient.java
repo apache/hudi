@@ -43,15 +43,11 @@ import java.util.stream.Collectors;
 
 public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<HoodieData<HoodieRecord<T>>, HoodieData<WriteStatus>, JavaRDD<WriteStatus>> {
 
-  protected Option<WriteToMetadataTableHandler> writeToMetadataTableHandlerOpt = Option.empty();
+  private HoodieMetadataWriterWrapper metadataWriterWrapper = new HoodieMetadataWriterWrapper();
   protected SparkRDDTableServiceClient(HoodieEngineContext context,
                                        HoodieWriteConfig clientConfig,
                                        Option<EmbeddedTimelineService> timelineService) {
     super(context, clientConfig, timelineService);
-  }
-
-  protected void setWriteToMetadataTableHandler(WriteToMetadataTableHandler writeToMetadataTableHandler) {
-    this.writeToMetadataTableHandlerOpt = Option.of(writeToMetadataTableHandler);
   }
 
   @Override
@@ -75,27 +71,12 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
 
   @Override
   protected HoodieWriteMetadata<HoodieData<WriteStatus>> mayBeStreamWriteToMetadataTable(HoodieTable table, HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata, String instantTime) {
-    if (!isMetadataTable && config.isMetadataTableEnabled() && config.isStreamingWritesToMetadataEnabled(table.getMetaClient().getTableConfig().getTableVersion())) {
-      if (!writeToMetadataTableHandlerOpt.isPresent()) {
-        System.out.println("Asdf");
-      }
-      ValidationUtils.checkArgument(writeToMetadataTableHandlerOpt.isPresent(), "When streaming writes to metadata table is enabled, write to metadata table handler should be set");
-      return writeToMetadataTableHandlerOpt.get().streamWriteToMetadataTable(table, writeMetadata, instantTime);
-    } else {
-      return writeMetadata;
-    }
+    return metadataWriterWrapper.mayBeStreamWriteToMetadataTable(table, config, isMetadataTable, writeMetadata, instantTime);
   }
 
   @Override
   protected void writeToMetadataTable(HoodieTable table, String instantTime, HoodieCommitMetadata metadata, List<HoodieWriteStat> metadataWriteStatsSoFar) {
-    boolean streamingWritesToMetadataTableEnabled = !isMetadataTable && config.isMetadataTableEnabled()
-        && config.isStreamingWritesToMetadataEnabled(table.getMetaClient().getTableConfig().getTableVersion());
-    if (streamingWritesToMetadataTableEnabled) {
-      writeToMetadataTableHandlerOpt.get().writeToMetadataTable(table, instantTime, metadataWriteStatsSoFar, metadata);
-    } else {
-      // legacy write DAG to metadata table.
-      writeTableMetadata(table, instantTime, metadata);
-    }
+    metadataWriterWrapper.writeToMetadataTable(table, config, isMetadataTable, instantTime, metadata, metadataWriteStatsSoFar, this);
   }
 
   @Override
