@@ -309,7 +309,7 @@ class TestEngineBasedMerger {
     assertEquals(expected, result);
   }
 
-  private static Stream<Arguments> shouldProcessDelete() {
+  private static Stream<Arguments> shouldKeepIncomingDelete() {
     DeleteRecord deleteRecordAtT1 = DeleteRecord.create("key", "partition", 1);
     DeleteRecord deleteRecordAtT2 = DeleteRecord.create("key", "partition", 2);
     DeleteRecord deleteRecordAtT3 = DeleteRecord.create("key", "partition", 3);
@@ -334,10 +334,10 @@ class TestEngineBasedMerger {
 
   @ParameterizedTest
   @MethodSource
-  void shouldProcessDelete(BufferedRecord<TestRecord> existing, DeleteRecord deleteRecord, RecordMergeMode recordMergeMode, boolean expected) {
+  void shouldKeepIncomingDelete(BufferedRecord<TestRecord> existing, DeleteRecord deleteRecord, RecordMergeMode recordMergeMode, boolean expected) {
     mockEmptyMergerAndSchema();
     EngineBasedMerger<TestRecord> merger = new EngineBasedMerger<>(readerContext, recordMergeMode, null, props);
-    assertEquals(expected, merger.shouldProcessDelete(deleteRecord, existing));
+    assertEquals(expected, merger.shouldKeepIncomingDelete(deleteRecord, existing));
   }
 
   private void mockResultConversionToBufferedRecord(Integer schemaId, HoodieRecord rewrittenRecord, Schema schema, long orderingValue, String recordKey, boolean isDelete) throws IOException {

@@ -73,7 +73,7 @@ public class EngineBasedMerger<T> {
     this.props = props;
   }
 
-  boolean shouldProcessDelete(DeleteRecord deleteRecord, BufferedRecord<T> existingRecord) {
+  boolean shouldKeepIncomingDelete(DeleteRecord deleteRecord, BufferedRecord<T> existingRecord) {
     if (existingRecord == null) {
       return true;
     }

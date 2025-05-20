@@ -111,7 +111,7 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
   public void processNextDeletedRecord(DeleteRecord deleteRecord, Serializable recordKey) {
     totalLogRecords++;
     BufferedRecord<T> existingRecord = records.get(recordKey);
-    if (merger.shouldProcessDelete(deleteRecord, existingRecord)) {
+    if (merger.shouldKeepIncomingDelete(deleteRecord, existingRecord)) {
       records.put(recordKey, BufferedRecord.forDeleteRecord(deleteRecord, readerContext));
     }
   }
