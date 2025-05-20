@@ -21,6 +21,7 @@ package org.apache.hudi.common.table.read;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
@@ -306,6 +307,33 @@ class TestEngineBasedMerger {
       expected = new BufferedRecord<>(T2.getRecordKey(), T2.getOrderingValue(), T2.getRecord(), T2.getSchemaId(), true);
     }
     assertEquals(expected, result);
+  }
+
+  private static Stream<Arguments> shouldProcessDelete() {
+    DeleteRecord deleteRecordAtT1= DeleteRecord.create("key", "partition", 1);
+    DeleteRecord deleteRecordAtT2 = DeleteRecord.create("key", "partition", 2);
+    DeleteRecord deleteRecordAtT3 = DeleteRecord.create("key", "partition", 3);
+    return Stream.of(
+        Arguments.of(T1, deleteRecordAtT2, RecordMergeMode.COMMIT_TIME_ORDERING, true),
+        Arguments.of(T2, deleteRecordAtT1, RecordMergeMode.COMMIT_TIME_ORDERING, true),
+        Arguments.of(T1, deleteRecordAtT2, RecordMergeMode.EVENT_TIME_ORDERING, true),
+        Arguments.of(T2, deleteRecordAtT1, RecordMergeMode.EVENT_TIME_ORDERING, false),
+        Arguments.of(T1, deleteRecordAtT2, RecordMergeMode.CUSTOM, true),
+        Arguments.of(T2, deleteRecordAtT1, RecordMergeMode.CUSTOM, false),
+        Arguments.of(HARD_DELETE, deleteRecordAtT3, RecordMergeMode.COMMIT_TIME_ORDERING, true),
+        Arguments.of(HARD_DELETE, deleteRecordAtT3, RecordMergeMode.EVENT_TIME_ORDERING, false),
+        Arguments.of(HARD_DELETE, deleteRecordAtT3, RecordMergeMode.CUSTOM, false),
+        // delete record with same ordering value is processed
+        Arguments.of(T1, deleteRecordAtT1, RecordMergeMode.EVENT_TIME_ORDERING, true),
+        Arguments.of(T1, deleteRecordAtT1, RecordMergeMode.CUSTOM, true));
+  }
+
+  @ParameterizedTest
+  @MethodSource
+  void shouldProcessDelete(BufferedRecord<TestRecord> existing, DeleteRecord deleteRecord, RecordMergeMode recordMergeMode, boolean expected) {
+    mockEmptyMergerAndSchema();
+    EngineBasedMerger<TestRecord> merger = new EngineBasedMerger<>(readerContext, recordMergeMode, null, props);
+    assertEquals(expected, merger.shouldProcessDelete(deleteRecord, existing));
   }
 
   private void mockResultConversionToBufferedRecord(Integer schemaId, HoodieRecord rewrittenRecord, Schema schema, long orderingValue, String recordKey, boolean isDelete) throws IOException {

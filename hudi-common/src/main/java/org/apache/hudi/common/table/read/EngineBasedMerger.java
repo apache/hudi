@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
+import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -32,6 +33,7 @@ import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -68,6 +70,27 @@ public class EngineBasedMerger<T> {
       this.payloadClass = Option.empty();
     }
     this.props = props;
+  }
+
+  boolean shouldProcessDelete(DeleteRecord deleteRecord, BufferedRecord<T> existingRecord) {
+    switch (recordMergeMode) {
+      case COMMIT_TIME_ORDERING:
+        return true;
+      case EVENT_TIME_ORDERING:
+      case CUSTOM:
+      default:
+        if (existingRecord.isCommitTimeOrderingDelete()) {
+          return false;
+        }
+        Comparable existingOrderingVal = existingRecord.getOrderingValue();
+        Comparable deleteOrderingVal = deleteRecord.getOrderingValue();
+        // Checks the ordering value does not equal to 0
+        // because we use 0 as the default value which means natural order
+        boolean chooseExisting = !deleteOrderingVal.equals(0)
+            && ReflectionUtils.isSameClass(existingOrderingVal, deleteOrderingVal)
+            && existingOrderingVal.compareTo(deleteOrderingVal) > 0;
+        return !chooseExisting;
+    }
   }
 
   BufferedRecord<T> merge(Option<BufferedRecord<T>> olderOption,

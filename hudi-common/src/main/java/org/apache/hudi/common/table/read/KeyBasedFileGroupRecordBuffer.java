@@ -108,14 +108,11 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
   }
 
   @Override
-  public void processNextDeletedRecord(DeleteRecord record, Serializable index) throws IOException {
+  public void processNextDeletedRecord(DeleteRecord deleteRecord, Serializable recordKey) {
     totalLogRecords++;
-    BufferedRecord<T> deleteRecord = BufferedRecord.forDeleteRecord(record, readerContext);
-    Option<BufferedRecord<T>> existingRecord = Option.ofNullable(records.get(index));
-    BufferedRecord<T> merged = merger.merge(existingRecord, Option.of(deleteRecord), enablePartialMerging);
-    // if merged result is just the existing record, no need to re-seal
-    if (existingRecord.map(existing -> !existing.equals(merged)).orElse(true)) {
-      records.put(index, merged.toBinary(readerContext));
+    BufferedRecord<T> existingRecord = records.get(recordKey);
+    if (existingRecord == null || merger.shouldProcessDelete(deleteRecord, existingRecord)) {
+      records.put(recordKey, BufferedRecord.forDeleteRecord(deleteRecord, readerContext));
     }
   }
 
