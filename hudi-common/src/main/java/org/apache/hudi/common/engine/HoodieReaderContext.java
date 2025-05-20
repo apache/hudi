@@ -73,6 +73,7 @@ public abstract class HoodieReaderContext<T> {
   private Boolean hasBootstrapBaseFile = null;
   private Boolean needsBootstrapMerge = null;
   private Boolean shouldMergeUseRecordPosition = null;
+  protected String partitionPath;
 
   // for encoding and decoding schemas to the spillable map
   private final LocalAvroSchemaCache localAvroSchemaCache = LocalAvroSchemaCache.getInstance();
@@ -127,6 +128,10 @@ public abstract class HoodieReaderContext<T> {
 
   public void setHasLogFiles(boolean hasLogFiles) {
     this.hasLogFiles = hasLogFiles;
+  }
+
+  public void setPartitionPath(String partitionPath) {
+    this.partitionPath = partitionPath;
   }
 
   // Getter and Setter for hasBootstrapBaseFile

@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.internal.schema.InternalSchema;
@@ -86,8 +87,7 @@ public class FlinkFileGroupReaderBasedMergeHandle<T, I, K, O> extends BaseFileGr
         .withLatestCommitTime(instantTime).withFileSlice(fileSlice).withDataSchema(writeSchemaWithMetaFields).withRequestedSchema(writeSchemaWithMetaFields)
         .withInternalSchema(internalSchemaOption).withProps(props).withShouldUseRecordPosition(false).build()) {
       // Reads the records from the file slice
-      try (HoodieFileGroupReader.HoodieFileGroupReaderIterator<RowData> recordIterator =
-               (HoodieFileGroupReader.HoodieFileGroupReaderIterator<RowData>) fileGroupReader.getClosableIterator()) {
+      try (ClosableIterator<RowData> recordIterator = (ClosableIterator<RowData>) fileGroupReader.getClosableIterator()) {
         while (recordIterator.hasNext()) {
           // Constructs Flink record for the Flink Parquet file writer
           RowData row = recordIterator.next();

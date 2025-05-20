@@ -84,8 +84,6 @@ class TestFileGroupRecordBuffer {
   private final FileGroupReaderSchemaHandler schemaHandler =
       mock(FileGroupReaderSchemaHandler.class);
   private HoodieTableMetaClient hoodieTableMetaClient = mock(HoodieTableMetaClient.class);
-  private Option<String> partitionNameOverrideOpt = Option.empty();
-  private Option<String[]> partitionPathFieldOpt = Option.empty();
   private TypedProperties props = new TypedProperties();
   private HoodieReadStats readStats = mock(HoodieReadStats.class);
 
@@ -290,10 +288,9 @@ class TestFileGroupRecordBuffer {
             readerContext,
             hoodieTableMetaClient,
             RecordMergeMode.COMMIT_TIME_ORDERING,
-            partitionNameOverrideOpt,
-            partitionPathFieldOpt,
             props,
-            readStats);
+            readStats,
+            Option.empty());
     when(readerContext.getValue(any(), any(), any())).thenReturn(null);
     assertFalse(keyBasedBuffer.isCustomDeleteRecord(record));
 
@@ -303,10 +300,9 @@ class TestFileGroupRecordBuffer {
             readerContext,
             hoodieTableMetaClient,
             RecordMergeMode.COMMIT_TIME_ORDERING,
-            partitionNameOverrideOpt,
-            partitionPathFieldOpt,
             props,
-            readStats);
+            readStats,
+            Option.empty());
     when(readerContext.getValue(any(), any(), any())).thenReturn("i");
     assertFalse(keyBasedBuffer.isCustomDeleteRecord(record));
     when(readerContext.getValue(any(), any(), any())).thenReturn("d");
@@ -325,10 +321,9 @@ class TestFileGroupRecordBuffer {
             readerContext,
             hoodieTableMetaClient,
             RecordMergeMode.COMMIT_TIME_ORDERING,
-            partitionNameOverrideOpt,
-            partitionPathFieldOpt,
             props,
-            readStats);
+            readStats,
+            Option.empty());
 
     // CASE 1: With custom delete marker.
     GenericRecord record = new GenericData.Record(schema);
