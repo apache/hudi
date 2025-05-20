@@ -195,9 +195,12 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
               .withMaxNumDeltaCommitsBeforeCompaction(1)
               .withInlineCompactionTriggerStrategy(CompactionTriggerStrategy.NUM_COMMITS).build())
           .withRollbackUsingMarkers(false)
-          .withMetadataConfig(
-              HoodieMetadataConfig.newBuilder().enable(false).build())
-          .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder().withRemoteTimelineClientRetry(true).build())
+          .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
+          .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
+              .withRemoteServerPort(cfg.getViewStorageConfig().getRemoteViewServerPort())
+              .withRemoteTimelineClientRetry(true)
+              .build())
+          .withEmbeddedTimelineServerPort(cfg.getEmbeddedTimelineServerPort())
           .build();
 
       String action = HoodieTimeline.LOG_COMPACTION_ACTION;
