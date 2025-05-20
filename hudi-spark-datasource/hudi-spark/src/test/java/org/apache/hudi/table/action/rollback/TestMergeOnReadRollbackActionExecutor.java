@@ -472,6 +472,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     assertTrue(partitionMetadata.getFailedDeleteFiles().isEmpty());
     assertTrue(partitionMetadata.getRollbackLogFiles().isEmpty());
     assertEquals(1, partitionMetadata.getSuccessDeleteFiles().size());
+    client.close();
   }
 
   /**
