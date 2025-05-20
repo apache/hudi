@@ -48,6 +48,7 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -391,37 +392,9 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     }
     fileSlices.forEach(fileSlice -> {
       if (shouldValidatePartialRead(fileSlice, avroSchema)) {
-        assertThrows(IllegalArgumentException.class, () -> new HoodieFileGroupReader<>(
-            getHoodieReaderContext(tablePath, avroSchema, storageConf, metaClient),
-            metaClient.getStorage(),
-            tablePath,
-            metaClient.getActiveTimeline().lastInstant().get().requestedTime(),
-            fileSlice,
-            avroSchema,
-            avroSchema,
-            Option.empty(),
-            metaClient,
-            props,
-            1,
-            fileSlice.getTotalFileSize(),
-            false,
-            false));
+        assertThrows(IllegalArgumentException.class, () -> getHoodieFileGroupReader(storageConf, tablePath, metaClient, avroSchema, fileSlice, 1, props));
       }
-      try (HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(
-          getHoodieReaderContext(tablePath, avroSchema, storageConf, metaClient),
-          metaClient.getStorage(),
-          tablePath,
-          metaClient.getActiveTimeline().lastInstant().get().requestedTime(),
-          fileSlice,
-          avroSchema,
-          avroSchema,
-          Option.empty(),
-          metaClient,
-          props,
-          0,
-          fileSlice.getTotalFileSize(),
-          false,
-          false)) {
+      try (HoodieFileGroupReader<T> fileGroupReader = getHoodieFileGroupReader(storageConf, tablePath, metaClient, avroSchema, fileSlice, 0, props)) {
         readWithFileGroupReader(fileGroupReader, actualRecordList, avroSchema);
       } catch (Exception ex) {
         throw new RuntimeException(ex);
@@ -430,13 +403,31 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     return actualRecordList;
   }
 
+  private HoodieFileGroupReader<T> getHoodieFileGroupReader(StorageConfiguration<?> storageConf, String tablePath, HoodieTableMetaClient metaClient, Schema avroSchema, FileSlice fileSlice,
+                                                            int start, TypedProperties props) {
+    return HoodieFileGroupReader.<T>newBuilder()
+        .withReaderContext(getHoodieReaderContext(tablePath, avroSchema, storageConf, metaClient))
+        .withHoodieTableMetaClient(metaClient)
+        .withLatestCommitTime(metaClient.getActiveTimeline().lastInstant().get().requestedTime())
+        .withFileSlice(fileSlice)
+        .withDataSchema(avroSchema)
+        .withRequestedSchema(avroSchema)
+        .withProps(props)
+        .withStart(start)
+        .withLength(fileSlice.getTotalFileSize())
+        .withShouldUseRecordPosition(false)
+        .withAllowInflightInstants(false)
+        .build();
+  }
+
   protected void readWithFileGroupReader(
       HoodieFileGroupReader<T> fileGroupReader,
       List<T> recordList,
       Schema recordSchema) throws IOException {
-    fileGroupReader.initRecordIterators();
-    while (fileGroupReader.hasNext()) {
-      recordList.add(fileGroupReader.next());
+    try (ClosableIterator<T> fileGroupReaderIterator = fileGroupReader.getClosableIterator()) {
+      while (fileGroupReaderIterator.hasNext()) {
+        recordList.add(fileGroupReaderIterator.next());
+      }
     }
   }
 

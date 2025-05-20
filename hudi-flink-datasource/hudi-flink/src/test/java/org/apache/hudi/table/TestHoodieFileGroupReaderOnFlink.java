@@ -31,6 +31,7 @@ import org.apache.hudi.common.table.read.TestHoodieFileGroupReaderBase;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieException;
@@ -123,10 +124,11 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
       List<RowData> recordList,
       Schema recordSchema) throws IOException {
     RowDataSerializer rowDataSerializer = RowDataAvroQueryContexts.getRowDataSerializer(recordSchema);
-    fileGroupReader.initRecordIterators();
-    while (fileGroupReader.hasNext()) {
-      RowData rowData = rowDataSerializer.copy(fileGroupReader.next());
-      recordList.add(rowData);
+    try (ClosableIterator<RowData> iterator = fileGroupReader.getClosableIterator()) {
+      while (iterator.hasNext()) {
+        RowData rowData = rowDataSerializer.copy(iterator.next());
+        recordList.add(rowData);
+      }
     }
   }
 

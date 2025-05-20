@@ -81,22 +81,10 @@ public class FlinkFileGroupReaderBasedMergeHandle<T, I, K, O> extends BaseFileGr
     }
     TypedProperties props = FlinkClientUtil.getMergedTableAndWriteProps(hoodieTable.getMetaClient().getTableConfig(), config);
     // Initializes file group reader
-    try (HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(
-        readerContext,
-        storage.newInstance(hoodieTable.getMetaClient().getBasePath(), readerContext.getStorageConfiguration()),
-        hoodieTable.getMetaClient().getBasePath().toString(),
-        instantTime,
-        fileSlice,
-        writeSchemaWithMetaFields,
-        writeSchemaWithMetaFields,
-        internalSchemaOption,
-        hoodieTable.getMetaClient(),
-        props,
-        0,
-        Long.MAX_VALUE,
-        false,
-        false)) {
-      fileGroupReader.initRecordIterators();
+    try (HoodieFileGroupReader<T> fileGroupReader = HoodieFileGroupReader.<T>newBuilder()
+        .withReaderContext(readerContext).withHoodieTableMetaClient(hoodieTable.getMetaClient())
+        .withLatestCommitTime(instantTime).withFileSlice(fileSlice).withDataSchema(writeSchemaWithMetaFields).withRequestedSchema(writeSchemaWithMetaFields)
+        .withInternalSchema(internalSchemaOption).withProps(props).withShouldUseRecordPosition(false).build()) {
       // Reads the records from the file slice
       try (HoodieFileGroupReader.HoodieFileGroupReaderIterator<RowData> recordIterator =
                (HoodieFileGroupReader.HoodieFileGroupReaderIterator<RowData>) fileGroupReader.getClosableIterator()) {

@@ -35,6 +35,7 @@ import org.apache.hudi.common.table.PartitionPathParser;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordReader;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.CachingIterator;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.EmptyIterator;
@@ -92,8 +93,13 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   // and deleted keys from the log files written as part of active data commit. During the RLI update,
   // the allowInflightInstants flag would need to be set to true. This would ensure the HoodieMergedLogRecordReader
   // considers the log records which are inflight.
-  private boolean allowInflightInstants;
+  private final boolean allowInflightInstants;
 
+  /**
+   * Constructs an instance of the HoodieFileGroupReader.
+   * @deprecated use {@link #newBuilder()} instead.
+   */
+  @Deprecated
   public HoodieFileGroupReader(HoodieReaderContext<T> readerContext, HoodieStorage storage,
       String tablePath,
       String latestCommitTime, FileSlice fileSlice, Schema dataSchema, Schema requestedSchema,
@@ -105,7 +111,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
         shouldUseRecordPosition, false);
   }
 
-  public HoodieFileGroupReader(HoodieReaderContext<T> readerContext, HoodieStorage storage, String tablePath,
+  private HoodieFileGroupReader(HoodieReaderContext<T> readerContext, HoodieStorage storage, String tablePath,
                                String latestCommitTime, FileSlice fileSlice, Schema dataSchema, Schema requestedSchema,
                                Option<InternalSchema> internalSchemaOpt, HoodieTableMetaClient hoodieTableMetaClient, TypedProperties props,
                                long start, long length, boolean shouldUseRecordPosition, boolean allowInflightInstants) {
@@ -182,7 +188,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   /**
    * Initialize internal iterators on the base and log files.
    */
-  public void initRecordIterators() throws IOException {
+  private void initRecordIterators() throws IOException {
     ClosableIterator<T> iter = makeBaseFileIterator();
     if (logFiles.isEmpty()) {
       this.baseFileIterator = CachingIterator.wrap(iter, readerContext);
@@ -287,7 +293,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
    * @return {@code true} if the next record exists; {@code false} otherwise.
    * @throws IOException on reader error.
    */
-  public boolean hasNext() throws IOException {
+  boolean hasNext() throws IOException {
     if (recordBuffer == null) {
       return baseFileIterator.hasNext();
     } else {
@@ -305,7 +311,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   /**
    * @return The next record after calling {@link #hasNext}.
    */
-  public T next() {
+  T next() {
     T nextVal = recordBuffer == null ? baseFileIterator.next() : recordBuffer.next();
     if (outputConverter.isPresent()) {
       return outputConverter.get().apply(nextVal);
@@ -346,7 +352,8 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     }
   }
 
-  public HoodieFileGroupReaderIterator<T> getClosableIterator() {
+  public HoodieFileGroupReaderIterator<T> getClosableIterator() throws IOException {
+    initRecordIterators();
     return new HoodieFileGroupReaderIterator<>(this);
   }
 
@@ -382,6 +389,109 @@ public final class HoodieFileGroupReader<T> implements Closeable {
           this.reader = null;
         }
       }
+    }
+  }
+
+  public static <T> Builder<T> newBuilder() {
+    return new Builder<>();
+  }
+
+  public static class Builder<T> {
+    private HoodieReaderContext<T> readerContext;
+    private HoodieStorage storage;
+    private String tablePath;
+    private String latestCommitTime;
+    private FileSlice fileSlice;
+    private Schema dataSchema;
+    private Schema requestedSchema;
+    private Option<InternalSchema> internalSchemaOpt = Option.empty();
+    private HoodieTableMetaClient hoodieTableMetaClient;
+    private TypedProperties props;
+    private long start = 0;
+    private long length = Long.MAX_VALUE;
+    private boolean shouldUseRecordPosition = false;
+    private boolean allowInflightInstants = false;
+
+    public Builder<T> withReaderContext(HoodieReaderContext<T> readerContext) {
+      this.readerContext = readerContext;
+      return this;
+    }
+
+    public Builder<T> withLatestCommitTime(String latestCommitTime) {
+      this.latestCommitTime = latestCommitTime;
+      return this;
+    }
+
+    public Builder<T> withFileSlice(FileSlice fileSlice) {
+      this.fileSlice = fileSlice;
+      return this;
+    }
+
+    public Builder<T> withDataSchema(Schema dataSchema) {
+      this.dataSchema = dataSchema;
+      return this;
+    }
+
+    public Builder<T> withRequestedSchema(Schema requestedSchema) {
+      this.requestedSchema = requestedSchema;
+      return this;
+    }
+
+    public Builder<T> withInternalSchema(Option<InternalSchema> internalSchemaOpt) {
+      this.internalSchemaOpt = internalSchemaOpt;
+      return this;
+    }
+
+    public Builder<T> withHoodieTableMetaClient(HoodieTableMetaClient hoodieTableMetaClient) {
+      this.hoodieTableMetaClient = hoodieTableMetaClient;
+      this.tablePath = hoodieTableMetaClient.getBasePath().toString();
+      return this;
+    }
+
+    public Builder<T> withProps(TypedProperties props) {
+      this.props = props;
+      return this;
+    }
+
+    public Builder<T> withStart(long start) {
+      this.start = start;
+      return this;
+    }
+
+    public Builder<T> withLength(long length) {
+      this.length = length;
+      return this;
+    }
+
+    public Builder<T> withShouldUseRecordPosition(boolean shouldUseRecordPosition) {
+      this.shouldUseRecordPosition = shouldUseRecordPosition;
+      return this;
+    }
+
+    public Builder<T> withAllowInflightInstants(boolean allowInflightInstants) {
+      this.allowInflightInstants = allowInflightInstants;
+      return this;
+    }
+
+    public HoodieFileGroupReader<T> build() {
+      ValidationUtils.checkArgument(readerContext != null, "Reader context is required");
+      ValidationUtils.checkArgument(hoodieTableMetaClient != null, "Hoodie table meta client is required");
+      ValidationUtils.checkArgument(tablePath != null, "Table path is required");
+      // set the storage with the readerContext's storage configuration
+      this.storage = hoodieTableMetaClient.getStorage().newInstance(new StoragePath(tablePath), readerContext.getStorageConfiguration());
+
+      ValidationUtils.checkArgument(storage != null, "Storage is required");
+      ValidationUtils.checkArgument(latestCommitTime != null, "Latest commit time is required");
+      ValidationUtils.checkArgument(fileSlice != null, "File slice is required");
+      ValidationUtils.checkArgument(dataSchema != null, "Data schema is required");
+      ValidationUtils.checkArgument(requestedSchema != null, "Requested schema is required");
+      ValidationUtils.checkArgument(props != null, "Props is required");
+
+
+      return new HoodieFileGroupReader<>(
+          readerContext, storage, tablePath, latestCommitTime, fileSlice,
+          dataSchema, requestedSchema, internalSchemaOpt, hoodieTableMetaClient,
+          props, start, length, shouldUseRecordPosition, allowInflightInstants);
     }
   }
 }
