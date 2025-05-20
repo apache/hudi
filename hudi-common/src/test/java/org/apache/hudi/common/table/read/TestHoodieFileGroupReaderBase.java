@@ -68,6 +68,7 @@ import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
+import java.io.UncheckedIOException;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -318,6 +319,13 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     // validate size is equivalent to ensure no duplicates are returned
     assertEquals(expectedRecords.size(), actualRecordList.size());
     assertEquals(new HashSet<>(expectedRecords), new HashSet<>(actualRecordList));
+    // validate records can be read from file group as HoodieRecords
+    actualRecordList = convertHoodieRecords(
+        readHoodieRecordsFromFileGroup(storageConf, tablePath, metaClient, fileSlices, avroSchema, recordMergeMode),
+        avroSchema, readerContext);
+    assertEquals(expectedRecords.size(), actualRecordList.size());
+    assertEquals(new HashSet<>(expectedRecords), new HashSet<>(actualRecordList));
+    // validate unmerged records
     actualRecordList = convertEngineRecords(
         readRecordsFromFileGroup(storageConf, tablePath, metaClient, fileSlices, avroSchema, recordMergeMode, true),
         avroSchema, readerContext);
@@ -372,21 +380,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
                                            boolean isSkipMerge) {
 
     List<T> actualRecordList = new ArrayList<>();
-    TypedProperties props = new TypedProperties();
-    props.setProperty("hoodie.datasource.write.precombine.field", PRECOMBINE_FIELD_NAME);
-    props.setProperty("hoodie.payload.ordering.field", PRECOMBINE_FIELD_NAME);
-    props.setProperty(RECORD_MERGE_MODE.key(), recordMergeMode.name());
-    if (recordMergeMode.equals(RecordMergeMode.CUSTOM)) {
-      props.setProperty(RECORD_MERGE_STRATEGY_ID.key(), PAYLOAD_BASED_MERGE_STRATEGY_UUID);
-      props.setProperty(PAYLOAD_CLASS_NAME.key(), getCustomPayload());
-    }
-    props.setProperty(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(), String.valueOf(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.defaultValue()));
-    props.setProperty(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH.key(), metaClient.getTempFolderPath());
-    props.setProperty(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.key(), ExternalSpillableMap.DiskMapType.ROCKS_DB.name());
-    props.setProperty(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), "false");
-    if (metaClient.getTableConfig().contains(PARTITION_FIELDS)) {
-      props.setProperty(PARTITION_FIELDS.key(), metaClient.getTableConfig().getString(PARTITION_FIELDS));
-    }
+    TypedProperties props = buildProperties(metaClient, recordMergeMode);
     if (isSkipMerge) {
       props.setProperty(HoodieReaderConfig.MERGE_TYPE.key(), HoodieReaderConfig.REALTIME_SKIP_MERGE);
     }
@@ -431,6 +425,47 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     }
   }
 
+  private List<HoodieRecord<T>> readHoodieRecordsFromFileGroup(StorageConfiguration<?> storageConf,
+                                                               String tablePath,
+                                                               HoodieTableMetaClient metaClient,
+                                                               List<FileSlice> fileSlices,
+                                                               Schema avroSchema,
+                                                               RecordMergeMode recordMergeMode) {
+
+    List<HoodieRecord<T>> actualRecordList = new ArrayList<>();
+    TypedProperties props = buildProperties(metaClient, recordMergeMode);
+    fileSlices.forEach(fileSlice -> {
+      try (HoodieFileGroupReader<T> fileGroupReader = getHoodieFileGroupReader(storageConf, tablePath, metaClient, avroSchema, fileSlice, 0, props);
+           ClosableIterator<HoodieRecord<T>> iter = fileGroupReader.getClosableHoodieRecordIterator()) {
+        while (iter.hasNext()) {
+          actualRecordList.add(iter.next());
+        }
+      } catch (IOException ex) {
+        throw new UncheckedIOException(ex);
+      }
+    });
+    return actualRecordList;
+  }
+
+  private TypedProperties buildProperties(HoodieTableMetaClient metaClient, RecordMergeMode recordMergeMode) {
+    TypedProperties props = new TypedProperties();
+    props.setProperty("hoodie.datasource.write.precombine.field", PRECOMBINE_FIELD_NAME);
+    props.setProperty("hoodie.payload.ordering.field", PRECOMBINE_FIELD_NAME);
+    props.setProperty(RECORD_MERGE_MODE.key(), recordMergeMode.name());
+    if (recordMergeMode.equals(RecordMergeMode.CUSTOM)) {
+      props.setProperty(RECORD_MERGE_STRATEGY_ID.key(), PAYLOAD_BASED_MERGE_STRATEGY_UUID);
+      props.setProperty(PAYLOAD_CLASS_NAME.key(), getCustomPayload());
+    }
+    props.setProperty(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(), String.valueOf(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.defaultValue()));
+    props.setProperty(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH.key(), metaClient.getTempFolderPath());
+    props.setProperty(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.key(), ExternalSpillableMap.DiskMapType.ROCKS_DB.name());
+    props.setProperty(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), "false");
+    if (metaClient.getTableConfig().contains(PARTITION_FIELDS)) {
+      props.setProperty(PARTITION_FIELDS.key(), metaClient.getTableConfig().getString(PARTITION_FIELDS));
+    }
+    return props;
+  }
+
   private boolean shouldValidatePartialRead(FileSlice fileSlice, Schema requestedSchema) {
     if (fileSlice.getLogFiles().findAny().isPresent()) {
       return true;
@@ -464,6 +499,24 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
             readerContext.getValue(record, schema, PRECOMBINE_FIELD_NAME).toString(),
             readerContext.getValue(record, schema, RIDER_FIELD_NAME).toString()))
         .collect(Collectors.toList());
+  }
+
+  private List<HoodieTestDataGenerator.RecordIdentifier> convertHoodieRecords(List<HoodieRecord<T>> records, Schema schema, HoodieReaderContext<T> readerContext) {
+    return records.stream()
+        .map(record -> new HoodieTestDataGenerator.RecordIdentifier(
+            record.getRecordKey(),
+            removeHiveStylePartition(record.getPartitionPath()),
+            record.getOrderingValue(schema, new TypedProperties()).toString(),
+            readerContext.getValue(record.getData(), schema, RIDER_FIELD_NAME).toString()))
+        .collect(Collectors.toList());
+  }
+
+  private static String removeHiveStylePartition(String partitionPath) {
+    int indexOf = partitionPath.indexOf("=");
+    if (indexOf > 0) {
+      return partitionPath.substring(indexOf + 1);
+    }
+    return partitionPath;
   }
 
   private void extract(Path target) throws IOException {
