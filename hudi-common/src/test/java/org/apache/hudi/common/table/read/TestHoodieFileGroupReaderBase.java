@@ -380,21 +380,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
                                            boolean isSkipMerge) {
 
     List<T> actualRecordList = new ArrayList<>();
-    TypedProperties props = new TypedProperties();
-    props.setProperty("hoodie.datasource.write.precombine.field", PRECOMBINE_FIELD_NAME);
-    props.setProperty("hoodie.payload.ordering.field", PRECOMBINE_FIELD_NAME);
-    props.setProperty(RECORD_MERGE_MODE.key(), recordMergeMode.name());
-    if (recordMergeMode.equals(RecordMergeMode.CUSTOM)) {
-      props.setProperty(RECORD_MERGE_STRATEGY_ID.key(), PAYLOAD_BASED_MERGE_STRATEGY_UUID);
-      props.setProperty(PAYLOAD_CLASS_NAME.key(), getCustomPayload());
-    }
-    props.setProperty(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(), String.valueOf(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.defaultValue()));
-    props.setProperty(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH.key(), metaClient.getTempFolderPath());
-    props.setProperty(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.key(), ExternalSpillableMap.DiskMapType.ROCKS_DB.name());
-    props.setProperty(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), "false");
-    if (metaClient.getTableConfig().contains(PARTITION_FIELDS)) {
-      props.setProperty(PARTITION_FIELDS.key(), metaClient.getTableConfig().getString(PARTITION_FIELDS));
-    }
+    TypedProperties props = buildProperties(metaClient, recordMergeMode);
     if (isSkipMerge) {
       props.setProperty(HoodieReaderConfig.MERGE_TYPE.key(), HoodieReaderConfig.REALTIME_SKIP_MERGE);
     }
@@ -447,6 +433,21 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
                                                                RecordMergeMode recordMergeMode) {
 
     List<HoodieRecord<T>> actualRecordList = new ArrayList<>();
+    TypedProperties props = buildProperties(metaClient, recordMergeMode);
+    fileSlices.forEach(fileSlice -> {
+      try (HoodieFileGroupReader<T> fileGroupReader = getHoodieFileGroupReader(storageConf, tablePath, metaClient, avroSchema, fileSlice, 0, props);
+           ClosableIterator<HoodieRecord<T>> iter = fileGroupReader.getClosableHoodieRecordIterator()) {
+        while (iter.hasNext()) {
+          actualRecordList.add(iter.next());
+        }
+      } catch (IOException ex) {
+        throw new UncheckedIOException(ex);
+      }
+    });
+    return actualRecordList;
+  }
+
+  private TypedProperties buildProperties(HoodieTableMetaClient metaClient, RecordMergeMode recordMergeMode) {
     TypedProperties props = new TypedProperties();
     props.setProperty("hoodie.datasource.write.precombine.field", PRECOMBINE_FIELD_NAME);
     props.setProperty("hoodie.payload.ordering.field", PRECOMBINE_FIELD_NAME);
@@ -462,33 +463,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     if (metaClient.getTableConfig().contains(PARTITION_FIELDS)) {
       props.setProperty(PARTITION_FIELDS.key(), metaClient.getTableConfig().getString(PARTITION_FIELDS));
     }
-    fileSlices.forEach(fileSlice -> {
-      try (HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(
-          getHoodieReaderContext(tablePath, avroSchema, storageConf, metaClient),
-          metaClient.getStorage(),
-          tablePath,
-          metaClient.getActiveTimeline().lastInstant().get().requestedTime(),
-          fileSlice,
-          avroSchema,
-          avroSchema,
-          Option.empty(),
-          metaClient,
-          props,
-          0,
-          fileSlice.getTotalFileSize(),
-          false,
-          false)) {
-        fileGroupReader.initRecordIterators();
-        try (ClosableIterator<HoodieRecord<T>> iter = fileGroupReader.getClosableHoodieRecordIterator()) {
-          while (iter.hasNext()) {
-            actualRecordList.add(iter.next());
-          }
-        }
-      } catch (IOException ex) {
-        throw new UncheckedIOException(ex);
-      }
-    });
-    return actualRecordList;
+    return props;
   }
 
   private boolean shouldValidatePartialRead(FileSlice fileSlice, Schema requestedSchema) {
