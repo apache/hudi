@@ -80,8 +80,6 @@ class Spark4_0Adapter extends BaseSpark4Adapter {
       .putBoolean(METADATA_COL_ATTR_KEY, value = true)
       .build()
 
-  override def getCatalogUtils: HoodieSpark4CatalogUtils = HoodieSpark40CatalogUtils
-
   override def getCatalystExpressionUtils: HoodieCatalystExpressionUtils = HoodieSpark40CatalystExpressionUtils
 
   override def getCatalystPlanUtils: HoodieCatalystPlansUtils = HoodieSpark40CatalystPlanUtils

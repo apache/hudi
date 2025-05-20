@@ -79,12 +79,6 @@ trait SparkAdapter extends Serializable {
   def injectTableFunctions(extensions: SparkSessionExtensions): Unit = {}
 
   /**
-   * Returns an instance of [[HoodieCatalogUtils]] providing for common utils operating on Spark's
-   * [[TableCatalog]]s
-   */
-  def getCatalogUtils: HoodieCatalogUtils
-
-  /**
    * Returns an instance of [[HoodieCatalystExpressionUtils]] providing for common utils operating
    * on Catalyst [[Expression]]s
    */

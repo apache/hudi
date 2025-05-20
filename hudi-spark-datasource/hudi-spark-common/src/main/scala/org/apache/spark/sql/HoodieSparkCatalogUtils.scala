@@ -17,30 +17,15 @@
 
 package org.apache.spark.sql
 
-import org.apache.hudi.SparkAdapterSupport
+import org.apache.spark.sql.connector.expressions.{BucketTransform, NamedReference, Transform}
 
-import org.apache.spark.sql.connector.expressions.{NamedReference, Transform}
-
-trait HoodieSpark4CatalogUtils extends HoodieCatalogUtils {
-
-  /**
-   * Decomposes [[org.apache.spark.sql.connector.expressions.BucketTransform]] extracting its
-   * arguments to accommodate for API changes in Spark 3.3 returning:
-   *
-   * <ol>
-   *   <li>Number of the buckets</li>
-   *   <li>Seq of references (to be bucketed by)</li>
-   *   <li>Seq of sorted references</li>
-   * </ol>
-   */
-  def unapplyBucketTransform(t: Transform): Option[(Int, Seq[NamedReference], Seq[NamedReference])]
-}
-
-object HoodieSpark4CatalogUtils extends SparkAdapterSupport {
+object HoodieSparkCatalogUtils {
 
   object MatchBucketTransform {
     def unapply(t: Transform): Option[(Int, Seq[NamedReference], Seq[NamedReference])] =
-      sparkAdapter.getCatalogUtils.asInstanceOf[HoodieSpark4CatalogUtils]
-        .unapplyBucketTransform(t)
+      t match {
+        case BucketTransform(numBuckets, refs, sortedRefs) => Some(numBuckets, refs, sortedRefs)
+        case _ => None
+      }
   }
 }

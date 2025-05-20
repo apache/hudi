@@ -32,7 +32,7 @@ import org.apache.hudi.storage.StoragePath
 
 import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.{Dataset, SaveMode, SparkSession, _}
-import org.apache.spark.sql.HoodieSpark3CatalogUtils.MatchBucketTransform
+import org.apache.spark.sql.HoodieSparkCatalogUtils.MatchBucketTransform
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.{NoSuchTableException, TableAlreadyExistsException, UnresolvedAttribute}
 import org.apache.spark.sql.catalyst.catalog._
