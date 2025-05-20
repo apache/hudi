@@ -227,22 +227,18 @@ class PartitionBucketIndexManager extends BaseProcedure
           val readerSchema = serializableTableSchemaWithMetaFields.get
           val internalSchemaOption: Option[InternalSchema] = Option.empty()
           // instantiate FG reader
-          val fileGroupReader = new HoodieFileGroupReader(readerContextFactory.getContext,
-            metaClient.getStorage,
-            basePath.toString,
-            latestInstantTime.requestedTime(),
-            fileSlice,
-            readerSchema,
-            readerSchema,
-            internalSchemaOption, // not support evolution of schema for now
-            metaClient,
-            metaClient.getTableConfig.getProps,
-            0,
-            java.lang.Long.MAX_VALUE,
-            HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS.defaultValue(),
-            false)
-          fileGroupReader.initRecordIterators()
-          val iterator = fileGroupReader.getClosableIterator.asInstanceOf[HoodieFileGroupReader.HoodieFileGroupReaderIterator[InternalRow]]
+          val fileGroupReader = HoodieFileGroupReader.newBuilder()
+            .withReaderContext(readerContextFactory.getContext)
+            .withHoodieTableMetaClient(metaClient)
+            .withLatestCommitTime(latestInstantTime.requestedTime())
+            .withFileSlice(fileSlice)
+            .withDataSchema(readerSchema)
+            .withRequestedSchema(readerSchema)
+            .withInternalSchema(internalSchemaOption) // not support evolution of schema for now
+            .withProps(metaClient.getTableConfig.getProps)
+            .withShouldUseRecordPosition(false)
+            .build()
+          val iterator = fileGroupReader.getClosableIterator
           CloseableIteratorListener.addListener(iterator)
           iterator.asScala
         })
