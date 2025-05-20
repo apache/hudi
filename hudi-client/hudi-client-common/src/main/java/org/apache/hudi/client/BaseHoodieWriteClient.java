@@ -942,10 +942,18 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   }
 
   /**
+   * Provides a new commit time for the provided action.
+   */
+  public String startCommit(String actionType) {
+    HoodieTableMetaClient metaClient = createMetaClient(true);
+    return startCommit(actionType, metaClient);
+  }
+
+  /**
    * Provides a new commit time for a write operation (insert/update/delete/insert_overwrite/insert_overwrite_table) with specified action.
    */
   public String startCommit(String actionType, HoodieTableMetaClient metaClient) {
-    return startCommitWithTime(Option.empty(), actionType, metaClient);
+    return startCommit(Option.empty(), actionType, metaClient);
   }
 
   /**
@@ -954,21 +962,28 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   public void startCommitWithTime(String instantTime) {
     HoodieTableMetaClient metaClient = createMetaClient(true);
-    startCommitWithTime(Option.of(instantTime), metaClient.getCommitActionType(), metaClient);
+    startCommit(Option.of(instantTime), metaClient.getCommitActionType(), metaClient);
   }
 
   /**
-   * Completes a new commit time for a write operation (insert/update/delete/insert_overwrite/insert_overwrite_table) with specified action.
+   * Starts a new commit time for a write operation against the metadata table with the provided instant and action type.
    */
-  public void startCommitWithTime(String instantTime, String actionType) {
-    HoodieTableMetaClient metaClient = createMetaClient(true);
-    startCommitWithTime(Option.of(instantTime), actionType, metaClient);
+  public void startCommitForMetadataTable(HoodieTableMetaClient metadataMetaClient, String instantTime, String actionType) {
+    ValidationUtils.checkArgument(metadataMetaClient.isMetadataTable(), "Attempting to create an instant with a predetermined time on a non-metadata table.");
+    startCommit(Option.of(instantTime), actionType, metadataMetaClient);
   }
 
   /**
    * Starts a new commit time for a write operation (insert/update/delete) with specified action.
+   *
+   * @param providedInstantTime an optional argument that should only be provided for writes to the metadata table or for testing purposes.
+   *                            If not provided, a new instant time will be generated and returned to the caller.
+   * @param actionType the type of commit
+   * @param metaClient a meta client for the table
+   * @return the requested instant time for the commit that was started
    */
-  private String startCommitWithTime(Option<String> providedInstantTime, String actionType, HoodieTableMetaClient metaClient) {
+  @VisibleForTesting
+  String startCommit(Option<String> providedInstantTime, String actionType, HoodieTableMetaClient metaClient) {
     if (needsUpgrade(metaClient)) {
       // unclear what instant to use, since upgrade does have a given instant.
       executeUsingTxnManager(Option.empty(), () -> tryUpgrade(metaClient, Option.empty()));

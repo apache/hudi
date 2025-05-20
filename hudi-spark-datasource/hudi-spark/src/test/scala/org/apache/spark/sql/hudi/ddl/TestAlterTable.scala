@@ -248,8 +248,7 @@ class TestAlterTable extends HoodieSparkSqlTestBase {
         // Create an inflight commit
         val client = HoodieCLIUtils.createHoodieWriteClient(spark, tablePath, Map.empty, Option(tableName))
         val metaClient = createMetaClient(spark, tablePath)
-        val firstInstant = client.createNewInstantTime()
-        client.startCommitWithTime(firstInstant, HoodieTimeline.COMMIT_ACTION)
+        val firstInstant = client.startCommit(HoodieTimeline.COMMIT_ACTION)
         val hoodieTable = HoodieSparkTable.create(client.getConfig, client.getEngineContext)
         val timeLine = hoodieTable.getActiveTimeline
         val requested = hoodieTable.getInstantGenerator.createNewInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, firstInstant)

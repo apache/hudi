@@ -309,8 +309,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
       saveMode = SaveMode.Overwrite)
 
     Using(getHoodieWriteClient(getWriteConfig(hudiOpts))) { client =>
-      val commitTime = client.startCommit
-      client.startCommitWithTime(commitTime, HoodieTimeline.REPLACE_COMMIT_ACTION)
+      val commitTime = client.startCommit(HoodieTimeline.REPLACE_COMMIT_ACTION)
       val deletingPartition = dataGen.getPartitionPaths.last
       val partitionList = Collections.singletonList(deletingPartition)
       client.deletePartitions(partitionList, commitTime)

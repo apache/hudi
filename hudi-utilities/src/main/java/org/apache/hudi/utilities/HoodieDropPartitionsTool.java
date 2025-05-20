@@ -19,14 +19,10 @@ package org.apache.hudi.utilities;
 
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.client.SparkRDDWriteClient;
-import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimeGenerator;
-import org.apache.hudi.common.table.timeline.TimeGenerators;
-import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -164,8 +160,6 @@ public class HoodieDropPartitionsTool implements Serializable {
     public String partitions = null;
     @Parameter(names = {"--parallelism", "-pl"}, description = "Parallelism for hoodie insert/upsert/delete", required = false)
     public int parallelism = 1500;
-    @Parameter(names = {"--instant-time", "-it"}, description = "instant time for delete table partitions operation.", required = false)
-    public String instantTime = null;
     @Parameter(names = {"--sync-hive-meta", "-sync"}, description = "Sync information to HMS.", required = false)
     public boolean syncToHive = false;
     @Parameter(names = {"--hive-database", "-db"}, description = "Database to sync to.", required = false)
@@ -213,7 +207,6 @@ public class HoodieDropPartitionsTool implements Serializable {
           + "   --table-name " + tableName + ", \n"
           + "   --partitions " + partitions + ", \n"
           + "   --parallelism " + parallelism + ", \n"
-          + "   --instantTime " + instantTime + ", \n"
           + "   --sync-hive-meta " + syncToHive + ", \n"
           + "   --hive-database " + hiveDataBase + ", \n"
           + "   --hive-table-name " + hiveTableName + ", \n"
@@ -245,7 +238,6 @@ public class HoodieDropPartitionsTool implements Serializable {
           && Objects.equals(runningMode, config.runningMode)
           && Objects.equals(tableName, config.tableName)
           && Objects.equals(partitions, config.partitions)
-          && Objects.equals(instantTime, config.instantTime)
           && Objects.equals(syncToHive, config.syncToHive)
           && Objects.equals(hiveDataBase, config.hiveDataBase)
           && Objects.equals(hiveTableName, config.hiveTableName)
@@ -265,7 +257,7 @@ public class HoodieDropPartitionsTool implements Serializable {
 
     @Override
     public int hashCode() {
-      return Objects.hash(basePath, runningMode, tableName, partitions, instantTime,
+      return Objects.hash(basePath, runningMode, tableName, partitions,
           syncToHive, hiveDataBase, hiveTableName, hiveUserName, hivePassWord, hiveURL,
           hivePartitionsField, hiveUseJdbc, hiveHMSUris, partitionValueExtractorClass,
           sparkMaster, sparkMemory, propsFilePath, configs, hiveSyncIgnoreException, help);
@@ -294,12 +286,6 @@ public class HoodieDropPartitionsTool implements Serializable {
 
   public void run() {
     try {
-      if (StringUtils.isNullOrEmpty(cfg.instantTime)) {
-        TimeGenerator timeGenerator = TimeGenerators
-            .getTimeGenerator(HoodieTimeGeneratorConfig.defaultConfig(cfg.basePath),
-                HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()));
-        cfg.instantTime = TimelineUtils.generateInstantTime(true, timeGenerator);
-      }
       LOG.info(cfg.toString());
 
       Mode mode = Mode.valueOf(cfg.runningMode.toUpperCase());
@@ -346,8 +332,8 @@ public class HoodieDropPartitionsTool implements Serializable {
     this.props.put(HoodieWriteConfig.AUTO_COMMIT_ENABLE.key(), "true");
     try (SparkRDDWriteClient<HoodieRecordPayload> client =  UtilHelpers.createHoodieClient(jsc, cfg.basePath, "", cfg.parallelism, Option.empty(), props)) {
       List<String> partitionsToDelete = Arrays.asList(cfg.partitions.split(","));
-      client.startCommitWithTime(cfg.instantTime, HoodieTimeline.REPLACE_COMMIT_ACTION);
-      client.deletePartitions(partitionsToDelete, cfg.instantTime);
+      String instantTime = client.startCommit(HoodieTimeline.REPLACE_COMMIT_ACTION);
+      client.deletePartitions(partitionsToDelete, instantTime);
     }
   }
 

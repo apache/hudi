@@ -43,14 +43,14 @@ import java.util.stream.Collectors;
 public class DatasetBulkInsertCommitActionExecutor extends BaseDatasetBulkInsertCommitActionExecutor {
 
   public DatasetBulkInsertCommitActionExecutor(HoodieWriteConfig config,
-                                               SparkRDDWriteClient writeClient,
-                                               String instantTime) {
-    super(config, writeClient, instantTime);
+                                               SparkRDDWriteClient writeClient) {
+    super(config, writeClient);
   }
 
   @Override
   protected void preExecute() {
-    // no op
+    instantTime = writeClient.startCommit();
+    table = writeClient.initTable(getWriteOperationType(), Option.ofNullable(instantTime));
   }
 
   @Override
