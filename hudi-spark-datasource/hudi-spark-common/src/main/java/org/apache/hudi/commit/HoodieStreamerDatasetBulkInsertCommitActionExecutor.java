@@ -36,14 +36,8 @@ import org.apache.spark.sql.Row;
  */
 public class HoodieStreamerDatasetBulkInsertCommitActionExecutor extends BaseDatasetBulkInsertCommitActionExecutor {
 
-  public HoodieStreamerDatasetBulkInsertCommitActionExecutor(HoodieWriteConfig config, SparkRDDWriteClient writeClient, String instantTime) {
-    super(config, writeClient, instantTime);
-  }
-
-  @Override
-  protected void preExecute() {
-    table.validateInsertSchema();
-    writeClient.preWrite(instantTime, getWriteOperationType(), table.getMetaClient());
+  public HoodieStreamerDatasetBulkInsertCommitActionExecutor(HoodieWriteConfig config, SparkRDDWriteClient writeClient) {
+    super(config, writeClient);
   }
 
   @Override

@@ -23,7 +23,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
-import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 import org.apache.hudi.utilities.schema.SchemaProvider;
@@ -86,8 +85,7 @@ public class HoodieDeltaStreamerWrapper extends HoodieDeltaStreamer {
         .setConf(service.getStorage().getConf().newInstance())
         .setBasePath(service.getCfg().targetBasePath)
         .build();
-    String instantTime = InProcessTimeGenerator.createNewInstantTime();
-    InputBatch inputBatch = service.readFromSource(instantTime, metaClient).getLeft();
+    InputBatch inputBatch = service.readFromSource(metaClient).getLeft();
     return Pair.of(inputBatch.getSchemaProvider(), Pair.of(inputBatch.getCheckpointForNextBatch(), (JavaRDD<HoodieRecord>) inputBatch.getBatch().get()));
   }
 

@@ -439,7 +439,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
       Set<HoodieFileGroupId> fileGroupsBeforeReplace = getAllFileGroups(hoodieTable, dataGen.getPartitionPaths());
       // replace by using insertOverwrite
       JavaRDD<HoodieRecord> replaceRecords = jsc.parallelize(dataGen.generateInserts(replaceInstantTime, numRecs), 1);
-      client.startCommitWithTime(replaceInstantTime, HoodieTimeline.REPLACE_COMMIT_ACTION);
+      metaClient.getActiveTimeline().createRequestedCommitWithReplaceMetadata(replaceInstantTime, HoodieTimeline.REPLACE_COMMIT_ACTION);
       client.insertOverwrite(replaceRecords, replaceInstantTime);
 
       metaClient.reloadActiveTimeline();

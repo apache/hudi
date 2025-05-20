@@ -413,9 +413,8 @@ class HoodieSparkSqlWriterInternal {
               streamingWritesParamsOpt.map(_.asyncClusteringTriggerFn.get.apply(client))
             }
 
-            instantTime = client.createNewInstantTime()
             // Issue deletes
-            client.startCommitWithTime(instantTime, commitActionType)
+            instantTime = client.startCommit(commitActionType)
             val writeStatuses = DataSourceUtils.doDeleteOperation(client, hoodieKeysAndLocationsToDelete, instantTime, preppedSparkSqlWrites || preppedWriteOperation)
             (writeStatuses, client)
 
@@ -445,8 +444,7 @@ class HoodieSparkSqlWriterInternal {
                 (parameters - HoodieWriteConfig.AUTO_COMMIT_ENABLE.key).asJava))
               .asInstanceOf[SparkRDDWriteClient[_]]
             // Issue delete partitions
-            instantTime = client.createNewInstantTime()
-            client.startCommitWithTime(instantTime, commitActionType)
+            instantTime = client.startCommit(commitActionType)
             val writeStatuses = DataSourceUtils.doDeletePartitionsOperation(client, partitionsToDelete, instantTime)
             (writeStatuses, client)
 
@@ -508,7 +506,7 @@ class HoodieSparkSqlWriterInternal {
             if (writeConfig.getRecordMerger.getRecordType == HoodieRecordType.SPARK && tableType == MERGE_ON_READ && writeConfig.getLogDataBlockFormat.orElse(HoodieLogBlockType.AVRO_DATA_BLOCK) != HoodieLogBlockType.PARQUET_DATA_BLOCK) {
               throw new UnsupportedOperationException(s"${writeConfig.getRecordMerger.getClass.getName} only support parquet log.")
             }
-            instantTime = client.createNewInstantTime()
+            instantTime = client.startCommit(commitActionType)
             // Convert to RDD[HoodieRecord]
             val hoodieRecords = Try(HoodieCreateRecordUtils.createHoodieRecordRdd(
               HoodieCreateRecordUtils.createHoodieRecordRddArgs(df, writeConfig, parameters, avroRecordName,
@@ -520,7 +518,6 @@ class HoodieSparkSqlWriterInternal {
 
             // Remove duplicates from incoming records based on existing keys from storage.
             val dedupedHoodieRecords = handleInsertDuplicates(hoodieRecords, hoodieConfig, operation, jsc, parameters)
-            client.startCommitWithTime(instantTime, commitActionType)
             try {
               val writeResult = DataSourceUtils.doWriteOperation(client, dedupedHoodieRecords, instantTime, operation,
                 preppedSparkSqlWrites || preppedWriteOperation)
@@ -825,23 +822,23 @@ class HoodieSparkSqlWriterInternal {
     val overwriteOperationType = Option(hoodieConfig.getString(HoodieInternalConfig.BULKINSERT_OVERWRITE_OPERATION_TYPE))
       .map(WriteOperationType.fromValue)
       .orNull
-    val instantTime = writeClient.createNewInstantTime()
     val executor = mode match {
       case _ if overwriteOperationType == null =>
         // Don't need to overwrite
-        new DatasetBulkInsertCommitActionExecutor(writeConfig, writeClient, instantTime)
+        new DatasetBulkInsertCommitActionExecutor(writeConfig, writeClient)
       case SaveMode.Append if overwriteOperationType == WriteOperationType.INSERT_OVERWRITE =>
         // INSERT OVERWRITE PARTITION uses Append mode
-        new DatasetBulkInsertOverwriteCommitActionExecutor(writeConfig, writeClient, instantTime)
+        new DatasetBulkInsertOverwriteCommitActionExecutor(writeConfig, writeClient)
       case SaveMode.Append if overwriteOperationType == WriteOperationType.BUCKET_RESCALE =>
-        new DatasetBucketRescaleCommitActionExecutor(writeConfig, writeClient, instantTime)
+        new DatasetBucketRescaleCommitActionExecutor(writeConfig, writeClient)
       case SaveMode.Overwrite if overwriteOperationType == WriteOperationType.INSERT_OVERWRITE_TABLE =>
-        new DatasetBulkInsertOverwriteTableCommitActionExecutor(writeConfig, writeClient, instantTime)
+        new DatasetBulkInsertOverwriteTableCommitActionExecutor(writeConfig, writeClient)
       case _ =>
         throw new HoodieException(s"$mode with bulk_insert in row writer path is not supported yet");
     }
 
     val writeResult = executor.execute(df, tableConfig.isTablePartitioned)
+    val instantTime = executor.getInstantTime
 
     try {
       val (writeSuccessful, compactionInstant, clusteringInstant) = mode match {

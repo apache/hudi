@@ -3295,7 +3295,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     HoodieStreamer deltaStreamer = new HoodieStreamer(cfg, jsc);
     HoodieStreamer.StreamSyncService streamSyncService = (HoodieStreamer.StreamSyncService) deltaStreamer.getIngestionService();
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(HoodieTestUtils.getDefaultStorageConf()).setBasePath(tableBasePath).build();
-    InputBatch inputBatch = streamSyncService.getStreamSync().readFromSource("00000", metaClient).getLeft();
+    InputBatch inputBatch = streamSyncService.getStreamSync().readFromSource(metaClient).getLeft();
     // Read from source and validate persistRdd call.
     JavaRDD<GenericRecord> sourceRdd = (JavaRDD<GenericRecord>) inputBatch.getBatch().get();
     assertEquals(1000, sourceRdd.count());

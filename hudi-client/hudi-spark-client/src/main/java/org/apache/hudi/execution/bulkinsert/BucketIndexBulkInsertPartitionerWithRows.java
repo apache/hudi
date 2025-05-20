@@ -18,7 +18,6 @@
 
 package org.apache.hudi.execution.bulkinsert;
 
-import org.apache.hudi.common.model.PartitionBucketIndexHashingConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.bucket.partition.NumBucketsFunction;
@@ -40,18 +39,16 @@ public class BucketIndexBulkInsertPartitionerWithRows implements BulkInsertParti
   private FileSystemViewStorageConfig viewConfig;
 
   public BucketIndexBulkInsertPartitionerWithRows(String indexKeyFields, HoodieWriteConfig writeConfig) {
-    this.indexKeyFields = indexKeyFields;
-    this.numBucketsFunction = NumBucketsFunction.fromWriteConfig(writeConfig);
-    this.writeConfig = writeConfig;
-    if (writeConfig.isUsingRemotePartitioner()) {
-      this.viewConfig = writeConfig.getViewStorageConfig();
-    }
+    this(writeConfig, NumBucketsFunction.fromWriteConfig(writeConfig), indexKeyFields);
   }
 
-  public BucketIndexBulkInsertPartitionerWithRows(HoodieWriteConfig writeConfig, PartitionBucketIndexHashingConfig hashingConfig) {
-    this.indexKeyFields = writeConfig.getBucketIndexHashFieldWithDefault();
-    this.numBucketsFunction = new NumBucketsFunction(hashingConfig.getExpressions(),
-        hashingConfig.getRule(), hashingConfig.getDefaultBucketNumber());
+  public BucketIndexBulkInsertPartitionerWithRows(HoodieWriteConfig writeConfig, String expressions, String rule, int bucketNumber) {
+    this(writeConfig, new NumBucketsFunction(expressions, rule, bucketNumber), writeConfig.getBucketIndexHashFieldWithDefault());
+  }
+
+  private BucketIndexBulkInsertPartitionerWithRows(HoodieWriteConfig writeConfig, NumBucketsFunction numBucketsFunction, String indexKeyFields) {
+    this.indexKeyFields = indexKeyFields;
+    this.numBucketsFunction = numBucketsFunction;
     this.writeConfig = writeConfig;
     if (writeConfig.isUsingRemotePartitioner()) {
       this.viewConfig = writeConfig.getViewStorageConfig();

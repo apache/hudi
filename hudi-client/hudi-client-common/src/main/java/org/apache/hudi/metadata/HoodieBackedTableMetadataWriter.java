@@ -1403,7 +1403,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       metadataMetaClient.reloadActiveTimeline();
     }
 
-    writeClient.startCommitWithTime(instantTime);
+    writeClient.startCommitForMetadataTable(metadataMetaClient, instantTime, HoodieActiveTimeline.DELTA_COMMIT_ACTION);
     preWrite(instantTime);
     if (isInitializing) {
       engineContext.setJobStatus(this.getClass().getSimpleName(), String.format("Bulk inserting at %s into metadata table %s", instantTime, metadataWriteConfig.getTableName()));
