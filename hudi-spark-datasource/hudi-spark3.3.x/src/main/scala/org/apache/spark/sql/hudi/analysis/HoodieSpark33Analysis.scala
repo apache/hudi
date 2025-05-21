@@ -36,7 +36,7 @@ import org.apache.spark.sql.hudi.catalog.HoodieInternalV2Table
  *
  * Check out HUDI-4178 for more details
  */
-case class HoodieSparkDataSourceV2ToV1Fallback(sparkSession: SparkSession) extends Rule[LogicalPlan]
+case class HoodieSpark33DataSourceV2ToV1Fallback(sparkSession: SparkSession) extends Rule[LogicalPlan]
   with ProvidesHoodieConfig {
 
   override def apply(plan: LogicalPlan): LogicalPlan = plan match {
@@ -46,7 +46,7 @@ case class HoodieSparkDataSourceV2ToV1Fallback(sparkSession: SparkSession) exten
 
     // NOTE: Unfortunately, [[InsertIntoStatement]] is implemented in a way that doesn't expose
     //       target relation as a child (even though there's no good reason for that)
-    case iis@InsertIntoStatement(rv2@DataSourceV2Relation(v2Table: HoodieInternalV2Table, _, _, _, _), _, _, _, _, _, _) =>
+    case iis@InsertIntoStatement(rv2@DataSourceV2Relation(v2Table: HoodieInternalV2Table, _, _, _, _), _, _, _, _, _) =>
       iis.copy(table = convertToV1(rv2, v2Table))
 
     case _ =>
