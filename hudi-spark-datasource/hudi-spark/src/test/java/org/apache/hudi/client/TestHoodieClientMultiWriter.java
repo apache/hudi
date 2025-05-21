@@ -347,7 +347,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     // schedule clustering (COW) or compaction (MOR)
     Option<String> tableServiceInstant = Option.empty();
     if (createInitialCommit) {
-      tableServiceInstant = tableServiceClient.scheduleTableService(tableServiceCommit32,
+      tableServiceInstant = tableServiceClient.scheduleTableService(Option.of(tableServiceCommit32),
         Option.empty(), tableType.equals(MERGE_ON_READ) ? TableServiceType.COMPACT : TableServiceType.CLUSTER);
       if (!writerSchema1.equals(writerSchema2)) {
         assertTrue(tableServiceInstant.isPresent());
@@ -809,9 +809,9 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
             .withInlineClusteringNumCommits(1)
             .build())
         .build();
-    final SparkRDDWriteClient client1 = getHoodieWriteClient(cfg2);
-    final SparkRDDWriteClient client2 = getHoodieWriteClient(cfg);
-    final SparkRDDWriteClient client3 = getHoodieWriteClient(cfg);
+    final SparkRDDWriteClient<?> client1 = getHoodieWriteClient(cfg2);
+    final SparkRDDWriteClient<?> client2 = getHoodieWriteClient(cfg);
+    final SparkRDDWriteClient<?> client3 = getHoodieWriteClient(cfg);
     final String upsertCommitTime = client1.createNewInstantTime(); // upsert commit time has to be lesser than compaction instant time.
     // and w/ MOR table, during conflict resolution, we will definitely hit conflict resolution exception.
     // if the delta commit's instant time is not guaranteed to be < compaction instant time, then delta commit will succeed w/o issues.
@@ -852,9 +852,8 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     Future future2 = executors.submit(() -> {
       if (tableType == MERGE_ON_READ) {
         assertDoesNotThrow(() -> {
-          String compactionTimeStamp = client2.createNewInstantTime();
+          String compactionTimeStamp = client2.scheduleTableService(Option.empty(), TableServiceType.COMPACT).get();
           ValidationUtils.checkArgument(InstantComparison.compareTimestamps(compactionTimeStamp, InstantComparison.GREATER_THAN, upsertCommitTime));
-          client2.scheduleTableService(compactionTimeStamp, Option.empty(), TableServiceType.COMPACT);
         });
       }
       latchCountDownAndWait(scheduleCountDownLatch, waitAndRunFirst);
@@ -863,8 +862,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     Future future3 = executors.submit(() -> {
       assertDoesNotThrow(() -> {
         latchCountDownAndWait(scheduleCountDownLatch, waitAndRunFirst);
-        String cleanCommitTime = client3.createNewInstantTime();
-        client3.scheduleTableService(cleanCommitTime, Option.empty(), TableServiceType.CLEAN);
+        client3.scheduleTableService(Option.empty(), TableServiceType.CLEAN);
       });
     });
     future1.get();
@@ -907,7 +905,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     future3 = executors.submit(() -> {
       latchCountDownAndWait(runCountDownLatch, waitAndRunFirst);
       assertDoesNotThrow(() -> {
-        client3.clean(pendingCleanTime, false);
+        client3.clean(false);
         validInstants.add(pendingCleanTime);
       });
     });

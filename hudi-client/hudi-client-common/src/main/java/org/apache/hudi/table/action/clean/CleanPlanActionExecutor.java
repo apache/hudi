@@ -178,10 +178,9 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
    * Creates a Cleaner plan if there are files to be cleaned and stores them in instant file.
    * Cleaner Plan contains absolute file paths.
    *
-   * @param startCleanTime Cleaner Instant Time
    * @return Cleaner Plan if generated
    */
-  protected Option<HoodieCleanerPlan> requestClean(String startCleanTime) {
+  protected Option<HoodieCleanerPlan> requestClean() {
     // Check if the last clean completed successfully and wrote out its metadata. If not, it should be retried.
     Option<HoodieInstant> lastClean = table.getCleanTimeline().filterCompletedInstants().lastInstant();
     if (lastClean.isPresent()) {
@@ -206,16 +205,6 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
     Option<HoodieCleanerPlan> option = Option.empty();
     if (nonEmpty(cleanerPlan.getFilePathsToBeDeletedPerPartition())
         && cleanerPlan.getFilePathsToBeDeletedPerPartition().values().stream().mapToInt(List::size).sum() > 0) {
-      // Only create cleaner plan which does some work
-      final HoodieInstant cleanInstant = instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, startCleanTime);
-      // Save to both aux and timeline folder
-      try {
-        table.getActiveTimeline().saveToCleanRequested(cleanInstant, Option.of(cleanerPlan));
-        LOG.info("Requesting Cleaning with instant time {}", cleanInstant);
-      } catch (HoodieIOException e) {
-        LOG.error("Got exception when saving cleaner requested file", e);
-        throw e;
-      }
       option = Option.of(cleanerPlan);
     }
 
@@ -228,7 +217,7 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
       return Option.empty();
     }
     // Plan a new clean action
-    return requestClean(instantTime);
+    return requestClean();
   }
 
 }

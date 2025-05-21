@@ -107,7 +107,7 @@ class TestBaseHoodieTableServiceClient extends HoodieCommonTestHarness {
     }
 
     TestTableServiceClient tableServiceClient = new TestTableServiceClient(writeConfig, Arrays.asList(firstTable, secondTable).iterator(), Option.empty(), expectedRollbackInfo);
-    tableServiceClient.clean(cleanInstantTime, false);
+    tableServiceClient.clean(Option.empty(), false);
   }
 
   @Test
@@ -140,7 +140,7 @@ class TestBaseHoodieTableServiceClient extends HoodieCommonTestHarness {
     when(firstTable.clean(any(), eq(cleanInstantTime))).thenReturn(metadata);
 
     TestTableServiceClient tableServiceClient = new TestTableServiceClient(writeConfig, Collections.singletonList(firstTable).iterator(), Option.empty(), expectedRollbackInfo);
-    assertSame(metadata, tableServiceClient.clean(cleanInstantTime, true));
+    assertSame(metadata, tableServiceClient.clean(Option.empty(), true));
     verify(mockMetaClient).reloadActiveTimeline();
   }
 
@@ -184,7 +184,7 @@ class TestBaseHoodieTableServiceClient extends HoodieCommonTestHarness {
     }
 
     TestTableServiceClient tableServiceClient = new TestTableServiceClient(writeConfig, Arrays.asList(firstTable, secondTable).iterator(), Option.empty(), expectedRollbackInfo);
-    assertEquals(metadata, tableServiceClient.clean(cleanInstantTime, true));
+    assertEquals(metadata, tableServiceClient.clean(Option.empty(), true));
     if (generatesPlan) {
       verify(mockMetaClient).reloadActiveTimeline();
     } else {
@@ -231,7 +231,7 @@ class TestBaseHoodieTableServiceClient extends HoodieCommonTestHarness {
     when(firstTable.clean(any(), eq(cleanInstantTime))).thenReturn(metadata);
 
     TestTableServiceClient tableServiceClient = new TestTableServiceClient(writeConfig, Arrays.asList(firstTable, secondTable).iterator(), Option.empty(), expectedRollbackInfo);
-    assertEquals(metadata, tableServiceClient.clean(cleanInstantTime, true));
+    assertEquals(metadata, tableServiceClient.clean(Option.empty(), true));
     verify(mockMetaClient).reloadActiveTimeline();
   }
 
