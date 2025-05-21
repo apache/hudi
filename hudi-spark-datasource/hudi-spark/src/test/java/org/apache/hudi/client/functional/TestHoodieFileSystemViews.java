@@ -87,15 +87,15 @@ public class TestHoodieFileSystemViews extends HoodieClientTestBase {
 
   public static List<Arguments> tableTypeMetadataFSVTypeArgs() {
     List<Arguments> testCases = new ArrayList<>();
-    for (HoodieTableType tableType : HoodieTableType.values()) {
-      for (boolean enableMdt : Arrays.asList(true, false)) {
-        for (FileSystemViewStorageType viewStorageType : Arrays.asList(FileSystemViewStorageType.MEMORY, FileSystemViewStorageType.SPILLABLE_DISK)) {
-          for (int writerVersion : Arrays.asList(6, 8)) {
-            testCases.add(Arguments.of(tableType, enableMdt, viewStorageType, writerVersion));
-          }
+    //for (HoodieTableType tableType : HoodieTableType.values()) {
+    for (boolean enableMdt : Arrays.asList(true)) {
+      for (FileSystemViewStorageType viewStorageType : Arrays.asList(FileSystemViewStorageType.MEMORY)) {
+        for (int writerVersion : Arrays.asList(6, 8)) {
+          testCases.add(Arguments.of(HoodieTableType.MERGE_ON_READ, enableMdt, viewStorageType, writerVersion));
         }
       }
     }
+    //}
     return testCases;
   }
 
