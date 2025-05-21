@@ -19,6 +19,7 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.HoodieJavaWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieStorageConfig;
@@ -129,7 +130,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
     int startInstant = 1;
     String firstCommitTime = makeNewCommitTime(startInstant++, "%09d");
     HoodieJavaWriteClient writeClient = getHoodieWriteClient(config);
-    writeClient.startCommitWithTime(firstCommitTime);
+    WriteClientTestUtils.startCommitWithTime(writeClient, firstCommitTime);
     metaClient = HoodieTableMetaClient.reload(metaClient);
     FileFormatUtils fileUtils = getFileUtilsInstance(metaClient);
 
@@ -190,7 +191,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
 
     String newCommitTime = makeNewCommitTime(startInstant++, "%09d");
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    writeClient.startCommitWithTime(newCommitTime);
+    WriteClientTestUtils.startCommitWithTime(writeClient, newCommitTime);
     List<WriteStatus> statuses = writeClient.upsert(updatedRecords, newCommitTime);
 
     allFiles = getIncrementalFiles(partitionPath, firstCommitTime, -1);
@@ -458,7 +459,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
         .withBulkInsertParallelism(2).withBulkInsertSortMode(bulkInsertMode).build();
     String instantTime = makeNewCommitTime();
     HoodieJavaWriteClient writeClient = getHoodieWriteClient(config);
-    writeClient.startCommitWithTime(instantTime);
+    WriteClientTestUtils.startCommitWithTime(writeClient, instantTime);
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieJavaCopyOnWriteTable table = (HoodieJavaCopyOnWriteTable) HoodieJavaTable.create(config, context, metaClient);
 
@@ -477,7 +478,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
     int startInstant = 1;
     String firstCommitTime = makeNewCommitTime(startInstant++, "%09d");
     HoodieJavaWriteClient writeClient = getHoodieWriteClient(config);
-    writeClient.startCommitWithTime(firstCommitTime);
+    WriteClientTestUtils.startCommitWithTime(writeClient, firstCommitTime);
     metaClient = HoodieTableMetaClient.reload(metaClient);
     FileFormatUtils fileUtils = getFileUtilsInstance(metaClient);
 
@@ -521,7 +522,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
     }
 
     String newCommitTime = makeNewCommitTime(startInstant++, "%09d");
-    writeClient.startCommitWithTime(newCommitTime);
+    WriteClientTestUtils.startCommitWithTime(writeClient, newCommitTime);
 
     // Test delete two records
     List<HoodieKey> keysForDelete = new ArrayList(Arrays.asList(records.get(0).getKey(), records.get(2).getKey()));
@@ -538,7 +539,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
     assertEquals(records.get(1).getRecordKey(), fileRecords.get(0).get("_row_key").toString());
 
     newCommitTime = makeNewCommitTime(startInstant++, "%09d");
-    writeClient.startCommitWithTime(newCommitTime);
+    WriteClientTestUtils.startCommitWithTime(writeClient, newCommitTime);
 
     // Test delete last record
     keysForDelete = new ArrayList(Arrays.asList(records.get(1).getKey()));

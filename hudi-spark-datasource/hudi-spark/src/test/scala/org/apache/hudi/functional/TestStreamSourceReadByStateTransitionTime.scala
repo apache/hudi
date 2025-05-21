@@ -17,7 +17,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.client.SparkRDDWriteClient
+import org.apache.hudi.client.{SparkRDDWriteClient, WriteClientTestUtils}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.engine.EngineType
 import org.apache.hudi.common.model.{HoodieFailedWritesCleaningPolicy, HoodieRecord, HoodieTableType}
@@ -63,8 +63,8 @@ class TestStreamSourceReadByStateTransitionTime extends TestStreamingSource {
         val records1 = sparkContext.parallelize(dataGen.generateInserts(instantTime1, 10).asScala.toSeq, 2)
         val records2 = sparkContext.parallelize(dataGen.generateInserts(instantTime2, 15).asScala.toSeq, 2)
 
-        writeClient.startCommitWithTime(instantTime1)
-        writeClient.startCommitWithTime(instantTime2)
+        WriteClientTestUtils.startCommitWithTime(writeClient, instantTime1)
+        WriteClientTestUtils.startCommitWithTime(writeClient, instantTime2)
         writeClient.insert(records2.toJavaRDD().asInstanceOf[JavaRDD[HoodieRecord[Nothing]]], instantTime2)
         val df = spark.readStream
           .format("hudi")

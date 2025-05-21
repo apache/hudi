@@ -22,6 +22,7 @@ package org.apache.hudi.table.functional;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -422,7 +423,7 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
     metaClient = HoodieTableMetaClient.reload(metaClient);
     JavaRDD<HoodieRecord> records = jsc().parallelize(hoodieRecords, 2);
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    client.startCommitWithTime(instant);
+    WriteClientTestUtils.startCommitWithTime(client, instant);
     List<WriteStatus> writeStatuses = client.upsert(records, instant).collect();
     assertNoWriteErrors(writeStatuses);
     if (doCommit) {

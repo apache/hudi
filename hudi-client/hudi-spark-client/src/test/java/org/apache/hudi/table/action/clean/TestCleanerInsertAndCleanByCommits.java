@@ -60,7 +60,6 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.model.HoodieCleaningPolicy.KEEP_LATEST_COMMITS;
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
-import static org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTime;
 import static org.apache.hudi.table.TestCleaner.insertFirstBigBatchForClientCleanerTest;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.apache.hudi.testutils.HoodieClientTestBase.Function2;
@@ -150,8 +149,7 @@ public class TestCleanerInsertAndCleanByCommits extends SparkClientFunctionalTes
       Map<String, List<HoodieWriteStat>> commitWriteStatsMap = new HashMap<>();
       // Keep doing some writes and clean inline. Make sure we have expected number of files remaining.
       for (int i = 0; i < 8; i++) {
-        String newCommitTime = makeNewCommitTime();
-        client.startCommitWithTime(newCommitTime);
+        String newCommitTime = client.startCommit();
         List<HoodieRecord> records = recordUpsertGenWrappedFunction.apply(newCommitTime, BATCH_SIZE);
 
         List<WriteStatus> statuses = upsertFn.apply(client, jsc().parallelize(records, PARALLELISM), newCommitTime).collect();
