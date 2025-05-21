@@ -263,10 +263,10 @@ public class HoodieIndexUtils {
         .filterCompletedInstants()
         .lastInstant()
         .map(HoodieInstant::requestedTime);
-    ReaderContextFactory<R> readerContextFactory = hoodieTable.getContext().getReaderContextFactory(metaClient);
     if (instantTime.isEmpty()) {
       return hoodieTable.getContext().emptyHoodieData();
     }
+    ReaderContextFactory<R> readerContextFactory = hoodieTable.getContext().getReaderContextFactory(metaClient);
     return partitionLocations.flatMap(p -> {
       Option<FileSlice> fileSliceOption = Option.fromJavaOptional(hoodieTable
           .getHoodieView()
@@ -288,7 +288,6 @@ public class HoodieIndexUtils {
           .withDataSchema(dataSchema)
           .withRequestedSchema(dataSchema)
           .withInternalSchema(internalSchemaOption)
-          .withShouldUseRecordPosition(false)
           .withProps(metaClient.getTableConfig().getProps())
           .build();
       try {
