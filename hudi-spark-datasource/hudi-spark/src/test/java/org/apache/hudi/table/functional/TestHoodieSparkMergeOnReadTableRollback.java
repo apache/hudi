@@ -23,6 +23,7 @@ import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPartitionMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.config.HoodieStorageConfig;
@@ -122,7 +123,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
        * Write 1 (only inserts)
        */
       String newCommitTime = "001";
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
       JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
@@ -141,7 +142,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
        * Write 2 (updates)
        */
       newCommitTime = "002";
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
       records = dataGen.generateUpdates(newCommitTime, records);
 
@@ -193,7 +194,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
        * Write 1 (only inserts)
        */
       String newCommitTime = "000000001";
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
       JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
@@ -235,7 +236,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
       // WriteClient with custom config (disable small file handling)
       // NOTE: Second writer will have Metadata table ENABLED
       try (SparkRDDWriteClient secondClient = getHoodieWriteClient(secondCfg);) {
-        secondClient.startCommitWithTime(commitTime1);
+        WriteClientTestUtils.startCommitWithTime(secondClient, commitTime1);
 
         List<HoodieRecord> copyOfRecords = new ArrayList<>(records);
         copyOfRecords = dataGen.generateUpdates(commitTime1, copyOfRecords);
@@ -276,7 +277,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
        */
       final String commitTime2 = "000000003";
       try (SparkRDDWriteClient thirdClient = getHoodieWriteClient(secondCfg);) {
-        thirdClient.startCommitWithTime(commitTime2);
+        WriteClientTestUtils.startCommitWithTime(thirdClient, commitTime2);
 
         List<HoodieRecord> copyOfRecords = new ArrayList<>(records);
         copyOfRecords = dataGen.generateUpdates(commitTime2, copyOfRecords);
@@ -325,7 +326,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
          * Write 4 (updates)
          */
         newCommitTime = "000000004";
-        thirdClient.startCommitWithTime(newCommitTime);
+        WriteClientTestUtils.startCommitWithTime(thirdClient, newCommitTime);
 
         writeStatusJavaRDD = thirdClient.upsert(writeRecords, newCommitTime);
 
@@ -391,7 +392,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
        * Write 1 (only inserts)
        */
       String newCommitTime = "000000001";
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
       JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
@@ -430,7 +431,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
       HoodieWriteConfig secondCfg = getHoodieWriteConfigWithSmallFileHandlingOff(true);
       secondCfg.setValue(HoodieWriteConfig.WRITE_TABLE_VERSION, "6");
       try (SparkRDDWriteClient secondClient = getHoodieWriteClient(secondCfg);) {
-        secondClient.startCommitWithTime(commitTime1);
+        WriteClientTestUtils.startCommitWithTime(secondClient, commitTime1);
 
         List<HoodieRecord> copyOfRecords = new ArrayList<>(records);
         copyOfRecords = dataGen.generateUpdates(commitTime1, copyOfRecords);
@@ -498,7 +499,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
        * Write 1 (only inserts)
        */
       String newCommitTime = "001";
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
       JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
@@ -550,7 +551,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
           // Timeline-server-based markers are not used for multi-rollback tests
           .withMarkersType(MarkerType.DIRECT.name()).build();
       try (SparkRDDWriteClient nClient = getHoodieWriteClient(smallFileWriteConfig)) {
-        nClient.startCommitWithTime(newCommitTime);
+        WriteClientTestUtils.startCommitWithTime(nClient, newCommitTime);
 
         List<HoodieRecord> copyOfRecords = new ArrayList<>(records);
         copyOfRecords = dataGen.generateUpdates(newCommitTime, copyOfRecords);
@@ -577,7 +578,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
        * Write 3 (inserts + updates)
        */
       newCommitTime = "003";
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
       List<HoodieRecord> newInserts = dataGen.generateInserts(newCommitTime, 100);
       records = dataGen.generateUpdates(newCommitTime, records);
@@ -601,7 +602,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
        * Write 4 (updates)
        */
       newCommitTime = "005";
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
       records = dataGen.generateUpdates(newCommitTime, records);
       writeRecords = jsc().parallelize(records, 1);
@@ -633,7 +634,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
        * Write 5 (updates)
        */
       newCommitTime = "007";
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
       List<HoodieRecord> copyOfRecords = new ArrayList<>(records);
       copyOfRecords = dataGen.generateUpdates(newCommitTime, copyOfRecords);
       copyOfRecords.addAll(dataGen.generateInserts(newCommitTime, 200));
@@ -684,7 +685,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
        * Write 1 (only inserts)
        */
       String newCommitTime = client.createNewInstantTime();
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
       JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
       JavaRDD<WriteStatus> writeStatusJavaRDD = client.upsert(writeRecords, newCommitTime);
@@ -750,7 +751,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
   }
 
   private void upsertRecords(SparkRDDWriteClient client, String commitTime, List<HoodieRecord> records, HoodieTestDataGenerator dataGen) throws IOException {
-    client.startCommitWithTime(commitTime);
+    WriteClientTestUtils.startCommitWithTime(client, commitTime);
     List<HoodieRecord> copyOfRecords = new ArrayList<>(records);
     copyOfRecords = dataGen.generateUpdates(commitTime, copyOfRecords);
     List<WriteStatus> statuses = client.upsert(jsc().parallelize(copyOfRecords, 1), commitTime).collect();
@@ -814,7 +815,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
   }
 
   private List<HoodieRecord> insertAndGetRecords(String newCommitTime, SparkRDDWriteClient client, HoodieTestDataGenerator dataGen, int count) {
-    client.startCommitWithTime(newCommitTime);
+    WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
     List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, count);
     JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
     JavaRDD<WriteStatus> writeStatusJavaRDD = client.upsert(writeRecords, newCommitTime);
@@ -823,7 +824,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
   }
 
   private List<HoodieRecord> updateAndGetRecords(String newCommitTime, SparkRDDWriteClient client, HoodieTestDataGenerator dataGen, List<HoodieRecord> records) throws IOException {
-    client.startCommitWithTime(newCommitTime);
+    WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
     List<HoodieRecord> updates = dataGen.generateUpdates(newCommitTime, records);
     JavaRDD<WriteStatus> writeStatusJavaRDD = client.upsert(jsc().parallelize(updates, 1), newCommitTime);
     client.commit(newCommitTime, writeStatusJavaRDD);
@@ -898,7 +899,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
 
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config)) {
       String newCommitTime = "100";
-      writeClient.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(writeClient, newCommitTime);
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
       JavaRDD<HoodieRecord> recordsRDD = jsc().parallelize(records, 1);
@@ -917,7 +918,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
 
       // insert 100 records
       newCommitTime = "101";
-      writeClient.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(writeClient, newCommitTime);
       records = dataGen.generateInserts(newCommitTime, 100);
       recordsRDD = jsc().parallelize(records, 1);
       writeClient.insert(recordsRDD, newCommitTime).collect();
@@ -990,7 +991,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
     HoodieWriteConfig config = getConfigBuilder(false, rollbackUsingMarkers, HoodieIndex.IndexType.INMEMORY).build();
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config);) {
       String newCommitTime = "100";
-      writeClient.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(writeClient, newCommitTime);
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
       JavaRDD<HoodieRecord> recordsRDD = jsc().parallelize(records, 1);
@@ -1083,7 +1084,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
   private List<HoodieRecord> updateRecords(SparkRDDWriteClient client, HoodieTestDataGenerator dataGen, String commitTime,
                                            List<HoodieRecord> records, HoodieTableMetaClient metaClient, HoodieWriteConfig cfg,
                                            boolean assertLogFiles) throws IOException {
-    client.startCommitWithTime(commitTime);
+    WriteClientTestUtils.startCommitWithTime(client, commitTime);
 
     records = dataGen.generateUpdates(commitTime, records);
     JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);

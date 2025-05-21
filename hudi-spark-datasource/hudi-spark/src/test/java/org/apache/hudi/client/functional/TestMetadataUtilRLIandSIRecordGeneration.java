@@ -107,9 +107,8 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
 
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
       // Insert
-      String commitTime = client.createNewInstantTime();
+      String commitTime = client.startCommit();
       List<HoodieRecord> records1 = dataGen.generateInserts(commitTime, 100);
-      client.startCommitWithTime(commitTime);
       List<WriteStatus> writeStatuses1 = client.insert(jsc.parallelize(records1, 1), commitTime).collect();
       assertNoWriteErrors(writeStatuses1);
 
@@ -142,8 +141,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       assertEquals(expectedRecordToPartitionMapping1, recordKeyToPartitionMapping1);
 
       // lets update some records and assert RLI records.
-      commitTime = client.createNewInstantTime();
-      client.startCommitWithTime(commitTime);
+      commitTime = client.startCommit();
       String finalCommitTime2 = commitTime;
       List<HoodieRecord> deletes2 = dataGen.generateUniqueDeleteRecords(commitTime, 30);
       List<HoodieRecord> updates2 = dataGen.generateUniqueUpdates(commitTime, 30);
@@ -211,9 +209,8 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
 
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
       // Insert
-      String commitTime = client.createNewInstantTime();
+      String commitTime = client.startCommit();
       List<HoodieRecord> records1 = dataGen.generateInserts(commitTime, 100);
-      client.startCommitWithTime(commitTime);
       List<WriteStatus> writeStatuses1 = client.insert(jsc.parallelize(records1, 1), commitTime).collect();
       assertNoWriteErrors(writeStatuses1);
 
@@ -246,8 +243,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       assertEquals(expectedRecordToPartitionMapping1, recordKeyToPartitionMapping1);
 
       // lets update some records and assert RLI records.
-      commitTime = client.createNewInstantTime();
-      client.startCommitWithTime(commitTime);
+      commitTime = client.startCommit();
       List<HoodieRecord> deletes2 = dataGen.generateUniqueDeleteRecords(commitTime, 30);
       List<HoodieRecord> updates2 = dataGen.generateUniqueUpdates(commitTime, 30);
       List<HoodieRecord> inserts2 = dataGen.generateInserts(commitTime, 30);
@@ -261,8 +257,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       assertRLIandSIRecordGenerationAPIs(inserts2, updates2, deletes2, writeStatuses2, commitTime, writeConfig);
 
       // trigger 2nd commit.
-      commitTime = client.createNewInstantTime();
-      client.startCommitWithTime(commitTime);
+      commitTime = client.startCommit();
       String finalCommitTime3 = commitTime;
       List<HoodieRecord> deletes3 = dataGen.generateUniqueDeleteRecords(commitTime, 30);
       List<HoodieRecord> updates3 = dataGen.generateUniqueUpdates(commitTime, 30);
@@ -308,10 +303,9 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
 
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
       // Insert
-      String commitTime = client.createNewInstantTime();
+      String commitTime = client.startCommit();
       int initialRecordsCount = 10;
       List<HoodieRecord> records1 = dataGen.generateInserts(commitTime, initialRecordsCount);
-      client.startCommitWithTime(commitTime);
       JavaRDD<WriteStatus> writeStatuses1 = client.insert(jsc.parallelize(records1, 1), commitTime);
       assertNoWriteErrors(writeStatuses1.collect());
       client.commit(commitTime, writeStatuses1);
@@ -339,8 +333,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       assertListEquality(expectedSecondaryIndexKeys, secondaryIndexRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()));
 
       // update and insert some records and assert SI records
-      commitTime = client.createNewInstantTime();
-      client.startCommitWithTime(commitTime);
+      commitTime = client.startCommit();
       List<HoodieRecord> updates2 = dataGen.generateUniqueUpdates(commitTime, 1);
       List<String> expectedUpdatedIndexKeys = updates2.stream().map(TestMetadataUtilRLIandSIRecordGeneration::getSecondaryIndexKey).collect(Collectors.toList());
       List<HoodieRecord> inserts2 = dataGen.generateInserts(commitTime, 1);
@@ -377,8 +370,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       assertTrue(expectedSecondaryIndexKeys.containsAll(deletedSecondaryIndexRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList())));
 
       // let us create one more file slice with delete
-      commitTime = client.createNewInstantTime();
-      client.startCommitWithTime(commitTime);
+      commitTime = client.startCommit();
       List<HoodieRecord> deletes = dataGen.generateUniqueDeleteRecords(commitTime, 1);
       List<String> expectedDeletedIndexKeys = deletes.stream().map(TestMetadataUtilRLIandSIRecordGeneration::getSecondaryIndexKey).collect(Collectors.toList());
       List<HoodieRecord> records3 = new ArrayList<>();
@@ -409,8 +401,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       assertEquals(getRecordKeyFromSecondaryIndexKey(expectedDeletedIndexKeys.get(0)), getRecordKeyFromSecondaryIndexKey(deletedSecondaryIndexRecords2.get(0).getRecordKey()));
 
       // revive the deleted keys
-      commitTime = client.createNewInstantTime();
-      client.startCommitWithTime(commitTime);
+      commitTime = client.startCommit();
       List<HoodieRecord> inserts4 = dataGen.generateSameKeyInserts(commitTime, deletes);
       List<String> expectedRevivedIndexKeys = inserts4.stream().map(TestMetadataUtilRLIandSIRecordGeneration::getSecondaryIndexKey).collect(Collectors.toList());
       List<HoodieRecord> records4 = new ArrayList<>();
@@ -433,8 +424,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       assertEquals(expectedRevivedIndexKeys.get(0), secondaryIndexRecords.get(0).getRecordKey());
 
       // generate update for the same key, but with the same rider value
-      commitTime = client.createNewInstantTime();
-      client.startCommitWithTime(commitTime);
+      commitTime = client.startCommit();
       List<HoodieRecord> updates5 = dataGen.generateUpdatesWithTimestamp(fourthCommitTime, inserts4, Long.parseLong(commitTime));
       List<String> expectedUpdatedIndexKeys2 = updates5.stream().map(TestMetadataUtilRLIandSIRecordGeneration::getSecondaryIndexKey).collect(Collectors.toList());
       List<HoodieRecord> records5 = new ArrayList<>();

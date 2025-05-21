@@ -21,6 +21,7 @@ package org.apache.hudi.utilities.multitable;
 
 import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -236,7 +237,7 @@ class TestHoodieMultiTableServicesMain extends HoodieCommonTestHarness implement
     // do one upsert with synchronous metadata update
     SparkRDDWriteClient writeClient = new SparkRDDWriteClient(context, writeConfig);
     List<HoodieRecord> records;
-    writeClient.startCommitWithTime(instant);
+    WriteClientTestUtils.startCommitWithTime(writeClient, instant);
     if (update) {
       records = dataGen.generateUpdates(instant, 100);
     } else {

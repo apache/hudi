@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client.functional;
 
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
@@ -261,7 +262,7 @@ public class TestConsistentBucketIndex extends HoodieSparkClientTestHarness {
 
   private List<WriteStatus> writeData(JavaRDD<HoodieRecord> records, String commitTime, WriteOperationType op, boolean doCommit) {
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    writeClient.startCommitWithTime(commitTime);
+    WriteClientTestUtils.startCommitWithTime(writeClient, commitTime);
     List<WriteStatus> writeStatues;
     switch (op) {
       case UPSERT:

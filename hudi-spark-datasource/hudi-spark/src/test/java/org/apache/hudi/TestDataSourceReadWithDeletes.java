@@ -20,6 +20,7 @@
 package org.apache.hudi;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.HoodieAvroRecord;
@@ -155,7 +156,7 @@ public class TestDataSourceReadWithDeletes extends SparkClientFunctionalTestHarn
     List<HoodieRecord> recordList = str2HoodieRecord(records);
     JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(recordList, 2);
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    client.startCommitWithTime(instant);
+    WriteClientTestUtils.startCommitWithTime(client, instant);
     List<WriteStatus> writeStatuses = client.upsert(writeRecords, instant).collect();
     assertNoWriteErrors(writeStatuses);
     metaClient = HoodieTableMetaClient.reload(metaClient);

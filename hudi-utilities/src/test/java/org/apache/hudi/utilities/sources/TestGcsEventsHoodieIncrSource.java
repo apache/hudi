@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
@@ -434,7 +435,7 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
     HoodieWriteConfig writeConfig = getWriteConfig();
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig)) {
 
-      writeClient.startCommitWithTime(commitTime);
+      WriteClientTestUtils.startCommitWithTime(writeClient, commitTime);
       List<HoodieRecord> gcsMetadataRecords = Arrays.asList(
           getGcsMetadataRecord(commitTime, "data-file-1.json", "bucket-1", "1"),
           getGcsMetadataRecord(commitTime, "data-file-2.json", "bucket-1", "1"),

@@ -19,6 +19,7 @@
 package org.apache.hudi.client.functional;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.function.SerializableFunctionUnchecked;
@@ -281,7 +282,7 @@ public class TestHoodieFileSystemViews extends HoodieClientTestBase {
   }
 
   private void insertRecords(SparkRDDWriteClient client, String commitTime, int numRecords, WriteOperationType operationType) {
-    client.startCommitWithTime(commitTime);
+    WriteClientTestUtils.startCommitWithTime(client, commitTime);
     List<HoodieRecord> inserts1 = dataGen.generateInserts(commitTime, numRecords);
     JavaRDD<HoodieRecord> insertRecordsRDD1 = jsc.parallelize(inserts1, 2);
     List<WriteStatus> statuses = operationType == WriteOperationType.BULK_INSERT ? client.bulkInsert(insertRecordsRDD1, commitTime, Option.empty()).collect() :
@@ -290,7 +291,7 @@ public class TestHoodieFileSystemViews extends HoodieClientTestBase {
   }
 
   private void upsertRecords(SparkRDDWriteClient client, String commitTime, int numRecords) {
-    client.startCommitWithTime(commitTime);
+    WriteClientTestUtils.startCommitWithTime(client, commitTime);
     List<HoodieRecord> updates = dataGen.generateUniqueUpdates(commitTime, numRecords);
     JavaRDD<HoodieRecord> updatesRdd = jsc.parallelize(updates, 2);
     List<WriteStatus> statuses = client.upsert(updatesRdd, commitTime).collect();

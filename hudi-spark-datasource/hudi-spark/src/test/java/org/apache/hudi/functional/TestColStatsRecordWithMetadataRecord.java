@@ -21,6 +21,7 @@ package org.apache.hudi.functional;
 import org.apache.hudi.avro.model.DecimalWrapper;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineProperty;
@@ -517,7 +518,7 @@ public class TestColStatsRecordWithMetadataRecord extends HoodieSparkClientTestH
     metaClient = HoodieTableMetaClient.reload(metaClient);
     JavaRDD records = jsc.parallelize(dataGen.generateInserts(instant, numRecords), 2);
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    client.startCommitWithTime(instant);
+    WriteClientTestUtils.startCommitWithTime(client, instant);
     List<WriteStatus> writeStatuses = client.upsert(records, instant).collect();
     org.apache.hudi.testutils.Assertions.assertNoWriteErrors(writeStatuses);
     if (doCommit) {

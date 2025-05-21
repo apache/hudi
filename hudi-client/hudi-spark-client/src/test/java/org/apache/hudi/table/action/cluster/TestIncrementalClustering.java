@@ -203,8 +203,7 @@ public class TestIncrementalClustering extends SparkClientFunctionalTestHarness 
     SparkRDDWriteClient client = getHoodieWriteClient(writeConfig);
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(partitions);
     for (int i = 0; i < partitions.length; i++) {
-      String instantTime = client.createNewInstantTime();
-      client.startCommitWithTime(instantTime);
+      String instantTime = client.startCommit();
       client.insert(jsc().parallelize(dataGen.generateInsertsForPartition(instantTime, 10, partitions[i]), 1), instantTime);
     }
     client.close();

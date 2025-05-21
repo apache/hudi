@@ -21,6 +21,7 @@ package org.apache.hudi.utils;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.BaseHoodieWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -696,7 +697,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     HoodieWriteConfig cfg = getConsistencyCheckWriteConfig(enableOptimisticConsistencyGuard);
     BaseHoodieWriteClient client = getHoodieWriteClient(cfg);
 
-    client.startCommitWithTime(instantTime);
+    WriteClientTestUtils.startCommitWithTime(client, instantTime);
     List<HoodieRecord> writeRecords = dataGen.generateInserts(instantTime, 200);
     List<WriteStatus> result = (List<WriteStatus>) transformOutputFn.apply(client.bulkInsert(transformInputFn.apply(writeRecords), instantTime));
 
@@ -869,7 +870,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     try (BaseHoodieWriteClient client = getHoodieWriteClient(cfgBuilder.build())) {
       HoodieTableMetaClient metaClient = createMetaClient();
       String instantTime = "000";
-      client.startCommitWithTime(instantTime);
+      WriteClientTestUtils.startCommitWithTime(client, instantTime);
       List<HoodieRecord> records = dataGen.generateInserts(instantTime, 200);
 
       assertTrue(client.commit(instantTime, client.bulkInsert(transformInputFn.apply(records), instantTime)), "Commit should succeed");
@@ -902,7 +903,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     BaseHoodieWriteClient client = getHoodieWriteClient(cfg);
 
     String instantTime0 = "000";
-    client.startCommitWithTime(instantTime0);
+    WriteClientTestUtils.startCommitWithTime(client, instantTime0);
     List<HoodieRecord> records0 = dataGen.generateInserts(instantTime0, 200);
     assertTrue(client.commit(instantTime0, client.bulkInsert(transformInputFn.apply(records0), instantTime0)), "Commit should succeed");
     assertTrue(testTable.commitExists(instantTime0), "After explicit commit, commit file should be created");
@@ -921,7 +922,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
 
     // Update + Inserts such that they just expand file1
     String instantTime1 = "001";
-    client.startCommitWithTime(instantTime1);
+    WriteClientTestUtils.startCommitWithTime(client, instantTime1);
     List<HoodieRecord> records1 = dataGen.generateUpdates(instantTime1, records0);
     assertTrue(client.commit(instantTime1, client.upsert(transformInputFn.apply(records1), instantTime1)), "Commit should succeed");
     assertTrue(testTable.commitExists(instantTime1), "After explicit commit, commit file should be created");
@@ -970,7 +971,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     BaseHoodieWriteClient client = getHoodieWriteClient(config);
     // delete non existent keys
     String commitTime1 = "001";
-    client.startCommitWithTime(commitTime1);
+    WriteClientTestUtils.startCommitWithTime(client, commitTime1);
 
     List<HoodieRecord> dummyInserts = dataGen.generateInserts(commitTime1, 20);
     List<HoodieKey> hoodieKeysToDelete = randomSelectAsHoodieKeys(dummyInserts, 20);
@@ -1004,7 +1005,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     try (BaseHoodieWriteClient client = getHoodieWriteClient(config)) {
       String commitTime = client.createNewInstantTime();
       List<HoodieRecord> records = dataGen.generateInserts(commitTime, 200);
-      client.startCommitWithTime(commitTime);
+      WriteClientTestUtils.startCommitWithTime(client, commitTime);
       List<WriteStatus> statusList = (List<WriteStatus>) transformOutputFn.apply(client.insert(transformInputFn.apply(records), commitTime));
       assertNoWriteErrors(statusList);
       client.commit(commitTime, transformInputFn.apply(statusList));
@@ -1034,7 +1035,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     }
     // Perform write-action and check
     try (BaseHoodieWriteClient client = getHoodieWriteClient(writeConfig)) {
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
       List<WriteStatus> statuses = writeFn.apply(client, recordList, newCommitTime);
       assertNoWriteErrors(statuses);
       assertEquals(2, statuses.size());

@@ -137,7 +137,7 @@ class TestSparkRDDWriteClient extends SparkClientFunctionalTestHarness {
     SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig);
     List<HoodieRecord> records = dataGen.generateInserts(instant1, 10);
     JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 2);
-    writeClient.startCommitWithTime(instant1);
+    WriteClientTestUtils.startCommitWithTime(writeClient, instant1);
     List<WriteStatus> writeStatuses = writeClient.insert(writeRecords, instant1).collect();
     assertNoWriteErrors(writeStatuses);
     String metadataTableBasePath = HoodieTableMetadata.getMetadataTableBasePath(writeConfig.getBasePath());

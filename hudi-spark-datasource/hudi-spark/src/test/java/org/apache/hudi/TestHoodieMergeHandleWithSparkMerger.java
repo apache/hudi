@@ -21,6 +21,7 @@
 package org.apache.hudi;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -262,7 +263,7 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
 
       // (1) Write: insert.
       String instantTime = "001";
-      writeClient.startCommitWithTime(instantTime);
+      WriteClientTestUtils.startCommitWithTime(writeClient, instantTime);
       List<HoodieRecord> records = generateRecords(100, instantTime);
       Stream<HoodieBaseFile> baseFileStream = insertRecordsToMORTable(reloadedMetaClient, records, writeClient, writeConfig, instantTime);
       assertTrue(baseFileStream.findAny().isPresent());
@@ -285,7 +286,7 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
 
       // (2) Write: append.
       instantTime = "002";
-      writeClient.startCommitWithTime(instantTime);
+      WriteClientTestUtils.startCommitWithTime(writeClient, instantTime);
 
       List<HoodieRecord> records2 = generateEmptyRecords(getKeys(records).subList(0, 17)); // 17 records with old keys.
       List<HoodieRecord> records3 = generateRecordUpdates(getKeys(records).subList(17, 36), "001"); // 19 update records.
@@ -313,7 +314,7 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
 
       // (3) Write: append, generate the log file.
       instantTime = "003";
-      writeClient.startCommitWithTime(instantTime);
+      WriteClientTestUtils.startCommitWithTime(writeClient, instantTime);
 
       List<HoodieRecord> records5 = generateEmptyRecords(getKeys(records).subList(50, 59)); // 9 deletes only
       assertEquals(9, records5.size());

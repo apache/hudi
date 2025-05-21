@@ -20,6 +20,7 @@
 package org.apache.hudi;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -66,7 +67,7 @@ class TestMetadataTableSupport extends HoodieSparkClientTestBase {
       List<HoodieRecord> records0 = dataGen.generateInserts(timestamp0, 100);
       JavaRDD<HoodieRecord> dataset0 = jsc.parallelize(records0, 2);
 
-      writeClient.startCommitWithTime(timestamp0);
+      WriteClientTestUtils.startCommitWithTime(writeClient, timestamp0);
       writeClient.insert(dataset0, timestamp0).collect();
 
       // Confirm MDT enabled.

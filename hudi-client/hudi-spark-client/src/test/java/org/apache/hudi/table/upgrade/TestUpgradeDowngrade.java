@@ -19,6 +19,7 @@
 package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -462,7 +463,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
   private void doInsert(SparkRDDWriteClient client) {
     // Write 1 (only inserts)
     String commit1 = "000";
-    client.startCommitWithTime(commit1);
+    WriteClientTestUtils.startCommitWithTime(client, commit1);
     List<HoodieRecord> records = dataGen.generateInserts(commit1, 100);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
     client.insert(writeRecords, commit1).collect();
@@ -472,7 +473,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     // Write 1 (only inserts)
     dataGen = new HoodieTestDataGenerator(new String[] {DEPRECATED_DEFAULT_PARTITION_PATH});
     String commit1 = "005";
-    client.startCommitWithTime(commit1);
+    WriteClientTestUtils.startCommitWithTime(client, commit1);
     List<HoodieRecord> records = dataGen.generateInserts(commit1, 100);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
     client.insert(writeRecords, commit1).collect();
@@ -482,7 +483,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     // Write 1 (only inserts)
     dataGen = new HoodieTestDataGenerator(new String[] {"partition_path=" + DEPRECATED_DEFAULT_PARTITION_PATH});
     String commit1 = "005";
-    client.startCommitWithTime(commit1);
+    WriteClientTestUtils.startCommitWithTime(client, commit1);
     List<HoodieRecord> records = dataGen.generateInserts(commit1, 100);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
     client.insert(writeRecords, commit1).collect();
@@ -811,7 +812,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).withRollbackUsingMarkers(enableMarkedBasedRollback).withProps(params).build();
     SparkRDDWriteClient client = getHoodieWriteClient(cfg);
 
-    client.startCommitWithTime(newCommitTime);
+    WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
     List<HoodieRecord> records = dataGen.generateInsertsContainsAllPartitions(newCommitTime, 2);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
@@ -875,7 +876,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
      * Write 1 (only inserts)
      */
     String newCommitTime = "001";
-    client.startCommitWithTime(newCommitTime);
+    WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
     List<HoodieRecord> records = dataGen.generateInsertsContainsAllPartitions(newCommitTime, 2);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
     JavaRDD<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime);
@@ -885,7 +886,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
      * Write 2 (updates)
      */
     newCommitTime = "002";
-    client.startCommitWithTime(newCommitTime);
+    WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
     List<HoodieRecord> records2 = dataGen.generateUpdates(newCommitTime, records);
     statuses = client.upsert(jsc.parallelize(records2, 1), newCommitTime);

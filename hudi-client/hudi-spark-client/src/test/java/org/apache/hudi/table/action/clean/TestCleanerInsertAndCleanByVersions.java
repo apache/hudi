@@ -21,6 +21,7 @@ package org.apache.hudi.table.action.clean;
 
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
@@ -174,7 +175,7 @@ public class TestCleanerInsertAndCleanByVersions extends SparkClientFunctionalTe
       // Keep doing some writes and clean inline. Make sure we have expected number of files
       // remaining.
       for (String newInstantTime : instantTimes) {
-        client.startCommitWithTime(newInstantTime);
+        WriteClientTestUtils.startCommitWithTime(client, newInstantTime);
         List<HoodieRecord> records = recordUpsertGenWrappedFunction.apply(newInstantTime, BATCH_SIZE);
 
         List<WriteStatus> statuses = upsertFn.apply(client, jsc().parallelize(records, PARALLELISM), newInstantTime).collect();

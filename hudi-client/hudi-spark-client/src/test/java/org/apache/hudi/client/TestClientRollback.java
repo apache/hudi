@@ -105,7 +105,7 @@ public class TestClientRollback extends HoodieClientTestBase {
        * Write 1 (only inserts)
        */
       String newCommitTime = "001";
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
       JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
@@ -117,7 +117,7 @@ public class TestClientRollback extends HoodieClientTestBase {
        * Write 2 (updates)
        */
       newCommitTime = "002";
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
       records = dataGen.generateUpdates(newCommitTime, records);
       statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
@@ -130,7 +130,7 @@ public class TestClientRollback extends HoodieClientTestBase {
        * Write 3 (updates)
        */
       newCommitTime = "003";
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
       records = dataGen.generateUpdates(newCommitTime, records);
       statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
@@ -157,7 +157,7 @@ public class TestClientRollback extends HoodieClientTestBase {
        * Write 4 (updates)
        */
       newCommitTime = "004";
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
       records = dataGen.generateUpdates(newCommitTime, records);
       statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
@@ -221,7 +221,7 @@ public class TestClientRollback extends HoodieClientTestBase {
   }
 
   private List<HoodieRecord> updateRecords(SparkRDDWriteClient client, List<HoodieRecord> records, String newCommitTime) throws IOException {
-    client.startCommitWithTime(newCommitTime);
+    WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
     List<HoodieRecord> recs = dataGen.generateUpdates(newCommitTime, records);
     List<WriteStatus> statuses = client.upsert(jsc.parallelize(recs, 1), newCommitTime).collect();
     assertNoWriteErrors(statuses);
@@ -241,7 +241,7 @@ public class TestClientRollback extends HoodieClientTestBase {
        * Write 1 (only inserts)
        */
       String newCommitTime = "001";
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
       JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
@@ -286,7 +286,7 @@ public class TestClientRollback extends HoodieClientTestBase {
        * Write 1 (only inserts)
        */
       String newCommitTime = "001";
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
       JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
@@ -298,7 +298,7 @@ public class TestClientRollback extends HoodieClientTestBase {
        * Write 2 (updates)
        */
       newCommitTime = "002";
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
       records = dataGen.generateUpdates(newCommitTime, records);
       statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
@@ -311,7 +311,7 @@ public class TestClientRollback extends HoodieClientTestBase {
        * Write 3 (updates)
        */
       newCommitTime = "003";
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
       records = dataGen.generateUpdates(newCommitTime, records);
       statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
@@ -338,7 +338,7 @@ public class TestClientRollback extends HoodieClientTestBase {
        * Write 4 (updates)
        */
       newCommitTime = "004";
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
       records = dataGen.generateUpdates(newCommitTime, records);
       statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
@@ -657,7 +657,7 @@ public class TestClientRollback extends HoodieClientTestBase {
 
       final String commitTime4 = "20160506030621";
       try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
-        client.startCommitWithTime(commitTime4);
+        WriteClientTestUtils.startCommitWithTime(client, commitTime4);
         // Check results, nothing changed
         assertTrue(testTable.commitExists(commitTime1));
         assertTrue(testTable.inflightCommitExists(commitTime2));
@@ -674,7 +674,7 @@ public class TestClientRollback extends HoodieClientTestBase {
           .withMetadataConfig(HoodieMetadataConfig.newBuilder().withMetadataIndexColumnStats(false).build()).build();
       final String commitTime5 = "20160506030631";
       try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
-        client.startCommitWithTime(commitTime5);
+        WriteClientTestUtils.startCommitWithTime(client, commitTime5);
         assertTrue(testTable.commitExists(commitTime1));
         assertFalse(testTable.inflightCommitExists(commitTime2));
         assertFalse(testTable.inflightCommitExists(commitTime3));

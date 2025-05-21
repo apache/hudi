@@ -19,6 +19,7 @@
 package org.apache.hudi.index.hbase;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -176,7 +177,7 @@ public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness 
       assertEquals(0, records1.filter(record -> record.isCurrentLocationKnown()).count());
 
       // Insert 200 records
-      writeClient.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(writeClient, newCommitTime);
       JavaRDD<WriteStatus> writeStatues = writeClient.upsert(writeRecords, newCommitTime);
       assertNoWriteErrors(writeStatues.collect());
 
@@ -242,7 +243,7 @@ public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness 
 
     HoodieWriteConfig config = getConfigBuilder(100, false, false).build();
     SparkRDDWriteClient writeClient = getHoodieWriteClient(config);
-    writeClient.startCommitWithTime(newCommitTime);
+    WriteClientTestUtils.startCommitWithTime(writeClient, newCommitTime);
     JavaRDD<WriteStatus> writeStatues = writeClient.upsert(oldWriteRecords, newCommitTime);
     writeClient.commit(newCommitTime, writeStatues);
     assertNoWriteErrors(writeStatues.collect());
@@ -253,7 +254,7 @@ public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness 
     assertEquals(numRecords, notAllowPathChangeRecords.stream().count());
 
     String newCommitTime1 = "002";
-    writeClient.startCommitWithTime(newCommitTime1);
+    WriteClientTestUtils.startCommitWithTime(writeClient, newCommitTime1);
     JavaRDD<WriteStatus> writeStatues1 = writeClient.upsert(newWriteRecords, newCommitTime1);
     writeClient.commit(newCommitTime1, writeStatues1);
     assertNoWriteErrors(writeStatues1.collect());
@@ -280,7 +281,7 @@ public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness 
 
     HoodieWriteConfig config = getConfigBuilder(100, true, false).build();
     SparkRDDWriteClient writeClient = getHoodieWriteClient(config);
-    writeClient.startCommitWithTime(newCommitTime);
+    WriteClientTestUtils.startCommitWithTime(writeClient, newCommitTime);
     JavaRDD<WriteStatus> writeStatues = writeClient.upsert(oldWriteRecords, newCommitTime);
     writeClient.commit(newCommitTime, writeStatues);
     assertNoWriteErrors(writeStatues.collect());
@@ -292,7 +293,7 @@ public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness 
     assertEquals(numRecords, pathChangeRecords.stream().filter(HoodieRecord::isCurrentLocationKnown).count());
 
     String newCommitTime1 = "002";
-    writeClient.startCommitWithTime(newCommitTime1);
+    WriteClientTestUtils.startCommitWithTime(writeClient, newCommitTime1);
     JavaRDD<WriteStatus> writeStatues1 = writeClient.upsert(newWriteRecords, newCommitTime1);
     writeClient.commit(newCommitTime1, writeStatues1);
     assertNoWriteErrors(writeStatues1.collect());
@@ -315,7 +316,7 @@ public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness 
     HoodieWriteConfig config = getConfig();
     SparkHoodieHBaseIndex index = new SparkHoodieHBaseIndex(config);
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config)) {
-      writeClient.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(writeClient, newCommitTime);
       metaClient = HoodieTableMetaClient.reload(metaClient);
       HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
 
@@ -780,7 +781,7 @@ public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness 
       JavaRDD<HoodieRecord> records1 = tagLocation(index, writeRecords, hoodieTable);
       assertEquals(0, records1.filter(record -> record.isCurrentLocationKnown()).count());
       // Insert 200 records
-      writeClient.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(writeClient, newCommitTime);
       JavaRDD<WriteStatus> writeStatues = writeClient.upsert(writeRecords, newCommitTime);
       assertNoWriteErrors(writeStatues.collect());
 
@@ -821,7 +822,7 @@ public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness 
       assertEquals(0, records1.filter(record -> record.isCurrentLocationKnown()).count());
 
       // Insert records
-      writeClient.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(writeClient, newCommitTime);
       JavaRDD<WriteStatus> writeStatues = writeClient.upsert(writeRecords, newCommitTime);
       assertNoWriteErrors(writeStatues.collect());
       writeClient.commit(newCommitTime, writeStatues);

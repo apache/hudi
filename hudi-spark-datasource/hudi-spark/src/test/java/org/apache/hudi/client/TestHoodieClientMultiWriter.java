@@ -309,7 +309,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
       final SparkRDDWriteClient client22 = getHoodieWriteClient(writeConfig22);
       JavaRDD<HoodieRecord> emptyRDD = jsc.emptyRDD();
       // Perform upsert with empty RDD
-      client22.startCommitWithTime("0013");
+      WriteClientTestUtils.startCommitWithTime(client22, "0013");
       JavaRDD<WriteStatus> writeStatusRDD = client22.upsert(emptyRDD, "0013");
       client22.commit("0013", writeStatusRDD);
       totalCommits += 1;
@@ -1301,7 +1301,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
   private void ingestBatch(Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieRecord>, String> writeFn,
                            SparkRDDWriteClient writeClient, String commitTime, JavaRDD<HoodieRecord> records,
                            CountDownLatch countDownLatch) throws IOException, InterruptedException {
-    writeClient.startCommitWithTime(commitTime);
+    WriteClientTestUtils.startCommitWithTime(writeClient, commitTime);
     countDownLatch.countDown();
     countDownLatch.await();
     JavaRDD<WriteStatus> statusJavaRDD = writeFn.apply(writeClient, records, commitTime);
@@ -1362,7 +1362,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
   private JavaRDD<WriteStatus> startCommitForUpdate(HoodieWriteConfig writeConfig, SparkRDDWriteClient writeClient,
                                                     String newCommitTime, int numRecords) throws Exception {
     // Start the new commit
-    writeClient.startCommitWithTime(newCommitTime);
+    WriteClientTestUtils.startCommitWithTime(writeClient, newCommitTime);
 
     // Prepare update records
     final Function2<List<HoodieRecord>, String, Integer> recordGenFunction =

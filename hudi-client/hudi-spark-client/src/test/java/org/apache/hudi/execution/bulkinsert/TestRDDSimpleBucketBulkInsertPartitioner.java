@@ -18,6 +18,7 @@
 
 package org.apache.hudi.execution.bulkinsert;
 
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -111,12 +112,12 @@ public class TestRDDSimpleBucketBulkInsertPartitioner extends HoodieSparkClientT
     }
 
     // 1st write, will create new bucket files based on the records
-    getHoodieWriteClient(config).startCommitWithTime("0");
+    WriteClientTestUtils.startCommitWithTime(getHoodieWriteClient(config), "0");
     List<WriteStatus> writeStatuses = getHoodieWriteClient(config).bulkInsert(HoodieJavaRDD.getJavaRDD(javaRDD), "0").collect();
     Map<String, WriteStatus> writeStatusesMap = new HashMap<>();
     writeStatuses.forEach(ws -> writeStatusesMap.put(ws.getFileId(), ws));
 
-    getHoodieWriteClient(config).startCommitWithTime("1");
+    WriteClientTestUtils.startCommitWithTime(getHoodieWriteClient(config),"1");
     // 2nd write of the same records, all records should be mapped to the same bucket files for MOR,
     // for COW with disabled Spark native row writer, 2nd bulk insert should fail with exception
     try {

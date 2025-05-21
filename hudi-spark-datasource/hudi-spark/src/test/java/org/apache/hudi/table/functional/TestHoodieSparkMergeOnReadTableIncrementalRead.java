@@ -20,6 +20,7 @@
 package org.apache.hudi.table.functional;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -92,7 +93,7 @@ public class TestHoodieSparkMergeOnReadTableIncrementalRead extends SparkClientF
        * Write 1 (only inserts)
        */
       String commitTime1 = "001";
-      client.startCommitWithTime(commitTime1);
+      WriteClientTestUtils.startCommitWithTime(client, commitTime1);
 
       List<HoodieRecord> records001 = dataGen.generateInserts(commitTime1, 200);
       Stream<HoodieBaseFile> dataFiles = insertRecordsToMORTable(metaClient, records001, client, cfg, commitTime1);
@@ -115,7 +116,7 @@ public class TestHoodieSparkMergeOnReadTableIncrementalRead extends SparkClientF
        * Write 2 (updates)
        */
       String updateTime = "004";
-      client.startCommitWithTime(updateTime);
+      WriteClientTestUtils.startCommitWithTime(client, updateTime);
       List<HoodieRecord> records004 = dataGen.generateUpdates(updateTime, 100);
       updateRecordsInMORTable(metaClient, records004, client, cfg, updateTime, false);
 
@@ -143,7 +144,7 @@ public class TestHoodieSparkMergeOnReadTableIncrementalRead extends SparkClientF
       // write 3 - more inserts
       String insertsTime = "006";
       List<HoodieRecord> records006 = dataGen.generateInserts(insertsTime, 200);
-      client.startCommitWithTime(insertsTime);
+      WriteClientTestUtils.startCommitWithTime(client, insertsTime);
       dataFiles = insertRecordsToMORTable(metaClient, records006, client, cfg, insertsTime);
       assertTrue(dataFiles.findAny().isPresent(), "should list the base files we wrote in the delta commit");
 

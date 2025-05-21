@@ -22,6 +22,7 @@ package org.apache.hudi.table.action.compact;
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.FileSlice;
@@ -178,7 +179,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config)) {
       // insert 100 records.
       String newCommitTime = "100";
-      writeClient.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(writeClient, newCommitTime);
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
       JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
@@ -186,7 +187,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
 
       // create one inflight instance.
       newCommitTime = "102";
-      writeClient.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(writeClient, newCommitTime);
       metaClient.getActiveTimeline().transitionRequestedToInflight(INSTANT_GENERATOR.createNewInstant(State.REQUESTED,
           HoodieTimeline.DELTA_COMMIT_ACTION, newCommitTime), Option.empty());
 
@@ -202,7 +203,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config)) {
       // insert 100 records.
       String newCommitTime = "100";
-      writeClient.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(writeClient, newCommitTime);
 
       // commit 1
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
@@ -214,7 +215,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
 
       // commit 3 (inflight)
       newCommitTime = "102";
-      writeClient.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(writeClient, newCommitTime);
       metaClient.getActiveTimeline().transitionRequestedToInflight(INSTANT_GENERATOR.createNewInstant(State.REQUESTED,
           HoodieTimeline.DELTA_COMMIT_ACTION, newCommitTime), Option.empty());
 
@@ -233,7 +234,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
         .build();
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config)) {
       String newCommitTime = "100";
-      writeClient.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(writeClient, newCommitTime);
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 1000);
       JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
@@ -267,7 +268,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
 
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config)) {
       String newCommitTime = writeClient.createNewInstantTime();
-      writeClient.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(writeClient, newCommitTime);
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
       JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
@@ -320,7 +321,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
         .withMetricsConfig(getMetricsConfig()).build();
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config)) {
       String newCommitTime = writeClient.createNewInstantTime();
-      writeClient.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(writeClient, newCommitTime);
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 10);
       JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
@@ -404,7 +405,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
   private void prepareRecords(SparkRDDWriteClient writeClient, HoodieWriteConfig config, String[] partitions) throws Exception {
     initTestDataGenerator(partitions);
     String newCommitTime = writeClient.createNewInstantTime();
-    writeClient.startCommitWithTime(newCommitTime);
+    WriteClientTestUtils.startCommitWithTime(writeClient, newCommitTime);
 
     // insert
     List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
@@ -436,7 +437,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
     HoodieIndex index = new HoodieBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
     JavaRDD<HoodieRecord> updatedTaggedRecordsRDD = tagLocation(index, updatedRecordsRDD, table);
 
-    writeClient.startCommitWithTime(newCommitTime);
+    WriteClientTestUtils.startCommitWithTime(writeClient, newCommitTime);
     writeClient.upsertPreppedRecords(updatedTaggedRecordsRDD, newCommitTime).collect();
     metaClient.reloadActiveTimeline();
   }

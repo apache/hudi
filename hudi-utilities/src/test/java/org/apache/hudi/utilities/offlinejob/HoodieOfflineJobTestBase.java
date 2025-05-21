@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.offlinejob;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -86,7 +87,7 @@ public class HoodieOfflineJobTestBase extends UtilitiesTestBase {
     metaClient = HoodieTableMetaClient.reload(metaClient);
     JavaRDD records = jsc.parallelize(dataGen.generateInserts(instant, numRecords), 2);
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    client.startCommitWithTime(instant);
+    WriteClientTestUtils.startCommitWithTime(client, instant);
     List<WriteStatus> writeStatuses;
     if (isUpsert) {
       writeStatuses = client.upsert(records, instant).collect();

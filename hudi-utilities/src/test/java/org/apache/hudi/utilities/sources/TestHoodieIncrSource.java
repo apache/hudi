@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.BaseHoodieTableFileIndex;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -757,7 +758,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
                                    List<HoodieRecord> insertRecords,
                                    String commit,
                                    int numRecords) throws IOException {
-    writeClient.startCommitWithTime(commit);
+    WriteClientTestUtils.startCommitWithTime(writeClient, commit);
     // Only supports INSERT, UPSERT, and BULK_INSERT
     List<HoodieRecord> records = writeOperationType == WriteOperationType.UPSERT
         ? dataGen.generateUpdates(commit, insertRecords) : dataGen.generateInserts(commit, numRecords);
@@ -779,7 +780,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
                                                WriteOperationType writeOperationType,
                                                String commit,
                                                String partitionPath) {
-    writeClient.startCommitWithTime(commit);
+    WriteClientTestUtils.startCommitWithTime(writeClient, commit);
     List<HoodieRecord> records = dataGen.generateInsertsForPartition(commit, 100, partitionPath);
     JavaRDD<WriteStatus> result = writeOperationType == WriteOperationType.BULK_INSERT
         ? writeClient.bulkInsert(jsc().parallelize(records, 1), commit)
