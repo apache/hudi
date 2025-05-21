@@ -237,6 +237,7 @@ class TestTableServicePlanConflictDetection extends HoodieCommonTestHarness {
     commitMetadata.addWriteStat(partitionPath, writeStat2);
     commitMetadata.setOperationType(WriteOperationType.INSERT);
     metaClient.getActiveTimeline().transitionRequestedToInflight(commitInstant, Option.of(commitMetadata));
+    metaClient.reloadActiveTimeline();
 
     TableServicePlanConflictDetection conflictDetection = new TableServicePlanConflictDetection(conflictResolutionStrategy, metaClient, lastKnownCompletionTime);
     if (isClusteringPlan) {

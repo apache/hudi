@@ -90,6 +90,7 @@ public class TableServicePlanConflictDetection {
   private Stream<HoodieInstant> generateCandidateInstants() {
     Stream<HoodieInstant> commitsCompletedDuringPlanning = metaClient
         .getCommitsTimeline()
+        .filterCompletedInstants()
         .findInstantsModifiedAfterByCompletionTime(lastKnownCompletionTime)
         .getInstantsAsStream();
     Stream<HoodieInstant> newClusteringPlans = metaClient
