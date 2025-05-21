@@ -174,7 +174,6 @@ public class CompactionTestBase extends HoodieClientTestBase {
   /**
    * Tries to schedule a compaction plan and returns the latest pending compaction instant time.
    *
-   * @param compactionInstantTime The given compaction instant time
    * @param client                The write client
    * @param cfg                   The write config
    *

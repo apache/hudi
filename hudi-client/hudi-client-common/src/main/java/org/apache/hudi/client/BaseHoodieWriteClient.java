@@ -868,6 +868,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * configurations and CleaningPolicy used. (typically files that no longer can be used by a running query can be
    * cleaned)
    */
+  @Deprecated
   public HoodieCleanMetadata clean(String cleanInstantTime) throws HoodieIOException {
     return clean(cleanInstantTime, true, false);
   }
@@ -875,43 +876,24 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   /**
    * Clean up any stale/old files/data lying around (either on file storage or index storage) based on the
    * configurations and CleaningPolicy used. (typically files that no longer can be used by a running query can be
-   * cleaned)
-   * @param cleanInstantTime instant time for clean.
-   * @param skipLocking if this is triggered by another parent transaction, locking can be skipped.
-   * @return instance of {@link HoodieCleanMetadata}.
-   */
-  @Deprecated
-  public HoodieCleanMetadata clean(String cleanInstantTime, boolean skipLocking) throws HoodieIOException {
-    return clean(cleanInstantTime, true, false);
-  }
-
-  /**
-   * Clean up any stale/old files/data lying around (either on file storage or index storage) based on the
-   * configurations and CleaningPolicy used. (typically files that no longer can be used by a running query can be
    * cleaned). This API provides the flexibility to schedule clean instant asynchronously via
-   * {@link BaseHoodieWriteClient#scheduleTableService(String, Option, TableServiceType)} and disable inline scheduling
+   * {@link BaseHoodieWriteClient#scheduleTableService(Option, TableServiceType)} and disable inline scheduling
    * of clean.
    * @param cleanInstantTime instant time for clean.
    * @param scheduleInline true if needs to be scheduled inline. false otherwise.
    * @param skipLocking if this is triggered by another parent transaction, locking can be skipped.
    */
+  @Deprecated
   public HoodieCleanMetadata clean(String cleanInstantTime, boolean scheduleInline, boolean skipLocking) throws HoodieIOException {
-    return tableServiceClient.clean(cleanInstantTime, scheduleInline);
+    return tableServiceClient.clean(Option.of(cleanInstantTime), scheduleInline);
+  }
+
+  public HoodieCleanMetadata clean(boolean scheduleInline) {
+    return tableServiceClient.clean(Option.empty(), scheduleInline);
   }
 
   public HoodieCleanMetadata clean() {
-    return clean(createNewInstantTime());
-  }
-
-  /**
-   * Triggers clean for the table. This refers to Clean up any stale/old files/data lying around (either on file storage or index storage) based on the
-   *    * configurations and CleaningPolicy used.
-   * @param skipLocking if this is triggered by another parent transaction, locking can be skipped.
-   * @return instance of {@link HoodieCleanMetadata}.
-   */
-  @Deprecated
-  public HoodieCleanMetadata clean(boolean skipLocking) {
-    return clean(createNewInstantTime());
+    return tableServiceClient.clean(Option.empty(), true);
   }
 
   /**
@@ -1015,8 +997,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param extraMetadata Extra Metadata to be stored
    */
   public Option<String> scheduleCompaction(Option<Map<String, String>> extraMetadata) throws HoodieIOException {
-    String instantTime = createNewInstantTime();
-    return scheduleCompactionAtInstant(instantTime, extraMetadata) ? Option.of(instantTime) : Option.empty();
+    return scheduleTableService(Option.empty(), extraMetadata, TableServiceType.COMPACT);
   }
 
   /**
@@ -1024,8 +1005,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param instantTime Compaction Instant Time
    * @param extraMetadata Extra Metadata to be stored
    */
+  @Deprecated
   public boolean scheduleCompactionAtInstant(String instantTime, Option<Map<String, String>> extraMetadata) throws HoodieIOException {
-    return scheduleTableService(instantTime, extraMetadata, TableServiceType.COMPACT).isPresent();
+    return scheduleTableService(Option.of(instantTime), extraMetadata, TableServiceType.COMPACT).isPresent();
   }
 
   /**
@@ -1141,8 +1123,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param extraMetadata Extra Metadata to be stored
    */
   public Option<String> scheduleLogCompaction(Option<Map<String, String>> extraMetadata) throws HoodieIOException {
-    String instantTime = createNewInstantTime();
-    return scheduleLogCompactionAtInstant(instantTime, extraMetadata) ? Option.of(instantTime) : Option.empty();
+    return scheduleTableService(Option.empty(), extraMetadata, TableServiceType.LOG_COMPACT);
   }
 
   /**
@@ -1151,7 +1132,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param extraMetadata Extra Metadata to be stored
    */
   public boolean scheduleLogCompactionAtInstant(String instantTime, Option<Map<String, String>> extraMetadata) throws HoodieIOException {
-    return scheduleTableService(instantTime, extraMetadata, TableServiceType.LOG_COMPACT).isPresent();
+    return scheduleTableService(Option.of(instantTime), extraMetadata, TableServiceType.LOG_COMPACT).isPresent();
   }
 
   /**
@@ -1208,8 +1189,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param extraMetadata Extra Metadata to be stored
    */
   public Option<String> scheduleClustering(Option<Map<String, String>> extraMetadata) throws HoodieIOException {
-    String instantTime = createNewInstantTime();
-    return scheduleClusteringAtInstant(instantTime, extraMetadata) ? Option.of(instantTime) : Option.empty();
+    return scheduleTableService(Option.empty(), extraMetadata, TableServiceType.CLUSTER);
   }
 
   /**
@@ -1217,17 +1197,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param instantTime clustering Instant Time
    * @param extraMetadata Extra Metadata to be stored
    */
+  @Deprecated
   public boolean scheduleClusteringAtInstant(String instantTime, Option<Map<String, String>> extraMetadata) throws HoodieIOException {
-    return scheduleTableService(instantTime, extraMetadata, TableServiceType.CLUSTER).isPresent();
-  }
-
-  /**
-   * Schedules a new cleaning instant with passed-in instant time.
-   * @param instantTime cleaning Instant Time
-   * @param extraMetadata Extra Metadata to be stored
-   */
-  protected boolean scheduleCleaningAtInstant(String instantTime, Option<Map<String, String>> extraMetadata) throws HoodieIOException {
-    return scheduleTableService(instantTime, extraMetadata, TableServiceType.CLEAN).isPresent();
+    return scheduleTableService(Option.of(instantTime), extraMetadata, TableServiceType.CLUSTER).isPresent();
   }
 
   /**
@@ -1256,8 +1228,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @return The given instant time option or empty if no table service plan is scheduled
    */
   public Option<String> scheduleTableService(Option<Map<String, String>> extraMetadata, TableServiceType tableServiceType) {
-    String instantTime = createNewInstantTime();
-    return scheduleTableService(instantTime, extraMetadata, tableServiceType);
+    return scheduleTableService(Option.empty(), extraMetadata, tableServiceType);
   }
 
   /**
@@ -1268,8 +1239,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    *
    * @return The given instant time option or empty if no table service plan is scheduled
    */
-  public Option<String> scheduleTableService(String instantTime, Option<Map<String, String>> extraMetadata, TableServiceType tableServiceType) {
-    return tableServiceClient.scheduleTableService(instantTime, extraMetadata, tableServiceType);
+  @VisibleForTesting
+  Option<String> scheduleTableService(Option<String> instantTime, Option<Map<String, String>> extraMetadata, TableServiceType tableServiceType) {
+    return tableServiceClient.scheduleTableServiceInternal(instantTime, extraMetadata, tableServiceType);
   }
 
   public HoodieMetrics getMetrics() {

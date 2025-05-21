@@ -108,15 +108,6 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseTableServi
     Option<HoodieCompactionPlan> option = Option.empty();
     if (plan != null && nonEmpty(plan.getOperations())) {
       extraMetadata.ifPresent(plan::setExtraMetadata);
-      if (operationType.equals(WriteOperationType.COMPACT)) {
-        HoodieInstant compactionInstant = instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED,
-            HoodieTimeline.COMPACTION_ACTION, instantTime);
-        table.getActiveTimeline().saveToCompactionRequested(compactionInstant, plan);
-      } else {
-        HoodieInstant logCompactionInstant = instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED,
-            HoodieTimeline.LOG_COMPACTION_ACTION, instantTime);
-        table.getActiveTimeline().saveToLogCompactionRequested(logCompactionInstant, plan);
-      }
       option = Option.of(plan);
     }
 

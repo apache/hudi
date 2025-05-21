@@ -81,7 +81,7 @@ class TestCleanPlanActionExecutor {
     HoodieEngineContext engineContext = new HoodieLocalEngineContext(new HadoopStorageConfiguration(false));
     CleanPlanActionExecutor<?, ?, ?, ?> executor = new CleanPlanActionExecutor<>(engineContext, HoodieWriteConfig.newBuilder().withPath("file://tmp").build(), table, "002", Option.empty());
 
-    Option<HoodieCleanerPlan> actualPlan = executor.requestClean("002");
+    Option<HoodieCleanerPlan> actualPlan = executor.requestClean();
     assertEquals(Option.of(cleanerPlan), actualPlan);
     verify(activeTimeline).deleteEmptyInstantIfExists(lastCompletedInstant);
   }
@@ -104,7 +104,7 @@ class TestCleanPlanActionExecutor {
     HoodieEngineContext engineContext = new HoodieLocalEngineContext(new HadoopStorageConfiguration(false));
     CleanPlanActionExecutor<?, ?, ?, ?> executor = new CleanPlanActionExecutor<>(engineContext, HoodieWriteConfig.newBuilder().withPath("file://tmp").build(), table, "002", Option.empty());
 
-    assertThrows(HoodieIOException.class, () -> executor.requestClean("002"));
+    assertThrows(HoodieIOException.class, executor::requestClean);
   }
 
   @Test
@@ -125,7 +125,7 @@ class TestCleanPlanActionExecutor {
     CleanPlanActionExecutor<?, ?, ?, ?> executor = spy(new CleanPlanActionExecutor<>(engineContext, HoodieWriteConfig.newBuilder().withPath("file://tmp").build(), table, "002", Option.empty()));
     HoodieCleanerPlan emptyPlan = new HoodieCleanerPlan();
     doReturn(emptyPlan).when(executor).requestClean(engineContext);
-    assertEquals(Option.empty(), executor.requestClean("002"));
+    assertEquals(Option.empty(), executor.requestClean());
   }
 
   @Test
@@ -141,7 +141,7 @@ class TestCleanPlanActionExecutor {
     CleanPlanActionExecutor<?, ?, ?, ?> executor = spy(new CleanPlanActionExecutor<>(engineContext, HoodieWriteConfig.newBuilder().withPath("file://tmp").build(), table, "002", Option.empty()));
     HoodieCleanerPlan emptyPlan = new HoodieCleanerPlan();
     doReturn(emptyPlan).when(executor).requestClean(engineContext);
-    assertEquals(Option.empty(), executor.requestClean("002"));
+    assertEquals(Option.empty(), executor.requestClean());
   }
 
   private static void mockEmptyLastCompletedClean(HoodieTable table, HoodieInstant lastCompletedInstant, HoodieActiveTimeline activeTimeline) {

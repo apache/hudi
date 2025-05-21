@@ -3499,7 +3499,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         .withProperties(getDisabledRowWriterProperties())
         .build();
     SparkRDDWriteClient clusteringClient = getHoodieWriteClient(clusterWriteCfg);
-    clusteringClient.scheduleTableService("0000003", Option.empty(), TableServiceType.CLUSTER);
+    WriteClientTestUtils.scheduleTableService(clusteringClient, "0000003", Option.empty(), TableServiceType.CLUSTER);
 
     // Execute pending clustering operation
     clusteringClient.cluster("0000003", true);
@@ -3560,7 +3560,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         .withProperties(getDisabledRowWriterProperties())
         .build();
     SparkRDDWriteClient clusteringClient = getHoodieWriteClient(clusterWriteCfg);
-    clusteringClient.scheduleTableService("0000003", Option.empty(), TableServiceType.CLUSTER);
+    WriteClientTestUtils.scheduleTableService(clusteringClient, "0000003", Option.empty(), TableServiceType.CLUSTER);
 
     // Insert second batch 0000004
     commitTime = "0000004";
