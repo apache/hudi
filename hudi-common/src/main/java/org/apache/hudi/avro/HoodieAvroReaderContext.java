@@ -23,8 +23,8 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.model.EventTimeBasedAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
-import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
@@ -136,12 +136,14 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
   public Option<HoodieRecordMerger> getRecordMerger(RecordMergeMode mergeMode, String mergeStrategyId, String mergeImplClasses) {
     switch (mergeMode) {
       case EVENT_TIME_ORDERING:
-        return Option.of(new HoodieAvroRecordMerger());
+        return Option.of(new EventTimeBasedAvroRecordMerger());
       case COMMIT_TIME_ORDERING:
         return Option.of(new OverwriteWithLatestMerger());
       case CUSTOM:
       default:
-        Option<HoodieRecordMerger> recordMerger = HoodieRecordUtils.createValidRecordMerger(EngineType.JAVA, mergeImplClasses, mergeStrategyId);
+        // For custom payloads, merger class is determined by the mergeStrategyId.
+        Option<HoodieRecordMerger> recordMerger = HoodieRecordUtils.createValidRecordMerger(
+            EngineType.JAVA, mergeImplClasses, mergeStrategyId);
         if (recordMerger.isEmpty()) {
           throw new IllegalArgumentException("No valid merger implementation set for `"
               + RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY + "`");

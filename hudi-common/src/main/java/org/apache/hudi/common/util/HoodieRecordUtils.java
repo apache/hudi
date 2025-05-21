@@ -19,12 +19,15 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.common.engine.EngineType;
+import org.apache.hudi.common.model.FirstValueAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.OperationModeAwareness;
+import org.apache.hudi.common.model.PartialUpdateAvroMerger;
+import org.apache.hudi.common.model.PartialUpdateWithNonDefaultValueAvroMerger;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 
@@ -85,11 +88,21 @@ public class HoodieRecordUtils {
   }
 
   public static Option<HoodieRecordMerger> createValidRecordMerger(EngineType engineType,
-                                                                   String mergerImpls, String recordMergerStrategy) {
-    if (recordMergerStrategy.equals(HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID)) {
-      return Option.of(HoodieAvroRecordMerger.INSTANCE);
+                                                                   String mergerImpls,
+                                                                   String recordMergerStrategy) {
+    switch (recordMergerStrategy) {
+      case HoodieRecordMerger.FIRST_VALUE_MERGE_STRATEGY_UUID:
+        return Option.of(FirstValueAvroRecordMerger.INSTANCE);
+      case HoodieRecordMerger.PARTIAL_UPDATE_MERGE_STRATEGY_UUID:
+        return Option.of(PartialUpdateAvroMerger.INSTANCE);
+      case HoodieRecordMerger.PARTIAL_UPDATE_WITH_NON_DEFAULT_VALUE_MERGE_STRATEGY_UUID:
+        return Option.of(PartialUpdateWithNonDefaultValueAvroMerger.INSTANCE);
+      case HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID:
+        return Option.of(HoodieAvroRecordMerger.INSTANCE);
+      default:
+        // General support.
+        return createValidRecordMerger(engineType, ConfigUtils.split2List(mergerImpls), recordMergerStrategy);
     }
-    return createValidRecordMerger(engineType,ConfigUtils.split2List(mergerImpls), recordMergerStrategy);
   }
 
   public static Option<HoodieRecordMerger> createValidRecordMerger(EngineType engineType,
