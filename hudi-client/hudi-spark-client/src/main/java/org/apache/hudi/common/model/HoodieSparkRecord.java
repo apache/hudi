@@ -54,8 +54,6 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Properties;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Function;
 
 import scala.Function1;
 
@@ -80,8 +78,6 @@ import static org.apache.spark.sql.types.DataTypes.StringType;
  *
  */
 public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
-  private static final Map<Pair<StructType, Schema>, Function<InternalRow, GenericRecord>>
-      AVRO_CONVERTER_CACHE = new ConcurrentHashMap<>();
 
   /**
    * Record copy operation to avoid double copying. InternalRow do not need to copy twice.
@@ -316,10 +312,8 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     if (data == null) {
       return Option.empty();
     }
-    GenericRecord convertedRecord = AVRO_CONVERTER_CACHE.computeIfAbsent(Pair.of(schema, recordSchema), pair -> {
-      StructType structType = schema == null ? AvroConversionUtils.convertAvroSchemaToStructType(recordSchema) : schema;
-      return data -> AvroConversionUtils.createInternalRowToAvroConverter(structType, recordSchema, false).apply(data);
-    }).apply(data);
+    StructType structType = schema == null ? AvroConversionUtils.convertAvroSchemaToStructType(recordSchema) : schema;
+    GenericRecord convertedRecord = AvroConversionUtils.createInternalRowToAvroConverter(structType, recordSchema, false).apply(data);
     return Option.of(new HoodieAvroIndexedRecord(key, convertedRecord));
   }
 
