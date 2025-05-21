@@ -394,7 +394,7 @@
     <dependency>
       <groupId>org.apache.parquet</groupId>
       <artifactId>parquet-avro</artifactId>
-      <version>${parquet.version}</version>
+      <version>${parquet.avro.version}</version>
       <scope>compile</scope>
       <exclusions>
         <exclusion>

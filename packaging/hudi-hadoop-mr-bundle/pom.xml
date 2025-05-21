@@ -188,7 +188,7 @@
     <dependency>
       <groupId>org.apache.parquet</groupId>
       <artifactId>parquet-avro</artifactId>
-      <version>${hive.parquet.version}</version>
+      <version>${parquet.avro.version}</version>
       <scope>compile</scope>
     </dependency>
 
