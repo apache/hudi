@@ -77,8 +77,7 @@ public class TestSchemaEvolutionClient extends HoodieJavaClientTestHarness {
   }
 
   private void prepareTable(HoodieJavaWriteClient<RawTripTestPayload> writeClient) throws IOException {
-    String commitTime = "1";
-    writeClient.startCommitWithTime(commitTime);
+    String commitTime = writeClient.startCommit();
     String jsonRow = "{\"_row_key\": \"1\", \"time\": \"2000-01-01T00:00:00.000Z\", \"number\": 1}";
     RawTripTestPayload payload = new RawTripTestPayload(jsonRow);
     HoodieAvroRecord<RawTripTestPayload> record = new HoodieAvroRecord<>(

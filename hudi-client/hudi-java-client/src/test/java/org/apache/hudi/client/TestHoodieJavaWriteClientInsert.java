@@ -163,7 +163,7 @@ public class TestHoodieJavaWriteClientInsert extends HoodieJavaClientTestHarness
     int startInstant = 1;
     String firstCommitTime = makeNewCommitTime(startInstant++, "%09d");
     // First insert
-    writeClient.startCommitWithTime(firstCommitTime);
+    WriteClientTestUtils.startCommitWithTime(writeClient, firstCommitTime);
     writeClient.insert(records1, firstCommitTime);
 
     String partitionPath = "2021/09/11";
@@ -190,7 +190,7 @@ public class TestHoodieJavaWriteClientInsert extends HoodieJavaClientTestHarness
     records2.add(new HoodieAvroRecord(new HoodieKey(insertRow2.getRowKey(), insertRow2.getPartitionPath()), insertRow2));
 
     String newCommitTime = makeNewCommitTime(startInstant++, "%09d");
-    writeClient.startCommitWithTime(newCommitTime);
+    WriteClientTestUtils.startCommitWithTime(writeClient, newCommitTime);
     // Second insert is the same as the _row_key of the first one,test allowDuplicateInserts
     writeClient.insert(records2, newCommitTime);
 
@@ -231,7 +231,7 @@ public class TestHoodieJavaWriteClientInsert extends HoodieJavaClientTestHarness
     List<HoodieRecord> records1 = dataGenerator.generateInserts(firstCommitTime, 100);
 
     // First insert
-    writeClient.startCommitWithTime(firstCommitTime);
+    WriteClientTestUtils.startCommitWithTime(writeClient, firstCommitTime);
     writeClient.insert(records1, firstCommitTime);
 
     FileStatus[] allFiles = getIncrementalFiles(partitionPath, "0", -1);
@@ -246,7 +246,7 @@ public class TestHoodieJavaWriteClientInsert extends HoodieJavaClientTestHarness
 
     String newCommitTime = makeNewCommitTime(startInstant++, "%09d");
     List<HoodieRecord> records2 = dataGenerator.generateUpdates(newCommitTime, 100);
-    writeClient.startCommitWithTime(newCommitTime);
+    WriteClientTestUtils.startCommitWithTime(writeClient, newCommitTime);
     // Second insert is the same as the _row_key of the first one,test allowDuplicateInserts
     writeClient.insert(records2, newCommitTime);
 

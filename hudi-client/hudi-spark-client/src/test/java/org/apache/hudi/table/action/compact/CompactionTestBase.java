@@ -22,6 +22,7 @@ import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
@@ -130,7 +131,7 @@ public class CompactionTestBase extends HoodieClientTestBase {
       String firstInstant = deltaInstants.get(0);
       deltaInstants = deltaInstants.subList(1, deltaInstants.size());
       JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
-      client.startCommitWithTime(firstInstant);
+      WriteClientTestUtils.startCommitWithTime(client, firstInstant);
       JavaRDD<WriteStatus> statuses = client.upsert(writeRecords, firstInstant);
       List<WriteStatus> statusList = statuses.collect();
 
@@ -260,7 +261,7 @@ public class CompactionTestBase extends HoodieClientTestBase {
                                                     HoodieTableMetaClient metaClient, HoodieWriteConfig cfg, boolean skipCommit) {
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
 
-    client.startCommitWithTime(instantTime);
+    WriteClientTestUtils.startCommitWithTime(client, instantTime);
 
     JavaRDD<WriteStatus> statuses = client.upsert(writeRecords, instantTime);
     List<WriteStatus> statusList = statuses.collect();

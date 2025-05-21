@@ -22,6 +22,7 @@ package org.apache.hudi.table.action.compact;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -159,7 +160,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
       assertEquals(inflightInstantTime, inflightInstant.requestedTime(), "inflight instant has expected instant time");
 
       // This should rollback
-      client.startCommitWithTime(nextInflightInstantTime);
+      WriteClientTestUtils.startCommitWithTime(client, nextInflightInstantTime);
 
       // Validate
       metaClient = HoodieTestUtils.createMetaClient(storageConf.newInstance(), cfg.getBasePath());

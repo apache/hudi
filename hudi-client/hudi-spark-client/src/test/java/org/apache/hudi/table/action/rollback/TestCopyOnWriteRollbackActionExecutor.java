@@ -22,6 +22,7 @@ import org.apache.hudi.avro.model.HoodieRollbackPartitionMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieRollbackRequest;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.HoodieRollbackStat;
@@ -67,8 +68,8 @@ import java.util.stream.IntStream;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH;
-import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -174,14 +175,14 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
     SparkRDDWriteClient client = getHoodieWriteClient(cfg);
 
     String newCommitTime = "001";
-    client.startCommitWithTime(newCommitTime);
+    WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
     List<HoodieRecord> records = dataGen.generateInsertsContainsAllPartitions(newCommitTime, 3);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
     JavaRDD<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime);
     Assertions.assertNoWriteErrors(statuses.collect());
 
     newCommitTime = "002";
-    client.startCommitWithTime(newCommitTime);
+    WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
     records = dataGen.generateUpdates(newCommitTime, records);
     statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime);
     Assertions.assertNoWriteErrors(statuses.collect());

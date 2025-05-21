@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 
 public class WriteClientTestUtils {
@@ -26,5 +27,10 @@ public class WriteClientTestUtils {
 
   public static void startCommitWithTime(BaseHoodieWriteClient<?, ?, ?, ?> writeClient, String instantTime, String actionType) {
     writeClient.startCommit(Option.of(instantTime), actionType, writeClient.createMetaClient(false));
+  }
+
+  public static void startCommitWithTime(BaseHoodieWriteClient<?, ?, ?, ?> writeClient, String instantTime) {
+    HoodieTableMetaClient metaClient = writeClient.createMetaClient(false);
+    writeClient.startCommit(Option.of(instantTime), metaClient.getCommitActionType(), metaClient);
   }
 }

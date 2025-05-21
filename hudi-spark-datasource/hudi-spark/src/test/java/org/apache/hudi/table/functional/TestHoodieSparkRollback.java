@@ -21,6 +21,7 @@ package org.apache.hudi.table.functional;
 
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.functional.TestHoodieBackedMetadata;
@@ -77,7 +78,7 @@ public class TestHoodieSparkRollback extends SparkClientFunctionalTestHarness {
     /*
      * Write 1 (only inserts, written as base file)
      */
-    client.startCommitWithTime(commitTime);
+    WriteClientTestUtils.startCommitWithTime(client, commitTime);
 
     List<HoodieRecord> records = dataGen.generateInserts(commitTime, 20);
     JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
@@ -89,7 +90,7 @@ public class TestHoodieSparkRollback extends SparkClientFunctionalTestHarness {
 
   protected List<WriteStatus> updateRecords(SparkRDDWriteClient client, HoodieTestDataGenerator dataGen, String commitTime,
                                           List<HoodieRecord> records) throws IOException {
-    client.startCommitWithTime(commitTime);
+    WriteClientTestUtils.startCommitWithTime(client, commitTime);
 
     records = dataGen.generateUpdates(commitTime, records);
     JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
