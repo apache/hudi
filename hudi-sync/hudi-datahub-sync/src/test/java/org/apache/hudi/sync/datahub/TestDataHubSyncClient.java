@@ -134,7 +134,8 @@ public class TestDataHubSyncClient {
     expectedProposalsMap.put("urn:li:dataset:(urn:li:dataPlatform:hudi,default.unknown,DEV)+status", "{removed=false}");
     expectedProposalsMap.put("urn:li:dataset:(urn:li:dataPlatform:hudi,default.unknown,DEV)+subTypes", "{typeNames=[Table]}");
     expectedProposalsMap.put("urn:li:dataset:(urn:li:dataPlatform:hudi,default.unknown,DEV)+dataPlatformInstance", "{platform=urn:li:dataPlatform:hudi}");
-    expectedProposalsMap.put("urn:li:dataset:(urn:li:dataPlatform:hudi,default.unknown,DEV)+browsePathsV2", "{path=[{urn=urn:li:container:ca5c62a21c8486b650b16634aacd3996, id=default}]}");
+    expectedProposalsMap.put("urn:li:dataset:(urn:li:dataPlatform:hudi,default.unknown,DEV)+browsePathsV2", "{path=[{urn=urn:li:container:ca5c62a21c8486b650b16634aacd3996"
+        + ", id=urn:li:container:ca5c62a21c8486b650b16634aacd3996}]}");
     expectedProposalsMap.put("urn:li:dataset:(urn:li:dataPlatform:hudi,default.unknown,DEV)+container", "{container=urn:li:container:ca5c62a21c8486b650b16634aacd3996}");
     expectedProposalsMap.put("urn:li:dataset:(urn:li:dataPlatform:hudi,default.unknown,DEV)+schemaMetadata", "{platformSchema={com.linkedin.schema.OtherSchema={rawSchema"
         + "={\"type\":\"record\",\"name\":\"triprec\",\"fields\":[{\"name\":\"ts\",\"type\":\"long\"}]}}}, schemaName=triprec, fields=[{nullable=false, fieldPath=[version=2.0]"
@@ -183,7 +184,8 @@ public class TestDataHubSyncClient {
     expectedProposalsMap.put("urn:li:dataset:(urn:li:dataPlatform:hudi,test_instance.default.unknown,DEV)+dataPlatformInstance", "{platform=urn:li:dataPlatform:hudi, instance="
         + "urn:li:dataPlatformInstance:(urn:li:dataPlatform:hudi,test_instance)}");
     expectedProposalsMap.put("urn:li:dataset:(urn:li:dataPlatform:hudi,test_instance.default.unknown,DEV)+browsePathsV2", "{path=[{urn=urn:li:dataPlatformInstance:(urn:li:dataPlatform"
-        + ":hudi,test_instance), id=urn:li:dataPlatformInstance:(urn:li:dataPlatform:hudi,test_instance)}, {urn=urn:li:container:da9c1430eb7551811f4c0e11b911614d, id=default}]}");
+        + ":hudi,test_instance), id=urn:li:dataPlatformInstance:(urn:li:dataPlatform:hudi,test_instance)}, {urn=urn:li:container:da9c1430eb7551811f4c0e11b911614d"
+        + ", id=urn:li:container:da9c1430eb7551811f4c0e11b911614d}]}");
     expectedProposalsMap.put("urn:li:dataset:(urn:li:dataPlatform:hudi,test_instance.default.unknown,DEV)+container", "{container=urn:li:container:da9c1430eb7551811f4c0e11b911614d}");
     expectedProposalsMap.put("urn:li:dataset:(urn:li:dataPlatform:hudi,test_instance.default.unknown,DEV)+schemaMetadata", "{platformSchema={com.linkedin.schema.OtherSchema={rawSchema"
         + "={\"type\":\"record\",\"name\":\"triprec\",\"fields\":[{\"name\":\"ts\",\"type\":\"long\"}]}}}, schemaName=triprec, fields=[{nullable=false, fieldPath=[version=2.0]"
