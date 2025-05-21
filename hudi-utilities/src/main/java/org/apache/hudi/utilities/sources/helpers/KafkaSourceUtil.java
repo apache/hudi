@@ -21,11 +21,14 @@ package org.apache.hudi.utilities.sources.helpers;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.hash.HashID;
+import org.apache.hudi.utilities.config.KafkaSourceConfig;
 import org.apache.hudi.utilities.exception.HoodieReadFromSourceException;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
 import com.google.crypto.tink.subtle.Base64;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 
 import static org.apache.hudi.utilities.config.KafkaSourceConfig.KAFKA_VALUE_DESERIALIZER_SCHEMA;
@@ -46,5 +49,35 @@ public class KafkaSourceUtil {
     String updatedConsumerGroup = groupId.isEmpty() ? schemaHash
         : StringUtils.concatenateWithThreshold(String.format("%s_", groupId), schemaHash, GROUP_ID_MAX_BYTES_LENGTH);
     props.put(NATIVE_KAFKA_CONSUMER_GROUP_ID, updatedConsumerGroup);
+  }
+
+  public static Map<String, Object> removeIgnorePrefixConfigs(Map<String, Object> kafkaParams, TypedProperties props) {
+    String prefixConfigList = props.getOrDefault(
+        KafkaSourceConfig.IGNORE_PREFIX_CONFIG_LIST, "").toString();
+
+    if (prefixConfigList.isEmpty()) {
+      return kafkaParams;
+    }
+
+    String[] prefixes = prefixConfigList.split(";");
+
+    Map<String, Object> filteredInParams = new HashMap<>();
+
+    for (Map.Entry<String, Object> entry : kafkaParams.entrySet()) {
+      boolean beginsWithAtleastOnePrefix = false;
+
+      for (String prefix : prefixes) {
+        if (!prefix.isEmpty() && entry.getKey().startsWith(prefix)) {
+          beginsWithAtleastOnePrefix = true;
+          break;
+        }
+      }
+
+      if (!beginsWithAtleastOnePrefix) {
+        filteredInParams.put(entry.getKey(), entry.getValue());
+      }
+    }
+
+    return filteredInParams;
   }
 }

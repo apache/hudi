@@ -45,9 +45,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
+import java.util.Map;
 
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getLongWithAltKeys;
+import static org.apache.hudi.utilities.sources.helpers.KafkaSourceUtil.removeIgnorePrefixConfigs;
 
 public abstract class KafkaSource<T> extends Source<T> {
   private static final Logger LOG = LoggerFactory.getLogger(KafkaSource.class);
@@ -132,12 +134,14 @@ public abstract class KafkaSource<T> extends Source<T> {
       JavaSparkContext sparkContext,
       KafkaOffsetGen offsetGen,
       OffsetRange[] offsetRanges) {
+    Map<String, Object> kafkaParams = removeIgnorePrefixConfigs(offsetGen.getKafkaParams(), props);
+    LOG.debug("Original kafka params " + offsetGen.getKafkaParams() + "\n After filtering kafka params " + kafkaParams);
     if (ConfigUtils.getBooleanWithAltKeys(props, KafkaSourceConfig.USE_SPARK_SQL_CONSUMER)) {
       long pollTimeoutMs = Long.parseLong(sparkContext.getConf().get("spark.streaming.kafka.consumer.poll.ms", DEFAULT_POLL_KAFKA_TIMEOUT_MS));
       boolean failOnDataLoss = ConfigUtils.getBooleanWithAltKeys(props, KafkaSourceConfig.ENABLE_FAIL_ON_DATA_LOSS);
-      return org.apache.spark.sql.kafka010.KafkaUtils.createRDD(sparkContext, offsetGen.getKafkaParams(), offsetGen.toKafkaOffsetRanges(offsetRanges), pollTimeoutMs, failOnDataLoss);
+      return org.apache.spark.sql.kafka010.KafkaUtils.createRDD(sparkContext, kafkaParams, offsetGen.toKafkaOffsetRanges(offsetRanges), pollTimeoutMs, failOnDataLoss);
     }
-    return KafkaUtils.createRDD(sparkContext, offsetGen.getKafkaParams(), offsetRanges, LocationStrategies.PreferConsistent());
+    return KafkaUtils.createRDD(sparkContext, kafkaParams, offsetRanges, LocationStrategies.PreferConsistent());
   }
 
   private InputBatch<T> toInputBatch(OffsetRange[] offsetRanges) {

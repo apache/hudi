@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.utilities.config.KafkaSourceConfig;
 import org.apache.hudi.utilities.exception.HoodieReadFromSourceException;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
@@ -27,6 +28,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.util.HashMap;
+import java.util.Map;
 
 import static org.apache.hudi.utilities.config.KafkaSourceConfig.KAFKA_VALUE_DESERIALIZER_SCHEMA;
 import static org.apache.hudi.utilities.sources.helpers.KafkaSourceUtil.GROUP_ID_MAX_BYTES_LENGTH;
@@ -58,5 +62,31 @@ public class TestKafkaSourceUtil {
     assertTrue(props.containsKey(NATIVE_KAFKA_CONSUMER_GROUP_ID));
     assertTrue(props.getString(NATIVE_KAFKA_CONSUMER_GROUP_ID, "").length() <= GROUP_ID_MAX_BYTES_LENGTH);
     assertEquals(props.getString(KAFKA_VALUE_DESERIALIZER_SCHEMA.key()), avroSchemaJson);
+  }
+
+  @Test
+  public void testRemoveIgnorePrefixConfigs() {
+    TypedProperties props = new TypedProperties();
+
+    Map<String, Object> kafkaParams = new HashMap<>();
+
+    kafkaParams.put("onehouse.hoodie.streamer", "offer");
+    kafkaParams.put("boostrap.servers", "dns:port");
+    kafkaParams.put("onehouse.stream.capture", "s3://folder1");
+    kafkaParams.put("onehousedataplane.streamer.sourceprofile.refresh.mode", "ENABLED");
+
+    assertEquals(kafkaParams,
+        KafkaSourceUtil.removeIgnorePrefixConfigs(kafkaParams, props));
+
+    props.put(KafkaSourceConfig.IGNORE_PREFIX_CONFIG_LIST, "onehouse");
+
+
+
+    Map<String, Object> filteredParams = KafkaSourceUtil.removeIgnorePrefixConfigs(kafkaParams, props);
+    Map<String, Object> expectedParams = new HashMap<>();
+
+    expectedParams.put("boostrap.servers", "dns:port");
+
+    assertEquals(expectedParams, filteredParams);
   }
 }

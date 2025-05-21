@@ -145,6 +145,12 @@ public class KafkaSourceConfig extends HoodieConfig {
       .sinceVersion("1.1.0")
       .withDocumentation("If enabled, use spark sql kafka consumer instead of spark streaming consumer.");
 
+  public static final ConfigProperty<String> IGNORE_PREFIX_CONFIG_LIST = ConfigProperty
+          .key(PREFIX + "ignore.prefix.config.list")
+          .defaultValue("")
+          .withDocumentation("Please add prefixes to ignore using semi-colon separated values "
+                  + "such as onehouse;one");
+
   /**
    * Kafka reset offset strategies.
    */
