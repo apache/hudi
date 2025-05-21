@@ -33,6 +33,7 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
@@ -207,8 +208,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
       if (isComplete) {
         action = HoodieTimeline.DELTA_COMMIT_ACTION;
       }
-      String logCompactionTime = InProcessTimeGenerator.createNewInstantTime();
-      client.scheduleLogCompactionAtInstant(logCompactionTime, Option.empty());
+      String logCompactionTime = (String) client.scheduleLogCompaction(Option.empty()).get();
       HoodieWriteMetadata writeMetadata = client.logCompact(logCompactionTime);
       if (isComplete) {
         client.commitLogCompaction(logCompactionTime, writeMetadata, Option.empty());

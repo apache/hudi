@@ -159,9 +159,9 @@ class RunClusteringProcedure extends BaseProcedure
       }
       if (operation.isSchedule) {
         val instantTime = client.scheduleClustering(HOption.empty())
-        if (instantTime.isPresent) {
-          filteredPendingClusteringInstants = Seq(instantTime.get())
-        }
+        instantTime.ifPresent(instant => {
+          filteredPendingClusteringInstants = Seq(instant)
+        })
       }
       logInfo(s"Clustering instants to run: ${filteredPendingClusteringInstants.mkString(",")}.")
 
