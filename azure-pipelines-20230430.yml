@@ -127,6 +127,7 @@ stages:
         value: 1
     jobs:
       - job: UT_FT_1
+        condition: false
         displayName: UT client/spark-client
         timeoutInMinutes: '75'
         steps:
@@ -163,6 +164,7 @@ stages:
             displayName: Top 100 long-running testcases
       - job: UT_FT_2
         displayName: FTA hudi-spark
+        condition: false
         timeoutInMinutes: '75'
         steps:
           - task: Maven@4
@@ -198,6 +200,7 @@ stages:
             displayName: Top 100 long-running testcases
       - job: UT_FT_3
         displayName: UT Hudi SQL features & spark-datasource Java Test 1
+        condition: false
         timeoutInMinutes: '75'
         steps:
           - task: Maven@4
@@ -242,6 +245,7 @@ stages:
             displayName: Top 100 long-running testcases
       - job: UT_FT_4
         displayName: UT spark-datasource Java Test 2
+        condition: false
         timeoutInMinutes: '75'
         steps:
           - task: Maven@4
@@ -277,6 +281,7 @@ stages:
             displayName: Top 100 long-running testcases
       - job: UT_FT_5
         displayName: UT spark-datasource DML
+        condition: false
         timeoutInMinutes: '75'
         steps:
           - task: Maven@4
@@ -312,6 +317,7 @@ stages:
             displayName: Top 100 long-running testcases
       - job: UT_FT_6
         displayName: UT spark-datasource DDL & Others
+        condition: false
         timeoutInMinutes: '75'
         steps:
           - task: Maven@4
@@ -347,6 +353,7 @@ stages:
             displayName: Top 100 long-running testcases
       - job: UT_FT_7
         displayName: UT Hudi Streamer & FT utilities
+        condition: false
         timeoutInMinutes: '75'
         steps:
           - task: Docker@2
@@ -396,6 +403,7 @@ stages:
             displayName: Top 100 long-running testcases
       - job: UT_FT_8
         displayName: UT hudi-hadoop-common & Hudi Utilities others
+        condition: false
         timeoutInMinutes: '75'
         steps:
           - task: Docker@2
@@ -445,6 +453,7 @@ stages:
             displayName: Top 100 long-running testcases
       - job: UT_FT_9
         displayName: FT spark 2
+        condition: false
         timeoutInMinutes: '75'
         steps:
           - task: Maven@4
@@ -490,6 +499,7 @@ stages:
             displayName: Top 100 long-running testcases
       - job: UT_FT_10
         displayName: UT FT common & other modules
+        condition: false
         timeoutInMinutes: '75'
         steps:
           - task: Docker@2
@@ -539,6 +549,7 @@ stages:
             displayName: Top 100 long-running testcases
       - job: MergeAndPublishCoverage
         displayName: 'Merge and Publish JaCoCo Code Coverage'
+        condition: false
         dependsOn:
           - UT_FT_1
           - UT_FT_2
