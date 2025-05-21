@@ -99,8 +99,7 @@ public abstract class HoodieFileGroupReaderOnJavaTestBase<T> extends TestHoodieF
     }
 
     try (HoodieJavaWriteClient writeClient = new HoodieJavaWriteClient(context, writeConfig)) {
-      String instantTime = writeClient.createNewInstantTime();
-      writeClient.startCommitWithTime(instantTime);
+      String instantTime = writeClient.startCommit();
       // Make a copy of the records for writing. The writer will clear out the data field.
       List<HoodieRecord> recordsCopy = new ArrayList<>(recordList.size());
       recordList.forEach(hoodieRecord -> recordsCopy.add(new HoodieAvroRecord<>(hoodieRecord.getKey(), (HoodieRecordPayload) hoodieRecord.getData())));

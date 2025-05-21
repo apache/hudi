@@ -36,7 +36,6 @@ import org.apache.hudi.common.table.timeline.versioning.v2.InstantComparatorV2;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
-import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -135,14 +134,13 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
     BaseHoodieTableServiceClient<String, String, String> tableServiceClient = mock(BaseHoodieTableServiceClient.class);
     TestWriteClient writeClient = new TestWriteClient(writeConfig, table, Option.empty(), tableServiceClient, transactionManager, timeGenerator);
 
-    writeClient.startCommit();
+    String instantTime = writeClient.startCommit("commit");
 
     HoodieTimeline writeTimeline = metaClient.getActiveTimeline().getWriteTimeline();
     assertTrue(writeTimeline.lastInstant().isPresent());
     assertEquals("commit", writeTimeline.lastInstant().get().getAction());
-    String commitTime = HoodieTestDataGenerator.getCommitTimeAtUTC(now.getEpochSecond());
-    assertEquals(commitTime, writeTimeline.lastInstant().get().requestedTime());
-    HoodieInstant expectedInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieActiveTimeline.COMMIT_ACTION, commitTime, InstantComparatorV2.COMPLETION_TIME_BASED_COMPARATOR);
+    assertEquals(instantTime, writeTimeline.lastInstant().get().requestedTime());
+    HoodieInstant expectedInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieActiveTimeline.COMMIT_ACTION, instantTime, InstantComparatorV2.COMPLETION_TIME_BASED_COMPARATOR);
 
     InOrder inOrder = Mockito.inOrder(transactionManager, timeGenerator);
     inOrder.verify(transactionManager).beginTransaction(Option.empty(), Option.empty());

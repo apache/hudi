@@ -170,9 +170,8 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
     // Prepare the AvroParquetIO
     HoodieWriteConfig config = makeHoodieClientConfigBuilder()
         .withProps(makeIndexConfig(indexType)).build();
-    String firstCommitTime = makeNewCommitTime();
     SparkRDDWriteClient writeClient = getHoodieWriteClient(config);
-    writeClient.startCommitWithTime(firstCommitTime);
+    String firstCommitTime = writeClient.startCommit();
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
     String partitionPath = "2016/01/31";
@@ -236,9 +235,8 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
     List<HoodieRecord> updatedRecords = Arrays.asList(updatedRecord1, insertedRecord1);
 
     Thread.sleep(1000);
-    String newCommitTime = makeNewCommitTime();
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    writeClient.startCommitWithTime(newCommitTime);
+    String newCommitTime = writeClient.startCommit();
     List<WriteStatus> statuses = writeClient.upsert(jsc.parallelize(updatedRecords), newCommitTime).collect();
 
     allFiles = getIncrementalFiles(partitionPath, firstCommitTime, -1);
@@ -504,9 +502,8 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
         .withPath(basePath).withSchema(TRIP_EXAMPLE_SCHEMA)
         .withBulkInsertParallelism(2).withBulkInsertSortMode(bulkInsertMode).build();
-    String instantTime = makeNewCommitTime();
     SparkRDDWriteClient writeClient = getHoodieWriteClient(config);
-    writeClient.startCommitWithTime(instantTime);
+    String instantTime = writeClient.startCommit();
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(config, context, metaClient);
 
@@ -544,9 +541,8 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
       assertTrue(table.getPartitionMetafileFormat().isPresent());
     }
 
-    String instantTime = makeNewCommitTime();
     SparkRDDWriteClient writeClient = getHoodieWriteClient(config);
-    writeClient.startCommitWithTime(instantTime);
+    String instantTime = writeClient.startCommit();
 
     // Insert new records
     final JavaRDD<HoodieRecord> inputRecords = generateTestRecordsForBulkInsert(jsc, 50);

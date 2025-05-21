@@ -470,21 +470,17 @@ public class MergeOnReadInputFormat
     TypedProperties typedProps = FlinkClientUtil.getMergedTableAndWriteProps(metaClient.getTableConfig(), writeConfig);
     typedProps.put(HoodieReaderConfig.MERGE_TYPE.key(), HoodieReaderConfig.REALTIME_SKIP_MERGE);
 
-    try (HoodieFileGroupReader<RowData> fileGroupReader = new HoodieFileGroupReader<>(
-        readerContext,
-        metaClient.getStorage(),
-        split.getTablePath(),
-        split.getLatestCommit(),
-        fileSlice,
-        tableSchema,
-        requiredSchema,
-        Option.ofNullable(internalSchemaManager.getQuerySchema()),
-        metaClient,
-        typedProps,
-        0,
-        Long.MAX_VALUE,
-        false)) {
-      fileGroupReader.initRecordIterators();
+    try (HoodieFileGroupReader<RowData> fileGroupReader = HoodieFileGroupReader.<RowData>newBuilder()
+        .withReaderContext(readerContext)
+        .withHoodieTableMetaClient(metaClient)
+        .withLatestCommitTime(split.getLatestCommit())
+        .withFileSlice(fileSlice)
+        .withDataSchema(tableSchema)
+        .withRequestedSchema(requiredSchema)
+        .withInternalSchema(Option.ofNullable(internalSchemaManager.getQuerySchema()))
+        .withProps(typedProps)
+        .withShouldUseRecordPosition(false)
+        .build()) {
       return fileGroupReader.getClosableIterator();
     } catch (IOException e) {
       throw new HoodieUpsertException("Failed to compact file slice: " + fileSlice, e);

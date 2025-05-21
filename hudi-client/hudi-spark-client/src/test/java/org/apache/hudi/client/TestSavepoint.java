@@ -83,14 +83,14 @@ public class TestSavepoint extends HoodieClientTestBase {
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
 
       String commitTime1 = "001";
-      client.startCommitWithTime(commitTime1);
+      WriteClientTestUtils.startCommitWithTime(client, commitTime1);
       List<HoodieRecord> records1 = dataGen.generateInserts(commitTime1, 200);
       JavaRDD<HoodieRecord> writeRecords1 = jsc.parallelize(records1, 1);
       List<WriteStatus> statuses1 = client.upsert(writeRecords1, commitTime1).collect();
       assertNoWriteErrors(statuses1);
 
       String commitTime2 = "002";
-      client.startCommitWithTime(commitTime2);
+      WriteClientTestUtils.startCommitWithTime(client, commitTime2);
       List<HoodieRecord> records2 = dataGen.generateInserts(commitTime2, 200);
       JavaRDD<HoodieRecord> writeRecords2 = jsc.parallelize(records2, 1);
       List<WriteStatus> statuses2 = client.upsert(writeRecords2, commitTime2).collect();

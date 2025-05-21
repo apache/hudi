@@ -309,7 +309,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
       final SparkRDDWriteClient client22 = getHoodieWriteClient(writeConfig22);
       JavaRDD<HoodieRecord> emptyRDD = jsc.emptyRDD();
       // Perform upsert with empty RDD
-      client22.startCommitWithTime("0013");
+      WriteClientTestUtils.startCommitWithTime(client22, "0013");
       JavaRDD<WriteStatus> writeStatusRDD = client22.upsert(emptyRDD, "0013");
       client22.commit("0013", writeStatusRDD);
       totalCommits += 1;
@@ -324,15 +324,13 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     HoodieWriteConfig writeConfig2 = HoodieWriteConfig.newBuilder().withProperties(writeConfig.getProps()).build();
     writeConfig2.setSchema(writerSchema1);
     final SparkRDDWriteClient client2 = getHoodieWriteClient(writeConfig2);
-    final String nextCommitTime21 = "0021";
-    startSchemaEvolutionTransaction(metaClient, client2, nextCommitTime21, tableType);
+    final String nextCommitTime21 = startSchemaEvolutionTransaction(metaClient, client2, tableType);
 
     // Start concurrent txn 003 alter table schema
     HoodieWriteConfig writeConfig3 = HoodieWriteConfig.newBuilder().withProperties(writeConfig.getProps()).build();
     writeConfig3.setSchema(writerSchema2);
     final SparkRDDWriteClient client3 = getHoodieWriteClient(writeConfig3);
-    final String nextCommitTime31 = "0031";
-    startSchemaEvolutionTransaction(metaClient, client3, nextCommitTime31, tableType);
+    final String nextCommitTime31 = startSchemaEvolutionTransaction(metaClient, client3, tableType);
 
     Properties props = new TypedProperties();
     HoodieWriteConfig tableServiceWriteCfg = tableType.equals(MERGE_ON_READ)
@@ -1303,7 +1301,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
   private void ingestBatch(Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieRecord>, String> writeFn,
                            SparkRDDWriteClient writeClient, String commitTime, JavaRDD<HoodieRecord> records,
                            CountDownLatch countDownLatch) throws IOException, InterruptedException {
-    writeClient.startCommitWithTime(commitTime);
+    WriteClientTestUtils.startCommitWithTime(writeClient, commitTime);
     countDownLatch.countDown();
     countDownLatch.await();
     JavaRDD<WriteStatus> statusJavaRDD = writeFn.apply(writeClient, records, commitTime);
@@ -1330,14 +1328,15 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     return result;
   }
 
-  private static void startSchemaEvolutionTransaction(HoodieTableMetaClient metaClient, SparkRDDWriteClient client, String nextCommitTime2, HoodieTableType tableType) throws IOException {
+  private static String startSchemaEvolutionTransaction(HoodieTableMetaClient metaClient, SparkRDDWriteClient client, HoodieTableType tableType) throws IOException {
     String commitActionType = CommitUtils.getCommitActionType(WriteOperationType.UPSERT, tableType);
-    client.startCommitWithTime(nextCommitTime2, commitActionType);
-    client.preWrite(nextCommitTime2, WriteOperationType.UPSERT, client.createMetaClient(true));
-    HoodieInstant requested = metaClient.createNewInstant(HoodieInstant.State.REQUESTED, commitActionType, nextCommitTime2);
+    String instant = client.startCommit(commitActionType);
+    client.preWrite(instant, WriteOperationType.UPSERT, client.createMetaClient(true));
+    HoodieInstant requested = metaClient.createNewInstant(HoodieInstant.State.REQUESTED, commitActionType, instant);
     HoodieCommitMetadata metadata = new HoodieCommitMetadata();
     metadata.setOperationType(WriteOperationType.UPSERT);
     client.createMetaClient(true).getActiveTimeline().transitionRequestedToInflight(requested, Option.of(metadata));
+    return instant;
   }
 
   private void createCommitWithUpserts(HoodieWriteConfig cfg, SparkRDDWriteClient client, String prevCommit,
@@ -1363,7 +1362,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
   private JavaRDD<WriteStatus> startCommitForUpdate(HoodieWriteConfig writeConfig, SparkRDDWriteClient writeClient,
                                                     String newCommitTime, int numRecords) throws Exception {
     // Start the new commit
-    writeClient.startCommitWithTime(newCommitTime);
+    WriteClientTestUtils.startCommitWithTime(writeClient, newCommitTime);
 
     // Prepare update records
     final Function2<List<HoodieRecord>, String, Integer> recordGenFunction =

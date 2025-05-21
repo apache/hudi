@@ -129,8 +129,7 @@ public class HoodieWriteClientExample {
         client.delete(deleteRecords, newCommitTime);
 
         // Delete by partition
-        newCommitTime = client.startCommit();
-        client.startCommitWithTime(newCommitTime, HoodieTimeline.REPLACE_COMMIT_ACTION);
+        newCommitTime = client.startCommit(HoodieTimeline.REPLACE_COMMIT_ACTION);
         LOG.info("Starting commit " + newCommitTime);
         // The partition where the data needs to be deleted
         List<String> partitionList = toBeDeleted.stream().map(s -> s.getPartitionPath()).distinct().collect(Collectors.toList());

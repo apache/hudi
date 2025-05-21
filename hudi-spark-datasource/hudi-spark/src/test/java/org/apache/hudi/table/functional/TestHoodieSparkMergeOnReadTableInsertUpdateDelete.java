@@ -20,6 +20,7 @@
 package org.apache.hudi.table.functional;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
@@ -122,7 +123,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
        * Write 1 (only inserts)
        */
       String newCommitTime = "001";
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
       Stream<HoodieBaseFile> dataFiles = insertRecordsToMORTable(metaClient, records, client, cfg, newCommitTime);
@@ -132,7 +133,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
        * Write 2 (updates)
        */
       newCommitTime = "004";
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
       records = dataGen.generateUpdates(newCommitTime, 100);
       updateRecordsInMORTable(metaClient, records, client, cfg, newCommitTime, false);
 
@@ -183,7 +184,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
        * Write 1 (only inserts)
        */
       String newCommitTime = "001";
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
       Stream<HoodieBaseFile> dataFiles = insertRecordsToMORTable(metaClient, records, client, cfg, newCommitTime, true);
@@ -193,7 +194,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
        * Write 2 (updates)
        */
       newCommitTime = "004";
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
       records = dataGen.generateUpdates(newCommitTime, 100);
       updateRecordsInMORTable(metaClient, records, client, cfg, newCommitTime, true);
 
@@ -225,7 +226,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
        * Write 1 (only inserts)
        */
       String newCommitTime = "001";
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
       Stream<HoodieBaseFile> dataFiles = insertRecordsToMORTable(metaClient, records, client, cfg, newCommitTime, true);
@@ -235,7 +236,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
        * Write 2 (updates)
        */
       newCommitTime = "004";
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
       records = dataGen.generateUpdates(newCommitTime, 100);
       updateRecordsInMORTable(metaClient, records, client, cfg, newCommitTime, true);
 
@@ -281,7 +282,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
        * Write 1 (only inserts, written as base file)
        */
       String newCommitTime = "001";
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 20);
       JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
@@ -314,7 +315,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
        * Write 2 (only updates, written to .log file)
        */
       newCommitTime = "002";
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
       records = dataGen.generateUpdates(newCommitTime, records);
       writeRecords = jsc().parallelize(records, 1);
@@ -325,7 +326,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
        * Write 2 (only deletes, written to .log file)
        */
       newCommitTime = "004";
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
       List<HoodieRecord> fewRecordsForDelete = dataGen.generateDeletesFromExistingRecords(records);
 
@@ -367,7 +368,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
 
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config)) {
       String newCommitTime = "100";
-      writeClient.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(writeClient, newCommitTime);
 
       HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);

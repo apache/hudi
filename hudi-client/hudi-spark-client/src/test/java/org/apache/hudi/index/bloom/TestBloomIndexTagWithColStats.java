@@ -20,6 +20,7 @@
 
 package org.apache.hudi.index.bloom;
 
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.functional.TestHoodieMetadataBase;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -150,7 +151,7 @@ public class TestBloomIndexTagWithColStats extends TestHoodieMetadataBase {
     // Should not find any files
     assertFalse(taggedRecordRDD.first().isCurrentLocationKnown());
 
-    writeClient.startCommitWithTime("001");
+    WriteClientTestUtils.startCommitWithTime(writeClient, "001");
     JavaRDD<WriteStatus> status = writeClient.upsert(taggedRecordRDD, "001");
     String fileId = status.first().getFileId();
 

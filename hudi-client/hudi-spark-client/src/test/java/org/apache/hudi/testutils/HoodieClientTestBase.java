@@ -19,6 +19,7 @@
 package org.apache.hudi.testutils;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.HoodieCleanStat;
@@ -375,7 +376,7 @@ public class HoodieClientTestBase extends HoodieSparkClientTestHarness {
           generateWrapRecordsFn(isPreppedAPI, writeConfig, dataGen::generateUniqueDeleteRecords);
 
       // Delete 1 (only deletes)
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
       List<HoodieRecord> records = recordGenFunction.apply(newCommitTime, numRecordsInThisCommit);
       JavaRDD<HoodieRecord> deleteRecords = jsc.parallelize(records, 1);
 
@@ -388,7 +389,7 @@ public class HoodieClientTestBase extends HoodieSparkClientTestHarness {
           generateWrapDeleteKeysFn(isPreppedAPI, writeConfig, dataGen::generateUniqueDeletes);
 
       // Delete 1 (only deletes)
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
       List<HoodieKey> keysToDelete = keyGenFunction.apply(numRecordsInThisCommit);
       JavaRDD<HoodieKey> deleteRecords = jsc.parallelize(keysToDelete, 1);
@@ -477,7 +478,7 @@ public class HoodieClientTestBase extends HoodieSparkClientTestHarness {
                                                 int expTotalCommits, boolean doCommit, boolean filterForCommitTimeWithAssert,
                                                 InstantGenerator instantGenerator) throws IOException {
     // Write 1 (only inserts)
-    client.startCommitWithTime(newCommitTime);
+    WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
 
@@ -596,7 +597,7 @@ public class HoodieClientTestBase extends HoodieSparkClientTestHarness {
         .build();
 
     try (SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig)) {
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, numRecords);
       JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
@@ -621,7 +622,7 @@ public class HoodieClientTestBase extends HoodieSparkClientTestHarness {
         .build();
 
     try (SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig)) {
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
       List<HoodieRecord> records = dataGen.generateUpdates(newCommitTime, baseRecordsToUpdate);
       JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
       client.upsert(writeRecords, newCommitTime);

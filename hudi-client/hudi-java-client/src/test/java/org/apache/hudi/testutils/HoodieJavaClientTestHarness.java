@@ -19,6 +19,7 @@ package org.apache.hudi.testutils;
 
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.client.HoodieJavaWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
 import org.apache.hudi.common.config.HoodieStorageConfig;
@@ -280,7 +281,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
 
   @Override
   protected List<WriteStatus> writeAndVerifyBatch(BaseHoodieWriteClient client, List<HoodieRecord> inserts, String commitTime, boolean populateMetaFields, boolean autoCommitOff) throws IOException {
-    client.startCommitWithTime(commitTime);
+    WriteClientTestUtils.startCommitWithTime(client, commitTime);
     List<WriteStatus> statusRDD = ((HoodieJavaWriteClient) client).upsert(inserts, commitTime);
     if (autoCommitOff) {
       client.commit(commitTime, statusRDD);
@@ -610,7 +611,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
           generateWrapRecordsFn(isPreppedAPI, writeConfig, dataGen::generateUniqueDeleteRecords);
 
       // Delete 1 (only deletes)
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
       List<HoodieRecord> deleteRecords = recordGenFunction.apply(newCommitTime, numRecordsInThisCommit);
 
       Function3<List<WriteStatus>, HoodieJavaWriteClient, List<HoodieRecord>, String> deleteFn = HoodieJavaWriteClient::deletePrepped;
@@ -622,7 +623,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
           generateWrapDeleteKeysFn(isPreppedAPI, writeConfig, dataGen::generateUniqueDeletes);
 
       // Delete 1 (only deletes)
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
       List<HoodieKey> deleteRecords = keyGenFunction.apply(numRecordsInThisCommit);
 
@@ -708,7 +709,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
                                              boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords,
                                              int expTotalCommits, boolean doCommit, boolean filterForCommitTimeWithAssert, InstantGenerator instantGenerator) throws IOException {
     // Write 1 (only inserts)
-    client.startCommitWithTime(newCommitTime);
+    WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
     List<WriteStatus> result = writeFn.apply(client, records, newCommitTime);
     assertNoWriteErrors(result);

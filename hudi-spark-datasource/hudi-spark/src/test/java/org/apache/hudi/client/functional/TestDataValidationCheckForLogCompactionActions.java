@@ -19,6 +19,7 @@
 package org.apache.hudi.client.functional;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
@@ -197,7 +198,7 @@ public class TestDataValidationCheckForLogCompactionActions extends HoodieClient
 
   private boolean writeOnMainTable(TestTableContents mainTable, int curr) throws IOException {
     String commitTime = mainTable.client.createNewInstantTime();
-    mainTable.client.startCommitWithTime(commitTime);
+    WriteClientTestUtils.startCommitWithTime(mainTable.client, commitTime);
 
     int actionType = pickAWriteAction();
     JavaRDD<WriteStatus> result;
@@ -234,7 +235,7 @@ public class TestDataValidationCheckForLogCompactionActions extends HoodieClient
 
   private void writeOnExperimentTable(TestTableContents mainTable, TestTableContents experimentTable) throws IOException {
     String commitTime = mainTable.commitTimeOnMainTable;
-    experimentTable.client.startCommitWithTime(commitTime);
+    WriteClientTestUtils.startCommitWithTime(experimentTable.client, commitTime);
     int actionType = mainTable.previousActionType;
     JavaRDD<WriteStatus> result;
     if (actionType == 0) {

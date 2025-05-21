@@ -337,7 +337,7 @@ public class DataHubSyncClient extends HoodieSyncClient {
   }
 
   private Stream<MetadataChangeProposalWrapper> createDatasetEntity() {
-    BrowsePathEntry databasePath = new BrowsePathEntry().setUrn(databaseUrn).setId(databaseName);
+    BrowsePathEntry databasePath = new BrowsePathEntry().setUrn(databaseUrn).setId(databaseUrn.toString());
     List<BrowsePathEntry> paths = dataPlatformInstanceUrn.map(dpiUrn -> {
       List<BrowsePathEntry> list = new ArrayList<BrowsePathEntry>();
       list.add(new BrowsePathEntry().setUrn(dpiUrn).setId(dpiUrn.toString()));

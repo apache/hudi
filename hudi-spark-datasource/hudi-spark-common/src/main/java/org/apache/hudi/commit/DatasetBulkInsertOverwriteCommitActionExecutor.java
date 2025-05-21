@@ -43,9 +43,8 @@ import java.util.stream.Collectors;
 public class DatasetBulkInsertOverwriteCommitActionExecutor extends BaseDatasetBulkInsertCommitActionExecutor {
 
   public DatasetBulkInsertOverwriteCommitActionExecutor(HoodieWriteConfig config,
-                                                        SparkRDDWriteClient writeClient,
-                                                        String instantTime) {
-    super(config, writeClient, instantTime);
+                                                        SparkRDDWriteClient writeClient) {
+    super(config, writeClient);
   }
 
   @Override

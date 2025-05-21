@@ -216,28 +216,34 @@ public class StreamWriteOperatorCoordinator
     // initialize event buffer
     this.eventBuffers = EventBuffers.getInstance();
     this.gateways = new SubtaskGateway[this.parallelism];
-    // init table, create if not exists.
-    this.metaClient = initTableIfNotExists(this.conf);
-    // the write client must create after the table creation
-    this.writeClient = FlinkWriteClients.createWriteClient(conf);
-    initMetadataTable(this.writeClient);
-    this.tableState = TableState.create(conf);
-    // start the executor
-    this.executor = NonThrownExecutor.builder(LOG)
-        .threadFactory(getThreadFactory("meta-event-handle"))
-        .exceptionHook((errMsg, t) -> this.context.failJob(new HoodieException(errMsg, t)))
-        .waitForTasksFinish(true).build();
-    this.instantRequestExecutor = NonThrownExecutor.builder(LOG)
-        .threadFactory(getThreadFactory("instant-response"))
-        .exceptionHook((errMsg, t) -> this.context.failJob(new HoodieException(errMsg, t)))
-        .build();
-    // start the executor if required
-    if (tableState.syncHive) {
-      initHiveSync();
-    }
-    // start client id heartbeats for optimistic concurrency control
-    if (OptionsResolver.isMultiWriter(conf)) {
-      initClientIds(conf);
+    try {
+      // init table, create if not exists.
+      this.metaClient = initTableIfNotExists(this.conf);
+      // the write client must create after the table creation
+      this.writeClient = FlinkWriteClients.createWriteClient(conf);
+      this.writeClient.tryUpgrade(instant, this.metaClient);
+      initMetadataTable(this.writeClient);
+      this.tableState = TableState.create(conf);
+      // start the executor
+      this.executor = NonThrownExecutor.builder(LOG)
+          .threadFactory(getThreadFactory("meta-event-handle"))
+          .exceptionHook((errMsg, t) -> this.context.failJob(new HoodieException(errMsg, t)))
+          .waitForTasksFinish(true).build();
+      this.instantRequestExecutor = NonThrownExecutor.builder(LOG)
+          .threadFactory(getThreadFactory("instant-response"))
+          .exceptionHook((errMsg, t) -> this.context.failJob(new HoodieException(errMsg, t)))
+          .build();
+      // start the executor if required
+      if (tableState.syncHive) {
+        initHiveSync();
+      }
+      // start client id heartbeats for optimistic concurrency control
+      if (OptionsResolver.isMultiWriter(conf)) {
+        initClientIds(conf);
+      }
+    } catch (Throwable throwable) {
+      LOG.error("Failed to start operator coordinator.", throwable);
+      context.failJob(throwable);
     }
   }
 
@@ -449,8 +455,6 @@ public class StreamWriteOperatorCoordinator
       }
       commitInstant(checkpointId, instant, bootstrapBuffer);
     }
-    // upgrade downgrade
-    this.writeClient.upgradeDowngrade(this.instant, this.metaClient);
   }
 
   private void handleBootstrapEvent(WriteMetadataEvent event) {

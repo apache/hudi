@@ -49,11 +49,9 @@ public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
       HoodieReaderContext<T> readerContext,
       HoodieTableMetaClient hoodieTableMetaClient,
       RecordMergeMode recordMergeMode,
-      Option<String> partitionNameOverrideOpt,
-      Option<String[]> partitionPathFieldOpt,
       TypedProperties props,
       HoodieReadStats readStats) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, partitionNameOverrideOpt, partitionPathFieldOpt, props, readStats);
+    super(readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, Option.empty());
     this.currentInstantLogBlocks = new ArrayDeque<>();
   }
 

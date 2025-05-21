@@ -41,17 +41,16 @@ public class DatasetBucketRescaleCommitActionExecutor extends DatasetBulkInsertO
   private static final long serialVersionUID = 1L;
 
   private static final Logger LOG = LoggerFactory.getLogger(DatasetBucketRescaleCommitActionExecutor.class);
-  private final PartitionBucketIndexHashingConfig hashingConfig;
+  private final String expression;
+  private final String rule;
+  private final int bucketNumber;
 
   public DatasetBucketRescaleCommitActionExecutor(HoodieWriteConfig config,
-                                                  SparkRDDWriteClient writeClient,
-                                                  String instantTime) {
-    super(config, writeClient, instantTime);
-    String expression = config.getBucketIndexPartitionExpression();
-    String rule = config.getBucketIndexPartitionRuleType();
-    int bucketNumber = config.getBucketIndexNumBuckets();
-    this.hashingConfig = new PartitionBucketIndexHashingConfig(expression,
-        bucketNumber, rule, PartitionBucketIndexHashingConfig.CURRENT_VERSION, instantTime);
+                                                  SparkRDDWriteClient writeClient) {
+    super(config, writeClient);
+    expression = config.getBucketIndexPartitionExpression();
+    rule = config.getBucketIndexPartitionRuleType();
+    bucketNumber = config.getBucketIndexNumBuckets();
   }
 
   /**
@@ -59,19 +58,20 @@ public class DatasetBucketRescaleCommitActionExecutor extends DatasetBulkInsertO
    */
   @Override
   protected BulkInsertPartitioner<Dataset<Row>> getPartitioner(boolean populateMetaFields, boolean isTablePartitioned) {
-    return new BucketIndexBulkInsertPartitionerWithRows(writeClient.getConfig(), hashingConfig);
+    return new BucketIndexBulkInsertPartitionerWithRows(writeClient.getConfig(), expression, rule, bucketNumber);
   }
 
   /**
    * create new hashing_config during afterExecute and before commit finished.
-   * @param result
    */
   @Override
   protected void preExecute() {
     super.preExecute();
+    PartitionBucketIndexHashingConfig hashingConfig = new PartitionBucketIndexHashingConfig(expression,
+        bucketNumber, rule, PartitionBucketIndexHashingConfig.CURRENT_VERSION, instantTime);
     boolean res = PartitionBucketIndexHashingConfig.saveHashingConfig(hashingConfig, table.getMetaClient());
     ValidationUtils.checkArgument(res);
-    LOG.info("Finish to save hashing config " + hashingConfig);
+    LOG.info("Finish to save hashing config {}", hashingConfig);
   }
 
   @Override

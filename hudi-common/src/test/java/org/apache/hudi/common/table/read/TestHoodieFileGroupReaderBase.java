@@ -48,6 +48,7 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -67,6 +68,7 @@ import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
+import java.io.UncheckedIOException;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -317,6 +319,13 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     // validate size is equivalent to ensure no duplicates are returned
     assertEquals(expectedRecords.size(), actualRecordList.size());
     assertEquals(new HashSet<>(expectedRecords), new HashSet<>(actualRecordList));
+    // validate records can be read from file group as HoodieRecords
+    actualRecordList = convertHoodieRecords(
+        readHoodieRecordsFromFileGroup(storageConf, tablePath, metaClient, fileSlices, avroSchema, recordMergeMode),
+        avroSchema, readerContext);
+    assertEquals(expectedRecords.size(), actualRecordList.size());
+    assertEquals(new HashSet<>(expectedRecords), new HashSet<>(actualRecordList));
+    // validate unmerged records
     actualRecordList = convertEngineRecords(
         readRecordsFromFileGroup(storageConf, tablePath, metaClient, fileSlices, avroSchema, recordMergeMode, true),
         avroSchema, readerContext);
@@ -371,6 +380,74 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
                                            boolean isSkipMerge) {
 
     List<T> actualRecordList = new ArrayList<>();
+    TypedProperties props = buildProperties(metaClient, recordMergeMode);
+    if (isSkipMerge) {
+      props.setProperty(HoodieReaderConfig.MERGE_TYPE.key(), HoodieReaderConfig.REALTIME_SKIP_MERGE);
+    }
+    fileSlices.forEach(fileSlice -> {
+      if (shouldValidatePartialRead(fileSlice, avroSchema)) {
+        assertThrows(IllegalArgumentException.class, () -> getHoodieFileGroupReader(storageConf, tablePath, metaClient, avroSchema, fileSlice, 1, props));
+      }
+      try (HoodieFileGroupReader<T> fileGroupReader = getHoodieFileGroupReader(storageConf, tablePath, metaClient, avroSchema, fileSlice, 0, props)) {
+        readWithFileGroupReader(fileGroupReader, actualRecordList, avroSchema);
+      } catch (Exception ex) {
+        throw new RuntimeException(ex);
+      }
+    });
+    return actualRecordList;
+  }
+
+  private HoodieFileGroupReader<T> getHoodieFileGroupReader(StorageConfiguration<?> storageConf, String tablePath, HoodieTableMetaClient metaClient, Schema avroSchema, FileSlice fileSlice,
+                                                            int start, TypedProperties props) {
+    return HoodieFileGroupReader.<T>newBuilder()
+        .withReaderContext(getHoodieReaderContext(tablePath, avroSchema, storageConf, metaClient))
+        .withHoodieTableMetaClient(metaClient)
+        .withLatestCommitTime(metaClient.getActiveTimeline().lastInstant().get().requestedTime())
+        .withFileSlice(fileSlice)
+        .withDataSchema(avroSchema)
+        .withRequestedSchema(avroSchema)
+        .withProps(props)
+        .withStart(start)
+        .withLength(fileSlice.getTotalFileSize())
+        .withShouldUseRecordPosition(false)
+        .withAllowInflightInstants(false)
+        .build();
+  }
+
+  protected void readWithFileGroupReader(
+      HoodieFileGroupReader<T> fileGroupReader,
+      List<T> recordList,
+      Schema recordSchema) throws IOException {
+    try (ClosableIterator<T> fileGroupReaderIterator = fileGroupReader.getClosableIterator()) {
+      while (fileGroupReaderIterator.hasNext()) {
+        recordList.add(fileGroupReaderIterator.next());
+      }
+    }
+  }
+
+  private List<HoodieRecord<T>> readHoodieRecordsFromFileGroup(StorageConfiguration<?> storageConf,
+                                                               String tablePath,
+                                                               HoodieTableMetaClient metaClient,
+                                                               List<FileSlice> fileSlices,
+                                                               Schema avroSchema,
+                                                               RecordMergeMode recordMergeMode) {
+
+    List<HoodieRecord<T>> actualRecordList = new ArrayList<>();
+    TypedProperties props = buildProperties(metaClient, recordMergeMode);
+    fileSlices.forEach(fileSlice -> {
+      try (HoodieFileGroupReader<T> fileGroupReader = getHoodieFileGroupReader(storageConf, tablePath, metaClient, avroSchema, fileSlice, 0, props);
+           ClosableIterator<HoodieRecord<T>> iter = fileGroupReader.getClosableHoodieRecordIterator()) {
+        while (iter.hasNext()) {
+          actualRecordList.add(iter.next());
+        }
+      } catch (IOException ex) {
+        throw new UncheckedIOException(ex);
+      }
+    });
+    return actualRecordList;
+  }
+
+  private TypedProperties buildProperties(HoodieTableMetaClient metaClient, RecordMergeMode recordMergeMode) {
     TypedProperties props = new TypedProperties();
     props.setProperty("hoodie.datasource.write.precombine.field", PRECOMBINE_FIELD_NAME);
     props.setProperty("hoodie.payload.ordering.field", PRECOMBINE_FIELD_NAME);
@@ -386,58 +463,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     if (metaClient.getTableConfig().contains(PARTITION_FIELDS)) {
       props.setProperty(PARTITION_FIELDS.key(), metaClient.getTableConfig().getString(PARTITION_FIELDS));
     }
-    if (isSkipMerge) {
-      props.setProperty(HoodieReaderConfig.MERGE_TYPE.key(), HoodieReaderConfig.REALTIME_SKIP_MERGE);
-    }
-    fileSlices.forEach(fileSlice -> {
-      if (shouldValidatePartialRead(fileSlice, avroSchema)) {
-        assertThrows(IllegalArgumentException.class, () -> new HoodieFileGroupReader<>(
-            getHoodieReaderContext(tablePath, avroSchema, storageConf, metaClient),
-            metaClient.getStorage(),
-            tablePath,
-            metaClient.getActiveTimeline().lastInstant().get().requestedTime(),
-            fileSlice,
-            avroSchema,
-            avroSchema,
-            Option.empty(),
-            metaClient,
-            props,
-            1,
-            fileSlice.getTotalFileSize(),
-            false,
-            false));
-      }
-      try (HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(
-          getHoodieReaderContext(tablePath, avroSchema, storageConf, metaClient),
-          metaClient.getStorage(),
-          tablePath,
-          metaClient.getActiveTimeline().lastInstant().get().requestedTime(),
-          fileSlice,
-          avroSchema,
-          avroSchema,
-          Option.empty(),
-          metaClient,
-          props,
-          0,
-          fileSlice.getTotalFileSize(),
-          false,
-          false)) {
-        readWithFileGroupReader(fileGroupReader, actualRecordList, avroSchema);
-      } catch (Exception ex) {
-        throw new RuntimeException(ex);
-      }
-    });
-    return actualRecordList;
-  }
-
-  protected void readWithFileGroupReader(
-      HoodieFileGroupReader<T> fileGroupReader,
-      List<T> recordList,
-      Schema recordSchema) throws IOException {
-    fileGroupReader.initRecordIterators();
-    while (fileGroupReader.hasNext()) {
-      recordList.add(fileGroupReader.next());
-    }
+    return props;
   }
 
   private boolean shouldValidatePartialRead(FileSlice fileSlice, Schema requestedSchema) {
@@ -473,6 +499,24 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
             readerContext.getValue(record, schema, PRECOMBINE_FIELD_NAME).toString(),
             readerContext.getValue(record, schema, RIDER_FIELD_NAME).toString()))
         .collect(Collectors.toList());
+  }
+
+  private List<HoodieTestDataGenerator.RecordIdentifier> convertHoodieRecords(List<HoodieRecord<T>> records, Schema schema, HoodieReaderContext<T> readerContext) {
+    return records.stream()
+        .map(record -> new HoodieTestDataGenerator.RecordIdentifier(
+            record.getRecordKey(),
+            removeHiveStylePartition(record.getPartitionPath()),
+            record.getOrderingValue(schema, new TypedProperties()).toString(),
+            readerContext.getValue(record.getData(), schema, RIDER_FIELD_NAME).toString()))
+        .collect(Collectors.toList());
+  }
+
+  private static String removeHiveStylePartition(String partitionPath) {
+    int indexOf = partitionPath.indexOf("=");
+    if (indexOf > 0) {
+      return partitionPath.substring(indexOf + 1);
+    }
+    return partitionPath;
   }
 
   private void extract(Path target) throws IOException {

@@ -156,7 +156,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
     SparkRDDWriteClient writeClient = (SparkRDDWriteClient) getWriteClient();
     String actionType = CommitUtils.getCommitActionType(WriteOperationType.DELETE_PARTITION, HoodieTableType.MERGE_ON_READ);
-    writeClient.startCommitWithTime(instantTime, actionType);
+    writeClient.startCommitForMetadataTable(metadataMetaClient, instantTime, actionType);
     writeClient.deletePartitions(partitionsToDrop, instantTime);
   }
 

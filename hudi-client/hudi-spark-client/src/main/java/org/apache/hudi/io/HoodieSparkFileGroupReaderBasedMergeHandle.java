@@ -29,9 +29,9 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
-import org.apache.hudi.common.table.read.HoodieFileGroupReader.HoodieFileGroupReaderIterator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.internal.schema.InternalSchema;
@@ -91,15 +91,11 @@ public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends Base
     long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(taskContextSupplier, config);
     props.put(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(), String.valueOf(maxMemoryPerCompaction));
     // Initializes file group reader
-    try (HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(readerContext,
-        storage.newInstance(hoodieTable.getMetaClient().getBasePath(), readerContext.getStorageConfiguration()),
-        hoodieTable.getMetaClient().getBasePath().toString(), instantTime, fileSlice,
-        writeSchemaWithMetaFields, writeSchemaWithMetaFields, internalSchemaOption,
-        hoodieTable.getMetaClient(), props, 0, Long.MAX_VALUE, usePosition, false)) {
-      fileGroupReader.initRecordIterators();
+    try (HoodieFileGroupReader<T> fileGroupReader = HoodieFileGroupReader.<T>newBuilder().withReaderContext(readerContext).withHoodieTableMetaClient(hoodieTable.getMetaClient())
+        .withLatestCommitTime(instantTime).withFileSlice(fileSlice).withDataSchema(writeSchemaWithMetaFields).withRequestedSchema(writeSchemaWithMetaFields)
+        .withInternalSchema(internalSchemaOption).withProps(props).withShouldUseRecordPosition(usePosition).build()) {
       // Reads the records from the file slice
-      try (HoodieFileGroupReaderIterator<InternalRow> recordIterator
-               = (HoodieFileGroupReaderIterator<InternalRow>) fileGroupReader.getClosableIterator()) {
+      try (ClosableIterator<InternalRow> recordIterator = (ClosableIterator<InternalRow>) fileGroupReader.getClosableIterator()) {
         StructType sparkSchema = AvroConversionUtils.convertAvroSchemaToStructType(writeSchemaWithMetaFields);
         while (recordIterator.hasNext()) {
           // Constructs Spark record for the Spark Parquet file writer

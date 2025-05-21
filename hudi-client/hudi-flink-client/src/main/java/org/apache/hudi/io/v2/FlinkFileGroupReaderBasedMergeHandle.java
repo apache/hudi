@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.internal.schema.InternalSchema;
@@ -81,25 +82,12 @@ public class FlinkFileGroupReaderBasedMergeHandle<T, I, K, O> extends BaseFileGr
     }
     TypedProperties props = FlinkClientUtil.getMergedTableAndWriteProps(hoodieTable.getMetaClient().getTableConfig(), config);
     // Initializes file group reader
-    try (HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(
-        readerContext,
-        storage.newInstance(hoodieTable.getMetaClient().getBasePath(), readerContext.getStorageConfiguration()),
-        hoodieTable.getMetaClient().getBasePath().toString(),
-        instantTime,
-        fileSlice,
-        writeSchemaWithMetaFields,
-        writeSchemaWithMetaFields,
-        internalSchemaOption,
-        hoodieTable.getMetaClient(),
-        props,
-        0,
-        Long.MAX_VALUE,
-        false,
-        false)) {
-      fileGroupReader.initRecordIterators();
+    try (HoodieFileGroupReader<T> fileGroupReader = HoodieFileGroupReader.<T>newBuilder()
+        .withReaderContext(readerContext).withHoodieTableMetaClient(hoodieTable.getMetaClient())
+        .withLatestCommitTime(instantTime).withFileSlice(fileSlice).withDataSchema(writeSchemaWithMetaFields).withRequestedSchema(writeSchemaWithMetaFields)
+        .withInternalSchema(internalSchemaOption).withProps(props).withShouldUseRecordPosition(false).build()) {
       // Reads the records from the file slice
-      try (HoodieFileGroupReader.HoodieFileGroupReaderIterator<RowData> recordIterator =
-               (HoodieFileGroupReader.HoodieFileGroupReaderIterator<RowData>) fileGroupReader.getClosableIterator()) {
+      try (ClosableIterator<RowData> recordIterator = (ClosableIterator<RowData>) fileGroupReader.getClosableIterator()) {
         while (recordIterator.hasNext()) {
           // Constructs Flink record for the Flink Parquet file writer
           RowData row = recordIterator.next();
