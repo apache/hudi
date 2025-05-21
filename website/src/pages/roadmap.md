@@ -32,6 +32,7 @@ down by areas on our [stack](/docs/hudi_stack).
 | Track schema in metadata table                       | 1.1.0          | [HUDI-6778](https://issues.apache.org/jira/browse/HUDI-6778)                                                                                                                   |
 | Enable partial updates for CDC workload payload      | 1.1.0          | [HUDI-7229](https://issues.apache.org/jira/browse/HUDI-7229)                                                                                                                   |
 | NBCC for MDT writes                                  | 1.1.0          | [HUDI-8480](https://issues.apache.org/jira/browse/HUDI-8480) |
+| Index abstraction for writer and reader              | 1.1.0          | [HUDI-9176](https://issues.apache.org/jira/browse/HUDI-9176) |
 | Vector search index                                  | 1.1.0          | [HUDI-9047](https://issues.apache.org/jira/browse/HUDI-9047) |
 | Bitmap index                                         | 1.1.0          | [HUDI-9048](https://issues.apache.org/jira/browse/HUDI-9048) |
 | Native HFile Writer and removal of HBase dependency  | 1.1.0          | [HUDI-8222](https://issues.apache.org/jira/browse/HUDI-8222) |
