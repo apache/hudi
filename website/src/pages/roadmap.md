@@ -10,16 +10,14 @@ down by areas on our [stack](/docs/hudi_stack).
 
 ## Recent Release(s)
 
-[1.0.1](/releases/release-1.0.1) (Feb 2025)
+[1.0.2](/releases/release-1.0.2) (May 2025)
 
 ## Future Releases
 
 | Release | Timeline  |
 |---------|-----------|
-| 1.0.2   | Mar 2025  |
-| 1.1.0   | Apr 2025  |
-| 1.2.0   | Jun 2025  |
-| 1.3.0   | Aug 2025  |
+| 1.1.0   | Jun 2025  |
+| 1.2.0   | Aug 2025  |
 | 2.0.0   | Nov 2025  |
 
 
@@ -27,7 +25,6 @@ down by areas on our [stack](/docs/hudi_stack).
 
 | Feature                                              | Target Release | Tracking                                                                                                                                                                       |
 |------------------------------------------------------|----------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Backwards compatible MDT writer and reader support   | 1.0.2          | [HUDI-9026](https://issues.apache.org/jira/browse/HUDI-9026) |
 | Introduce `.abort` state in the timeline             | 1.1.0          | [HUDI-8189](https://issues.apache.org/jira/browse/HUDI-8189) |
 | Schema tracking in metadata table                    | 1.1.0          | [HUDI-6778](https://issues.apache.org/jira/browse/HUDI-6778) |
 | Variant type support on Spark 4                      | 1.1.0          | [HUDI-9046](https://issues.apache.org/jira/browse/HUDI-9046) |
@@ -39,6 +36,7 @@ down by areas on our [stack](/docs/hudi_stack).
 | Bitmap index                                         | 1.1.0          | [HUDI-9048](https://issues.apache.org/jira/browse/HUDI-9048) |
 | Native HFile Writer and removal of HBase dependency  | 1.1.0          | [HUDI-8222](https://issues.apache.org/jira/browse/HUDI-8222) |
 | New abstraction for schema, expressions, and filters | 1.1.0          | [RFC-88](https://github.com/apache/hudi/pull/12795) |
+| Pluggable Table Formats in Hudi                      | 1.1.0          | [RFC-93, HUDI-9332](https://github.com/apache/hudi/blob/master/rfc/rfc-93/rfc-93.md) |
 | Streaming CDC/Incremental read improvement           | 1.2.0          | [HUDI-2749](https://issues.apache.org/jira/browse/HUDI-2749) |
 | Supervised table service planning and execution      | 1.2.0          | [RFC-43](https://github.com/apache/hudi/pull/4309), [HUDI-4147](https://issues.apache.org/jira/browse/HUDI-4147)                                                               |
 | General purpose support for multi-table transactions | 1.2.0          | [HUDI-6709](https://issues.apache.org/jira/browse/HUDI-6709) |
@@ -62,7 +60,6 @@ down by areas on our [stack](/docs/hudi_stack).
 
 | Feature                                                 | Target Release | Tracking                                                                                                                                                                                 |
 |---------------------------------------------------------|----------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Presto/Trino queries with new format                    | 1.0.2          | [HUDI-3210](https://issues.apache.org/jira/browse/HUDI-4394), [HUDI-4394](https://issues.apache.org/jira/browse/HUDI-4394), [HUDI-4552](https://issues.apache.org/jira/browse/HUDI-4552) |
 | Improve metadata table write DAG on Spark               | 1.1.0          | [HUDI-8462](https://issues.apache.org/jira/browse/HUDI-8462) |
 | End-to-end DataFrame write path on Spark                | 1.1.0          | [HUDI-9019](https://issues.apache.org/jira/browse/HUDI-9019), [HUDI-4857](https://issues.apache.org/jira/browse/HUDI-4857) |
 | Optimize performance with engine-native records on Flink | 1.1.0          | [HUDI-8799](https://issues.apache.org/jira/browse/HUDI-8799) |
@@ -72,7 +69,10 @@ down by areas on our [stack](/docs/hudi_stack).
 | Spark 4 Support	                                       | 1.1.0	         | [HUDI-7915](https://issues.apache.org/jira/browse/HUDI-7915)                                                                                                                             |
 | Spark datasource V2 read                                | 1.1.0          | [HUDI-4449](https://issues.apache.org/jira/browse/HUDI-4449)                                                                                                                             |
 | Simplification of engine integration and module organization | 1.1.0          | [HUDI-9502](https://issues.apache.org/jira/browse/HUDI-9502) |
-
+| Support Hudi 1.0 release in Presto Hudi Connector       | Presto Release / Q2 | [HUDI-3210](https://issues.apache.org/jira/browse/HUDI-3210) |
+| Support of new indexes in Presto Hudi Connector         | Presto Release / Q3 | [HUDI-4394](https://issues.apache.org/jira/browse/HUDI-4394), [HUDI-4552](https://issues.apache.org/jira/browse/HUDI-4552) |
+| MDT support in Trino Hudi Connector                     | Trino Release / Q2 | [HUDI-2687](https://issues.apache.org/jira/browse/HUDI-2687) |
+| Support of new indexes in Trino Hudi Connector          | Trino Release / Q3 | [HUDI-4394](https://issues.apache.org/jira/browse/HUDI-4394), [HUDI-4552](https://issues.apache.org/jira/browse/HUDI-4552) |
 
 ## Platform Components
 
@@ -88,5 +88,5 @@ down by areas on our [stack](/docs/hudi_stack).
 ## Developer Experience
 | Feature                                                 | Target Release | Tracking                                 |
 |---------------------------------------------------------|----------------|------------------------------------------|
-| Support code coverage report and improve test coverage  | 1.0.2          | [HUDI-9015](https://issues.apache.org/jira/browse/HUDI-9015) |
-| Clean up tech debt and deprecate unused code            | 1.1.0          | [HUDI-9504](https://issues.apache.org/jira/browse/HUDI-9504) |
+| Support code coverage report and improve test coverage  | 1.1.0          | [HUDI-9015](https://issues.apache.org/jira/browse/HUDI-9015) |
+| Clean up tech debt and deprecate unused code            | 1.1.0          | [HUDI-9054](https://issues.apache.org/jira/browse/HUDI-9054) |
