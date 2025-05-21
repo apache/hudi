@@ -33,6 +33,7 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
@@ -195,7 +196,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
       action = HoodieTimeline.DELTA_COMMIT_ACTION;
     }
     SparkRDDWriteClient client = getHoodieWriteClient(cfg);
-    client.scheduleLogCompactionAtInstant("003", Option.empty());
+    WriteClientTestUtils.scheduleTableService(client, "003", Option.empty(), TableServiceType.LOG_COMPACT);
     client.logCompact("003");
 
     //3. rollback log compact
