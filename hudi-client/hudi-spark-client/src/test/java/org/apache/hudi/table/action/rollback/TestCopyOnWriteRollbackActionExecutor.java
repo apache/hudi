@@ -180,18 +180,16 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
       WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
       List<HoodieRecord> records = dataGen.generateInsertsContainsAllPartitions(newCommitTime, 3);
       JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
-      JavaRDD<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime);
-      statuses = jsc.parallelize(statuses.collect(), 1);
-      client.commit(newCommitTime, statuses, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
-      assertNoWriteErrors(statuses.collect());
+      List<WriteStatus> statusList = client.upsert(writeRecords, newCommitTime).collect();
+      client.commit(newCommitTime, jsc.parallelize(statusList), Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+      assertNoWriteErrors(statusList);
 
       newCommitTime = "002";
       WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
       records = dataGen.generateUpdates(newCommitTime, records);
-      statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime);
-      statuses = jsc.parallelize(statuses.collect(), 1);
-      client.commit(newCommitTime, statuses, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
-      assertNoWriteErrors(statuses.collect());
+      statusList = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
+      client.commit(newCommitTime, jsc.parallelize(statusList), Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+      assertNoWriteErrors(statusList);
 
       context = new HoodieSparkEngineContext(jsc);
       metaClient = HoodieTableMetaClient.reload(metaClient);

@@ -90,21 +90,19 @@ public class TestSavepoint extends HoodieClientTestBase {
       WriteClientTestUtils.startCommitWithTime(client, commitTime1);
       List<HoodieRecord> records1 = dataGen.generateInserts(commitTime1, 200);
       JavaRDD<HoodieRecord> writeRecords1 = jsc.parallelize(records1, 1);
-      JavaRDD<WriteStatus> statuses1 = client.upsert(writeRecords1, commitTime1);
-      statuses1 = jsc.parallelize(statuses1.collect(), 1);
-      client.commit(commitTime1, statuses1, Option.empty(), tableType == HoodieTableType.COPY_ON_WRITE ? COMMIT_ACTION : DELTA_COMMIT_ACTION,
+      List<WriteStatus> statusList = client.upsert(writeRecords1, commitTime1).collect();
+      client.commit(commitTime1, jsc.parallelize(statusList), Option.empty(), tableType == HoodieTableType.COPY_ON_WRITE ? COMMIT_ACTION : DELTA_COMMIT_ACTION,
           Collections.emptyMap(), Option.empty());
-      assertNoWriteErrors(statuses1.collect());
+      assertNoWriteErrors(statusList);
 
       String commitTime2 = "002";
       WriteClientTestUtils.startCommitWithTime(client, commitTime2);
       List<HoodieRecord> records2 = dataGen.generateInserts(commitTime2, 200);
       JavaRDD<HoodieRecord> writeRecords2 = jsc.parallelize(records2, 1);
-      JavaRDD<WriteStatus> statuses2 = client.upsert(writeRecords2, commitTime2);
-      statuses2 = jsc.parallelize(statuses2.collect(), 1);
-      client.commit(commitTime2, statuses2, Option.empty(), tableType == HoodieTableType.COPY_ON_WRITE ? COMMIT_ACTION : DELTA_COMMIT_ACTION,
+      statusList = client.upsert(writeRecords2, commitTime2).collect();
+      client.commit(commitTime2, jsc.parallelize(statusList), Option.empty(), tableType == HoodieTableType.COPY_ON_WRITE ? COMMIT_ACTION : DELTA_COMMIT_ACTION,
           Collections.emptyMap(), Option.empty());
-      assertNoWriteErrors(statuses2.collect());
+      assertNoWriteErrors(statusList);
 
       client.savepoint("user", "hoodie-savepoint-unit-test");
 

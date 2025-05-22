@@ -152,10 +152,9 @@ public class TestCleaner extends HoodieCleanerTestBase {
     List<HoodieRecord> records = recordGenFunction.apply(newCommitTime, BIG_BATCH_INSERT_SIZE);
     JavaRDD<HoodieRecord> writeRecords = context.getJavaSparkContext().parallelize(records, PARALLELISM);
 
-    JavaRDD<WriteStatus> statuses = insertFn.apply(client, writeRecords, newCommitTime);
-    statuses = context.getJavaSparkContext().parallelize(statuses.collect(), 1);
-    client.commit(newCommitTime, statuses, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
-    assertNoWriteErrors(statuses.collect());
+    List<WriteStatus> statusList = insertFn.apply(client, writeRecords, newCommitTime).collect();
+    client.commit(newCommitTime, context.getJavaSparkContext().parallelize(statusList), Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+    assertNoWriteErrors(statusList);
 
     // verify that there is a commit
     metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -166,7 +165,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
 
     // We no longer write empty cleaner plans when there is nothing to be cleaned.
     assertTrue(table.getCompletedCleanTimeline().empty());
-    return Pair.of(newCommitTime, statuses);
+    return Pair.of(newCommitTime, context.getJavaSparkContext().parallelize(statusList));
   }
 
   /**

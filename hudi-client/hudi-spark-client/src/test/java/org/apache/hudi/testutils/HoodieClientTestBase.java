@@ -526,9 +526,9 @@ public class HoodieClientTestBase extends HoodieSparkClientTestHarness {
 
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
 
-    JavaRDD<WriteStatus> rawResult = writeFn.apply(client, writeRecords, newCommitTime);
-    JavaRDD<WriteStatus> result = jsc.parallelize(rawResult.collect(), 1);
-    assertNoWriteErrors(result.collect());
+    List<WriteStatus> statusList = writeFn.apply(client, writeRecords, newCommitTime).collect();
+    JavaRDD<WriteStatus> result = jsc.parallelize(statusList, 1);
+    assertNoWriteErrors(statusList);
 
     if (!skipCommit) {
       client.commit(newCommitTime, result);

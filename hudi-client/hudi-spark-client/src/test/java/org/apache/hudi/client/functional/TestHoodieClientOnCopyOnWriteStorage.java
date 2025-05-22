@@ -699,8 +699,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     WriteClientTestUtils.startCommitWithTime(client, commitTime);
     List<HoodieRecord> inserts = dataGen.generateInserts(commitTime, recordNum);
     JavaRDD<HoodieRecord> insertRecordsRDD = jsc.parallelize(inserts, numSlices);
-    JavaRDD<WriteStatus> statuses = writeFn.apply(client, insertRecordsRDD, commitTime);
-    List<WriteStatus> statusList = statuses.collect();
+    List<WriteStatus> statusList = writeFn.apply(client, insertRecordsRDD, commitTime).collect();
     assertNoWriteErrors(statusList);
     JavaRDD<WriteStatus> recreatedStatuses = jsc.parallelize(statusList, numSlices);
     if (!skipCommit) {
@@ -784,15 +783,14 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     Set<String> keys1 = recordsToRecordKeySet(inserts1);
 
     JavaRDD<HoodieRecord> insertRecordsRDD1 = jsc.parallelize(inserts1, 1);
-    JavaRDD<WriteStatus> rawStatuses = client.upsert(insertRecordsRDD1, commitTime1);
-    JavaRDD<WriteStatus> statuses = jsc.parallelize(rawStatuses.collect(), 1);
-    writeClient.commit(commitTime1, statuses, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
-    assertNoWriteErrors(statuses.collect());
+    List<WriteStatus> statusList = client.upsert(insertRecordsRDD1, commitTime1).collect();
+    writeClient.commit(commitTime1, jsc.parallelize(statusList), Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+    assertNoWriteErrors(statusList);
 
-    assertEquals(1, statuses.collect().size(), "Just 1 file needs to be added.");
-    String file1 = statuses.collect().get(0).getFileId();
+    assertEquals(1, statusList.size(), "Just 1 file needs to be added.");
+    String file1 = statusList.get(0).getFileId();
     assertEquals(100,
-        fileUtils.readRowKeys(storage, new StoragePath(basePath, statuses.collect().get(0).getStat().getPath()))
+        fileUtils.readRowKeys(storage, new StoragePath(basePath, statusList.get(0).getStat().getPath()))
             .size(), "file should contain 100 records");
 
     // Update + Inserts such that they just expand file1
@@ -805,15 +803,14 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     insertsAndUpdates2.addAll(dataGen.generateUpdates(commitTime2, inserts1));
 
     JavaRDD<HoodieRecord> insertAndUpdatesRDD2 = jsc.parallelize(insertsAndUpdates2, 1);
-    rawStatuses = client.upsert(insertAndUpdatesRDD2, commitTime2);
-    statuses = jsc.parallelize(rawStatuses.collect(), 1);
-    client.commit(commitTime2, statuses, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
-    assertNoWriteErrors(statuses.collect());
+    statusList = client.upsert(insertAndUpdatesRDD2, commitTime2).collect();
+    client.commit(commitTime2, jsc.parallelize(statusList), Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+    assertNoWriteErrors(statusList);
 
-    assertEquals(1, statuses.collect().size(), "Just 1 file needs to be updated.");
-    assertEquals(file1, statuses.collect().get(0).getFileId(), "Existing file should be expanded");
-    assertEquals(commitTime1, statuses.collect().get(0).getStat().getPrevCommit(), "Existing file should be expanded");
-    StoragePath newFile = new StoragePath(basePath, statuses.collect().get(0).getStat().getPath());
+    assertEquals(1, statusList.size(), "Just 1 file needs to be updated.");
+    assertEquals(file1, statusList.get(0).getFileId(), "Existing file should be expanded");
+    assertEquals(commitTime1, statusList.get(0).getStat().getPrevCommit(), "Existing file should be expanded");
+    StoragePath newFile = new StoragePath(basePath, statusList.get(0).getStat().getPath());
     assertEquals(140, fileUtils.readRowKeys(storage, newFile).size(),
         "file should contain 140 records");
 
@@ -833,12 +830,10 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     insertsAndUpdates3.addAll(updates3);
 
     JavaRDD<HoodieRecord> insertAndUpdatesRDD3 = jsc.parallelize(insertsAndUpdates3, 1);
-    rawStatuses = client.upsert(insertAndUpdatesRDD3, commitTime3);
-    statuses = jsc.parallelize(rawStatuses.collect(), 1);
-    client.commit(commitTime3, statuses, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
-    List<WriteStatus> writeStatuses = statuses.collect();
-    assertNoWriteErrors(writeStatuses);
-    assertEquals(2, writeStatuses.size(), "2 files needs to be committed.");
+    statusList = client.upsert(insertAndUpdatesRDD3, commitTime3).collect();
+    client.commit(commitTime3, jsc.parallelize(statusList), Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+    assertNoWriteErrors(statusList);
+    assertEquals(2, statusList.size(), "2 files needs to be committed.");
     HoodieTableMetaClient metadata = createMetaClient();
 
     HoodieTable table = getHoodieTable(metadata, config);
@@ -972,15 +967,14 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     Set<String> keys1 = recordsToRecordKeySet(inserts1);
     List<String> keysSoFar = new ArrayList<>(keys1);
     JavaRDD<HoodieRecord> insertRecordsRDD1 = jsc.parallelize(inserts1, 1);
-    JavaRDD<WriteStatus> rawStatuses = client.upsert(insertRecordsRDD1, commitTime1);
-    JavaRDD<WriteStatus> statuses = jsc.parallelize(rawStatuses.collect(), 1);
-    client.commit(commitTime1, statuses, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
-    assertNoWriteErrors(statuses.collect());
+    List<WriteStatus> statusList = client.upsert(insertRecordsRDD1, commitTime1).collect();
+    client.commit(commitTime1, jsc.parallelize(statusList), Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+    assertNoWriteErrors(statusList);
 
-    assertEquals(1, statuses.collect().size(), "Just 1 file needs to be added.");
-    String file1 = statuses.collect().get(0).getFileId();
+    assertEquals(1, statusList.size(), "Just 1 file needs to be added.");
+    String file1 = statusList.get(0).getFileId();
     assertEquals(100, getFileUtilsInstance(metaClient).readRowKeys(
-        storage, new StoragePath(basePath, statuses.collect().get(0).getStat().getPath())).size(), "file should contain 100 records");
+        storage, new StoragePath(basePath, statusList.get(0).getStat().getPath())).size(), "file should contain 100 records");
 
     // Delete 20 among 100 inserted
     testDeletes(client, inserts1, 20, file1, "002", 80, keysSoFar);
@@ -1003,10 +997,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     List<HoodieRecord> dummyInserts3 = dataGen.generateInserts(commitTime6, 20);
     List<HoodieKey> hoodieKeysToDelete3 = randomSelectAsHoodieKeys(dummyInserts3, 20);
     JavaRDD<HoodieKey> deleteKeys3 = jsc.parallelize(hoodieKeysToDelete3, 1);
-    JavaRDD<WriteStatus> preStatuses = client.delete(deleteKeys3, commitTime6);
-    statuses = jsc.parallelize(preStatuses.collect(), 1);
-    client.commit(commitTime6, statuses, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
-    List<WriteStatus> statusList = statuses.collect();
+    statusList = client.delete(deleteKeys3, commitTime6).collect();
+    client.commit(commitTime6, jsc.parallelize(statusList), Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
     assertNoWriteErrors(statusList);
     assertEquals(0, statusList.size(), "Just 0 write status for delete.");
 
@@ -1296,12 +1288,12 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     List<HoodieRecord> insertsAndUpdates2 = new ArrayList<>(inserts2);
     JavaRDD<HoodieRecord> insertAndUpdatesRDD2 = jsc.parallelize(insertsAndUpdates2, 2);
     HoodieWriteResult writeResult = client.insertOverwrite(insertAndUpdatesRDD2, commitTime2);
-    JavaRDD<WriteStatus> statusJavaRDD = jsc.parallelize(writeResult.getWriteStatuses().collect(), 2);
-    client.commit(commitTime2, statusJavaRDD, Option.empty(), REPLACE_COMMIT_ACTION, Collections.emptyMap(), Option.empty());
-    assertNoWriteErrors(statusJavaRDD.collect());
+    List<WriteStatus> statusList = jsc.parallelize(writeResult.getWriteStatuses().collect(), 2).collect();
+    client.commit(commitTime2, jsc.parallelize(statusList), Option.empty(), REPLACE_COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+    assertNoWriteErrors(statusList);
 
     assertEquals(batch1Buckets, new HashSet<>(writeResult.getPartitionToReplaceFileIds().get(testPartitionPath)));
-    verifyRecordsWritten(commitTime2, populateMetaFields, inserts2, statusJavaRDD.collect(), config,
+    verifyRecordsWritten(commitTime2, populateMetaFields, inserts2, statusList, config,
         HoodieSparkKeyGeneratorFactory.createKeyGenerator(config.getProps()));
   }
 
@@ -1338,12 +1330,11 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     WriteClientTestUtils.startCommitWithTime(client, commitTime1);
     List<HoodieRecord> inserts1 = dataGen.generateInsertsForPartition(commitTime1, recordsCount, partitionPath);
     JavaRDD<HoodieRecord> insertRecordsRDD1 = jsc.parallelize(inserts1, 2);
-    JavaRDD<WriteStatus> rawStatuses = client.upsert(insertRecordsRDD1, commitTime1);
-    JavaRDD<WriteStatus> statuses = jsc.parallelize(rawStatuses.collect(), 2);
-    client.commit(commitTime1, statuses, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
-    assertNoWriteErrors(statuses.collect());
-    Set<String> batchBuckets = statuses.collect().stream().map(WriteStatus::getFileId).collect(Collectors.toSet());
-    verifyRecordsWritten(commitTime1, true, inserts1, statuses.collect(), client.getConfig(),
+    List<WriteStatus> statusList = client.upsert(insertRecordsRDD1, commitTime1).collect();
+    client.commit(commitTime1, jsc.parallelize(statusList), Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+    assertNoWriteErrors(statusList);
+    Set<String> batchBuckets = statusList.stream().map(WriteStatus::getFileId).collect(Collectors.toSet());
+    verifyRecordsWritten(commitTime1, true, inserts1, statusList, client.getConfig(),
         HoodieSparkKeyGeneratorFactory.createKeyGenerator(client.getConfig().getProps()));
     return batchBuckets;
   }
@@ -1430,10 +1421,9 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     insertsAndUpdates.addAll(dataGen.generateUpdates(instantTime, inserts));
 
     JavaRDD<HoodieRecord> insertAndUpdatesRDD = jsc.parallelize(insertsAndUpdates, 1);
-    JavaRDD<WriteStatus> rawStatuses = client.upsert(insertAndUpdatesRDD, instantTime);
-    JavaRDD<WriteStatus> statuses = jsc.parallelize(rawStatuses.collect(), 1);
-    client.commit(instantTime, statuses, Option.empty(), COMMIT_ACTION, Collections.emptyMap());
-    assertNoWriteErrors(statuses.collect());
+    List<WriteStatus> statusList = client.upsert(insertAndUpdatesRDD, instantTime).collect();
+    client.commit(instantTime, jsc.parallelize(statusList), Option.empty(), COMMIT_ACTION, Collections.emptyMap());
+    assertNoWriteErrors(statusList);
 
     assertTheEntireDatasetHasAllRecordsStill(expectedRecords);
     return Pair.of(keys, inserts);
@@ -1445,17 +1435,16 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
     List<HoodieKey> hoodieKeysToDelete = randomSelectAsHoodieKeys(previousRecords, sizeToDelete);
     JavaRDD<HoodieKey> deleteKeys = jsc.parallelize(hoodieKeysToDelete, 1);
-    JavaRDD<WriteStatus> rawStatuses = client.delete(deleteKeys, instantTime);
-    JavaRDD<WriteStatus> statuses = jsc.parallelize(rawStatuses.collect(),1);
-    client.commit(instantTime, statuses, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
-    assertNoWriteErrors(statuses.collect());
+    List<WriteStatus> statusList = client.delete(deleteKeys, instantTime).collect();
+    client.commit(instantTime, jsc.parallelize(statusList), Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+    assertNoWriteErrors(statusList);
 
-    assertEquals(1, statuses.collect().size(), "Just 1 file needs to be added.");
-    assertEquals(existingFile, statuses.collect().get(0).getFileId(), "Existing file should be expanded");
+    assertEquals(1, statusList.size(), "Just 1 file needs to be added.");
+    assertEquals(existingFile, statusList.get(0).getFileId(), "Existing file should be expanded");
 
     assertTheEntireDatasetHasAllRecordsStill(expectedRecords);
 
-    StoragePath newFile = new StoragePath(basePath, statuses.collect().get(0).getStat().getPath());
+    StoragePath newFile = new StoragePath(basePath, statusList.get(0).getStat().getPath());
     assertEquals(expectedRecords,
         getFileUtilsInstance(metaClient).readRowKeys(storage, newFile).size(),
         "file should contain 110 records");

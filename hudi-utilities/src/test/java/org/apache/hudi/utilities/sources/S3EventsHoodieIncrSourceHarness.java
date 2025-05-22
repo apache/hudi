@@ -225,10 +225,9 @@ public class S3EventsHoodieIncrSourceHarness extends SparkClientFunctionalTestHa
       List<HoodieRecord> s3MetadataRecords = Arrays.asList(
           generateS3EventMetadata(commitTime, "bucket-1", "data-file-1.json", 1L)
       );
-      JavaRDD<WriteStatus> result = writeClient.upsert(jsc().parallelize(s3MetadataRecords, 1), commitTime);
-      result = jsc.parallelize(result.collect(), 1);
-      writeClient.commit(commitTime, result, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
-      assertNoWriteErrors(result.collect());
+      List<WriteStatus> statusList = writeClient.upsert(jsc().parallelize(s3MetadataRecords, 1), commitTime).collect();
+      writeClient.commit(commitTime, jsc.parallelize(statusList), Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+      assertNoWriteErrors(statusList);
       return Pair.of(commitTime, s3MetadataRecords);
     }
   }

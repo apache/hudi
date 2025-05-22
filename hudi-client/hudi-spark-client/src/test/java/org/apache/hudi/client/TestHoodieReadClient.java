@@ -118,10 +118,9 @@ public class TestHoodieReadClient extends HoodieClientTestBase {
 
       JavaRDD<HoodieRecord> smallRecordsRDD = jsc.parallelize(records.subList(0, 75), PARALLELISM);
       // We create three base file, each having one record. (3 different partitions)
-      JavaRDD<WriteStatus> statuses = writeFn.apply(writeClient, smallRecordsRDD, newCommitTime);
-      statuses = jsc.parallelize(statuses.collect(), 1);
-      writeClient.commit(newCommitTime, statuses, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
-      assertNoWriteErrors(statuses.collect());
+      List<WriteStatus> statusList = writeFn.apply(writeClient, smallRecordsRDD, newCommitTime).collect();
+      writeClient.commit(newCommitTime, jsc.parallelize(statusList), Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+      assertNoWriteErrors(statusList);
 
       SparkRDDReadClient anotherReadClient = getHoodieReadClient(config.getBasePath());
       filteredRDD = anotherReadClient.filterExists(recordsRDD);

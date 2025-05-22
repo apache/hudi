@@ -152,13 +152,12 @@ public class TestCleanerInsertAndCleanByCommits extends SparkClientFunctionalTes
       for (int i = 0; i < 8; i++) {
         String newCommitTime = client.startCommit();
         List<HoodieRecord> records = recordUpsertGenWrappedFunction.apply(newCommitTime, BATCH_SIZE);
-        JavaRDD<WriteStatus> rawStatuses = upsertFn.apply(client, jsc().parallelize(records, PARALLELISM), newCommitTime);
-        JavaRDD<WriteStatus> statuses = jsc().parallelize(rawStatuses.collect(), 1);
-        client.commit(newCommitTime, statuses, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
-        assertNoWriteErrors(statuses.collect());
+        List<WriteStatus> statusList = upsertFn.apply(client, jsc().parallelize(records, PARALLELISM), newCommitTime).collect();
+        client.commit(newCommitTime, jsc().parallelize(statusList), Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+        assertNoWriteErrors(statusList);
         commitWriteStatsMap.put(
             newCommitTime,
-            statuses.map(WriteStatus::getStat).collect());
+            statusList.stream().map(WriteStatus::getStat).collect(Collectors.toList()));
 
         metaClient = HoodieTableMetaClient.reload(metaClient);
         validateFilesAfterCleaning(

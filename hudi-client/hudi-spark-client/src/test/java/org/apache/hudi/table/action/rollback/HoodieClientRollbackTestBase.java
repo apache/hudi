@@ -64,10 +64,9 @@ public class HoodieClientRollbackTestBase extends HoodieClientTestBase {
     WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
     List<HoodieRecord> records = dataGen.generateInsertsContainsAllPartitions(newCommitTime, 2);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
-    JavaRDD<WriteStatus> rawStatuses = client.upsert(writeRecords, newCommitTime);
-    JavaRDD<WriteStatus> statuses = jsc.parallelize(rawStatuses.collect(), 1);
-    client.commit(newCommitTime, statuses);
-    Assertions.assertNoWriteErrors(statuses.collect());
+    List<WriteStatus> statusList = client.upsert(writeRecords, newCommitTime).collect();
+    client.commit(newCommitTime, jsc.parallelize(statusList));
+    Assertions.assertNoWriteErrors(statusList);
 
     /**
      * Write 2 (updates)
@@ -75,12 +74,11 @@ public class HoodieClientRollbackTestBase extends HoodieClientTestBase {
     newCommitTime = InProcessTimeGenerator.createNewInstantTime();
     WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
     records = dataGen.generateUpdates(newCommitTime, records);
-    rawStatuses = client.upsert(jsc.parallelize(records, 1), newCommitTime);
-    statuses = jsc.parallelize(rawStatuses.collect(), 1);
+    statusList = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
     if (commitSecondUpsert) {
-      client.commit(newCommitTime, statuses);
+      client.commit(newCommitTime, jsc.parallelize(statusList));
     }
-    Assertions.assertNoWriteErrors(statuses.collect());
+    Assertions.assertNoWriteErrors(statusList);
 
     //2. assert file group and get the first partition file slice
     HoodieTable table = this.getHoodieTable(metaClient, cfg);
@@ -119,9 +117,9 @@ public class HoodieClientRollbackTestBase extends HoodieClientTestBase {
     List<HoodieRecord> records = dataGen.generateInsertsContainsAllPartitions(newCommitTime, 2);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
     WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
-    JavaRDD<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime);
-    Assertions.assertNoWriteErrors(statuses.collect());
-    client.commit(newCommitTime, statuses);
+    List<WriteStatus> statusList = client.upsert(writeRecords, newCommitTime).collect();
+    Assertions.assertNoWriteErrors(statusList);
+    client.commit(newCommitTime, jsc.parallelize(statusList));
 
     // get fileIds written
     HoodieTable table = this.getHoodieTable(metaClient, cfg);
@@ -142,10 +140,10 @@ public class HoodieClientRollbackTestBase extends HoodieClientTestBase {
     writeRecords = jsc.parallelize(records, 1);
     WriteClientTestUtils.startCommitWithTime(client, newCommitTime, commitActionType);
     HoodieWriteResult result = client.insertOverwrite(writeRecords, newCommitTime);
-    statuses = result.getWriteStatuses();
-    Assertions.assertNoWriteErrors(statuses.collect());
+    statusList = result.getWriteStatuses().collect();
+    Assertions.assertNoWriteErrors(statusList);
     if (commitSecondInsertOverwrite) {
-      client.commit(newCommitTime, statuses, Option.empty(), commitActionType, result.getPartitionToReplaceFileIds());
+      client.commit(newCommitTime, jsc.parallelize(statusList), Option.empty(), commitActionType, result.getPartitionToReplaceFileIds());
     }
     metaClient.reloadActiveTimeline();
     // get new fileIds written as part of insert_overwrite

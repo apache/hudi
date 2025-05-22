@@ -49,10 +49,9 @@ class TestDataSourceUtils extends HoodieClientTestBase {
       String newCommitTime = writeClient.startCommit();
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
       JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 2);
-      JavaRDD<WriteStatus> rawStatuses = writeClient.bulkInsert(recordsRDD, newCommitTime);
-      JavaRDD<WriteStatus> statuses = jsc.parallelize(rawStatuses.collect(), 1);
-      writeClient.commit(newCommitTime, statuses, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
-      assertNoWriteErrors(statuses.collect());
+      List<WriteStatus> statusList = writeClient.bulkInsert(recordsRDD, newCommitTime).collect();
+      writeClient.commit(newCommitTime, jsc.parallelize(statusList), Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+      assertNoWriteErrors(statusList);
 
       Map<String, String> parameters = config.getProps().entrySet().stream().collect(Collectors.toMap(entry -> entry.getKey().toString(), entry -> entry.getValue().toString()));
       List<HoodieRecord> newRecords = dataGen.generateInserts(newCommitTime, 10);

@@ -180,10 +180,9 @@ public class TestCleanerInsertAndCleanByVersions extends SparkClientFunctionalTe
         WriteClientTestUtils.startCommitWithTime(client, newInstantTime);
         List<HoodieRecord> records = recordUpsertGenWrappedFunction.apply(newInstantTime, BATCH_SIZE);
 
-        JavaRDD<WriteStatus> rawStatuses = upsertFn.apply(client, jsc().parallelize(records, PARALLELISM), newInstantTime);
-        JavaRDD<WriteStatus> statuses = jsc().parallelize(rawStatuses.collect(), 1);
-        client.commit(newInstantTime, statuses, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
-        assertNoWriteErrors(statuses.collect());
+        List<WriteStatus> statusList = upsertFn.apply(client, jsc().parallelize(records, PARALLELISM), newInstantTime).collect();
+        client.commit(newInstantTime, jsc().parallelize(statusList), Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+        assertNoWriteErrors(statusList);
 
         metaClient = HoodieTableMetaClient.reload(metaClient);
         table = HoodieSparkTable.create(cfg, context(), metaClient);

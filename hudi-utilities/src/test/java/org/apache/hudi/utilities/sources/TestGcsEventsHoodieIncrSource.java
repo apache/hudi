@@ -444,10 +444,9 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
           getGcsMetadataRecord(commitTime, "data-file-3.json", "bucket-1", "1"),
           getGcsMetadataRecord(commitTime, "data-file-4.json", "bucket-1", "1")
       );
-      JavaRDD<WriteStatus> result = writeClient.upsert(jsc().parallelize(gcsMetadataRecords, 1), commitTime);
-      result = jsc.parallelize(result.collect(), 1);
-      writeClient.commit(commitTime, result, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
-      assertNoWriteErrors(result.collect());
+      List<WriteStatus> statusList = writeClient.upsert(jsc().parallelize(gcsMetadataRecords, 1), commitTime).collect();
+      writeClient.commit(commitTime, jsc.parallelize(statusList), Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+      assertNoWriteErrors(statusList);
       return Pair.of(commitTime, gcsMetadataRecords);
     }
   }
