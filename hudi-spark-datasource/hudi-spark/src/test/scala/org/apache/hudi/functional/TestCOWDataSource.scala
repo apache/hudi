@@ -1524,7 +1524,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     // first use the Overwrite mode
     val records1 = recordsToStrings(dataGen.generateInserts("001", 5)).asScala.toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
-    inputDF1.write.format("hudi")
+    inputDF1.write.format("org.apache.hudi")
       .partitionBy("partition")
       .options(writeOpts)
       .mode(SaveMode.Append)
@@ -1537,7 +1537,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     // use the Append mode
     val records2 = recordsToStrings(dataGen.generateInserts("002", 6)).asScala.toList
     val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
-    inputDF2.write.format("hudi")
+    inputDF2.write.format("org.apache.hudi")
       .partitionBy("partition")
       .options(writeOpts)
       .mode(SaveMode.Append)
@@ -1547,7 +1547,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     // use the Ignore mode
     val records3 = recordsToStrings(dataGen.generateInserts("003", 7)).asScala.toList
     val inputDF3 = spark.read.json(spark.sparkContext.parallelize(records3, 2))
-    inputDF3.write.format("hudi")
+    inputDF3.write.format("org.apache.hudi")
       .partitionBy("partition")
       .options(writeOpts)
       .mode(SaveMode.Ignore)
@@ -1559,7 +1559,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     val records4 = recordsToStrings(dataGen.generateInserts("004", 8)).asScala.toList
     val inputDF4 = spark.read.json(spark.sparkContext.parallelize(records4, 2))
     try {
-      inputDF4.write.format("hudi")
+      inputDF4.write.format("org.apache.hudi")
         .partitionBy("partition")
         .options(writeOpts)
         .mode(SaveMode.ErrorIfExists)
@@ -1571,7 +1571,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     // use the Overwrite mode
     val records5 = recordsToStrings(dataGen.generateInserts("005", 9)).asScala.toList
     val inputDF5 = spark.read.json(spark.sparkContext.parallelize(records5, 2))
-    inputDF5.write.format("hudi")
+    inputDF5.write.format("org.apache.hudi")
       .partitionBy("partition")
       .options(writeOpts)
       .mode(SaveMode.Overwrite)

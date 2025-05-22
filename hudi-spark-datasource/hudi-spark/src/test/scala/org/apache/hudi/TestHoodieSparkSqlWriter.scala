@@ -873,7 +873,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
     fooTableModifier = fooTableModifier.updated(DataSourceWriteOptions.OPERATION.key(), WriteOperationType.DELETE_PARTITION.name())
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableModifier, recordsToDelete)
     validateDataAndPartitionStats(recordsToDelete, isDeletePartition = true)
-    val snapshotDF3 = spark.read.format("org.apache.hudi").load(tempBasePath)
+    val snapshotDF3 = spark.read.format("hudi").load(tempBasePath)
     assertEquals(0, snapshotDF3.filter(entry => {
       val partitionPath = entry.getString(3)
       !partitionPath.equals(HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH)
