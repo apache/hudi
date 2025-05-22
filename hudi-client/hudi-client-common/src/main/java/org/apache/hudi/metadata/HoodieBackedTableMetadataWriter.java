@@ -1533,7 +1533,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
 
     BaseHoodieWriteClient<?, I, ?, O> writeClient = getWriteClient();
     // rollback partially failed writes if any.
-    metadataMetaClient = rollbackFailedWrites(dataWriteConfig, writeClient, metadataMetaClient);
+    metadataMetaClient = rollbackFailedWrites(dataWriteConfig, dataMetaClient, writeClient, metadataMetaClient);
 
     if (!metadataMetaClient.getActiveTimeline().getCommitsTimeline().containsInstant(instantTime)) {
       // if this is a new commit being applied to metadata for the first time
@@ -1585,8 +1585,10 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
    * @param writeClient write client for the metadata table
    * @param metadataMetaClient meta client for the metadata table
    */
-  static <I> HoodieTableMetaClient rollbackFailedWrites(HoodieWriteConfig dataWriteConfig, BaseHoodieWriteClient<?, I, ?, ?> writeClient, HoodieTableMetaClient metadataMetaClient) {
-    if (dataWriteConfig.getFailedWritesCleanPolicy().isEager() && writeClient.rollbackFailedWrites(metadataMetaClient)) {
+  static <I> HoodieTableMetaClient rollbackFailedWrites(HoodieWriteConfig dataWriteConfig, HoodieTableMetaClient dataMetaClient, BaseHoodieWriteClient<?, I, ?, ?> writeClient,
+                                                        HoodieTableMetaClient metadataMetaClient) {
+    if (dataWriteConfig.isStreamingWritesToMetadataEnabled(dataMetaClient.getTableConfig().getTableVersion())
+        && dataWriteConfig.getFailedWritesCleanPolicy().isEager() && writeClient.rollbackFailedWrites(metadataMetaClient)) {
       metadataMetaClient = HoodieTableMetaClient.reload(metadataMetaClient);
     }
     return metadataMetaClient;
