@@ -247,6 +247,7 @@ object HoodieDatasetBulkInsertHelper
     // NOTE: Pre-combine field could be a nested field
     val preCombineFieldPath = composeNestedFieldPath(schema, preCombineFieldRef)
       .getOrElse(throw new HoodieException(s"Pre-combine field $preCombineFieldRef is missing in $schema"))
+    val isStringType = preCombineFieldPath.parts(0)._2.dataType.isInstanceOf[StringType]
 
     rdd.map { row =>
         val rowKey = if (isGlobalIndex) {
@@ -263,7 +264,7 @@ object HoodieDatasetBulkInsertHelper
       .reduceByKey ((oneRow, otherRow) => {
         val onePreCombineVal = getNestedInternalRowValue(oneRow, preCombineFieldPath).asInstanceOf[Comparable[AnyRef]]
         val otherPreCombineVal = getNestedInternalRowValue(otherRow, preCombineFieldPath).asInstanceOf[Comparable[AnyRef]]
-        if (onePreCombineVal.isInstanceOf[UTF8String]) {
+        if (isStringType) {
           if (sparkAdapter.compareUTF8String(onePreCombineVal.asInstanceOf[UTF8String], otherPreCombineVal.asInstanceOf[UTF8String]) >= 0) {
             oneRow
           } else {
