@@ -174,47 +174,47 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
     HoodieTestDataGenerator.writePartitionMetadataDeprecated(
         storage, new String[] {DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH},
         basePath);
-    SparkRDDWriteClient client = getHoodieWriteClient(cfg);
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
 
-    String newCommitTime = "001";
-    WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
-    List<HoodieRecord> records = dataGen.generateInsertsContainsAllPartitions(newCommitTime, 3);
-    JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
-    JavaRDD<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime);
-    statuses = jsc.parallelize(statuses.collect(), 1);
-    client.commit(newCommitTime, statuses, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
-    assertNoWriteErrors(statuses.collect());
+      String newCommitTime = "001";
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
+      List<HoodieRecord> records = dataGen.generateInsertsContainsAllPartitions(newCommitTime, 3);
+      JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
+      JavaRDD<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime);
+      statuses = jsc.parallelize(statuses.collect(), 1);
+      client.commit(newCommitTime, statuses, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+      assertNoWriteErrors(statuses.collect());
 
-    newCommitTime = "002";
-    WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
-    records = dataGen.generateUpdates(newCommitTime, records);
-    statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime);
-    client.commit(newCommitTime, statuses, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+      newCommitTime = "002";
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
+      records = dataGen.generateUpdates(newCommitTime, records);
+      statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime);
+      client.commit(newCommitTime, statuses, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
 
-    context = new HoodieSparkEngineContext(jsc);
-    metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieTable table = this.getHoodieTable(metaClient, cfg);
-    HoodieInstant needRollBackInstant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, COMMIT_ACTION, "002");
-    String rollbackInstant = "003";
+      context = new HoodieSparkEngineContext(jsc);
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      HoodieTable table = this.getHoodieTable(metaClient, cfg);
+      HoodieInstant needRollBackInstant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, COMMIT_ACTION, "002");
+      String rollbackInstant = "003";
 
-    ListingBasedRollbackStrategy rollbackStrategy = new ListingBasedRollbackStrategy(table, context, table.getConfig(), rollbackInstant, false);
-    List<HoodieRollbackRequest> rollBackRequests = rollbackStrategy.getRollbackRequests(needRollBackInstant);
+      ListingBasedRollbackStrategy rollbackStrategy = new ListingBasedRollbackStrategy(table, context, table.getConfig(), rollbackInstant, false);
+      List<HoodieRollbackRequest> rollBackRequests = rollbackStrategy.getRollbackRequests(needRollBackInstant);
 
-    HoodieRollbackRequest rollbackRequest = rollBackRequests.stream().filter(entry -> entry.getPartitionPath().equals(DEFAULT_FIRST_PARTITION_PATH)).findFirst().get();
+      HoodieRollbackRequest rollbackRequest = rollBackRequests.stream().filter(entry -> entry.getPartitionPath().equals(DEFAULT_FIRST_PARTITION_PATH)).findFirst().get();
 
-    FileSystem fs = Mockito.mock(FileSystem.class);
-    MockitoAnnotations.initMocks(this);
+      FileSystem fs = Mockito.mock(FileSystem.class);
+      MockitoAnnotations.initMocks(this);
 
-    // mock to throw exception when fs.exists() is invoked
-    Mockito.when(fs.exists(any()))
-        .thenThrow(new IOException("Failing exists call for " + rollbackRequest.getFilesToBeDeleted().get(0)));
+      // mock to throw exception when fs.exists() is invoked
+      Mockito.when(fs.exists(any()))
+          .thenThrow(new IOException("Failing exists call for " + rollbackRequest.getFilesToBeDeleted().get(0)));
 
-    rollbackStrategy = new ListingBasedRollbackStrategy(table, context, cfg, rollbackInstant, false);
-    List<HoodieRollbackRequest> rollBackRequestsUpdated = rollbackStrategy.getRollbackRequests(needRollBackInstant);
+      rollbackStrategy = new ListingBasedRollbackStrategy(table, context, cfg, rollbackInstant, false);
+      List<HoodieRollbackRequest> rollBackRequestsUpdated = rollbackStrategy.getRollbackRequests(needRollBackInstant);
 
-    assertEquals(rollBackRequests, rollBackRequestsUpdated);
+      assertEquals(rollBackRequests, rollBackRequestsUpdated);
+    }
   }
-
 
   // Verify that rollback works with replacecommit
   @ParameterizedTest
@@ -227,11 +227,11 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
         .withRollbackUsingMarkers(isUsingMarkers)
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder().withRemoteTimelineClientRetry(true).build())
         .build();
-    SparkRDDWriteClient client = getHoodieWriteClient(cfg);
-    this.insertOverwriteCommitDataWithTwoPartitions(firstPartitionCommit2FileSlices, secondPartitionCommit2FileSlices, cfg, !isUsingMarkers, client);
-    HoodieTable table = this.getHoodieTable(metaClient, cfg);
-    performRollbackAndValidate(isUsingMarkers, cfg, table, firstPartitionCommit2FileSlices, secondPartitionCommit2FileSlices);
-    client.close();
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
+      this.insertOverwriteCommitDataWithTwoPartitions(firstPartitionCommit2FileSlices, secondPartitionCommit2FileSlices, cfg, !isUsingMarkers, client);
+      HoodieTable table = this.getHoodieTable(metaClient, cfg);
+      performRollbackAndValidate(isUsingMarkers, cfg, table, firstPartitionCommit2FileSlices, secondPartitionCommit2FileSlices);
+    }
   }
 
   @ParameterizedTest
@@ -241,12 +241,12 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
     List<FileSlice> firstPartitionCommit2FileSlices = new ArrayList<>();
     List<FileSlice> secondPartitionCommit2FileSlices = new ArrayList<>();
     HoodieWriteConfig cfg = getConfigBuilder().withRollbackUsingMarkers(isUsingMarkers).build();
-    SparkRDDWriteClient client = getHoodieWriteClient(cfg);
-    this.twoUpsertCommitDataWithTwoPartitions(firstPartitionCommit2FileSlices, secondPartitionCommit2FileSlices, cfg, !isUsingMarkers, client);
-    metaClient.reloadActiveTimeline();
-    HoodieTable table = this.getHoodieTable(metaClient, cfg);
-    performRollbackAndValidate(isUsingMarkers, cfg, table, firstPartitionCommit2FileSlices, secondPartitionCommit2FileSlices);
-    client.close();
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
+      this.twoUpsertCommitDataWithTwoPartitions(firstPartitionCommit2FileSlices, secondPartitionCommit2FileSlices, cfg, !isUsingMarkers, client);
+      metaClient.reloadActiveTimeline();
+      HoodieTable table = this.getHoodieTable(metaClient, cfg);
+      performRollbackAndValidate(isUsingMarkers, cfg, table, firstPartitionCommit2FileSlices, secondPartitionCommit2FileSlices);
+    }
   }
 
   /**
@@ -296,9 +296,6 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
   private void performRollbackAndValidate(boolean isUsingMarkers, HoodieWriteConfig cfg, HoodieTable table,
                                           List<FileSlice> firstPartitionCommit2FileSlices,
                                           List<FileSlice> secondPartitionCommit2FileSlices) throws IOException, InterruptedException {
-    // Create a client to start timeline service needed by the rollback action executor
-    // Sleep for timeline service to start listening on the port
-    Thread.sleep(1000);
     //2. rollback
     HoodieInstant commitInstant;
     if (isUsingMarkers) {

@@ -201,7 +201,6 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
               .withRemoteServerPort(cfg.getViewStorageConfig().getRemoteViewServerPort())
               .withRemoteTimelineClientRetry(true)
               .build())
-          .withEmbeddedTimelineServerPort(cfg.getEmbeddedTimelineServerPort())
           .build();
 
       String action = HoodieTimeline.LOG_COMPACTION_ACTION;
