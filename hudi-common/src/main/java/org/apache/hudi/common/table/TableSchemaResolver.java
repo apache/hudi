@@ -344,13 +344,7 @@ public class TableSchemaResolver {
     HoodieTimeline completedInstants = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
     HoodieTimeline timeline = completedInstants
         .filter(instant -> { // consider only instants that can update/change schema.
-          try {
-            HoodieCommitMetadata commitMetadata =
-                completedInstants.readCommitMetadata(instant);
-            return WriteOperationType.canUpdateSchema(commitMetadata.getOperationType());
-          } catch (IOException e) {
-            throw new HoodieIOException(String.format("Failed to fetch HoodieCommitMetadata for instant (%s)", instant), e);
-          }
+          return WriteOperationType.canUpdateSchema(getCachedCommitMetadata(instant).getOperationType());
         });
     return timeline.lastInstant().flatMap(this::getTableInternalSchemaFromCommitMetadata);
   }
