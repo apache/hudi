@@ -96,8 +96,8 @@ public class SparkInsertOverwriteCommitActionExecutor<T>
   }
 
   protected List<String> getAllExistingFileIds(String partitionPath) {
-    // because new commit is not complete. it is safe to mark all existing file Ids as old files
-    return table.getSliceView().getLatestFileSlices(partitionPath).map(FileSlice::getFileId).distinct().collect(Collectors.toList());
+    // we should only fetch the latest merged file slices with committed data
+    return table.getSliceView().getLatestMergedFileSlicesBeforeOrOn(partitionPath, instantTime).filter(slice -> !slice.isEmpty()).map(FileSlice::getFileId).distinct().collect(Collectors.toList());
   }
 
   @Override

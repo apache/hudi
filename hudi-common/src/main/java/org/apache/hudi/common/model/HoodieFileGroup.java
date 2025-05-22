@@ -18,7 +18,9 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.CompletionTimeQueryView;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
@@ -119,6 +121,10 @@ public class HoodieFileGroup implements Serializable {
   @VisibleForTesting
   public String getBaseInstantTime(CompletionTimeQueryView completionTimeQueryView, HoodieLogFile logFile) {
     if (fileSlices.isEmpty()) {
+      if (completionTimeQueryView.getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
+        // no base file in the file group, use INITIAL INSTANT TIME as base instant time
+        return HoodieActiveTimeline.INIT_INSTANT_TS;
+      }
       // no base file in the file group, use the log file delta commit time.
       return logFile.getDeltaCommitTime();
     }
@@ -130,7 +136,10 @@ public class HoodieFileGroup implements Serializable {
           return commitTime;
         }
       }
-      // no base file that starts earlier than the log delta commit completion time,
+      // no base file that starts earlier than the log delta commit completion time
+      if (completionTimeQueryView.getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
+        return HoodieActiveTimeline.INIT_INSTANT_TS;
+      }
       // use the log file delta commit time.
       return logFile.getDeltaCommitTime();
     }

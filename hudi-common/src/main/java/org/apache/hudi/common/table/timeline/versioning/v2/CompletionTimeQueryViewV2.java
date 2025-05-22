@@ -31,7 +31,6 @@ import org.apache.hudi.common.util.VisibleForTesting;
 
 import org.apache.avro.generic.GenericRecord;
 
-import java.io.Serializable;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.Comparator;
@@ -53,7 +52,7 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THA
 /**
  * Query view for instant completion time.
  */
-public class CompletionTimeQueryViewV2 implements CompletionTimeQueryView, Serializable {
+public class CompletionTimeQueryViewV2 extends CompletionTimeQueryView {
   private static final long serialVersionUID = 1L;
 
   private static final long MILLI_SECONDS_IN_THREE_DAYS = 3 * 24 * 3600 * 1000;
@@ -62,8 +61,6 @@ public class CompletionTimeQueryViewV2 implements CompletionTimeQueryView, Seria
 
   private static final Function<String, String> GET_INSTANT_ONE_DAY_BEFORE = instant ->
       HoodieInstantTimeGenerator.instantTimeMinusMillis(instant, MILLI_SECONDS_IN_ONE_DAY);
-
-  private final HoodieTableMetaClient metaClient;
 
   /**
    * Mapping from instant time -> completion time.
@@ -100,7 +97,7 @@ public class CompletionTimeQueryViewV2 implements CompletionTimeQueryView, Seria
    * @param eagerLoadInstant The earliest instant time to eagerly load from, by default load last N days of completed instants.
    */
   public CompletionTimeQueryViewV2(HoodieTableMetaClient metaClient, String eagerLoadInstant) {
-    this.metaClient = metaClient;
+    super(metaClient);
     this.instantTimeToCompletionTimeMap = new ConcurrentHashMap<>();
     this.cursorInstant = InstantComparison.minInstant(eagerLoadInstant, metaClient.getActiveTimeline().firstInstant().map(HoodieInstant::requestedTime).orElse(""));
     // Note: use getWriteTimeline() to keep sync with the fs view visibleCommitsAndCompactionTimeline, see AbstractTableFileSystemView.refreshTimeline.
