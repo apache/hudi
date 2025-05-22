@@ -277,7 +277,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     // Rollback the last commit
     writeClient.rollback(newCommitTime);
 
-    hoodieTable = HoodieSparkTable.create(config, context, metaClient);
+    hoodieTable = HoodieSparkTable.create(config, context);
     // Now tagLocation for these records, hbaseIndex should not tag them since it was a rolled
     // back commit
     javaRDD = tagLocation(index, writtenRecords, hoodieTable);
