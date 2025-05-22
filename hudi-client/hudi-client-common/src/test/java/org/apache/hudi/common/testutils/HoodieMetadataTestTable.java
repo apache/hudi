@@ -36,6 +36,7 @@ import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.storage.HoodieStorage;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -125,8 +126,8 @@ public class HoodieMetadataTestTable extends HoodieTestTable {
   }
 
   @Override
-  public HoodieCleanMetadata doClean(String commitTime, Map<String, Integer> partitionFileCountsToDelete) throws IOException {
-    HoodieCleanMetadata cleanMetadata = super.doClean(commitTime, partitionFileCountsToDelete);
+  public HoodieCleanMetadata doClean(String commitTime, Map<String, Integer> partitionFileCountsToDelete, List<String> partitionsToBeDeleted) throws IOException {
+    HoodieCleanMetadata cleanMetadata = super.doClean(commitTime, partitionFileCountsToDelete, partitionsToBeDeleted);
     if (writer != null) {
       writer.update(cleanMetadata, commitTime);
     }

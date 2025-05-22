@@ -556,7 +556,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     Map<String, Integer> cleanStats = new HashMap<>();
     cleanStats.put("p1", 1);
     cleanStats.put("p2", 2);
-    testTable.doClean(String.format("%08d", 8), cleanStats,
+    testTable.doClean(String.format("%08d", 8), cleanStats, Collections.emptyList(),
         Collections.singletonMap(CleanerUtils.SAVEPOINTED_TIMESTAMPS, "00000003"));
 
     // trigger archival
@@ -571,7 +571,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
         expectedActiveInstants, commitsAfterArchival, false);
 
     // add a clean commit with earliest savepoint set as c7
-    testTable.doClean(String.format("%08d", 9), cleanStats, Collections.singletonMap(CleanerUtils.SAVEPOINTED_TIMESTAMPS, "00000007"));
+    testTable.doClean(String.format("%08d", 9), cleanStats, Collections.emptyList(), Collections.singletonMap(CleanerUtils.SAVEPOINTED_TIMESTAMPS, "00000007"));
 
     // trigger archival
     commitsList = archiveAndGetCommitsList(writeConfig);
@@ -1159,7 +1159,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
       if (i == 1) {
         testTable.doWriteOperation(String.format("%08d", i), WriteOperationType.UPSERT, Arrays.asList("p1", "p2"), Arrays.asList("p1", "p2"), 20);
       } else if (i <= 3 || i == 5) {
-        testTable.doClean(String.format("%08d", i), cleanStats);
+        testTable.doClean(String.format("%08d", i), cleanStats, Collections.emptyList());
       } else {
         testTable.doWriteOperation(String.format("%08d", i), WriteOperationType.UPSERT, Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
       }
@@ -1208,7 +1208,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
           // 1 and 2 should be archived.
           savepoint = "00000010";
         }
-        testTable.doClean(String.format("%08d", i), cleanStats, Collections.singletonMap(CleanerUtils.SAVEPOINTED_TIMESTAMPS, savepoint));
+        testTable.doClean(String.format("%08d", i), cleanStats, Collections.emptyList(), Collections.singletonMap(CleanerUtils.SAVEPOINTED_TIMESTAMPS, savepoint));
       }
       // trigger archival
       Pair<List<HoodieInstant>, List<HoodieInstant>> commitsList = archiveAndGetCommitsList(writeConfig);
@@ -1267,7 +1267,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     for (int i = 2; i < 5; i++) {
       String cleanInstant = metaClient.createNewInstantTime();
       instants.add(Pair.of(cleanInstant, HoodieTimeline.CLEAN_ACTION));
-      testTable.doClean(cleanInstant, partitionToFileDeleteCount);
+      testTable.doClean(cleanInstant, partitionToFileDeleteCount, Collections.emptyList());
     }
 
     // the step size should be the number of new commits yielded in one loop.
