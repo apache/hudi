@@ -56,7 +56,6 @@ import static org.apache.hudi.common.util.CommitUtils.getPartitionAndFileIdWitho
 public class ConcurrentOperation {
 
   private WriteOperationType operationType;
-  private final HoodieMetadataWrapper metadataWrapper;
   private final Option<HoodieCommitMetadata> commitMetadataOption;
   private final String actionState;
   private final String actionType;
@@ -69,21 +68,21 @@ public class ConcurrentOperation {
         && instant.getState().equals(HoodieInstant.State.INFLIGHT)) {
       instant = metaClient.createNewInstant(HoodieInstant.State.REQUESTED, instant.getAction(), instant.requestedTime());
     }
-    this.metadataWrapper = new HoodieMetadataWrapper(MetadataConversionUtils.createMetaWrapper(instant, metaClient));
+    HoodieMetadataWrapper metadataWrapper = new HoodieMetadataWrapper(MetadataConversionUtils.createMetaWrapper(instant, metaClient));
     this.commitMetadataOption = Option.empty();
     this.actionState = instant.getState().name();
     this.actionType = instant.getAction();
     this.instantTime = instant.requestedTime();
-    init(instant);
+    init(metadataWrapper, instant);
   }
 
   public ConcurrentOperation(HoodieInstant instant, HoodieCommitMetadata commitMetadata) {
     this.commitMetadataOption = Option.of(commitMetadata);
-    this.metadataWrapper = new HoodieMetadataWrapper(commitMetadata);
+    HoodieMetadataWrapper metadataWrapper = new HoodieMetadataWrapper(commitMetadata);
     this.actionState = instant.getState().name();
     this.actionType = instant.getAction();
     this.instantTime = instant.requestedTime();
-    init(instant);
+    init(metadataWrapper, instant);
   }
 
   /**
@@ -94,7 +93,6 @@ public class ConcurrentOperation {
    */
   public ConcurrentOperation(HoodieCompactionPlan compactionPlan, String requestedInstantTime) {
     this.commitMetadataOption = Option.empty();
-    this.metadataWrapper = null;
     this.actionState = HoodieInstant.State.REQUESTED.name();
     this.actionType = COMPACTION_ACTION;
     this.operationType = WriteOperationType.COMPACT;
@@ -110,7 +108,6 @@ public class ConcurrentOperation {
    */
   public ConcurrentOperation(HoodieClusteringPlan clusteringPlan, String requestedInstantTime) {
     this.commitMetadataOption = Option.empty();
-    this.metadataWrapper = null;
     this.actionState = HoodieInstant.State.REQUESTED.name();
     this.actionType = CLUSTERING_ACTION;
     this.operationType = WriteOperationType.CLUSTER;
@@ -142,33 +139,33 @@ public class ConcurrentOperation {
     return commitMetadataOption;
   }
 
-  private void init(HoodieInstant instant) {
-    if (this.metadataWrapper.isAvroMetadata()) {
+  private void init(HoodieMetadataWrapper metadataWrapper, HoodieInstant instant) {
+    if (metadataWrapper.isAvroMetadata()) {
       switch (getInstantActionType()) {
         case COMPACTION_ACTION:
           this.operationType = WriteOperationType.COMPACT;
-          this.mutatedPartitionAndFileIds = getPartitionAndFileIdsFromCompactionPlan(this.metadataWrapper.getMetadataFromTimeline().getHoodieCompactionPlan());
+          this.mutatedPartitionAndFileIds = getPartitionAndFileIdsFromCompactionPlan(metadataWrapper.getMetadataFromTimeline().getHoodieCompactionPlan());
           break;
         case COMMIT_ACTION:
         case DELTA_COMMIT_ACTION:
-          this.mutatedPartitionAndFileIds = getPartitionAndFileIdWithoutSuffixFromSpecificRecord(this.metadataWrapper.getMetadataFromTimeline().getHoodieCommitMetadata()
+          this.mutatedPartitionAndFileIds = getPartitionAndFileIdWithoutSuffixFromSpecificRecord(metadataWrapper.getMetadataFromTimeline().getHoodieCommitMetadata()
               .getPartitionToWriteStats());
-          this.operationType = WriteOperationType.fromValue(this.metadataWrapper.getMetadataFromTimeline().getHoodieCommitMetadata().getOperationType());
+          this.operationType = WriteOperationType.fromValue(metadataWrapper.getMetadataFromTimeline().getHoodieCommitMetadata().getOperationType());
           break;
         case REPLACE_COMMIT_ACTION:
         case CLUSTERING_ACTION:
           if (instant.isCompleted()) {
             this.mutatedPartitionAndFileIds = getPartitionAndFileIdWithoutSuffixFromSpecificRecord(
-                this.metadataWrapper.getMetadataFromTimeline().getHoodieReplaceCommitMetadata().getPartitionToWriteStats());
-            Map<String, List<String>> partitionToReplaceFileIds = this.metadataWrapper.getMetadataFromTimeline().getHoodieReplaceCommitMetadata().getPartitionToReplaceFileIds();
+                metadataWrapper.getMetadataFromTimeline().getHoodieReplaceCommitMetadata().getPartitionToWriteStats());
+            Map<String, List<String>> partitionToReplaceFileIds = metadataWrapper.getMetadataFromTimeline().getHoodieReplaceCommitMetadata().getPartitionToReplaceFileIds();
             this.mutatedPartitionAndFileIds.addAll(CommitUtils.flattenPartitionToReplaceFileIds(partitionToReplaceFileIds));
-            this.operationType = WriteOperationType.fromValue(this.metadataWrapper.getMetadataFromTimeline().getHoodieReplaceCommitMetadata().getOperationType());
+            this.operationType = WriteOperationType.fromValue(metadataWrapper.getMetadataFromTimeline().getHoodieReplaceCommitMetadata().getOperationType());
           } else {
             // we need to have different handling for requested and inflight replacecommit because
             // for requested replacecommit, clustering will generate a plan and HoodieRequestedReplaceMetadata will not be empty, but insert_overwrite/insert_overwrite_table could have empty content
             // for inflight replacecommit, clustering will have no content in metadata, but insert_overwrite/insert_overwrite_table will have some commit metadata
-            HoodieRequestedReplaceMetadata requestedReplaceMetadata = this.metadataWrapper.getMetadataFromTimeline().getHoodieRequestedReplaceMetadata();
-            org.apache.hudi.avro.model.HoodieCommitMetadata inflightCommitMetadata = this.metadataWrapper.getMetadataFromTimeline().getHoodieInflightReplaceMetadata();
+            HoodieRequestedReplaceMetadata requestedReplaceMetadata = metadataWrapper.getMetadataFromTimeline().getHoodieRequestedReplaceMetadata();
+            org.apache.hudi.avro.model.HoodieCommitMetadata inflightCommitMetadata = metadataWrapper.getMetadataFromTimeline().getHoodieInflightReplaceMetadata();
             if (instant.isRequested()) {
               // for insert_overwrite/insert_overwrite_table clusteringPlan will be empty
               if (requestedReplaceMetadata != null && requestedReplaceMetadata.getClusteringPlan() != null) {
@@ -178,7 +175,7 @@ public class ConcurrentOperation {
             } else {
               if (inflightCommitMetadata != null) {
                 this.mutatedPartitionAndFileIds = getPartitionAndFileIdWithoutSuffixFromSpecificRecord(inflightCommitMetadata.getPartitionToWriteStats());
-                this.operationType = WriteOperationType.fromValue(this.metadataWrapper.getMetadataFromTimeline().getHoodieInflightReplaceMetadata().getOperationType());
+                this.operationType = WriteOperationType.fromValue(metadataWrapper.getMetadataFromTimeline().getHoodieInflightReplaceMetadata().getOperationType());
               } else if (requestedReplaceMetadata != null) {
                 // inflight replacecommit metadata is empty due to clustering, read fileIds from requested replacecommit
                 this.mutatedPartitionAndFileIds = getPartitionAndFileIdsFromRequestedReplaceMetadata(requestedReplaceMetadata);
@@ -194,17 +191,17 @@ public class ConcurrentOperation {
     } else {
       switch (getInstantActionType()) {
         // the enumerations should be kept in sync with the timeline metadata fetching code path,
-        // e.g. when this.metadataWrapper.isAvroMetadata() is true.
+        // e.g. when metadataWrapper.isAvroMetadata() is true.
         case COMPACTION_ACTION:
         case COMMIT_ACTION:
         case DELTA_COMMIT_ACTION:
         case REPLACE_COMMIT_ACTION:
         case CLUSTERING_ACTION:
         case LOG_COMPACTION_ACTION:
-          this.mutatedPartitionAndFileIds = CommitUtils.getPartitionAndFileIdWithoutSuffix(this.metadataWrapper.getCommitMetadata().getPartitionToWriteStats());
-          this.operationType = this.metadataWrapper.getCommitMetadata().getOperationType();
+          this.mutatedPartitionAndFileIds = CommitUtils.getPartitionAndFileIdWithoutSuffix(metadataWrapper.getCommitMetadata().getPartitionToWriteStats());
+          this.operationType = metadataWrapper.getCommitMetadata().getOperationType();
           if (this.operationType.equals(WriteOperationType.CLUSTER) || WriteOperationType.isOverwrite(this.operationType)) {
-            HoodieReplaceCommitMetadata replaceCommitMetadata = (HoodieReplaceCommitMetadata) this.metadataWrapper.getCommitMetadata();
+            HoodieReplaceCommitMetadata replaceCommitMetadata = (HoodieReplaceCommitMetadata) metadataWrapper.getCommitMetadata();
             mutatedPartitionAndFileIds.addAll(CommitUtils.flattenPartitionToReplaceFileIds(replaceCommitMetadata.getPartitionToReplaceFileIds()));
           }
           break;
