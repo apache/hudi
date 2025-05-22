@@ -822,9 +822,9 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     } else {
       table = initialTable;
     }
-    boolean hasInflightClean = table.getActiveTimeline().getCleanerTimeline().filterInflightsAndRequested().firstInstant().isPresent();
+    Option<String> inflightClean = table.getActiveTimeline().getCleanerTimeline().filterInflightsAndRequested().firstInstant().map(HoodieInstant::requestedTime);
     Option<String> cleanInstantTime = Option.empty();
-    if (config.allowMultipleCleans() || !hasInflightClean) {
+    if (config.allowMultipleCleans() || inflightClean.isEmpty()) {
       LOG.info("Cleaner started for table {}", config.getBasePath());
       // proceed only if multiple clean schedules are enabled or if there are no pending cleans.
       if (scheduleInline) {
@@ -837,17 +837,18 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       }
     }
 
-    if (hasInflightClean || cleanInstantTime.isPresent()) {
+    if (inflightClean.isPresent() || cleanInstantTime.isPresent()) {
       table.getMetaClient().reloadActiveTimeline();
       // Proceeds to execute any requested or inflight clean instances in the timeline
-      HoodieCleanMetadata metadata = table.clean(context, cleanInstantTime.get());
+      String cleanInstant = cleanInstantTime.isPresent() ? cleanInstantTime.get() : inflightClean.get();
+      HoodieCleanMetadata metadata = table.clean(context, cleanInstant);
       if (timerContext != null && metadata != null) {
         long durationMs = metrics.getDurationInMs(timerContext.stop());
         metrics.updateCleanMetrics(durationMs, metadata.getTotalFilesDeleted());
         LOG.info("Cleaned {} files Earliest Retained Instant :{} cleanerElapsedMs: {}",
             metadata.getTotalFilesDeleted(), metadata.getEarliestCommitToRetain(), durationMs);
       }
-      releaseResources(cleanInstantTime.get());
+      releaseResources(cleanInstant);
       return metadata;
     }
     return null;
