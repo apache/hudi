@@ -25,12 +25,16 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.function.SerializableFunctionUnchecked;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
@@ -43,6 +47,7 @@ import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.testutils.HoodieClientTestBase;
@@ -59,12 +64,14 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH;
-import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -96,7 +103,14 @@ public class TestHoodieFileSystemViews extends HoodieClientTestBase {
   @ParameterizedTest
   @MethodSource("tableTypeMetadataFSVTypeArgs")
   public void testFileSystemViewConsistency(HoodieTableType tableType, boolean enableMdt, FileSystemViewStorageType storageType, int writeVersion) throws IOException {
+    metaClient.getStorage().deleteDirectory(new StoragePath(basePath));
     this.tableType = tableType;
+    Properties properties = new Properties();
+    properties.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), Integer.toString(writeVersion));
+    properties.setProperty(HoodieTableConfig.VERSION.key(), Integer.toString(writeVersion));
+    properties.setProperty(HoodieTableConfig.TIMELINE_LAYOUT_VERSION.key(), writeVersion == 6
+        ? Integer.toString(TimelineLayoutVersion.LAYOUT_VERSION_1.getVersion()) : Integer.toString(TimelineLayoutVersion.LAYOUT_VERSION_2.getVersion()));
+    initMetaClient(tableType, properties);
     HoodieWriteConfig.Builder configBuilder = getConfigBuilder();
     if (tableType == HoodieTableType.MERGE_ON_READ) {
       configBuilder.withCompactionConfig(HoodieCompactionConfig.newBuilder().withInlineCompaction(true)
@@ -112,8 +126,8 @@ public class TestHoodieFileSystemViews extends HoodieClientTestBase {
         .withWriteTableVersion(writeVersion);
     HoodieWriteConfig config = configBuilder.build();
     try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
-      insertRecords(client, "001", 100, WriteOperationType.BULK_INSERT);
-      insertRecords(client, "002", 100, WriteOperationType.INSERT);
+      insertRecords(client, client.createNewInstantTime(), 100, WriteOperationType.BULK_INSERT);
+      insertRecords(client, client.createNewInstantTime(), 100, WriteOperationType.INSERT);
       metaClient = HoodieTableMetaClient.reload(metaClient);
 
       // base line file system view is in-memory for any combination.
@@ -131,43 +145,46 @@ public class TestHoodieFileSystemViews extends HoodieClientTestBase {
                   HoodieTableMetadata.create(context, metaClient.getStorage(), config.getMetadataConfig(), config.getBasePath()))
           .getFileSystemView(basePath);
 
-      assertFileSystemViews(config, enableMdt, storageType);
+      assertFileSystemViews(config, enableMdt, storageType, Option.empty());
       for (int i = 3; i < 10; i++) {
-        String commitTime = String.format("%10d", i);
+        String commitTime = client.createNewInstantTime();
         upsertRecords(client, commitTime, 50);
       }
       expectedFileSystemView.sync();
       actualFileSystemView.sync();
-      assertForFSVEquality(expectedFileSystemView, actualFileSystemView, enableMdt);
-      for (int i = 10; i < 20; i++) {
-        String commitTime = String.format("%10d", i);
+      assertForFSVEquality(expectedFileSystemView, actualFileSystemView, enableMdt, Option.empty());
+      for (int i = 10; i < 23; i++) {
+        String commitTime = client.createNewInstantTime();
         upsertRecords(client, commitTime, 50);
       }
 
       // mimic failed write for last completed operation and retry few more operations.
-      HoodieInstant lastInstant = metaClient.reloadActiveTimeline().lastInstant().get();
+      HoodieInstant lastInstant = metaClient.reloadActiveTimeline().getWriteTimeline().lastInstant().get();
+      HoodieCommitMetadata commitMetadata = metaClient.getActiveTimeline().readCommitMetadata(lastInstant);
       StoragePath instantPath = HoodieTestUtils
           .getCompleteInstantPath(metaClient.getStorage(),
               metaClient.getTimelinePath(),
-              lastInstant.requestedTime(), lastInstant.getAction());
+              lastInstant.requestedTime(), lastInstant.getAction(), HoodieTableVersion.fromVersionCode(writeVersion));
       metaClient.getStorage().deleteFile(instantPath);
 
       expectedFileSystemView.sync();
       actualFileSystemView.sync();
-      assertForFSVEquality(expectedFileSystemView, actualFileSystemView, enableMdt);
+      // pass the commit metadata for the instant being deleted (mimic failure). so that we can account for during validation with table version 6.
+      assertForFSVEquality(expectedFileSystemView, actualFileSystemView, enableMdt,
+          metaClient.getTableConfig().getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT) ? Option.empty() : Option.of(commitMetadata));
 
       // add few more updates
-      for (int i = 21; i < 23; i++) {
-        String commitTime = String.format("%10d", i);
+      for (int i = 23; i < 28; i++) {
+        String commitTime = client.createNewInstantTime();
         upsertRecords(client, commitTime, 50);
       }
       actualFileSystemView.close();
       expectedFileSystemView.close();
     }
-    assertFileSystemViews(config, enableMdt, storageType);
+    assertFileSystemViews(config, enableMdt, storageType, Option.empty());
   }
 
-  private void assertFileSystemViews(HoodieWriteConfig writeConfig, boolean enableMdt, FileSystemViewStorageType baseStorageType) {
+  private void assertFileSystemViews(HoodieWriteConfig writeConfig, boolean enableMdt, FileSystemViewStorageType baseStorageType, Option<HoodieCommitMetadata> commitMetadataOpt) {
     metaClient = HoodieTableMetaClient.reload(metaClient);
     // base line file system view is in-memory for any combination.
     HoodieTableFileSystemView expectedFileSystemView = FileSystemViewManager.createInMemoryFileSystemView(context, metaClient,
@@ -184,14 +201,14 @@ public class TestHoodieFileSystemViews extends HoodieClientTestBase {
                 HoodieTableMetadata.create(context, metaClient.getStorage(), writeConfig.getMetadataConfig(), writeConfig.getBasePath()))
         .getFileSystemView(basePath);
     try {
-      assertForFSVEquality(expectedFileSystemView, actualFileSystemView, enableMdt);
+      assertForFSVEquality(expectedFileSystemView, actualFileSystemView, enableMdt, Option.empty());
     } finally {
       expectedFileSystemView.close();
       actualFileSystemView.close();
     }
   }
 
-  private void assertForFSVEquality(HoodieTableFileSystemView fsv1, HoodieTableFileSystemView fsv2, boolean enableMdt) {
+  private void assertForFSVEquality(HoodieTableFileSystemView fsv1, HoodieTableFileSystemView fsv2, boolean enableMdt, Option<HoodieCommitMetadata> commitMetadataOpt) {
     List<String> allPartitionNames = Arrays.asList(DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH, DEFAULT_THIRD_PARTITION_PATH);
     fsv1.loadPartitions(allPartitionNames);
     if (enableMdt) {
@@ -213,7 +230,7 @@ public class TestHoodieFileSystemViews extends HoodieClientTestBase {
 
       List<FileSlice> fileSlices1 = fsv1.getLatestFileSlices(path).collect(Collectors.toList());
       List<FileSlice> fileSlices2 = fsv2.getLatestFileSlices(path).collect(Collectors.toList());
-      assertFileSliceListEquality(fileSlices1, fileSlices2);
+      assertFileSliceListEquality(fileSlices1, fileSlices2, commitMetadataOpt);
     });
   }
 
@@ -240,7 +257,7 @@ public class TestHoodieFileSystemViews extends HoodieClientTestBase {
     assertEquals(baseFile1.getFileSize(), baseFile2.getFileSize());
   }
 
-  private void assertFileSliceListEquality(List<FileSlice> fileSlices1, List<FileSlice> fileSlices2) {
+  private void assertFileSliceListEquality(List<FileSlice> fileSlices1, List<FileSlice> fileSlices2, Option<HoodieCommitMetadata> commitMetadataOpt) {
     assertEquals(fileSlices1.size(), fileSlices1.size());
     Map<Pair<String, String>, FileSlice> fileNameToFileSliceMap1 = new HashMap<>();
     fileSlices1.forEach(entry -> {
@@ -252,21 +269,36 @@ public class TestHoodieFileSystemViews extends HoodieClientTestBase {
     });
     fileNameToFileSliceMap1.entrySet().forEach((kv) -> {
       assertTrue(fileNameToFileSliceMap2.containsKey(kv.getKey()));
-      assertFileSliceEquality(kv.getValue(), fileNameToFileSliceMap2.get(kv.getKey()));
+      assertFileSliceEquality(kv.getValue(), fileNameToFileSliceMap2.get(kv.getKey()), commitMetadataOpt);
     });
   }
 
-  private void assertFileSliceEquality(FileSlice fileSlice1, FileSlice fileSlice2) {
+  private void assertFileSliceEquality(FileSlice fileSlice1, FileSlice fileSlice2, Option<HoodieCommitMetadata> commitMetadataOpt) {
     assertEquals(fileSlice1.getBaseFile().isPresent(), fileSlice2.getBaseFile().isPresent());
     if (fileSlice1.getBaseFile().isPresent()) {
       assertBaseFileEquality(fileSlice1.getBaseFile().get(), fileSlice2.getBaseFile().get());
     }
     List<HoodieLogFile> logFiles1 = fileSlice1.getLogFiles().collect(Collectors.toList());
     List<HoodieLogFile> logFiles2 = fileSlice2.getLogFiles().collect(Collectors.toList());
-    assertEquals(logFiles1.size(), logFiles2.size());
+    if (logFiles1.size() != logFiles2.size()) {
+      if (!commitMetadataOpt.isPresent()) {
+        throw new HoodieException("Log files out of sync. ");
+      } else {
+        // for table version 6, since we deleted the latest completed delta commit from timeline. baseline FSV might report the log file that's part of failed commit.
+        // while mdt based FSV may not report the log file.
+        if (logFiles2.isEmpty() && logFiles1.size() == 1) {
+          // validate that the log file that is out of sync is part of the latest commit metadata.
+          long totalMatched = commitMetadataOpt.get().getPartitionToWriteStats().get(fileSlice1.getPartitionPath())
+              .stream().filter(writeStat -> writeStat.getFileId().equals(fileSlice1.getFileId()) && writeStat.getPath().contains(logFiles1.get(0).getFileName())).count();
+          assertTrue(totalMatched == 1, "Log files out of sync.");
+        } else {
+          throw new HoodieException("Log files out of sync. ");
+        }
+      }
+    }
     int counter = 0;
-    for (HoodieLogFile logFile1 : logFiles1) {
-      HoodieLogFile logFile2 = logFiles2.get(counter++);
+    for (HoodieLogFile logFile2 : logFiles2) {
+      HoodieLogFile logFile1 = logFiles1.get(counter++);
       assertLogFileEquality(logFile1, logFile2);
     }
   }
@@ -285,16 +317,17 @@ public class TestHoodieFileSystemViews extends HoodieClientTestBase {
     WriteClientTestUtils.startCommitWithTime(client, commitTime);
     List<HoodieRecord> inserts1 = dataGen.generateInserts(commitTime, numRecords);
     JavaRDD<HoodieRecord> insertRecordsRDD1 = jsc.parallelize(inserts1, 2);
-    List<WriteStatus> statuses = operationType == WriteOperationType.BULK_INSERT ? client.bulkInsert(insertRecordsRDD1, commitTime, Option.empty()).collect() :
-        client.insert(insertRecordsRDD1, commitTime).collect();
-    assertNoWriteErrors(statuses);
+    JavaRDD<WriteStatus> statuses = operationType == WriteOperationType.BULK_INSERT ? client.bulkInsert(insertRecordsRDD1, commitTime, Option.empty()) :
+        client.insert(insertRecordsRDD1, commitTime);
+    client.commit(commitTime, statuses, Option.empty(),
+        tableType == HoodieTableType.COPY_ON_WRITE ? COMMIT_ACTION : DELTA_COMMIT_ACTION, Collections.emptyMap(), Option.empty());
   }
 
   private void upsertRecords(SparkRDDWriteClient client, String commitTime, int numRecords) {
     WriteClientTestUtils.startCommitWithTime(client, commitTime);
     List<HoodieRecord> updates = dataGen.generateUniqueUpdates(commitTime, numRecords);
     JavaRDD<HoodieRecord> updatesRdd = jsc.parallelize(updates, 2);
-    List<WriteStatus> statuses = client.upsert(updatesRdd, commitTime).collect();
-    assertNoWriteErrors(statuses);
+    client.commit(commitTime, client.upsert(updatesRdd, commitTime), Option.empty(),
+        tableType == HoodieTableType.COPY_ON_WRITE ? COMMIT_ACTION : DELTA_COMMIT_ACTION, Collections.emptyMap(), Option.empty());
   }
 }

@@ -343,11 +343,10 @@ class TestIncrSourceHelper extends SparkClientFunctionalTestHarness {
       List<HoodieRecord> s3MetadataRecords = Arrays.asList(
           generateS3EventMetadata(commitTime, "bucket-1", "data-file-1.json", 1L)
       );
-      JavaRDD<WriteStatus> result = writeClient.upsert(jsc().parallelize(s3MetadataRecords, 1), commitTime);
-
-      List<WriteStatus> statuses = result.collect();
-      assertNoWriteErrors(statuses);
-
+      JavaRDD<WriteStatus> writeStatuses = writeClient.upsert(jsc().parallelize(s3MetadataRecords, 1), commitTime);
+      writeStatuses = jsc.parallelize(writeStatuses.collect(), 1);
+      writeClient.commit(commitTime, writeStatuses);
+      assertNoWriteErrors(writeStatuses.collect());
       return Pair.of(commitTime, s3MetadataRecords);
     }
   }

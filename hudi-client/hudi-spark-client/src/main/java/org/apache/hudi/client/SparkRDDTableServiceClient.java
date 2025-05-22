@@ -20,9 +20,11 @@ package org.apache.hudi.client;
 
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.utils.SparkReleaseResources;
+import org.apache.hudi.client.utils.SparkValidatorUtils;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
@@ -33,6 +35,8 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import org.apache.spark.api.java.JavaRDD;
 
+import java.util.List;
+
 public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<HoodieData<HoodieRecord<T>>, HoodieData<WriteStatus>, JavaRDD<WriteStatus>> {
   protected SparkRDDTableServiceClient(HoodieEngineContext context,
                                        HoodieWriteConfig clientConfig,
@@ -41,8 +45,23 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
   }
 
   @Override
+  protected List<HoodieWriteStat> triggerWritesAndFetchWriteStats(HoodieWriteMetadata<JavaRDD<WriteStatus>> writeMetadata) {
+    return writeMetadata.getWriteStatuses().map(writeStatus -> writeStatus.getStat()).collect();
+  }
+
+  @Override
   protected HoodieWriteMetadata<JavaRDD<WriteStatus>> convertToOutputMetadata(HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata) {
     return writeMetadata.clone(HoodieJavaRDD.getJavaRDD(writeMetadata.getWriteStatuses()));
+  }
+
+  @Override
+  protected void runPrecommitValidationForClustering(HoodieWriteMetadata<JavaRDD<WriteStatus>> writeMetadata, HoodieTable table, String instantTime) {
+    HoodieWriteMetadata<HoodieData<WriteStatus>> recreatedWriteMetadata = new HoodieWriteMetadata<>();
+    if (writeMetadata.getWriteStats().isPresent()) {
+      recreatedWriteMetadata.setWriteStats(writeMetadata.getWriteStats().get());
+    }
+    recreatedWriteMetadata.setPartitionToReplaceFileIds(writeMetadata.getPartitionToReplaceFileIds());
+    SparkValidatorUtils.runValidators(config, recreatedWriteMetadata, context, table, instantTime);
   }
 
   @Override

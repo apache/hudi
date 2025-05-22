@@ -76,36 +76,10 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
   @ParameterizedTest
   @MethodSource
   void testClustering(boolean clusteringAsRow, boolean doUpdates, boolean populateMetaFields) throws Exception {
-    // set low compaction small File Size to generate more file groups.
-    HoodieWriteConfig.Builder cfgBuilder = HoodieWriteConfig.newBuilder()
-        .forTable("test-trip-table")
-        .withPath(basePath())
-        .withSchema(TRIP_EXAMPLE_SCHEMA)
-        .withParallelism(2, 2)
-        .withDeleteParallelism(2)
-        .withAutoCommit(true)
-        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
-            .compactionSmallFileSize(10L)
-            .withInlineCompaction(false).withMaxNumDeltaCommitsBeforeCompaction(1).build())
-        .withStorageConfig(HoodieStorageConfig.newBuilder()
-            .hfileMaxFileSize(1024 * 1024 * 1024)
-            .parquetMaxFileSize(1024 * 1024 * 1024).build())
-        .withEmbeddedTimelineServerEnabled(true)
-        .withFileSystemViewConfig(new FileSystemViewStorageConfig.Builder()
-            .withEnableBackupForRemoteFileSystemView(false).build())
-        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
-        .withClusteringConfig(HoodieClusteringConfig.newBuilder()
-            .withClusteringMaxNumGroups(10)
-            .withClusteringTargetPartitions(0)
-            .withInlineClustering(true)
-            .withInlineClusteringNumCommits(1)
-            .build())
-        .withRollbackUsingMarkers(false);
-    addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
-    HoodieWriteConfig cfg = cfgBuilder.build();
+    HoodieWriteConfig cfg = getHoodieWriteConfig(populateMetaFields, false);
     HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, cfg.getProps());
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
-
+    int totalFiles = 0;
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
 
       /*
@@ -140,19 +114,52 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
       HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
       hoodieTable.getHoodieView().sync();
       List<StoragePathInfo> allFiles = listAllBaseFilesInPath(hoodieTable);
+      totalFiles = allFiles.size();
       // expect 2 base files for each partition
       assertEquals(dataGen.getPartitionPaths().length * 2, allFiles.size());
+    }
+
+    HoodieWriteConfig cfgClusteringEnabled = getHoodieWriteConfig(populateMetaFields, true);
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfgClusteringEnabled)) {
 
       String clusteringCommitTime = client.scheduleClustering(Option.empty()).get().toString();
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
+      HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
       // verify all files are included in clustering plan.
-      assertEquals(allFiles.size(),
+      assertEquals(totalFiles,
           hoodieTable.getFileSystemView().getFileGroupsInPendingClustering().map(Pair::getLeft).count());
 
       // Do the clustering and validate
       doClusteringAndValidate(client, clusteringCommitTime, metaClient, cfg, dataGen, clusteringAsRow);
     }
+  }
+
+  private HoodieWriteConfig getHoodieWriteConfig(boolean populateMetaFields, boolean enableInlineClustering) {
+    HoodieWriteConfig.Builder cfgBuilder = HoodieWriteConfig.newBuilder()
+        .forTable("test-trip-table")
+        .withPath(basePath())
+        .withSchema(TRIP_EXAMPLE_SCHEMA)
+        .withParallelism(2, 2)
+        .withDeleteParallelism(2)
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .compactionSmallFileSize(10L)
+            .withInlineCompaction(false).withMaxNumDeltaCommitsBeforeCompaction(1).build())
+        .withStorageConfig(HoodieStorageConfig.newBuilder()
+            .hfileMaxFileSize(1024 * 1024 * 1024)
+            .parquetMaxFileSize(1024 * 1024 * 1024).build())
+        .withEmbeddedTimelineServerEnabled(true)
+        .withFileSystemViewConfig(new FileSystemViewStorageConfig.Builder()
+            .withEnableBackupForRemoteFileSystemView(false).build())
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
+        .withClusteringConfig(HoodieClusteringConfig.newBuilder()
+            .withClusteringMaxNumGroups(10)
+            .withClusteringTargetPartitions(0)
+            .withInlineClustering(enableInlineClustering)
+            .withInlineClusteringNumCommits(1)
+            .build())
+        .withRollbackUsingMarkers(false);
+    addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
+    return cfgBuilder.build();
   }
 
   private static Stream<Arguments> testClusteringWithNoBaseFiles() {
@@ -169,34 +176,7 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
   @ParameterizedTest
   @MethodSource
   void testClusteringWithNoBaseFiles(boolean clusteringAsRow, boolean doUpdates, boolean shouldWriteRecordPositions) throws Exception {
-    // set low compaction small File Size to generate more file groups.
-    HoodieWriteConfig.Builder cfgBuilder = HoodieWriteConfig.newBuilder()
-        .forTable("test-trip-table")
-        .withPath(basePath())
-        .withSchema(TRIP_EXAMPLE_SCHEMA)
-        .withParallelism(2, 2)
-        .withDeleteParallelism(2)
-        .withAutoCommit(true)
-        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
-            .compactionSmallFileSize(10L)
-            .withInlineCompaction(false).withMaxNumDeltaCommitsBeforeCompaction(1).build())
-        .withStorageConfig(HoodieStorageConfig.newBuilder()
-            .hfileMaxFileSize(1024 * 1024 * 1024)
-            .parquetMaxFileSize(1024 * 1024 * 1024).build())
-        .withEmbeddedTimelineServerEnabled(true)
-        .withFileSystemViewConfig(new FileSystemViewStorageConfig.Builder()
-            .withEnableBackupForRemoteFileSystemView(false).build())
-        // set index type to INMEMORY so that log files can be indexed, and it is safe to send
-        // inserts straight to the log to produce file slices with only log files and no data files
-        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build())
-        .withWriteRecordPositionsEnabled(shouldWriteRecordPositions)
-        .withClusteringConfig(HoodieClusteringConfig.newBuilder()
-            .withClusteringMaxNumGroups(10)
-            .withClusteringTargetPartitions(0)
-            .withInlineClustering(true)
-            .withInlineClusteringNumCommits(1).build())
-        .withRollbackUsingMarkers(false);
-    HoodieWriteConfig cfg = cfgBuilder.build();
+    HoodieWriteConfig cfg = getWriteConfigToTestClusteringWithNoBaseFiles(shouldWriteRecordPositions, false);
     HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, cfg.getProps());
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
 
@@ -224,16 +204,48 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
       List<StoragePathInfo> allBaseFiles = listAllBaseFilesInPath(hoodieTable);
       // expect 0 base files for each partition
       assertEquals(0, allBaseFiles.size());
+    }
 
+    HoodieWriteConfig cfgClusteringEnabled = getWriteConfigToTestClusteringWithNoBaseFiles(shouldWriteRecordPositions, true);
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfgClusteringEnabled)) {
       String clusteringCommitTime = client.scheduleClustering(Option.empty()).get().toString();
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
+      HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
       // verify log files are included in clustering plan for each partition.
       assertEquals(dataGen.getPartitionPaths().length, hoodieTable.getFileSystemView().getFileGroupsInPendingClustering().map(Pair::getLeft).count());
 
       // do the clustering and validate
       doClusteringAndValidate(client, clusteringCommitTime, metaClient, cfg, dataGen, clusteringAsRow);
     }
+  }
+
+  private HoodieWriteConfig getWriteConfigToTestClusteringWithNoBaseFiles(boolean shouldWriteRecordPositions, boolean enableInlineClustering) {
+    HoodieWriteConfig.Builder cfgBuilder = HoodieWriteConfig.newBuilder()
+        .forTable("test-trip-table")
+        .withPath(basePath())
+        .withSchema(TRIP_EXAMPLE_SCHEMA)
+        .withParallelism(2, 2)
+        .withDeleteParallelism(2)
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .compactionSmallFileSize(10L)
+            .withInlineCompaction(false).withMaxNumDeltaCommitsBeforeCompaction(1).build())
+        .withStorageConfig(HoodieStorageConfig.newBuilder()
+            .hfileMaxFileSize(1024 * 1024 * 1024)
+            .parquetMaxFileSize(1024 * 1024 * 1024).build())
+        .withEmbeddedTimelineServerEnabled(true)
+        .withFileSystemViewConfig(new FileSystemViewStorageConfig.Builder()
+            .withEnableBackupForRemoteFileSystemView(false).build())
+        // set index type to INMEMORY so that log files can be indexed, and it is safe to send
+        // inserts straight to the log to produce file slices with only log files and no data files
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build())
+        .withWriteRecordPositionsEnabled(shouldWriteRecordPositions)
+        .withClusteringConfig(HoodieClusteringConfig.newBuilder()
+            .withClusteringMaxNumGroups(10)
+            .withClusteringTargetPartitions(0)
+            .withInlineClustering(enableInlineClustering)
+            .withInlineClusteringNumCommits(1).build())
+        .withRollbackUsingMarkers(false);
+    return cfgBuilder.build();
   }
 
   private void doClusteringAndValidate(SparkRDDWriteClient client,

@@ -88,8 +88,9 @@ public class TestMetadataCommand extends CLIFunctionalTestHarness {
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, numRecords);
       JavaRDD<HoodieRecord> writeRecords = context().getJavaSparkContext().parallelize(records, 1);
-      List<WriteStatus> result = client.upsert(writeRecords, newCommitTime).collect();
-      Assertions.assertNoWriteErrors(result);
+      JavaRDD<WriteStatus> result = client.upsert(writeRecords, newCommitTime);
+      client.commit(newCommitTime, result);
+      Assertions.assertNoWriteErrors(result.collect());
     }
 
     // verify that metadata partitions are filled in as part of table config.

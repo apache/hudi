@@ -164,7 +164,7 @@ public class TestHoodieJavaWriteClientInsert extends HoodieJavaClientTestHarness
     String firstCommitTime = makeNewCommitTime(startInstant++, "%09d");
     // First insert
     WriteClientTestUtils.startCommitWithTime(writeClient, firstCommitTime);
-    writeClient.insert(records1, firstCommitTime);
+    writeClient.commit(firstCommitTime, writeClient.insert(records1, firstCommitTime));
 
     String partitionPath = "2021/09/11";
     FileStatus[] allFiles = getIncrementalFiles(partitionPath, "0", -1);
@@ -192,7 +192,7 @@ public class TestHoodieJavaWriteClientInsert extends HoodieJavaClientTestHarness
     String newCommitTime = makeNewCommitTime(startInstant++, "%09d");
     WriteClientTestUtils.startCommitWithTime(writeClient, newCommitTime);
     // Second insert is the same as the _row_key of the first one,test allowDuplicateInserts
-    writeClient.insert(records2, newCommitTime);
+    writeClient.commit(newCommitTime, writeClient.insert(records2, newCommitTime));
 
     allFiles = getIncrementalFiles(partitionPath, firstCommitTime, -1);
     assertEquals(1, allFiles.length);
@@ -232,7 +232,7 @@ public class TestHoodieJavaWriteClientInsert extends HoodieJavaClientTestHarness
 
     // First insert
     WriteClientTestUtils.startCommitWithTime(writeClient, firstCommitTime);
-    writeClient.insert(records1, firstCommitTime);
+    writeClient.commit(firstCommitTime, writeClient.insert(records1, firstCommitTime));
 
     FileStatus[] allFiles = getIncrementalFiles(partitionPath, "0", -1);
     assertEquals(1, allFiles.length);
@@ -248,7 +248,7 @@ public class TestHoodieJavaWriteClientInsert extends HoodieJavaClientTestHarness
     List<HoodieRecord> records2 = dataGenerator.generateUpdates(newCommitTime, 100);
     WriteClientTestUtils.startCommitWithTime(writeClient, newCommitTime);
     // Second insert is the same as the _row_key of the first one,test allowDuplicateInserts
-    writeClient.insert(records2, newCommitTime);
+    writeClient.commit(newCommitTime, writeClient.insert(records2, newCommitTime));
 
     allFiles = getIncrementalFiles(partitionPath, firstCommitTime, -1);
     assertEquals(1, allFiles.length);

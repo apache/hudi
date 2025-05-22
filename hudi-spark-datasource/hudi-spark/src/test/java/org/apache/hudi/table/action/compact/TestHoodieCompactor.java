@@ -26,6 +26,7 @@ import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -161,7 +162,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
       String newCommitTime = writeClient.startCommit();
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
       JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
-      writeClient.insert(recordsRDD, newCommitTime).collect();
+      writeClient.commit(newCommitTime, writeClient.insert(recordsRDD, newCommitTime));
 
       String compactionInstantTime = writeClient.createNewInstantTime();
       Option<HoodieCompactionPlan> plan = table.scheduleCompaction(context, compactionInstantTime, Option.empty());
@@ -183,7 +184,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
       JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
-      writeClient.insert(recordsRDD, newCommitTime).collect();
+      writeClient.commit(newCommitTime, writeClient.insert(recordsRDD, newCommitTime));
 
       // create one inflight instance.
       newCommitTime = "102";
@@ -208,7 +209,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
       // commit 1
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
       JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
-      writeClient.insert(recordsRDD, newCommitTime).collect();
+      writeClient.commit(newCommitTime, writeClient.insert(recordsRDD, newCommitTime));
 
       // commit 2
       updateRecords(config, "101", records);
@@ -238,7 +239,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 1000);
       JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
-      writeClient.insert(recordsRDD, newCommitTime).collect();
+      writeClient.commit(newCommitTime, writeClient.insert(recordsRDD, newCommitTime));
 
       // Update all the 1000 records across 5 commits to generate sufficient log files.
       int i = 1;
@@ -272,7 +273,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
       JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
-      writeClient.insert(recordsRDD, newCommitTime).collect();
+      writeClient.commit(newCommitTime, writeClient.insert(recordsRDD, newCommitTime));
 
       // trigger 2 updates following with compaction
       for (int i = 1; i < 5; i += 2) {
@@ -325,7 +326,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 10);
       JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
-      writeClient.insert(recordsRDD, newCommitTime).collect();
+      writeClient.commit(newCommitTime, writeClient.insert(recordsRDD, newCommitTime));
 
       // update 1 time
       newCommitTime = writeClient.createNewInstantTime();
@@ -342,8 +343,8 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
 
       HoodieWriteMetadata result = compact(writeClient, compactionInstant);
 
-      assertTrue(result.getWriteStats().isPresent());
-      List<HoodieWriteStat> stats = (List<HoodieWriteStat>) result.getWriteStats().get();
+      assertTrue(!((HoodieCommitMetadata) result.getCommitMetadata().get()).getWriteStats().isEmpty());
+      List<HoodieWriteStat> stats = ((HoodieCommitMetadata) result.getCommitMetadata().get()).getWriteStats();
       assertEquals(expectedCompactedPartition.size(), stats.size());
       expectedCompactedPartition.forEach(expectedPartition -> {
         assertTrue(stats.stream().anyMatch(stat -> stat.getPartitionPath().contentEquals(expectedPartition)));
@@ -410,7 +411,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
     // insert
     List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
     JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
-    writeClient.insert(recordsRDD, newCommitTime).collect();
+    writeClient.commit(newCommitTime, writeClient.insert(recordsRDD, newCommitTime));
 
     // update
     newCommitTime = writeClient.createNewInstantTime();
@@ -438,7 +439,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
     JavaRDD<HoodieRecord> updatedTaggedRecordsRDD = tagLocation(index, updatedRecordsRDD, table);
 
     WriteClientTestUtils.startCommitWithTime(writeClient, newCommitTime);
-    writeClient.upsertPreppedRecords(updatedTaggedRecordsRDD, newCommitTime).collect();
+    writeClient.commit(newCommitTime, writeClient.upsertPreppedRecords(updatedTaggedRecordsRDD, newCommitTime));
     metaClient.reloadActiveTimeline();
   }
 
@@ -465,6 +466,8 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
   private HoodieWriteMetadata compact(SparkRDDWriteClient writeClient, String compactionInstantTime) {
     writeClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty());
     HoodieWriteMetadata compactMetadata = writeClient.compact(compactionInstantTime);
+    writeClient.commitCompaction(compactionInstantTime, compactMetadata, Option.empty());
+    assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(compactionInstantTime));
     return compactMetadata;
   }
 
@@ -472,8 +475,8 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
    * Verify that all partition paths are present in the HoodieWriteMetadata result.
    */
   private void verifyCompaction(HoodieWriteMetadata compactionMetadata, long expectedTotalLogRecords) {
-    assertTrue(compactionMetadata.getWriteStats().isPresent());
-    List<HoodieWriteStat> stats = (List<HoodieWriteStat>) compactionMetadata.getWriteStats().get();
+    assertTrue(!((HoodieCommitMetadata) compactionMetadata.getCommitMetadata().get()).getWriteStats().isEmpty());
+    List<HoodieWriteStat> stats = ((HoodieCommitMetadata) compactionMetadata.getCommitMetadata().get()).getWriteStats();
     assertEquals(dataGen.getPartitionPaths().length, stats.size());
     for (String partitionPath : dataGen.getPartitionPaths()) {
       assertTrue(stats.stream().anyMatch(stat -> stat.getPartitionPath().contentEquals(partitionPath)));

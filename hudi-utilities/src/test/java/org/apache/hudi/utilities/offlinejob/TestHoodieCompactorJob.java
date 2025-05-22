@@ -59,7 +59,6 @@ public class TestHoodieCompactorJob extends HoodieOfflineJobTestBase {
         .withSchema(TRIP_EXAMPLE_SCHEMA)
         .withParallelism(2, 2)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
-        .withAutoCommit(false)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
           .withInlineCompaction(false).withScheduleInlineCompaction(false).build())
         .withStorageConfig(HoodieStorageConfig.newBuilder()

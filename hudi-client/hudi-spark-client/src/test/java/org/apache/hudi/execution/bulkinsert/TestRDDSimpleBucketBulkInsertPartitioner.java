@@ -113,7 +113,9 @@ public class TestRDDSimpleBucketBulkInsertPartitioner extends HoodieSparkClientT
 
     // 1st write, will create new bucket files based on the records
     WriteClientTestUtils.startCommitWithTime(getHoodieWriteClient(config), "0");
-    List<WriteStatus> writeStatuses = getHoodieWriteClient(config).bulkInsert(HoodieJavaRDD.getJavaRDD(javaRDD), "0").collect();
+    JavaRDD<WriteStatus> writeStatusesRDD = getHoodieWriteClient(config).bulkInsert(HoodieJavaRDD.getJavaRDD(javaRDD), "0");
+    List<WriteStatus> writeStatuses = writeStatusesRDD.collect();
+    writeClient.commit("0", jsc.parallelize(writeStatuses, 1));
     Map<String, WriteStatus> writeStatusesMap = new HashMap<>();
     writeStatuses.forEach(ws -> writeStatusesMap.put(ws.getFileId(), ws));
 
@@ -121,7 +123,9 @@ public class TestRDDSimpleBucketBulkInsertPartitioner extends HoodieSparkClientT
     // 2nd write of the same records, all records should be mapped to the same bucket files for MOR,
     // for COW with disabled Spark native row writer, 2nd bulk insert should fail with exception
     try {
-      List<WriteStatus> writeStatuses2 = getHoodieWriteClient(config).bulkInsert(HoodieJavaRDD.getJavaRDD(javaRDD), "1").collect();
+      JavaRDD<WriteStatus> writeStatusesRDD2 = getHoodieWriteClient(config).bulkInsert(HoodieJavaRDD.getJavaRDD(javaRDD), "1");
+      List<WriteStatus> writeStatuses2 = writeStatusesRDD2.collect();
+      writeClient.commit("1", jsc.parallelize(writeStatuses2, 1));
       writeStatuses2.forEach(ws -> assertEquals(ws.getTotalRecords(), writeStatusesMap.get(ws.getFileId()).getTotalRecords()));
     } catch (Exception ex) {
       assertEquals("COPY_ON_WRITE", tableType);
