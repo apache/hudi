@@ -148,7 +148,7 @@ public class TestMultiWriterWithPreferWriterIngestion extends HoodieClientTestBa
     }, executors);
     CompletableFuture<String> future3 = CompletableFuture.supplyAsync(() -> {
       try {
-        return client2.scheduleTableService(Option.empty(), TableServiceType.CLEAN).get();
+        return client2.scheduleTableService(Option.empty(), TableServiceType.CLEAN).orElse(null);
       } catch (Exception e2) {
         throw new RuntimeException(e2);
       }
@@ -181,8 +181,8 @@ public class TestMultiWriterWithPreferWriterIngestion extends HoodieClientTestBa
     });
     Future<?> future5 = executors.submit(() -> {
       try {
-        client2.clean(instant6);
-        validInstants.add(instant6);
+        client2.clean();
+        metaClient.reloadActiveTimeline().getCleanerTimeline().lastInstant().map(HoodieInstant::requestedTime).ifPresent(validInstants::add);
       } catch (Exception e2) {
         throw new RuntimeException(e2);
       }
@@ -190,10 +190,10 @@ public class TestMultiWriterWithPreferWriterIngestion extends HoodieClientTestBa
     future1.get();
     future4.get();
     future5.get();
-    Set<String> completedInstants = metaClient.getActiveTimeline().getCommitsTimeline()
+    Set<String> completedInstants = metaClient.reloadActiveTimeline().getCommitsTimeline()
         .filterCompletedInstants().getInstantsAsStream().map(HoodieInstant::requestedTime)
         .collect(Collectors.toSet());
-    Assertions.assertTrue(validInstants.containsAll(completedInstants));
+    Assertions.assertEquals(validInstants, completedInstants);
   }
 
   @ParameterizedTest
