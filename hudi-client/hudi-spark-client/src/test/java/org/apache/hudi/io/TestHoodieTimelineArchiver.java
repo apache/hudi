@@ -768,7 +768,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
         testTable.doCompaction(String.format("%08d", i), Arrays.asList("p1", "p2"));
       } else {
         testTable.doWriteOperation(String.format("%08d", i), WriteOperationType.UPSERT, i == 1 ? Arrays.asList("p1", "p2") : Collections.emptyList(), Arrays.asList("p1", "p2"), 2);
-        testTable.doClean(String.format("%08d", i + 1), cleanStats, Collections.emptyMap());
+        testTable.doClean(String.format("%08d", i + 1), cleanStats, Collections.emptyList());
       }
     }
     testTable.doCompaction(String.format("%08d", 17), Arrays.asList("p1", "p2"));

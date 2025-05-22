@@ -1064,22 +1064,6 @@ public class HoodieTestTable implements AutoCloseable {
     });
   }
 
-  public void deletePartition(String partitionPath) throws IOException {
-    try {
-      Files.walk(Paths.get(basePath, partitionPath))
-          .sorted(Comparator.reverseOrder()) // delete children first
-          .forEach(path -> {
-            try {
-              Files.delete(path);
-            } catch (IOException e) {
-              throw new RuntimeException(e);
-            }
-          });
-    } catch (IOException e) {
-      throw new HoodieTestTableException(e);
-    }
-  }
-
   public HoodieTestTable doRollback(String commitTimeToRollback, String commitTime) throws Exception {
     metaClient = HoodieTableMetaClient.reload(metaClient);
     Option<HoodieCommitMetadata> commitMetadata = getMetadataForInstant(commitTimeToRollback);
@@ -1195,9 +1179,6 @@ public class HoodieTestTable implements AutoCloseable {
     }
 
     testTableState = testTableState.createTestTableStateForCleaner(commitTime, partitionsToDelete);
-    for (String partition: partitionsToDelete) {
-      deletePartition(partition);
-    }
 
     Pair<HoodieCleanerPlan, HoodieCleanMetadata> cleanerMeta = getHoodieCleanMetadata(commitTime, testTableState);
     HoodieCleanMetadata cleanMetadata = cleanerMeta.getValue();

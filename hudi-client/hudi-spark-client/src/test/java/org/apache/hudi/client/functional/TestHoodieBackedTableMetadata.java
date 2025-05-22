@@ -23,6 +23,7 @@ import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -412,9 +413,8 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
   }
 
   @ParameterizedTest
-  @EnumSource(HoodieTableType.class)
-  void testCleanDeletePartition() throws Exception{
-    HoodieTableType tableType = HoodieTableType.MERGE_ON_READ;
+  @CsvSource({"COPY_ON_WRITE,6", "COPY_ON_WRITE,8", "MERGE_ON_READ,6", "MERGE_ON_READ,8"})
+  void testDeletePartitionKeyOnCleanPartition(final HoodieTableType tableType, int tableVersion) throws Exception {
     initPath();
     writeConfig = getWriteConfigBuilder(true, true, false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
@@ -422,6 +422,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
             .withMaxNumDeltaCommitsBeforeCompaction(6)
             .build())
         .build();
+    writeConfig.setValue(HoodieWriteConfig.WRITE_TABLE_VERSION, String.valueOf(tableVersion));
     init(tableType, writeConfig);
     String partition1 = "p1";
     // Simulate two bulk insert operations adding two data files in partition "p1"
@@ -434,7 +435,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
 
     final HoodieTableMetaClient metadataMetaClient = createMetaClient(metadataTableBasePath);
     String partition2 = "p2";
-      // Write until the compaction happens in the metadata table
+    // Write until the compaction happens in the metadata table
     testTable.doWriteOperation(
         metaClient.createNewInstantTime(), BULK_INSERT, emptyList(), asList(partition2), 1);
     metadataMetaClient.reloadActiveTimeline();
@@ -452,19 +453,25 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     while (getNumCompactions(metadataMetaClient) == 0) {
       // Write until the compaction happens in the metadata table
       testTable.doWriteOperation(
-          metaClient.createNewInstantTime(), BULK_INSERT, emptyList(), asList("p3"), 1);
+          metaClient.createNewInstantTime(), BULK_INSERT, emptyList(), asList(partition2), 1);
       metadataMetaClient.reloadActiveTimeline();
     }
 
     List<String> deleteFileList = cleanMetadata.getPartitionMetadata().get(partition1).getDeletePathPatterns();
-    assertTrue(deleteFileList.size() > 0);
+    assertFalse(deleteFileList.isEmpty());
 
     HoodieBackedTableMetadata tableMetadata = new HoodieBackedTableMetadata(
         new HoodieLocalEngineContext(storageConf),
         storage,
         HoodieMetadataConfig.newBuilder().enable(true).build(),
         basePath);
-    assertTrue(tableMetadata.getAllRecordsByKeys(Collections.singletonList("p1"), "files").isEmpty());
+    HoodieData<HoodieRecord<HoodieMetadataPayload>> data = tableMetadata.getRecordsByKeyPrefixes(Collections.singletonList(partition1), FILES.getPartitionPath(), false);
+    assertTrue(data.collectAsList().isEmpty());
+
+    // validate table version
+    HoodieTableVersion finalTableVersion = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
+        .getTableConfig().getTableVersion();
+    assertEquals(tableVersion, finalTableVersion.versionCode());
   }
 
   private int getNumCompactions(HoodieTableMetaClient metaClient) {
