@@ -335,12 +335,11 @@ public class ITTestCompactionCommand extends HoodieCLIIntegrationTestBase {
     client.commit(newCommitTime, client.delete(deleteRecords, newCommitTime));
   }
 
-  private JavaRDD<WriteStatus> operateFunc(
+  private void operateFunc(
       HoodieClientTestBase.Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieRecord>, String> writeFn,
       SparkRDDWriteClient<HoodieAvroPayload> client, JavaRDD<HoodieRecord> writeRecords, String commitTime)
       throws IOException {
     List<WriteStatus> writeStatuses = writeFn.apply(client, writeRecords, commitTime).collect();
     client.commit(commitTime, jsc.parallelize(writeStatuses));
-    return jsc.parallelize(writeStatuses);
   }
 }

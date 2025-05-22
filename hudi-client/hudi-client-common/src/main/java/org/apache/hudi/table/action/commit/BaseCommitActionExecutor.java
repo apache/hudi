@@ -190,7 +190,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
       initializeTransactionSupportingCast();
     }
     autoCommit(result);
-    LOG.info("Completing commit for " + instantTime);
+    LOG.info("Completed commit for " + instantTime);
   }
 
   protected void autoCommit(HoodieWriteMetadata<O> result) {
@@ -309,7 +309,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
 
     writeMetadata.setWriteStatuses(statuses);
 
-    LOG.info("Create place holder commit metadata for clustering with instant time " + instantTime);
+    LOG.debug("Create place holder commit metadata for clustering with instant time " + instantTime);
     HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(Collections.emptyList(), Collections.emptyMap(),
         extraMetadata, operationType, schema.get().toString(), getCommitActionType());
     writeMetadata.setCommitMetadata(Option.of(commitMetadata));

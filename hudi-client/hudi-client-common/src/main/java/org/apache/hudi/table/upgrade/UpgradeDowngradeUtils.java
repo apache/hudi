@@ -93,7 +93,7 @@ public class UpgradeDowngradeUtils {
           Option<String> compactionInstantOpt = writeClient.scheduleCompaction(Option.empty());
           if (compactionInstantOpt.isPresent()) {
             HoodieWriteMetadata result = writeClient.compact(compactionInstantOpt.get());
-            writeClient.commitCompaction(compactionInstantOpt.get(), result, Option.empty());
+            writeClient.commitCompaction(compactionInstantOpt.get(), result, Option.of(table));
           }
         }
       }

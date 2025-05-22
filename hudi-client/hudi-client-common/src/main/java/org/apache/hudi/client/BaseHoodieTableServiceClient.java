@@ -332,7 +332,6 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     // Fetch commit metadata from HoodieWriteMetadata and update HoodieWriteStat
     CommonClientUtils.stitchCompactionHoodieWriteStats(compactionWriteMetadata, writeStats);
     metrics.emitCompactionCompleted();
-    LOG.info("Compaction completed. Instant time: {}.", compactionInstantTime);
 
     HoodieTable table = tableOpt.orElseGet(() -> createTable(config, context.getStorageConf()));
     completeCompaction(compactionWriteMetadata.getCommitMetadata().get(), table, compactionInstantTime);
@@ -358,8 +357,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       // commit to data table after committing to metadata table.
       writeTableMetadata(table, compactionCommitTime, metadata);
       LOG.info("Committing Compaction {}", compactionCommitTime);
-      LOG.debug("Compaction {} finished with result: {}", compactionCommitTime, metadata);
       CompactHelpers.getInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
+      LOG.debug("Compaction {} finished with result: {}", compactionCommitTime, metadata);
     } finally {
       this.txnManager.endTransaction(Option.of(compactionInstant));
       releaseResources(compactionCommitTime);
@@ -381,7 +380,6 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     // fetch HoodieCommitMetadata and update HoodieWriteStat
     CommonClientUtils.stitchCompactionHoodieWriteStats(writeMetadata, writeStats);
     metrics.emitCompactionCompleted();
-    LOG.info("Log Compaction completed. Instant time: {}.", compactionInstantTime);
     HoodieTable table = tableOpt.orElseGet(() -> createTable(config, context.getStorageConf()));
     completeLogCompaction(writeMetadata.getCommitMetadata().get(), table, compactionInstantTime);
   }
@@ -432,8 +430,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       // commit to data table after committing to metadata table.
       writeTableMetadata(table, logCompactionCommitTime, metadata);
       LOG.info("Committing Log Compaction {}", logCompactionCommitTime);
-      LOG.debug("Log Compaction {} finished with result {}", logCompactionCommitTime, metadata);
       CompactHelpers.getInstance().completeInflightLogCompaction(table, logCompactionCommitTime, metadata);
+      LOG.debug("Log Compaction {} finished with result {}", logCompactionCommitTime, metadata);
     } finally {
       this.txnManager.endTransaction(Option.of(logCompactionInstant));
       releaseResources(logCompactionCommitTime);
@@ -552,9 +550,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     clusteringWriteMetadata.setPartitionToReplaceFileIds(partitionToReplaceFileIds);
     replaceCommitMetadata.setPartitionToReplaceFileIds(partitionToReplaceFileIds);
 
-    clusteringWriteMetadata.setCommitMetadata(Option.of(replaceCommitMetadata));
     runPrecommitValidationForClustering(clusteringWriteMetadata, table, clusteringCommitTime);
-
     // Publish file creation metrics for clustering.
     if (config.isMetricsOn()) {
       clusteringWriteMetadata.getWriteStats()
@@ -588,9 +584,9 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       writeTableMetadata(table, clusteringInstant.requestedTime(), replaceCommitMetadata);
 
       LOG.info("Committing Clustering {} for table {}", clusteringCommitTime, table.getConfig().getBasePath());
-      LOG.debug("Clustering {} finished with result {}", clusteringCommitTime, replaceCommitMetadata);
 
       ClusteringUtils.transitionClusteringOrReplaceInflightToComplete(false, clusteringInstant, replaceCommitMetadata, table.getActiveTimeline());
+      LOG.debug("Clustering {} finished with result {}", clusteringCommitTime, replaceCommitMetadata);
     } catch (Exception e) {
       throw new HoodieClusteringException("unable to transition clustering inflight to complete: " + clusteringCommitTime, e);
     } finally {
