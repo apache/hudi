@@ -484,7 +484,8 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append)
-    assertTrue(metadataWriter(getWriteConfig(hudiOpts)).getEnabledPartitionTypes.containsAll(metadataPartitions.asJava))
+    assertTrue(metadataWriter(getWriteConfig(hudiOpts)).getEnabledIndexerMap
+      .keySet().containsAll(metadataPartitions.asJava))
   }
 
   @ParameterizedTest

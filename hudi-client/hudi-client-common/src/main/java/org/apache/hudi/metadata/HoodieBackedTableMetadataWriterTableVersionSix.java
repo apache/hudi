@@ -33,12 +33,12 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.metadata.index.ExpressionIndexRecordGenerator;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.ARCHIVELOG_FOLDER;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
@@ -62,27 +62,21 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I> extends 
    * the timeline. If compaction triggers now, the compaction would use the index instant timestamp and add 001 suffix to it, creating a timestamp
    * value with suffix 010001. Both indexing and compaction suffix would be present in the compaction timestamp in such a case.
    *
-   * @param storageConf                Storage configuration to use for the metadata writer
-   * @param writeConfig                Writer config
-   * @param failedWritesCleaningPolicy Cleaning policy on failed writes
-   * @param engineContext              Engine context
-   * @param inflightInstantTimestamp   Timestamp of any instant in progress
+   * @param storageConf                    storage configuration to use for the metadata writer
+   * @param writeConfig                    writer config
+   * @param failedWritesCleaningPolicy     cleaning policy on failed writes
+   * @param engineContext                  engine context
+   * @param expressionIndexRecordGenerator engine-specific record generator for expression index
+   * @param inflightInstantTimestamp       timestamp of any instant in progress
    */
   protected HoodieBackedTableMetadataWriterTableVersionSix(StorageConfiguration<?> storageConf,
                                                            HoodieWriteConfig writeConfig,
                                                            HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                                            HoodieEngineContext engineContext,
+                                                           ExpressionIndexRecordGenerator expressionIndexRecordGenerator,
                                                            Option<String> inflightInstantTimestamp) {
-    super(storageConf, writeConfig, failedWritesCleaningPolicy, engineContext, inflightInstantTimestamp);
-  }
-
-  @Override
-  List<MetadataPartitionType> getEnabledPartitions(HoodieMetadataConfig metadataConfig, HoodieTableMetaClient metaClient) {
-    return MetadataPartitionType.getEnabledPartitions(metadataConfig, metaClient).stream()
-        .filter(partition -> !partition.equals(MetadataPartitionType.SECONDARY_INDEX))
-        .filter(partition -> !partition.equals(MetadataPartitionType.EXPRESSION_INDEX))
-        .filter(partition -> !partition.equals(MetadataPartitionType.PARTITION_STATS))
-        .collect(Collectors.toList());
+    super(storageConf, writeConfig, failedWritesCleaningPolicy, engineContext,
+        expressionIndexRecordGenerator, inflightInstantTimestamp);
   }
 
   @Override

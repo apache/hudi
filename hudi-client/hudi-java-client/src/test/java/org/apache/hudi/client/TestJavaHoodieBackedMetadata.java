@@ -2826,7 +2826,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
       // check if the last instant is restore, then the metadata table should have only the partitions that are not deleted
       metaClient.reloadActiveTimeline().getReverseOrderedInstants().findFirst().ifPresent(instant -> {
         if (instant.getAction().equals(HoodieActiveTimeline.RESTORE_ACTION)) {
-          metadataWriter.getEnabledPartitionTypes().stream().filter(partitionType -> !MetadataPartitionType.shouldDeletePartitionOnRestore(partitionType.getPartitionPath()))
+          metadataWriter.getEnabledIndexerMap().keySet().stream().filter(partitionType -> !MetadataPartitionType.shouldDeletePartitionOnRestore(partitionType.getPartitionPath()))
               .forEach(partitionType -> assertTrue(metadataTablePartitions.contains(partitionType.getPartitionPath())));
         }
       });
