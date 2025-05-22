@@ -24,6 +24,7 @@ import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.transaction.BucketIndexConcurrentFileWritesConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.fs.FSUtils;
@@ -80,6 +81,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -216,6 +218,63 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
     // the data files belongs 3rd commit is not included in the last compaction.
     Map<String, String> result = Collections.singletonMap("par1", "[id1,par1,id1,Danny,null,1,par1]");
     checkWrittenData(result, 1);
+  }
+
+  /**
+   * case: query with pending instant
+   *
+   * 1. insert-txn1 start
+   * 2. insert-txn2 start
+   * 3. insert-txn2 commit
+   * 4. query-txn3 execute
+   * 5. insert-txn1 commit
+   *
+   *  |-------------------------------- txn1: insert --------------------------------------|
+   *               |------ txn2: insert ------|
+   *                                            |---txn3: query---|
+   *
+   *  we expected txn3's query should see the data of txn2
+   */
+  @Test
+  public void testNonBlockingConcurrencyControlWithPendingInstant() throws Exception {
+    HoodieWriteConfig config = createHoodieWriteConfig();
+    metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, config.getProps());
+
+    // start the 1st txn and insert record: [id1,Danny,null,1,par2], suspend the tx commit
+    SparkRDDWriteClient client0 = getHoodieWriteClient(config);
+    List<String> dataset0 = Collections.singletonList("id1,lcy,13,1,par0");
+    String insertTime0 = client0.createNewInstantTime();
+    writeData(client0, insertTime0, dataset0, true, WriteOperationType.INSERT);
+
+    // start the 1st txn and insert record: [id1,Danny,null,1,par1], suspend the tx commit
+    SparkRDDWriteClient client1 = getHoodieWriteClient(config);
+    List<String> dataset1 = Collections.singletonList("id1,Danny,,1,par1");
+    String insertTime1 = client1.createNewInstantTime();
+    writeData(client1, insertTime1, dataset1, false, WriteOperationType.INSERT);
+
+    // start the 2nd txn and insert record: [id1,null,23,2,par1], suspend the tx commit
+    SparkRDDWriteClient client2 = getHoodieWriteClient(config);
+    List<String> dataset2 = Collections.singletonList("id1,,23,2,par1");
+    String insertTime2 = client2.createNewInstantTime();
+    List<WriteStatus> writeStatuses2 = writeData(client2, insertTime2, dataset2, false, WriteOperationType.INSERT);
+
+    // step to commit the 2nd txn
+    client1.commitStats(
+        insertTime2,
+        writeStatuses2.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
+        Option.empty(),
+        metaClient.getCommitActionType());
+
+    // schedule compaction
+    String compactionTime = (String) client1.scheduleCompaction(Option.empty()).get();
+
+    // do compaction for later query with parquet format
+    client1.compact(compactionTime);
+
+    Map<String, String> result = new HashMap<>();
+    result.put("par0", "[id1,par0,id1,lcy,13,1,par0]");
+    result.put("par1", "[id1,par1,id1,null,23,2,par1]");
+    checkWrittenData(result, 2);
   }
 
   // Validate that multiple writers will only produce base files for bulk insert
@@ -602,6 +661,8 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
     String basePath = basePath();
     return HoodieWriteConfig.newBuilder()
         .withProps(Collections.singletonMap(HoodieTableConfig.PRECOMBINE_FIELD.key(), "ts"))
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(false).build())
         .forTable("test")
         .withPath(basePath)
         .withSchema(jsonSchema)
