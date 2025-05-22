@@ -200,6 +200,7 @@ public class HoodieIndexUtils {
                                                             HoodieStorage storage) throws HoodieIndexException {
     checkArgument(FSUtils.isBaseFile(filePath));
     List<Pair<String, Long>> foundRecordKeys = new ArrayList<>();
+    LOG.info(String.format("Going to filter %d keys from file %s", candidateRecordKeys.size(), filePath));
     try (HoodieFileReader fileReader = HoodieIOFactory.getIOFactory(storage)
         .getReaderFactory(HoodieRecordType.AVRO)
         .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, filePath)) {
@@ -208,11 +209,9 @@ public class HoodieIndexUtils {
         HoodieTimer timer = HoodieTimer.start();
         Set<Pair<String, Long>> fileRowKeys = fileReader.filterRowKeys(candidateRecordKeys.stream().collect(Collectors.toSet()));
         foundRecordKeys.addAll(fileRowKeys);
-        LOG.info(String.format("Checked keys against file %s, in %d ms. #candidates (%d) #found (%d)", filePath,
-            timer.endTimer(), candidateRecordKeys.size(), foundRecordKeys.size()));
-        if (LOG.isDebugEnabled()) {
-          LOG.debug("Keys matching for file " + filePath + " => " + foundRecordKeys);
-        }
+        LOG.info("Checked keys against file {}, in {} ms. #candidates ({}) #found ({})", filePath,
+            timer.endTimer(), candidateRecordKeys.size(), foundRecordKeys.size());
+        LOG.debug("Keys matching for file {} => {}", filePath, foundRecordKeys);
       }
     } catch (Exception e) {
       throw new HoodieIndexException("Error checking candidate keys against file.", e);
@@ -271,7 +270,7 @@ public class HoodieIndexUtils {
    */
   private static Pair<HoodieWriteConfig, Option<BaseKeyGenerator>> getKeygenAndUpdatedWriteConfig(HoodieWriteConfig config, HoodieTableConfig tableConfig) {
     if (config.getPayloadClass().equals("org.apache.spark.sql.hudi.command.payload.ExpressionPayload")) {
-      TypedProperties typedProperties = new TypedProperties(config.getProps());
+      TypedProperties typedProperties = TypedProperties.copy(config.getProps());
       // set the payload class to table's payload class and not expresison payload. this will be used to read the existing records
       typedProperties.setProperty(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key(), tableConfig.getPayloadClass());
       typedProperties.setProperty(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), tableConfig.getPayloadClass());

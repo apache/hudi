@@ -45,12 +45,16 @@ public class HadoopConfigurations {
   }
 
   /**
-   * Creates a new hadoop configuration that is initialized with the given flink configuration.
+   * Creates a new hadoop configuration that is initialized with the given flink configuration
+   * along with some configurations necessary to construct file readers/writers.
    */
   public static org.apache.hadoop.conf.Configuration getHadoopConf(Configuration conf) {
     org.apache.hadoop.conf.Configuration hadoopConf = FlinkClientUtil.getHadoopConf();
-    Map<String, String> options = FlinkOptions.getPropertiesWithPrefix(conf.toMap(), HADOOP_PREFIX);
-    options.forEach(hadoopConf::set);
+    Map<String, String> hadoopOptions = FlinkOptions.getPropertiesWithPrefix(conf.toMap(), HADOOP_PREFIX);
+    hadoopOptions.forEach(hadoopConf::set);
+    // kind of hacky: flink specific IO options.
+    Map<String, String> ioOptions = OptionsResolver.getIOOptions(conf);
+    ioOptions.forEach(hadoopConf::set);
     return hadoopConf;
   }
 

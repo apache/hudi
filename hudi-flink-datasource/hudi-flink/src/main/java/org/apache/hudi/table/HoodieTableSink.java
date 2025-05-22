@@ -21,7 +21,7 @@ package org.apache.hudi.table;
 import org.apache.hudi.adapter.DataStreamSinkProviderAdapter;
 import org.apache.hudi.adapter.SupportsRowLevelDeleteAdapter;
 import org.apache.hudi.adapter.SupportsRowLevelUpdateAdapter;
-import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.client.model.HoodieFlinkInternalRow;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsInference;
@@ -82,6 +82,8 @@ public class HoodieTableSink implements
       OptionsInference.setupSinkTasks(conf, dataStream.getExecutionConfig().getParallelism());
       // set up client id
       OptionsInference.setupClientId(conf);
+      // set up index related configs
+      OptionsInference.setupIndexConfigs(conf);
 
       RowType rowType = (RowType) schema.toSinkRowDataType().notNull().getLogicalType();
 
@@ -109,12 +111,10 @@ public class HoodieTableSink implements
         }
       }
 
+      // process dataStream and write corresponding files
       DataStream<Object> pipeline;
-      // bootstrap
-      final DataStream<HoodieRecord> hoodieRecordDataStream =
-          Pipelines.bootstrap(conf, rowType, dataStream, context.isBounded(), overwrite);
-      // write pipeline
-      pipeline = Pipelines.hoodieStreamWrite(conf, hoodieRecordDataStream);
+      final DataStream<HoodieFlinkInternalRow> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, dataStream, context.isBounded(), overwrite);
+      pipeline = Pipelines.hoodieStreamWrite(conf, rowType, hoodieRecordDataStream);
       // compaction
       if (OptionsResolver.needsAsyncCompaction(conf)) {
         // use synchronous compaction for bounded source.

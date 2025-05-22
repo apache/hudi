@@ -19,6 +19,7 @@
 package org.apache.hudi.functional;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -67,15 +68,14 @@ public class TestWriteClient extends HoodieSparkClientTestBase {
       addConfigsForPopulateMetaFields(cfgBuilder, false);
       client = getHoodieWriteClient(cfgBuilder.build());
       String secondCommit = "002";
-      client.startCommitWithTime(secondCommit);
+      WriteClientTestUtils.startCommitWithTime(client, secondCommit);
       JavaRDD<HoodieRecord> emptyRdd = context.emptyRDD();
       result = client.insert(emptyRdd, secondCommit);
       assertTrue(client.commit(secondCommit, result), "Commit should succeed");
       // Schema Validations.
       HoodieTableMetaClient metaClient = createMetaClient(jsc, basePath);
       HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
-      HoodieCommitMetadata metadata = metaClient.getCommitMetadataSerDe().deserialize(timeline.lastInstant().get(),
-          timeline.getInstantDetails(timeline.lastInstant().get()).get(), HoodieCommitMetadata.class);
+      HoodieCommitMetadata metadata = timeline.readCommitMetadata(timeline.lastInstant().get());
       assertTrue(metadata.getExtraMetadata().get("schema").isEmpty());
       TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
       assertEquals(Schema.parse(TRIP_EXAMPLE_SCHEMA), tableSchemaResolver.getTableAvroSchema(false));

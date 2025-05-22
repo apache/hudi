@@ -47,6 +47,7 @@ import org.apache.hudi.source.IncrementalInputSplits;
 import org.apache.hudi.source.StreamReadMonitoringFunction;
 import org.apache.hudi.source.StreamReadOperator;
 import org.apache.hudi.source.prune.ColumnStatsProbe;
+import org.apache.hudi.source.prune.PartitionBucketIdFunc;
 import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.source.prune.PrimaryKeyPruners;
 import org.apache.hudi.source.rebalance.partitioner.StreamReadAppendPartitioner;
@@ -116,6 +117,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.StringJoiner;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -156,7 +158,7 @@ public class HoodieTableSource implements
   private List<Predicate> predicates;
   private ColumnStatsProbe columnStatsProbe;
   private PartitionPruners.PartitionPruner partitionPruner;
-  private int dataBucket;
+  private Option<Function<Integer, Integer>> dataBucketFunc; // numBuckets -> bucketId
   private transient FileIndex fileIndex;
 
   public HoodieTableSource(
@@ -165,7 +167,8 @@ public class HoodieTableSource implements
       List<String> partitionKeys,
       String defaultPartName,
       Configuration conf) {
-    this(schema, path, partitionKeys, defaultPartName, conf, null, null, null, PrimaryKeyPruners.BUCKET_ID_NO_PRUNING, null, null, null, null);
+    this(schema, path, partitionKeys, defaultPartName, conf, null, null, null,
+        Option.empty(), null, null, null, null);
   }
 
   public HoodieTableSource(
@@ -177,7 +180,7 @@ public class HoodieTableSource implements
       @Nullable List<Predicate> predicates,
       @Nullable ColumnStatsProbe columnStatsProbe,
       @Nullable PartitionPruners.PartitionPruner partitionPruner,
-      int dataBucket,
+      Option<Function<Integer, Integer>> dataBucketFunc,
       @Nullable int[] requiredPos,
       @Nullable Long limit,
       @Nullable HoodieTableMetaClient metaClient,
@@ -191,7 +194,7 @@ public class HoodieTableSource implements
     this.predicates = Optional.ofNullable(predicates).orElse(Collections.emptyList());
     this.columnStatsProbe = columnStatsProbe;
     this.partitionPruner = partitionPruner;
-    this.dataBucket = dataBucket;
+    this.dataBucketFunc = dataBucketFunc;
     this.requiredPos = Optional.ofNullable(requiredPos).orElseGet(() -> IntStream.range(0, this.tableRowType.getFieldCount()).toArray());
     this.limit = Optional.ofNullable(limit).orElse(NO_LIMIT_CONSTANT);
     this.hadoopConf = new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(conf));
@@ -266,7 +269,7 @@ public class HoodieTableSource implements
   @Override
   public DynamicTableSource copy() {
     return new HoodieTableSource(schema, path, partitionKeys, defaultPartName,
-        conf, predicates, columnStatsProbe, partitionPruner, dataBucket, requiredPos, limit, metaClient, internalSchemaManager);
+        conf, predicates, columnStatsProbe, partitionPruner, dataBucketFunc, requiredPos, limit, metaClient, internalSchemaManager);
   }
 
   @Override
@@ -281,7 +284,7 @@ public class HoodieTableSource implements
     this.predicates = ExpressionPredicates.fromExpression(splitFilters.f0);
     this.columnStatsProbe = ColumnStatsProbe.newInstance(splitFilters.f0);
     this.partitionPruner = createPartitionPruner(splitFilters.f1, columnStatsProbe);
-    this.dataBucket = getDataBucket(splitFilters.f0);
+    this.dataBucketFunc = getDataBucketFunc(splitFilters.f0);
     // refuse all the filters now
     return SupportsFilterPushDown.Result.of(new ArrayList<>(splitFilters.f1), new ArrayList<>(filters));
   }
@@ -330,14 +333,10 @@ public class HoodieTableSource implements
     List<String> fields = Arrays.stream(this.requiredPos)
         .mapToObj(i -> schemaFieldNames[i])
         .collect(Collectors.toList());
-    StringBuilder sb = new StringBuilder();
-    sb.append(operatorName)
-        .append("(")
-        .append("table=").append(Collections.singletonList(conf.getString(FlinkOptions.TABLE_NAME)))
-        .append(", ")
-        .append("fields=").append(fields)
-        .append(")");
-    return sb.toString();
+    return operatorName + "("
+        + "table=" + Collections.singletonList(conf.get(FlinkOptions.TABLE_NAME))
+        + ", " + "fields=" + fields
+        + ")";
   }
 
   @Nullable
@@ -369,16 +368,16 @@ public class HoodieTableSource implements
         .build();
   }
 
-  private int getDataBucket(List<ResolvedExpression> dataFilters) {
+  private Option<Function<Integer, Integer>> getDataBucketFunc(List<ResolvedExpression> dataFilters) {
     if (!OptionsResolver.isBucketIndexType(conf) || dataFilters.isEmpty()) {
-      return PrimaryKeyPruners.BUCKET_ID_NO_PRUNING;
+      return Option.empty();
     }
     Set<String> indexKeyFields = Arrays.stream(OptionsResolver.getIndexKeys(conf)).collect(Collectors.toSet());
     List<ResolvedExpression> indexKeyFilters = dataFilters.stream().filter(expr -> ExpressionUtils.isEqualsLitExpr(expr, indexKeyFields)).collect(Collectors.toList());
     if (!ExpressionUtils.isFilteringByAllFields(indexKeyFilters, indexKeyFields)) {
-      return PrimaryKeyPruners.BUCKET_ID_NO_PRUNING;
+      return Option.empty();
     }
-    return PrimaryKeyPruners.getBucketId(indexKeyFilters, conf);
+    return Option.of(PrimaryKeyPruners.getBucketIdFunc(indexKeyFilters, conf));
   }
 
   private List<MergeOnReadInputSplit> buildInputSplits() {
@@ -535,7 +534,6 @@ public class HoodieTableSource implements
         // use the explicit fields' data type because the AvroSchemaConverter
         // is not very stable.
         .fieldTypes(rowDataType.getChildren())
-        .defaultPartName(conf.getString(FlinkOptions.PARTITION_DEFAULT_NAME))
         .predicates(this.predicates)
         .limit(this.limit)
         .emitDelete(false) // the change logs iterator can handle the DELETE records
@@ -562,7 +560,6 @@ public class HoodieTableSource implements
         // use the explicit fields' data type because the AvroSchemaConverter
         // is not very stable.
         .fieldTypes(rowDataType.getChildren())
-        .defaultPartName(conf.getString(FlinkOptions.PARTITION_DEFAULT_NAME))
         .predicates(this.predicates)
         .limit(this.limit)
         .emitDelete(emitDelete)
@@ -615,7 +612,8 @@ public class HoodieTableSource implements
           .rowType(this.tableRowType)
           .columnStatsProbe(this.columnStatsProbe)
           .partitionPruner(this.partitionPruner)
-          .dataBucket(this.dataBucket)
+          .partitionBucketIdFunc(PartitionBucketIdFunc.create(this.dataBucketFunc,
+              this.metaClient, conf.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS)))
           .build();
     }
     return this.fileIndex;
@@ -699,7 +697,7 @@ public class HoodieTableSource implements
   }
 
   @VisibleForTesting
-  public int getDataBucket() {
-    return dataBucket;
+  public Option<Function<Integer, Integer>> getDataBucketFunc() {
+    return dataBucketFunc;
   }
 }

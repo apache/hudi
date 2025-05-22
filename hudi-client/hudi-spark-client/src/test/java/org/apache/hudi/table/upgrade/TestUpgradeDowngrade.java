@@ -19,6 +19,7 @@
 package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -104,6 +105,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * Unit tests {@link UpgradeDowngrade}.
@@ -172,14 +175,14 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
   }
 
   @Test
-  public void testAutoUpgradeFailure() throws IOException {
+  public void testWithoutAutoUpgrade() throws IOException {
     Map<String, String> params = new HashMap<>();
     addNewTableParamsToProps(params);
     HoodieWriteConfig cfg = getConfigBuilder().withAutoUpgradeVersion(false).withProps(params).build();
     HoodieTableMetaClient metaClient = HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE, HoodieTableVersion.SIX);
-    assertThrows(IllegalStateException.class, () ->
-        new UpgradeDowngrade(metaClient, cfg, context, SparkUpgradeDowngradeHelper.getInstance()).run(HoodieTableVersion.EIGHT, null)
-    );
+    new UpgradeDowngrade(metaClient, cfg, context, SparkUpgradeDowngradeHelper.getInstance()).run(HoodieTableVersion.EIGHT, null);
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    assertEquals(HoodieTableVersion.SIX, metaClient.getTableConfig().getTableVersion());
   }
 
   @Test
@@ -460,7 +463,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
   private void doInsert(SparkRDDWriteClient client) {
     // Write 1 (only inserts)
     String commit1 = "000";
-    client.startCommitWithTime(commit1);
+    WriteClientTestUtils.startCommitWithTime(client, commit1);
     List<HoodieRecord> records = dataGen.generateInserts(commit1, 100);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
     client.insert(writeRecords, commit1).collect();
@@ -470,7 +473,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     // Write 1 (only inserts)
     dataGen = new HoodieTestDataGenerator(new String[] {DEPRECATED_DEFAULT_PARTITION_PATH});
     String commit1 = "005";
-    client.startCommitWithTime(commit1);
+    WriteClientTestUtils.startCommitWithTime(client, commit1);
     List<HoodieRecord> records = dataGen.generateInserts(commit1, 100);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
     client.insert(writeRecords, commit1).collect();
@@ -480,7 +483,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     // Write 1 (only inserts)
     dataGen = new HoodieTestDataGenerator(new String[] {"partition_path=" + DEPRECATED_DEFAULT_PARTITION_PATH});
     String commit1 = "005";
-    client.startCommitWithTime(commit1);
+    WriteClientTestUtils.startCommitWithTime(client, commit1);
     List<HoodieRecord> records = dataGen.generateInserts(commit1, 100);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
     client.insert(writeRecords, commit1).collect();
@@ -668,6 +671,49 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
      */
   }
 
+  @Test
+  void testNeedsUpgrade() {
+    HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
+    when(tableConfig.getTableVersion()).thenReturn(HoodieTableVersion.EIGHT);
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+    when(metaClient.getTableConfig()).thenReturn(tableConfig);
+    HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
+    when(writeConfig.autoUpgrade()).thenReturn(true);
+
+    // assert no downgrade for table version 7 from table version 8
+    boolean shouldDowngrade = new UpgradeDowngrade(metaClient, writeConfig, context, null)
+        .needsUpgrade(HoodieTableVersion.SEVEN);
+    assertFalse(shouldDowngrade);
+
+    // assert no downgrade for table version 6 from table version 8
+    shouldDowngrade = new UpgradeDowngrade(metaClient, writeConfig, context, null)
+        .needsUpgrade(HoodieTableVersion.SIX);
+    assertFalse(shouldDowngrade);
+
+    // assert no upgrade/downgrade for table version 8 from table version 8
+    shouldDowngrade = new UpgradeDowngrade(metaClient, writeConfig, context, null)
+        .needsUpgrade(HoodieTableVersion.EIGHT);
+    assertFalse(shouldDowngrade);
+
+    // test upgrade from table version six
+    when(tableConfig.getTableVersion()).thenReturn(HoodieTableVersion.SIX);
+    // assert upgrade for table version 7 from table version 6
+    boolean shouldUpgrade = new UpgradeDowngrade(metaClient, writeConfig, context, null)
+        .needsUpgrade(HoodieTableVersion.SEVEN);
+    assertTrue(shouldUpgrade);
+
+    // assert upgrade for table version 8 from table version 6
+    shouldUpgrade = new UpgradeDowngrade(metaClient, writeConfig, context, null)
+        .needsUpgrade(HoodieTableVersion.EIGHT);
+    assertTrue(shouldUpgrade);
+
+    // assert upgrade for table version 8 from table version 6 with auto upgrade set to false
+    when(writeConfig.autoUpgrade()).thenReturn(false);
+    shouldUpgrade = new UpgradeDowngrade(metaClient, writeConfig, context, null)
+        .needsUpgrade(HoodieTableVersion.EIGHT);
+    assertTrue(shouldUpgrade);
+  }
+
   private void assertMarkerFilesForDowngrade(HoodieTable table, HoodieInstant commitInstant, boolean assertExists) throws IOException {
     // Verify recreated marker files are as expected
     WriteMarkers writeMarkers = WriteMarkersFactory.get(getConfig().getMarkersType(), table, commitInstant.requestedTime());
@@ -766,7 +812,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).withRollbackUsingMarkers(enableMarkedBasedRollback).withProps(params).build();
     SparkRDDWriteClient client = getHoodieWriteClient(cfg);
 
-    client.startCommitWithTime(newCommitTime);
+    WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
     List<HoodieRecord> records = dataGen.generateInsertsContainsAllPartitions(newCommitTime, 2);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
@@ -830,7 +876,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
      * Write 1 (only inserts)
      */
     String newCommitTime = "001";
-    client.startCommitWithTime(newCommitTime);
+    WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
     List<HoodieRecord> records = dataGen.generateInsertsContainsAllPartitions(newCommitTime, 2);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
     JavaRDD<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime);
@@ -840,7 +886,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
      * Write 2 (updates)
      */
     newCommitTime = "002";
-    client.startCommitWithTime(newCommitTime);
+    WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
     List<HoodieRecord> records2 = dataGen.generateUpdates(newCommitTime, records);
     statuses = client.upsert(jsc.parallelize(records2, 1), newCommitTime);

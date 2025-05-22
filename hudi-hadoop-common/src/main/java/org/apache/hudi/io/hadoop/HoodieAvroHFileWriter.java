@@ -29,7 +29,6 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.io.storage.HoodieAvroFileWriter;
 import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
-import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
@@ -64,7 +63,7 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
  */
 public class HoodieAvroHFileWriter
     implements HoodieAvroFileWriter {
-  private static AtomicLong recordIndex = new AtomicLong(1);
+  private static final AtomicLong RECORD_INDEX_COUNT = new AtomicLong(1);
   private final Path file;
   private final HoodieHFileConfig hfileConfig;
   private final boolean isWrapperFileSystem;
@@ -127,7 +126,7 @@ public class HoodieAvroHFileWriter
   public void writeAvroWithMetadata(HoodieKey key, IndexedRecord avroRecord) throws IOException {
     if (populateMetaFields) {
       prepRecordWithMetadata(key, avroRecord, instantTime,
-          taskContextSupplier.getPartitionIdSupplier().get(), recordIndex.getAndIncrement(), file.getName());
+          taskContextSupplier.getPartitionIdSupplier().get(), RECORD_INDEX_COUNT.getAndIncrement(), file.getName());
       writeAvro(key.getRecordKey(), avroRecord);
     } else {
       writeAvro(key.getRecordKey(), avroRecord);
@@ -141,9 +140,7 @@ public class HoodieAvroHFileWriter
 
   @Override
   public void writeAvro(String recordKey, IndexedRecord record) throws IOException {
-    // do not allow duplicates for record index (primary index)
-    // secondary index can have duplicates
-    if (prevRecordKey.equals(recordKey) && file.getName().startsWith(MetadataPartitionType.RECORD_INDEX.getFileIdPrefix())) {
+    if (prevRecordKey.equals(recordKey)) {
       throw new HoodieDuplicateKeyException("Duplicate recordKey " + recordKey + " found while writing to HFile."
           + "Record payload: " + record);
     }

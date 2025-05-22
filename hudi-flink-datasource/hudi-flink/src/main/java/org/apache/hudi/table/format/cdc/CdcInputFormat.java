@@ -20,7 +20,6 @@ package org.apache.hudi.table.format.cdc;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
@@ -34,7 +33,6 @@ import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.table.log.HoodieCDCLogRecordIterator;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
-import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -105,11 +103,10 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
       Configuration conf,
       MergeOnReadTableState tableState,
       List<DataType> fieldTypes,
-      String defaultPartName,
       List<Predicate> predicates,
       long limit,
       boolean emitDelete) {
-    super(conf, tableState, fieldTypes, defaultPartName, predicates, limit, emitDelete, InternalSchemaManager.DISABLED);
+    super(conf, tableState, fieldTypes, predicates, limit, emitDelete, InternalSchemaManager.DISABLED);
   }
 
   @Override
@@ -368,11 +365,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
           ? null
           : RowDataProjection.instance(tableState.getRequiredRowType(), tableState.getRequiredPositions());
 
-      List<String> mergers = Arrays.stream(flinkConf.getString(FlinkOptions.RECORD_MERGER_IMPLS).split(","))
-          .map(String::trim)
-          .distinct()
-          .collect(Collectors.toList());
-      this.recordMerger = HoodieRecordUtils.createRecordMerger(split.getTablePath(), EngineType.FLINK, mergers, flinkConf.getString(FlinkOptions.RECORD_MERGER_STRATEGY_ID));
+      this.recordMerger = StreamerUtil.getRecordMergerForReader(flinkConf, split.getTablePath());
       this.payloadProps = StreamerUtil.getPayloadConfig(flinkConf).getProps();
       initImages(cdcFileSplit);
     }
@@ -878,11 +871,6 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
       return this;
     }
 
-    public Builder defaultPartName(String defaultPartName) {
-      this.defaultPartName = defaultPartName;
-      return this;
-    }
-
     public Builder predicates(List<Predicate> predicates) {
       this.predicates = predicates;
       return this;
@@ -899,8 +887,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
     }
 
     public CdcInputFormat build() {
-      return new CdcInputFormat(conf, tableState, fieldTypes,
-          defaultPartName, predicates, limit, emitDelete);
+      return new CdcInputFormat(conf, tableState, fieldTypes, predicates, limit, emitDelete);
     }
   }
 

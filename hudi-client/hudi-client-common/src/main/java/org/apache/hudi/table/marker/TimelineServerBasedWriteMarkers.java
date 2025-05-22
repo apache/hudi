@@ -35,7 +35,6 @@ import org.apache.hudi.timeline.TimelineServiceClient;
 import org.apache.hudi.timeline.TimelineServiceClientBase.RequestMethod;
 
 import com.fasterxml.jackson.core.type.TypeReference;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -89,7 +88,7 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
       return executeRequestToTimelineServer(
           DELETE_MARKER_DIR_URL, paramsMap, BOOLEAN_TYPE_REFERENCE, RequestMethod.POST);
     } catch (IOException e) {
-      throw new HoodieRemoteException("Failed to delete marker directory " + markerDirPath.toString(), e);
+      throw new HoodieRemoteException("Failed to delete marker directory " + markerDirPath, e);
     }
   }
 
@@ -100,7 +99,7 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
       return executeRequestToTimelineServer(
           MARKERS_DIR_EXISTS_URL, paramsMap, BOOLEAN_TYPE_REFERENCE, RequestMethod.GET);
     } catch (IOException e) {
-      throw new HoodieRemoteException("Failed to check marker directory " + markerDirPath.toString(), e);
+      throw new HoodieRemoteException("Failed to check marker directory " + markerDirPath, e);
     }
   }
 
@@ -113,7 +112,7 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
       return markerPaths.stream().map(WriteMarkers::stripMarkerSuffix).collect(Collectors.toSet());
     } catch (IOException e) {
       throw new HoodieRemoteException("Failed to get CREATE and MERGE data file paths in "
-          + markerDirPath.toString(), e);
+          + markerDirPath, e);
     }
   }
 
@@ -124,7 +123,7 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
       return executeRequestToTimelineServer(
           ALL_MARKERS_URL, paramsMap, SET_TYPE_REFERENCE, RequestMethod.GET);
     } catch (IOException e) {
-      throw new HoodieRemoteException("Failed to get all markers in " + markerDirPath.toString(), e);
+      throw new HoodieRemoteException("Failed to get all markers in " + markerDirPath, e);
     }
   }
 
@@ -207,10 +206,10 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
     return paramsMap;
   }
 
-  private <T> T executeRequestToTimelineServer(String requestPath,
-                                               Map<String, String> queryParameters,
-                                               TypeReference reference,
-                                               RequestMethod method) throws IOException {
+  protected <T> T executeRequestToTimelineServer(String requestPath,
+                                                 Map<String, String> queryParameters,
+                                                 TypeReference reference,
+                                                 RequestMethod method) throws IOException {
     return timelineServiceClient.makeRequest(
             TimelineServiceClient.Request.newBuilder(method, requestPath).addQueryParams(queryParameters).build())
         .getDecodedContent(reference);

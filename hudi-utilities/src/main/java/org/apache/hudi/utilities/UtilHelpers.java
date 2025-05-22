@@ -116,6 +116,7 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
@@ -152,17 +153,29 @@ public class UtilHelpers {
     sourceConstructorAndArgs.add(Pair.of(constructorArgsMetrics, new Object[] {cfg, jssc, sparkSession, streamContext.getSchemaProvider(), metrics}));
     sourceConstructorAndArgs.add(Pair.of(constructorArgs, new Object[] {cfg, jssc, sparkSession, streamContext.getSchemaProvider()}));
 
-    HoodieException sourceClassLoadException = null;
+    List<HoodieException> nonMatchingConstructorExceptions = new ArrayList<>();
     for (Pair<Class<?>[], Object[]> constructor : sourceConstructorAndArgs) {
       try {
         return (Source) ReflectionUtils.loadClass(sourceClass, constructor.getLeft(), constructor.getRight());
       } catch (HoodieException e) {
-        sourceClassLoadException = e;
+        if (e.getCause() instanceof NoSuchMethodException) {
+          // If the cause is a NoSuchMethodException, ignore
+          continue;
+        }
+        nonMatchingConstructorExceptions.add(e);
+        String constructorSignature = Arrays.stream(constructor.getLeft())
+            .map(Class::getSimpleName)
+            .collect(Collectors.joining(", ", "[", "]"));
+        LOG.error("Unexpected error while loading source class {} with constructor signature {}", sourceClass, constructorSignature, e);
       } catch (Throwable t) {
-        throw new IOException("Could not load source class " + sourceClass, t);
+        throw new IOException("Could not load source class due to unexpected error " + sourceClass, t);
       }
     }
-    throw new IOException("Could not load source class " + sourceClass, sourceClassLoadException);
+
+    // Rather than throw the last failure, we will only throw failures that did not occur due to NoSuchMethodException.
+    IOException ioe = new IOException("Could not load any source class for " + sourceClass);
+    nonMatchingConstructorExceptions.forEach(ioe::addSuppressed);
+    throw ioe;
   }
 
   public static JsonKafkaSourcePostProcessor createJsonKafkaSourcePostProcessor(String postProcessorClassNames, TypedProperties props) throws IOException {
@@ -411,14 +424,14 @@ public class UtilHelpers {
     writeResponse.foreach(writeStatus -> {
       if (writeStatus.hasErrors()) {
         errors.add(1);
-        LOG.error(String.format("Error processing records :writeStatus:%s", writeStatus.getStat().toString()));
+        LOG.error("Error processing records :writeStatus:{}", writeStatus.getStat().toString());
       }
     });
     if (errors.value() == 0) {
-      LOG.info(String.format("Table imported into hoodie with %s instant time.", instantTime));
+      LOG.info("Table imported into hoodie with {} instant time.", instantTime);
       return 0;
     }
-    LOG.error(String.format("Import failed with %d errors.", errors.value()));
+    LOG.error("Import failed with {} errors.", errors.value());
     return -1;
   }
 
@@ -426,11 +439,11 @@ public class UtilHelpers {
     List<HoodieWriteStat> writeStats = metadata.getWriteStats();
     long errorsCount = writeStats.stream().mapToLong(HoodieWriteStat::getTotalWriteErrors).sum();
     if (errorsCount == 0) {
-      LOG.info(String.format("Finish job with %s instant time.", instantTime));
+      LOG.info("Finish job with {} instant time.", instantTime);
       return 0;
     }
 
-    LOG.error(String.format("Job failed with %d errors.", errorsCount));
+    LOG.error("Job failed with {} errors.", errorsCount);
     return -1;
   }
 

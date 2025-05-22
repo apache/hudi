@@ -19,6 +19,7 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
@@ -104,7 +105,7 @@ public class TestHoodieMergeHandle extends HoodieSparkClientTestHarness {
        * each. id1 (21 records), id2 (21 records), id3, id4
        */
       String newCommitTime = "001";
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 4);
       HoodieRecord record1 = records.get(0);
       HoodieRecord record2 = records.get(1);
@@ -136,7 +137,7 @@ public class TestHoodieMergeHandle extends HoodieSparkClientTestHarness {
        * records), id3, id4 File 2 - id1
        */
       newCommitTime = "002";
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
       // Do 1 more bulk insert with the same dup record1
       List<HoodieRecord> newRecords = new ArrayList<>();
@@ -160,7 +161,7 @@ public class TestHoodieMergeHandle extends HoodieSparkClientTestHarness {
        * id6
        */
       newCommitTime = "003";
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
       newRecords = dataGen.generateInserts(newCommitTime, 2);
       writeRecords = jsc.parallelize(newRecords, 1);
       statuses = client.bulkInsert(writeRecords, newCommitTime).collect();
@@ -181,7 +182,7 @@ public class TestHoodieMergeHandle extends HoodieSparkClientTestHarness {
        * records in File 1, File 2 and File 3 must be updated.
        */
       newCommitTime = "004";
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
       List<HoodieRecord> updateRecords = new ArrayList<>();
 
       // This exists in 001 and 002 and should be updated in both
@@ -266,7 +267,7 @@ public class TestHoodieMergeHandle extends HoodieSparkClientTestHarness {
         .build();
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config);) {
       String newCommitTime = "100";
-      writeClient.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(writeClient, newCommitTime);
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
       JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
@@ -290,7 +291,7 @@ public class TestHoodieMergeHandle extends HoodieSparkClientTestHarness {
       metaClient = HoodieTableMetaClient.reload(metaClient);
 
       newCommitTime = "101";
-      writeClient.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(writeClient, newCommitTime);
 
       List<HoodieRecord> updatedRecords = dataGen.generateUpdates(newCommitTime, records);
       JavaRDD<HoodieRecord> updatedRecordsRDD = jsc.parallelize(updatedRecords, 1);
@@ -311,7 +312,7 @@ public class TestHoodieMergeHandle extends HoodieSparkClientTestHarness {
           (long) statuses.stream().map(status -> status.getStat().getNumInserts()).reduce((a, b) -> a + b).get());
 
       newCommitTime = "102";
-      writeClient.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(writeClient, newCommitTime);
 
       List<HoodieRecord> allRecords = dataGen.generateInserts(newCommitTime, 100);
       allRecords.addAll(updatedRecords);

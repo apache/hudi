@@ -24,6 +24,7 @@ import org.apache.hudi.cli.testutils.HoodieCLIIntegrationTestBase;
 import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.TestCompactionAdminClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.model.CompactionOperation;
@@ -300,7 +301,7 @@ public class ITTestCompactionCommand extends HoodieCLIIntegrationTestBase {
       HoodieTestDataGenerator dataGen) throws IOException {
     // inserts
     String newCommitTime = "001";
-    client.startCommitWithTime(newCommitTime);
+    WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
     List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 10);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
@@ -313,7 +314,7 @@ public class ITTestCompactionCommand extends HoodieCLIIntegrationTestBase {
       throws IOException {
     // updates
     String newCommitTime = "002";
-    client.startCommitWithTime(newCommitTime);
+    WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
     List<HoodieRecord> toBeUpdated = dataGen.generateUpdates(newCommitTime, 2);
     records.addAll(toBeUpdated);
@@ -325,7 +326,7 @@ public class ITTestCompactionCommand extends HoodieCLIIntegrationTestBase {
        List<HoodieRecord> records) {
     // Delete
     String newCommitTime = "003";
-    client.startCommitWithTime(newCommitTime);
+    WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
     // just delete half of the records
     int numToDelete = records.size() / 2;

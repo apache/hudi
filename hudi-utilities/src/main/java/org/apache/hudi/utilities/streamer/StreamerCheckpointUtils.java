@@ -28,7 +28,6 @@ import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.table.checkpoint.CheckpointUtils;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineLayout;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -116,7 +115,7 @@ public class StreamerCheckpointUtils {
 
   private static Option<Checkpoint> useCkpFromOverrideConfigIfAny(
       HoodieStreamer.Config streamerConfig, TypedProperties props, Option<Checkpoint> checkpoint) {
-    LOG.debug("Checkpoint from config: " + streamerConfig.checkpoint);
+    LOG.debug("Checkpoint from config: {}", streamerConfig.checkpoint);
     if (!checkpoint.isPresent() && streamerConfig.checkpoint != null) {
       int writeTableVersion = ConfigUtils.getIntWithAltKeys(props, HoodieWriteConfig.WRITE_TABLE_VERSION);
       checkpoint = Option.of(buildCheckpointFromConfigOverride(streamerConfig.sourceClassName, writeTableVersion, streamerConfig.checkpoint));
@@ -157,7 +156,7 @@ public class StreamerCheckpointUtils {
       if (commitMetadataOption.isPresent()) {
         HoodieCommitMetadata commitMetadata = commitMetadataOption.get();
         Checkpoint checkpointFromCommit = CheckpointUtils.getCheckpoint(commitMetadata);
-        LOG.debug("Checkpoint reset from metadata: " + checkpointFromCommit.getCheckpointResetKey());
+        LOG.debug("Checkpoint reset from metadata: {}", checkpointFromCommit.getCheckpointResetKey());
         if (ignoreCkpCfgPrevailsOverCkpFromPrevCommit(streamerConfig, checkpointFromCommit)) {
           // we ignore any existing checkpoint and start ingesting afresh
           resumeCheckpoint = Option.empty();
@@ -204,9 +203,7 @@ public class StreamerCheckpointUtils {
       throws IOException {
     return (Option<Pair<String, HoodieCommitMetadata>>) timeline.getReverseOrderedInstants().map(instant -> {
       try {
-        TimelineLayout layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion());
-        HoodieCommitMetadata commitMetadata = layout.getCommitMetadataSerDe()
-            .deserialize(instant, timeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+        HoodieCommitMetadata commitMetadata = timeline.readCommitMetadata(instant);
         if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(HoodieStreamer.CHECKPOINT_KEY))
             || !StringUtils.isNullOrEmpty(commitMetadata.getMetadata(HoodieStreamer.CHECKPOINT_RESET_KEY))
             || !StringUtils.isNullOrEmpty(commitMetadata.getMetadata(STREAMER_CHECKPOINT_KEY_V2))

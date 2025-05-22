@@ -19,7 +19,7 @@
 package org.apache.hudi
 
 import org.apache.hudi.DataSourceWriteOptions.{INSERT_DROP_DUPS, PRECOMBINE_FIELD}
-import org.apache.hudi.avro.HoodieAvroUtils
+import org.apache.hudi.avro.{AvroSchemaCache, HoodieAvroUtils}
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model._
@@ -114,7 +114,7 @@ object HoodieCreateRecordUtils {
 
         avroRecords.mapPartitions(it => {
           val sparkPartitionId = TaskContext.getPartitionId()
-          val keyGenProps = new TypedProperties(config.getProps)
+          val keyGenProps = TypedProperties.copy(config.getProps)
           if (autoGenerateRecordKeys) {
             keyGenProps.setProperty(KeyGenUtils.RECORD_KEY_GEN_PARTITION_ID_CONFIG, String.valueOf(sparkPartitionId))
             keyGenProps.setProperty(KeyGenUtils.RECORD_KEY_GEN_INSTANT_TIME_CONFIG, instantTime)
@@ -157,14 +157,14 @@ object HoodieCreateRecordUtils {
         }).toJavaRDD()
 
       case HoodieRecord.HoodieRecordType.SPARK =>
-        val dataFileSchema = new Schema.Parser().parse(dataFileSchemaStr)
+        val dataFileSchema = AvroSchemaCache.intern(new Schema.Parser().parse(dataFileSchemaStr))
         val dataFileStructType = HoodieInternalRowUtils.getCachedSchema(dataFileSchema)
-        val writerStructType = HoodieInternalRowUtils.getCachedSchema(writerSchema)
+        val writerStructType = HoodieInternalRowUtils.getCachedSchema(AvroSchemaCache.intern(writerSchema))
         val sourceStructType = df.schema
 
         df.queryExecution.toRdd.mapPartitions { it =>
           val sparkPartitionId = TaskContext.getPartitionId()
-          val keyGenProps = new TypedProperties(config.getProps)
+          val keyGenProps = TypedProperties.copy(config.getProps)
           if (autoGenerateRecordKeys) {
             keyGenProps.setProperty(KeyGenUtils.RECORD_KEY_GEN_PARTITION_ID_CONFIG, String.valueOf(sparkPartitionId))
             keyGenProps.setProperty(KeyGenUtils.RECORD_KEY_GEN_INSTANT_TIME_CONFIG, instantTime)

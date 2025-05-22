@@ -69,6 +69,7 @@ import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -267,16 +268,19 @@ public class ParquetUtils extends FileFormatUtils {
                                                                                  StoragePath filePath,
                                                                                  List<String> columnList) {
     ParquetMetadata metadata = readMetadata(storage, filePath);
+    return readColumnStatsFromMetadata(metadata, filePath.getName(), Option.of(columnList));
+  }
 
+  public List<HoodieColumnRangeMetadata<Comparable>> readColumnStatsFromMetadata(ParquetMetadata metadata, String filePath, Option<List<String>> columnList) {
     // Collect stats from all individual Parquet blocks
     Stream<HoodieColumnRangeMetadata<Comparable>> hoodieColumnRangeMetadataStream =
         metadata.getBlocks().stream().sequential().flatMap(blockMetaData ->
             blockMetaData.getColumns().stream()
-                    .filter(f -> columnList.contains(f.getPath().toDotString()))
+                    .filter(f -> !columnList.isPresent() || columnList.get().contains(f.getPath().toDotString()))
                     .map(columnChunkMetaData -> {
                       Statistics stats = columnChunkMetaData.getStatistics();
                       return (HoodieColumnRangeMetadata<Comparable>) HoodieColumnRangeMetadata.<Comparable>create(
-                          filePath.getName(),
+                          filePath,
                           columnChunkMetaData.getPath().toDotString(),
                           convertToNativeJavaType(
                               columnChunkMetaData.getPrimitiveType(),
@@ -294,8 +298,12 @@ public class ParquetUtils extends FileFormatUtils {
                     })
         );
 
+    return mergeColumnStats(hoodieColumnRangeMetadataStream);
+  }
+
+  public List<HoodieColumnRangeMetadata<Comparable>> mergeColumnStats(Stream<HoodieColumnRangeMetadata<Comparable>> columnStats) {
     Map<String, List<HoodieColumnRangeMetadata<Comparable>>> columnToStatsListMap =
-        hoodieColumnRangeMetadataStream.collect(Collectors.groupingBy(HoodieColumnRangeMetadata::getColumnName));
+        columnStats.collect(Collectors.groupingBy(HoodieColumnRangeMetadata::getColumnName));
 
     // Combine those into file-level statistics
     // NOTE: Inlining this var makes javac (1.8) upset (due to its inability to infer
@@ -374,14 +382,14 @@ public class ParquetUtils extends FileFormatUtils {
   }
 
   @Override
-  public byte[] serializeRecordsToLogBlock(HoodieStorage storage,
+  public ByteArrayOutputStream serializeRecordsToLogBlock(HoodieStorage storage,
                                            List<HoodieRecord> records,
                                            Schema writerSchema,
                                            Schema readerSchema,
                                            String keyFieldName,
                                            Map<String, String> paramsMap) throws IOException {
     if (records.size() == 0) {
-      return new byte[0];
+      return new ByteArrayOutputStream(0);
     }
 
     ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
@@ -399,7 +407,34 @@ public class ParquetUtils extends FileFormatUtils {
       }
       outputStream.flush();
     }
-    return outputStream.toByteArray();
+    return outputStream;
+  }
+
+  @Override
+  public Pair<ByteArrayOutputStream, Object> serializeRecordsToLogBlock(HoodieStorage storage,
+                                                                        Iterator<HoodieRecord> recordItr,
+                                                                        HoodieRecord.HoodieRecordType recordType,
+                                                                        Schema writerSchema,
+                                                                        Schema readerSchema,
+                                                                        String keyFieldName,
+                                                                        Map<String, String> paramsMap) throws IOException {
+    ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+    HoodieConfig config = new HoodieConfig();
+    paramsMap.entrySet().stream().forEach(entry -> config.setValue(entry.getKey(), entry.getValue()));
+    config.setValue(PARQUET_BLOCK_SIZE.key(), String.valueOf(ParquetWriter.DEFAULT_BLOCK_SIZE));
+    config.setValue(PARQUET_PAGE_SIZE.key(), String.valueOf(ParquetWriter.DEFAULT_PAGE_SIZE));
+    config.setValue(PARQUET_MAX_FILE_SIZE.key(), String.valueOf(1024 * 1024 * 1024));
+
+    HoodieFileWriter parquetWriter = HoodieFileWriterFactory.getFileWriter(
+        HoodieFileFormat.PARQUET, outputStream, storage, config, writerSchema, recordType);
+    while (recordItr.hasNext()) {
+      HoodieRecord record = recordItr.next();
+      String recordKey = record.getRecordKey(readerSchema, keyFieldName);
+      parquetWriter.write(recordKey, record, writerSchema);
+    }
+    outputStream.flush();
+    parquetWriter.close();
+    return Pair.of(outputStream, parquetWriter.getFileFormatMetadata());
   }
 
   static class RecordKeysFilterFunction implements Function<String, Boolean> {

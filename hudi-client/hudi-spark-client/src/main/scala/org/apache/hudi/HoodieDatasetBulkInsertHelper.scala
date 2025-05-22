@@ -23,21 +23,24 @@ import org.apache.hudi.client.model.HoodieInternalRow
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.data.HoodieData
 import org.apache.hudi.common.engine.TaskContextSupplier
-import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
 import org.apache.hudi.common.util.ReflectionUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.data.HoodieJavaRDD
 import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.index.HoodieIndex.BucketIndexEngineType
 import org.apache.hudi.index.{HoodieIndex, SparkHoodieIndexFactory}
-import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
+import org.apache.hudi.index.HoodieIndex.BucketIndexEngineType
 import org.apache.hudi.keygen.{AutoRecordGenWrapperKeyGenerator, BuiltinKeyGenerator, KeyGenUtils}
-import org.apache.hudi.table.action.commit.{BulkInsertDataInternalWriterHelper, ConsistentBucketBulkInsertDataInternalWriterHelper, ParallelismHelper}
+import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.table.{BulkInsertPartitioner, HoodieTable}
+import org.apache.hudi.table.action.commit.{BucketBulkInsertDataInternalWriterHelper, BulkInsertDataInternalWriterHelper, ConsistentBucketBulkInsertDataInternalWriterHelper, ParallelismHelper}
 import org.apache.hudi.util.JFunction.toJavaSerializableFunctionUnchecked
+
+import org.apache.avro.Schema
 import org.apache.spark.TaskContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.{DataFrame, Dataset, HoodieUnsafeUtils, Row}
 import org.apache.spark.sql.HoodieUnsafeRowUtils.{composeNestedFieldPath, getNestedInternalRowValue}
 import org.apache.spark.sql.HoodieUnsafeUtils.getNumPartitions
 import org.apache.spark.sql.catalyst.InternalRow
@@ -45,7 +48,6 @@ import org.apache.spark.sql.catalyst.expressions.{Alias, Literal}
 import org.apache.spark.sql.catalyst.plans.logical.Project
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
-import org.apache.spark.sql.{DataFrame, Dataset, HoodieUnsafeUtils, Row}
 import org.apache.spark.unsafe.types.UTF8String
 
 import scala.collection.JavaConverters.asScalaBufferConverter
@@ -90,7 +92,7 @@ object HoodieDatasetBulkInsertHelper
 
       val prependedRdd: RDD[InternalRow] = {
         injectSQLConf(df.queryExecution.toRdd.mapPartitions { iter =>
-          val typedProps = new TypedProperties(config.getProps)
+          val typedProps = TypedProperties.copy(config.getProps)
           if (autoGenerateRecordKeys) {
             typedProps.setProperty(KeyGenUtils.RECORD_KEY_GEN_PARTITION_ID_CONFIG, String.valueOf(TaskContext.getPartitionId()))
             typedProps.setProperty(KeyGenUtils.RECORD_KEY_GEN_INSTANT_TIME_CONFIG, instantTime)
@@ -148,8 +150,14 @@ object HoodieDatasetBulkInsertHelper
                  table: HoodieTable[_, _, _, _],
                  writeConfig: HoodieWriteConfig,
                  arePartitionRecordsSorted: Boolean,
-                 shouldPreserveHoodieMetadata: Boolean): HoodieData[WriteStatus] = {
-    val schema = dataset.schema
+                 shouldPreserveHoodieMetadata: Boolean,
+                 operation: WriteOperationType): HoodieData[WriteStatus] = {
+    val schema = operation match {
+      case WriteOperationType.CLUSTER =>
+        alignNotNullFields(dataset.schema, new Schema.Parser().parse(writeConfig.getSchema))
+      case _ =>
+        dataset.schema
+    }
     HoodieJavaRDD.of(
       injectSQLConf(dataset.queryExecution.toRdd.mapPartitions(iter => {
         val taskContextSupplier: TaskContextSupplier = table.getTaskContextSupplier
@@ -161,6 +169,19 @@ object HoodieDatasetBulkInsertHelper
           case HoodieIndex.IndexType.BUCKET if writeConfig.getBucketIndexEngineType
             == BucketIndexEngineType.CONSISTENT_HASHING =>
             new ConsistentBucketBulkInsertDataInternalWriterHelper(
+              table,
+              writeConfig,
+              instantTime,
+              taskPartitionId,
+              taskId,
+              taskEpochId,
+              schema,
+              writeConfig.populateMetaFields,
+              arePartitionRecordsSorted,
+              shouldPreserveHoodieMetadata)
+          case HoodieIndex.IndexType.BUCKET if writeConfig.getBucketIndexEngineType
+            == BucketIndexEngineType.SIMPLE =>
+            new BucketBulkInsertDataInternalWriterHelper(
               table,
               writeConfig,
               instantTime,
@@ -197,6 +218,24 @@ object HoodieDatasetBulkInsertHelper
 
         writer.getWriteStatuses.asScala.iterator
       }), SQLConf.get).toJavaRDD())
+  }
+
+  private def alignNotNullFields(sourceSchema: StructType, avroSchema: Schema): StructType = {
+    val notNullFieldNames = avroSchema.getFields.asScala
+      .filter(f => !f.schema.isNullable)
+      .map(f => f.name)
+    if (notNullFieldNames.isEmpty) {
+      return sourceSchema
+    }
+
+    val copiedFields = sourceSchema.fields.map(field => {
+      if (notNullFieldNames.contains(field.name)) {
+        field.copy(nullable = false)
+      } else {
+        field.copy()
+      }
+    }).toSeq
+    StructType(copiedFields)
   }
 
   private def dedupeRows(rdd: RDD[InternalRow], schema: StructType, preCombineFieldRef: String, isGlobalIndex: Boolean, targetParallelism: Int): RDD[InternalRow] = {
@@ -243,7 +282,7 @@ object HoodieDatasetBulkInsertHelper
 
   private def getPartitionPathFields(config: HoodieWriteConfig): mutable.Seq[String] = {
     val keyGeneratorClassName = config.getString(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME)
-    val keyGenerator = ReflectionUtils.loadClass(HoodieSparkKeyGeneratorFactory.convertToSparkKeyGenerator(keyGeneratorClassName), new TypedProperties(config.getProps)).asInstanceOf[BuiltinKeyGenerator]
+    val keyGenerator = ReflectionUtils.loadClass(HoodieSparkKeyGeneratorFactory.convertToSparkKeyGenerator(keyGeneratorClassName), config.getProps).asInstanceOf[BuiltinKeyGenerator]
     keyGenerator.getPartitionPathFields.asScala
   }
 

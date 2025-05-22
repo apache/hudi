@@ -19,18 +19,24 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.avro.GenericAvroSerializer;
+import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieFileGroupId;
+import org.apache.hudi.common.model.HoodieLogFile;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.Serializer;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.util.Utf8;
 import org.objenesis.strategy.StdInstantiatorStrategy;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.TreeSet;
 
 /**
  * {@link SerializationUtils} class internally uses {@link Kryo} serializer for serializing / deserializing objects.
@@ -126,6 +132,13 @@ public class SerializationUtils {
       // Register serializers
       kryo.register(Utf8.class, new AvroUtf8Serializer());
       kryo.register(GenericData.Fixed.class, new GenericAvroSerializer<>());
+      kryo.register(IndexedRecord.class, new GenericAvroSerializer<>());
+      kryo.register(GenericData.Record.class, new GenericAvroSerializer<>());
+      kryo.register(HoodieFileGroupId.class);
+      kryo.register(FileSlice.class);
+      kryo.register(HoodieBaseFile.class);
+      kryo.register(HoodieLogFile.class);
+      kryo.register(TreeSet.class);
 
       return kryo;
     }

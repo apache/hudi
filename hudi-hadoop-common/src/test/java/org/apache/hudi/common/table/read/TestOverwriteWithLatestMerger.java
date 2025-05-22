@@ -19,16 +19,12 @@
 
 package org.apache.hudi.common.table.read;
 
+import org.apache.hudi.avro.HoodieAvroReaderContext;
 import org.apache.hudi.common.config.RecordMergeMode;
-import org.apache.hudi.common.model.HoodieRecordMerger;
-import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
-import org.apache.hudi.common.model.OverwriteWithLatestMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.reader.HoodieFileGroupReaderTestHarness;
 import org.apache.hudi.common.testutils.reader.HoodieFileSliceTestUtils;
-import org.apache.hudi.common.testutils.reader.HoodieTestReaderContext;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 
 import org.apache.avro.generic.IndexedRecord;
@@ -65,10 +61,6 @@ public class TestOverwriteWithLatestMerger extends HoodieFileGroupReaderTestHarn
 
   @BeforeAll
   public static void setUp() throws IOException {
-    HoodieRecordMerger merger = new OverwriteWithLatestMerger();
-    readerContext = new HoodieTestReaderContext(
-        Option.of(merger),
-        Option.of(OverwriteWithLatestAvroPayload.class.getName()));
     properties.setProperty("hoodie.write.record.merge.mode", RecordMergeMode.COMMIT_TIME_ORDERING.name());
 
     // -------------------------------------------------------------
@@ -108,7 +100,6 @@ public class TestOverwriteWithLatestMerger extends HoodieFileGroupReaderTestHarn
     // Specify the instant time for each file.
     instantTimes = Arrays.asList(
         "001", "002", "003", "004", "005");
-    shouldWritePositions = Arrays.asList(false, false, false, false, false);
   }
 
   @BeforeEach
@@ -118,6 +109,7 @@ public class TestOverwriteWithLatestMerger extends HoodieFileGroupReaderTestHarn
     initMetaClient();
     initTestDataGenerator(new String[]{PARTITION_PATH});
     testTable = HoodieTestTable.of(metaClient);
+    readerContext = new HoodieAvroReaderContext(storageConf, metaClient.getTableConfig());
     setUpMockCommits();
   }
 
@@ -126,18 +118,19 @@ public class TestOverwriteWithLatestMerger extends HoodieFileGroupReaderTestHarn
   public void testWithOneLogFile(boolean useRecordPositions) throws IOException, InterruptedException {
     shouldWritePositions = Arrays.asList(useRecordPositions, useRecordPositions);
     // The FileSlice contains a base file and a log file.
-    ClosableIterator<IndexedRecord> iterator = getFileGroupIterator(2, useRecordPositions);
-    List<String> leftKeysExpected = Arrays.asList("6", "7", "8", "9", "10");
-    List<Long> leftTimestampsExpected = Arrays.asList(2L, 2L, 2L, 2L, 2L);
-    List<String> leftKeysActual = new ArrayList<>();
-    List<Long> leftTimestampsActual = new ArrayList<>();
-    while (iterator.hasNext()) {
-      IndexedRecord record = iterator.next();
-      leftKeysActual.add(record.get(AVRO_SCHEMA.getField(ROW_KEY).pos()).toString());
-      leftTimestampsActual.add((Long) record.get(AVRO_SCHEMA.getField("timestamp").pos()));
+    try (ClosableIterator<IndexedRecord> iterator = getFileGroupIterator(2, useRecordPositions)) {
+      List<String> leftKeysExpected = Arrays.asList("6", "7", "8", "9", "10");
+      List<Long> leftTimestampsExpected = Arrays.asList(2L, 2L, 2L, 2L, 2L);
+      List<String> leftKeysActual = new ArrayList<>();
+      List<Long> leftTimestampsActual = new ArrayList<>();
+      while (iterator.hasNext()) {
+        IndexedRecord record = iterator.next();
+        leftKeysActual.add(record.get(AVRO_SCHEMA.getField(ROW_KEY).pos()).toString());
+        leftTimestampsActual.add((Long) record.get(AVRO_SCHEMA.getField("timestamp").pos()));
+      }
+      assertEquals(leftKeysExpected, leftKeysActual);
+      assertEquals(leftTimestampsExpected, leftTimestampsActual);
     }
-    assertEquals(leftKeysExpected, leftKeysActual);
-    assertEquals(leftTimestampsExpected, leftTimestampsActual);
   }
 
   @ParameterizedTest
@@ -145,18 +138,19 @@ public class TestOverwriteWithLatestMerger extends HoodieFileGroupReaderTestHarn
   public void testWithTwoLogFiles(boolean useRecordPositions) throws IOException, InterruptedException {
     shouldWritePositions = Arrays.asList(useRecordPositions, useRecordPositions, useRecordPositions);
     // The FileSlice contains a base file and two log files.
-    ClosableIterator<IndexedRecord> iterator = getFileGroupIterator(3, useRecordPositions);
-    List<String> leftKeysExpected = Arrays.asList("1", "2", "3", "6", "7", "8", "9", "10");
-    List<Long> leftTimestampsExpected = Arrays.asList(1L, 1L, 1L, 2L, 2L, 2L, 2L, 2L);
-    List<String> leftKeysActual = new ArrayList<>();
-    List<Long> leftTimestampsActual = new ArrayList<>();
-    while (iterator.hasNext()) {
-      IndexedRecord record = iterator.next();
-      leftKeysActual.add(record.get(AVRO_SCHEMA.getField(ROW_KEY).pos()).toString());
-      leftTimestampsActual.add((Long) record.get(AVRO_SCHEMA.getField("timestamp").pos()));
+    try (ClosableIterator<IndexedRecord> iterator = getFileGroupIterator(3, useRecordPositions)) {
+      List<String> leftKeysExpected = Arrays.asList("1", "2", "3", "6", "7", "8", "9", "10");
+      List<Long> leftTimestampsExpected = Arrays.asList(1L, 1L, 1L, 2L, 2L, 2L, 2L, 2L);
+      List<String> leftKeysActual = new ArrayList<>();
+      List<Long> leftTimestampsActual = new ArrayList<>();
+      while (iterator.hasNext()) {
+        IndexedRecord record = iterator.next();
+        leftKeysActual.add(record.get(AVRO_SCHEMA.getField(ROW_KEY).pos()).toString());
+        leftTimestampsActual.add((Long) record.get(AVRO_SCHEMA.getField("timestamp").pos()));
+      }
+      assertEquals(leftKeysExpected, leftKeysActual);
+      assertEquals(leftTimestampsExpected, leftTimestampsActual);
     }
-    assertEquals(leftKeysExpected, leftKeysActual);
-    assertEquals(leftTimestampsExpected, leftTimestampsActual);
   }
 
   @ParameterizedTest
@@ -164,35 +158,38 @@ public class TestOverwriteWithLatestMerger extends HoodieFileGroupReaderTestHarn
   public void testWithThreeLogFiles(boolean useRecordPositions) throws IOException, InterruptedException {
     shouldWritePositions = Arrays.asList(useRecordPositions, useRecordPositions, useRecordPositions, useRecordPositions);
     // The FileSlice contains a base file and three log files.
-    ClosableIterator<IndexedRecord> iterator = getFileGroupIterator(4, useRecordPositions);
-    List<String> leftKeysExpected = Arrays.asList("1", "2", "3", "9", "10");
-    List<Long> leftTimestampsExpected = Arrays.asList(1L, 1L, 1L, 2L, 2L);
-    List<String> leftKeysActual = new ArrayList<>();
-    List<Long> leftTimestampsActual = new ArrayList<>();
-    while (iterator.hasNext()) {
-      IndexedRecord record = iterator.next();
-      leftKeysActual.add(record.get(AVRO_SCHEMA.getField(ROW_KEY).pos()).toString());
-      leftTimestampsActual.add((Long) record.get(AVRO_SCHEMA.getField("timestamp").pos()));
+    try (ClosableIterator<IndexedRecord> iterator = getFileGroupIterator(4, useRecordPositions)) {
+      List<String> leftKeysExpected = Arrays.asList("1", "2", "3", "9", "10");
+      List<Long> leftTimestampsExpected = Arrays.asList(1L, 1L, 1L, 2L, 2L);
+      List<String> leftKeysActual = new ArrayList<>();
+      List<Long> leftTimestampsActual = new ArrayList<>();
+      while (iterator.hasNext()) {
+        IndexedRecord record = iterator.next();
+        leftKeysActual.add(record.get(AVRO_SCHEMA.getField(ROW_KEY).pos()).toString());
+        leftTimestampsActual.add((Long) record.get(AVRO_SCHEMA.getField("timestamp").pos()));
+      }
+      assertEquals(leftKeysExpected, leftKeysActual);
+      assertEquals(leftTimestampsExpected, leftTimestampsActual);
     }
-    assertEquals(leftKeysExpected, leftKeysActual);
-    assertEquals(leftTimestampsExpected, leftTimestampsActual);
   }
 
   @Test
   public void testWithFourLogFiles() throws IOException, InterruptedException {
+    shouldWritePositions = Arrays.asList(false, false, false, false, false);
     // The FileSlice contains a base file and three log files.
-    ClosableIterator<IndexedRecord> iterator = getFileGroupIterator(5);
-    List<String> leftKeysExpected = Arrays.asList("1", "2", "3", "4", "9", "10");
-    List<Long> leftTimestampsExpected = Arrays.asList(1L, 4L, 4L, 4L, 2L, 2L);
-    List<String> leftKeysActual = new ArrayList<>();
-    List<Long> leftTimestampsActual = new ArrayList<>();
-    while (iterator.hasNext()) {
-      IndexedRecord record = iterator.next();
-      leftKeysActual.add(record.get(AVRO_SCHEMA.getField(ROW_KEY).pos()).toString());
-      leftTimestampsActual.add((Long) record.get(AVRO_SCHEMA.getField("timestamp").pos()));
+    try (ClosableIterator<IndexedRecord> iterator = getFileGroupIterator(5)) {
+      List<String> leftKeysExpected = Arrays.asList("1", "2", "3", "4", "9", "10");
+      List<Long> leftTimestampsExpected = Arrays.asList(1L, 4L, 4L, 4L, 2L, 2L);
+      List<String> leftKeysActual = new ArrayList<>();
+      List<Long> leftTimestampsActual = new ArrayList<>();
+      while (iterator.hasNext()) {
+        IndexedRecord record = iterator.next();
+        leftKeysActual.add(record.get(AVRO_SCHEMA.getField(ROW_KEY).pos()).toString());
+        leftTimestampsActual.add((Long) record.get(AVRO_SCHEMA.getField("timestamp").pos()));
+      }
+      assertEquals(leftKeysExpected, leftKeysActual);
+      assertEquals(leftTimestampsExpected, leftTimestampsActual);
     }
-    assertEquals(leftKeysExpected, leftKeysActual);
-    assertEquals(leftTimestampsExpected, leftTimestampsActual);
   }
 
   @ParameterizedTest
@@ -201,18 +198,19 @@ public class TestOverwriteWithLatestMerger extends HoodieFileGroupReaderTestHarn
                                         boolean log3haspositions, boolean log4haspositions) throws IOException, InterruptedException {
     shouldWritePositions = Arrays.asList(true, log1haspositions, log2haspositions, log3haspositions, log4haspositions);
     // The FileSlice contains a base file and three log files.
-    ClosableIterator<IndexedRecord> iterator = getFileGroupIterator(5, true);
-    List<String> leftKeysExpected = Arrays.asList("1", "2", "3", "4", "9", "10");
-    List<Long> leftTimestampsExpected = Arrays.asList(1L, 4L, 4L, 4L, 2L, 2L);
-    List<String> leftKeysActual = new ArrayList<>();
-    List<Long> leftTimestampsActual = new ArrayList<>();
-    while (iterator.hasNext()) {
-      IndexedRecord record = iterator.next();
-      leftKeysActual.add(record.get(AVRO_SCHEMA.getField(ROW_KEY).pos()).toString());
-      leftTimestampsActual.add((Long) record.get(AVRO_SCHEMA.getField("timestamp").pos()));
+    try (ClosableIterator<IndexedRecord> iterator = getFileGroupIterator(5, true)) {
+      List<String> leftKeysExpected = Arrays.asList("1", "2", "3", "4", "9", "10");
+      List<Long> leftTimestampsExpected = Arrays.asList(1L, 4L, 4L, 4L, 2L, 2L);
+      List<String> leftKeysActual = new ArrayList<>();
+      List<Long> leftTimestampsActual = new ArrayList<>();
+      while (iterator.hasNext()) {
+        IndexedRecord record = iterator.next();
+        leftKeysActual.add(record.get(AVRO_SCHEMA.getField(ROW_KEY).pos()).toString());
+        leftTimestampsActual.add((Long) record.get(AVRO_SCHEMA.getField("timestamp").pos()));
+      }
+      assertEquals(leftKeysExpected, leftKeysActual);
+      assertEquals(leftTimestampsExpected, leftTimestampsActual);
     }
-    assertEquals(leftKeysExpected, leftKeysActual);
-    assertEquals(leftTimestampsExpected, leftTimestampsActual);
   }
 
   //generate all possible combos of 4 booleans

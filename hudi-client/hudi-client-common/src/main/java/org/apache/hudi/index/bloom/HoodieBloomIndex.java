@@ -21,7 +21,6 @@ package org.apache.hudi.index.bloom;
 
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -33,7 +32,6 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.MetadataNotFoundException;
 import org.apache.hudi.index.HoodieIndex;
@@ -78,8 +76,7 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
       HoodieTable hoodieTable) {
     // Step 0: cache the input records if needed
     if (config.getBloomIndexUseCaching()) {
-      records.persist(new HoodieConfig(config.getProps())
-          .getString(HoodieIndexConfig.BLOOM_INDEX_INPUT_STORAGE_LEVEL_VALUE));
+      records.persist(config.getBloomIndexInputStorageLevel());
     }
 
     // Step 1: Extract out thinner pairs of (partitionPath, recordKey)
@@ -92,12 +89,11 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
 
     // Cache the result, for subsequent stages.
     if (config.getBloomIndexUseCaching()) {
-      keyFilenamePairs.persist(new HoodieConfig(config.getProps())
-          .getString(HoodieIndexConfig.BLOOM_INDEX_INPUT_STORAGE_LEVEL_VALUE));
+      keyFilenamePairs.persist(config.getBloomIndexInputStorageLevel());
     }
     if (LOG.isDebugEnabled()) {
       long totalTaggedRecords = keyFilenamePairs.count();
-      LOG.debug("Number of update records (ones tagged with a fileID): " + totalTaggedRecords);
+      LOG.debug("Number of update records (ones tagged with a fileID): {}", totalTaggedRecords);
     }
 
     // Step 3: Tag the incoming records, as inserts or updates, by joining with existing record keys

@@ -28,7 +28,6 @@ import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.v1.InstantComparatorV1;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.Option;
@@ -74,8 +73,7 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
     int numCommits;
     if (lastCleanInstant.isPresent() && !table.getActiveTimeline().isEmpty(lastCleanInstant.get())) {
       try {
-        HoodieCleanMetadata cleanMetadata = TimelineMetadataUtils
-            .deserializeHoodieCleanMetadata(table.getActiveTimeline().getInstantDetails(lastCleanInstant.get()).get());
+        HoodieCleanMetadata cleanMetadata = table.getActiveTimeline().readCleanMetadata(lastCleanInstant.get());
         String lastCompletedCommitTimestamp = cleanMetadata.getLastCompletedCommitTimestamp();
         numCommits = commitTimeline.findInstantsAfter(lastCompletedCommitTimestamp).countInstants();
       } catch (IOException e) {
@@ -193,14 +191,13 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
         activeTimeline.deleteEmptyInstantIfExists(cleanInstant);
         HoodieInstant cleanPlanInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, cleanInstant.getAction(), cleanInstant.requestedTime(), InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
         try {
-          Option<byte[]> content = activeTimeline.getInstantDetails(cleanPlanInstant);
-          // Deserialize plan if it is non-empty
-          if (content.map(bytes -> bytes.length > 0).orElse(false)) {
-            return Option.of(TimelineMetadataUtils.deserializeCleanerPlan(content.get()));
-          } else {
+          // Deserialize plan.
+          return Option.of(activeTimeline.readCleanerPlan(cleanPlanInstant));
+        } catch (IOException ex) {
+          // If it is empty we catch error and repair.
+          if (activeTimeline.isEmpty(cleanPlanInstant)) {
             return Option.of(new HoodieCleanerPlan());
           }
-        } catch (IOException ex) {
           throw new HoodieIOException("Failed to parse cleaner plan", ex);
         }
       }
@@ -213,11 +210,11 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
       final HoodieInstant cleanInstant = instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, startCleanTime);
       // Save to both aux and timeline folder
       try {
-        table.getActiveTimeline().saveToCleanRequested(cleanInstant, TimelineMetadataUtils.serializeCleanerPlan(cleanerPlan));
-        LOG.info("Requesting Cleaning with instant time " + cleanInstant);
-      } catch (IOException e) {
+        table.getActiveTimeline().saveToCleanRequested(cleanInstant, Option.of(cleanerPlan));
+        LOG.info("Requesting Cleaning with instant time {}", cleanInstant);
+      } catch (HoodieIOException e) {
         LOG.error("Got exception when saving cleaner requested file", e);
-        throw new HoodieIOException(e.getMessage(), e);
+        throw e;
       }
       option = Option.of(cleanerPlan);
     }

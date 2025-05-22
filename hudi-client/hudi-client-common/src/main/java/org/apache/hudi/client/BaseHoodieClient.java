@@ -34,6 +34,7 @@ import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
@@ -73,7 +74,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
   protected final String basePath;
   protected final HoodieHeartbeatClient heartbeatClient;
   protected final TransactionManager txnManager;
-  private final TimeGenerator timeGenerator;
+  protected final TimeGenerator timeGenerator;
 
   /**
    * Timeline Server has the same lifetime as that of Client. Any operations done on the same timeline service will be
@@ -88,7 +89,21 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
   }
 
   protected BaseHoodieClient(HoodieEngineContext context, HoodieWriteConfig clientConfig,
-      Option<EmbeddedTimelineService> timelineServer) {
+                             Option<EmbeddedTimelineService> timelineServer) {
+    this(context, clientConfig, timelineServer, buildTransactionManager(context, clientConfig), buildTimeGenerator(context, clientConfig));
+  }
+
+  private static TimeGenerator buildTimeGenerator(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
+    return TimeGenerators.getTimeGenerator(clientConfig.getTimeGeneratorConfig(), context.getStorageConf());
+  }
+
+  private static TransactionManager buildTransactionManager(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
+    return new TransactionManager(clientConfig, HoodieStorageUtils.getStorage(clientConfig.getBasePath(), context.getStorageConf()));
+  }
+
+  @VisibleForTesting
+  BaseHoodieClient(HoodieEngineContext context, HoodieWriteConfig clientConfig,
+                   Option<EmbeddedTimelineService> timelineServer, TransactionManager transactionManager, TimeGenerator timeGenerator) {
     this.storageConf = context.getStorageConf();
     this.storage = HoodieStorageUtils.getStorage(clientConfig.getBasePath(), storageConf);
     this.context = context;
@@ -100,9 +115,8 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
         clientConfig.getHoodieClientHeartbeatIntervalInMs(),
         clientConfig.getHoodieClientHeartbeatTolerableMisses());
     this.metrics = new HoodieMetrics(config, storage);
-    this.txnManager = new TransactionManager(config, storage);
-    this.timeGenerator = TimeGenerators.getTimeGenerator(
-        config.getTimeGeneratorConfig(), storageConf);
+    this.txnManager = transactionManager;
+    this.timeGenerator = timeGenerator;
     startEmbeddedServerView();
     initWrapperFSMetrics();
     runClientInitCallbacks();

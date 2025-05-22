@@ -19,6 +19,7 @@
 package org.apache.hudi.common.util.hash;
 
 import org.apache.hudi.common.util.Functions;
+import org.apache.hudi.common.util.ValidationUtils;
 
 /**
  * Utility class for bucket index.
@@ -35,11 +36,14 @@ public class BucketIndexUtil {
    * @param parallelism Parallelism of the task
    * @return The partition index of this bucket.
    */
-  public static Functions.Function2<String, Integer, Integer> getPartitionIndexFunc(int bucketNum, int parallelism) {
-    return (partition, curBucket) -> {
-      int partitionIndex = (partition.hashCode() & Integer.MAX_VALUE) % parallelism * bucketNum;
-      int globalIndex = partitionIndex + curBucket;
-      return globalIndex % parallelism;
+  public static Functions.Function3<Integer, String, Integer, Integer> getPartitionIndexFunc(int parallelism) {
+    return (bucketNum, partition, curBucket) -> {
+      long partitionIndex = (partition.hashCode() & Integer.MAX_VALUE) % parallelism * (long) bucketNum;
+      long globalIndex = partitionIndex + curBucket;
+      int partitionId = (int) (globalIndex % parallelism);
+      ValidationUtils.checkArgument(partitionId >= 0 && partitionId < parallelism,
+          () -> "Partition id should be in range [0, " + parallelism + "), but got " + partitionId);
+      return partitionId;
     };
   }
 }

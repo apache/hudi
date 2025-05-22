@@ -20,6 +20,7 @@ package org.apache.hudi.functional;
 
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -152,7 +153,7 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records);
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
-    writeClient.startCommitWithTime(commitTime);
+    WriteClientTestUtils.startCommitWithTime(writeClient, commitTime);
     List<WriteStatus> writeStatues = writeClient.insert(writeRecords, commitTime).collect();
     org.apache.hudi.testutils.Assertions.assertNoWriteErrors(writeStatues);
 

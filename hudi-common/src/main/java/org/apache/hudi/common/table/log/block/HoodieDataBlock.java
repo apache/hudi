@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.log.block;
 
+import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
@@ -31,6 +32,7 @@ import org.apache.avro.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -71,7 +73,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
   protected Schema readerSchema;
 
   //  Map of string schema to parsed schema.
-  private static ConcurrentHashMap<String, Schema> schemaMap = new ConcurrentHashMap<>();
+  private static final ConcurrentHashMap<String, Schema> SCHEMA_MAP = new ConcurrentHashMap<>();
 
   /**
    * NOTE: This ctor is used on the write-path (ie when records ought to be written into the log)
@@ -85,7 +87,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     this.records = Option.of(records);
     this.keyFieldName = keyFieldName;
     // If no reader-schema has been provided assume writer-schema as one
-    this.readerSchema = getWriterSchema(super.getLogBlockHeader());
+    this.readerSchema = AvroSchemaCache.intern(getWriterSchema(super.getLogBlockHeader()));
     this.enablePointLookups = false;
   }
 
@@ -108,21 +110,22 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
         // When the data block contains partial updates, we need to strictly use the writer schema
         // from the log block header, as we need to use the partial schema to indicate which
         // fields are updated during merging.
-        ? getWriterSchema(super.getLogBlockHeader())
+        ? AvroSchemaCache.intern(getWriterSchema(super.getLogBlockHeader()))
         // If no reader-schema has been provided assume writer-schema as one
-        : readerSchema.orElseGet(() -> getWriterSchema(super.getLogBlockHeader()));
+        : AvroSchemaCache.intern(readerSchema.orElseGet(() -> getWriterSchema(super.getLogBlockHeader())));
     this.enablePointLookups = enablePointLookups;
   }
 
   @Override
-  public byte[] getContentBytes(HoodieStorage storage) throws IOException {
+  public ByteArrayOutputStream getContentBytes(HoodieStorage storage) throws IOException {
     // In case this method is called before realizing records from content
     Option<byte[]> content = getContent();
 
     checkState(content.isPresent() || records.isPresent(), "Block is in invalid state");
 
-    if (content.isPresent()) {
-      return content.get();
+    Option<ByteArrayOutputStream> baosOpt = getContentAsByteStream();
+    if (baosOpt.isPresent()) {
+      return baosOpt.get();
     }
 
     return serializeRecords(records.get(), storage);
@@ -268,7 +271,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
 
     HashSet<String> keySet = new HashSet<>(keys);
     return FilteringEngineRecordIterator.getInstance(allRecords, keySet, fullKey, record ->
-        Option.of(readerContext.getValue(record, readerSchema, keyFieldName).toString()));
+        Option.of(readerContext.getRecordKey(record, readerSchema)));
   }
 
   protected <T> ClosableIterator<HoodieRecord<T>> readRecordsFromBlockPayload(HoodieRecordType type) throws IOException {
@@ -325,7 +328,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     );
   }
 
-  protected abstract byte[] serializeRecords(List<HoodieRecord> records, HoodieStorage storage) throws IOException;
+  protected abstract ByteArrayOutputStream serializeRecords(List<HoodieRecord> records, HoodieStorage storage) throws IOException;
 
   protected abstract <T> ClosableIterator<HoodieRecord<T>> deserializeRecords(byte[] content, HoodieRecordType type) throws IOException;
 
@@ -368,8 +371,8 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
 
   protected Schema getSchemaFromHeader() {
     String schemaStr = getLogBlockHeader().get(HeaderMetadataType.SCHEMA);
-    schemaMap.computeIfAbsent(schemaStr, (schemaString) -> new Schema.Parser().parse(schemaString));
-    return schemaMap.get(schemaStr);
+    SCHEMA_MAP.computeIfAbsent(schemaStr, (schemaString) -> new Schema.Parser().parse(schemaString));
+    return SCHEMA_MAP.get(schemaStr);
   }
 
   /**

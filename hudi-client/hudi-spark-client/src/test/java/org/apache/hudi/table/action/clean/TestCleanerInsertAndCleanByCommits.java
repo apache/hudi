@@ -22,7 +22,6 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -61,7 +60,6 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.model.HoodieCleaningPolicy.KEEP_LATEST_COMMITS;
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
-import static org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTime;
 import static org.apache.hudi.table.TestCleaner.insertFirstBigBatchForClientCleanerTest;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.apache.hudi.testutils.HoodieClientTestBase.Function2;
@@ -151,8 +149,7 @@ public class TestCleanerInsertAndCleanByCommits extends SparkClientFunctionalTes
       Map<String, List<HoodieWriteStat>> commitWriteStatsMap = new HashMap<>();
       // Keep doing some writes and clean inline. Make sure we have expected number of files remaining.
       for (int i = 0; i < 8; i++) {
-        String newCommitTime = makeNewCommitTime();
-        client.startCommitWithTime(newCommitTime);
+        String newCommitTime = client.startCommit();
         List<HoodieRecord> records = recordUpsertGenWrappedFunction.apply(newCommitTime, BATCH_SIZE);
 
         List<WriteStatus> statuses = upsertFn.apply(client, jsc().parallelize(records, PARALLELISM), newCommitTime).collect();
@@ -216,8 +213,7 @@ public class TestCleanerInsertAndCleanByCommits extends SparkClientFunctionalTes
         try {
           HoodieInstant instant1 = timeline.filter(inst -> inst.requestedTime().equals(newInstant))
               .firstInstant().get();
-          return layout.getCommitMetadataSerDe().deserialize(instant1, timeline.getInstantDetails(instant1).get(), HoodieCommitMetadata.class)
-              .getWriteStats();
+          return timeline.readCommitMetadata(instant1).getWriteStats();
         } catch (IOException e) {
           return Collections.EMPTY_LIST;
         }
@@ -245,7 +241,7 @@ public class TestCleanerInsertAndCleanByCommits extends SparkClientFunctionalTes
       for (HoodieFileGroup fileGroup : fileGroups) {
         Set<String> commitTimes = new HashSet<>();
         fileGroup.getAllBaseFiles().forEach(value -> {
-          LOG.debug("Data File - " + value);
+          LOG.debug("Data File - {}", value);
           commitTimes.add(value.getCommitTime());
         });
         if (isAsyncClean) {

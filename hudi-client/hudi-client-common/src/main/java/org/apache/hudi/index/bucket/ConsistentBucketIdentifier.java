@@ -86,8 +86,12 @@ public class ConsistentBucketIdentifier extends BucketIdentifier {
     return getBucket(getHashKeys(hoodieKey.getRecordKey(), indexKeyFields));
   }
 
-  public ConsistentHashingNode getBucket(String hoodieKey, String indexKeyFields) {
-    return getBucket(getHashKeys(hoodieKey, indexKeyFields));
+  public ConsistentHashingNode getBucket(String recordKey, List<String> indexKeyFields) {
+    return getBucket(getHashKeys(recordKey, indexKeyFields));
+  }
+
+  public ConsistentHashingNode getBucket(String recordKey, String indexKeyFields) {
+    return getBucket(getHashKeys(recordKey, indexKeyFields));
   }
 
   protected ConsistentHashingNode getBucket(List<String> hashKeys) {

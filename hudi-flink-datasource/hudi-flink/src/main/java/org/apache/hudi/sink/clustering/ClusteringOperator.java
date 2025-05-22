@@ -26,7 +26,6 @@ import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.utils.ConcatenatingIterator;
 import org.apache.hudi.common.config.HoodieStorageConfig;
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.ClusteringOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -57,6 +56,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.AvroToRowDataConverters;
+import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.FlinkWriteClients;
 
 import org.apache.avro.Schema;
@@ -139,7 +139,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
   public ClusteringOperator(Configuration conf, RowType rowType) {
     // copy a conf let following modification not to impact the global conf
     this.conf = new Configuration(conf);
-    this.rowType = BulkInsertWriterHelper.addMetadataFields(rowType, false);
+    this.rowType = DataTypeUtils.addMetadataFields(rowType, false);
     this.asyncClustering = OptionsResolver.needsAsyncClustering(conf);
     this.sortClusteringEnabled = OptionsResolver.sortClusteringEnabled(conf);
 
@@ -163,7 +163,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
     super.open();
 
     this.taskID = getRuntimeContext().getIndexOfThisSubtask();
-    this.writeConfig = FlinkWriteClients.getHoodieClientConfig(this.conf);
+    this.writeConfig = FlinkWriteClients.getHoodieClientConfig(this.conf, false, false, true);
     this.writeClient = FlinkWriteClients.createWriteClient(conf, getRuntimeContext());
     this.table = writeClient.getHoodieTable();
 
@@ -300,7 +300,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
             .build();
         HoodieTableConfig tableConfig = table.getMetaClient().getTableConfig();
         Option<BaseKeyGenerator> keyGeneratorOpt = tableConfig.populateMetaFields() ? Option.empty() :
-            Option.of((BaseKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(new TypedProperties(writeConfig.getProps())));
+            Option.of((BaseKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(writeConfig.getProps()));
         HoodieFileSliceReader<? extends IndexedRecord> hoodieFileSliceReader = new HoodieFileSliceReader(baseFileReader, scanner, readerSchema,
             tableConfig.getPreCombineField(),writeConfig.getRecordMerger(),
             tableConfig.getProps(),
@@ -331,7 +331,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
       Iterable<IndexedRecord> indexedRecords = () -> {
         try {
           HoodieFileReaderFactory fileReaderFactory = HoodieIOFactory.getIOFactory(table.getStorage())
-              .getReaderFactory(table.getConfig().getRecordMerger().getRecordType());
+              .getReaderFactory(writeConfig.getRecordMerger().getRecordType());
           HoodieAvroFileReader fileReader = (HoodieAvroFileReader) fileReaderFactory.getFileReader(
               table.getConfig(), new StoragePath(clusteringOp.getDataFilePath()));
 

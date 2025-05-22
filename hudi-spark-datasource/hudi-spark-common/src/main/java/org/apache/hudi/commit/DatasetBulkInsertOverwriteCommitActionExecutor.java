@@ -43,9 +43,8 @@ import java.util.stream.Collectors;
 public class DatasetBulkInsertOverwriteCommitActionExecutor extends BaseDatasetBulkInsertCommitActionExecutor {
 
   public DatasetBulkInsertOverwriteCommitActionExecutor(HoodieWriteConfig config,
-                                                        SparkRDDWriteClient writeClient,
-                                                        String instantTime) {
-    super(config, writeClient, instantTime);
+                                                        SparkRDDWriteClient writeClient) {
+    super(config, writeClient);
   }
 
   @Override
@@ -53,7 +52,7 @@ public class DatasetBulkInsertOverwriteCommitActionExecutor extends BaseDatasetB
     table.getActiveTimeline().transitionRequestedToInflight(table.getMetaClient().createNewInstant(HoodieInstant.State.REQUESTED,
         getCommitActionType(), instantTime), Option.empty());
     return Option.of(HoodieDatasetBulkInsertHelper
-        .bulkInsert(records, instantTime, table, writeConfig, arePartitionRecordsSorted, false));
+        .bulkInsert(records, instantTime, table, writeConfig, arePartitionRecordsSorted, false, getWriteOperationType()));
   }
 
   @Override

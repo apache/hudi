@@ -403,7 +403,7 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
 
   @Override
   protected void storePartitionView(String partitionPath, List<HoodieFileGroup> fileGroups) {
-    LOG.debug("Adding file-groups for partition :" + partitionPath + ", #FileGroups=" + fileGroups.size());
+    LOG.debug("Adding file-groups for partition :{}, #FileGroups={}", partitionPath, fileGroups.size());
     List<HoodieFileGroup> newList = new ArrayList<>(fileGroups);
     partitionToFileGroupsMap.put(partitionPath, newList);
   }

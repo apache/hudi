@@ -80,7 +80,6 @@ import org.apache.hudi.table.action.rollback.CopyOnWriteRollbackActionExecutor;
 import org.apache.hudi.table.action.rollback.RestorePlanActionExecutor;
 import org.apache.hudi.table.action.savepoint.SavepointActionExecutor;
 
-import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -272,12 +271,11 @@ public class HoodieSparkCopyOnWriteTable<T>
   public List<WriteStatus> compactUsingFileGroupReader(String instantTime,
                                                        CompactionOperation operation,
                                                        HoodieWriteConfig writeConfig,
-                                                       HoodieReaderContext readerContext,
-                                                       Configuration conf) {
+                                                       HoodieReaderContext readerContext) {
     config.setDefault(writeConfig);
     Option<BaseKeyGenerator> keyGeneratorOpt = HoodieSparkKeyGeneratorFactory.createBaseKeyGenerator(config);
     HoodieSparkFileGroupReaderBasedMergeHandle mergeHandle = new HoodieSparkFileGroupReaderBasedMergeHandle(config,
-        instantTime, this, operation, taskContextSupplier, keyGeneratorOpt, readerContext, conf);
+        instantTime, this, operation, taskContextSupplier, keyGeneratorOpt, readerContext);
     mergeHandle.write();
     return mergeHandle.close();
   }

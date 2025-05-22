@@ -21,6 +21,7 @@ package org.apache.hudi.table.action.rollback;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPartitionMetadata;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
@@ -265,7 +266,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
      * Write 1 (only inserts)
      */
     String newCommitTime = "0000001";
-    client.startCommitWithTime(newCommitTime);
+    WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
     List<HoodieRecord> records = dataGenPartition3.generateInsertsContainsAllPartitions(newCommitTime, 2);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
     JavaRDD<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime);
@@ -353,7 +354,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     SparkRDDWriteClient client = getHoodieWriteClient(cfg);
     // Write 1 (only inserts)
     String newCommitTime = "001";
-    client.startCommitWithTime(newCommitTime);
+    WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
     List<HoodieRecord> records = dataGen.generateInsertsForPartition(newCommitTime, 2, DEFAULT_FIRST_PARTITION_PATH);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
     JavaRDD<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime);
@@ -372,11 +373,8 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
 
     // check hoodieCommitMeta
     HoodieInstant instant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "001");
-    HoodieCommitMetadata commitMetadata = metaClient.getCommitMetadataSerDe().deserialize(instant,
-        table.getMetaClient().getCommitTimeline()
-            .getInstantDetails(instant)
-            .get(),
-        HoodieCommitMetadata.class);
+    HoodieCommitMetadata commitMetadata =
+        table.getMetaClient().getCommitTimeline().readCommitMetadata(instant);
     List<HoodieWriteStat> firstPartitionWriteStat = commitMetadata.getPartitionToWriteStats().get(DEFAULT_FIRST_PARTITION_PATH);
     assertEquals(2, firstPartitionWriteStat.size());
     // we have an empty writeStat for all partition
@@ -389,7 +387,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
 
     // Write 2 (inserts)
     newCommitTime = "002";
-    client.startCommitWithTime(newCommitTime);
+    WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
     List<HoodieRecord> updateRecords = Collections.singletonList(dataGen.generateUpdateRecord(records.get(0).getKey(), newCommitTime));
     List<HoodieRecord> insertRecordsInSamePartition = dataGen.generateInsertsForPartition(newCommitTime, 2, DEFAULT_FIRST_PARTITION_PATH);
     List<HoodieRecord> insertRecordsInOtherPartition = dataGen.generateInsertsForPartition(newCommitTime, 2, DEFAULT_SECOND_PARTITION_PATH);
@@ -400,11 +398,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     client.commit(newCommitTime, statuses);
     table = this.getHoodieTable(metaClient, cfg);
     HoodieInstant instant1 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, newCommitTime);
-    commitMetadata = metaClient.getCommitMetadataSerDe().deserialize(instant1,
-        table.getMetaClient().getCommitTimeline()
-            .getInstantDetails(instant1)
-            .get(),
-        HoodieCommitMetadata.class);
+    commitMetadata = table.getMetaClient().getCommitTimeline().readCommitMetadata(instant1);
     assertTrue(commitMetadata.getPartitionToWriteStats().containsKey(DEFAULT_FIRST_PARTITION_PATH));
     assertTrue(commitMetadata.getPartitionToWriteStats().containsKey(DEFAULT_SECOND_PARTITION_PATH));
     List<HoodieWriteStat> hoodieWriteStatOptionList = commitMetadata.getPartitionToWriteStats().get(DEFAULT_FIRST_PARTITION_PATH);
@@ -464,7 +458,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
         .withRollbackUsingMarkers(false)
         .withPath(basePath).build();
     try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
-      client.startCommitWithTime("001");
+      WriteClientTestUtils.startCommitWithTime(client, "001");
       client.insert(jsc.emptyRDD(), "001");
       client.rollback("001");
     }

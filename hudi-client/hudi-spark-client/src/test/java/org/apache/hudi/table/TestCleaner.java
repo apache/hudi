@@ -31,6 +31,7 @@ import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieSliceInfo;
 import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.timeline.versioning.v2.TimelineArchiverV2;
@@ -54,7 +55,6 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanMetadataMigrator;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanMigrator;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV1MigrationHandler;
@@ -107,8 +107,8 @@ import scala.Tuple3;
 
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
-import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.TIMELINE_FACTORY;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.awaitility.Awaitility.await;
@@ -268,8 +268,8 @@ public class TestCleaner extends HoodieCleanerTestBase {
           CollectionUtils.createSet(HoodieTimeline.ROLLBACK_ACTION)).filterCompletedInstants().countInstants() == 3);
       Option<HoodieInstant> rollBackInstantForFailedCommit = timeline.getTimelineOfActions(
           CollectionUtils.createSet(HoodieTimeline.ROLLBACK_ACTION)).filterCompletedInstants().lastInstant();
-      HoodieRollbackMetadata rollbackMetadata = TimelineMetadataUtils.deserializeAvroMetadata(
-          timeline.getInstantDetails(rollBackInstantForFailedCommit.get()).get(), HoodieRollbackMetadata.class);
+      HoodieRollbackMetadata rollbackMetadata =
+          timeline.readRollbackMetadata(rollBackInstantForFailedCommit.get());
       // Rollback of one of the failed writes should have deleted 3 files
       assertEquals(3, rollbackMetadata.getTotalFilesDeleted());
     }
@@ -317,7 +317,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
           earliestInstantToRetain = instantTime;
         }
         List<HoodieRecord> records = dataGen.generateInsertsForPartition(instantTime, 1, partition1);
-        client.startCommitWithTime(instantTime);
+        WriteClientTestUtils.startCommitWithTime(client, instantTime);
         client.insert(jsc.parallelize(records, 1), instantTime).collect();
       }
 
@@ -334,7 +334,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
 
       instantTime = client.createNewInstantTime();
       List<HoodieRecord> records = dataGen.generateInsertsForPartition(instantTime, 1, partition1);
-      client.startCommitWithTime(instantTime);
+      WriteClientTestUtils.startCommitWithTime(client, instantTime);
       JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
       client.insert(recordsRDD, instantTime).collect();
 
@@ -345,7 +345,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
       JavaRDD<HoodieRecord> updatedRecordsRDD = jsc.parallelize(updatedRecords, 1);
       SparkRDDReadClient readClient = new SparkRDDReadClient(context, writeConfig);
       JavaRDD<HoodieRecord> updatedTaggedRecordsRDD = readClient.tagLocation(updatedRecordsRDD);
-      client.startCommitWithTime(instantTime);
+      WriteClientTestUtils.startCommitWithTime(client, instantTime);
       client.upsertPreppedRecords(updatedTaggedRecordsRDD, instantTime).collect();
 
       table.getMetaClient().reloadActiveTimeline();
@@ -355,7 +355,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
       for (int idx = 0; idx < 3; ++idx) {
         instantTime = client.createNewInstantTime();
         records = dataGen.generateInsertsForPartition(instantTime, 1, partition2);
-        client.startCommitWithTime(instantTime);
+        WriteClientTestUtils.startCommitWithTime(client, instantTime);
         client.insert(jsc.parallelize(records, 1), instantTime).collect();
       }
 
@@ -393,7 +393,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
       for (int idx = 0; idx < 3; ++idx) {
         instantTime = client.createNewInstantTime();
         List<HoodieRecord> records = dataGen.generateInserts(instantTime, 1);
-        client.startCommitWithTime(instantTime);
+        WriteClientTestUtils.startCommitWithTime(client, instantTime);
         client.insert(jsc.parallelize(records, 1), instantTime).collect();
       }
 
@@ -441,7 +441,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
       for (; index < 3; ++index) {
         String newCommitTime = "00" + index;
         List<HoodieRecord> records = dataGen.generateInsertsForPartition(newCommitTime, 1, partition);
-        client.startCommitWithTime(newCommitTime);
+        WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
         client.insert(jsc.parallelize(records, 1), newCommitTime).collect();
       }
     }
@@ -457,7 +457,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
       // Next commit. This is required so that there is an additional file version to clean.
       String newCommitTime = "00" + index++;
       List<HoodieRecord> records = dataGen.generateInsertsForPartition(newCommitTime, 1, partition);
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
       client.insert(jsc.parallelize(records, 1), newCommitTime).collect();
 
       // Try to schedule another clean
@@ -545,8 +545,8 @@ public class TestCleaner extends HoodieCleanerTestBase {
         CollectionUtils.createSet(HoodieTimeline.ROLLBACK_ACTION)).filterCompletedInstants().countInstants() == 3);
     Option<HoodieInstant> rollBackInstantForFailedCommit = timeline.getTimelineOfActions(
         CollectionUtils.createSet(HoodieTimeline.ROLLBACK_ACTION)).filterCompletedInstants().lastInstant();
-    HoodieRollbackMetadata rollbackMetadata = TimelineMetadataUtils.deserializeAvroMetadata(
-        timeline.getInstantDetails(rollBackInstantForFailedCommit.get()).get(), HoodieRollbackMetadata.class);
+    HoodieRollbackMetadata rollbackMetadata =
+        timeline.readRollbackMetadata(rollBackInstantForFailedCommit.get());
     // Rollback of one of the failed writes should have deleted 3 files
     assertEquals(3, rollbackMetadata.getTotalFilesDeleted());
   }

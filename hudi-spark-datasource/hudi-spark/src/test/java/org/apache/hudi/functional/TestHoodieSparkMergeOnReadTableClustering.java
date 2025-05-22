@@ -21,6 +21,7 @@ package org.apache.hudi.functional;
 
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -111,7 +112,7 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
        * Write 1 (only inserts)
        */
       String newCommitTime = "001";
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 400);
       Stream<HoodieBaseFile> dataFiles = insertRecordsToMORTable(metaClient, records.subList(0, 200), client, cfg, newCommitTime);
@@ -122,7 +123,7 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
        */
       // we already set small file size to small number to force inserts to go into new file.
       newCommitTime = "002";
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
       dataFiles = insertRecordsToMORTable(metaClient, records.subList(200, 400), client, cfg, newCommitTime);
       assertTrue(dataFiles.findAny().isPresent(), "should list the base files we wrote in the delta commit");
 
@@ -131,7 +132,7 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
          * Write 3 (updates)
          */
         newCommitTime = "003";
-        client.startCommitWithTime(newCommitTime);
+        WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
         records = dataGen.generateUpdates(newCommitTime, 100);
         updateRecordsInMORTable(metaClient, records, client, cfg, newCommitTime, false);
       }
@@ -202,18 +203,18 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
       // test 2 inserts
       String newCommitTime = "001";
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 400);
       Stream<HoodieBaseFile> dataFiles = insertRecordsToMORTable(metaClient, records.subList(0, 200), client, cfg, newCommitTime);
       assertTrue(!dataFiles.findAny().isPresent(), "should not have any base files");
       newCommitTime = "002";
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
       dataFiles = insertRecordsToMORTable(metaClient, records.subList(200, 400), client, cfg, newCommitTime);
       assertTrue(!dataFiles.findAny().isPresent(), "should not have any base files");
       // run updates
       if (doUpdates) {
         newCommitTime = "003";
-        client.startCommitWithTime(newCommitTime);
+        WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
         records = dataGen.generateUpdates(newCommitTime, 100);
         updateRecordsInMORTable(metaClient, records, client, cfg, newCommitTime, false);
       }

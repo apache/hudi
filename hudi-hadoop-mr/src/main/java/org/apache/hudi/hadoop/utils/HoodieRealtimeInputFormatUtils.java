@@ -75,11 +75,10 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
       // If not already in the list - then add it
       conf.set(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, readColNamesPrefix + fieldName);
       conf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, readColIdsPrefix + fieldIndex);
-      if (LOG.isDebugEnabled()) {
-        LOG.debug(String.format("Adding extra column " + fieldName + ", to enable log merging cols (%s) ids (%s) ",
-            conf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR),
-            conf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR)));
-      }
+      LOG.debug("Adding extra column {}, to enable log merging cols ({}) ids ({})",
+          fieldName,
+          conf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR),
+          conf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR));
     }
     return conf;
   }
@@ -119,8 +118,7 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
           && readColNames.contains(HoodieRecord.PARTITION_PATH_METADATA_FIELD);
     } else {
       return readColNames.contains(hoodieVirtualKeyInfo.get().getRecordKeyField())
-          && (hoodieVirtualKeyInfo.get().getPartitionPathField().isPresent() ? readColNames.contains(hoodieVirtualKeyInfo.get().getPartitionPathField().get())
-          : true);
+          && (!hoodieVirtualKeyInfo.get().getPartitionPathField().isPresent() || readColNames.contains(hoodieVirtualKeyInfo.get().getPartitionPathField().get()));
     }
   }
 

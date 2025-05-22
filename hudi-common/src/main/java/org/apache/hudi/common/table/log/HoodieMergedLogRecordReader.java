@@ -21,12 +21,12 @@ package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.table.read.HoodieFileGroupRecordBuffer;
+import org.apache.hudi.common.table.read.FileGroupRecordBuffer;
+import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
@@ -51,7 +51,7 @@ import static org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath;
  * @param <T> type of engine-specific record representation.
  */
 public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
-    implements Iterable<Pair<Option<T>, Map<String, Object>>>, Closeable {
+    implements Iterable<BufferedRecord<T>>, Closeable {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieMergedLogRecordReader.class);
   // A timer for calculating elapsed time in millis
   public final HoodieTimer timer = HoodieTimer.create();
@@ -63,16 +63,12 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
   private long totalTimeTakenToReadAndMergeBlocks;
 
   @SuppressWarnings("unchecked")
-  private HoodieMergedLogRecordReader(HoodieReaderContext<T> readerContext,
-                                      HoodieStorage storage, List<String> logFilePaths, boolean reverseReader,
-                                      int bufferSize, Option<InstantRange> instantRange,
-                                      boolean withOperationField, boolean forceFullScan,
-                                      Option<String> partitionName,
-                                      Option<String> keyFieldOverride,
-                                      boolean enableOptimizedLogBlocksScan,
-                                      HoodieFileGroupRecordBuffer<T> recordBuffer) {
+  private HoodieMergedLogRecordReader(HoodieReaderContext<T> readerContext, HoodieStorage storage, List<String> logFilePaths, boolean reverseReader,
+                                      int bufferSize, Option<InstantRange> instantRange, boolean withOperationField, boolean forceFullScan,
+                                      Option<String> partitionName, Option<String> keyFieldOverride, boolean enableOptimizedLogBlocksScan,
+                                      FileGroupRecordBuffer<T> recordBuffer, boolean allowInflightInstants) {
     super(readerContext, storage, logFilePaths, reverseReader, bufferSize, instantRange, withOperationField,
-        forceFullScan, partitionName, keyFieldOverride, enableOptimizedLogBlocksScan, recordBuffer);
+        forceFullScan, partitionName, keyFieldOverride, enableOptimizedLogBlocksScan, recordBuffer, allowInflightInstants);
     this.scannedPrefixes = new HashSet<>();
 
     if (forceFullScan) {
@@ -170,11 +166,11 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
   }
 
   @Override
-  public Iterator<Pair<Option<T>, Map<String, Object>>> iterator() {
+  public Iterator<BufferedRecord<T>> iterator() {
     return recordBuffer.getLogRecordIterator();
   }
 
-  public Map<Serializable, Pair<Option<T>, Map<String, Object>>> getRecords() {
+  public Map<Serializable, BufferedRecord<T>> getRecords() {
     return recordBuffer.getLogRecords();
   }
 
@@ -185,8 +181,8 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
   /**
    * Returns the builder for {@code HoodieMergedLogRecordReader}.
    */
-  public static Builder newBuilder() {
-    return new Builder();
+  public static <T> Builder<T> newBuilder() {
+    return new Builder<>();
   }
 
   public long getTotalTimeTakenToReadAndMergeBlocks() {
@@ -219,7 +215,8 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
     private boolean forceFullScan = true;
     private boolean enableOptimizedLogBlocksScan = false;
 
-    private HoodieFileGroupRecordBuffer<T> recordBuffer;
+    private FileGroupRecordBuffer<T> recordBuffer;
+    private boolean allowInflightInstants = false;
 
     @Override
     public Builder<T> withHoodieReaderContext(HoodieReaderContext<T> readerContext) {
@@ -287,8 +284,13 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
       return this;
     }
 
-    public Builder<T> withRecordBuffer(HoodieFileGroupRecordBuffer<T> recordBuffer) {
+    public Builder<T> withRecordBuffer(FileGroupRecordBuffer<T> recordBuffer) {
       this.recordBuffer = recordBuffer;
+      return this;
+    }
+
+    public Builder<T> withAllowInflightInstants(boolean allowInflightInstants) {
+      this.allowInflightInstants = allowInflightInstants;
       return this;
     }
 
@@ -307,7 +309,8 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
           withOperationField, forceFullScan,
           Option.ofNullable(partitionName),
           Option.ofNullable(keyFieldOverride),
-          enableOptimizedLogBlocksScan, recordBuffer);
+          enableOptimizedLogBlocksScan, recordBuffer,
+          allowInflightInstants);
     }
   }
 }

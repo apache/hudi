@@ -36,14 +36,8 @@ import org.apache.spark.sql.Row;
  */
 public class HoodieStreamerDatasetBulkInsertCommitActionExecutor extends BaseDatasetBulkInsertCommitActionExecutor {
 
-  public HoodieStreamerDatasetBulkInsertCommitActionExecutor(HoodieWriteConfig config, SparkRDDWriteClient writeClient, String instantTime) {
-    super(config, writeClient, instantTime);
-  }
-
-  @Override
-  protected void preExecute() {
-    table.validateInsertSchema();
-    writeClient.preWrite(instantTime, getWriteOperationType(), table.getMetaClient());
+  public HoodieStreamerDatasetBulkInsertCommitActionExecutor(HoodieWriteConfig config, SparkRDDWriteClient writeClient) {
+    super(config, writeClient);
   }
 
   @Override
@@ -51,7 +45,7 @@ public class HoodieStreamerDatasetBulkInsertCommitActionExecutor extends BaseDat
     table.getActiveTimeline().transitionRequestedToInflight(table.getMetaClient().createNewInstant(HoodieInstant.State.REQUESTED,
             getCommitActionType(), instantTime), Option.empty());
     return Option.of(HoodieDatasetBulkInsertHelper
-        .bulkInsert(records, instantTime, table, writeConfig, arePartitionRecordsSorted, false));
+        .bulkInsert(records, instantTime, table, writeConfig, arePartitionRecordsSorted, false, getWriteOperationType()));
   }
 
   @Override

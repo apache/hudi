@@ -30,7 +30,7 @@ to ingest, index, store, serve, transform and manage your data across multiple c
 [![License](https://img.shields.io/badge/license-Apache%202-4EB1BA.svg)](https://www.apache.org/licenses/LICENSE-2.0.html)
 [![Maven Central](https://maven-badges.herokuapp.com/maven-central/org.apache.hudi/hudi/badge.svg)](http://search.maven.org/#search%7Cga%7C1%7Cg%3A%22org.apache.hudi%22)
 ![GitHub commit activity](https://img.shields.io/github/commit-activity/m/apache/hudi)
-[![Join on Slack](https://img.shields.io/badge/slack-%23hudi-72eff8?logo=slack&color=48c628&label=Join%20on%20Slack)](https://join.slack.com/t/apache-hudi/shared_invite/zt-2ggm1fub8-_yt4Reu9djwqqVRFC7X49g)
+[![Join on Slack](https://img.shields.io/badge/slack-%23hudi-72eff8?logo=slack&color=48c628&label=Join%20on%20Slack)](https://join.slack.com/t/apache-hudi/shared_invite/zt-33fabmxb7-Q7QSUtNOHYCwUdYM8LbauA)
 [![Twitter Follow](https://img.shields.io/twitter/follow/ApacheHudi)](https://twitter.com/apachehudi)
 [![Follow Linkedin](https://img.shields.io/badge/apache%E2%80%93hudi-0077B5?style=for-the-badge&logo=linkedin&logoColor=white&label=Follow)](https://www.linkedin.com/company/apache-hudi/?viewAsMember=true)
 
@@ -160,7 +160,7 @@ Starting from versions 0.11, Hudi no longer requires `spark-avro` to be specifie
 
 ### Build with different Flink versions
 
-The default Flink version supported is 1.20. The default Flink 1.20.x version, corresponding to `flink1.20` profile is 1.20.0.
+The default Flink version supported is 1.20. The default Flink 1.20.x version, corresponding to `flink1.20` profile is 1.20.1.
 Flink is Scala-free since 1.15.x, there is no need to specify the Scala version for Flink 1.15.x and above versions.
 Refer to the table below for building with different Flink and Scala versions.
 
@@ -173,7 +173,6 @@ Refer to the table below for building with different Flink and Scala versions.
 | `-Dflink1.17`       | hudi-flink1.17-bundle          | For Flink 1.17                   |
 | `-Dflink1.16`       | hudi-flink1.16-bundle          | For Flink 1.16                   |
 | `-Dflink1.15`       | hudi-flink1.15-bundle          | For Flink 1.15                   |
-| `-Dflink1.14`       | hudi-flink1.14-bundle          | For Flink 1.14                   |
 
 For example,
 ```

@@ -61,7 +61,6 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE;
@@ -230,8 +229,6 @@ public class HoodieCopyOnWriteTableInputFormat extends HoodieTableInputFormat {
     HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(HadoopFSUtils.getStorageConf(job));
     List<FileStatus> targetFiles = new ArrayList<>();
 
-    TypedProperties props = new TypedProperties(new Properties());
-
     Map<HoodieTableMetaClient, List<Path>> groupedPaths =
         HoodieInputFormatUtils.groupSnapshotPathsByMetaClient(tableMetaClientMap.values(), snapshotPaths);
 
@@ -252,7 +249,7 @@ public class HoodieCopyOnWriteTableInputFormat extends HoodieTableInputFormat {
             new HiveHoodieTableFileIndex(
                 engineContext,
                 tableMetaClient,
-                props,
+                new TypedProperties(),
                 HoodieTableQueryType.SNAPSHOT,
                 partitionPaths.stream().map(HadoopFSUtils::convertToStoragePath).collect(Collectors.toList()),
                 queryCommitInstant,

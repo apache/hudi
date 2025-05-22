@@ -18,8 +18,12 @@
 
 package org.apache.hudi.execution.bulkinsert;
 
+import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.index.bucket.partition.NumBucketsFunction;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
+import org.apache.spark.Partitioner;
 import org.apache.spark.sql.BucketPartitionUtils$;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -30,16 +34,33 @@ import org.apache.spark.sql.Row;
 public class BucketIndexBulkInsertPartitionerWithRows implements BulkInsertPartitioner<Dataset<Row>> {
 
   private final String indexKeyFields;
-  private final int bucketNum;
+  private final NumBucketsFunction numBucketsFunction;
+  private final HoodieWriteConfig writeConfig;
+  private FileSystemViewStorageConfig viewConfig;
 
-  public BucketIndexBulkInsertPartitionerWithRows(String indexKeyFields, int bucketNum) {
+  public BucketIndexBulkInsertPartitionerWithRows(String indexKeyFields, HoodieWriteConfig writeConfig) {
+    this(writeConfig, NumBucketsFunction.fromWriteConfig(writeConfig), indexKeyFields);
+  }
+
+  public BucketIndexBulkInsertPartitionerWithRows(HoodieWriteConfig writeConfig, String expressions, String rule, int bucketNumber) {
+    this(writeConfig, new NumBucketsFunction(expressions, rule, bucketNumber), writeConfig.getBucketIndexHashFieldWithDefault());
+  }
+
+  private BucketIndexBulkInsertPartitionerWithRows(HoodieWriteConfig writeConfig, NumBucketsFunction numBucketsFunction, String indexKeyFields) {
     this.indexKeyFields = indexKeyFields;
-    this.bucketNum = bucketNum;
+    this.numBucketsFunction = numBucketsFunction;
+    this.writeConfig = writeConfig;
+    if (writeConfig.isUsingRemotePartitioner()) {
+      this.viewConfig = writeConfig.getViewStorageConfig();
+    }
   }
 
   @Override
   public Dataset<Row> repartitionRecords(Dataset<Row> rows, int outputPartitions) {
-    return BucketPartitionUtils$.MODULE$.createDataFrame(rows, indexKeyFields, bucketNum, outputPartitions);
+    Partitioner partitioner = writeConfig.isUsingRemotePartitioner() && writeConfig.isEmbeddedTimelineServerEnabled()
+        ? BucketPartitionUtils$.MODULE$.getRemotePartitioner(viewConfig, numBucketsFunction, outputPartitions) 
+        : BucketPartitionUtils$.MODULE$.getLocalePartitioner(numBucketsFunction, outputPartitions);
+    return BucketPartitionUtils$.MODULE$.createDataFrame(rows, indexKeyFields, numBucketsFunction, partitioner);
   }
 
   @Override

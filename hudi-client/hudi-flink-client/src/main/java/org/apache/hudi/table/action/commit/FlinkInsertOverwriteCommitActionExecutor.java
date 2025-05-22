@@ -28,6 +28,7 @@ import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
+import java.util.Iterator;
 import java.util.List;
 
 /**
@@ -36,25 +37,27 @@ import java.util.List;
 public class FlinkInsertOverwriteCommitActionExecutor<T>
     extends BaseFlinkCommitActionExecutor<T> {
 
-  protected List<HoodieRecord<T>> inputRecords;
+  protected Iterator<HoodieRecord<T>> inputRecords;
 
   public FlinkInsertOverwriteCommitActionExecutor(HoodieEngineContext context,
                                                   HoodieWriteHandle<?, ?, ?, ?> writeHandle,
+                                                  BucketInfo bucketInfo,
                                                   HoodieWriteConfig config,
                                                   HoodieTable table,
                                                   String instantTime,
-                                                  List<HoodieRecord<T>> inputRecords) {
-    this(context, writeHandle, config, table, instantTime, inputRecords, WriteOperationType.INSERT_OVERWRITE);
+                                                  Iterator<HoodieRecord<T>> inputRecords) {
+    this(context, writeHandle, bucketInfo, config, table, instantTime, inputRecords, WriteOperationType.INSERT_OVERWRITE);
   }
 
   public FlinkInsertOverwriteCommitActionExecutor(HoodieEngineContext context,
                                                   HoodieWriteHandle<?, ?, ?, ?> writeHandle,
+                                                  BucketInfo bucketInfo,
                                                   HoodieWriteConfig config,
                                                   HoodieTable table,
                                                   String instantTime,
-                                                  List<HoodieRecord<T>> inputRecords,
+                                                  Iterator<HoodieRecord<T>> inputRecords,
                                                   WriteOperationType writeOperationType) {
-    super(context, writeHandle, config, table, instantTime, writeOperationType);
+    super(context, writeHandle, bucketInfo, config, table, instantTime, writeOperationType);
     this.inputRecords = inputRecords;
   }
 

@@ -41,6 +41,7 @@ public enum WriteOperationType {
   BOOTSTRAP("bootstrap"),
   // insert overwrite with static partitioning
   INSERT_OVERWRITE("insert_overwrite"),
+  BUCKET_RESCALE("bucket_rescale"),
   // cluster
   CLUSTER("cluster"),
   // delete partition
@@ -55,7 +56,7 @@ public enum WriteOperationType {
   // alter schema
   ALTER_SCHEMA("alter_schema"),
   // log compact
-  LOG_COMPACT("logcompact"),
+  LOG_COMPACT("log_compact"),
   // used for old version
   UNKNOWN("unknown");
 
@@ -100,6 +101,10 @@ public enum WriteOperationType {
         return INDEX;
       case "alter_schema":
         return ALTER_SCHEMA;
+      case "log_compact":
+        return LOG_COMPACT;
+      case "bucket_rescale":
+        return BUCKET_RESCALE;
       case "unknown":
         return UNKNOWN;
       default:

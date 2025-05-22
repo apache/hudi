@@ -26,13 +26,13 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictResolutionStrategy
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider
 import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.model.{FileSlice, HoodieBaseFile, HoodieCommitMetadata, HoodieFailedWritesCleaningPolicy, HoodieTableType, WriteConcurrencyMode, WriteOperationType}
+import org.apache.hudi.common.model.{FileSlice, HoodieBaseFile, HoodieFailedWritesCleaningPolicy, HoodieTableType, WriteConcurrencyMode, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieClusteringConfig, HoodieCompactionConfig, HoodieLockConfig, HoodieWriteConfig}
-import org.apache.hudi.exception.{HoodieException, HoodieWriteConflictException}
+import org.apache.hudi.exception.HoodieWriteConflictException
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, MetadataPartitionType}
 import org.apache.hudi.util.{JavaConversions, JFunction}
@@ -59,7 +59,7 @@ import scala.concurrent.duration.Duration
 /**
  * Test cases on partition stats index with Spark datasource.
  */
-@Tag("functional")
+@Tag("functional-b")
 class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
 
   val sqlTempTable = "hudi_tbl"
@@ -72,7 +72,7 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
     // remove column stats enable key from commonOpts
     val hudiOpts = commonOpts + (HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "false")
     // should throw an exception as column stats is required for partition stats
-    assertThrows[HoodieException] {
+    assertThrows[IllegalStateException] {
       doWriteAndValidateDataAndPartitionStats(
         hudiOpts,
         operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
@@ -467,7 +467,7 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
       val compactionTimeline = metadataTableFSView.getVisibleCommitsAndCompactionTimeline.filterCompletedAndCompactionInstants()
       val lastCompactionInstant = compactionTimeline
         .filter(JavaConversions.getPredicate((instant: HoodieInstant) =>
-          metaClient.getTimelineLayout.getCommitMetadataSerDe.deserialize(instant, compactionTimeline.getInstantDetails(instant).get, classOf[HoodieCommitMetadata])
+          compactionTimeline.readCommitMetadata(instant)
             .getOperationType == WriteOperationType.COMPACT))
         .lastInstant()
       val compactionBaseFile = metadataTableFSView.getAllBaseFiles(MetadataPartitionType.PARTITION_STATS.getPartitionPath)

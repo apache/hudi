@@ -304,22 +304,22 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
   }
 
   @Override
+  public Map<Pair<String, String>, List<HoodieMetadataColumnStats>> getColumnStats(List<Pair<String, String>> partitionNameFileNameList, List<String> columnNames) throws HoodieMetadataException {
+    throw new HoodieMetadataException("Unsupported operation: getColumnsStats!");
+  }
+
+  @Override
   public HoodieData<HoodieRecord<HoodieMetadataPayload>> getRecordsByKeyPrefixes(List<String> keyPrefixes, String partitionName, boolean shouldLoadInMemory) {
     throw new HoodieMetadataException("Unsupported operation: getRecordsByKeyPrefixes!");
   }
 
   @Override
-  public Map<String, List<HoodieRecord<HoodieMetadataPayload>>> getAllRecordsByKeys(List<String> keys, String partitionName) {
-    throw new HoodieMetadataException("Unsupported operation: getAllRecordsByKeys!");
-  }
-
-  @Override
-  public Map<String, List<HoodieRecordGlobalLocation>> readRecordIndex(List<String> recordKeys) {
+  public Map<String, HoodieRecordGlobalLocation> readRecordIndex(List<String> recordKeys) {
     throw new HoodieMetadataException("Unsupported operation: readRecordIndex!");
   }
 
   @Override
-  public Map<String, List<HoodieRecordGlobalLocation>> readSecondaryIndex(List<String> secondaryKeys, String partitionName) {
+  public Map<String, HoodieRecordGlobalLocation> readSecondaryIndex(List<String> secondaryKeys, String partitionName) {
     throw new HoodieMetadataException("Unsupported operation: readSecondaryIndex!");
   }
 

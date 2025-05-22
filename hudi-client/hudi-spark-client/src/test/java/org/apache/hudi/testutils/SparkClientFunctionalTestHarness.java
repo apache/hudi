@@ -25,7 +25,6 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieStorageConfig;
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -204,7 +203,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
         .setTableName(RAW_TRIPS_TEST_NAME)
         .setTableType(tableType)
         .setPayloadClass(HoodieAvroPayload.class)
-        .setTableVersion(ConfigUtils.getIntWithAltKeys(new TypedProperties(props), WRITE_TABLE_VERSION))
+        .setTableVersion(ConfigUtils.getIntWithAltKeys(props, WRITE_TABLE_VERSION))
         .fromProperties(props)
         .initTable(storageConf.newInstance(), basePath);
   }
@@ -447,7 +446,9 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
    * @param validateColumns columns to validate
    * @return true if dataframes are equal, false otherwise
    */
-  public static boolean areDataframesEqual(Dataset<Row> expectedDf, Dataset<Row> actualDf, Set<String> validateColumns) {
+  public static boolean areDataframesEqual(Dataset<Row> expectedDf,
+                                           Dataset<Row> actualDf,
+                                           Set<String> validateColumns) {
     // Normalize schema order
     String[] sortedColumnNames = Arrays.stream(expectedDf.columns())
         .filter(validateColumns::contains).sorted().toArray(String[]::new);
@@ -456,11 +457,8 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
     Dataset<Row> df1Normalized = expectedDf.selectExpr(sortedColumnNames);
     Dataset<Row> df2Normalized = actualDf.selectExpr(sortedColumnNames);
 
-    // Sort rows
-    Dataset<Row> df1Sorted = df1Normalized.sort("_row_key");
-    Dataset<Row> df2Sorted = df2Normalized.sort("_row_key");
-
     // Check for differences
-    return df1Sorted.except(df2Sorted).isEmpty() && df2Sorted.except(df1Sorted).isEmpty();
+    return df1Normalized.except(df2Normalized).isEmpty()
+        && df2Normalized.except(df1Normalized).isEmpty();
   }
 }

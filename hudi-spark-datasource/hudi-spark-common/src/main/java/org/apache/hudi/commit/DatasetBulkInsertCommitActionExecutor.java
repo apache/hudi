@@ -43,14 +43,14 @@ import java.util.stream.Collectors;
 public class DatasetBulkInsertCommitActionExecutor extends BaseDatasetBulkInsertCommitActionExecutor {
 
   public DatasetBulkInsertCommitActionExecutor(HoodieWriteConfig config,
-                                               SparkRDDWriteClient writeClient,
-                                               String instantTime) {
-    super(config, writeClient, instantTime);
+                                               SparkRDDWriteClient writeClient) {
+    super(config, writeClient);
   }
 
   @Override
   protected void preExecute() {
-    // no op
+    instantTime = writeClient.startCommit();
+    table = writeClient.initTable(getWriteOperationType(), Option.ofNullable(instantTime));
   }
 
   @Override
@@ -64,7 +64,7 @@ public class DatasetBulkInsertCommitActionExecutor extends BaseDatasetBulkInsert
     String targetFormat;
     Map<String, String> customOpts = new HashMap<>(1);
     if (HoodieSparkUtils.isSpark3()) {
-      targetFormat = "org.apache.hudi.spark3.internal";
+      targetFormat = "org.apache.hudi.spark.internal";
       customOpts.put(HoodieInternalConfig.BULKINSERT_INPUT_DATA_SCHEMA_DDL.key(), records.schema().json());
     } else {
       throw new HoodieException("Bulk insert using row writer is not supported with current Spark version."

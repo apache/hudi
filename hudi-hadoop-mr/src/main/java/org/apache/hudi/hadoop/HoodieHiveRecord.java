@@ -41,6 +41,7 @@ import org.apache.hadoop.io.BooleanWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Map;
@@ -101,7 +102,7 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
   }
 
   @Override
-  public Comparable<?> getOrderingValue(Schema recordSchema, Properties props) {
+  public Comparable<?> doGetOrderingValue(Schema recordSchema, Properties props) {
     String orderingField = ConfigUtils.getOrderingField(props);
     if (isNullOrEmpty(orderingField)) {
       return DEFAULT_ORDERING_VALUE;
@@ -141,6 +142,11 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
       objects[i] = getValue(columns[i]);
     }
     return objects;
+  }
+
+  @Override
+  public Object getColumnValueAsJava(Schema recordSchema, String column, Properties props) {
+    throw new UnsupportedOperationException("Unsupported yet for " + this.getClass().getSimpleName());
   }
 
   @Override
@@ -209,6 +215,11 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
 
   @Override
   public Option<HoodieAvroIndexedRecord> toIndexedRecord(Schema recordSchema, Properties props) throws IOException {
+    throw new UnsupportedOperationException("Not supported for HoodieHiveRecord");
+  }
+
+  @Override
+  public ByteArrayOutputStream getAvroBytes(Schema recordSchema, Properties props) throws IOException {
     throw new UnsupportedOperationException("Not supported for HoodieHiveRecord");
   }
 

@@ -193,7 +193,7 @@ public class ConsistencyGuardConfig extends HoodieConfig {
    * @deprecated use {@link #INITIAL_CHECK_INTERVAL_MS} and its methods.
    */
   @Deprecated
-  private static long DEFAULT_INITIAL_CONSISTENCY_CHECK_INTERVAL_MS = INITIAL_CHECK_INTERVAL_MS.defaultValue();
+  private static final long DEFAULT_INITIAL_CONSISTENCY_CHECK_INTERVAL_MS = INITIAL_CHECK_INTERVAL_MS.defaultValue();
   /**
    * @deprecated use {@link #MAX_CHECK_INTERVAL_MS} and its methods.
    */
@@ -203,7 +203,7 @@ public class ConsistencyGuardConfig extends HoodieConfig {
    * @deprecated use {@link #MAX_CHECK_INTERVAL_MS} and its methods.
    */
   @Deprecated
-  private static long DEFAULT_MAX_CONSISTENCY_CHECK_INTERVAL_MS = MAX_CHECK_INTERVAL_MS.defaultValue();
+  private static final long DEFAULT_MAX_CONSISTENCY_CHECK_INTERVAL_MS = MAX_CHECK_INTERVAL_MS.defaultValue();
   /**
    * @deprecated use {@link #MAX_CHECKS} and its methods.
    */
@@ -213,7 +213,7 @@ public class ConsistencyGuardConfig extends HoodieConfig {
    * @deprecated use {@link #MAX_CHECKS} and its methods.
    */
   @Deprecated
-  private static int DEFAULT_MAX_CONSISTENCY_CHECKS = MAX_CHECKS.defaultValue();
+  private static final int DEFAULT_MAX_CONSISTENCY_CHECKS = MAX_CHECKS.defaultValue();
   /**
    * @deprecated use {@link #OPTIMISTIC_CONSISTENCY_GUARD_SLEEP_TIME_MS} and its methods.
    */
@@ -223,7 +223,7 @@ public class ConsistencyGuardConfig extends HoodieConfig {
    * @deprecated use {@link #OPTIMISTIC_CONSISTENCY_GUARD_SLEEP_TIME_MS} and its methods.
    */
   @Deprecated
-  private static long DEFAULT_OPTIMISTIC_CONSISTENCY_GUARD_SLEEP_TIME_MS_PROP = OPTIMISTIC_CONSISTENCY_GUARD_SLEEP_TIME_MS.defaultValue();
+  private static final long DEFAULT_OPTIMISTIC_CONSISTENCY_GUARD_SLEEP_TIME_MS_PROP = OPTIMISTIC_CONSISTENCY_GUARD_SLEEP_TIME_MS.defaultValue();
   /**
    * @deprecated use {@link #OPTIMISTIC_CONSISTENCY_GUARD_ENABLE} and its methods.
    */
@@ -233,5 +233,5 @@ public class ConsistencyGuardConfig extends HoodieConfig {
    * @deprecated use {@link #OPTIMISTIC_CONSISTENCY_GUARD_ENABLE} and its methods.
    */
   @Deprecated
-  private static boolean DEFAULT_ENABLE_OPTIMISTIC_CONSISTENCY_GUARD = OPTIMISTIC_CONSISTENCY_GUARD_ENABLE.defaultValue();
+  private static final boolean DEFAULT_ENABLE_OPTIMISTIC_CONSISTENCY_GUARD = OPTIMISTIC_CONSISTENCY_GUARD_ENABLE.defaultValue();
 }

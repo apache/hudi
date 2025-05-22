@@ -20,6 +20,7 @@ package org.apache.hudi.table.action.rollback;
 
 import org.apache.hudi.client.HoodieWriteResult;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFileGroup;
@@ -62,7 +63,7 @@ public class HoodieClientRollbackTestBase extends HoodieClientTestBase {
      * Write 1 (only inserts)
      */
     String newCommitTime = "001";
-    client.startCommitWithTime(newCommitTime);
+    WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
     List<HoodieRecord> records = dataGen.generateInsertsContainsAllPartitions(newCommitTime, 2);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
     JavaRDD<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime);
@@ -73,7 +74,7 @@ public class HoodieClientRollbackTestBase extends HoodieClientTestBase {
      * Write 2 (updates)
      */
     newCommitTime = "002";
-    client.startCommitWithTime(newCommitTime);
+    WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
     records = dataGen.generateUpdates(newCommitTime, records);
     statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime);
     Assertions.assertNoWriteErrors(statuses.collect());
@@ -121,7 +122,7 @@ public class HoodieClientRollbackTestBase extends HoodieClientTestBase {
     String newCommitTime = "001";
     List<HoodieRecord> records = dataGen.generateInsertsContainsAllPartitions(newCommitTime, 2);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
-    client.startCommitWithTime(newCommitTime);
+    WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
     JavaRDD<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime);
     Assertions.assertNoWriteErrors(statuses.collect());
     client.commit(newCommitTime, statuses);
@@ -143,7 +144,7 @@ public class HoodieClientRollbackTestBase extends HoodieClientTestBase {
     newCommitTime = "002";
     records = dataGen.generateInsertsContainsAllPartitions(newCommitTime, 2);
     writeRecords = jsc.parallelize(records, 1);
-    client.startCommitWithTime(newCommitTime, commitActionType);
+    WriteClientTestUtils.startCommitWithTime(client, newCommitTime, commitActionType);
     HoodieWriteResult result = client.insertOverwrite(writeRecords, newCommitTime);
     statuses = result.getWriteStatuses();
     Assertions.assertNoWriteErrors(statuses.collect());

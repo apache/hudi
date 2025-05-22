@@ -54,8 +54,9 @@ public abstract class HoodieAvroHFileReaderImplBase extends HoodieAvroFileReader
   public static List<IndexedRecord> readAllRecords(HoodieAvroFileReader reader)
       throws IOException {
     Schema schema = reader.getSchema();
-    return toStream(reader.getIndexedRecordIterator(schema))
-        .collect(Collectors.toList());
+    try (ClosableIterator<IndexedRecord> indexedRecordIterator = reader.getIndexedRecordIterator(schema)) {
+      return toStream(indexedRecordIterator).collect(Collectors.toList());
+    }
   }
 
   /**
@@ -77,8 +78,9 @@ public abstract class HoodieAvroHFileReaderImplBase extends HoodieAvroFileReader
                                                 List<String> keys,
                                                 Schema schema) throws IOException {
     Collections.sort(keys);
-    return toStream(reader.getIndexedRecordsByKeysIterator(keys, schema))
-        .collect(Collectors.toList());
+    try (ClosableIterator<IndexedRecord> indexedRecordsByKeysIterator = reader.getIndexedRecordsByKeysIterator(keys, schema)) {
+      return toStream(indexedRecordsByKeysIterator).collect(Collectors.toList());
+    }
   }
 
   public abstract ClosableIterator<IndexedRecord> getIndexedRecordsByKeysIterator(List<String> keys,

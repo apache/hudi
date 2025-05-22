@@ -20,10 +20,15 @@ package org.apache.hudi.table.format;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
+import org.apache.hudi.client.model.PartialUpdateFlinkRecordMerger;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.model.PartialUpdateAvroPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -52,11 +57,15 @@ import org.apache.flink.api.common.io.InputFormat;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.io.InputSplit;
 import org.apache.flink.table.api.DataTypes;
+import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.data.StringData;
+import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.expressions.CallExpression;
 import org.apache.flink.table.expressions.FieldReferenceExpression;
 import org.apache.flink.table.expressions.ValueLiteralExpression;
 import org.apache.flink.table.functions.BuiltInFunctionDefinitions;
+import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -78,10 +87,12 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
+import static org.apache.hudi.utils.TestData.insertRow;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -1152,6 +1163,30 @@ public class TestInputFormat {
     TestData.assertRowDataEquals(result, TestData.DATA_SET_INSERT);
   }
 
+  @Test
+  void testOrderingValueWithDecimalType() throws Exception {
+    conf = new Configuration();
+    conf.set(FlinkOptions.PATH, tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.TABLE_NAME, "TestHoodieTable");
+    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
+    conf.set(FlinkOptions.PARTITION_PATH_FIELD, "partition");
+    conf.setString(FlinkOptions.SOURCE_AVRO_SCHEMA.key(), AvroSchemaConverter.convertToSchema(TestConfigurations.ROW_TYPE_DECIMAL_ORDERING).toString());
+    conf.set(FlinkOptions.COMPACTION_ASYNC_ENABLED, false); // by default close the async compaction
+    StreamerUtil.initTableIfNotExists(conf);
+
+    tableSource = getTableSource(conf, TestConfigurations.TABLE_SCHEMA_DECIMAL_ORDERING);
+
+    TestData.writeData(TestData.DATA_SET_INSERT_DECIMAL_ORDERING, conf);
+    InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat();
+    List<RowData> result = readData(inputFormat, TestConfigurations.SERIALIZER_DECIMAL_ORDERING);
+
+    // global index is enabled by default
+    // row1: <id1, Danny, 23, 10, par1>
+    // row2: <id1, Bob, 44, 1, par2>
+    // the ordering value of row2: 1 is smaller than that of row1: 10, so row1 in `par1` will not be deleted.
+    TestData.assertRowDataEquals(result, TestData.DATA_SET_INSERT_DECIMAL_ORDERING, TestConfigurations.ROW_DATA_TYPE_DECIMAL_ORDERING);
+  }
+
   /**
    * Test reading file groups with compaction plan scheduled and delta logs.
    * File-slice after pending compaction-requested instant-time should also be considered valid.
@@ -1223,6 +1258,102 @@ public class TestInputFormat {
     TestData.assertRowDataEquals(result2, TestData.dataSetInsert(1, 2));
   }
 
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testCompactWithEventTimeOrdering(boolean useLegacyConfig) throws Exception {
+    Map<String, String> options = new HashMap<>();
+    if (useLegacyConfig) {
+      options.put(FlinkOptions.PAYLOAD_CLASS_NAME.key(), EventTimeAvroPayload.class.getName());
+    } else {
+      options.put(FlinkOptions.RECORD_MERGE_MODE.key(), RecordMergeMode.EVENT_TIME_ORDERING.name());
+    }
+    options.put(FlinkOptions.COMPACTION_DELTA_COMMITS.key(), "1");
+    options.put(FlinkOptions.COMPACTION_ASYNC_ENABLED.key(), "true");
+    beforeEach(HoodieTableType.MERGE_ON_READ, options);
+
+    TestData.writeData(TestData.DATA_SET_DISORDER_INSERT, conf);
+    Map<String, String> expected = new HashMap<>();
+    // expected is row with the largest ordering value
+    expected.put("par1", "[id1,par1,id1,Danny,22,4,par1]");
+    // check result from base file
+    TestData.checkWrittenData(tempFile, expected, expected.size());
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testCompactWithCommitTimeOrdering(boolean useLegacyConfig) throws Exception {
+    Map<String, String> options = new HashMap<>();
+    if (useLegacyConfig) {
+      options.put(FlinkOptions.PAYLOAD_CLASS_NAME.key(), OverwriteWithLatestAvroPayload.class.getName());
+    } else {
+      options.put(FlinkOptions.RECORD_MERGE_MODE.key(), RecordMergeMode.COMMIT_TIME_ORDERING.name());
+    }
+    options.put(FlinkOptions.COMPACTION_DELTA_COMMITS.key(), "1");
+    options.put(FlinkOptions.COMPACTION_ASYNC_ENABLED.key(), "true");
+    beforeEach(HoodieTableType.MERGE_ON_READ, options);
+
+    TestData.writeData(TestData.DATA_SET_DISORDER_INSERT, conf);
+    Map<String, String> expected = new HashMap<>();
+    // expected is the last inserted row
+    expected.put("par1", "[id1,par1,id1,Danny,23,1,par1]");
+    // check result from base file
+    TestData.checkWrittenData(tempFile, expected, expected.size());
+  }
+
+  @ParameterizedTest
+  @ValueSource(ints = {1, 2, 3})
+  public void testCompactWithPartialUpdate(int configOrdinal) throws Exception {
+    Map<String, String> options = new HashMap<>();
+    if (configOrdinal == 1) {
+      // legacy config for partial update
+      options.put(FlinkOptions.PAYLOAD_CLASS_NAME.key(), PartialUpdateAvroPayload.class.getName());
+    } else if (configOrdinal == 2) {
+      // new config with only merge classes
+      options.put(FlinkOptions.RECORD_MERGER_IMPLS.key(), PartialUpdateFlinkRecordMerger.class.getName());
+    } else {
+      // new config with merge classes and merge mode
+      options.put(FlinkOptions.RECORD_MERGE_MODE.key(), RecordMergeMode.CUSTOM.name());
+      options.put(FlinkOptions.RECORD_MERGER_IMPLS.key(), PartialUpdateFlinkRecordMerger.class.getName());
+    }
+    options.put(FlinkOptions.COMPACTION_DELTA_COMMITS.key(), "1");
+    options.put(FlinkOptions.COMPACTION_ASYNC_ENABLED.key(), "true");
+    beforeEach(HoodieTableType.MERGE_ON_READ, options);
+
+    List<RowData> sourceData = Arrays.asList(
+        insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), null,
+            TimestampData.fromEpochMillis(2), StringData.fromString("par1")),
+        insertRow(StringData.fromString("id1"), null, 23,
+            TimestampData.fromEpochMillis(1), StringData.fromString("par1"))
+    );
+    TestData.writeData(sourceData, conf);
+
+    Map<String, String> expected = new HashMap<>();
+    expected.put("par1", "[id1,par1,id1,Danny,23,2,par1]");
+    // check result from base file
+    TestData.checkWrittenData(tempFile, expected, expected.size());
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableType.class)
+  void testStreamWriteAndReadWithUpgrade(HoodieTableType tableType) throws Exception {
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.WRITE_TABLE_VERSION.key(), HoodieTableVersion.SIX.versionCode() + "");
+    // init and write data with table version SIX
+    beforeEach(tableType, options);
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    assertSame(HoodieTableVersion.SIX, tableSource.getMetaClient().getTableConfig().getTableVersion());
+
+    // write another batch of data with table version EIGHT
+    conf.set(FlinkOptions.WRITE_TABLE_VERSION, HoodieTableVersion.EIGHT.versionCode());
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    this.tableSource = getTableSource(conf);
+    assertSame(HoodieTableVersion.EIGHT, tableSource.getMetaClient().getTableConfig().getTableVersion());
+
+    InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat();
+    List<RowData> result = readData(inputFormat);
+    TestData.assertRowDataEquals(result, TestData.DATA_SET_INSERT);
+  }
+
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
@@ -1241,28 +1372,40 @@ public class TestInputFormat {
   }
 
   private HoodieTableSource getTableSource(Configuration conf) {
+    return getTableSource(conf, TestConfigurations.TABLE_SCHEMA);
+  }
+
+  private HoodieTableSource getTableSource(Configuration conf, ResolvedSchema tableSchema) {
     return new HoodieTableSource(
-        SerializableSchema.create(TestConfigurations.TABLE_SCHEMA),
+        SerializableSchema.create(tableSchema),
         new StoragePath(tempFile.getAbsolutePath()),
         Collections.singletonList("partition"),
         "default",
         conf);
   }
 
-  @SuppressWarnings("rawtypes")
   private static List<RowData> readData(InputFormat inputFormat) throws IOException {
+    return readData(inputFormat, TestConfigurations.SERIALIZER);
+  }
+
+  @SuppressWarnings("rawtypes")
+  private static List<RowData> readData(InputFormat inputFormat, RowDataSerializer serializer) throws IOException {
     InputSplit[] inputSplits = inputFormat.createInputSplits(1);
-    return readData(inputFormat, inputSplits);
+    return readData(inputFormat, inputSplits, serializer);
+  }
+
+  private static List<RowData> readData(InputFormat inputFormat, InputSplit[] inputSplits) throws IOException {
+    return readData(inputFormat, inputSplits, TestConfigurations.SERIALIZER);
   }
 
   @SuppressWarnings("unchecked, rawtypes")
-  private static List<RowData> readData(InputFormat inputFormat, InputSplit[] inputSplits) throws IOException {
+  private static List<RowData> readData(InputFormat inputFormat, InputSplit[] inputSplits, RowDataSerializer serializer) throws IOException {
     List<RowData> result = new ArrayList<>();
 
     for (InputSplit inputSplit : inputSplits) {
       inputFormat.open(inputSplit);
       while (!inputFormat.reachedEnd()) {
-        result.add(TestConfigurations.SERIALIZER.copy((RowData) inputFormat.nextRecord(null))); // no reuse
+        result.add(serializer.copy((RowData) inputFormat.nextRecord(null))); // no reuse
       }
       inputFormat.close();
     }

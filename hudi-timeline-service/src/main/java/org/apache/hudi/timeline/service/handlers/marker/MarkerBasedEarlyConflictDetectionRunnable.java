@@ -43,13 +43,13 @@ import java.util.stream.Collectors;
 public class MarkerBasedEarlyConflictDetectionRunnable implements Runnable {
   private static final Logger LOG = LoggerFactory.getLogger(MarkerBasedEarlyConflictDetectionRunnable.class);
 
-  private MarkerHandler markerHandler;
-  private String markerDir;
-  private String basePath;
-  private HoodieStorage storage;
-  private AtomicBoolean hasConflict;
-  private long maxAllowableHeartbeatIntervalInMs;
-  private Set<HoodieInstant> completedCommits;
+  private final MarkerHandler markerHandler;
+  private final String markerDir;
+  private final String basePath;
+  private final HoodieStorage storage;
+  private final AtomicBoolean hasConflict;
+  private final long maxAllowableHeartbeatIntervalInMs;
+  private final Set<HoodieInstant> completedCommits;
   private final boolean checkCommitConflict;
 
   public MarkerBasedEarlyConflictDetectionRunnable(AtomicBoolean hasConflict, MarkerHandler markerHandler,
@@ -118,7 +118,7 @@ public class MarkerBasedEarlyConflictDetectionRunnable implements Runnable {
             + "Table markers: " + tableMarkers);
         hasConflict.compareAndSet(false, true);
       }
-      LOG.info("Finish batching marker-based conflict detection in " + timer.endTimer() + " ms");
+      LOG.info("Finish batching marker-based conflict detection in {} ms", timer.endTimer());
 
     } catch (IOException e) {
       throw new HoodieIOException("IOException occurs during checking marker conflict");

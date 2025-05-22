@@ -29,6 +29,7 @@ import org.apache.hudi.sink.bulk.BulkInsertWriteFunction;
 import org.apache.hudi.sink.bulk.RowDataKeyGen;
 import org.apache.hudi.sink.bulk.sort.SortOperator;
 import org.apache.hudi.sink.bulk.sort.SortOperatorGen;
+import org.apache.hudi.sink.common.AbstractWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
@@ -123,6 +124,11 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
     return this.coordinator.getEventBuffer();
   }
 
+  @Override
+  public WriteMetadataEvent[] getEventBuffer(long checkpointId) {
+    return this.coordinator.getEventBuffer(checkpointId);
+  }
+
   public OperatorEvent getNextEvent() {
     return this.gateway.getNextEvent();
   }
@@ -176,6 +182,11 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
     return coordinator;
   }
 
+  @Override
+  public AbstractWriteFunction getWriteFunction() {
+    return this.writeFunction;
+  }
+
   public MockOperatorCoordinatorContext getCoordinatorContext() {
     return coordinatorContext;
   }
@@ -202,8 +213,7 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
     writeFunction.setRuntimeContext(runtimeContext);
     writeFunction.setOperatorEventGateway(gateway);
     writeFunction.open(conf);
-    // handle the bootstrap event
-    coordinator.handleEventFromOperator(0, getNextEvent());
+    writeFunction.setCorrespondent(new MockCorrespondent(this.coordinator));
   }
 
   private void setupMapFunction() {
@@ -212,7 +222,7 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
     int numBuckets = conf.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS);
     boolean needFixedFileIdSuffix = OptionsResolver.isNonBlockingConcurrencyControl(conf);
     this.bucketIdToFileId = new HashMap<>();
-    this.mapFunction = r -> BucketBulkInsertWriterHelper.rowWithFileId(bucketIdToFileId, keyGen, r, indexKeys, numBuckets, needFixedFileIdSuffix);
+    this.mapFunction = r -> BucketBulkInsertWriterHelper.rowWithFileId(bucketIdToFileId, keyGen, r, indexKeys, conf, needFixedFileIdSuffix);
   }
 
   private void setupSortOperator() throws Exception {

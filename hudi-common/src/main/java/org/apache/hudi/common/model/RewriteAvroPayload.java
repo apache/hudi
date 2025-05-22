@@ -31,7 +31,7 @@ import java.io.IOException;
  */
 public class RewriteAvroPayload implements HoodieRecordPayload<RewriteAvroPayload> {
 
-  private GenericRecord record;
+  private final GenericRecord record;
   
   public RewriteAvroPayload(GenericRecord record) {
     this.record = record;

@@ -140,7 +140,7 @@ public class WriteStatus implements Serializable {
       stat.setMinEventTime(eventTime);
       stat.setMaxEventTime(eventTime);
     } catch (DateTimeException | IllegalArgumentException e) {
-      LOG.debug(String.format("Fail to parse event time value: %s", eventTimeVal), e);
+      LOG.debug("Fail to parse event time value: {}", eventTimeVal, e);
     }
   }
 
@@ -259,14 +259,12 @@ public class WriteStatus implements Serializable {
 
   @Override
   public String toString() {
-    final StringBuilder sb = new StringBuilder("WriteStatus {");
-    sb.append("fileId=").append(fileId);
-    sb.append(", writeStat=").append(stat);
-    sb.append(", globalError='").append(globalError).append('\'');
-    sb.append(", hasErrors='").append(hasErrors()).append('\'');
-    sb.append(", errorCount='").append(totalErrorRecords).append('\'');
-    sb.append(", errorPct='").append((100.0 * totalErrorRecords) / totalRecords).append('\'');
-    sb.append('}');
-    return sb.toString();
+    return "WriteStatus {" + "fileId=" + fileId
+        + ", writeStat=" + stat
+        + ", globalError='" + globalError + '\''
+        + ", hasErrors='" + hasErrors() + '\''
+        + ", errorCount='" + totalErrorRecords + '\''
+        + ", errorPct='" + (100.0 * totalErrorRecords) / totalRecords + '\''
+        + '}';
   }
 }

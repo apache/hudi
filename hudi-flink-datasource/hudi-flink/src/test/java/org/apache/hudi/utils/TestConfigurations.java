@@ -57,8 +57,23 @@ public class TestConfigurations {
 
   public static final RowType ROW_TYPE = (RowType) ROW_DATA_TYPE.getLogicalType();
 
+  public static final DataType ROW_DATA_TYPE_DECIMAL_ORDERING = DataTypes.ROW(
+          DataTypes.FIELD("uuid", DataTypes.VARCHAR(20)),// record key
+          DataTypes.FIELD("name", DataTypes.VARCHAR(10)),
+          DataTypes.FIELD("age", DataTypes.INT()),
+          DataTypes.FIELD("ts", DataTypes.DECIMAL(10, 0)), // precombine field
+          DataTypes.FIELD("partition", DataTypes.VARCHAR(10)))
+      .notNull();
+
+  public static final RowType ROW_TYPE_DECIMAL_ORDERING =
+      (RowType) ROW_DATA_TYPE_DECIMAL_ORDERING.getLogicalType();
+
   public static final ResolvedSchema TABLE_SCHEMA = SchemaBuilder.instance()
       .fields(ROW_TYPE.getFieldNames(), ROW_DATA_TYPE.getChildren())
+      .build();
+
+  public static final ResolvedSchema TABLE_SCHEMA_DECIMAL_ORDERING = SchemaBuilder.instance()
+      .fields(ROW_TYPE_DECIMAL_ORDERING.getFieldNames(), ROW_DATA_TYPE_DECIMAL_ORDERING.getChildren())
       .build();
 
   private static final List<String> FIELDS = ROW_TYPE.getFields().stream()
@@ -244,6 +259,11 @@ public class TestConfigurations {
   }
 
   public static String getCollectSinkDDL(String tableName) {
+    // set expectedRowNum as -1 to disable forced exception to terminate a successful sink
+    return getCollectSinkDDLWithExpectedNum(tableName, -1);
+  }
+
+  public static String getCollectSinkDDLWithExpectedNum(String tableName, int expectedRowNum) {
     return "create table " + tableName + "(\n"
         + "  uuid varchar(20),\n"
         + "  name varchar(10),\n"
@@ -251,11 +271,16 @@ public class TestConfigurations {
         + "  ts timestamp(3),\n"
         + "  `partition` varchar(20)\n"
         + ") with (\n"
-        + "  'connector' = '" + CollectSinkTableFactory.FACTORY_ID + "'"
+        + "  'connector' = '" + CollectSinkTableFactory.FACTORY_ID + "',\n"
+        + "  'sink-expected-row-num' = '" + expectedRowNum + "'"
         + ")";
   }
 
   public static String getCollectSinkDDL(String tableName, TableSchema tableSchema) {
+    return getCollectSinkDDLWithExpectedNum(tableName, tableSchema, -1);
+  }
+
+  public static String getCollectSinkDDLWithExpectedNum(String tableName, TableSchema tableSchema, int expectRowNum) {
     final StringBuilder builder = new StringBuilder("create table " + tableName + "(\n");
     String[] fieldNames = tableSchema.getFieldNames();
     DataType[] fieldTypes = tableSchema.getFieldDataTypes();
@@ -271,7 +296,8 @@ public class TestConfigurations {
     }
     final String withProps = ""
         + ") with (\n"
-        + "  'connector' = '" + CollectSinkTableFactory.FACTORY_ID + "'\n"
+        + "  'connector' = '" + CollectSinkTableFactory.FACTORY_ID + "',\n"
+        + "  'sink-expected-row-num' = '" + expectRowNum + "'"
         + ")";
     builder.append(withProps);
     return builder.toString();
@@ -294,6 +320,8 @@ public class TestConfigurations {
   }
 
   public static final RowDataSerializer SERIALIZER = new RowDataSerializer(ROW_TYPE);
+
+  public static final RowDataSerializer SERIALIZER_DECIMAL_ORDERING = new RowDataSerializer(ROW_TYPE_DECIMAL_ORDERING);
 
   public static Configuration getDefaultConf(String tablePath) {
     Configuration conf = new Configuration();
@@ -399,6 +427,10 @@ public class TestConfigurations {
       }
       return TestConfigurations.getCreateHoodieTableDDL(this.tableName, this.fields, options,
           this.withPartition, this.pkField, this.partitionField);
+    }
+
+    public Map<String, String> getOptions() {
+      return this.options;
     }
   }
 

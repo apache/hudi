@@ -35,6 +35,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
@@ -43,9 +44,7 @@ import java.util.stream.Collectors;
 public class PrimaryKeyPruners {
   private static final Logger LOG = LoggerFactory.getLogger(PrimaryKeyPruners.class);
 
-  public static final int BUCKET_ID_NO_PRUNING = -1;
-
-  public static int getBucketId(List<ResolvedExpression> hashKeyFilters, Configuration conf) {
+  public static Function<Integer, Integer> getBucketIdFunc(List<ResolvedExpression> hashKeyFilters, Configuration conf) {
     List<String> pkFields = Arrays.asList(conf.getString(FlinkOptions.RECORD_KEY_FIELD).split(","));
     // step1: resolve the hash key values
     final boolean logicalTimestamp = OptionsResolver.isConsistentLogicalTimestampEnabled(conf);
@@ -60,7 +59,7 @@ public class PrimaryKeyPruners {
         .map(Pair::getValue)
         .collect(Collectors.toList());
     // step2: generate bucket id
-    return BucketIdentifier.getBucketId(values, conf.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS));
+    return (numBuckets) -> BucketIdentifier.getBucketId(values, numBuckets);
   }
 
   private static Pair<FieldReferenceExpression, ValueLiteralExpression> castChildAs(List<Expression> children) {

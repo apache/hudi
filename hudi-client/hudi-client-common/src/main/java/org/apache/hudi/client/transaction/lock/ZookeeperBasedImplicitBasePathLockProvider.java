@@ -31,7 +31,7 @@ import org.slf4j.LoggerFactory;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
-import static org.apache.hudi.aws.utils.S3Utils.s3aToS3;
+import static org.apache.hudi.common.fs.FSUtils.s3aToS3;
 
 /**
  * A zookeeper based lock. This {@link LockProvider} implementation allows to lock table operations
@@ -50,7 +50,7 @@ public class ZookeeperBasedImplicitBasePathLockProvider extends BaseZookeeperBas
   public static String getLockBasePath(String hudiTableBasePath) {
     // Ensure consistent format for S3 URI.
     String lockBasePath = "/tmp/" + HashID.generateXXHashAsString(s3aToS3(hudiTableBasePath), HashID.Size.BITS_64);
-    LOG.info(String.format("The Zookeeper lock key for the base path %s is %s", hudiTableBasePath, lockBasePath));
+    LOG.info("The Zookeeper lock key for the base path {} is {}", hudiTableBasePath, lockBasePath);
     return lockBasePath;
   }
 

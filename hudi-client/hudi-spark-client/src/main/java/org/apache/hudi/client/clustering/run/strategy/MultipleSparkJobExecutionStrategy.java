@@ -33,6 +33,7 @@ import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.ClusteringOperation;
 import org.apache.hudi.common.model.FileSlice;
@@ -42,6 +43,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.util.ClusteringUtils;
@@ -54,6 +56,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.data.CloseableIteratorListener;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieException;
@@ -72,10 +75,8 @@ import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.SparkBroadcastManager;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.cluster.strategy.ClusteringExecutionStrategy;
 
@@ -326,7 +327,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
     return HoodieJavaRDD.of(jsc.parallelize(clusteringOps, readParallelism).mapPartitions(clusteringOpsPartition -> {
       List<Supplier<ClosableIterator<HoodieRecord<T>>>> suppliers = new ArrayList<>();
       long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(new SparkTaskContextSupplier(), getWriteConfig());
-      LOG.info("MaxMemoryPerCompaction run as part of clustering => " + maxMemoryPerCompaction);
+      LOG.info("MaxMemoryPerCompaction run as part of clustering => {}", maxMemoryPerCompaction);
       Option<BaseKeyGenerator> keyGeneratorOpt = HoodieSparkKeyGeneratorFactory.createBaseKeyGenerator(writeConfig);
       clusteringOpsPartition.forEachRemaining(clusteringOp -> {
         Supplier<ClosableIterator<HoodieRecord<T>>> iteratorSupplier = () -> {
@@ -336,7 +337,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
         };
         suppliers.add(iteratorSupplier);
       });
-      return new LazyConcatenatingIterator<>(suppliers);
+      return CloseableIteratorListener.addListener(new LazyConcatenatingIterator<>(suppliers));
     }));
   }
 
@@ -358,7 +359,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
             iteratorGettersForPartition.add(recordIteratorGetter);
           });
 
-          return new LazyConcatenatingIterator<>(iteratorGettersForPartition);
+          return CloseableIteratorListener.addListener(new LazyConcatenatingIterator<>(iteratorGettersForPartition));
         }));
   }
 
@@ -455,8 +456,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
     SerializableSchema serializableTableSchemaWithMetaFields = new SerializableSchema(tableSchemaWithMetaFields);
 
     // broadcast reader context.
-    SparkBroadcastManager broadcastManager = new SparkBroadcastManager(getEngineContext(), getHoodieTable().getMetaClient());
-    broadcastManager.prepareAndBroadcast();
+    ReaderContextFactory<InternalRow> readerContextFactory = getEngineContext().getReaderContextFactory(getHoodieTable().getMetaClient());
     StructType sparkSchemaWithMetaFields = AvroConversionUtils.convertAvroSchemaToStructType(tableSchemaWithMetaFields);
 
     RDD<InternalRow> internalRowRDD = jsc.parallelize(clusteringOps, clusteringOps.size()).flatMap(new FlatMapFunction<ClusteringOperation, InternalRow>() {
@@ -469,29 +469,16 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
         if (isInternalSchemaPresent) {
           internalSchemaOption = SerDeHelper.fromJson(internalSchemaStr);
         }
-        Option<HoodieReaderContext> readerContextOpt = broadcastManager.retrieveFileGroupReaderContext(new StoragePath(basePath));
-        Configuration conf = broadcastManager.retrieveStorageConfig().get();
 
         // instantiate FG reader
-        HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(
-            readerContextOpt.get(),
-            getHoodieTable().getMetaClient().getStorage().newInstance(new StoragePath(basePath), new HadoopStorageConfiguration(conf)),
-            basePath,
-            instantTime,
-            fileSlice,
-            readerSchema,
-            readerSchema,
-            internalSchemaOption,
-            getHoodieTable().getMetaClient(),
-            getHoodieTable().getMetaClient().getTableConfig().getProps(),
-            0,
-            Long.MAX_VALUE,
-            usePosition);
-        fileGroupReader.initRecordIterators();
+        HoodieTableMetaClient metaClient = getHoodieTable().getMetaClient();
+        HoodieReaderContext<InternalRow> readerContext = readerContextFactory.getContext();
+        HoodieFileGroupReader<InternalRow> fileGroupReader = HoodieFileGroupReader.<InternalRow>newBuilder()
+            .withReaderContext(readerContext).withHoodieTableMetaClient(metaClient).withLatestCommitTime(instantTime)
+            .withFileSlice(fileSlice).withDataSchema(readerSchema).withRequestedSchema(readerSchema).withInternalSchema(internalSchemaOption)
+            .withShouldUseRecordPosition(usePosition).withProps(metaClient.getTableConfig().getProps()).build();
         // read records from the FG reader
-        HoodieFileGroupReader.HoodieFileGroupReaderIterator<InternalRow> recordIterator
-            = (HoodieFileGroupReader.HoodieFileGroupReaderIterator<InternalRow>) fileGroupReader.getClosableIterator();
-        return recordIterator;
+        return CloseableIteratorListener.addListener(fileGroupReader.getClosableIterator());
       }
     }).rdd();
 

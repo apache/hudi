@@ -24,7 +24,6 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.{HoodieMetadataConfig, RecordMergeMode}
 import org.apache.hudi.common.model.WriteOperationType
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeCommitMetadata
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieCompactionConfig, HoodieWriteConfig}
@@ -448,7 +447,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
       // 3. A time travel query is performed with data skipping enabled.
       // 4. If it was to look up the secondary index, it would have skipped the data file, but the data file is still present.
       // 5. Time travel query should throw an exception in this case.
-      val firstCommitMetadata = deserializeCommitMetadata(metaClient.reloadActiveTimeline().getInstantDetails(firstInstant).get())
+      val firstCommitMetadata = metaClient.reloadActiveTimeline().readCommitMetadataToAvro(firstInstant)
       val partitionToWriteStats = firstCommitMetadata.getPartitionToWriteStats.asScala.mapValues(_.asScala.toList)
       // Find the path for the given fileId
       val matchingPath: Option[String] = partitionToWriteStats.values.flatten
@@ -457,9 +456,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
       assertTrue(matchingPath.isDefined)
       // Corrupt the data file
       val dataFile = new StoragePath(basePath, matchingPath.get)
-      val storage = metaClient.getStorage
-      storage.deleteFile(dataFile)
-      storage.createNewFile(dataFile)
+      HoodieSparkSqlTestBase.replaceWithEmptyFile(metaClient.getStorage, dataFile)
       // Time travel query should now throw an exception
       checkExceptionContain(() => spark.read.format("hudi")
         .options(readOpts)

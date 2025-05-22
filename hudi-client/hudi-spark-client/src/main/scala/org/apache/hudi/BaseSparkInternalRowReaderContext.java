@@ -22,30 +22,36 @@ package org.apache.hudi;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieSparkRecord;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.avro.Schema;
 import org.apache.spark.sql.HoodieInternalRowUtils;
 import org.apache.spark.sql.HoodieUnsafeRowUtils;
 import org.apache.spark.sql.catalyst.InternalRow;
+import org.apache.spark.sql.catalyst.expressions.UnsafeProjection;
 import org.apache.spark.sql.catalyst.expressions.UnsafeRow;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.unsafe.types.UTF8String;
 
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.function.UnaryOperator;
+import java.util.stream.Collectors;
 
 import scala.Function1;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
-import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
 import static org.apache.spark.sql.HoodieInternalRowUtils.getCachedSchema;
 
 /**
@@ -53,6 +59,11 @@ import static org.apache.spark.sql.HoodieInternalRowUtils.getCachedSchema;
  * Subclasses need to implement {@link #getFileRecordIterator} with the reader logic.
  */
 public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderContext<InternalRow> {
+
+  protected BaseSparkInternalRowReaderContext(StorageConfiguration<?> storageConfig,
+                                              HoodieTableConfig tableConfig) {
+    super(storageConfig, tableConfig);
+  }
 
   @Override
   public Option<HoodieRecordMerger> getRecordMerger(RecordMergeMode mergeMode, String mergeStrategyId, String mergeImplClasses) {
@@ -65,15 +76,12 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
         return Option.of(new OverwriteWithLatestSparkRecordMerger());
       case CUSTOM:
       default:
-        if (mergeStrategyId.equals(HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID)) {
-          return Option.of(HoodieAvroRecordMerger.INSTANCE);
-        }
-        Option<HoodieRecordMerger> mergerClass = HoodieRecordUtils.createValidRecordMerger(EngineType.SPARK, mergeImplClasses, mergeStrategyId);
-        if (mergerClass.isEmpty()) {
+        Option<HoodieRecordMerger> recordMerger = HoodieRecordUtils.createValidRecordMerger(EngineType.SPARK, mergeImplClasses, mergeStrategyId);
+        if (recordMerger.isEmpty()) {
           throw new IllegalArgumentException("No valid spark merger implementation set for `"
               + RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY + "`");
         }
-        return mergerClass;
+        return recordMerger;
     }
   }
 
@@ -83,28 +91,31 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
   }
 
   @Override
-  public String getRecordKey(InternalRow row, Schema schema) {
-    return getFieldValueFromInternalRow(row, schema, RECORD_KEY_METADATA_FIELD).toString();
-  }
-
-  @Override
-  public HoodieRecord<InternalRow> constructHoodieRecord(Option<InternalRow> rowOption,
-                                                         Map<String, Object> metadataMap) {
-    if (!rowOption.isPresent()) {
+  public HoodieRecord<InternalRow> constructHoodieRecord(BufferedRecord<InternalRow> bufferedRecord) {
+    HoodieKey hoodieKey = new HoodieKey(bufferedRecord.getRecordKey(), partitionPath);
+    if (bufferedRecord.isDelete()) {
       return new HoodieEmptyRecord<>(
-          new HoodieKey((String) metadataMap.get(INTERNAL_META_RECORD_KEY),
-              (String) metadataMap.get(INTERNAL_META_PARTITION_PATH)),
+          hoodieKey,
           HoodieRecord.HoodieRecordType.SPARK);
     }
 
-    Schema schema = getSchemaFromMetadata(metadataMap);
-    InternalRow row = rowOption.get();
-    return new HoodieSparkRecord(row, HoodieInternalRowUtils.getCachedSchema(schema));
+    Schema schema = getSchemaFromBufferRecord(bufferedRecord);
+    InternalRow row = bufferedRecord.getRecord();
+    return new HoodieSparkRecord(hoodieKey, row, HoodieInternalRowUtils.getCachedSchema(schema), false);
   }
 
   @Override
   public InternalRow seal(InternalRow internalRow) {
     return internalRow.copy();
+  }
+
+  @Override
+  public InternalRow toBinaryRow(Schema schema, InternalRow internalRow) {
+    if (internalRow instanceof UnsafeRow) {
+      return internalRow;
+    }
+    final UnsafeProjection unsafeProjection = HoodieInternalRowUtils.getCachedUnsafeProjection(schema);
+    return unsafeProjection.apply(internalRow);
   }
 
   private Object getFieldValueFromInternalRow(InternalRow row, Schema recordSchema, String fieldName) {
@@ -122,13 +133,23 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
   @Override
   public UnaryOperator<InternalRow> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns) {
     Function1<InternalRow, UnsafeRow> unsafeRowWriter =
-        HoodieInternalRowUtils.getCachedUnsafeRowWriter(getCachedSchema(from), getCachedSchema(to), renamedColumns);
+        HoodieInternalRowUtils.getCachedUnsafeRowWriter(getCachedSchema(from), getCachedSchema(to), renamedColumns, Collections.emptyMap());
     return row -> (InternalRow) unsafeRowWriter.apply(row);
-
   }
 
-  protected UnaryOperator<InternalRow> getIdentityProjection() {
-    return row -> row;
+  /**
+   * Constructs a transformation that will take a row and convert it to a new row with the given schema and adds in the values for the partition columns if they are missing in the returned row.
+   * It is assumed that the `to` schema will contain the partition fields.
+   * @param from the original schema
+   * @param to the schema the row will be converted to
+   * @param partitionFieldAndValues the partition fields and their values, if any are required by the reader
+   * @return a function for transforming the row
+   */
+  protected UnaryOperator<InternalRow> getBootstrapProjection(Schema from, Schema to, List<Pair<String, Object>> partitionFieldAndValues) {
+    Map<Integer, Object> partitionValuesByIndex = partitionFieldAndValues.stream().collect(Collectors.toMap(pair -> to.getField(pair.getKey()).pos(), Pair::getRight));
+    Function1<InternalRow, UnsafeRow> unsafeRowWriter =
+        HoodieInternalRowUtils.getCachedUnsafeRowWriter(getCachedSchema(from), getCachedSchema(to), Collections.emptyMap(), partitionValuesByIndex);
+    return row -> (InternalRow) unsafeRowWriter.apply(row);
   }
 
   @Override

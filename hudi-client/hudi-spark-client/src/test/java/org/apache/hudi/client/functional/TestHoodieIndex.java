@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client.functional;
 
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
@@ -194,11 +195,11 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
         new RawTripTestPayload(recordStr4).toHoodieRecord());
   }
 
-  private static List<HoodieRecord> getInsertsWithSameKeyInTwoPartitions() throws IOException {
-    String recordStr1 = "{\"_row_key\":\"001\",\"time\":\"2016-01-31T00:00:01.000Z\",\"number\":1}";
-    String recordStr2 = "{\"_row_key\":\"002\",\"time\":\"2016-01-31T00:00:02.000Z\",\"number\":2}";
-    String recordStr3 = "{\"_row_key\":\"003\",\"time\":\"2016-01-31T00:00:03.000Z\",\"number\":3}";
-    String recordStr4 = "{\"_row_key\":\"003\",\"time\":\"2015-01-31T00:00:04.000Z\",\"number\":4}";
+  private static List<HoodieRecord> getInsertsBatch2() throws IOException {
+    String recordStr1 = "{\"_row_key\":\"005\",\"time\":\"2016-01-31T00:00:01.000Z\",\"number\":5}";
+    String recordStr2 = "{\"_row_key\":\"006\",\"time\":\"2016-01-31T00:00:02.000Z\",\"number\":6}";
+    String recordStr3 = "{\"_row_key\":\"007\",\"time\":\"2016-01-31T00:00:03.000Z\",\"number\":7}";
+    String recordStr4 = "{\"_row_key\":\"008\",\"time\":\"2017-01-31T00:00:04.000Z\",\"number\":8}";
     return Arrays.asList(
         new RawTripTestPayload(recordStr1).toHoodieRecord(),
         new RawTripTestPayload(recordStr2).toHoodieRecord(),
@@ -206,34 +207,16 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
         new RawTripTestPayload(recordStr4).toHoodieRecord());
   }
 
-  @Test
-  public void testRecordIndexForNonGlobalWrites() throws Exception {
-    setUp(IndexType.RECORD_INDEX, true, true);
-    final int totalRecords = 4;
-    List<HoodieRecord> records = getInsertsWithSameKeyInTwoPartitions();
-    JavaRDD<HoodieRecord> writtenRecords = jsc.parallelize(records, 1);
-
-    // Insert totalRecords records
-    String newCommitTime = writeClient.createNewInstantTime();
-    writeClient.startCommitWithTime(newCommitTime);
-    JavaRDD<WriteStatus> writeStatusRdd = writeClient.upsert(writtenRecords, newCommitTime);
-    List<WriteStatus> writeStatuses = writeStatusRdd.collect();
-    assertNoWriteErrors(writeStatuses);
-    String[] fileIdsFromWriteStatuses = writeStatuses.stream().map(WriteStatus::getFileId)
-        .sorted().toArray(String[]::new);
-
-    // Now commit this & update location of records inserted and validate no errors
-    writeClient.commit(newCommitTime, writeStatusRdd);
-    // Now tagLocation for these records, index should tag them correctly
-    metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
-    JavaRDD<HoodieRecord> javaRDD = tagLocation(index, writtenRecords, hoodieTable);
-    Map<String, String> recordKeyToPartitionPathMap = new HashMap();
-    List<HoodieRecord> hoodieRecords = writtenRecords.collect();
-    hoodieRecords.forEach(entry -> recordKeyToPartitionPathMap.put(entry.getRecordKey(), entry.getPartitionPath()));
-    String[] taggedFileIds = javaRDD.map(record -> record.getCurrentLocation().getFileId()).distinct().collect()
-        .stream().sorted().toArray(String[]::new);
-    assertArrayEquals(taggedFileIds, fileIdsFromWriteStatuses);
+  private static List<HoodieRecord> getUpdates() throws IOException {
+    String recordStr1 = "{\"_row_key\":\"001\",\"time\":\"2016-01-31T00:00:01.000Z\",\"number\":5}";
+    String recordStr2 = "{\"_row_key\":\"002\",\"time\":\"2016-01-31T00:00:02.000Z\",\"number\":6}";
+    String recordStr3 = "{\"_row_key\":\"003\",\"time\":\"2016-01-31T00:00:03.000Z\",\"number\":7}";
+    String recordStr4 = "{\"_row_key\":\"004\",\"time\":\"2017-01-31T00:00:04.000Z\",\"number\":8}";
+    return new ArrayList<>(Arrays.asList(
+        new RawTripTestPayload(recordStr1).toHoodieRecord(),
+        new RawTripTestPayload(recordStr2).toHoodieRecord(),
+        new RawTripTestPayload(recordStr3).toHoodieRecord(),
+        new RawTripTestPayload(recordStr4).toHoodieRecord()));
   }
 
   @ParameterizedTest
@@ -253,7 +236,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
 
     // Insert totalRecords records
     String newCommitTime = writeClient.createNewInstantTime();
-    writeClient.startCommitWithTime(newCommitTime);
+    WriteClientTestUtils.startCommitWithTime(writeClient, newCommitTime);
     JavaRDD<WriteStatus> writeStatusRdd = writeClient.upsert(writtenRecords, newCommitTime);
     List<WriteStatus> writeStatuses = writeStatusRdd.collect();
     assertNoWriteErrors(writeStatuses);
@@ -318,7 +301,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     assertTrue(javaRDD.filter(record -> record.isCurrentLocationKnown()).collect().isEmpty());
 
     // Insert totalRecords records
-    writeClient.startCommitWithTime(newCommitTime);
+    WriteClientTestUtils.startCommitWithTime(writeClient, newCommitTime);
     JavaRDD<WriteStatus> writeStatues = writeClient.upsert(writeRecords, newCommitTime);
     assertNoWriteErrors(writeStatues.collect());
 
@@ -369,7 +352,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     HoodieSparkTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
 
     String newCommitTime = writeClient.createNewInstantTime();
-    writeClient.startCommitWithTime(newCommitTime);
+    WriteClientTestUtils.startCommitWithTime(writeClient, newCommitTime);
     JavaRDD<WriteStatus> writeStatues = writeClient.upsert(writeRecords, newCommitTime);
     JavaRDD<HoodieRecord> javaRDD1 = tagLocation(index, writeRecords, hoodieTable);
 
@@ -610,7 +593,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     String newCommitTime = writeClient.createNewInstantTime();
     List<HoodieRecord> records = getInserts();
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
-    writeClient.startCommitWithTime(newCommitTime);
+    WriteClientTestUtils.startCommitWithTime(writeClient, newCommitTime);
     JavaRDD<WriteStatus> writeStatues = writeClient.upsert(writeRecords, newCommitTime);
     assertNoWriteErrors(writeStatues.collect());
     writeClient.commit(newCommitTime, writeStatues);
@@ -644,7 +627,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     final int numDeletes = records.size() / 2;
     List<HoodieKey> keysToDelete = records.stream().limit(numDeletes).map(r -> new HoodieKey(r.getRecordKey(), r.getPartitionPath())).collect(Collectors.toList());
     String deleteCommitTime = writeClient.createNewInstantTime();
-    writeClient.startCommitWithTime(deleteCommitTime);
+    WriteClientTestUtils.startCommitWithTime(writeClient, deleteCommitTime);
     writeStatues = writeClient.delete(jsc.parallelize(keysToDelete, 1), deleteCommitTime);
     assertNoWriteErrors(writeStatues.collect());
     writeClient.commit(deleteCommitTime, writeStatues);

@@ -37,7 +37,7 @@ class RecordLevelIndexTestBase extends HoodieStatsIndexTestBase {
     HoodieMetadataConfig.ENABLE.key -> "true",
     HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key -> "true"
   )
-  val commonOpts: Map[String, String] = Map(
+  def commonOpts: Map[String, String] = Map(
     PARTITIONPATH_FIELD.key -> "partition",
     HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
     HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "15"
@@ -94,7 +94,7 @@ class RecordLevelIndexTestBase extends HoodieStatsIndexTestBase {
     if (!metaClientReloaded) {
       // initialization of meta client is required again after writing data so that
       // latest table configs are picked up
-      metaClient = HoodieTableMetaClient.reload(metaClient)
+      metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
       metaClientReloaded = true
     }
 
@@ -130,10 +130,7 @@ class RecordLevelIndexTestBase extends HoodieStatsIndexTestBase {
       val recordKey: String = row.getAs("_hoodie_record_key")
       val partitionPath: String = row.getAs("_hoodie_partition_path")
       val fileName: String = row.getAs("_hoodie_file_name")
-      val recordLocations = recordIndexMap.get(recordKey)
-      assertFalse(recordLocations.isEmpty)
-      // assuming no duplicate keys for now
-      val recordLocation = recordLocations.get(0)
+      val recordLocation = recordIndexMap.get(recordKey)
       assertEquals(partitionPath, recordLocation.getPartitionPath)
       assertTrue(fileName.startsWith(recordLocation.getFileId), fileName + " should start with " + recordLocation.getFileId)
     }

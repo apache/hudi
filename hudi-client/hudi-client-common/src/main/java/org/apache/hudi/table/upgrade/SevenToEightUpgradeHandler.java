@@ -25,7 +25,9 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.BootstrapIndexType;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
+import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
@@ -90,12 +92,6 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
     // If auto upgrade is disabled, set writer version to 6 and return
     if (!config.autoUpgrade()) {
-      /**
-       * At this point, metadata should already be disabled (see {@link UpgradeDowngrade#needsUpgradeOrDowngrade(HoodieTableVersion)}).
-       * So, check either this is a metadata table itself,  or metadata table is disabled.
-       */
-      ValidationUtils.checkState(table.isMetadataTable() || !config.isMetadataTableEnabled(),
-          "Metadata table should be disabled to write in table version SIX using 1.0.0+" + metaClient.getBasePath());
       config.setValue(HoodieWriteConfig.WRITE_TABLE_VERSION, String.valueOf(HoodieTableVersion.SIX.versionCode()));
       return tablePropsToAdd;
     }
@@ -178,21 +174,75 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
   }
 
   static void upgradeMergeMode(HoodieTableConfig tableConfig, Map<ConfigProperty, String> tablePropsToAdd) {
-    if (tableConfig.getPayloadClass() != null
-        && tableConfig.getPayloadClass().equals(OverwriteWithLatestAvroPayload.class.getName())) {
-      if (HoodieTableType.COPY_ON_WRITE == tableConfig.getTableType()) {
-        tablePropsToAdd.put(
-            HoodieTableConfig.RECORD_MERGE_MODE,
-            RecordMergeMode.COMMIT_TIME_ORDERING.name());
-      } else {
+    String payloadClass = tableConfig.getPayloadClass();
+    String preCombineField = tableConfig.getPreCombineField();
+    if (isCustomPayloadClass(payloadClass)) {
+      // This contains a special case: HoodieMetadataPayload.
+      tablePropsToAdd.put(
+          HoodieTableConfig.PAYLOAD_CLASS_NAME,
+          payloadClass);
+      tablePropsToAdd.put(
+          HoodieTableConfig.RECORD_MERGE_MODE,
+          RecordMergeMode.CUSTOM.name());
+      tablePropsToAdd.put(
+          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID,
+          HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID);
+    } else if (tableConfig.getTableType() == HoodieTableType.COPY_ON_WRITE) {
+      setEventTimeOrCommitTimeBasedOnPayload(payloadClass, tablePropsToAdd);
+    } else { // MOR table
+      if (StringUtils.nonEmpty(preCombineField)) {
+        // This contains a special case: OverwriteWithLatestPayload with preCombine field.
         tablePropsToAdd.put(
             HoodieTableConfig.PAYLOAD_CLASS_NAME,
             DefaultHoodieRecordPayload.class.getName());
         tablePropsToAdd.put(
             HoodieTableConfig.RECORD_MERGE_MODE,
             RecordMergeMode.EVENT_TIME_ORDERING.name());
+        tablePropsToAdd.put(
+            HoodieTableConfig.RECORD_MERGE_STRATEGY_ID,
+            HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID);
+      } else {
+        setEventTimeOrCommitTimeBasedOnPayload(payloadClass, tablePropsToAdd);
       }
     }
+  }
+
+  private static void setEventTimeOrCommitTimeBasedOnPayload(String payloadClass, Map<ConfigProperty, String> tablePropsToAdd) {
+    // DefaultRecordPayload without preCombine Field.
+    // This is unlikely to happen.
+    if (useDefaultHoodieRecordPayload(payloadClass)) {
+      tablePropsToAdd.put(
+          HoodieTableConfig.PAYLOAD_CLASS_NAME,
+          DefaultHoodieRecordPayload.class.getName());
+      tablePropsToAdd.put(
+          HoodieTableConfig.RECORD_MERGE_MODE,
+          RecordMergeMode.EVENT_TIME_ORDERING.name());
+      tablePropsToAdd.put(
+          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID,
+          HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID);
+    } else {
+      tablePropsToAdd.put(
+          HoodieTableConfig.PAYLOAD_CLASS_NAME,
+          OverwriteWithLatestAvroPayload.class.getName());
+      tablePropsToAdd.put(
+          HoodieTableConfig.RECORD_MERGE_MODE,
+          RecordMergeMode.COMMIT_TIME_ORDERING.name());
+      tablePropsToAdd.put(
+          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID,
+          HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID);
+    }
+  }
+
+  static boolean useDefaultHoodieRecordPayload(String payloadClass) {
+    return !StringUtils.isNullOrEmpty(payloadClass)
+        && payloadClass.equals(DefaultHoodieRecordPayload.class.getName());
+  }
+
+  static boolean isCustomPayloadClass(String payloadClass) {
+    return !StringUtils.isNullOrEmpty(payloadClass)
+        && !payloadClass.equals(DefaultHoodieRecordPayload.class.getName())
+        && !payloadClass.equals(EventTimeAvroPayload.class.getName())
+        && !payloadClass.equals(OverwriteWithLatestAvroPayload.class.getName());
   }
 
   static void setInitialVersion(HoodieTableConfig tableConfig, Map<ConfigProperty, String> tablePropsToAdd) {
@@ -289,10 +339,9 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
     boolean success = true;
     if (instant.getAction().equals(COMMIT_ACTION) || instant.getAction().equals(DELTA_COMMIT_ACTION) || (instant.getAction().equals(REPLACE_COMMIT_ACTION) && instant.isCompleted())) {
       Class<? extends HoodieCommitMetadata> clazz = instant.getAction().equals(REPLACE_COMMIT_ACTION) ? HoodieReplaceCommitMetadata.class : HoodieCommitMetadata.class;
-      HoodieCommitMetadata commitMetadata = commitMetadataSerDeV1.deserialize(instant, metaClient.getActiveTimeline().getInstantDetails(instant).get(), clazz);
-      Option<byte[]> data = commitMetadataSerDeV2.serialize(commitMetadata);
+      HoodieCommitMetadata commitMetadata = metaClient.getActiveTimeline().readInstantContent(instant, clazz);
       String toPathStr = toPath.toUri().toString();
-      activeTimelineV2.createFileInMetaPath(toPathStr, data, true);
+      activeTimelineV2.createFileInMetaPath(toPathStr, Option.of(commitMetadata), true);
       metaClient.getStorage().deleteFile(fromPath);
     } else {
       success = metaClient.getStorage().rename(fromPath, toPath);

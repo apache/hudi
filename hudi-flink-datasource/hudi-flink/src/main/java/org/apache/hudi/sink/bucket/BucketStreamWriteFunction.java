@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -18,19 +18,19 @@
 
 package org.apache.hudi.sink.bucket;
 
-import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.client.model.HoodieFlinkInternalRow;
 import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.hash.BucketIndexUtil;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.index.bucket.BucketIdentifier;
+import org.apache.hudi.index.bucket.partition.NumBucketsFunction;
 import org.apache.hudi.sink.StreamWriteFunction;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
+import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.Collector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,16 +47,12 @@ import java.util.Set;
  * <p>The task holds a fresh new local index: {(partition + bucket number) &rarr fileId} mapping, this index
  * is used for deciding whether the incoming records in an UPDATE or INSERT.
  * The index is local because different partition paths have separate items in the index.
- *
- * @param <I> the input type
  */
-public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
+public class BucketStreamWriteFunction extends StreamWriteFunction {
 
   private static final Logger LOG = LoggerFactory.getLogger(BucketStreamWriteFunction.class);
 
   private int parallelism;
-
-  private int bucketNum;
 
   private String indexKeyFields;
 
@@ -78,8 +74,11 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
   /**
    * Functions for calculating the task partition to dispatch.
    */
-  private Functions.Function2<String, Integer, Integer> partitionIndexFunc;
-
+  private Functions.Function3<Integer, String, Integer, Integer> partitionIndexFunc;
+  /**
+   * Function to calculate num buckets per partition.
+   */
+  private NumBucketsFunction numBucketsFunction;
 
   /**
    * To prevent strings compare for each record, define this only during open()
@@ -91,22 +90,23 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
    *
    * @param config The config options
    */
-  public BucketStreamWriteFunction(Configuration config) {
-    super(config);
+  public BucketStreamWriteFunction(Configuration config, RowType rowType) {
+    super(config, rowType);
   }
 
   @Override
   public void open(Configuration parameters) throws IOException {
     super.open(parameters);
-    this.bucketNum = config.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS);
     this.indexKeyFields = OptionsResolver.getIndexKeyField(config);
     this.isNonBlockingConcurrencyControl = OptionsResolver.isNonBlockingConcurrencyControl(config);
     this.taskID = getRuntimeContext().getIndexOfThisSubtask();
     this.parallelism = getRuntimeContext().getNumberOfParallelSubtasks();
     this.bucketIndex = new HashMap<>();
     this.incBucketIndex = new HashSet<>();
-    this.partitionIndexFunc = BucketIndexUtil.getPartitionIndexFunc(bucketNum, parallelism);
+    this.partitionIndexFunc = BucketIndexUtil.getPartitionIndexFunc(parallelism);
     this.isInsertOverwrite = OptionsResolver.isInsertOverwrite(config);
+    this.numBucketsFunction = new NumBucketsFunction(config.get(FlinkOptions.BUCKET_INDEX_PARTITION_EXPRESSIONS),
+        config.get(FlinkOptions.BUCKET_INDEX_PARTITION_RULE), config.get(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS));
   }
 
   @Override
@@ -121,35 +121,36 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
   }
 
   @Override
-  public void processElement(I i, ProcessFunction<I, Object>.Context context, Collector<Object> collector) throws Exception {
-    HoodieRecord<?> record = (HoodieRecord<?>) i;
-    final HoodieKey hoodieKey = record.getKey();
-    final String partition = hoodieKey.getPartitionPath();
-    final HoodieRecordLocation location;
+  public void processElement(HoodieFlinkInternalRow record,
+                             ProcessFunction<HoodieFlinkInternalRow, Object>.Context context,
+                             Collector<Object> collector) throws Exception {
+    defineRecordLocation(record);
+    bufferRecord(record);
+  }
 
-    // for insert overwrite operation skip the index loading
+  private void defineRecordLocation(HoodieFlinkInternalRow record) {
+    final String partition = record.getPartitionPath();
+    // for insert overwrite operation skip `bucketIndex` loading
     if (!isInsertOverwrite) {
       bootstrapIndexIfNeed(partition);
     }
-
     Map<Integer, String> bucketToFileId = bucketIndex.computeIfAbsent(partition, p -> new HashMap<>());
-    final int bucketNum = BucketIdentifier.getBucketId(hoodieKey.getRecordKey(), indexKeyFields, this.bucketNum);
+    final int bucketNum = BucketIdentifier.getBucketId(record.getRecordKey(), indexKeyFields, numBucketsFunction.getNumBuckets(record.getPartitionPath()));
     final String bucketId = partition + "/" + bucketNum;
 
     if (incBucketIndex.contains(bucketId)) {
-      location = new HoodieRecordLocation("I", bucketToFileId.get(bucketNum));
+      record.setInstantTime("I");
+      record.setFileId(bucketToFileId.get(bucketNum));
     } else if (bucketToFileId.containsKey(bucketNum)) {
-      location = new HoodieRecordLocation("U", bucketToFileId.get(bucketNum));
+      record.setInstantTime("U");
+      record.setFileId(bucketToFileId.get(bucketNum));
     } else {
       String newFileId = isNonBlockingConcurrencyControl ? BucketIdentifier.newBucketFileIdForNBCC(bucketNum) : BucketIdentifier.newBucketFileIdPrefix(bucketNum);
-      location = new HoodieRecordLocation("I", newFileId);
+      record.setInstantTime("I");
+      record.setFileId(newFileId);
       bucketToFileId.put(bucketNum, newFileId);
       incBucketIndex.add(bucketId);
     }
-    record.unseal();
-    record.setCurrentLocation(location);
-    record.seal();
-    bufferRecord(record);
   }
 
   /**
@@ -157,7 +158,8 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
    * partitionIndex == this taskID belongs to this task.
    */
   public boolean isBucketToLoad(int bucketNumber, String partition) {
-    return this.partitionIndexFunc.apply(partition, bucketNumber) == taskID;
+    int numBuckets = numBucketsFunction.getNumBuckets(partition);
+    return this.partitionIndexFunc.apply(numBuckets, partition, bucketNumber) == taskID;
   }
 
   /**

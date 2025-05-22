@@ -25,6 +25,7 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.table.BulkInsertPartitioner;
@@ -63,7 +64,7 @@ public class SparkSortAndSizeExecutionStrategy<T>
                                                                    List<HoodieFileGroupId> fileGroupIdList,
                                                                    boolean shouldPreserveHoodieMetadata,
                                                                    Map<String, String> extraMetadata) {
-    LOG.info("Starting clustering for a group, parallelism:" + numOutputGroups + " commit:" + instantTime);
+    LOG.info("Starting clustering for a group, parallelism:{} commit:{}", numOutputGroups, instantTime);
     HoodieWriteConfig newConfig = HoodieWriteConfig.newBuilder()
         .withBulkInsertParallelism(numOutputGroups)
         .withProps(getWriteConfig().getProps()).build();
@@ -74,7 +75,7 @@ public class SparkSortAndSizeExecutionStrategy<T>
     Dataset<Row> repartitionedRecords = partitioner.repartitionRecords(inputRecords, numOutputGroups);
 
     return HoodieDatasetBulkInsertHelper.bulkInsert(repartitionedRecords, instantTime, getHoodieTable(), newConfig,
-        partitioner.arePartitionRecordsSorted(), shouldPreserveHoodieMetadata);
+        partitioner.arePartitionRecordsSorted(), shouldPreserveHoodieMetadata, WriteOperationType.CLUSTER);
   }
 
   @Override
@@ -86,7 +87,7 @@ public class SparkSortAndSizeExecutionStrategy<T>
                                                                  final List<HoodieFileGroupId> fileGroupIdList,
                                                                  final boolean shouldPreserveHoodieMetadata,
                                                                  final Map<String, String> extraMetadata) {
-    LOG.info("Starting clustering for a group, parallelism:" + numOutputGroups + " commit:" + instantTime);
+    LOG.info("Starting clustering for a group, parallelism:{} commit:{}", numOutputGroups, instantTime);
 
     HoodieWriteConfig newConfig = HoodieWriteConfig.newBuilder()
         .withBulkInsertParallelism(numOutputGroups)

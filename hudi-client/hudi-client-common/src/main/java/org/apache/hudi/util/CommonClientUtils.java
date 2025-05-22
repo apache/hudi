@@ -22,10 +22,14 @@ package org.apache.hudi.util;
 
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
 import org.slf4j.Logger;
@@ -54,6 +58,37 @@ public class CommonClientUtils {
 
     if (tableConfig.getTableVersion().lesserThan(HoodieTableVersion.EIGHT) && writeConfig.isNonBlockingConcurrencyControl()) {
       throw new HoodieNotSupportedException("Non-blocking concurrency control is not supported for table versions < 8.");
+    }
+  }
+
+  /**
+   * Returns the base file format.
+   */
+  public static HoodieFileFormat getBaseFileFormat(HoodieWriteConfig writeConfig, HoodieTableConfig tableConfig) {
+    if (tableConfig.isMultipleBaseFileFormatsEnabled() && writeConfig.contains(HoodieWriteConfig.BASE_FILE_FORMAT)) {
+      return writeConfig.getBaseFileFormat();
+    }
+    return tableConfig.getBaseFileFormat();
+  }
+
+  /**
+   * Returns the log block type..
+   */
+  public static HoodieLogBlock.HoodieLogBlockType getLogBlockType(HoodieWriteConfig writeConfig, HoodieTableConfig tableConfig) {
+    Option<HoodieLogBlock.HoodieLogBlockType> logBlockTypeOpt = writeConfig.getLogDataBlockFormat();
+    if (logBlockTypeOpt.isPresent()) {
+      return logBlockTypeOpt.get();
+    }
+    HoodieFileFormat baseFileFormat = getBaseFileFormat(writeConfig, tableConfig);
+    switch (getBaseFileFormat(writeConfig, tableConfig)) {
+      case PARQUET:
+      case ORC:
+        return HoodieLogBlock.HoodieLogBlockType.AVRO_DATA_BLOCK;
+      case HFILE:
+        return HoodieLogBlock.HoodieLogBlockType.HFILE_DATA_BLOCK;
+      default:
+        throw new HoodieException("Base file format " + baseFileFormat
+            + " does not have associated log block type");
     }
   }
 

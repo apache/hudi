@@ -22,6 +22,7 @@ package org.apache.hudi.table.action.compact;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -31,7 +32,6 @@ import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -59,9 +59,9 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -160,7 +160,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
       assertEquals(inflightInstantTime, inflightInstant.requestedTime(), "inflight instant has expected instant time");
 
       // This should rollback
-      client.startCommitWithTime(nextInflightInstantTime);
+      WriteClientTestUtils.startCommitWithTime(client, nextInflightInstantTime);
 
       // Validate
       metaClient = HoodieTestUtils.createMetaClient(storageConf.newInstance(), cfg.getBasePath());
@@ -247,9 +247,8 @@ public class TestAsyncCompaction extends CompactionTestBase {
       moveCompactionFromRequestedToInflight(compactionInstantTime, cfg);
 
       // validate the compaction plan does not include pending log files.
-      HoodieCompactionPlan compactionPlan = TimelineMetadataUtils.deserializeCompactionPlan(
-          metaClient.reloadActiveTimeline()
-              .readCompactionPlanAsBytes(INSTANT_GENERATOR.getCompactionRequestedInstant(compactionInstantTime)).get());
+      HoodieCompactionPlan compactionPlan = metaClient.reloadActiveTimeline().readCompactionPlan(
+          INSTANT_GENERATOR.getCompactionRequestedInstant(compactionInstantTime));
       assertTrue(compactionPlan.getOperations().stream()
               .noneMatch(op -> op.getDeltaFilePaths().stream().anyMatch(deltaFile -> getCommitTime(deltaFile).equals(pendingInstantTime))),
           "compaction plan should not include pending log files. Data file paths " + new HashSet<>(compactionPlan.getOperations()));
@@ -441,7 +440,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
       Set<HoodieFileGroupId> fileGroupsBeforeReplace = getAllFileGroups(hoodieTable, dataGen.getPartitionPaths());
       // replace by using insertOverwrite
       JavaRDD<HoodieRecord> replaceRecords = jsc.parallelize(dataGen.generateInserts(replaceInstantTime, numRecs), 1);
-      client.startCommitWithTime(replaceInstantTime, HoodieTimeline.REPLACE_COMMIT_ACTION);
+      metaClient.getActiveTimeline().createRequestedCommitWithReplaceMetadata(replaceInstantTime, HoodieTimeline.REPLACE_COMMIT_ACTION);
       client.insertOverwrite(replaceRecords, replaceInstantTime);
 
       metaClient.reloadActiveTimeline();

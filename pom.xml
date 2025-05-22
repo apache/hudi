@@ -102,6 +102,8 @@
     <fasterxml.jackson.dataformat.yaml.version>${fasterxml.spark3.version}</fasterxml.jackson.dataformat.yaml.version>
     <kafka.version>2.0.0</kafka.version>
     <pulsar.version>3.0.2</pulsar.version>
+    <kafka.connect.api.version>2.5.0</kafka.connect.api.version>
+    <kafka.spark3.version>2.8.2</kafka.spark3.version>
     <pulsar.spark.version>${pulsar.spark.scala12.version}</pulsar.spark.version>
     <pulsar.spark.scala12.version>3.1.1.4</pulsar.spark.scala12.version>
     <pulsar.spark.scala13.version>3.4.1.1</pulsar.spark.scala13.version>
@@ -138,13 +140,12 @@
     <spark.version>${spark3.version}</spark.version>
     <spark3.version>3.5.1</spark3.version>
     <sparkbundle.version></sparkbundle.version>
-    <flink1.20.version>1.20.0</flink1.20.version>
-    <flink1.19.version>1.19.1</flink1.19.version>
+    <flink1.20.version>1.20.1</flink1.20.version>
+    <flink1.19.version>1.19.2</flink1.19.version>
     <flink1.18.version>1.18.1</flink1.18.version>
     <flink1.17.version>1.17.1</flink1.17.version>
     <flink1.16.version>1.16.2</flink1.16.version>
     <flink1.15.version>1.15.1</flink1.15.version>
-    <flink1.14.version>1.14.5</flink1.14.version>
     <flink.version>${flink1.20.version}</flink.version>
     <hudi.flink.module>hudi-flink1.20.x</hudi.flink.module>
     <flink.bundle.version>1.20</flink.bundle.version>
@@ -166,9 +167,8 @@
     <rocksdbjni.version>7.5.3</rocksdbjni.version>
     <spark33.version>3.3.4</spark33.version>
     <spark34.version>3.4.3</spark34.version>
-    <spark35.version>3.5.4</spark35.version>
+    <spark35.version>3.5.5</spark35.version>
     <hudi.spark.module>hudi-spark3.5.x</hudi.spark.module>
-    <hudi.spark.common.module>hudi-spark3-common</hudi.spark.common.module>
     <avro.version>1.11.4</avro.version>
     <bijection-avro.version>0.9.8</bijection-avro.version>
     <caffeine.version>2.9.1</caffeine.version>
@@ -185,7 +185,7 @@
     <surefire-log4j.file>log4j2-surefire.properties</surefire-log4j.file>
     <thrift.version>0.13.0</thrift.version>
     <javalin.version>4.6.7</javalin.version>
-    <jetty.version>9.4.53.v20231009</jetty.version>
+    <jetty.version>9.4.57.v20241219</jetty.version>
     <htrace.version>3.1.0-incubating</htrace.version>
     <hbase.version>2.4.13</hbase.version>
     <h2.version>1.4.199</h2.version>
@@ -208,11 +208,12 @@
     <presto.bundle.bootstrap.shade.prefix>org.apache.hudi.</presto.bundle.bootstrap.shade.prefix>
     <trino.bundle.bootstrap.scope>compile</trino.bundle.bootstrap.scope>
     <trino.bundle.bootstrap.shade.prefix>org.apache.hudi.</trino.bundle.bootstrap.shade.prefix>
+    <twitter.chill.version>0.10.0</twitter.chill.version>
     <shadeSources>true</shadeSources>
     <zk-curator.version>2.7.1</zk-curator.version>
     <disruptor.version>3.4.2</disruptor.version>
     <antlr.version>4.8</antlr.version>
-    <aws.sdk.version>2.25.69</aws.sdk.version>
+    <aws.sdk.version>2.29.52</aws.sdk.version>
     <proto.version>3.25.5</proto.version>
     <protoc.version>3.25.5</protoc.version>
     <dynamodb.lockclient.version>1.2.0</dynamodb.lockclient.version>
@@ -221,6 +222,7 @@
     <google.cloud.pubsub.version>1.120.0</google.cloud.pubsub.version>
     <gcp-libraries-bom.version>26.15.0</gcp-libraries-bom.version>
     <gcs.connector.version>hadoop2-2.2.7</gcs.connector.version>
+    <testcontainers.version>1.20.2</testcontainers.version>
     <dynamodb-local.port>8000</dynamodb-local.port>
     <dynamodb-local.endpoint>http://localhost:${dynamodb-local.port}</dynamodb-local.endpoint>
     <moto.port>5002</moto.port>
@@ -710,6 +712,7 @@
               <exclude>**/test/resources/*.commit</exclude>
               <exclude>**/test/resources/**/*.txt</exclude>
               <exclude>**/test/resources/**/*.avsc</exclude>
+              <exclude>**/test/resources/**/.zip</exclude>
               <exclude>**/target/**</exclude>
               <exclude>**/generated-sources/**</exclude>
               <exclude>.github/**</exclude>
@@ -1305,6 +1308,16 @@
         </exclusions>
       </dependency>
       <dependency>
+        <groupId>org.apache.kafka</groupId>
+        <artifactId>connect-api</artifactId>
+        <version>${kafka.connect.api.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.kafka</groupId>
+        <artifactId>kafka-streams-test-utils</artifactId>
+        <version>3.4.0</version>
+      </dependency>
+      <dependency>
         <groupId>org.apache.hadoop</groupId>
         <artifactId>hadoop-mapreduce-client-common</artifactId>
         <version>${hadoop.version}</version>
@@ -1754,6 +1767,13 @@
         <scope>test</scope>
       </dependency>
 
+      <!-- Used for adding kryo serializers for protobuf -->
+      <dependency>
+        <groupId>com.twitter</groupId>
+        <artifactId>chill-protobuf</artifactId>
+        <version>${twitter.chill.version}</version>
+      </dependency>
+
       <!-- Other Utils -->
       <dependency>
         <groupId>org.apache.flink</groupId>
@@ -1825,7 +1845,23 @@
       </dependency>
       <dependency>
         <groupId>io.confluent</groupId>
+        <artifactId>kafka-protobuf-provider</artifactId>
+        <version>${confluent.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.confluent</groupId>
         <artifactId>kafka-json-schema-serializer</artifactId>
+        <version>${confluent.version}</version>
+        <exclusions>
+          <exclusion>
+            <groupId>com.kjetland</groupId>
+            <artifactId>mbknor-jackson-jsonschema_2.12</artifactId>
+          </exclusion>
+        </exclusions>
+      </dependency>
+      <dependency>
+        <groupId>io.confluent</groupId>
+        <artifactId>kafka-json-schema-provider</artifactId>
         <version>${confluent.version}</version>
         <exclusions>
           <exclusion>
@@ -1838,6 +1874,18 @@
         <groupId>com.kjetland</groupId>
         <artifactId>mbknor-jackson-jsonschema_${scala.binary.version}</artifactId>
         <version>1.0.39</version>
+      </dependency>
+      <dependency>
+        <groupId>org.testcontainers</groupId>
+        <artifactId>testcontainers</artifactId>
+        <version>${testcontainers.version}</version>
+        <scope>test</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.testcontainers</groupId>
+        <artifactId>localstack</artifactId>
+        <version>${testcontainers.version}</version>
+        <scope>test</scope>
       </dependency>
     </dependencies>
   </dependencyManagement>
@@ -1953,9 +2001,11 @@
             <configuration combine.self="append">
               <skip>${skipUTs}</skip>
               <forkedProcessExitTimeoutInSeconds>120</forkedProcessExitTimeoutInSeconds>
-              <excludedGroups>functional</excludedGroups>
+              <excludedGroups>functional,functional-b</excludedGroups>
               <excludes>
                 <exclude>**/*FunctionalTestSuite.java</exclude>
+                <exclude>**/*FunctionalTestSuiteA.java</exclude>
+                <exclude>**/*FunctionalTestSuiteB.java</exclude>
                 <exclude>**/IT*.java</exclude>
                 <exclude>**/testsuite/**/Test*.java</exclude>
               </excludes>
@@ -2014,6 +2064,63 @@
               <reuseForks>true</reuseForks>
               <includes>
                 <include>**/*FunctionalTestSuite.java</include>
+                <include>**/*FunctionalTestSuiteA.java</include>
+              </includes>
+            </configuration>
+          </plugin>
+          <plugin>
+            <groupId>org.jacoco</groupId>
+            <artifactId>jacoco-maven-plugin</artifactId>
+            <executions>
+              <execution>
+                <goals>
+                  <goal>prepare-agent</goal>
+                </goals>
+                <configuration>
+                  <destFile>${project.build.directory}/jacoco-agent/${jacoco.agent.dest.filename}</destFile>
+                </configuration>
+              </execution>
+              <execution>
+                <id>post-functional-tests</id>
+                <phase>test</phase>
+                <goals>
+                  <goal>report</goal>
+                </goals>
+                <configuration>
+                  <outputDirectory>${project.reporting.outputDirectory}/jacoco-ft</outputDirectory>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+    <profile>
+      <id>functional-tests-b</id>
+      <properties>
+        <skipUTs>true</skipUTs>
+        <skipFTs>false</skipFTs>
+        <skipITs>true</skipITs>
+      </properties>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-surefire-plugin</artifactId>
+            <version>${maven-surefire-plugin.version}</version>
+            <dependencies>
+              <dependency>
+                <groupId>org.apache.maven.surefire</groupId>
+                <artifactId>surefire-junit47</artifactId>
+                <version>${maven-surefire-plugin.version}</version>
+              </dependency>
+            </dependencies>
+            <configuration combine.self="append">
+              <skip>${skipFTs}</skip>
+              <forkCount>1</forkCount>
+              <reuseForks>true</reuseForks>
+              <includes>
+                <include>**/*FunctionalTestSuiteB.java</include>
               </includes>
             </configuration>
           </plugin>
@@ -2396,7 +2503,6 @@
       </properties>
       <modules>
         <module>hudi-spark-datasource/hudi-spark3.3.x</module>
-        <module>hudi-spark-datasource/hudi-spark3-common</module>
       </modules>
       <activation>
         <property>
@@ -2439,7 +2545,6 @@
       </properties>
       <modules>
         <module>hudi-spark-datasource/hudi-spark3.4.x</module>
-        <module>hudi-spark-datasource/hudi-spark3-common</module>
       </modules>
       <dependencies>
         <dependency>
@@ -2490,7 +2595,6 @@
       </properties>
       <modules>
         <module>hudi-spark-datasource/hudi-spark3.5.x</module>
-        <module>hudi-spark-datasource/hudi-spark3-common</module>
       </modules>
       <dependencies>
         <dependency>
@@ -2608,32 +2712,6 @@
       <activation>
         <property>
           <name>flink1.15</name>
-        </property>
-      </activation>
-    </profile>
-    <profile>
-      <id>flink1.14</id>
-      <properties>
-        <flink.version>${flink1.14.version}</flink.version>
-        <hudi.flink.module>hudi-flink1.14.x</hudi.flink.module>
-        <flink.bundle.version>1.14</flink.bundle.version>
-        <orc.flink.version>1.5.6</orc.flink.version>
-        <flink.avro.version>1.11.4</flink.avro.version>
-        <flink.table.runtime.artifactId>flink-table-runtime_${scala.binary.version}</flink.table.runtime.artifactId>
-        <flink.table.planner.artifactId>flink-table-planner_${scala.binary.version}</flink.table.planner.artifactId>
-        <flink.parquet.artifactId>flink-parquet_${scala.binary.version}</flink.parquet.artifactId>
-        <flink.statebackend.rocksdb.artifactId>flink-statebackend-rocksdb_${scala.binary.version}</flink.statebackend.rocksdb.artifactId>
-        <flink.test.utils.artifactId>flink-test-utils_${scala.binary.version}</flink.test.utils.artifactId>
-        <flink.streaming.java.artifactId>flink-streaming-java_${scala.binary.version}</flink.streaming.java.artifactId>
-        <flink.clients.artifactId>flink-clients_${scala.binary.version}</flink.clients.artifactId>
-        <flink.connector.kafka.artifactId>flink-connector-kafka_${scala.binary.version}</flink.connector.kafka.artifactId>
-        <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility_${scala.binary.version}</flink.hadoop.compatibility.artifactId>
-        <flink.format.parquet.version>1.11.1</flink.format.parquet.version>
-        <flink.connector.kafka.version>${flink1.14.version}</flink.connector.kafka.version>
-      </properties>
-      <activation>
-        <property>
-          <name>flink1.14</name>
         </property>
       </activation>
     </profile>

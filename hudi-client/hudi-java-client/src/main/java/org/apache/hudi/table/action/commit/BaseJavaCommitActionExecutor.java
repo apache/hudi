@@ -19,7 +19,6 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
@@ -68,7 +67,7 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
 
   private static final Logger LOG = LoggerFactory.getLogger(BaseJavaCommitActionExecutor.class);
 
-  public BaseJavaCommitActionExecutor(HoodieEngineContext context,
+  protected BaseJavaCommitActionExecutor(HoodieEngineContext context,
                                       HoodieWriteConfig config,
                                       HoodieTable table,
                                       String instantTime,
@@ -76,12 +75,12 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
     super(context, config, table, instantTime, operationType, Option.empty());
   }
 
-  public BaseJavaCommitActionExecutor(HoodieEngineContext context,
+  protected BaseJavaCommitActionExecutor(HoodieEngineContext context,
                                       HoodieWriteConfig config,
                                       HoodieTable table,
                                       String instantTime,
                                       WriteOperationType operationType,
-                                      Option extraMetadata) {
+                                      Option<Map<String, String>> extraMetadata) {
     super(context, config, table, instantTime, operationType, extraMetadata);
   }
 
@@ -256,7 +255,7 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
     Option<BaseKeyGenerator> keyGeneratorOpt = Option.empty();
     if (!config.populateMetaFields()) {
       try {
-        keyGeneratorOpt = Option.of((BaseKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(new TypedProperties(config.getProps())));
+        keyGeneratorOpt = Option.of((BaseKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(config.getProps()));
       } catch (IOException e) {
         throw new HoodieIOException("Only BaseKeyGenerator (or any key generator that extends from BaseKeyGenerator) are supported when meta "
             + "columns are disabled. Please choose the right key generator if you wish to disable meta fields.", e);

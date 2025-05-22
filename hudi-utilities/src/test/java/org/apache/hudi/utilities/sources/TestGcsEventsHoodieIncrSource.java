@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
@@ -44,12 +45,12 @@ import org.apache.hudi.utilities.config.CloudSourceConfig;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
+import org.apache.hudi.utilities.sources.S3EventsHoodieIncrSourceHarness.TestSourceProfile;
 import org.apache.hudi.utilities.sources.helpers.CloudDataFetcher;
 import org.apache.hudi.utilities.sources.helpers.CloudObjectsSelectorCommon;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
 import org.apache.hudi.utilities.sources.helpers.QueryInfo;
 import org.apache.hudi.utilities.sources.helpers.QueryRunner;
-import org.apache.hudi.utilities.sources.S3EventsHoodieIncrSourceHarness.TestSourceProfile;
 import org.apache.hudi.utilities.streamer.DefaultStreamContext;
 import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
 
@@ -81,7 +82,6 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
@@ -435,7 +435,7 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
     HoodieWriteConfig writeConfig = getWriteConfig();
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig)) {
 
-      writeClient.startCommitWithTime(commitTime);
+      WriteClientTestUtils.startCommitWithTime(writeClient, commitTime);
       List<HoodieRecord> gcsMetadataRecords = Arrays.asList(
           getGcsMetadataRecord(commitTime, "data-file-1.json", "bucket-1", "1"),
           getGcsMetadataRecord(commitTime, "data-file-2.json", "bucket-1", "1"),
@@ -452,7 +452,7 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
   }
 
   private TypedProperties setProps(IncrSourceHelper.MissingCheckpointStrategy missingCheckpointStrategy) {
-    Properties properties = new Properties();
+    TypedProperties properties = new TypedProperties();
     //String schemaFilePath = TestGcsEventsHoodieIncrSource.class.getClassLoader().getResource("schema/sample_gcs_data.avsc").getPath();
     //properties.put("hoodie.streamer.schemaprovider.source.schema.file", schemaFilePath);
     properties.put("hoodie.streamer.schema.provider.class.name", FilebasedSchemaProvider.class.getName());
@@ -460,7 +460,7 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
     properties.setProperty("hoodie.streamer.source.hoodieincr.missing.checkpoint.strategy",
         missingCheckpointStrategy.name());
     properties.setProperty(CloudSourceConfig.DATAFILE_FORMAT.key(), "json");
-    return new TypedProperties(properties);
+    return properties;
   }
 
   private HoodieWriteConfig.Builder getConfigBuilder(String basePath, HoodieTableMetaClient metaClient) {

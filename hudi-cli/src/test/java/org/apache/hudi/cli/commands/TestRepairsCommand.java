@@ -25,6 +25,7 @@ import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
 import org.apache.hudi.cli.testutils.HoodieTestCommitMetadataGenerator;
 import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroRecord;
@@ -334,7 +335,7 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(context(), config)) {
       String newCommitTime = "001";
       int numRecords = 10;
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, numRecords);
       JavaRDD<HoodieRecord> writeRecords = context().getJavaSparkContext().parallelize(records, 1);
@@ -357,7 +358,7 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
         }
       });
 
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
       // ingest records2 which has null for partition path fields, but goes into "default" partition.
       JavaRDD<HoodieRecord> writeRecords2 = context().getJavaSparkContext().parallelize(records2, 1);
       List<WriteStatus> result2 = client.bulkInsert(writeRecords2, newCommitTime).collect();
@@ -401,7 +402,7 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(context(), config)) {
       String newCommitTime = "001";
       int numRecords = 20;
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, numRecords);
       JavaRDD<HoodieRecord> writeRecords = context().getJavaSparkContext().parallelize(records, 1);

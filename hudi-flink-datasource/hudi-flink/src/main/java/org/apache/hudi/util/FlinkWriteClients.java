@@ -24,11 +24,14 @@ import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
+import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieClusteringConfig;
@@ -155,6 +158,14 @@ public class FlinkWriteClients {
       Configuration conf,
       boolean enableEmbeddedTimelineService,
       boolean loadFsViewStorageConfig) {
+    return getHoodieClientConfig(conf, enableEmbeddedTimelineService, loadFsViewStorageConfig, false);
+  }
+
+  public static HoodieWriteConfig getHoodieClientConfig(
+      Configuration conf,
+      boolean enableEmbeddedTimelineService,
+      boolean loadFsViewStorageConfig,
+      boolean forScanner) {
     HoodieWriteConfig.Builder builder =
         HoodieWriteConfig.newBuilder()
             .withEngineType(EngineType.FLINK)
@@ -208,13 +219,15 @@ public class FlinkWriteClients {
                     ).build())
             .forTable(conf.getString(FlinkOptions.TABLE_NAME))
             .withStorageConfig(HoodieStorageConfig.newBuilder()
-                .logFileDataBlockMaxSize(conf.getInteger(FlinkOptions.WRITE_LOG_BLOCK_SIZE) * 1024 * 1024)
+                .logFileDataBlockMaxSize((long) conf.getInteger(FlinkOptions.WRITE_LOG_BLOCK_SIZE) * 1024 * 1024)
                 .logFileMaxSize(conf.getLong(FlinkOptions.WRITE_LOG_MAX_SIZE) * 1024 * 1024)
                 .parquetBlockSize(conf.getInteger(FlinkOptions.WRITE_PARQUET_BLOCK_SIZE) * 1024 * 1024)
                 .parquetPageSize(conf.getInteger(FlinkOptions.WRITE_PARQUET_PAGE_SIZE) * 1024 * 1024)
                 .parquetMaxFileSize(conf.getInteger(FlinkOptions.WRITE_PARQUET_MAX_FILE_SIZE) * 1024 * 1024L)
+                .withWriteUtcTimezone(conf.get(FlinkOptions.WRITE_UTC_TIMEZONE))
                 .build())
             .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+                .withEngineType(EngineType.FLINK) // this affects the default value inference
                 .enable(conf.getBoolean(FlinkOptions.METADATA_ENABLED))
                 .withMaxNumDeltaCommitsBeforeCompaction(conf.getInteger(FlinkOptions.METADATA_COMPACTION_DELTA_COMMITS))
                 .build())
@@ -227,12 +240,24 @@ public class FlinkWriteClients {
             .withProps(flinkConf2TypedProperties(conf))
             .withSchema(getSourceSchema(conf).toString());
 
+    // currently only set there merge configurations for writing, for reader, will support in HUDI-9146
+    if (!forScanner) {
+      // <merge_mode, payload_class, merge_strategy_id>
+      Triple<RecordMergeMode, String, String> mergingBehavior = StreamerUtil.inferMergingBehavior(conf);
+      builder.withRecordMergeStrategyId(mergingBehavior.getRight())
+          .withRecordMergeMode(mergingBehavior.getLeft())
+          .withRecordMergeImplClasses(StreamerUtil.getMergerClasses(conf, mergingBehavior.getLeft(), mergingBehavior.getMiddle()));
+    }
+
     Option<HoodieLockConfig> lockConfig = getLockConfig(conf);
     if (lockConfig.isPresent()) {
       builder.withLockConfig(lockConfig.get());
     }
 
     HoodieWriteConfig writeConfig = builder.build();
+    // always LAZY for non-blocking instant time generation.
+    writeConfig.setValue(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key(),
+        HoodieFailedWritesCleaningPolicy.LAZY.name());
     if (loadFsViewStorageConfig && !conf.containsKey(FileSystemViewStorageConfig.REMOTE_HOST_NAME.key())) {
       // do not use the builder to give a change for recovering the original fs view storage config
       FileSystemViewStorageConfig viewStorageConfig = ViewStorageProperties.loadFromProperties(conf.getString(FlinkOptions.PATH), conf);

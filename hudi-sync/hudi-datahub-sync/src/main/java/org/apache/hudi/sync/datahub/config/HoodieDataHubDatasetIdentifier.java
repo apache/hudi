@@ -19,6 +19,8 @@
 
 package org.apache.hudi.sync.datahub.config;
 
+import org.apache.hudi.common.util.Option;
+
 import com.linkedin.common.FabricType;
 import com.linkedin.common.urn.DataPlatformUrn;
 import com.linkedin.common.urn.DatasetUrn;
@@ -29,6 +31,7 @@ import java.util.Properties;
 
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
+import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_DATAHUB_DATAPLATFORM_INSTANCE_NAME;
 import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_DATAHUB_DATAPLATFORM_NAME;
 import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_DATAHUB_DATASET_ENV;
 
@@ -43,6 +46,10 @@ public class HoodieDataHubDatasetIdentifier {
   public static final FabricType DEFAULT_DATAHUB_ENV = FabricType.DEV;
 
   protected final Properties props;
+  private final String dataPlatform;
+  private final DataPlatformUrn dataPlatformUrn;
+  private final Option<String> dataPlatformInstance;
+  private final Option<Urn> dataPlatformInstanceUrn;
   private final DatasetUrn datasetUrn;
   private final Urn databaseUrn;
   private final String tableName;
@@ -55,18 +62,26 @@ public class HoodieDataHubDatasetIdentifier {
     }
     DataHubSyncConfig config = new DataHubSyncConfig(props);
 
+    this.dataPlatform = config.getStringOrDefault(META_SYNC_DATAHUB_DATAPLATFORM_NAME);
+    this.dataPlatformUrn = createDataPlatformUrn(this.dataPlatform);
+    this.dataPlatformInstance = Option.ofNullable(config.getString(META_SYNC_DATAHUB_DATAPLATFORM_INSTANCE_NAME));
+    this.dataPlatformInstanceUrn = createDataPlatformInstanceUrn(
+        this.dataPlatformUrn,
+        Option.ofNullable(config.getString(META_SYNC_DATAHUB_DATAPLATFORM_INSTANCE_NAME))
+    );
     this.datasetUrn = new DatasetUrn(
-            createDataPlatformUrn(config.getStringOrDefault(META_SYNC_DATAHUB_DATAPLATFORM_NAME)),
-            createDatasetName(config.getString(META_SYNC_DATABASE_NAME), config.getString(META_SYNC_TABLE_NAME)),
+            this.dataPlatformUrn,
+            createDatasetName(this.dataPlatformInstance, config.getString(META_SYNC_DATABASE_NAME), config.getString(META_SYNC_TABLE_NAME)),
             FabricType.valueOf(config.getStringOrDefault(META_SYNC_DATAHUB_DATASET_ENV))
     );
 
     this.tableName = config.getString(META_SYNC_TABLE_NAME);
     this.databaseName = config.getString(META_SYNC_DATABASE_NAME);
 
+    // https://github.com/datahub-project/datahub/blob/0b105395e913cc47a59bdeed0c56d7c0d4b71b63/metadata-ingestion/src/datahub/emitter/mcp_builder.py#L69-L72
     DatabaseKey databaseKey = DatabaseKey.builder()
             .platform(config.getStringOrDefault(META_SYNC_DATAHUB_DATAPLATFORM_NAME))
-            .instance(config.getStringOrDefault(META_SYNC_DATAHUB_DATASET_ENV))
+            .instance(this.dataPlatformInstance.orElse(config.getStringOrDefault(META_SYNC_DATAHUB_DATASET_ENV)))
             .database(this.databaseName)
             .build();
 
@@ -75,6 +90,22 @@ public class HoodieDataHubDatasetIdentifier {
 
   public DatasetUrn getDatasetUrn() {
     return this.datasetUrn;
+  }
+
+  public String getDataPlatform() {
+    return this.dataPlatform;
+  }
+
+  public DataPlatformUrn getDataPlatformUrn() {
+    return this.dataPlatformUrn;
+  }
+
+  public Option<String> getDataPlatformInstance() {
+    return this.dataPlatformInstance;
+  }
+
+  public Option<Urn> getDataPlatformInstanceUrn() {
+    return this.dataPlatformInstanceUrn;
   }
 
   public Urn getDatabaseUrn() {
@@ -93,7 +124,22 @@ public class HoodieDataHubDatasetIdentifier {
     return new DataPlatformUrn(platformUrn);
   }
 
-  private static String createDatasetName(String databaseName, String tableName) {
+  private static Option<Urn> createDataPlatformInstanceUrn(DataPlatformUrn dataPlatformUrn, Option<String> dataPlatformInstance) {
+    if (dataPlatformInstance.isEmpty()) {
+      return Option.empty();
+    }
+    String dataPlatformInstanceStr = String.format("urn:li:dataPlatformInstance:(%s,%s)", dataPlatformUrn.toString(), dataPlatformInstance.get());
+    try {
+      return Option.of(Urn.createFromString(dataPlatformInstanceStr));
+    } catch (Exception e) {
+      throw new IllegalArgumentException(String.format("Failed to create DataPlatformInstance URN from string: %s", dataPlatformInstanceStr), e);
+    }
+  }
+
+  private static String createDatasetName(Option<String> dataPlatformInstance, String databaseName, String tableName) {
+    if (dataPlatformInstance.isPresent()) {
+      return String.format("%s.%s.%s", dataPlatformInstance.get(), databaseName, tableName);
+    }
     return String.format("%s.%s", databaseName, tableName);
   }
 }

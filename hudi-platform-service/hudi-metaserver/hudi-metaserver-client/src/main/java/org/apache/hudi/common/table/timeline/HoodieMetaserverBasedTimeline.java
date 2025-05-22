@@ -22,6 +22,7 @@ import org.apache.hudi.common.config.HoodieMetaserverConfig;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.versioning.v2.ActiveTimelineV2;
+import org.apache.hudi.common.table.timeline.versioning.v2.CommitMetadataSerDeV2;
 import org.apache.hudi.common.table.timeline.versioning.v2.InstantGeneratorV2;
 import org.apache.hudi.common.table.timeline.versioning.v2.InstantFileNameGeneratorV2;
 import org.apache.hudi.common.util.Option;
@@ -32,6 +33,8 @@ import org.apache.hudi.metaserver.client.HoodieMetaserverClientProxy;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.convertMetadataToByteArray;
+
 /**
  * Active timeline for hoodie table whose metadata is stored in the hoodie meta server instead of file system.
  * Note. MetadataServer only works with 1.x table version and will be disabled when in prior table version.
@@ -41,6 +44,7 @@ public class HoodieMetaserverBasedTimeline extends ActiveTimelineV2 {
   private final String tableName;
   private final HoodieMetaserverClient metaserverClient;
   private final InstantGeneratorV2 instantGenerator = new InstantGeneratorV2();
+  private final CommitMetadataSerDeV2 metadataSerDeV2 = new CommitMetadataSerDeV2();
   private final InstantFileNameGeneratorV2 instantFileNameGenerator = new InstantFileNameGeneratorV2();
   public HoodieMetaserverBasedTimeline(HoodieTableMetaClient metaClient, HoodieMetaserverConfig config) {
     this.metaClient = metaClient;
@@ -56,23 +60,26 @@ public class HoodieMetaserverBasedTimeline extends ActiveTimelineV2 {
   }
 
   @Override
-  protected void transitionStateToComplete(boolean shouldLock, HoodieInstant fromInstant, HoodieInstant toInstant, Option<byte[]> data) {
+  protected <T> void transitionStateToComplete(boolean shouldLock, HoodieInstant fromInstant, HoodieInstant toInstant, Option<T> metadata) {
     ValidationUtils.checkArgument(fromInstant.requestedTime().equals(toInstant.requestedTime()));
-    metaserverClient.transitionInstantState(databaseName, tableName, fromInstant, toInstant, data);
+    metaserverClient.transitionInstantState(databaseName, tableName, fromInstant, toInstant,
+        metadata.map(m -> convertMetadataToByteArray(m, metadataSerDeV2)));
   }
 
   @Override
-  public void transitionPendingState(HoodieInstant fromInstant, HoodieInstant toInstant, Option<byte[]> data, boolean allowRedundantTransitions) {
+  public <T> void transitionPendingState(HoodieInstant fromInstant, HoodieInstant toInstant, Option<T> metadata, boolean allowRedundantTransitions) {
     ValidationUtils.checkArgument(fromInstant.requestedTime().equals(toInstant.requestedTime()));
-    metaserverClient.transitionInstantState(databaseName, tableName, fromInstant, toInstant, data);
+    metaserverClient.transitionInstantState(databaseName, tableName, fromInstant, toInstant,
+        metadata.map(m -> convertMetadataToByteArray(m, metadataSerDeV2)));
   }
 
   @Override
-  public void createFileInMetaPath(String filename, Option<byte[]> content, boolean allowOverwrite) {
+  public <T> void createFileInMetaPath(String filename, Option<T> metadata, boolean allowOverwrite) {
     StoragePathInfo pathInfo = new StoragePathInfo(new StoragePath(filename), 0, false, (short) 0, 0, 0);
     HoodieInstant instant = instantGenerator.createNewInstant(pathInfo);
     ValidationUtils.checkArgument(instant.getState().equals(HoodieInstant.State.REQUESTED));
-    metaserverClient.createNewInstant(databaseName, tableName, instant, Option.empty());
+    metaserverClient.createNewInstant(databaseName, tableName, instant,
+        metadata.map(m -> convertMetadataToByteArray(m, metadataSerDeV2)));
   }
 
   @Override

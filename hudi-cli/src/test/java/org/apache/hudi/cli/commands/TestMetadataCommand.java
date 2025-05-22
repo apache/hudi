@@ -23,6 +23,7 @@ import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
 import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -83,7 +84,7 @@ public class TestMetadataCommand extends CLIFunctionalTestHarness {
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(context(), config)) {
       String newCommitTime = "001";
       int numRecords = 10;
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, numRecords);
       JavaRDD<HoodieRecord> writeRecords = context().getJavaSparkContext().parallelize(records, 1);

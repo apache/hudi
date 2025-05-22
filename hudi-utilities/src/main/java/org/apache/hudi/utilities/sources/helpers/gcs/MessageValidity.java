@@ -50,6 +50,6 @@ public class MessageValidity {
    * */
   public enum ProcessingDecision {
     DO_PROCESS,
-    DO_SKIP;
+    DO_SKIP
   }
 }

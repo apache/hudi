@@ -186,10 +186,7 @@ class TestMetadataRecordIndex extends HoodieSparkClientTestBase {
       val recordKey: String = row.getAs("_hoodie_record_key")
       val partitionPath: String = row.getAs("_hoodie_partition_path")
       val fileName: String = row.getAs("_hoodie_file_name")
-      val recordLocations = recordIndexMap.get(recordKey)
-      assertFalse(recordLocations.isEmpty)
-      // assuming no duplicate keys for now
-      val recordLocation = recordLocations.get(0)
+      val recordLocation = recordIndexMap.get(recordKey)
       assertEquals(partitionPath, recordLocation.getPartitionPath)
       if (!writeConfig.inlineClusteringEnabled && !writeConfig.isAsyncClusteringEnabled) {
         // The file id changes after clustering, so only assert it for usual upsert and compaction operations
