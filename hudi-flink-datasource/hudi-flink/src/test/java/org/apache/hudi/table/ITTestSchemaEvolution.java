@@ -82,6 +82,7 @@ import static org.apache.hudi.internal.schema.action.TableChange.ColumnPositionC
 import static org.apache.hudi.utils.TestConfigurations.ROW_TYPE_EVOLUTION_AFTER;
 import static org.apache.hudi.utils.TestConfigurations.ROW_TYPE_EVOLUTION_BEFORE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SuppressWarnings({"SqlDialectInspection", "SqlNoDataSourceInspection"})
 @ExtendWith(FlinkMiniCluster.class)
@@ -489,6 +490,7 @@ public class ITTestSchemaEvolution {
           .setParallelism(1);
 
       env.execute("flink_hudi_compaction");
+      assertTrue(table.getMetaClient().reloadActiveTimeline().filterCompletedInstants().containsInstant(instant.requestedTime()));
     }
   }
 
