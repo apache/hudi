@@ -174,7 +174,7 @@ public class CleanerUtils {
   }
 
   public static HoodieInstant getCleanRequestInstant(HoodieTableMetaClient metaClient, HoodieInstant cleanInstant) {
-    if (cleanInstant.isInflight() || cleanInstant.isCompleted()) {
+    if (!cleanInstant.isRequested()) {
       return metaClient.getInstantGenerator().getRequestedInstant(cleanInstant);
     }
     return cleanInstant;
