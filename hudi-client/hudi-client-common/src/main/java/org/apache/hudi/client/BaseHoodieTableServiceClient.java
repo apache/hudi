@@ -641,14 +641,14 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
   }
 
   Option<String> scheduleTableServiceInternal(Option<String> providedInstantTime, Option<Map<String, String>> extraMetadata,
-                                                        TableServiceType tableServiceType) {
+                                              TableServiceType tableServiceType) {
     if (!tableServicesEnabled(config)) {
       return Option.empty();
     }
 
     Option<String> option = Option.empty();
     HoodieTable<?, ?, ?, ?> table = createTable(config, storageConf);
-    String plannerStartTime = createNewInstantTime(false);
+    String plannerStartTime = providedInstantTime.orElseGet(() -> createNewInstantTime(false));
     InstantGenerator instantGenerator = table.getInstantGenerator();
 
     switch (tableServiceType) {
