@@ -1019,9 +1019,10 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
       // Do a compaction
       newCommitTime = writeClient.scheduleCompaction(Option.empty()).get().toString();
       HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = writeClient.compact(newCommitTime);
-      JavaRDD<WriteStatus> writeStatuses = compactionMetadata.getWriteStatuses();
+      List<WriteStatus> writeStatuses = compactionMetadata.getWriteStatuses().collect();
+      compactionMetadata.setWriteStatuses(jsc().parallelize(writeStatuses));
       writeClient.commitCompaction(newCommitTime, compactionMetadata, Option.empty());
-      assertNoWriteErrors(writeStatuses.collect());
+      assertNoWriteErrors(writeStatuses);
       assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(newCommitTime));
 
       // Trigger a rollback of compaction

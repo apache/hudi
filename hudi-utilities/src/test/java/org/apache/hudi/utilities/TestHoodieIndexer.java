@@ -551,7 +551,9 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
       String instant = writeClient.createNewInstantTime();
       WriteClientTestUtils.startCommitWithTime(writeClient, instant);
       List<HoodieRecord> records = DATA_GENERATOR.generateInserts(instant, 100);
-      writeClient.commit(instant, writeClient.upsert(jsc().parallelize(records, 1), instant));
+      List<WriteStatus> writeStatusList = writeClient.upsert(jsc().parallelize(records, 1), instant).collect();
+      writeClient.commit(instant, jsc().parallelize(writeStatusList));
+      assertNoWriteErrors(writeStatusList);
     }
 
     // validate partitions built successfully
@@ -603,7 +605,9 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
       String instant = writeClient.createNewInstantTime();
       WriteClientTestUtils.startCommitWithTime(writeClient, instant);
       List<HoodieRecord> records = DATA_GENERATOR.generateInserts(instant, 100);
-      writeClient.commit(instant, writeClient.upsert(jsc().parallelize(records, 1), instant));
+      List<WriteStatus> writeStatusList = writeClient.upsert(jsc().parallelize(records, 1), instant).collect();
+      writeClient.commit(instant, jsc().parallelize(writeStatusList));
+      assertNoWriteErrors(writeStatusList);
     }
 
     // validate files partition built successfully

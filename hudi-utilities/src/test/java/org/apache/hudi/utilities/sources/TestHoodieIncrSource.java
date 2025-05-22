@@ -792,7 +792,9 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
     JavaRDD<WriteStatus> result = writeOperationType == WriteOperationType.BULK_INSERT
         ? writeClient.bulkInsert(jsc().parallelize(records, 1), commit)
         : writeClient.upsert(jsc().parallelize(records, 1), commit);
-    writeClient.commit(commit, result, Option.empty(), tableType == COPY_ON_WRITE ? COMMIT_ACTION : DELTA_COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+    List<WriteStatus> statuses = result.collect();
+    assertNoWriteErrors(statuses);
+    writeClient.commit(commit, jsc().parallelize(statuses), Option.empty(), tableType == COPY_ON_WRITE ? COMMIT_ACTION : DELTA_COMMIT_ACTION, Collections.emptyMap(), Option.empty());
     metaClient.reloadActiveTimeline();
     return new WriteResult(
         metaClient

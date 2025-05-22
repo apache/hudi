@@ -222,7 +222,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       List<WriteStatus> writeStatuses1 = rawWriteStatusesRDD1.collect();
       JavaRDD<WriteStatus> writeStatusesRDD1 = jsc.parallelize(writeStatuses1, 1);
       client.commit(commitTime, writeStatusesRDD1, Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap(), Option.empty());
-      assertNoWriteErrors(writeStatuses1);
+      assertNoWriteErrors(writeStatusesRDD1.collect());
 
       // assert RLI records for a base file from 1st commit
       String finalCommitTime = commitTime;
@@ -266,7 +266,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       List<WriteStatus> writeStatuses2 = rawWriteStatusesRDD2.collect();
       JavaRDD<WriteStatus> writeStatusesRDD2 = jsc.parallelize(writeStatuses2, 1);
       client.commit(commitTime, writeStatusesRDD2, Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap(), Option.empty());
-
+      assertNoWriteErrors(writeStatusesRDD2.collect());
       assertRLIandSIRecordGenerationAPIs(inserts2, updates2, deletes2, writeStatuses2, commitTime, writeConfig);
 
       // trigger 2nd commit.
@@ -284,6 +284,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       List<WriteStatus> writeStatuses3 = rawWriteStatusesRDD3.collect();
       JavaRDD<WriteStatus> writeStatusesRDD3 = jsc.parallelize(writeStatuses3, 1);
       client.commit(commitTime, writeStatusesRDD3, Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+      assertNoWriteErrors(writeStatusesRDD3.collect());
       assertRLIandSIRecordGenerationAPIs(inserts3, updates3, deletes3, writeStatuses3, finalCommitTime3, writeConfig);
 
       // trigger compaction

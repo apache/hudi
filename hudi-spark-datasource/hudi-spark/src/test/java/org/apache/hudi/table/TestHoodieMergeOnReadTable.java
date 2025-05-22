@@ -808,6 +808,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       writeRecords = jsc().parallelize(records, 1);
       rawStatuses = client.upsert(writeRecords, newCommitTime).collect();
       client.commit(newCommitTime, jsc().parallelize(rawStatuses, 1), Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap());
+      assertNoWriteErrors(rawStatuses);
 
       /**
        * Write 3 (only deletes, written to .log file)

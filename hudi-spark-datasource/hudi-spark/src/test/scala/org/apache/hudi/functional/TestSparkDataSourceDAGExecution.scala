@@ -188,7 +188,6 @@ class TestSparkDataSourceDAGExecution extends HoodieSparkClientTestBase with Sca
     var triggerCount = 0
 
     override def onStageCompleted(stageCompleted: SparkListenerStageCompleted): Unit = {
-      log.info("Completed stage " + stageCompleted.stageInfo.details)
       if (stageCompleted.stageInfo.details.contains(eventToTrack)) {
         triggerCount += 1
       }

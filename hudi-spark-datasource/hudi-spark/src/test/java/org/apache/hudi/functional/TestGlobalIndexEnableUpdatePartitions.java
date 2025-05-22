@@ -115,27 +115,35 @@ public class TestGlobalIndexEnableUpdatePartitions extends SparkClientFunctional
       String commitTimeAtEpoch0 = getCommitTimeAtUTC(0);
       List<HoodieRecord> insertsAtEpoch0 = getInserts(totalRecords, p1, 0, payloadClass);
       WriteClientTestUtils.startCommitWithTime(client, commitTimeAtEpoch0);
-      client.commit(commitTimeAtEpoch0, client.upsert(jsc().parallelize(insertsAtEpoch0, 2), commitTimeAtEpoch0));
+      List<WriteStatus> writeStatusesList = client.upsert(jsc().parallelize(insertsAtEpoch0, 2), commitTimeAtEpoch0).collect();
+      client.commit(commitTimeAtEpoch0, jsc().parallelize(writeStatusesList));
+      assertNoWriteErrors(writeStatusesList);
 
       // 2nd batch: normal updates same partition
       String commitTimeAtEpoch5 = getCommitTimeAtUTC(5);
       List<HoodieRecord> updatesAtEpoch5 = getUpdates(insertsAtEpoch0, 5, payloadClass);
       WriteClientTestUtils.startCommitWithTime(client, commitTimeAtEpoch5);
-      client.commit(commitTimeAtEpoch5, client.upsert(jsc().parallelize(updatesAtEpoch5, 2), commitTimeAtEpoch5));
+      writeStatusesList = client.upsert(jsc().parallelize(updatesAtEpoch5, 2), commitTimeAtEpoch5).collect();
+      client.commit(commitTimeAtEpoch5, jsc().parallelize(writeStatusesList));
+      assertNoWriteErrors(writeStatusesList);
       readTableAndValidate(metaClient, new int[] {0, 1, 2, 3}, p1, 5);
 
       // 3rd batch: update all from p1 to p2
       String commitTimeAtEpoch6 = getCommitTimeAtUTC(6);
       List<HoodieRecord> updatesAtEpoch6 = getUpdates(updatesAtEpoch5, p2, 6, payloadClass);
       WriteClientTestUtils.startCommitWithTime(client, commitTimeAtEpoch6);
-      client.commit(commitTimeAtEpoch6, client.upsert(jsc().parallelize(updatesAtEpoch6, 2), commitTimeAtEpoch6));
+      writeStatusesList = client.upsert(jsc().parallelize(updatesAtEpoch6, 2), commitTimeAtEpoch6).collect();
+      client.commit(commitTimeAtEpoch6, jsc().parallelize(writeStatusesList));
+      assertNoWriteErrors(writeStatusesList);
       readTableAndValidate(metaClient, new int[] {0, 1, 2, 3}, p2, 6);
 
       // 4th batch: update all from p2 to p3
       String commitTimeAtEpoch7 = getCommitTimeAtUTC(7);
       List<HoodieRecord> updatesAtEpoch7 = getUpdates(updatesAtEpoch6, p3, 7, payloadClass);
       WriteClientTestUtils.startCommitWithTime(client, commitTimeAtEpoch7);
-      client.commit(commitTimeAtEpoch7, client.upsert(jsc().parallelize(updatesAtEpoch7, 2), commitTimeAtEpoch7));
+      writeStatusesList = client.upsert(jsc().parallelize(updatesAtEpoch7, 2), commitTimeAtEpoch7).collect();
+      client.commit(commitTimeAtEpoch7, jsc().parallelize(writeStatusesList));
+      assertNoWriteErrors(writeStatusesList);
       readTableAndValidate(metaClient, new int[] {0, 1, 2, 3}, p3, 7);
 
       // 5th batch: late update all to p4; discarded
@@ -152,7 +160,9 @@ public class TestGlobalIndexEnableUpdatePartitions extends SparkClientFunctional
       String commitTimeAtEpoch9 = getCommitTimeAtUTC(9);
       List<HoodieRecord> updatesAtEpoch9 = getUpdates(updatesAtEpoch7, p1, 9, payloadClass);
       WriteClientTestUtils.startCommitWithTime(client, commitTimeAtEpoch9);
-      client.commit(commitTimeAtEpoch9, client.upsert(jsc().parallelize(updatesAtEpoch9, 2), commitTimeAtEpoch9));
+      writeStatusesList = client.upsert(jsc().parallelize(updatesAtEpoch9, 2), commitTimeAtEpoch9).collect();
+      client.commit(commitTimeAtEpoch9, jsc().parallelize(writeStatusesList));
+      assertNoWriteErrors(writeStatusesList);
       readTableAndValidate(metaClient, new int[] {0, 1, 2, 3}, p1, 9);
     }
   }
@@ -179,7 +189,9 @@ public class TestGlobalIndexEnableUpdatePartitions extends SparkClientFunctional
       // 1st batch: inserts
       String commitTimeAtEpoch0 = TimelineUtils.generateInstantTime(false, timeGenerator);
       WriteClientTestUtils.startCommitWithTime(client, commitTimeAtEpoch0);
-      client.commit(commitTimeAtEpoch0, client.upsert(jsc().parallelize(insertsAtEpoch0, 2), commitTimeAtEpoch0));
+      List<WriteStatus> writeStatusList = client.upsert(jsc().parallelize(insertsAtEpoch0, 2), commitTimeAtEpoch0).collect();
+      client.commit(commitTimeAtEpoch0, jsc().parallelize(writeStatusList));
+      assertNoWriteErrors(writeStatusList);
 
       // 2nd batch: update 4 records from p1 to p2
       String commitTimeAtEpoch5 = TimelineUtils.generateInstantTime(false, timeGenerator);

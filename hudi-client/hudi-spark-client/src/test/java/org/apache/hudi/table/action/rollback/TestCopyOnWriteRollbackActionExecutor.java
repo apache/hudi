@@ -189,7 +189,9 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
       WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
       records = dataGen.generateUpdates(newCommitTime, records);
       statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime);
+      statuses = jsc.parallelize(statuses.collect(), 1);
       client.commit(newCommitTime, statuses, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+      assertNoWriteErrors(statuses.collect());
 
       context = new HoodieSparkEngineContext(jsc);
       metaClient = HoodieTableMetaClient.reload(metaClient);

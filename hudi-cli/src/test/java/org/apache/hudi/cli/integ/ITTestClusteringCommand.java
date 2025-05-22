@@ -193,8 +193,8 @@ public class ITTestClusteringCommand extends HoodieCLIIntegrationTestBase {
 
     List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 10);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
-    JavaRDD<WriteStatus> result = operateFunc(SparkRDDWriteClient::insert, client, writeRecords, newCommitTime);
-    client.commit(newCommitTime, result);
+    List<WriteStatus> result = operateFunc(SparkRDDWriteClient::insert, client, writeRecords, newCommitTime).collect();
+    client.commit(newCommitTime, jsc.parallelize(result));
     return records;
   }
 

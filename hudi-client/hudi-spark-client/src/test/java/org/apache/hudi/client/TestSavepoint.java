@@ -101,8 +101,10 @@ public class TestSavepoint extends HoodieClientTestBase {
       List<HoodieRecord> records2 = dataGen.generateInserts(commitTime2, 200);
       JavaRDD<HoodieRecord> writeRecords2 = jsc.parallelize(records2, 1);
       JavaRDD<WriteStatus> statuses2 = client.upsert(writeRecords2, commitTime2);
+      statuses2 = jsc.parallelize(statuses2.collect(), 1);
       client.commit(commitTime2, statuses2, Option.empty(), tableType == HoodieTableType.COPY_ON_WRITE ? COMMIT_ACTION : DELTA_COMMIT_ACTION,
           Collections.emptyMap(), Option.empty());
+      assertNoWriteErrors(statuses2.collect());
 
       client.savepoint("user", "hoodie-savepoint-unit-test");
 

@@ -149,8 +149,10 @@ public class TestHoodieMergeHandle extends HoodieSparkClientTestHarness {
       HoodieRecord sameAsRecord1 = dataGen.generateUpdateRecord(record1.getKey(), newCommitTime);
       newRecords.add(sameAsRecord1);
       writeRecords = jsc.parallelize(newRecords, 1);
-      statuses = client.bulkInsert(writeRecords, newCommitTime);
+      JavaRDD<WriteStatus> rawStatuses = client.bulkInsert(writeRecords, newCommitTime);
+      statuses = jsc.parallelize(rawStatuses.collect());
       client.commit(newCommitTime, statuses, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+      assertNoWriteErrors(statuses.collect());
 
       // verify that there are 2 commits
       metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -169,8 +171,10 @@ public class TestHoodieMergeHandle extends HoodieSparkClientTestHarness {
       WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
       newRecords = dataGen.generateInserts(newCommitTime, 2);
       writeRecords = jsc.parallelize(newRecords, 1);
-      statuses = client.bulkInsert(writeRecords, newCommitTime);
+      rawStatuses = client.bulkInsert(writeRecords, newCommitTime);
+      statuses = jsc.parallelize(rawStatuses.collect());
       client.commit(newCommitTime, statuses, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+      assertNoWriteErrors(statuses.collect());
 
       // verify that there are now 3 commits
       metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -198,8 +202,10 @@ public class TestHoodieMergeHandle extends HoodieSparkClientTestHarness {
       HoodieRecord sameAsRecord2 = dataGen.generateUpdateRecord(record2.getKey(), newCommitTime);
       updateRecords.add(sameAsRecord2);
       JavaRDD<HoodieRecord> updateRecordsRDD = jsc.parallelize(updateRecords, 1);
-      statuses = client.upsert(updateRecordsRDD, newCommitTime);
+      rawStatuses = client.upsert(updateRecordsRDD, newCommitTime);
+      statuses = jsc.parallelize(rawStatuses.collect());
       client.commit(newCommitTime, statuses, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+      assertNoWriteErrors(statuses.collect());
 
       // verify there are now 4 commits
       timeline = TIMELINE_FACTORY.createActiveTimeline(metaClient).getCommitAndReplaceTimeline();
