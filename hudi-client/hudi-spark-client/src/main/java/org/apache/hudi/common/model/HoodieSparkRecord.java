@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.client.model.HoodieInternalRow;
 import org.apache.hudi.common.util.ConfigUtils;
@@ -33,6 +34,7 @@ import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.sql.HoodieInternalRowUtils;
 import org.apache.spark.sql.HoodieUnsafeRowUtils;
 import org.apache.spark.sql.HoodieUnsafeRowUtils.NestedFieldPath;
@@ -307,7 +309,12 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
 
   @Override
   public Option<HoodieAvroIndexedRecord> toIndexedRecord(Schema recordSchema, Properties prop) {
-    throw new UnsupportedOperationException();
+    if (data == null) {
+      return Option.empty();
+    }
+    StructType structType = schema == null ? AvroConversionUtils.convertAvroSchemaToStructType(recordSchema) : schema;
+    GenericRecord convertedRecord = AvroConversionUtils.createInternalRowToAvroConverter(structType, recordSchema, false).apply(data);
+    return Option.of(new HoodieAvroIndexedRecord(key, convertedRecord));
   }
 
   @Override

@@ -31,9 +31,15 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types.{ArrayType, DataType, MapType, StructType}
 import org.apache.spark.sql.{Dataset, Row, SparkSession}
 
+import java.util.concurrent.ConcurrentHashMap
+import java.util.function.Function
+
 import scala.collection.JavaConverters._
 
 object AvroConversionUtils {
+  private val ROW_TO_AVRO_CONVERTER_CACHE =
+    new ConcurrentHashMap[Tuple3[StructType, Schema, Boolean], Function1[InternalRow, GenericRecord]]
+  private val AVRO_SCHEMA_CACHE = new ConcurrentHashMap[Schema, StructType]
 
   /**
    * Creates converter to transform Avro payload into Spark's Catalyst one
@@ -58,17 +64,20 @@ object AvroConversionUtils {
    * @return converter accepting Catalyst payload (in the form of [[InternalRow]]) and transforming it into an Avro one
    */
   def createInternalRowToAvroConverter(rootCatalystType: StructType, rootAvroType: Schema, nullable: Boolean): InternalRow => GenericRecord = {
-    val serializer = sparkAdapter.createAvroSerializer(rootCatalystType, rootAvroType, nullable)
-    row => {
-      try {
-        serializer
-          .serialize(row)
-          .asInstanceOf[GenericRecord]
-      } catch {
-        case e: HoodieSchemaException => throw e
-        case e => throw new SchemaCompatibilityException("Failed to convert spark record into avro record", e)
+    val loader: java.util.function.Function[Tuple3[StructType, Schema, Boolean], Function1[InternalRow, GenericRecord]] = key => {
+      val serializer = sparkAdapter.createAvroSerializer(key._1, key._2, key._3)
+      row => {
+        try {
+          serializer
+            .serialize(row)
+            .asInstanceOf[GenericRecord]
+        } catch {
+          case e: HoodieSchemaException => throw e
+          case e => throw new SchemaCompatibilityException("Failed to convert spark record into avro record", e)
+        }
       }
     }
+    ROW_TO_AVRO_CONVERTER_CACHE.computeIfAbsent(Tuple3.apply(rootCatalystType, rootAvroType, nullable), loader)
   }
 
   /**
@@ -158,14 +167,17 @@ object AvroConversionUtils {
    * Converts Avro's [[Schema]] to Catalyst's [[StructType]]
    */
   def convertAvroSchemaToStructType(avroSchema: Schema): StructType = {
-    try {
-      val schemaConverters = sparkAdapter.getAvroSchemaConverters
-      schemaConverters.toSqlType(avroSchema) match {
-        case (dataType, _) => dataType.asInstanceOf[StructType]
+    val loader: java.util.function.Function[Schema, StructType] = key => {
+      try {
+        val schemaConverters = sparkAdapter.getAvroSchemaConverters
+        schemaConverters.toSqlType(key) match {
+          case (dataType, _) => dataType.asInstanceOf[StructType]
+        }
+      } catch {
+        case e: Exception => throw new HoodieSchemaException("Failed to convert avro schema to struct type: " + avroSchema, e)
       }
-    } catch {
-      case e: Exception => throw new HoodieSchemaException("Failed to convert avro schema to struct type: " + avroSchema, e)
     }
+    AVRO_SCHEMA_CACHE.computeIfAbsent(avroSchema, loader)
   }
 
   /**
@@ -182,8 +194,8 @@ object AvroConversionUtils {
         val structType = dataType.asInstanceOf[StructType]
         val structFields = structType.fields
         val modifiedFields = schema.getFields.asScala.map(field => {
-          val i: Int = structType.fieldIndex(field.name())
-          val comment: String = if (structFields(i).metadata.contains("comment")) {
+          val i = structType.fieldIndex(field.name())
+          val comment = if (structFields(i).metadata.contains("comment")) {
             structFields(i).metadata.getString("comment")
           } else {
             field.doc()
@@ -228,7 +240,7 @@ object AvroConversionUtils {
    * @return Avro schema with null default set to nullable fields and bool that is true if the union contains null
    *
    * */
-  private def resolveUnion(schema: Schema, dataType: DataType): (Schema, Boolean) = {
+  private def resolveUnion(schema: Schema, dataType: DataType) = {
     val innerFields = schema.getTypes.asScala
     val containsNullSchema = innerFields.foldLeft(false)((nullFieldEncountered, schema) => nullFieldEncountered | schema.getType == Schema.Type.NULL)
     (if (containsNullSchema) {
