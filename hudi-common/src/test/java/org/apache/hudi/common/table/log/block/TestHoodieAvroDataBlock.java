@@ -18,14 +18,11 @@
 
 package org.apache.hudi.common.table.log.block;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericData;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockContentLocation;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockContentLocation;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.io.ByteBufferBackedInputStream;
@@ -35,6 +32,9 @@ import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -98,7 +98,7 @@ public class TestHoodieAvroDataBlock {
 
     // Get record iterator
     try (ClosableIterator<HoodieRecord<Object>> recordIterator = useKeyFilter
-        ? block.getRecordIterator(keysForFilter, keyFilterFullKeyMatch, HoodieRecord.HoodieRecordType.AVRO)
+        ? block.getRecordIterator(keysForFilter.iterator(), keyFilterFullKeyMatch, HoodieRecord.HoodieRecordType.AVRO)
         : block.getRecordIterator(HoodieRecord.HoodieRecordType.AVRO)) {
       List<HoodieRecord> retrievedRecords = new ArrayList<>();
       recordIterator.forEachRemaining(retrievedRecords::add);
@@ -138,7 +138,7 @@ public class TestHoodieAvroDataBlock {
 
     // Get record iterator
     try (ClosableIterator<HoodieRecord<Object>> recordIterator = useKeyFilter
-        ? dataBlock.getRecordIterator(keysForFilter, keyFilterFullKeyMatch, HoodieRecord.HoodieRecordType.AVRO)
+        ? dataBlock.getRecordIterator(keysForFilter.iterator(), keyFilterFullKeyMatch, HoodieRecord.HoodieRecordType.AVRO)
         : dataBlock.getRecordIterator(HoodieRecord.HoodieRecordType.AVRO)) {
       List<HoodieRecord> retrievedRecords = new ArrayList<>();
       recordIterator.forEachRemaining(retrievedRecords::add);
@@ -185,7 +185,7 @@ public class TestHoodieAvroDataBlock {
 
     // Get record iterator
     try (ClosableIterator<HoodieRecord<Object>> recordIterator = useKeyFilter
-        ? dataBlock.getRecordIterator(keysForFilter, keyFilterFullKeyMatch, HoodieRecord.HoodieRecordType.AVRO, bufferSize)
+        ? dataBlock.getRecordIterator(keysForFilter.iterator(), keyFilterFullKeyMatch, HoodieRecord.HoodieRecordType.AVRO, bufferSize)
         : dataBlock.getRecordIterator(HoodieRecord.HoodieRecordType.AVRO, bufferSize)) {
       List<HoodieRecord> retrievedRecords = new ArrayList<>();
       recordIterator.forEachRemaining(retrievedRecords::add);

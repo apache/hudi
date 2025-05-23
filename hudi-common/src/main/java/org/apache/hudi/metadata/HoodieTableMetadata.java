@@ -41,6 +41,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Collection;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -267,10 +268,11 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
       throws HoodieMetadataException;
 
   /**
-   * Returns the location of record keys which are found in the record index.
+   * @param sortedRecordKeyIterator an iterator of sorted record keys
+   * @return the location of record keys which are found in the record index.
    * Records that are not found are ignored and wont be part of map object that is returned.
    */
-  Map<String, HoodieRecordGlobalLocation> readRecordIndex(List<String> recordKeys);
+  Map<String, HoodieRecordGlobalLocation> readRecordIndex(Iterator<String> sortedRecordKeyIterator);
 
   /**
    * Returns the location of records which the provided secondary keys maps to.

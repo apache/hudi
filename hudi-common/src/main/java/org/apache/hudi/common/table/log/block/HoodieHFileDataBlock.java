@@ -45,6 +45,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
@@ -159,7 +160,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
 
   // TODO abstract this w/in HoodieDataBlock
   @Override
-  protected <T> ClosableIterator<HoodieRecord<T>> lookupRecords(List<String> sortedKeys, boolean fullKey) throws IOException {
+  protected <T> ClosableIterator<HoodieRecord<T>> lookupRecords(Iterator<String> sortedKeyIterator, boolean fullKey) throws IOException {
     HoodieLogBlockContentLocation blockContentLoc = getBlockContentLocation().get();
 
     // NOTE: It's important to extend Hadoop configuration here to make sure configuration
@@ -177,8 +178,9 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
         .getReaderFactory(HoodieRecordType.AVRO)
         .getFileReader(hFileReaderConfig, inlinePath, HoodieFileFormat.HFILE, Option.of(getSchemaFromHeader()))) {
       // Get writer's schema from the header
-      final ClosableIterator<HoodieRecord<IndexedRecord>> recordIterator =
-          fullKey ? reader.getRecordsByKeysIterator(sortedKeys, readerSchema) : reader.getRecordsByKeyPrefixIterator(sortedKeys, readerSchema);
+      final ClosableIterator<HoodieRecord<IndexedRecord>> recordIterator = fullKey
+          ? reader.getRecordsByKeysIterator(sortedKeyIterator, readerSchema)
+          : reader.getRecordsByKeyPrefixIterator(sortedKeyIterator, readerSchema);
 
       return new CloseableMappingIterator<>(recordIterator, data -> (HoodieRecord<T>) data);
     }

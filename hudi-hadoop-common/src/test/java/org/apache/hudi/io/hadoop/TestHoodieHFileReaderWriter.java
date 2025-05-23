@@ -80,7 +80,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieHFileReaderWriterBase
       // Note that backward seek is not expected to happen in production code
       try (ClosableIterator<IndexedRecord> iterator =
           hfileReader.getIndexedRecordsByKeysIterator(
-              Arrays.asList("key00001", "key05", "key24", "key16", "key31", "key61"),
+              Arrays.asList("key00001", "key05", "key24", "key16", "key31", "key61").iterator(),
               avroSchema)) {
         assertThrows(
             IllegalStateException.class,

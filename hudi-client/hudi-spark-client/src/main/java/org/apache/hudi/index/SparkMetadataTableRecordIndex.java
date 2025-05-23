@@ -41,9 +41,7 @@ import org.apache.spark.api.java.function.PairFlatMapFunction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 
 import scala.Tuple2;
@@ -94,10 +92,9 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
 
     // Partition the record keys to lookup such that each partition looks up one record index shard
     JavaRDD<String> partitionedKeyRDD = HoodieJavaRDD.getJavaRDD(records)
-        .map(HoodieRecord::getRecordKey)
-        .keyBy(k -> HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(k, numFileGroups))
-        .partitionBy(new PartitionIdPassthrough(numFileGroups))
-        .map(t -> t._2);
+        .mapToPair(e -> new Tuple2<>(e.getRecordKey(), null))
+        .repartitionAndSortWithinPartitions(new RecordKeyShardingPartitioner(numFileGroups))
+        .map(t -> t._1);
     ValidationUtils.checkState(partitionedKeyRDD.getNumPartitions() <= numFileGroups);
 
     // Lookup the keys in the record index
@@ -152,6 +149,7 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
 
   /**
    * Function that lookups a list of keys in a single shard of the record index
+   * PLEASE NOTE that this function only takes sorted list of keys
    */
   private static class RecordIndexFileGroupLookupFunction implements PairFlatMapFunction<Iterator<String>, String, HoodieRecordGlobalLocation> {
     private final HoodieTable hoodieTable;
@@ -161,12 +159,9 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
     }
 
     @Override
-    public Iterator<Tuple2<String, HoodieRecordGlobalLocation>> call(Iterator<String> recordKeyIterator) {
-      List<String> keysToLookup = new ArrayList<>();
-      recordKeyIterator.forEachRemaining(keysToLookup::add);
-
+    public Iterator<Tuple2<String, HoodieRecordGlobalLocation>> call(Iterator<String> sortedRecordKeyIterator) {
       // recordIndexInfo object only contains records that are present in record_index.
-      Map<String, HoodieRecordGlobalLocation> recordIndexInfo = hoodieTable.getMetadataTable().readRecordIndex(keysToLookup);
+      Map<String, HoodieRecordGlobalLocation> recordIndexInfo = hoodieTable.getMetadataTable().readRecordIndex(sortedRecordKeyIterator);
       return recordIndexInfo.entrySet().stream()
           .map(e -> new Tuple2<>(e.getKey(), e.getValue())).iterator();
     }
@@ -179,22 +174,22 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
    * NOTE: This is a workaround for SPARK-39391, which moved the PartitionIdPassthrough from
    * {@link org.apache.spark.sql.execution.ShuffledRowRDD} to {@link Partitioner}.
    */
-  private class PartitionIdPassthrough extends Partitioner {
+  private class RecordKeyShardingPartitioner extends Partitioner {
 
-    private final int numPartitions;
+    private final int numRecordIndexFileGroups;
 
-    public PartitionIdPassthrough(int numPartitions) {
-      this.numPartitions = numPartitions;
+    public RecordKeyShardingPartitioner(int numRecordIndexFileGroups) {
+      this.numRecordIndexFileGroups = numRecordIndexFileGroups;
     }
 
     @Override
     public int numPartitions() {
-      return numPartitions;
+      return numRecordIndexFileGroups;
     }
 
     @Override
     public int getPartition(Object key) {
-      return (int) key;
+      return HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex((String) key, numRecordIndexFileGroups);
     }
   }
 }

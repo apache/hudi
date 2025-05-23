@@ -73,7 +73,8 @@ class RecordLevelIndexSupport(spark: SparkSession,
    * @return Sequence of file names which need to be queried
    */
   private def getCandidateFilesForRecordKeys(allFiles: Seq[StoragePath], recordKeys: List[String]): Set[String] = {
-    val recordKeyLocationsMap = metadataTable.readRecordIndex(JavaConverters.seqAsJavaListConverter(recordKeys).asJava)
+    val recordKeyLocationsMap = metadataTable.readRecordIndex(
+      JavaConverters.seqAsJavaListConverter(recordKeys).asJava.iterator())
     val fileIdToPartitionMap: mutable.Map[String, String] = mutable.Map.empty
     val candidateFiles: mutable.Set[String] = mutable.Set.empty
     for (location <- JavaConverters.collectionAsScalaIterableConverter(recordKeyLocationsMap.values()).asScala) {

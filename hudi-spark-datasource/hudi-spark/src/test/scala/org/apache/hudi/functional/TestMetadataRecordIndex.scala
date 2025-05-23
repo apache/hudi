@@ -31,7 +31,7 @@ import org.apache.hudi.testutils.HoodieSparkClientTestBase
 
 import org.apache.spark.sql._
 import org.junit.jupiter.api._
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
 
@@ -179,7 +179,7 @@ class TestMetadataRecordIndex extends HoodieSparkClientTestBase {
     val readDf = spark.read.format("hudi").load(basePath)
     val rowArr = readDf.collect()
     val recordIndexMap = metadata.readRecordIndex(
-      rowArr.map(row => row.getAs("_hoodie_record_key").toString).toList.asJava)
+      rowArr.map(row => row.getAs("_hoodie_record_key").toString).toList.asJava.iterator())
 
     assertTrue(rowArr.length > 0)
     for (row <- rowArr) {
