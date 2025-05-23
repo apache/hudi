@@ -24,14 +24,13 @@ import org.apache.hudi.avro.{AvroSchemaUtils, HoodieAvroUtils}
 import org.apache.hudi.avro.AvroSchemaUtils.isNullable
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord}
 import org.apache.hudi.common.table.read.PositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.collection.{CachingIterator, ClosableIterator, Pair => HPair}
 import org.apache.hudi.io.storage.{HoodieSparkFileReaderFactory, HoodieSparkParquetReader}
 import org.apache.hudi.storage.{HoodieStorage, StorageConfiguration, StoragePath}
 import org.apache.hudi.util.CloseableInternalRowIterator
-
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericRecord, IndexedRecord}
 import org.apache.hadoop.conf.Configuration
@@ -41,7 +40,7 @@ import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSerializer}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.JoinedRow
 import org.apache.spark.sql.execution.datasources.PartitionedFile
-import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, SparkParquetReader}
+import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, SparkFileReader}
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.{LongType, MetadataBuilder, StructField, StructType}
@@ -55,13 +54,13 @@ import scala.collection.mutable
  *
  * This uses Spark parquet reader to read parquet data files or parquet log blocks.
  *
- * @param parquetFileReader A reader that transforms a [[PartitionedFile]] to an iterator of
+ * @param fileReader A reader that transforms a [[PartitionedFile]] to an iterator of
  *                          [[InternalRow]]. This is required for reading the base file and
  *                          not required for reading a file group with only log files.
  * @param filters           spark filters that might be pushed down into the reader
  * @param requiredFilters   filters that are required and should always be used, even in merging situations
  */
-class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetReader,
+class SparkFileFormatInternalRowReaderContext(fileReaders: java.util.Map[HoodieFileFormat, SparkFileReader],
                                               filters: Seq[Filter],
                                               requiredFilters: Seq[Filter],
                                               storageConfiguration: StorageConfiguration[_],
@@ -97,8 +96,13 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
       val fileInfo = sparkAdapter.getSparkPartitionedFileUtils
         .createPartitionedFile(InternalRow.empty, filePath, start, length)
       val (readSchema, readFilters) = getSchemaAndFiltersForRead(structType, hasRowIndexField)
-      new CloseableInternalRowIterator(parquetFileReader.read(fileInfo,
-        readSchema, StructType(Seq.empty), getSchemaHandler.getInternalSchemaOpt,
+      val fileReader = if (fileInfo.filePath.toString.endsWith(HoodieFileFormat.PARQUET.getFileExtension)) {
+        fileReaders.get(HoodieFileFormat.PARQUET)
+      } else {
+        throw new RuntimeException("Only parquet file reader is supported for now")
+      }
+      new CloseableInternalRowIterator(fileReader.read(
+        fileInfo, readSchema, StructType(Seq.empty), getSchemaHandler.getInternalSchemaOpt,
         readFilters, storage.getConf.asInstanceOf[StorageConfiguration[Configuration]]))
     }
   }

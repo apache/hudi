@@ -37,7 +37,7 @@ import org.apache.spark.sql.catalyst.util.DateFormatter
 import org.apache.spark.sql.catalyst.{InternalRow, TableIdentifier}
 import org.apache.spark.sql.execution.QueryExecution
 import org.apache.spark.sql.execution.datasources._
-import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, SparkParquetReader}
+import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, SparkFileReader}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.parser.HoodieExtendedParserInterface
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
@@ -66,7 +66,7 @@ trait SparkAdapter extends Serializable {
   /**
    * Inject table-valued functions to SparkSessionExtensions
    */
-  def injectTableFunctions(extensions : SparkSessionExtensions): Unit = {}
+  def injectTableFunctions(extensions: SparkSessionExtensions): Unit = {}
 
   /**
    * Returns an instance of [[HoodieCatalogUtils]] providing for common utils operating on Spark's
@@ -137,7 +137,7 @@ trait SparkAdapter extends Serializable {
    * Combine [[PartitionedFile]] to [[FilePartition]] according to `maxSplitBytes`.
    */
   def getFilePartitions(sparkSession: SparkSession, partitionedFiles: Seq[PartitionedFile],
-      maxSplitBytes: Long): Seq[FilePartition]
+                        maxSplitBytes: Long): Seq[FilePartition]
 
   /**
    * Checks whether [[LogicalPlan]] refers to Hudi table, and if it's the case extracts
@@ -232,7 +232,7 @@ trait SparkAdapter extends Serializable {
   def createParquetFileReader(vectorized: Boolean,
                               sqlConf: SQLConf,
                               options: Map[String, String],
-                              hadoopConf: Configuration): SparkParquetReader
+                              hadoopConf: Configuration): SparkFileReader
 
   /**
    * use new qe execute
@@ -241,11 +241,10 @@ trait SparkAdapter extends Serializable {
                                         queryExecution: QueryExecution,
                                         name: Option[String] = None)(body: => T): T
 
-
   /**
    * Stop spark context with exit code
    *
-   * @param jssc JavaSparkContext object to shutdown the spark context
+   * @param jssc     JavaSparkContext object to shutdown the spark context
    * @param exitCode passed as a param to shutdown spark context with provided exit code
    * @return
    */

@@ -29,7 +29,10 @@ import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
 
-trait SparkParquetReader extends Serializable {
+/**
+ * This serves as the base class for various Spark file readers that FG reader supports.
+ */
+trait SparkFileReader extends Serializable {
   /**
    * Read an individual parquet file
    *

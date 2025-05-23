@@ -17,13 +17,14 @@
 
 package org.apache.spark.sql.execution.datasources.parquet
 
-import org.apache.hudi.{AvroConversionUtils, HoodieFileIndex, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, HoodieTableSchema, HoodieTableState, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
+import org.apache.hudi.{AvroConversionUtils, HoodieFileIndex, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, HoodieTableSchema, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
 import org.apache.hudi.avro.AvroSchemaUtils
 import org.apache.hudi.cdc.{CDCFileGroupIterator, CDCRelation, HoodieCDCFileGroupSplit}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.config.{HoodieMemoryConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.read.HoodieFileGroupReader
 import org.apache.hudi.common.util.collection.ClosableIterator
@@ -174,7 +175,8 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
             case Some(fileSlice) if !isCount && (requiredSchema.nonEmpty || fileSlice.getLogFiles.findAny().isPresent) =>
               val metaClient: HoodieTableMetaClient = HoodieTableMetaClient
                 .builder().setConf(storageConf).setBasePath(tablePath).build
-              val readerContext = new SparkFileFormatInternalRowReaderContext(parquetFileReader.value, filters, requiredFilters, storageConf, metaClient.getTableConfig)
+              val readers: Map[HoodieFileFormat, SparkFileReader] = Map(HoodieFileFormat.PARQUET -> parquetFileReader.value)
+              val readerContext = new SparkFileFormatInternalRowReaderContext(readers.asJava, filters, requiredFilters, storageConf, metaClient.getTableConfig)
               val props = metaClient.getTableConfig.getProps
               options.foreach(kv => props.setProperty(kv._1, kv._2))
               props.put(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(), String.valueOf(maxMemoryPerCompaction))
@@ -229,7 +231,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
   }
 
   private def buildCDCRecordIterator(hoodiePartitionCDCFileGroupSliceMapping: HoodiePartitionCDCFileGroupMapping,
-                                     parquetFileReader: SparkParquetReader,
+                                     parquetFileReader: SparkFileReader,
                                      storageConf: StorageConfiguration[Configuration],
                                      props: TypedProperties,
                                      requiredSchema: StructType): Iterator[InternalRow] = {
@@ -293,7 +295,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
     }
   }
 
-  private def readBaseFile(file: PartitionedFile, parquetFileReader: SparkParquetReader, requestedSchema: StructType,
+  private def readBaseFile(file: PartitionedFile, parquetFileReader: SparkFileReader, requestedSchema: StructType,
                            remainingPartitionSchema: StructType, fixedPartitionIndexes: Set[Int], requiredSchema: StructType,
                            partitionSchema: StructType, outputSchema: StructType, filters: Seq[Filter],
                            storageConf: StorageConfiguration[Configuration]): Iterator[InternalRow] = {
