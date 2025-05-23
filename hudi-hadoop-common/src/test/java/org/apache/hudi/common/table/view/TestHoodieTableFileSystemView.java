@@ -1154,7 +1154,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
           "Inflight File Slice with data-file check data-file");
       assertEquals(0, inflightFileSliceWithDataFile.getLogFiles().count(),
           "Inflight File Slice with data-file check data-file");
-      assertEquals(invalidInstantId, orphanFileSliceWithLogFile.getBaseInstantTime(),
+      assertEquals(!preTableVersion8 ? HoodieActiveTimeline.INIT_INSTANT_TS : invalidInstantId, orphanFileSliceWithLogFile.getBaseInstantTime(),
           "Orphan File Slice with log-file check base-commit");
       assertFalse(orphanFileSliceWithLogFile.getBaseFile().isPresent(),
           "Orphan File Slice with log-file check data-file");
@@ -1162,7 +1162,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
       assertEquals(1, logFiles.size(), "Orphan File Slice with log-file check data-file");
       assertEquals(orphanLogFileName, logFiles.get(0).getFileName(),
           "Orphan File Slice with log-file check data-file");
-      assertEquals(inflightDeltaInstantTime, inflightFileSliceWithLogFile.getBaseInstantTime(),
+      assertEquals(!preTableVersion8 ? HoodieActiveTimeline.INIT_INSTANT_TS : inflightDeltaInstantTime, inflightFileSliceWithLogFile.getBaseInstantTime(),
           "Inflight File Slice with log-file check base-commit");
       assertFalse(inflightFileSliceWithLogFile.getBaseFile().isPresent(),
           "Inflight File Slice with log-file check data-file");
@@ -1233,7 +1233,8 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
       assertFalse(df.getBootstrapBaseFile().isPresent(), "No external data file must be present");
     });
 
-    assertEquals(expTotalFileSlices, rtView.getAllFileSlices(partitionPath).count(),
+    // for table version8 and above, we will get the inflight or invalid file slices returned as following method
+    assertEquals(!preTableVersion8 ? expTotalFileSlices + 2 : expTotalFileSlices, rtView.getAllFileSlices(partitionPath).filter(slice -> !slice.isEmpty()).count(),
         "Total number of file-slices in partitions matches expected");
     assertEquals(expTotalDataFiles, roView.getAllBaseFiles(partitionPath).count(),
         "Total number of data-files in partitions matches expected");

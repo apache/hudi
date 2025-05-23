@@ -591,6 +591,27 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   }
 
   /**
+   * Ignores the empty file-slice.
+   * When a slice is full of pending log files, we need to filter out this situation because in fact, the file group represented by this file slice has not committed any data either
+   * @param fileSlice File Slice
+   * @return Stream of FileSlice
+   */
+  private Stream<FileSlice> filterOutEmptyFileSlice(FileSlice fileSlice) {
+    // Check if the file slice is empty
+    //    a. the base instant is a pending compaction, still return the file slice
+    //    b. the base instant is a normal write, should filter out the file slice, because the entire file group is empty
+    if (fileSlice.isEmpty()) {
+      if (isFileSliceAfterPendingCompaction(fileSlice)) {
+        LOG.debug("File Slice ({}) is in pending compaction", fileSlice);
+      } else {
+        LOG.debug("File Slice ({}) is empty", fileSlice);
+        return Stream.of();
+      }
+    }
+    return Stream.of(fileSlice);
+  }
+
+  /**
    * Ignores the uncommitted log files.
    *
    * @param fileSlice File Slice
@@ -867,6 +888,10 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
           .flatMap(slice -> tableVersion8AndAbove()
               ? this.filterUncommittedFiles(slice, true)
               : this.filterBaseFileAfterPendingCompaction(slice, true))
+          .flatMap(slice -> tableVersion8AndAbove()
+              // for table version 8 and above, we need to filter out empty file slices
+              ? this.filterOutEmptyFileSlice(slice)
+              : Stream.of(slice))
           .map(this::addBootstrapBaseFileIfPresent);
     } finally {
       readLock.unlock();
@@ -899,7 +924,11 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
             .filter(Option::isPresent).map(Option::get)
             .flatMap(slice -> tableVersion8AndAbove()
                 ? this.filterUncommittedFiles(slice, true)
-                : this.filterBaseFileAfterPendingCompaction(slice, true));
+                : this.filterBaseFileAfterPendingCompaction(slice, true))
+            .flatMap(slice -> tableVersion8AndAbove()
+                // for table version 8 and above, we need to filter out empty file slices
+                ? this.filterOutEmptyFileSlice(slice)
+                : Stream.of(slice));
 
         if (bootstrapIndex.useIndex()) {
           final Map<HoodieFileGroupId, BootstrapBaseFileMapping> bootstrapBaseFileMappings = getBootstrapBaseFileMappings(partition);
@@ -930,9 +959,13 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
         if (!fs.isPresent()) {
           return Option.empty();
         }
-        Stream<FileSlice> fileSlices = tableVersion8AndAbove()
+        Stream<FileSlice> fileSlices = (tableVersion8AndAbove()
             ? this.filterUncommittedFiles(fs.get(), true)
-            : this.filterBaseFileAfterPendingCompaction(fs.get(), true);
+            : this.filterBaseFileAfterPendingCompaction(fs.get(), true))
+            .flatMap(slice -> tableVersion8AndAbove()
+            // for table version 8 and above, we need to filter out empty file slices
+            ? this.filterOutEmptyFileSlice(slice)
+            : Stream.of(slice));
 
         return Option.ofNullable(fileSlices
             .map(this::addBootstrapBaseFileIfPresent)
@@ -1051,6 +1084,9 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
               fileSlice = Option.of(fetchMergedFileSlice(fileGroup, tableVersion8AndAbove()
                       ? filterUncommittedLogs(fileSlice.get()) : fileSlice.get())
               );
+              if (fileSlice.isPresent() && tableVersion8AndAbove()) {
+                fileSlice = Option.fromJavaOptional(filterOutEmptyFileSlice(fileSlice.get()).findAny());
+              }
             }
             return fileSlice;
           }).filter(Option::isPresent).map(Option::get).map(this::addBootstrapBaseFileIfPresent);

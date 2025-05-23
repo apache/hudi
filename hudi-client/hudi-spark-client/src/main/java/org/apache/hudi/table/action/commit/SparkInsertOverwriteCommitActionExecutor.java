@@ -97,7 +97,7 @@ public class SparkInsertOverwriteCommitActionExecutor<T>
 
   protected List<String> getAllExistingFileIds(String partitionPath) {
     // we should only fetch the latest merged file slices with committed data
-    return table.getSliceView().getLatestMergedFileSlicesBeforeOrOn(partitionPath, instantTime).filter(slice -> !slice.isEmpty()).map(FileSlice::getFileId).distinct().collect(Collectors.toList());
+    return table.getSliceView().getLatestMergedFileSlicesBeforeOrOn(partitionPath, instantTime).map(FileSlice::getFileId).distinct().collect(Collectors.toList());
   }
 
   @Override

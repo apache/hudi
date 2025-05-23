@@ -121,8 +121,8 @@ public class HoodieFileGroup implements Serializable {
   @VisibleForTesting
   public String getBaseInstantTime(CompletionTimeQueryView completionTimeQueryView, HoodieLogFile logFile) {
     if (fileSlices.isEmpty()) {
-      if (completionTimeQueryView.getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
-        // no base file in the file group, use INITIAL INSTANT TIME as base instant time
+      if (completionTimeQueryView.getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT) && !completionTimeQueryView.isCompleted(logFile.getDeltaCommitTime())) {
+        // no base file in the file group and the smallest log file is still pending, we should use the INIT_INSTANT_TS for these uncertain cases.
         return HoodieActiveTimeline.INIT_INSTANT_TS;
       }
       // no base file in the file group, use the log file delta commit time.
@@ -135,10 +135,6 @@ public class HoodieFileGroup implements Serializable {
         if (compareTimestamps(completionTimeOpt.get(), GREATER_THAN_OR_EQUALS, commitTime)) {
           return commitTime;
         }
-      }
-      // no base file that starts earlier than the log delta commit completion time
-      if (completionTimeQueryView.getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
-        return HoodieActiveTimeline.INIT_INSTANT_TS;
       }
       // use the log file delta commit time.
       return logFile.getDeltaCommitTime();
