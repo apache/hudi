@@ -153,6 +153,7 @@ class TestFileGroupRecordBuffer {
                                            HoodieTableVersion tableVersion,
                                            String mergeStrategyId) {
     HoodieReaderContext readerContext = mock(HoodieReaderContext.class);
+    when(readerContext.getInstantRange()).thenReturn(Option.empty());
     when(readerContext.getHasBootstrapBaseFile()).thenReturn(false);
     when(readerContext.getHasLogFiles()).thenReturn(true);
     HoodieRecordMerger recordMerger = mock(HoodieRecordMerger.class);
@@ -290,7 +291,8 @@ class TestFileGroupRecordBuffer {
             RecordMergeMode.COMMIT_TIME_ORDERING,
             props,
             readStats,
-            Option.empty());
+            Option.empty(),
+            false);
     when(readerContext.getValue(any(), any(), any())).thenReturn(null);
     assertFalse(keyBasedBuffer.isCustomDeleteRecord(record));
 
@@ -302,7 +304,8 @@ class TestFileGroupRecordBuffer {
             RecordMergeMode.COMMIT_TIME_ORDERING,
             props,
             readStats,
-            Option.empty());
+            Option.empty(),
+            false);
     when(readerContext.getValue(any(), any(), any())).thenReturn("i");
     assertFalse(keyBasedBuffer.isCustomDeleteRecord(record));
     when(readerContext.getValue(any(), any(), any())).thenReturn("d");
@@ -323,7 +326,8 @@ class TestFileGroupRecordBuffer {
             RecordMergeMode.COMMIT_TIME_ORDERING,
             props,
             readStats,
-            Option.empty());
+            Option.empty(),
+            false);
 
     // CASE 1: With custom delete marker.
     GenericRecord record = new GenericData.Record(schema);

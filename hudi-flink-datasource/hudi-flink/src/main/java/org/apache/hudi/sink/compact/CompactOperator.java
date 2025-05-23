@@ -185,7 +185,7 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
       Supplier<InternalSchemaManager> internalSchemaManager = () -> InternalSchemaManager.get(conf, metaClient);
       // initialize storage conf lazily.
       StorageConfiguration<?> readerConf = writeClient.getEngineContext().getStorageConf();
-      return Option.of(new FlinkRowDataReaderContext(readerConf, internalSchemaManager, Collections.emptyList(), metaClient.getTableConfig()));
+      return Option.of(new FlinkRowDataReaderContext(readerConf, internalSchemaManager, Collections.emptyList(), metaClient.getTableConfig(), Option.empty()));
     } else {
       // always using avro record merger for legacy compaction since log scanner do not support rowdata reading yet.
       writeClient.getConfig().setRecordMergerClass(HoodieAvroRecordMerger.class.getName());
