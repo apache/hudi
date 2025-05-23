@@ -19,6 +19,9 @@
 
 package org.apache.hudi.io.compress;
 
+import org.apache.hudi.common.util.ValidationUtils;
+
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -37,7 +40,7 @@ public enum CompressionCodec {
   ZSTD("zstd");
 
   private static final Map<String, CompressionCodec>
-      HFILE_NAME_TO_COMPRESSION_CODEC_MAP = createNameToCompressionCodecMap();
+      NAME_TO_COMPRESSION_CODEC_MAP = createNameToCompressionCodecMap();
 
   private final String name;
 
@@ -51,13 +54,10 @@ public enum CompressionCodec {
 
   public static CompressionCodec findCodecByName(String name) {
     CompressionCodec codec =
-        HFILE_NAME_TO_COMPRESSION_CODEC_MAP.getOrDefault(name.toLowerCase(), null);
-    if (codec != null) {
-      return codec;
-    } else {
-      throw new IllegalArgumentException(
-          String.format("Cannot find compression codec: %s", name));
-    }
+        NAME_TO_COMPRESSION_CODEC_MAP.get(name.toLowerCase());
+    ValidationUtils.checkArgument(
+        codec != null, String.format("Cannot find compression codec: %s", name));
+    return codec;
   }
 
   /**
@@ -65,13 +65,7 @@ public enum CompressionCodec {
    */
   private static Map<String, CompressionCodec> createNameToCompressionCodecMap() {
     Map<String, CompressionCodec> result = new HashMap<>();
-    result.put(LZO.getName(), LZO);
-    result.put(GZIP.getName(), GZIP);
-    result.put(NONE.getName(), NONE);
-    result.put(SNAPPY.getName(), SNAPPY);
-    result.put(LZ4.getName(), LZ4);
-    result.put(BZIP2.getName(), BZIP2);
-    result.put(ZSTD.getName(), ZSTD);
+    Arrays.stream(CompressionCodec.values()).forEach(codec -> result.put(codec.getName(), codec));
     return Collections.unmodifiableMap(result);
   }
 }

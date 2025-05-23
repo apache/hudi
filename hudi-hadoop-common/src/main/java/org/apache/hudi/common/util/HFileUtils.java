@@ -202,21 +202,21 @@ public class HFileUtils extends FileFormatUtils {
         .blockSize(DEFAULT_BLOCK_SIZE_FOR_LOG_FILE)
         .compressionCodec(compressionCodec)
         .build();
-    HFileWriter writer = new HFileWriterImpl(context, ostream);
-    sortedRecordsMap.forEach((recordKey, recordBytes) -> {
-      try {
-        writer.append(recordKey, recordBytes);
-      } catch (IOException e) {
-        throw new HoodieIOException("IOException serializing records", e);
-      }
-    });
-    writer.appendFileInfo(
-        HoodieAvroHFileReaderImplBase.SCHEMA_KEY, getUTF8Bytes(readerSchema.toString()));
-    writer.close();
+    try (HFileWriter writer = new HFileWriterImpl(context, ostream)) {
+      sortedRecordsMap.forEach((recordKey,recordBytes) -> {
+        try {
+          writer.append(recordKey, recordBytes);
+        } catch (IOException e) {
+          throw new HoodieIOException("IOException serializing records", e);
+        }
+      });
+      writer.appendFileInfo(
+          HoodieAvroHFileReaderImplBase.SCHEMA_KEY,
+          getUTF8Bytes(readerSchema.toString()));
+    }
 
     ostream.flush();
     ostream.close();
-
     return baos;
   }
 
