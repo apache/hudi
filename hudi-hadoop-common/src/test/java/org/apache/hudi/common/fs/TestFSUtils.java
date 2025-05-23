@@ -19,6 +19,7 @@
 package org.apache.hudi.common.fs;
 
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
@@ -34,6 +35,7 @@ import org.apache.hudi.hadoop.fs.inline.HadoopInLineFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
 import org.apache.hadoop.conf.Configuration;
@@ -668,6 +670,30 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     assertEquals("s3://my-bucket/path/to/object", FSUtils.s3aToS3("s3A://my-bucket/path/to/object"));
     assertEquals("s3://my-bucket/path/to/object", FSUtils.s3aToS3("S3A://my-bucket/path/to/object"));
     assertEquals("s3://my-bucket/s3a://another-bucket/another/path", FSUtils.s3aToS3("s3a://my-bucket/s3a://another-bucket/another/path"));
+  }
+
+  @Test
+  void testIsMdtBaseFileWithTrueOutput() {
+    StoragePath path = new StoragePath("s3://my-bucket/path/.hoodie/metadata/files/1.hfile");
+    StoragePathInfo storagePathInfo = new StoragePathInfo(path, 100L, false, (short) 1, 1L, 1L);
+    // With path info.
+    HoodieBaseFile baseFile = new HoodieBaseFile(storagePathInfo);
+    assertTrue(FSUtils.isMdtBaseFile(baseFile));
+    // With file path.
+    baseFile = new HoodieBaseFile(path.toString());
+    assertTrue(FSUtils.isMdtBaseFile(baseFile));
+  }
+
+  @Test
+  void testIsMdtBaseFileWithFalseOutput() {
+    StoragePath path = new StoragePath("s3://my-bucket/path/1.hfile");
+    StoragePathInfo storagePathInfo = new StoragePathInfo(path, 100L, false, (short) 1, 1L, 1L);
+    // With path info.
+    HoodieBaseFile baseFile = new HoodieBaseFile(storagePathInfo);
+    assertFalse(FSUtils.isMdtBaseFile(baseFile));
+    // With file path.
+    baseFile = new HoodieBaseFile(path.toString());
+    assertFalse(FSUtils.isMdtBaseFile(baseFile));
   }
 
   @ParameterizedTest
