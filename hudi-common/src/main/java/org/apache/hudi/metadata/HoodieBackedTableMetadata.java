@@ -764,10 +764,10 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
                                                                   Schema requestedSchema,
                                                                   HoodieTableMetaClient metaClient,
                                                                   TypedProperties props,
-                                                                  Option<Predicate> filter,
+                                                                  Option<Predicate> filterOpt,
                                                                   InstantRange instantRange) throws IOException {
     HoodieReaderContext<IndexedRecord> readerContext =
-        new HoodieAvroReaderContext(storageConf, tableConfig, filter);
+        new HoodieAvroReaderContext(storageConf, tableConfig, Option.of(instantRange), filterOpt);
     return HoodieFileGroupReader.<IndexedRecord>newBuilder()
         .withReaderContext(readerContext)
         .withHoodieTableMetaClient(metaClient)
@@ -779,7 +779,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         .withStart(0)
         .withLength(Long.MAX_VALUE)
         .withShouldUseRecordPosition(false)
-        .withInstantRange(instantRange)
         .build();
   }
 }

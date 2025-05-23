@@ -115,7 +115,8 @@ public class TestEventTimeMerging extends HoodieFileGroupReaderTestHarness {
     testTable = HoodieTestTable.of(metaClient);
     // Create dedicated merger to avoid current delete logic holes.
     // TODO: Unify delete logic (HUDI-7240).
-    readerContext = new HoodieAvroReaderContext(storageConf, metaClient.getTableConfig(), Option.empty());
+    readerContext = new HoodieAvroReaderContext(
+        storageConf, metaClient.getTableConfig(), Option.empty(), Option.empty());
     setUpMockCommits();
   }
 

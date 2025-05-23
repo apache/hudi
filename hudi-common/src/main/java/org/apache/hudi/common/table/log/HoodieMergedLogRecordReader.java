@@ -158,7 +158,7 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
     // Do the scan and merge
     timer.startTimer();
 
-    Option<KeySpec> keySpecOpt = createKeySpec(readerContext.getFilter());
+    Option<KeySpec> keySpecOpt = createKeySpec(readerContext.getFilterOpt());
     scanInternal(keySpecOpt, false);
 
     this.totalTimeTakenToReadAndMergeBlocks = timer.endTimer();

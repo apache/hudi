@@ -71,7 +71,7 @@ public abstract class HoodieReaderContext<T> {
   private final BiFunction<T, Schema, String> recordKeyExtractor;
   protected final HoodieFileFormat baseFileFormat;
   // For general predicate pushdown.
-  protected final Option<Predicate> filter;
+  protected final Option<Predicate> filterOpt;
   private FileGroupReaderSchemaHandler<T> schemaHandler = null;
   private String tablePath = null;
   private String latestCommitTime = null;
@@ -88,12 +88,14 @@ public abstract class HoodieReaderContext<T> {
 
   protected HoodieReaderContext(StorageConfiguration<?> storageConfiguration,
                                 HoodieTableConfig tableConfig,
-                                Option<Predicate> filter) {
+                                Option<InstantRange> instantRangeOpt,
+                                Option<Predicate> filterOpt) {
     this.storageConfiguration = storageConfiguration;
     this.recordKeyExtractor = tableConfig.populateMetaFields() ? metadataKeyExtractor() : virtualKeyExtractor(tableConfig.getRecordKeyFields()
         .orElseThrow(() -> new IllegalArgumentException("No record keys specified and meta fields are not populated")));
     this.baseFileFormat = tableConfig.getBaseFileFormat();
-    this.filter = filter;
+    this.instantRangeOpt = instantRangeOpt;
+    this.filterOpt = filterOpt;
   }
 
   // Getter and Setter for schemaHandler
@@ -176,8 +178,8 @@ public abstract class HoodieReaderContext<T> {
     return storageConfiguration;
   }
 
-  public Option<Predicate> getFilter() {
-    return filter;
+  public Option<Predicate> getFilterOpt() {
+    return filterOpt;
   }
 
   /**
@@ -301,7 +303,8 @@ public abstract class HoodieReaderContext<T> {
     InstantRange instantRange = getInstantRange().get();
     final Schema.Field commitTimeField = schemaHandler.getRequiredSchema().getField(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
     final int commitTimePos = commitTimeField.pos();
-    Predicate<T> instantFilter = row -> instantRange.isInRange(getMetaFieldValue(row, commitTimePos));
+    java.util.function.Predicate<T> instantFilter =
+        row -> instantRange.isInRange(getMetaFieldValue(row, commitTimePos));
     return new CloseableFilterIterator<>(fileRecordIterator, instantFilter);
   }
 
