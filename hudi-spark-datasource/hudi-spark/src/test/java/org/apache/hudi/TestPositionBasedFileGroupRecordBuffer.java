@@ -139,7 +139,7 @@ public class TestPositionBasedFileGroupRecordBuffer extends TestHoodieFileGroupR
         baseFileInstantTime,
         props,
         readStats,
-        orderingFieldName,
+        Option.of("timestamp"),
         merger,
         false);
   }
