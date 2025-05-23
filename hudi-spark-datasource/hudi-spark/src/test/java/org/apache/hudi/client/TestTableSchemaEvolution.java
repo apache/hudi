@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -180,7 +181,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     checkLatestDeltaCommit("001");
 
     // Compact once so we can incrementally read later
-    assertTrue(client.scheduleCompactionAtInstant("002", Option.empty()));
+    assertTrue(WriteClientTestUtils.scheduleTableService(client, "002", Option.empty(), TableServiceType.COMPACT).isPresent());
     HoodieWriteMetadata result = client.compact("002");
     client.commitCompaction("002", result, Option.empty());
     assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant("002"));

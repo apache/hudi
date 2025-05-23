@@ -36,6 +36,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.marker.MarkerType;
@@ -596,7 +597,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
       metaClient = HoodieTableMetaClient.reload(metaClient);
 
       String compactionInstantTime = "004";
-      client.scheduleCompactionAtInstant(compactionInstantTime, Option.empty());
+      WriteClientTestUtils.scheduleTableService(client, compactionInstantTime, Option.empty(), TableServiceType.COMPACT);
 
       // Compaction commit
       /*
@@ -618,7 +619,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
       metaClient = HoodieTableMetaClient.reload(metaClient);
 
       compactionInstantTime = "006";
-      client.scheduleCompactionAtInstant(compactionInstantTime, Option.empty());
+      WriteClientTestUtils.scheduleTableService(client, compactionInstantTime, Option.empty(), TableServiceType.COMPACT);
       HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client.compact(compactionInstantTime);
       client.commitCompaction(compactionInstantTime, compactionMetadata, Option.empty());
       assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(compactionInstantTime));
@@ -800,7 +801,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
         // trigger compaction and then trigger couple of upserts followed by restore.
         metaClient = HoodieTableMetaClient.reload(metaClient);
         String compactionInstantTime = "005";
-        client.scheduleCompactionAtInstant(compactionInstantTime, Option.empty());
+        WriteClientTestUtils.scheduleTableService(client, compactionInstantTime, Option.empty(), TableServiceType.COMPACT);
         HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client.compact(compactionInstantTime);
         client.commitCompaction(compactionInstantTime, compactionMetadata, Option.empty());
         assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(compactionInstantTime));
