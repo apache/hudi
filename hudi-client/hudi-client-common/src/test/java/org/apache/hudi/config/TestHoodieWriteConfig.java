@@ -742,12 +742,14 @@ public class TestHoodieWriteConfig {
         .withProperties(props)
         .withEngineType(EngineType.FLINK).build();
     assertFalse(config.isStreamingWritesToMetadataEnabled(HoodieTableVersion.SIX));
+    assertFalse(config.isStreamingWritesToMetadataEnabled(HoodieTableVersion.EIGHT));
 
     config = HoodieWriteConfig.newBuilder()
         .withPath("/tmp")
         .withProperties(props)
         .withEngineType(EngineType.JAVA).build();
     assertFalse(config.isStreamingWritesToMetadataEnabled(HoodieTableVersion.SIX));
+    assertFalse(config.isStreamingWritesToMetadataEnabled(HoodieTableVersion.EIGHT));
   }
 
   private HoodieWriteConfig createWriteConfig(Map<String, String> configs) {

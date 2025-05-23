@@ -846,8 +846,9 @@ public class HoodieWriteConfig extends HoodieConfig {
       .defaultValue(false)
       .markAdvanced()
       .sinceVersion("1.1.0")
-      .withDocumentation("Whether to enable streaming write to metadata table or not. With streaming writes, we execute writes to both data table and metadata table "
-          + "using one RDD stage boundary. If not, writes to data table and metadata table happens across stage boundaries.");
+      .withDocumentation("Whether to enable streaming writes to metadata table or not. With streaming writes, we execute writes to both data table and metadata table "
+          + "using one RDD stage boundary. If not, writes to data table and metadata table happens across stage boundaries. By default "
+          + "streaming writes to metadata table is enabled for SPARK incremental operations and disabled for all other cases.");
   
   /**
    * Config key with boolean value that indicates whether record being written during MERGE INTO Spark SQL
@@ -2918,12 +2919,16 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   /**
-   * Whether to enable Optimized writes or not. By default for table version 6 we are not enabling this, since NBCC is not available in table version 6.
-   * For flink and java engines, there are no issues w/ task retries and so they are out of it.
-   * So, the optimized writes is only supported in spark for table version 8 and above, for incremental operations (insert, upsert, delete)
-   * and table services (compaction and clustering). All other operations go through original metadata write paths.
+   * Whether to enable streaming writes to metadata table or not.
+   * We have support for streaming writes only in SPARK engine (due to spark task retries intricacies) and for table version > 8 due to the
+   * pre-requisite of NBCC.
+   * To support streaming writes, we might need NBCC support for metadata table, since there could an ingestion and a table service from data table
+   * concurrently trying to write to metadata table.
+   * In Spark, when streaming writes are enabled, incremental operations like insert, upsert, delete and table services (compaction and clustering)
+   * will take the streaming writes flow, while all other operations (like delete_partition, insert_overwrite, etc) go through
+   * legacy metadata write paths (since these might involve reading entire partition and not purely rely on incremental data written).
    * @param tableVersion {@link HoodieTableVersion} of interest.
-   * @return true if optimized writes are enabled. false otherwise.
+   * @return true if streaming writes are enabled. false otherwise.
    */
   public boolean isStreamingWritesToMetadataEnabled(HoodieTableVersion tableVersion) {
     if (tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
