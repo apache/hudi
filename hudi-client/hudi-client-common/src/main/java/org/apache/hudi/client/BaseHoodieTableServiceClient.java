@@ -762,7 +762,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
    * @param scheduleInline   true if needs to be scheduled inline. false otherwise.
    */
   @Nullable
-  public HoodieCleanMetadata clean(Option<String> suppliedCleanInstant, boolean scheduleInline) throws HoodieIOException {
+  HoodieCleanMetadata clean(Option<String> suppliedCleanInstant, boolean scheduleInline) throws HoodieIOException {
     if (!tableServicesEnabled(config)) {
       return null;
     }
