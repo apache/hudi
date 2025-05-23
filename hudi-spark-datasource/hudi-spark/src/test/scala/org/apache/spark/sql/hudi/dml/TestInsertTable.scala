@@ -2426,10 +2426,9 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
           )
 
           val client = HoodieCLIUtils.createHoodieWriteClient(spark, basePath, clusteringOptions, Option(tableName))
-          val instant = client.createNewInstantTime()
 
           // Test bucket merge by clustering
-          client.scheduleClusteringAtInstant(instant, HOption.empty())
+          val instant = client.scheduleClustering(HOption.empty()).get()
 
           checkAnswer(s"call show_clustering(table => '$tableName')")(
             Seq(instant, 10, HoodieInstant.State.REQUESTED.name(), "*")
