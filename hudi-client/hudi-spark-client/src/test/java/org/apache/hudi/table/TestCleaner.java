@@ -428,16 +428,15 @@ public class TestCleaner extends HoodieCleanerTestBase {
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(context, writeConfig)) {
       // Three writes so we can initiate a clean
       for (; index < 3; ++index) {
-        String newCommitTime = "00" + index;
+        String newCommitTime = client.startCommit();
         List<HoodieRecord> records = dataGen.generateInsertsForPartition(newCommitTime, 1, partition);
-        WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
         JavaRDD<WriteStatus> writeStatusJavaRDD = client.insert(jsc.parallelize(records, 1), newCommitTime);
         client.commit(newCommitTime, writeStatusJavaRDD, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
       }
     }
 
     // mimic failed/leftover clean by scheduling a clean but not performing it
-    cleanInstantTime = "00" + index++;
+    cleanInstantTime = metaClient.createNewInstantTime();
     HoodieTable table = HoodieSparkTable.create(writeConfig, context);
     Option<HoodieCleanerPlan> cleanPlan = table.scheduleCleaning(context, cleanInstantTime, Option.empty());
     assertEquals(cleanPlan.get().getFilePathsToBeDeletedPerPartition().get(partition).size(), 1);
@@ -445,22 +444,19 @@ public class TestCleaner extends HoodieCleanerTestBase {
 
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(context, writeConfig)) {
       // Next commit. This is required so that there is an additional file version to clean.
-      String newCommitTime = "00" + index++;
+      String newCommitTime = client.startCommit();
       List<HoodieRecord> records = dataGen.generateInsertsForPartition(newCommitTime, 1, partition);
-      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
       JavaRDD<WriteStatus> writeStatusJavaRDD = client.insert(jsc.parallelize(records, 1), newCommitTime);
       client.commit(newCommitTime, writeStatusJavaRDD, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
 
       // Try to schedule another clean
-      String newCleanInstantTime = "00" + index++;
-      HoodieCleanMetadata cleanMetadata = client.clean(newCleanInstantTime);
+      HoodieCleanMetadata cleanMetadata = client.clean();
       // When hoodie.clean.multiple.enabled is set to false, a new clean action should not be scheduled.
       // The existing requested clean should complete execution.
       assertNotNull(cleanMetadata);
       assertTrue(metaClient.reloadActiveTimeline().getCleanerTimeline()
           .filterCompletedInstants().containsInstant(cleanInstantTime));
-      assertFalse(metaClient.getActiveTimeline().getCleanerTimeline()
-          .containsInstant(newCleanInstantTime));
+      assertEquals(1, metaClient.getActiveTimeline().getCleanerTimeline().countInstants());
 
       // 1 file cleaned
       assertEquals(cleanMetadata.getPartitionMetadata().get(partition).getSuccessDeleteFiles().size(), 1);
@@ -468,10 +464,9 @@ public class TestCleaner extends HoodieCleanerTestBase {
       assertEquals(cleanMetadata.getPartitionMetadata().get(partition).getDeletePathPatterns().size(), 1);
 
       // Now that there is no requested or inflight clean instant, a new clean action can be scheduled
-      cleanMetadata = client.clean(newCleanInstantTime);
+      cleanMetadata = client.clean();
       assertNotNull(cleanMetadata);
-      assertTrue(metaClient.reloadActiveTimeline().getCleanerTimeline()
-          .containsInstant(newCleanInstantTime));
+      assertEquals(2, metaClient.reloadActiveTimeline().getCleanerTimeline().countInstants());
 
       // 1 file cleaned
       assertEquals(cleanMetadata.getPartitionMetadata().get(partition).getSuccessDeleteFiles().size(), 1);
