@@ -225,17 +225,19 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     }
 
     StoragePathInfo baseFileStoragePathInfo = baseFile.getPathInfo();
+    final ClosableIterator<T> recordIterator;
     if (baseFileStoragePathInfo != null) {
-      return readerContext.getFileRecordIterator(
+      recordIterator = readerContext.getFileRecordIterator(
           baseFileStoragePathInfo, start, length,
           readerContext.getSchemaHandler().getTableSchema(),
           readerContext.getSchemaHandler().getRequiredSchema(), storage);
     } else {
-      return readerContext.getFileRecordIterator(
+      recordIterator = readerContext.getFileRecordIterator(
           baseFile.getStoragePath(), start, length,
           readerContext.getSchemaHandler().getTableSchema(),
           readerContext.getSchemaHandler().getRequiredSchema(), storage);
     }
+    return readerContext.getInstantRange().isPresent() ? readerContext.applyInstantRangeFilter(recordIterator) : recordIterator;
   }
 
   private ClosableIterator<T> makeBootstrapBaseFileIterator(HoodieBaseFile baseFile) throws IOException {

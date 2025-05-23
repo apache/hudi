@@ -23,7 +23,6 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -86,11 +85,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
     HoodieAvroFileReader reader = (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(storage)
         .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(new HoodieConfig(),
             filePath, HoodieFileFormat.PARQUET, Option.empty());
-    ClosableIterator<IndexedRecord> recordIterator = reader.getIndexedRecordIterator(dataSchema, requiredSchema);
-    if (FSUtils.isLogFile(filePath)) {
-      return recordIterator;
-    }
-    return applyInstantRangeFilter(recordIterator, requiredSchema);
+    return reader.getIndexedRecordIterator(dataSchema, requiredSchema);
   }
 
   @Override
@@ -104,7 +99,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
   }
 
   @Override
-  public IndexedRecord getRecordKeyRow(String recordKey) {
+  public IndexedRecord getDeleteRow(IndexedRecord record, String recordKey) {
     throw new UnsupportedOperationException("Not supported for " + this.getClass().getSimpleName());
   }
 

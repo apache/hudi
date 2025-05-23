@@ -169,7 +169,7 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
   }
 
   @Override
-  public InternalRow getRecordKeyRow(String recordKey) {
+  public InternalRow getDeleteRow(InternalRow record, String recordKey) {
     throw new UnsupportedOperationException("Not supported for " + this.getClass().getSimpleName());
   }
 }

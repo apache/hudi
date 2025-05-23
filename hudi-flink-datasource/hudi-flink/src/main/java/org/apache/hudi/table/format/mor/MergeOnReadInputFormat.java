@@ -355,8 +355,7 @@ public class MergeOnReadInputFormat
             () -> internalSchemaManager,
             predicates,
             metaClient.getTableConfig(),
-            split.getInstantRange(),
-            emitDelete);
+            split.getInstantRange());
     TypedProperties typedProps = FlinkClientUtil.getMergedTableAndWriteProps(metaClient.getTableConfig(), writeConfig);
     typedProps.put(HoodieReaderConfig.MERGE_TYPE.key(), mergeType);
 

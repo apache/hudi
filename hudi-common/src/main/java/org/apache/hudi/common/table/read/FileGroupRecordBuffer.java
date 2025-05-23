@@ -560,11 +560,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
         return true;
       } else if (emitDelete) {
         // emit Deletes
-        T mergedRecord = isDeleteAndRecord.getRight();
-        if (mergedRecord == null) {
-          mergedRecord = readerContext.getRecordKeyRow(baseRecordInfo.getRecordKey());
-        }
-        nextRecord = mergedRecord == null ? null : readerContext.seal(mergedRecord);
+        nextRecord = readerContext.getDeleteRow(isDeleteAndRecord.getRight(), baseRecordInfo.getRecordKey());
         readStats.incrementNumDeletes();
         return nextRecord != null;
       } else {
@@ -592,10 +588,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
         readStats.incrementNumInserts();
         return true;
       } else if (emitDelete) {
-        nextRecord = nextRecordInfo.getRecord();
-        if (nextRecord == null) {
-          nextRecord = readerContext.getRecordKeyRow(nextRecordInfo.getRecordKey());
-        }
+        nextRecord = readerContext.getDeleteRow(nextRecordInfo.getRecord(), nextRecordInfo.getRecordKey());
         readStats.incrementNumDeletes();
         return nextRecord != null;
       } else {

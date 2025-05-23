@@ -23,7 +23,6 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -161,14 +160,11 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
       firstRecordReader = recordReader;
     }
     ClosableIterator<ArrayWritable> recordIterator = new RecordReaderValueIterator<>(recordReader);
-    if (!modifiedDataSchema.equals(requiredSchema)) {
-      // record reader puts the required columns in the positions of the data schema and nulls the rest of the columns
-      recordIterator = new CloseableMappingIterator<>(recordIterator, projectRecord(modifiedDataSchema, requiredSchema));
-    }
-    if (FSUtils.isLogFile(filePath)) {
+    if (modifiedDataSchema.equals(requiredSchema)) {
       return recordIterator;
     }
-    return applyInstantRangeFilter(recordIterator, requiredSchema);
+    // record reader puts the required columns in the positions of the data schema and nulls the rest of the columns
+    return new CloseableMappingIterator<>(recordIterator, projectRecord(modifiedDataSchema, requiredSchema));
   }
 
   @Override
@@ -182,7 +178,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   }
 
   @Override
-  public ArrayWritable getRecordKeyRow(String recordKey) {
+  public ArrayWritable getDeleteRow(ArrayWritable record, String recordKey) {
     throw new UnsupportedOperationException("Not supported for " + this.getClass().getSimpleName());
   }
 

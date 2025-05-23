@@ -87,7 +87,6 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
   private final Supplier<InternalSchemaManager> internalSchemaManager;
   private final boolean utcTimezone;
   private final HoodieTableConfig tableConfig;
-  private final boolean emitDelete;
   // the converter is used to create a RowData contains primary key fields only
   // for DELETE cases, it'll not be initialized if primary key semantics is lost.
   // For e.g, if the pk fields are [a, b] but user only select a, then the pk
@@ -99,15 +98,13 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
       Supplier<InternalSchemaManager> internalSchemaManager,
       List<ExpressionPredicates.Predicate> predicates,
       HoodieTableConfig tableConfig,
-      Option<InstantRange> instantRangeOpt,
-      boolean emitDelete) {
+      Option<InstantRange> instantRangeOpt) {
     super(storageConfiguration, tableConfig);
     this.tableConfig = tableConfig;
     this.internalSchemaManager = internalSchemaManager;
     this.predicates = predicates;
     this.utcTimezone = getStorageConfiguration().getBoolean(FlinkOptions.READ_UTC_TIMEZONE.key(), FlinkOptions.READ_UTC_TIMEZONE.defaultValue());
     this.instantRangeOpt = instantRangeOpt;
-    this.emitDelete = emitDelete;
   }
 
   @Override
@@ -127,36 +124,30 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
             .getReaderFactory(HoodieRecord.HoodieRecordType.FLINK)
             .getFileReader(tableConfig, filePath, HoodieFileFormat.PARQUET, Option.empty());
     DataType rowType = RowDataAvroQueryContexts.fromAvroSchema(dataSchema).getRowType();
-    ClosableIterator<RowData> fileRecordIterator = rowDataParquetReader.getRowDataIterator(schemaManager, rowType, requiredSchema, predicates);
-    if (isLogFile) {
-      return fileRecordIterator;
-    }
-    return applyInstantRangeFilter(fileRecordIterator, requiredSchema);
+    return rowDataParquetReader.getRowDataIterator(schemaManager, rowType, requiredSchema, predicates);
   }
 
   @Override
   public void setSchemaHandler(FileGroupReaderSchemaHandler<RowData> schemaHandler) {
     super.setSchemaHandler(schemaHandler);
 
-    if (emitDelete) {
-      Option<String[]> recordKeysOpt = tableConfig.getRecordKeyFields();
-      if (recordKeysOpt.isEmpty()) {
-        return;
-      }
-      // primary key semantic is lost if not all primary key fields are included in the request schema.
-      boolean pkSemanticLost = Arrays.stream(recordKeysOpt.get()).anyMatch(k -> schemaHandler.getRequestedSchema().getField(k) == null);
-      if (pkSemanticLost) {
-        return;
-      }
-      // get primary key field position in required schema.
-      Schema requiredSchema = schemaHandler.getRequiredSchema();
-      int[] pkFieldsPos = Arrays.stream(recordKeysOpt.get())
-          .map(k -> Option.ofNullable(requiredSchema.getField(k)).map(Schema.Field::pos).orElse(-1))
-          .mapToInt(Integer::intValue)
-          .toArray();
-      recordKeyRowConverter = new StringToRowDataConverter(
-          pkFieldsPos, (RowType) RowDataAvroQueryContexts.fromAvroSchema(requiredSchema).getRowType().getLogicalType());
+    Option<String[]> recordKeysOpt = tableConfig.getRecordKeyFields();
+    if (recordKeysOpt.isEmpty()) {
+      return;
     }
+    // primary key semantic is lost if not all primary key fields are included in the request schema.
+    boolean pkSemanticLost = Arrays.stream(recordKeysOpt.get()).anyMatch(k -> schemaHandler.getRequestedSchema().getField(k) == null);
+    if (pkSemanticLost) {
+      return;
+    }
+    // get primary key field position in required schema.
+    Schema requiredSchema = schemaHandler.getRequiredSchema();
+    int[] pkFieldsPos = Arrays.stream(recordKeysOpt.get())
+        .map(k -> Option.ofNullable(requiredSchema.getField(k)).map(Schema.Field::pos).orElse(-1))
+        .mapToInt(Integer::intValue)
+        .toArray();
+    recordKeyRowConverter = new StringToRowDataConverter(
+        pkFieldsPos, (RowType) RowDataAvroQueryContexts.fromAvroSchema(requiredSchema).getRowType().getLogicalType());
   }
 
   @Override
@@ -305,7 +296,10 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
   }
 
   @Override
-  public RowData getRecordKeyRow(String recordKey) {
+  public RowData getDeleteRow(RowData record, String recordKey) {
+    if (record != null) {
+      return record;
+    }
     // don't need to emit record key row if primary key semantic is lost
     if (recordKeyRowConverter == null) {
       return null;

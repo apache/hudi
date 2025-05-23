@@ -223,7 +223,7 @@ public abstract class HoodieReaderContext<T> {
    *
    * @return Engine specific row which contains record key fields only.
    */
-  public abstract T getRecordKeyRow(String recordKey);
+  public abstract T getDeleteRow(T record, String recordKey);
   
   /**
    * @param mergeMode        record merge mode
@@ -278,16 +278,12 @@ public abstract class HoodieReaderContext<T> {
    * Apply the {@link InstantRange} filter to the file record iterator if necessary.
    *
    * @param fileRecordIterator File record iterator.
-   * @param requiredSchema The required schema.
    *
    * @return File record iterator filter by {@link InstantRange}.
    */
-  protected ClosableIterator<T> applyInstantRangeFilter(ClosableIterator<T> fileRecordIterator, Schema requiredSchema) {
-    if (getInstantRange().isEmpty()) {
-      return fileRecordIterator;
-    }
+  public ClosableIterator<T> applyInstantRangeFilter(ClosableIterator<T> fileRecordIterator) {
     InstantRange instantRange = getInstantRange().get();
-    final Schema.Field commitTimeField = requiredSchema.getField(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
+    final Schema.Field commitTimeField = schemaHandler.getRequiredSchema().getField(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
     final int commitTimePos = commitTimeField.pos();
     Predicate<T> instantFilter = row -> instantRange.isInRange(getMetaFieldValue(row, commitTimePos));
     return new CloseableFilterIterator<>(fileRecordIterator, instantFilter);
