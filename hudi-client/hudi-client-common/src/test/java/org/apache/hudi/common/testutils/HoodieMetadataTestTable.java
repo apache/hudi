@@ -125,6 +125,15 @@ public class HoodieMetadataTestTable extends HoodieTestTable {
   }
 
   @Override
+  public HoodieCleanMetadata doClean(String commitTime, Map<String, Integer> partitionFileCountsToDelete) throws IOException {
+    HoodieCleanMetadata cleanMetadata = super.doClean(commitTime, partitionFileCountsToDelete);
+    if (writer != null) {
+      writer.update(cleanMetadata, commitTime);
+    }
+    return cleanMetadata;
+  }
+
+  @Override
   public HoodieCleanMetadata doClean(String commitTime, Map<String, Integer> partitionFileCountsToDelete, List<String> partitionsToBeDeleted) throws IOException {
     HoodieCleanMetadata cleanMetadata = super.doClean(commitTime, partitionFileCountsToDelete, partitionsToBeDeleted);
     if (writer != null) {

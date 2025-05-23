@@ -467,10 +467,10 @@ public class HoodieTestTable implements AutoCloseable {
   }
 
   public Pair<HoodieCleanerPlan, HoodieCleanMetadata> getHoodieCleanMetadata(String commitTime, HoodieTestTableState testTableState) {
-    HoodieCleanerPlan cleanerPlan = new HoodieCleanerPlan(new HoodieActionInstant(commitTime, CLEAN_ACTION, EMPTY_STRING),
-        EMPTY_STRING, EMPTY_STRING, new HashMap<>(), CleanPlanV2MigrationHandler.VERSION, new HashMap<>(), testTableState.getPartitionsToDeleteForCleaner(commitTime), Collections.EMPTY_MAP);
-    List<HoodieCleanStat> cleanStats = new ArrayList<>();
     List<String> deletedPartitions = testTableState.getPartitionsToDeleteForCleaner(commitTime);
+    HoodieCleanerPlan cleanerPlan = new HoodieCleanerPlan(new HoodieActionInstant(commitTime, CLEAN_ACTION, EMPTY_STRING),
+        EMPTY_STRING, EMPTY_STRING, new HashMap<>(), CleanPlanV2MigrationHandler.VERSION, new HashMap<>(), deletedPartitions, Collections.EMPTY_MAP);
+    List<HoodieCleanStat> cleanStats = new ArrayList<>();
     for (Map.Entry<String, List<String>> entry : testTableState.getPartitionToFileIdMapForCleaner(commitTime).entrySet()) {
       if (deletedPartitions.contains(entry.getKey())) {
         cleanStats.add(new HoodieCleanStat(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS,
@@ -1163,8 +1163,16 @@ public class HoodieTestTable implements AutoCloseable {
     return replaceMetadata;
   }
 
+  public HoodieCleanMetadata doClean(String commitTime, Map<String, Integer> partitionFileCountsToDelete) throws IOException {
+    return doClean(commitTime, partitionFileCountsToDelete, Collections.emptyMap());
+  }
+
   public HoodieCleanMetadata doClean(String commitTime, Map<String, Integer> partitionFileCountsToDelete, List<String> partitionsToBeDeleted) throws IOException {
     return doClean(commitTime, partitionFileCountsToDelete, partitionsToBeDeleted, Collections.emptyMap());
+  }
+
+  public HoodieCleanMetadata doClean(String commitTime, Map<String, Integer> partitionFileCountsToDelete, Map<String, String> extraMetadata) throws IOException {
+    return doClean(commitTime, partitionFileCountsToDelete, Collections.emptyList(), extraMetadata);
   }
 
   public HoodieCleanMetadata doClean(String commitTime, Map<String, Integer> partitionFileCountsToDelete, List<String> partitionsToDelete, Map<String, String> extraMetadata) throws IOException {
@@ -1174,11 +1182,11 @@ public class HoodieTestTable implements AutoCloseable {
     }
     HoodieTestTableState testTableState = new HoodieTestTableState();
     for (Map.Entry<String, List<String>> entry : partitionFilesToDelete.entrySet()) {
-      testTableState = testTableState.createTestTableStateForCleaner(commitTime, entry.getKey(), entry.getValue());
+      testTableState = testTableState.createTestTableStateForFilesToClean(commitTime, entry.getKey(), entry.getValue());
       deleteFilesInPartition(entry.getKey(), entry.getValue());
     }
 
-    testTableState = testTableState.createTestTableStateForCleaner(commitTime, partitionsToDelete);
+    testTableState = testTableState.createTestTableStateForPartitionsToClean(commitTime, partitionsToDelete);
 
     Pair<HoodieCleanerPlan, HoodieCleanMetadata> cleanerMeta = getHoodieCleanMetadata(commitTime, testTableState);
     HoodieCleanMetadata cleanMetadata = cleanerMeta.getValue();
@@ -1540,7 +1548,7 @@ public class HoodieTestTable implements AutoCloseable {
 
     /**
      * Map<commitTime, List<partitionPath>>
-     * Used to build commit metadata for partitions that got deleted
+     * Used to build clean metadata for partitions that got deleted
      */
     Map<String, List<String>> commitsToPartitionForCleaner = new HashMap<>();
 
@@ -1551,7 +1559,7 @@ public class HoodieTestTable implements AutoCloseable {
       return new HoodieTestTableState();
     }
 
-    HoodieTestTableState createTestTableStateForCleaner(String commitTime, String partitionPath, List<String> filesToClean) {
+    HoodieTestTableState createTestTableStateForFilesToClean(String commitTime, String partitionPath, List<String> filesToClean) {
       if (!commitsToPartitionToFileIdForCleaner.containsKey(commitTime)) {
         commitsToPartitionToFileIdForCleaner.put(commitTime, new HashMap<>());
       }
@@ -1563,7 +1571,7 @@ public class HoodieTestTable implements AutoCloseable {
       return this;
     }
 
-    HoodieTestTableState createTestTableStateForCleaner(String commitTime, List<String> partitionsToClean) {
+    HoodieTestTableState createTestTableStateForPartitionsToClean(String commitTime, List<String> partitionsToClean) {
       if (!commitsToPartitionForCleaner.containsKey(commitTime)) {
         commitsToPartitionForCleaner.put(commitTime, new ArrayList<>());
       }
