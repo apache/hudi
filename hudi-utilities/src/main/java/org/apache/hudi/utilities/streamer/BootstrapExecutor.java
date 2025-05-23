@@ -141,7 +141,6 @@ public class BootstrapExecutor implements Serializable {
             .forTable(cfg.targetTableName)
             .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
             .withRecordMergeImplClasses(cfg.recordMergeImplClasses)
-            .withAutoCommit(true)
             .withProps(props);
 
     if (null != schemaProvider && null != schemaProvider.getTargetSchema()) {

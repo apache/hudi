@@ -19,13 +19,17 @@ package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.HoodieCLIUtils
 import org.apache.hudi.client.SparkRDDWriteClient
+import org.apache.hudi.common.model.HoodieCommitMetadata
+import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.config.HoodieTTLConfig
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
-import java.util.function.Supplier
+import java.util
+import java.util.function.{BiConsumer, Supplier}
 
 import scala.collection.JavaConverters._
 
@@ -80,6 +84,8 @@ class RunTTLProcedure extends BaseProcedure with ProcedureBuilder with Logging {
       if (hoodieTTLMeta == null) {
         Seq.empty
       } else {
+        client.commit(ttlInstantTime, hoodieTTLMeta.getWriteStatuses, org.apache.hudi.common.util.Option.empty[util.Map[String, String]], HoodieTimeline.REPLACE_COMMIT_ACTION,
+          hoodieTTLMeta.getPartitionToReplaceFileIds, org.apache.hudi.common.util.Option.empty[BiConsumer[HoodieTableMetaClient, HoodieCommitMetadata]])
         hoodieTTLMeta.getPartitionToReplaceFileIds.keySet().asScala.map { p =>
           Row(p)
         }.toSeq

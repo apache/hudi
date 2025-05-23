@@ -88,7 +88,8 @@ class TestTTLProcedure extends HoodieSparkProcedureTestBase with SparkDatasetMix
         .asInstanceOf[java.util.List[HoodieRecord[Nothing]]]
     // Use this JavaRDD to call the insert method
     WriteClientTestUtils.startCommitWithTime(client, instantTime, HoodieTimeline.COMMIT_ACTION)
-    client.insert(spark.sparkContext.parallelize(records.asScala.toSeq).toJavaRDD(), instantTime)
+    val statuses = client.insert(spark.sparkContext.parallelize(records.asScala.toSeq).toJavaRDD(), instantTime)
+    client.commit(instantTime, statuses)
   }
 
   private def getHoodieWriteClient(cfg: HoodieWriteConfig): SparkRDDWriteClient[Nothing] = {
@@ -112,7 +113,6 @@ class TestTTLProcedure extends HoodieSparkProcedureTestBase with SparkDatasetMix
       .newBuilder
       .withPath(basePath)
       .withSchema(TRIP_EXAMPLE_SCHEMA)
-      .withAutoCommit(autoCommit)
       .withPreCombineField("_row_key")
       .forTable(tableName)
 

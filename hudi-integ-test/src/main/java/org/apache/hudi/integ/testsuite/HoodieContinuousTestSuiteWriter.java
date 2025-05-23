@@ -24,6 +24,7 @@ import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.integ.testsuite.writer.DeltaWriteStats;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
 import org.apache.avro.generic.GenericRecord;
@@ -138,7 +139,7 @@ public class HoodieContinuousTestSuiteWriter extends HoodieTestSuiteWriter {
   }
 
   @Override
-  public JavaRDD<WriteStatus> compact(Option<String> instantTime) throws Exception {
+  public HoodieWriteMetadata<JavaRDD<WriteStatus>> compact(Option<String> instantTime) throws Exception {
     return null;
   }
 
@@ -158,7 +159,6 @@ public class HoodieContinuousTestSuiteWriter extends HoodieTestSuiteWriter {
   }
 
   @Override
-  public void commitCompaction(JavaRDD<WriteStatus> records, JavaRDD<DeltaWriteStats> generatedDataStats,
-                               Option<String> instantTime) throws IOException {
+  public void commitCompaction(Option<String> instantTime, HoodieWriteMetadata<JavaRDD<WriteStatus>> writeMetadata) throws IOException {
   }
 }

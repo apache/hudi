@@ -17,7 +17,8 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.hudi.{HoodieCLIUtils, SparkAdapterSupport}
+import org.apache.hudi.HoodieCLIUtils
+import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.model.HoodieCommitMetadata
 import org.apache.hudi.common.table.timeline.HoodieTimeline
@@ -117,8 +118,8 @@ class RunCompactionProcedure extends BaseProcedure with ProcedureBuilder with Sp
         val timer = HoodieTimer.start
         filteredPendingCompactionInstants.foreach { compactionInstant =>
           val writeResponse = client.compact(compactionInstant)
+          client.commitCompaction(compactionInstant, writeResponse, HOption.empty())
           handleResponse(writeResponse.getCommitMetadata.get())
-          client.commitCompaction(compactionInstant, writeResponse.getCommitMetadata.get(), HOption.empty())
         }
         logInfo(s"Finish Run compaction at instants: [${filteredPendingCompactionInstants.mkString(",")}]," +
           s" spend: ${timer.endTimer()}ms")

@@ -350,7 +350,6 @@ public class TestDataValidationCheckForLogCompactionActions extends HoodieClient
     properties.setProperty("hoodie.parquet.small.file.limit", "0");
     HoodieWriteConfig config = getConfigBuilder(TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.INMEMORY)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().withInlineCompaction(true).build())
-        .withAutoCommit(true)
         .withProperties(properties)
         .build();
     SparkRDDWriteClient client = new SparkRDDWriteClient(context, config);
@@ -369,7 +368,7 @@ public class TestDataValidationCheckForLogCompactionActions extends HoodieClient
     HoodieWriteConfig config2 = getConfigBuilderForSecondTable(tableName2, basePath2,
         TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.INMEMORY)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().withInlineCompaction(true).build())
-        .withAutoCommit(true).build();
+        .build();
 
     // Create writeClient
     SparkRDDWriteClient client2 = new SparkRDDWriteClient(context, config2);

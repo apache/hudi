@@ -36,6 +36,7 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
+import org.slf4j.LoggerFactory
 
 import java.util.function.Consumer
 
@@ -45,6 +46,7 @@ import scala.collection.JavaConverters._
  * Tests around Dag execution for Spark DataSource.
  */
 class TestSparkDataSourceDAGExecution extends HoodieSparkClientTestBase with ScalaAssertionSupport {
+  private val log = LoggerFactory.getLogger(getClass)
   var spark: SparkSession = null
   val commonOpts = Map(
     "hoodie.insert.shuffle.parallelism" -> "4",
@@ -114,7 +116,7 @@ class TestSparkDataSourceDAGExecution extends HoodieSparkClientTestBase with Sca
   @Test
   def testClusteringDoesNotTriggerRepeatedDAG(): Unit = {
     // register stage event listeners
-    val stageListener = new StageListener("org.apache.hudi.table.action.commit.BaseCommitActionExecutor.executeClustering")
+    val stageListener = new StageListener("org.apache.hudi.client.BaseHoodieTableServiceClient.cluster")
     spark.sparkContext.addSparkListener(stageListener)
 
     var structType: StructType = null
@@ -149,7 +151,7 @@ class TestSparkDataSourceDAGExecution extends HoodieSparkClientTestBase with Sca
   @Test
   def testCompactionDoesNotTriggerRepeatedDAG(): Unit = {
     // register stage event listeners
-    val stageListener = new StageListener("org.apache.hudi.table.action.compact.RunCompactionActionExecutor.execute")
+    val stageListener = new StageListener("org.apache.hudi.client.BaseHoodieTableServiceClient.commitCompaction")
     spark.sparkContext.addSparkListener(stageListener)
 
     var structType: StructType = null

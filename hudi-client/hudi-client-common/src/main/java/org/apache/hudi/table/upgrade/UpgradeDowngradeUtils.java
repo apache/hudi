@@ -46,6 +46,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.UnBoundedCompactionStrategy;
 
@@ -91,7 +92,8 @@ public class UpgradeDowngradeUtils {
         try (BaseHoodieWriteClient writeClient = upgradeDowngradeHelper.getWriteClient(compactionConfig, context)) {
           Option<String> compactionInstantOpt = writeClient.scheduleCompaction(Option.empty());
           if (compactionInstantOpt.isPresent()) {
-            writeClient.compact(compactionInstantOpt.get());
+            HoodieWriteMetadata result = writeClient.compact(compactionInstantOpt.get());
+            writeClient.commitCompaction(compactionInstantOpt.get(), result, Option.of(table));
           }
         }
       }
@@ -203,7 +205,8 @@ public class UpgradeDowngradeUtils {
         if (shouldCompact) {
           Option<String> compactionInstantOpt = writeClient.scheduleCompaction(Option.empty());
           if (compactionInstantOpt.isPresent()) {
-            writeClient.compact(compactionInstantOpt.get());
+            HoodieWriteMetadata result = writeClient.compact(compactionInstantOpt.get());
+            writeClient.commitCompaction(compactionInstantOpt.get(), result, Option.empty());
           }
         }
       }

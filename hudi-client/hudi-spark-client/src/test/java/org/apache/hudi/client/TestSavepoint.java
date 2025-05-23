@@ -31,6 +31,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieSparkTable;
@@ -44,11 +45,14 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.common.table.view.FileSystemViewStorageType.EMBEDDED_KV_STORE;
 import static org.apache.hudi.common.table.view.FileSystemViewStorageType.MEMORY;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.RAW_TRIPS_TEST_NAME;
@@ -86,15 +90,19 @@ public class TestSavepoint extends HoodieClientTestBase {
       WriteClientTestUtils.startCommitWithTime(client, commitTime1);
       List<HoodieRecord> records1 = dataGen.generateInserts(commitTime1, 200);
       JavaRDD<HoodieRecord> writeRecords1 = jsc.parallelize(records1, 1);
-      List<WriteStatus> statuses1 = client.upsert(writeRecords1, commitTime1).collect();
-      assertNoWriteErrors(statuses1);
+      List<WriteStatus> statusList = client.upsert(writeRecords1, commitTime1).collect();
+      client.commit(commitTime1, jsc.parallelize(statusList), Option.empty(), tableType == HoodieTableType.COPY_ON_WRITE ? COMMIT_ACTION : DELTA_COMMIT_ACTION,
+          Collections.emptyMap(), Option.empty());
+      assertNoWriteErrors(statusList);
 
       String commitTime2 = "002";
       WriteClientTestUtils.startCommitWithTime(client, commitTime2);
       List<HoodieRecord> records2 = dataGen.generateInserts(commitTime2, 200);
       JavaRDD<HoodieRecord> writeRecords2 = jsc.parallelize(records2, 1);
-      List<WriteStatus> statuses2 = client.upsert(writeRecords2, commitTime2).collect();
-      assertNoWriteErrors(statuses2);
+      statusList = client.upsert(writeRecords2, commitTime2).collect();
+      client.commit(commitTime2, jsc.parallelize(statusList), Option.empty(), tableType == HoodieTableType.COPY_ON_WRITE ? COMMIT_ACTION : DELTA_COMMIT_ACTION,
+          Collections.emptyMap(), Option.empty());
+      assertNoWriteErrors(statusList);
 
       client.savepoint("user", "hoodie-savepoint-unit-test");
 

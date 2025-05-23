@@ -45,7 +45,6 @@ import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.testutils.providers.SparkProvider;
 
-import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -497,9 +496,9 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
       String instant = writeClient.createNewInstantTime();
       WriteClientTestUtils.startCommitWithTime(writeClient, instant);
       List<HoodieRecord> records = DATA_GENERATOR.generateInserts(instant, 100);
-      JavaRDD<WriteStatus> result = writeClient.upsert(jsc().parallelize(records, 1), instant);
-      List<WriteStatus> statuses = result.collect();
-      assertNoWriteErrors(statuses);
+      List<WriteStatus> statusList = writeClient.upsert(jsc().parallelize(records, 1), instant).collect();
+      writeClient.commit(instant, jsc().parallelize(statusList));
+      assertNoWriteErrors(statusList);
     }
   }
 
@@ -550,9 +549,9 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
       String instant = writeClient.createNewInstantTime();
       WriteClientTestUtils.startCommitWithTime(writeClient, instant);
       List<HoodieRecord> records = DATA_GENERATOR.generateInserts(instant, 100);
-      JavaRDD<WriteStatus> result = writeClient.upsert(jsc().parallelize(records, 1), instant);
-      List<WriteStatus> statuses = result.collect();
-      assertNoWriteErrors(statuses);
+      List<WriteStatus> statusList = writeClient.upsert(jsc().parallelize(records, 1), instant).collect();
+      writeClient.commit(instant, jsc().parallelize(statusList));
+      assertNoWriteErrors(statusList);
     }
 
     // validate partitions built successfully
@@ -604,9 +603,9 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
       String instant = writeClient.createNewInstantTime();
       WriteClientTestUtils.startCommitWithTime(writeClient, instant);
       List<HoodieRecord> records = DATA_GENERATOR.generateInserts(instant, 100);
-      JavaRDD<WriteStatus> result = writeClient.upsert(jsc().parallelize(records, 1), instant);
-      List<WriteStatus> statuses = result.collect();
-      assertNoWriteErrors(statuses);
+      List<WriteStatus> statusList = writeClient.upsert(jsc().parallelize(records, 1), instant).collect();
+      writeClient.commit(instant, jsc().parallelize(statusList));
+      assertNoWriteErrors(statusList);
     }
 
     // validate files partition built successfully

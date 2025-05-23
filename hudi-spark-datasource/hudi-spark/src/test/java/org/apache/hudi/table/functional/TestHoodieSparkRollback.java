@@ -84,6 +84,7 @@ public class TestHoodieSparkRollback extends SparkClientFunctionalTestHarness {
     JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
 
     List<WriteStatus> statuses = client.upsert(writeRecords, commitTime).collect();
+    client.commit(commitTime, jsc().parallelize(statuses));
     assertNoWriteErrors(statuses);
     return records;
   }
@@ -95,6 +96,7 @@ public class TestHoodieSparkRollback extends SparkClientFunctionalTestHarness {
     records = dataGen.generateUpdates(commitTime, records);
     JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
     List<WriteStatus> statuses = client.upsert(writeRecords, commitTime).collect();
+    client.commit(commitTime, jsc().parallelize(statuses));
     assertNoWriteErrors(statuses);
     return statuses;
   }
@@ -110,7 +112,6 @@ public class TestHoodieSparkRollback extends SparkClientFunctionalTestHarness {
         .withSchema(TRIP_EXAMPLE_SCHEMA)
         .withParallelism(2, 2)
         .withDeleteParallelism(2)
-        .withAutoCommit(autoCommit)
         .withEmbeddedTimelineServerEnabled(false).forTable("test-trip-table")
         .withRollbackUsingMarkers(true)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(mdtEnable).build())

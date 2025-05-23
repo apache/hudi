@@ -345,7 +345,6 @@ public class TestDataSkippingWithMORColstats extends HoodieSparkClientTestBase {
   private void scheduleCompaction() {
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(basePath.toString())
         .withRollbackUsingMarkers(false)
-        .withAutoCommit(false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
             .withMetadataIndexColumnStats(true)

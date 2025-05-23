@@ -49,7 +49,7 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.compareTim
  * HoodieBackedTableMetadataWriter for tables with version 6. The class derives most of the functionality from HoodieBackedTableMetadataWriter
  * and overrides some behaviour to make it compatible for version 6.
  */
-public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I> extends HoodieBackedTableMetadataWriter<I> {
+public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I, O> extends HoodieBackedTableMetadataWriter<I, O> {
 
   private static final int PARTITION_INITIALIZATION_TIME_SUFFIX = 10;
 
@@ -255,7 +255,7 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I> extends 
    * deltacommit.
    */
   @Override
-  void compactIfNecessary(BaseHoodieWriteClient<?,I,?,?> writeClient, Option<String> latestDeltaCommitTimeOpt) {
+  void compactIfNecessary(BaseHoodieWriteClient<?,I,?,O> writeClient, Option<String> latestDeltaCommitTimeOpt) {
     // Trigger compaction with suffixes based on the same instant time. This ensures that any future
     // delta commits synced over will not have an instant time lesser than the last completed instant on the
     // metadata table.
@@ -269,7 +269,7 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I> extends 
       LOG.info("Compaction with same {} time is already present in the timeline.", compactionInstantTime);
     } else if (writeClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty())) {
       LOG.info("Compaction is scheduled for timestamp {}", compactionInstantTime);
-      writeClient.compact(compactionInstantTime);
+      writeClient.compact(compactionInstantTime, true);
     } else if (metadataWriteConfig.isLogCompactionEnabled()) {
       // Schedule and execute log compaction with suffixes based on the same instant time. This ensures that any future
       // delta commits synced over will not have an instant time lesser than the last completed instant on the
@@ -279,7 +279,7 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I> extends 
         LOG.info("Log compaction with same {} time is already present in the timeline.", logCompactionInstantTime);
       } else if (writeClient.scheduleLogCompactionAtInstant(logCompactionInstantTime, Option.empty())) {
         LOG.info("Log compaction is scheduled for timestamp {}", logCompactionInstantTime);
-        writeClient.logCompact(logCompactionInstantTime);
+        writeClient.logCompact(logCompactionInstantTime, true);
       }
     }
   }
@@ -291,7 +291,7 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I> extends 
 
   @Override
   String createRestoreInstantTime() {
-    return createRestoreTimestamp(writeClient.createNewInstantTime(false));
+    return createRestoreTimestamp(getWriteClient().createNewInstantTime(false));
   }
 
   /**

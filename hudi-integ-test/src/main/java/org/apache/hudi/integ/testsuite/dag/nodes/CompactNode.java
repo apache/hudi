@@ -25,6 +25,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import org.apache.spark.api.java.JavaRDD;
 
@@ -55,8 +56,9 @@ public class CompactNode extends DagNode<JavaRDD<WriteStatus>> {
         .getWriteTimeline().filterPendingCompactionTimeline().lastInstant();
     if (lastInstant.isPresent()) {
       log.info("Compacting instant {}", lastInstant.get());
-      this.result = executionContext.getHoodieTestSuiteWriter().compact(Option.of(lastInstant.get().requestedTime()));
-      executionContext.getHoodieTestSuiteWriter().commitCompaction(result, executionContext.getJsc().emptyRDD(), Option.of(lastInstant.get().requestedTime()));
+      HoodieWriteMetadata<JavaRDD<WriteStatus>> writeMetadata = executionContext.getHoodieTestSuiteWriter().compact(Option.of(lastInstant.get().requestedTime()));
+      executionContext.getHoodieTestSuiteWriter().commitCompaction(Option.of(lastInstant.get().requestedTime()), writeMetadata);
+      this.result = writeMetadata.getWriteStatuses();
     }
   }
 }

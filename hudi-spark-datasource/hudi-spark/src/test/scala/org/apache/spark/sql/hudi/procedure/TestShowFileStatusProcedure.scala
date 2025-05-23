@@ -25,6 +25,7 @@ import org.apache.hudi.common.util.{Option => HOption}
 
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.spark.sql.hudi.command.procedures.{FileStatus, TimelineType}
+import org.junit.jupiter.api.Assertions.assertTrue
 
 import scala.collection.JavaConverters._
 
@@ -95,7 +96,9 @@ class TestShowFileStatusProcedure extends HoodieSparkProcedureTestBase {
           client.cluster(newInstant)
         } else {
           client.scheduleCompactionAtInstant(newInstant, HOption.empty())
-          client.compact(newInstant)
+          val result = client.compact(newInstant)
+          client.commitCompaction(newInstant, result, HOption.empty())
+          assertTrue(metaClient.reloadActiveTimeline.filterCompletedInstants.containsInstant(newInstant))
         }
 
         spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002, 1000)")
@@ -199,7 +202,9 @@ class TestShowFileStatusProcedure extends HoodieSparkProcedureTestBase {
           client.cluster(newInstant)
         } else {
           client.scheduleCompactionAtInstant(newInstant, HOption.empty())
-          client.compact(newInstant)
+          val result = client.compact(newInstant)
+          client.commitCompaction(newInstant, result, HOption.empty())
+          assertTrue(metaClient.reloadActiveTimeline.filterCompletedInstants.containsInstant(newInstant))
         }
 
         spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002, 1000)")

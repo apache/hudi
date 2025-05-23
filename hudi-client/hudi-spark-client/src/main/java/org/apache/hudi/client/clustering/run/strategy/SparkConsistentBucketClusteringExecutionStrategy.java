@@ -91,8 +91,6 @@ public class SparkConsistentBucketClusteringExecutionStrategy<T extends HoodieRe
 
     LOG.info("Starting clustering for a group, parallelism:{} commit:{}", numOutputGroups, instantTime);
     Properties props = getWriteConfig().getProps();
-    // We are calling another action executor - disable auto commit. Strategy is only expected to write data in new files.
-    props.put(HoodieWriteConfig.AUTO_COMMIT_ENABLE.key(), Boolean.FALSE.toString());
     HoodieWriteConfig newConfig = HoodieWriteConfig.newBuilder().withProps(props).build();
 
     Pair<String, List<ConsistentHashingNode>> childNodesPair = extractChildNodes(extraMetadata);

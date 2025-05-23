@@ -36,8 +36,11 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
+
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 
 @Tag("functional")
 public class TestSparkClusteringCornerCases extends HoodieClientTestBase {
@@ -74,6 +77,7 @@ public class TestSparkClusteringCornerCases extends HoodieClientTestBase {
     JavaRDD records = jsc.parallelize(recordList, 2);
     WriteClientTestUtils.startCommitWithTime(client, instant);
     List<WriteStatus> writeStatuses = client.upsert(records, instant).collect();
+    client.commit(instant, jsc.parallelize(writeStatuses), Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap(), Option.empty());
     org.apache.hudi.testutils.Assertions.assertNoWriteErrors(writeStatuses);
     return recordList;
   }

@@ -87,7 +87,6 @@ public class KafkaConnectWriterProvider implements ConnectWriterProvider<WriteSt
               KafkaConnectFileIdPrefixProvider.KAFKA_CONNECT_PARTITION_ID,
               String.valueOf(partition)))
           .withSchema(schemaProvider.getSourceSchema().toString())
-          .withAutoCommit(false)
           .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build())
           // participants should not trigger table services, and leave it to the coordinator
           .withArchivalConfig(HoodieArchivalConfig.newBuilder().withAutoArchive(false).build())

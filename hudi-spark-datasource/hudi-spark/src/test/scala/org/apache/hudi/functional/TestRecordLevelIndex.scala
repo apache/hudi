@@ -312,7 +312,9 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
       val commitTime = client.startCommit(HoodieTimeline.REPLACE_COMMIT_ACTION)
       val deletingPartition = dataGen.getPartitionPaths.last
       val partitionList = Collections.singletonList(deletingPartition)
-      client.deletePartitions(partitionList, commitTime)
+      val result = client.deletePartitions(partitionList, commitTime)
+      client.commit(commitTime, result.getWriteStatuses, org.apache.hudi.common.util.Option.empty(), HoodieTimeline.REPLACE_COMMIT_ACTION,
+        result.getPartitionToReplaceFileIds, org.apache.hudi.common.util.Option.empty());
 
       val deletedDf = latestSnapshot.filter(s"partition = $deletingPartition")
       validateDataAndRecordIndices(hudiOpts, deletedDf)

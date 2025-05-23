@@ -22,19 +22,14 @@ import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieAvroRecord;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.integ.testsuite.HoodieTestSuiteJob.HoodieTestSuiteConfig;
 import org.apache.hudi.integ.testsuite.writer.DeltaWriteStats;
-import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
-import org.apache.hudi.table.action.compact.CompactHelpers;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
@@ -156,9 +151,12 @@ public class HoodieInlineTestSuiteWriter extends HoodieTestSuiteWriter {
   }
 
   @Override
-  public JavaRDD<WriteStatus> compact(Option<String> instantTime) throws Exception {
+  public HoodieWriteMetadata<JavaRDD<WriteStatus>> compact(Option<String> instantTime) throws Exception {
     if (cfg.useDeltaStreamer) {
-      return deltaStreamerWrapper.compact();
+      JavaRDD<WriteStatus> toReturn = deltaStreamerWrapper.compact();
+      HoodieWriteMetadata writeMetadata = new HoodieWriteMetadata();
+      writeMetadata.setWriteStatuses(toReturn);
+      return writeMetadata;
     } else {
       if (!instantTime.isPresent()) {
         Option<Pair<String, HoodieCompactionPlan>> compactionPlanPair = Option
@@ -170,7 +168,7 @@ public class HoodieInlineTestSuiteWriter extends HoodieTestSuiteWriter {
       }
       if (instantTime.isPresent()) {
         HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = writeClient.compact(instantTime.get());
-        return compactionMetadata.getWriteStatuses();
+        return compactionMetadata;
       } else {
         return null;
       }
@@ -220,20 +218,20 @@ public class HoodieInlineTestSuiteWriter extends HoodieTestSuiteWriter {
   }
 
   @Override
-  public void commitCompaction(JavaRDD<WriteStatus> records, JavaRDD<DeltaWriteStats> generatedDataStats,
-                               Option<String> instantTime) throws IOException {
+  public void commitCompaction(Option<String> instantTime, HoodieWriteMetadata<JavaRDD<WriteStatus>> writeMetadata) throws IOException {
     if (!cfg.useDeltaStreamer) {
       Map<String, String> extraMetadata = new HashMap<>();
       /** Store the checkpoint in the commit metadata just like
        * {@link HoodieDeltaStreamer#commit(SparkRDDWriteClient, JavaRDD, Option)} **/
       extraMetadata.put(HoodieDeltaStreamer.CHECKPOINT_KEY, lastCheckpoint.get().getCheckpointKey());
-      if (generatedDataStats != null && generatedDataStats.count() > 1) {
+      // to fix HUDI-9392
+      /*if (generatedDataStats != null && generatedDataStats.count() > 1) {
         // Just stores the path where this batch of data is generated to
         extraMetadata.put(GENERATED_DATA_PATH, generatedDataStats.map(s -> s.getFilePath()).collect().get(0));
-      }
-      HoodieSparkTable<HoodieRecordPayload> table = HoodieSparkTable.create(writeClient.getConfig(), writeClient.getEngineContext());
-      HoodieCommitMetadata metadata = CompactHelpers.getInstance().createCompactionMetadata(table, instantTime.get(), HoodieJavaRDD.of(records), writeClient.getConfig().getSchema());
-      writeClient.commitCompaction(instantTime.get(), metadata, Option.of(extraMetadata));
+      }*/
+      //HoodieSparkTable<HoodieRecordPayload> table = HoodieSparkTable.create(writeClient.getConfig(), writeClient.getEngineContext());
+      //HoodieCommitMetadata metadata = CompactHelpers.getInstance().createCompactionMetadata(table, instantTime.get(), HoodieJavaRDD.of(records), writeClient.getConfig().getSchema());
+      writeClient.commitCompaction(instantTime.get(), writeMetadata, Option.empty());
     }
   }
 }

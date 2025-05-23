@@ -186,7 +186,7 @@ public class DataSourceUtils {
     // insert/bulk-insert combining to be true, if filtering for duplicates
     boolean combineInserts = Boolean.parseBoolean(parameters.get(DataSourceWriteOptions.INSERT_DROP_DUPS().key()));
     HoodieWriteConfig.Builder builder = HoodieWriteConfig.newBuilder()
-        .withPath(basePath).withAutoCommit(false).combineInput(combineInserts, true);
+        .withPath(basePath).combineInput(combineInserts, true);
     if (schemaStr != null) {
       builder = builder.withSchema(schemaStr);
     }

@@ -74,7 +74,7 @@ public class HoodieCleaner {
   }
 
   private HoodieWriteConfig getHoodieClientConfig() {
-    return HoodieWriteConfig.newBuilder().combineInput(true, true).withPath(cfg.basePath).withAutoCommit(false)
+    return HoodieWriteConfig.newBuilder().combineInput(true, true).withPath(cfg.basePath)
         .withProps(props).build();
   }
 

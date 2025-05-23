@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.functional;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteClientTestUtils;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.AWSDmsAvroPayload;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -27,6 +28,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
@@ -67,6 +69,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -104,7 +107,8 @@ public class TestHoodieSnapshotExporter extends SparkClientFunctionalTestHarness
       HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(new String[] {PARTITION_PATH});
       List<HoodieRecord> records = dataGen.generateInserts(COMMIT_TIME, NUM_RECORDS);
       JavaRDD<HoodieRecord> recordsRDD = jsc().parallelize(records, 1);
-      writeClient.bulkInsert(recordsRDD, COMMIT_TIME);
+      JavaRDD<WriteStatus> statusJavaRDD = writeClient.bulkInsert(recordsRDD, COMMIT_TIME);
+      writeClient.commit(COMMIT_TIME, statusJavaRDD, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
     }
     List<StoragePathInfo> pathInfoList = storage.listFiles(new StoragePath(sourcePath));
     for (StoragePathInfo pathInfo : pathInfoList) {
