@@ -1234,6 +1234,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   /**
    * Schedule table services such as clustering, compaction & cleaning.
    *
+   * @param instantTime optional instant time to use for scheduling the table service.
+   *                    Should only be used for testing or metadata table management which is tied to particular commits in the data table
    * @param extraMetadata Metadata to pass onto the scheduled service instant
    * @param tableServiceType Type of table service to schedule
    *
