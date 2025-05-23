@@ -81,7 +81,7 @@ public abstract class HoodieJavaTable<T>
   @Override
   protected Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstantTimestamp, HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy) {
     if (isMetadataTable()) {
-      return Option.empty();
+      throw new HoodieException("Cannot create metadata writer for metadata table");
     }
     if (config.isMetadataTableEnabled() || metaClient.getTableConfig().isMetadataTableAvailable()) {
       // Create the metadata table writer. First time after the upgrade this creation might trigger

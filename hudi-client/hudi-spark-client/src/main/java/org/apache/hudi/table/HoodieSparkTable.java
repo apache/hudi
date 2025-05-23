@@ -98,7 +98,7 @@ public abstract class HoodieSparkTable<T>
       String triggeringInstantTimestamp,
       HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy) {
     if (isMetadataTable()) {
-      return Option.empty();
+      throw new HoodieException("Cannot create metadata writer for metadata table");
     }
     if (config.isMetadataTableEnabled()) {
       // if any partition is deleted, we need to reload the metadata table writer so that new table configs are picked up
