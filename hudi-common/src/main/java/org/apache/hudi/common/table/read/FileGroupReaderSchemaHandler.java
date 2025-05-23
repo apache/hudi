@@ -178,12 +178,12 @@ public class FileGroupReaderSchemaHandler<T> {
 
   @VisibleForTesting
   Schema generateRequiredSchema() {
-    List<Schema.Field> addedFields = new ArrayList<>();
-    if (readerContext.getInstantRange().isPresent()
-        && !findNestedField(requestedSchema, HoodieRecord.COMMIT_TIME_METADATA_FIELD).isPresent()) {
-      addedFields.add(getField(tableSchema, HoodieRecord.COMMIT_TIME_METADATA_FIELD));
-    }
+    boolean hasInstantRange = readerContext.getInstantRange().isPresent();
     if (!needsMORMerge) {
+      List<Schema.Field> addedFields = new ArrayList<>();
+      if (hasInstantRange && !findNestedField(requestedSchema, HoodieRecord.COMMIT_TIME_METADATA_FIELD).isPresent()) {
+        addedFields.add(getField(tableSchema, HoodieRecord.COMMIT_TIME_METADATA_FIELD));
+      }
       return addedFields.isEmpty() ? requestedSchema : appendFieldsToSchemaDedupNested(requestedSchema, addedFields);
     }
 
@@ -193,9 +193,10 @@ public class FileGroupReaderSchemaHandler<T> {
       }
     }
 
+    List<Schema.Field> addedFields = new ArrayList<>();
     for (String field : getMandatoryFieldsForMerging(
         hoodieTableConfig, properties, tableSchema, recordMerger,
-        hasBuiltInDelete, customDeleteMarkerKeyValue)) {
+        hasBuiltInDelete, customDeleteMarkerKeyValue, hasInstantRange)) {
       if (!findNestedField(requestedSchema, field).isPresent()) {
         addedFields.add(getField(tableSchema, field));
       }
@@ -213,7 +214,8 @@ public class FileGroupReaderSchemaHandler<T> {
                                                        Schema tableSchema,
                                                        Option<HoodieRecordMerger> recordMerger,
                                                        boolean hasBuiltInDelete,
-                                                       Option<Pair<String, String>> customDeleteMarkerKeyAndValue) {
+                                                       Option<Pair<String, String>> customDeleteMarkerKeyAndValue,
+                                                       boolean hasInstantRange) {
     Triple<RecordMergeMode, String, String> mergingConfigs = HoodieTableConfig.inferCorrectMergingBehavior(
         cfg.getRecordMergeMode(),
         cfg.getPayloadClass(),
@@ -227,6 +229,11 @@ public class FileGroupReaderSchemaHandler<T> {
 
     // Use Set to avoid duplicated fields.
     Set<String> requiredFields = new HashSet<>();
+
+    if (hasInstantRange) {
+      requiredFields.add(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
+    }
+
     // Add record key fields.
     if (cfg.populateMetaFields()) {
       requiredFields.add(HoodieRecord.RECORD_KEY_METADATA_FIELD);

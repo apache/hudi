@@ -214,11 +214,12 @@ public abstract class HoodieReaderContext<T> {
   public abstract GenericRecord convertToAvroRecord(T record, Schema schema);
 
   /**
-   * Get the engine specific row with record key fields only with other fields as null.
-   * When `emitDelete` is true for FileGroup reader and data for DELETE record is null,
-   * record key row is emitted to downstream to delete data from storage by record key
-   * by best effort.
+   * Return the delete record if it's not null, otherwise get the row with record key
+   * fields only and other fields as null. When `emitDelete` is true for FileGroup reader
+   * and data for DELETE record is null, record key row is emitted to downstream to delete
+   * data from storage by record key by best effort.
    *
+   * @param record    delete record
    * @param recordKey record key
    *
    * @return Engine specific row which contains record key fields only.
@@ -275,7 +276,7 @@ public abstract class HoodieReaderContext<T> {
   }
 
   /**
-   * Apply the {@link InstantRange} filter to the file record iterator if necessary.
+   * Apply the {@link InstantRange} filter to the file record iterator.
    *
    * @param fileRecordIterator File record iterator.
    *

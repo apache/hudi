@@ -590,7 +590,9 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
       } else if (emitDelete) {
         nextRecord = readerContext.getDeleteRow(nextRecordInfo.getRecord(), nextRecordInfo.getRecordKey());
         readStats.incrementNumDeletes();
-        return nextRecord != null;
+        if (nextRecord != null) {
+          return true;
+        }
       } else {
         readStats.incrementNumDeletes();
       }
