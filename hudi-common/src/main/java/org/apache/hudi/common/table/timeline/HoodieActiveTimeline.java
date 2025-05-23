@@ -65,6 +65,12 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
   HoodieInstant createRequestedCommitWithReplaceMetadata(String instantTime, String actionType);
 
   /**
+   * Create completion time to assist with wrapping up a commit.
+   * @return newly generated completion time.
+   */
+  String createCompletionTime();
+
+  /**
    * Save Completed instant in active timeline.
    * @param instant Instant to be saved.
    * @param metadata metadata to write into the instant file
@@ -78,6 +84,17 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    * @param metadata metadata to write into the instant file
    */
   <T> void saveAsComplete(boolean shouldLock, HoodieInstant instant, Option<T> metadata);
+
+  /**
+   * Save Completed instant in active timeline with an optional completion time. For version 8 tables, completion times are generated just before wrapping up the commit and serialized as part of
+   * completed commit metadata file.
+   * @param shouldLock Lock before writing to timeline.
+   * @param instant Instant to be saved.
+   * @param metadata metadata to write into the instant file
+   * @param completionTimeOpt an optinal instance of completion time.
+   * @param <T>
+   */
+  <T> void saveAsComplete(boolean shouldLock, HoodieInstant instant, Option<T> metadata, Option<String> completionTimeOpt);
 
   /**
    * Delete Compaction requested instant file from timeline.

@@ -53,8 +53,9 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
                                        RecordMergeMode recordMergeMode,
                                        TypedProperties props,
                                        HoodieReadStats readStats,
-                                       Option<String> orderingFieldName) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, orderingFieldName);
+                                       Option<String> orderingFieldName,
+                                       boolean emitDelete) {
+    super(readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, orderingFieldName, emitDelete);
   }
 
   @Override
@@ -77,7 +78,7 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
     try (ClosableIterator<T> recordIterator = recordsIteratorSchemaPair.getLeft()) {
       while (recordIterator.hasNext()) {
         T nextRecord = recordIterator.next();
-        boolean isDelete = isBuiltInDeleteRecord(nextRecord) || isCustomDeleteRecord(nextRecord);
+        boolean isDelete = isBuiltInDeleteRecord(nextRecord) || isCustomDeleteRecord(nextRecord) || isDeleteHoodieOperation(nextRecord);
         BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(nextRecord, schema, readerContext, orderingFieldName, isDelete);
         processNextDataRecord(bufferedRecord, bufferedRecord.getRecordKey());
       }

@@ -71,6 +71,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.convertMetadataToRecordIndexRecords;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getRecordKeys;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getRevivedAndDeletedKeysFromMergedLogs;
@@ -109,14 +110,15 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       // Insert
       String commitTime = client.startCommit();
       List<HoodieRecord> records1 = dataGen.generateInserts(commitTime, 100);
-      List<WriteStatus> writeStatuses1 = client.insert(jsc.parallelize(records1, 1), commitTime).collect();
-      assertNoWriteErrors(writeStatuses1);
+      List<WriteStatus> writeStatusList1 = client.insert(jsc.parallelize(records1, 1), commitTime).collect();
+      client.commit(commitTime, jsc.parallelize(writeStatusList1));
+      assertNoWriteErrors(writeStatusList1);
 
       // assert RLI records for a base file from 1st commit
       String finalCommitTime = commitTime;
       Map<String, String> recordKeyToPartitionMapping1 = new HashMap<>();
       Map<String, String> fileIdToFileNameMapping1 = new HashMap<>();
-      writeStatuses1.forEach(writeStatus -> {
+      writeStatusList1.forEach(writeStatus -> {
         assertEquals(writeStatus.getStat().getNumDeletes(), 0);
         // Fetch record keys for all
         String writeStatFileId = writeStatus.getFileId();
@@ -151,7 +153,10 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       records2.addAll(updates2);
       records2.addAll(deletes2);
 
-      List<WriteStatus> writeStatuses2 = client.upsert(jsc.parallelize(records2, 1), commitTime).collect();
+      JavaRDD<WriteStatus> rawWriteStatuses2 = client.upsert(jsc.parallelize(records2, 1), commitTime);
+      JavaRDD<WriteStatus> writeStatusesRDD2 = jsc.parallelize(rawWriteStatuses2.collect(), 1);
+      List<WriteStatus> writeStatuses2 = writeStatusesRDD2.collect();
+
       assertNoWriteErrors(writeStatuses2);
 
       List<String> expectedInserts = inserts2.stream().map(record -> record.getKey().getRecordKey()).collect(Collectors.toList());
@@ -203,22 +208,23 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
 
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
     HoodieWriteConfig writeConfig = getConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER)
-        .withCompactionConfig(HoodieCompactionConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(2)
-            .withInlineCompaction(true)
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(3)
+            .withInlineCompaction(false)
             .compactionSmallFileSize(0).build()).build();
 
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
       // Insert
       String commitTime = client.startCommit();
       List<HoodieRecord> records1 = dataGen.generateInserts(commitTime, 100);
-      List<WriteStatus> writeStatuses1 = client.insert(jsc.parallelize(records1, 1), commitTime).collect();
-      assertNoWriteErrors(writeStatuses1);
+      List<WriteStatus> writeStatusList = client.insert(jsc.parallelize(records1, 1), commitTime).collect();
+      client.commit(commitTime, jsc.parallelize(writeStatusList), Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+      assertNoWriteErrors(writeStatusList);
 
       // assert RLI records for a base file from 1st commit
       String finalCommitTime = commitTime;
       Map<String, String> recordKeyToPartitionMapping1 = new HashMap<>();
       Map<String, String> fileIdToFileNameMapping1 = new HashMap<>();
-      writeStatuses1.forEach(writeStatus -> {
+      writeStatusList.forEach(writeStatus -> {
         assertEquals(writeStatus.getStat().getNumDeletes(), 0);
         // Fetch record keys for all
         String writeStatFileId = writeStatus.getFileId();
@@ -252,9 +258,10 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       records2.addAll(updates2);
       records2.addAll(deletes2);
 
-      List<WriteStatus> writeStatuses2 = client.upsert(jsc.parallelize(records2, 1), commitTime).collect();
-      assertNoWriteErrors(writeStatuses2);
-      assertRLIandSIRecordGenerationAPIs(inserts2, updates2, deletes2, writeStatuses2, commitTime, writeConfig);
+      List<WriteStatus> writeStatusList2 = client.upsert(jsc.parallelize(records2, 1), commitTime).collect();
+      client.commit(commitTime, jsc.parallelize(writeStatusList2), Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+
+      assertRLIandSIRecordGenerationAPIs(inserts2, updates2, deletes2, writeStatusList2, commitTime, writeConfig);
 
       // trigger 2nd commit.
       commitTime = client.startCommit();
@@ -267,14 +274,16 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       records3.addAll(updates3);
       records3.addAll(deletes3);
 
-      List<WriteStatus> writeStatuses3 = client.upsert(jsc.parallelize(records3, 1), commitTime).collect();
-      assertNoWriteErrors(writeStatuses3);
-      assertRLIandSIRecordGenerationAPIs(inserts3, updates3, deletes3, writeStatuses3, finalCommitTime3, writeConfig);
+      List<WriteStatus> writeStatusList3 = client.upsert(jsc.parallelize(records3, 1), commitTime).collect();
+      client.commit(commitTime, jsc.parallelize(writeStatusList3), Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+      assertRLIandSIRecordGenerationAPIs(inserts3, updates3, deletes3, writeStatusList3, finalCommitTime3, writeConfig);
 
       // trigger compaction
       Option<String> compactionInstantOpt = client.scheduleCompaction(Option.empty());
       assertTrue(compactionInstantOpt.isPresent());
       HoodieWriteMetadata compactionWriteMetadata = client.compact(compactionInstantOpt.get());
+      client.commitCompaction(compactionInstantOpt.get(), compactionWriteMetadata, Option.empty());
+      assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(compactionInstantOpt.get()));
       HoodieCommitMetadata compactionCommitMetadata = (HoodieCommitMetadata) compactionWriteMetadata.getCommitMetadata().get();
       // no RLI records should be generated for compaction operation.
       assertTrue(convertMetadataToRecordIndexRecords(context, compactionCommitMetadata, writeConfig.getMetadataConfig(),
@@ -296,7 +305,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
     initTimelineService();
 
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
-    HoodieWriteConfig writeConfig = getConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER).withAutoCommit(false)
+    HoodieWriteConfig writeConfig = getConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(3)
             .withInlineCompaction(false)
             .compactionSmallFileSize(0).build()).build();
@@ -306,9 +315,9 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       String commitTime = client.startCommit();
       int initialRecordsCount = 10;
       List<HoodieRecord> records1 = dataGen.generateInserts(commitTime, initialRecordsCount);
-      JavaRDD<WriteStatus> writeStatuses1 = client.insert(jsc.parallelize(records1, 1), commitTime);
-      assertNoWriteErrors(writeStatuses1.collect());
-      client.commit(commitTime, writeStatuses1);
+      List<WriteStatus> writeStatusList = client.insert(jsc.parallelize(records1, 1), commitTime).collect();
+      assertNoWriteErrors(writeStatusList);
+      client.commit(commitTime, jsc.parallelize(writeStatusList));
 
       // assert SI records from 1st commit
       List<String> expectedSecondaryIndexKeys = records1.stream().map(TestMetadataUtilRLIandSIRecordGeneration::getSecondaryIndexKey).collect(Collectors.toList());
@@ -341,18 +350,18 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       List<HoodieRecord> records2 = new ArrayList<>();
       records2.addAll(inserts2);
       records2.addAll(updates2);
-      JavaRDD<WriteStatus> writeStatuses2 = client.upsert(jsc.parallelize(records2, 1), commitTime);
-      assertNoWriteErrors(writeStatuses2.collect());
+      List<WriteStatus> writeStatusList2 = client.upsert(jsc.parallelize(records2, 1), commitTime).collect();
+      assertNoWriteErrors(writeStatusList2);
 
       // assert SI
       String secondCommitTime = commitTime;
       metaClient = HoodieTableMetaClient.reload(metaClient);
       metadata.reset();
       metadataView = new HoodieTableFileSystemView(metadata, metaClient, metaClient.getActiveTimeline());
-      List<HoodieWriteStat> allWriteStats = writeStatuses2.collect().stream().map(WriteStatus::getStat).collect(Collectors.toList());
+      List<HoodieWriteStat> allWriteStats = writeStatusList2.stream().map(WriteStatus::getStat).collect(Collectors.toList());
       secondaryIndexRecords =
           convertWriteStatsToSecondaryIndexRecords(allWriteStats, secondCommitTime, indexDefinition, metadataConfig, metadataView, metaClient, engineContext, EngineType.SPARK).collectAsList();
-      client.commit(secondCommitTime, writeStatuses2);
+      client.commit(secondCommitTime, jsc.parallelize(writeStatusList2));
 
       // There should be 3 SI records:
       // a) 1 insert due to inserts2,
@@ -375,18 +384,18 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       List<String> expectedDeletedIndexKeys = deletes.stream().map(TestMetadataUtilRLIandSIRecordGeneration::getSecondaryIndexKey).collect(Collectors.toList());
       List<HoodieRecord> records3 = new ArrayList<>();
       records3.addAll(deletes);
-      JavaRDD<WriteStatus> writeStatuses3 = client.upsert(jsc.parallelize(records3, 1), commitTime);
-      assertNoWriteErrors(writeStatuses3.collect());
+      List<WriteStatus> writeStatusList3 = client.upsert(jsc.parallelize(records3, 1), commitTime).collect();
+      assertNoWriteErrors(writeStatusList3);
 
       // assert SI
       String thirdCommitTime = commitTime;
       metaClient = HoodieTableMetaClient.reload(metaClient);
       metadata.reset();
       metadataView = new HoodieTableFileSystemView(metadata, metaClient, metaClient.getActiveTimeline());
-      allWriteStats = writeStatuses3.collect().stream().map(WriteStatus::getStat).collect(Collectors.toList());
+      allWriteStats = writeStatusList3.stream().map(WriteStatus::getStat).collect(Collectors.toList());
       secondaryIndexRecords =
           convertWriteStatsToSecondaryIndexRecords(allWriteStats, thirdCommitTime, indexDefinition, metadataConfig, metadataView, metaClient, engineContext, EngineType.SPARK).collectAsList();
-      client.commit(thirdCommitTime, writeStatuses3);
+      client.commit(thirdCommitTime, jsc.parallelize(writeStatusList3));
 
       // There should be 1 SI records: 1 delete due to deletes3
       assertEquals(1, secondaryIndexRecords.size());
@@ -406,18 +415,18 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       List<String> expectedRevivedIndexKeys = inserts4.stream().map(TestMetadataUtilRLIandSIRecordGeneration::getSecondaryIndexKey).collect(Collectors.toList());
       List<HoodieRecord> records4 = new ArrayList<>();
       records4.addAll(inserts4);
-      JavaRDD<WriteStatus> writeStatuses4 = client.upsert(jsc.parallelize(records4, 1), commitTime);
-      assertNoWriteErrors(writeStatuses4.collect());
+      List<WriteStatus> writeStatusList4 = client.upsert(jsc.parallelize(records4, 1), commitTime).collect();
+      assertNoWriteErrors(writeStatusList4);
 
       // assert SI
       String fourthCommitTime = commitTime;
       metaClient = HoodieTableMetaClient.reload(metaClient);
       metadata.reset();
       metadataView = new HoodieTableFileSystemView(metadata, metaClient, metaClient.getActiveTimeline());
-      allWriteStats = writeStatuses4.collect().stream().map(WriteStatus::getStat).collect(Collectors.toList());
+      allWriteStats = writeStatusList4.stream().map(WriteStatus::getStat).collect(Collectors.toList());
       secondaryIndexRecords =
           convertWriteStatsToSecondaryIndexRecords(allWriteStats, fourthCommitTime, indexDefinition, metadataConfig, metadataView, metaClient, engineContext, EngineType.SPARK).collectAsList();
-      client.commit(fourthCommitTime, writeStatuses4);
+      client.commit(fourthCommitTime, jsc.parallelize(writeStatusList4));
 
       // There should be 1 SI records: 1 insert due to inserts4
       assertEquals(1, secondaryIndexRecords.size());
@@ -429,18 +438,18 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       List<String> expectedUpdatedIndexKeys2 = updates5.stream().map(TestMetadataUtilRLIandSIRecordGeneration::getSecondaryIndexKey).collect(Collectors.toList());
       List<HoodieRecord> records5 = new ArrayList<>();
       records5.addAll(updates5);
-      JavaRDD<WriteStatus> writeStatuses5 = client.upsert(jsc.parallelize(records5, 1), commitTime);
-      assertNoWriteErrors(writeStatuses5.collect());
+      List<WriteStatus> writeStatusList5 = client.upsert(jsc.parallelize(records5, 1), commitTime).collect();
+      assertNoWriteErrors(writeStatusList5);
 
       // assert SI
       String fifthCommitTime = commitTime;
       metaClient = HoodieTableMetaClient.reload(metaClient);
       metadata.reset();
       metadataView = new HoodieTableFileSystemView(metadata, metaClient, metaClient.getActiveTimeline());
-      allWriteStats = writeStatuses5.collect().stream().map(WriteStatus::getStat).collect(Collectors.toList());
+      allWriteStats = writeStatusList5.stream().map(WriteStatus::getStat).collect(Collectors.toList());
       secondaryIndexRecords =
           convertWriteStatsToSecondaryIndexRecords(allWriteStats, fifthCommitTime, indexDefinition, metadataConfig, metadataView, metaClient, engineContext, EngineType.SPARK).collectAsList();
-      client.commit(fifthCommitTime, writeStatuses5);
+      client.commit(fifthCommitTime, jsc.parallelize(writeStatusList5));
 
       // There should be 0 SI records because the secondary key field "rider" value has not changed.
       assertEquals(0, secondaryIndexRecords.size());
@@ -449,6 +458,8 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       Option<String> compactionInstantOpt = client.scheduleCompaction(Option.empty());
       assertTrue(compactionInstantOpt.isPresent());
       HoodieWriteMetadata compactionWriteMetadata = client.compact(compactionInstantOpt.get());
+      client.commitCompaction(compactionInstantOpt.get(), compactionWriteMetadata, Option.empty());
+      assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(compactionInstantOpt.get()));
       HoodieCommitMetadata compactionCommitMetadata = (HoodieCommitMetadata) compactionWriteMetadata.getCommitMetadata().get();
       // assert SI records
       metaClient = HoodieTableMetaClient.reload(metaClient);

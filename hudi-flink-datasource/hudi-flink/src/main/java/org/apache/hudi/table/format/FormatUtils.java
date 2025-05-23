@@ -135,6 +135,7 @@ public class FormatUtils {
     }
   }
 
+  @Deprecated
   public static HoodieMergedLogRecordScanner logScanner(
       MergeOnReadInputSplit split,
       Schema logSchema,
@@ -163,6 +164,7 @@ public class FormatUtils {
         .build();
   }
 
+  @Deprecated
   public static HoodieMergedLogRecordScanner logScanner(
       List<String> logPaths,
       Schema logSchema,

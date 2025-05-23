@@ -135,7 +135,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
       return getBaseFileIteratorWithMetadata(split.getBasePath().get());
     } else if (!split.getBasePath().isPresent()) {
       // log files only
-      return new LogFileOnlyIterator(getFullLogFileIterator(split));
+      return getFullLogFileIterator(split);
     } else {
       Schema tableSchema = new Schema.Parser().parse(this.tableState.getAvroSchema());
       return new MergeIterator(

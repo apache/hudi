@@ -403,7 +403,7 @@ class HoodieSparkSqlWriterInternal {
             val internalSchemaOpt = HoodieSchemaUtils.getLatestTableInternalSchema(hoodieConfig, tableMetaClient)
             val client = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc,
                 null, path, tblName,
-                (addSchemaEvolutionParameters(parameters, internalSchemaOpt) - HoodieWriteConfig.AUTO_COMMIT_ENABLE.key).asJava))
+                addSchemaEvolutionParameters(parameters, internalSchemaOpt).asJava))
               .asInstanceOf[SparkRDDWriteClient[_]]
 
             if (isAsyncCompactionEnabled(client, tableConfig, parameters, jsc.hadoopConfiguration())) {
@@ -441,12 +441,12 @@ class HoodieSparkSqlWriterInternal {
             val schemaStr = new TableSchemaResolver(tableMetaClient).getTableAvroSchema(false).toString
             val client = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc,
                 schemaStr, path, tblName,
-                (parameters - HoodieWriteConfig.AUTO_COMMIT_ENABLE.key).asJava))
+                parameters.asJava))
               .asInstanceOf[SparkRDDWriteClient[_]]
             // Issue delete partitions
             instantTime = client.startCommit(commitActionType)
-            val writeStatuses = DataSourceUtils.doDeletePartitionsOperation(client, partitionsToDelete, instantTime)
-            (writeStatuses, client)
+            val writeResult =  DataSourceUtils.doDeletePartitionsOperation(client, partitionsToDelete, instantTime)
+            (writeResult, client)
 
           // Here all other (than DELETE, DELETE_PARTITION) write operations are handled
           case _ =>
@@ -482,7 +482,7 @@ class HoodieSparkSqlWriterInternal {
 
             // Create a HoodieWriteClient & issue the write.
             val client = hoodieWriteClient.getOrElse {
-              val finalOpts = addSchemaEvolutionParameters(parameters, internalSchemaOpt, Some(writerSchema)) - HoodieWriteConfig.AUTO_COMMIT_ENABLE.key
+              val finalOpts = addSchemaEvolutionParameters(parameters, internalSchemaOpt, Some(writerSchema))
               // TODO(HUDI-4772) proper writer-schema has to be specified here
               DataSourceUtils.createHoodieClient(jsc, processedDataSchema.toString, path, tblName, finalOpts.asJava)
             }

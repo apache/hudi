@@ -246,6 +246,7 @@ class TestHoodieMultiTableServicesMain extends HoodieCommonTestHarness implement
     JavaRDD<WriteStatus> result = writeClient.upsert(jsc.parallelize(records, 8), instant);
     List<WriteStatus> statuses = result.collect();
     assertNoWriteErrors(statuses);
+    writeClient.commit(instant, jsc().parallelize(statuses));
   }
 
   private HoodieWriteConfig.Builder getWriteConfigBuilder(StoragePath basePath, String tableName) {

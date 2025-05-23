@@ -20,11 +20,9 @@ package org.apache.hudi.table.format.mor;
 
 import org.apache.hudi.common.model.HoodieRecord;
 
-import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
 
 import java.io.Serializable;
-import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -88,30 +86,5 @@ public class MergeOnReadTableState implements Serializable {
         .map(fieldNames::indexOf)
         .mapToInt(i -> i)
         .toArray();
-  }
-
-  /**
-   * Get the primary key positions in required row type.
-   */
-  public int[] getPkOffsetsInRequired() {
-    final List<String> fieldNames = requiredRowType.getFieldNames();
-    return Arrays.stream(pkFields)
-        .map(fieldNames::indexOf)
-        .mapToInt(i -> i)
-        .toArray();
-  }
-
-  /**
-   * Returns the primary key fields logical type with given offsets.
-   *
-   * @param pkOffsets the pk offsets in required row type
-   * @return pk field logical types
-   * @see #getPkOffsetsInRequired()
-   */
-  public LogicalType[] getPkTypes(int[] pkOffsets) {
-    final LogicalType[] requiredTypes = requiredRowType.getFields().stream()
-        .map(RowType.RowField::getType).toArray(LogicalType[]::new);
-    return Arrays.stream(pkOffsets).mapToObj(offset -> requiredTypes[offset])
-        .toArray(LogicalType[]::new);
   }
 }

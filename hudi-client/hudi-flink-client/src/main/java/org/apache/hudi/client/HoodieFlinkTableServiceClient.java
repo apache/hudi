@@ -69,8 +69,13 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
   protected HoodieWriteMetadata<List<WriteStatus>> compact(String compactionInstantTime, boolean shouldComplete) {
     // only used for metadata table, the compaction happens in single thread
     HoodieWriteMetadata<List<WriteStatus>> compactionMetadata = createTable(config, storageConf).compact(context, compactionInstantTime);
-    commitCompaction(compactionInstantTime, compactionMetadata.getCommitMetadata().get(), Option.empty());
+    commitCompaction(compactionInstantTime, compactionMetadata, Option.empty());
     return compactionMetadata;
+  }
+
+  @Override
+  protected List<HoodieWriteStat> triggerWritesAndFetchWriteStats(HoodieWriteMetadata<List<WriteStatus>> writeMetadata) {
+    return writeMetadata.getWriteStatuses().stream().map(writeStatus -> writeStatus.getStat()).collect(Collectors.toList());
   }
 
   @Override

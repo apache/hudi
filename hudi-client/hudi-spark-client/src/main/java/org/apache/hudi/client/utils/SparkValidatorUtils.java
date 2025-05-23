@@ -60,7 +60,7 @@ public class SparkValidatorUtils {
 
   /**
    * Check configured pre-commit validators and run them. Note that this only works for COW tables
-   * 
+   * <p>
    * Throw error if there are validation failures.
    */
   public static void runValidators(HoodieWriteConfig config,
@@ -101,7 +101,7 @@ public class SparkValidatorUtils {
   /**
    * Run validators in a separate thread pool for parallelism. Each of validator can submit a distributed spark job if needed.
    */
-  private static CompletableFuture<Boolean> runValidatorAsync(SparkPreCommitValidator validator, HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata,
+  private static CompletableFuture<Boolean> runValidatorAsync(SparkPreCommitValidator validator, HoodieWriteMetadata<?> writeMetadata,
                                                               Dataset<Row> beforeState, Dataset<Row> afterState, String instantTime) {
     return CompletableFuture.supplyAsync(() -> {
       try {
@@ -163,7 +163,7 @@ public class SparkValidatorUtils {
    */
   public static Dataset<Row> getRecordsFromPendingCommits(SQLContext sqlContext, 
                                                           Set<String> partitionsAffected, 
-                                                          HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata,
+                                                          HoodieWriteMetadata<?> writeMetadata,
                                                           HoodieTable table,
                                                           String instantTime) {
 

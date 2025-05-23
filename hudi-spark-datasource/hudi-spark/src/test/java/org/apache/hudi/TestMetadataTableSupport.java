@@ -19,6 +19,7 @@
 
 package org.apache.hudi;
 
+import org.apache.hudi.client.HoodieWriteResult;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -26,6 +27,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StoragePath;
@@ -68,7 +70,7 @@ class TestMetadataTableSupport extends HoodieSparkClientTestBase {
       JavaRDD<HoodieRecord> dataset0 = jsc.parallelize(records0, 2);
 
       WriteClientTestUtils.startCommitWithTime(writeClient, timestamp0);
-      writeClient.insert(dataset0, timestamp0).collect();
+      writeClient.commit(timestamp0, writeClient.insert(dataset0, timestamp0));
 
       // Confirm MDT enabled.
       metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -99,13 +101,14 @@ class TestMetadataTableSupport extends HoodieSparkClientTestBase {
       List<HoodieRecord> records1 = dataGen.generateInserts(timestamp1, 50);
       JavaRDD<HoodieRecord> dataset1 = jsc.parallelize(records1, 2);
 
-      writeClient.insertOverwriteTable(dataset1, timestamp1);
+      HoodieWriteResult writeResult = writeClient.insertOverwriteTable(dataset1, timestamp1);
+      writeClient.commit(timestamp1, writeResult.getWriteStatuses(), Option.empty(), REPLACE_COMMIT_ACTION, writeResult.getPartitionToReplaceFileIds(), Option.empty());
 
       // Validate.
       mdtMetaClient = HoodieTableMetaClient.reload(mdtMetaClient);
       timeline = mdtMetaClient.getActiveTimeline();
       instants = timeline.getInstants();
-      assertEquals(5, timeline.getInstants().size());
+      assertEquals(6, timeline.getInstants().size());
       // For MDT bootstrap instant.
       assertEquals("00000000000000000", instants.get(0).requestedTime());
       // For col stats bootstrap instant.
@@ -115,7 +118,7 @@ class TestMetadataTableSupport extends HoodieSparkClientTestBase {
       // For partitions stats bootstrap instant.
       assertEquals("00000000000000003", instants.get(3).requestedTime());
       // For the insert_overwrite_table instant.
-      assertEquals(timestamp1, instants.get(4).requestedTime());
+      assertEquals(timestamp1, instants.get(5).requestedTime());
     }
   }
 }

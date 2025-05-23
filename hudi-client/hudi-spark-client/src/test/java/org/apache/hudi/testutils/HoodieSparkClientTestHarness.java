@@ -405,7 +405,11 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
 
   @Override
   public SparkRDDWriteClient getHoodieWriteClient(HoodieWriteConfig cfg) {
-    if (null != writeClient) {
+    return getHoodieWriteClient(cfg, true);
+  }
+
+  public SparkRDDWriteClient getHoodieWriteClient(HoodieWriteConfig cfg, boolean shouldCloseOlderClient) {
+    if (null != writeClient && shouldCloseOlderClient) {
       writeClient.close();
       writeClient = null;
     }
@@ -482,16 +486,12 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
   protected List<WriteStatus> writeAndVerifyBatch(BaseHoodieWriteClient client, List<HoodieRecord> inserts, String commitTime, boolean populateMetaFields, boolean autoCommitOff) {
     WriteClientTestUtils.startCommitWithTime(client, commitTime);
     JavaRDD<HoodieRecord> insertRecordsRDD1 = jsc.parallelize(inserts, 2);
-    JavaRDD<WriteStatus> statusRDD = ((SparkRDDWriteClient) client).upsert(insertRecordsRDD1, commitTime);
-    if (autoCommitOff) {
-      client.commit(commitTime, statusRDD);
-    }
-    List<WriteStatus> statuses = statusRDD.collect();
-    assertNoWriteErrors(statuses);
-    verifyRecordsWritten(commitTime, populateMetaFields, inserts, statuses, client.getConfig(),
+    List<WriteStatus> statusList = ((SparkRDDWriteClient) client).upsert(insertRecordsRDD1, commitTime).collect();
+    client.commit(commitTime, jsc.parallelize(statusList, 1));
+    assertNoWriteErrors(statusList);
+    verifyRecordsWritten(commitTime, populateMetaFields, inserts, statusList, client.getConfig(),
         HoodieSparkKeyGeneratorFactory.createKeyGenerator(client.getConfig().getProps()));
-
-    return statuses;
+    return statusList;
   }
 
   /**

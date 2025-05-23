@@ -18,45 +18,20 @@
 
 package org.apache.hudi.common.util.collection;
 
-import org.apache.hudi.common.util.ValidationUtils;
-
 import java.util.Iterator;
 import java.util.function.Predicate;
 
 /**
- * An iterator that filters elements from a source iterator based on a predicate.
- * @param <R> Type of elements in the iterator
+ * {@link FilterIterator} requiring to be closed after iteration (to cleanup resources)
  */
-public class FilterIterator<R> implements Iterator<R> {
+public class CloseableFilterIterator<R> extends FilterIterator<R> implements ClosableIterator<R> {
 
-  protected final Iterator<R> source;
-
-  private final Predicate<R> filter;
-
-  private R current;
-
-  public FilterIterator(Iterator<R> source, Predicate<R> filter) {
-    this.source = source;
-    this.filter = filter;
+  public CloseableFilterIterator(Iterator<R> source, Predicate<R> filter) {
+    super(source, filter);
   }
 
   @Override
-  public boolean hasNext() {
-    while (current == null && source.hasNext()) {
-      R next = source.next();
-      if (filter.test(next)) {
-        current = next;
-        break;
-      }
-    }
-    return current != null;
-  }
-
-  @Override
-  public R next() {
-    ValidationUtils.checkArgument(hasNext(), "No more elements to iterate");
-    R next = current;
-    current = null;
-    return next;
+  public void close() {
+    ((ClosableIterator<R>) source).close();
   }
 }

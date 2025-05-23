@@ -22,7 +22,6 @@ import org.apache.hudi.client.model.BootstrapRowData;
 import org.apache.hudi.client.model.CommitTimeFlinkRecordMerger;
 import org.apache.hudi.client.model.EventTimeFlinkRecordMerger;
 import org.apache.hudi.client.model.HoodieFlinkRecord;
-import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
@@ -34,7 +33,9 @@ import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -43,7 +44,8 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.io.storage.HoodieIOFactory;
-import org.apache.hudi.source.ExpressionPredicates.Predicate;
+import org.apache.hudi.keygen.KeyGenUtils;
+import org.apache.hudi.source.ExpressionPredicates;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
@@ -52,6 +54,7 @@ import org.apache.hudi.util.RowDataAvroQueryContexts;
 import org.apache.hudi.util.RowDataUtils;
 import org.apache.hudi.util.RowProjection;
 import org.apache.hudi.util.SchemaEvolvingRowDataProjection;
+import org.apache.hudi.util.StringToRowDataConverter;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -65,6 +68,7 @@ import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.types.RowKind;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
@@ -79,21 +83,28 @@ import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
  * log files with Flink parquet reader.
  */
 public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
-  private final List<Predicate> predicates;
+  private final List<ExpressionPredicates.Predicate> predicates;
   private final Supplier<InternalSchemaManager> internalSchemaManager;
   private final boolean utcTimezone;
-  private final HoodieConfig hoodieConfig;
+  private final HoodieTableConfig tableConfig;
+  // the converter is used to create a RowData contains primary key fields only
+  // for DELETE cases, it'll not be initialized if primary key semantics is lost.
+  // For e.g, if the pk fields are [a, b] but user only select a, then the pk
+  // semantics is lost.
+  private StringToRowDataConverter recordKeyRowConverter;
 
   public FlinkRowDataReaderContext(
       StorageConfiguration<?> storageConfiguration,
       Supplier<InternalSchemaManager> internalSchemaManager,
-      List<Predicate> predicates,
-      HoodieTableConfig tableConfig) {
+      List<ExpressionPredicates.Predicate> predicates,
+      HoodieTableConfig tableConfig,
+      Option<InstantRange> instantRangeOpt) {
     super(storageConfiguration, tableConfig);
-    this.hoodieConfig = tableConfig;
+    this.tableConfig = tableConfig;
     this.internalSchemaManager = internalSchemaManager;
     this.predicates = predicates;
     this.utcTimezone = getStorageConfiguration().getBoolean(FlinkOptions.READ_UTC_TIMEZONE.key(), FlinkOptions.READ_UTC_TIMEZONE.defaultValue());
+    this.instantRangeOpt = instantRangeOpt;
   }
 
   @Override
@@ -111,9 +122,32 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
     HoodieRowDataParquetReader rowDataParquetReader =
         (HoodieRowDataParquetReader) HoodieIOFactory.getIOFactory(storage)
             .getReaderFactory(HoodieRecord.HoodieRecordType.FLINK)
-            .getFileReader(hoodieConfig, filePath, HoodieFileFormat.PARQUET, Option.empty());
+            .getFileReader(tableConfig, filePath, HoodieFileFormat.PARQUET, Option.empty());
     DataType rowType = RowDataAvroQueryContexts.fromAvroSchema(dataSchema).getRowType();
-    return rowDataParquetReader.getRowDataIterator(schemaManager, rowType, requiredSchema);
+    return rowDataParquetReader.getRowDataIterator(schemaManager, rowType, requiredSchema, predicates);
+  }
+
+  @Override
+  public void setSchemaHandler(FileGroupReaderSchemaHandler<RowData> schemaHandler) {
+    super.setSchemaHandler(schemaHandler);
+
+    Option<String[]> recordKeysOpt = tableConfig.getRecordKeyFields();
+    if (recordKeysOpt.isEmpty()) {
+      return;
+    }
+    // primary key semantic is lost if not all primary key fields are included in the request schema.
+    boolean pkSemanticLost = Arrays.stream(recordKeysOpt.get()).anyMatch(k -> schemaHandler.getRequestedSchema().getField(k) == null);
+    if (pkSemanticLost) {
+      return;
+    }
+    // get primary key field position in required schema.
+    Schema requiredSchema = schemaHandler.getRequiredSchema();
+    int[] pkFieldsPos = Arrays.stream(recordKeysOpt.get())
+        .map(k -> Option.ofNullable(requiredSchema.getField(k)).map(Schema.Field::pos).orElse(-1))
+        .mapToInt(Integer::intValue)
+        .toArray();
+    recordKeyRowConverter = new StringToRowDataConverter(
+        pkFieldsPos, (RowType) RowDataAvroQueryContexts.fromAvroSchema(requiredSchema).getRowType().getLogicalType());
   }
 
   @Override
@@ -142,6 +176,11 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
     } else {
       return fieldQueryContext.getFieldGetter().getFieldOrNull(record);
     }
+  }
+
+  @Override
+  public String getMetaFieldValue(RowData record, int pos) {
+    return record.getString(pos).toString();
   }
 
   @Override
@@ -254,6 +293,21 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
   @Override
   public GenericRecord convertToAvroRecord(RowData record, Schema schema) {
     return (GenericRecord) RowDataAvroQueryContexts.fromAvroSchema(schema).getRowDataToAvroConverter().convert(schema, record);
+  }
+
+  @Override
+  public RowData getDeleteRow(RowData record, String recordKey) {
+    if (record != null) {
+      return record;
+    }
+    // don't need to emit record key row if primary key semantic is lost
+    if (recordKeyRowConverter == null) {
+      return null;
+    }
+    final String[] pkVals = KeyGenUtils.extractRecordKeys(recordKey);
+    RowData recordKeyRow = recordKeyRowConverter.convert(pkVals);
+    recordKeyRow.setRowKind(RowKind.DELETE);
+    return recordKeyRow;
   }
 
   @Override

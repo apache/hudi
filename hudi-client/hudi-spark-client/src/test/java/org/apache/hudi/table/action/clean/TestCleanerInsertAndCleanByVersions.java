@@ -55,12 +55,14 @@ import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.testutils.HoodieTestTable.makeIncrementalCommitTimes;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.table.TestCleaner.insertFirstBigBatchForClientCleanerTest;
@@ -123,7 +125,7 @@ public class TestCleanerInsertAndCleanByVersions extends SparkClientFunctionalTe
       Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieRecord>, String> upsertFn, boolean isPreppedAPI)
       throws Exception {
     int maxVersions = 2; // keep upto 2 versions for each file
-    HoodieWriteConfig cfg = getConfigBuilder(true)
+    HoodieWriteConfig cfg = getConfigBuilder(false)
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS)
             .retainFileVersions(maxVersions).build())
@@ -178,9 +180,9 @@ public class TestCleanerInsertAndCleanByVersions extends SparkClientFunctionalTe
         WriteClientTestUtils.startCommitWithTime(client, newInstantTime);
         List<HoodieRecord> records = recordUpsertGenWrappedFunction.apply(newInstantTime, BATCH_SIZE);
 
-        List<WriteStatus> statuses = upsertFn.apply(client, jsc().parallelize(records, PARALLELISM), newInstantTime).collect();
-        // Verify there are no errors
-        assertNoWriteErrors(statuses);
+        List<WriteStatus> statusList = upsertFn.apply(client, jsc().parallelize(records, PARALLELISM), newInstantTime).collect();
+        client.commit(newInstantTime, jsc().parallelize(statusList), Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+        assertNoWriteErrors(statusList);
 
         metaClient = HoodieTableMetaClient.reload(metaClient);
         table = HoodieSparkTable.create(cfg, context(), metaClient);

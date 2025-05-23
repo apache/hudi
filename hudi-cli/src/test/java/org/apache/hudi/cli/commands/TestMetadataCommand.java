@@ -89,6 +89,7 @@ public class TestMetadataCommand extends CLIFunctionalTestHarness {
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, numRecords);
       JavaRDD<HoodieRecord> writeRecords = context().getJavaSparkContext().parallelize(records, 1);
       List<WriteStatus> result = client.upsert(writeRecords, newCommitTime).collect();
+      client.commit(newCommitTime, jsc().parallelize(result));
       Assertions.assertNoWriteErrors(result);
     }
 

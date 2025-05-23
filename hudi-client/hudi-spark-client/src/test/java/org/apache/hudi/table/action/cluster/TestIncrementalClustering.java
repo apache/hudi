@@ -21,6 +21,7 @@ package org.apache.hudi.table.action.cluster;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieSliceInfo;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.TableServiceType;
@@ -36,6 +37,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.cluster.strategy.ClusteringPlanStrategy;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
+import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -44,12 +46,14 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.config.HoodieClusteringConfig.DAYBASED_LOOKBACK_PARTITIONS;
 import static org.apache.hudi.config.HoodieClusteringConfig.PARTITION_FILTER_BEGIN_PARTITION;
 import static org.apache.hudi.config.HoodieClusteringConfig.PARTITION_FILTER_END_PARTITION;
@@ -188,7 +192,7 @@ public class TestIncrementalClustering extends SparkClientFunctionalTestHarness 
   private HoodieWriteConfig buildWriteConfig(boolean enableIncrTableService, Properties properties, int maxClusteringGroup) {
     properties.put("hoodie.datasource.write.row.writer.enable", String.valueOf(false));
     properties.put("hoodie.parquet.small.file.limit", String.valueOf(-1));
-    return getConfigBuilder(true)
+    return getConfigBuilder(false)
         .withIncrementalTableServiceEnabled(enableIncrTableService)
         .withClusteringConfig(HoodieClusteringConfig.newBuilder()
             .withClusteringMaxNumGroups(maxClusteringGroup)
@@ -204,7 +208,8 @@ public class TestIncrementalClustering extends SparkClientFunctionalTestHarness 
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(partitions);
     for (int i = 0; i < partitions.length; i++) {
       String instantTime = client.startCommit();
-      client.insert(jsc().parallelize(dataGen.generateInsertsForPartition(instantTime, 10, partitions[i]), 1), instantTime);
+      JavaRDD<WriteStatus> writeStatusJavaRDD = client.insert(jsc().parallelize(dataGen.generateInsertsForPartition(instantTime, 10, partitions[i]), 1), instantTime);
+      client.commit(instantTime, writeStatusJavaRDD, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
     }
     client.close();
   }

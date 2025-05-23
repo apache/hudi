@@ -22,10 +22,13 @@ import org.apache.hudi.common.util.ValidationUtils;
 
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.table.data.DecimalData;
+import org.apache.flink.table.data.GenericRowData;
+import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.types.logical.DecimalType;
 import org.apache.flink.table.types.logical.LogicalType;
+import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.TimestampType;
 
 import java.math.BigDecimal;
@@ -44,22 +47,26 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 @Internal
 public class StringToRowDataConverter {
   private final Converter[] converters;
+  private final int[] fieldsPos;
+  private final int rowArity;
 
-  public StringToRowDataConverter(LogicalType[] fieldTypes) {
-    this.converters = Arrays.stream(fieldTypes)
-        .map(StringToRowDataConverter::getConverter)
+  public StringToRowDataConverter(int[] fieldsPos, RowType rowType) {
+    this.fieldsPos = fieldsPos;
+    this.rowArity = rowType.getFieldCount();
+    this.converters = Arrays.stream(fieldsPos)
+        .mapToObj(f -> getConverter(rowType.getTypeAt(f)))
         .toArray(Converter[]::new);
   }
 
-  public Object[] convert(String[] fields) {
+  public RowData convert(String[] fields) {
     ValidationUtils.checkArgument(converters.length == fields.length,
         "Field types and values should equal with number");
 
-    Object[] converted = new Object[fields.length];
+    GenericRowData rowData = new GenericRowData(rowArity);
     for (int i = 0; i < fields.length; i++) {
-      converted[i] = converters[i].convert(fields[i]);
+      rowData.setField(fieldsPos[i], converters[i].convert(fields[i]));
     }
-    return converted;
+    return rowData;
   }
 
   private interface Converter {

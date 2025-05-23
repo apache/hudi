@@ -147,7 +147,6 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
             .withPayloadOrderingField("number").build())
         .withRollbackUsingMarkers(rollbackUsingMarkers)
         .withIndexConfig(indexBuilder.build())
-        .withAutoCommit(false)
         .withMetadataConfig(metadataConfigBuilder.build())
         .withLayoutConfig(HoodieLayoutConfig.newBuilder().fromProperties(indexBuilder.build().getProps())
             .withLayoutPartitioner(SparkBucketIndexPartitioner.class.getName()).build())
@@ -277,7 +276,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     // Rollback the last commit
     writeClient.rollback(newCommitTime);
 
-    hoodieTable = HoodieSparkTable.create(config, context, metaClient);
+    hoodieTable = HoodieSparkTable.create(config, context);
     // Now tagLocation for these records, hbaseIndex should not tag them since it was a rolled
     // back commit
     javaRDD = tagLocation(index, writtenRecords, hoodieTable);

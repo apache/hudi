@@ -20,6 +20,7 @@ package org.apache.hudi.common.util.collection;
 
 import java.io.Serializable;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * (NOTE: Adapted from Apache commons-lang3)
@@ -170,7 +171,7 @@ public abstract class Pair<L, R> implements Map.Entry<L, R>, Comparable<Pair<L, 
     }
     if (obj instanceof Map.Entry<?, ?>) {
       final Map.Entry<?, ?> other = (Map.Entry<?, ?>) obj;
-      return getKey().equals(other.getKey()) && getValue().equals(other.getValue());
+      return Objects.equals(getKey(), other.getKey()) && Objects.equals(getValue(), other.getValue());
     }
     return false;
   }

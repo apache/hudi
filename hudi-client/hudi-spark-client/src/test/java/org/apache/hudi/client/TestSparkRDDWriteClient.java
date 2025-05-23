@@ -118,7 +118,6 @@ class TestSparkRDDWriteClient extends SparkClientFunctionalTestHarness {
     final HoodieTableMetaClient metaClient = getHoodieMetaClient(storageConf(), URI.create(basePath()).getPath(), tableType, new Properties());
     final HoodieWriteConfig writeConfig = getConfigBuilder(true)
         .withPath(metaClient.getBasePath())
-        .withAutoCommit(false)
         .withReleaseResourceEnabled(shouldReleaseResource)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(metadataTableEnable).build())
         .build();

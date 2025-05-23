@@ -1048,22 +1048,6 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     })
   }
 
-  @Test
-  def testWithAutoCommitOn(): Unit = {
-    val (writeOpts, readOpts) = getWriterReaderOpts()
-
-    val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).asScala.toList
-    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
-    inputDF1.write.format("org.apache.hudi")
-      .options(writeOpts)
-      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
-      .option(HoodieWriteConfig.AUTO_COMMIT_ENABLE.key, "true")
-      .mode(SaveMode.Overwrite)
-      .save(basePath)
-
-    assertTrue(HoodieDataSourceHelpers.hasNewCommits(storage, basePath, "000"))
-  }
-
   private def getDataFrameWriter(keyGenerator: String, opts: Map[String, String]): DataFrameWriter[Row] = {
     val records = recordsToStrings(dataGen.generateInserts("000", 100)).asScala.toList
     val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
