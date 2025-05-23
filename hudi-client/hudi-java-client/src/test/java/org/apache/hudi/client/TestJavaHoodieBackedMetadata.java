@@ -2705,12 +2705,12 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
         assertTrue(compactionInstantTime.isPresent());
 
         HoodieWriteMetadata writeMetadata = metadataWriteClient.compact(compactionInstantTime.get());
-        metadataWriteClient.commitCompaction(compactionInstantTime, writeMetadata, Option.empty());
+        metadataWriteClient.commitCompaction(compactionInstantTime.get(), writeMetadata, Option.empty());
         HoodieTableMetaClient mdtMetaClient = HoodieTableMetaClient.builder()
             .setBasePath(metadataTableBasePath)
             .setConf(storageConf)
             .build();
-        assertTrue(mdtMetaClient.getActiveTimeline().filterCompletedInstants().containsInstant(compactionInstantTime));
+        assertTrue(mdtMetaClient.getActiveTimeline().filterCompletedInstants().containsInstant(compactionInstantTime.get()));
 
         // verify metadata table
         validateMetadata(client);

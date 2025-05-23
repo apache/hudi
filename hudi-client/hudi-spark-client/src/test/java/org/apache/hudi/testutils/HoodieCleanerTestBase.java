@@ -52,6 +52,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.bootstrap.index.TestBootstrapIndex.generateBootstrapIndex;
+import static org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTime;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -108,8 +109,8 @@ public class HoodieCleanerTestBase extends HoodieClientTestBase {
       HoodieWriteConfig config, boolean simulateRetryFailure, boolean simulateMetadataFailure,
       Integer firstCommitSequence, boolean needInstantInHudiFormat) throws IOException {
     SparkRDDWriteClient<?> writeClient = getHoodieWriteClient(config);
-    HoodieCleanMetadata cleanMetadata1 = writeClient.clean();
-    String cleanInstantTs = metaClient.reloadActiveTimeline().getCleanerTimeline().lastInstant().get().requestedTime();
+    String cleanInstantTs = needInstantInHudiFormat ? makeNewCommitTime(firstCommitSequence, "%014d") : makeNewCommitTime(firstCommitSequence, "%09d");
+    HoodieCleanMetadata cleanMetadata1 = writeClient.clean(cleanInstantTs);
 
     if (null == cleanMetadata1) {
       return new ArrayList<>();
