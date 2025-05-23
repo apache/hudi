@@ -28,7 +28,6 @@ import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.read.HoodieFileGroupReader
 import org.apache.hudi.common.util.collection.ClosableIterator
 import org.apache.hudi.data.CloseableIteratorListener
-import org.apache.hudi.expression.Predicate
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.io.IOUtils
 import org.apache.hudi.storage.StorageConfiguration

@@ -248,10 +248,10 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         schema,
         metadataMetaClient,
         new TypedProperties(),
-        Option.of(transformKeyPrefixesToPredicate(sortedKeyPrefixes)));
-    fileGroupReader.setInstantRange(Option.of(instantRange));
+        Option.of(transformKeyPrefixesToPredicate(sortedKeyPrefixes)),
+        instantRange);
     ClosableIterator<IndexedRecord> it = fileGroupReader.getClosableIterator();
-    return new HoodieRecordIterator(it, partitionName, sortedKeyPrefixes);
+    return new HoodieRecordIterator(it, partitionName);
   }
 
   private Predicate transformKeysToPredicate(List<String> keys) {
@@ -267,13 +267,11 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   public static class HoodieRecordIterator implements Iterator<HoodieRecord<HoodieMetadataPayload>> {
     private final ClosableIterator<IndexedRecord> baseIterator;
     private final String partitionName;
-    private final List<String> sortedKeyPrefixes;
     private GenericRecord metadataRecord;
 
-    public HoodieRecordIterator(ClosableIterator<IndexedRecord> baseIterator, String partitionName, List<String> sortedKeyPrefixes) {
+    public HoodieRecordIterator(ClosableIterator<IndexedRecord> baseIterator, String partitionName) {
       this.baseIterator = baseIterator;
       this.partitionName = partitionName;
-      this.sortedKeyPrefixes = sortedKeyPrefixes;
     }
 
     @Override
@@ -320,7 +318,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     // Lookup keys from each file slice
     if (numFileSlices == 1) {
       // Optimization for a single slice for smaller metadata table partitions
-      result = lookupKeysFromFileSlice(partitionName, keys, partitionFileSlices.get(0));
+      result = lookupKeysWithFileGroupReader(partitionName, keys, partitionFileSlices.get(0));
     } else {
       // Parallel lookup for large sized partitions with many file slices
       // Partition the keys by the file slice which contains it
@@ -332,7 +330,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
           return Collections.<String, HoodieRecord<HoodieMetadataPayload>>emptyMap();
         }
         int shardIndex = HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(keysList.get(0), numFileSlices);
-        return lookupKeysFromFileSlice(partitionName, keysList, partitionFileSlices.get(shardIndex));
+        return lookupKeysWithFileGroupReader(partitionName, keysList, partitionFileSlices.get(shardIndex));
       }, partitionedKeys.size()).forEach(result::putAll);
     }
 
@@ -349,45 +347,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       partitionedKeys.get(shardIndex).add(key);
     });
     return partitionedKeys;
-  }
-
-  /**
-   * Lookup list of keys from a single file slice.
-   *
-   * @param partitionName Name of the partition
-   * @param keys          The list of keys to lookup
-   * @param fileSlice     The file slice to read
-   * @return A {@code Map} of key name to {@code HoodieRecord} for the keys which were found in the file slice
-   */
-  private Map<String, HoodieRecord<HoodieMetadataPayload>> lookupKeysFromFileSlice(String partitionName, List<String> keys, FileSlice fileSlice) {
-    // If file group reader has been enabled, we read from it.
-    if (metadataConfig.isFileGroupReaderEnabled()) {
-      return lookupKeysWithFileGroupReader(partitionName, keys, fileSlice);
-    }
-
-    Pair<HoodieSeekingFileReader<?>, HoodieMetadataLogRecordReader> readers = getOrCreateReaders(partitionName, fileSlice);
-    try {
-      HoodieSeekingFileReader<?> baseFileReader = readers.getKey();
-      HoodieMetadataLogRecordReader logRecordScanner = readers.getRight();
-      if (baseFileReader == null && logRecordScanner == null) {
-        return Collections.emptyMap();
-      }
-
-      // Sort it here once so that we don't need to sort individually for base file and for each individual log files.
-      List<String> sortedKeys = new ArrayList<>(keys);
-      Collections.sort(sortedKeys);
-      boolean fullKeys = true;
-      List<Long> timings = new ArrayList<>(1);
-      Map<String, HoodieRecord<HoodieMetadataPayload>> logRecords = readLogRecords(logRecordScanner, sortedKeys, fullKeys, timings);
-      Map<String, HoodieRecord<HoodieMetadataPayload>> finalRecords = readFromBaseAndMergeWithLogRecords(baseFileReader, sortedKeys, fullKeys, logRecords, timings, partitionName);
-      return finalRecords;
-    } catch (IOException ioe) {
-      throw new HoodieIOException("Error merging records from metadata table for  " + keys.size() + " key : ", ioe);
-    } finally {
-      if (!reuse) {
-        closeReader(readers);
-      }
-    }
   }
 
   private Map<String, HoodieRecord<HoodieMetadataPayload>> lookupKeysWithFileGroupReader(String partitionName,
@@ -418,8 +377,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
           schema,
           metadataMetaClient,
           new TypedProperties(),
-          Option.of(transformKeysToPredicate(sortedKeys)));
-      fileGroupReader.setInstantRange(Option.of(instantRange));
+          Option.of(transformKeysToPredicate(sortedKeys)),
+          instantRange);
       try (ClosableIterator<IndexedRecord> it = fileGroupReader.getClosableIterator()) {
         Map<String, HoodieRecord<HoodieMetadataPayload>> records = new HashMap<>();
         while (it.hasNext()) {
@@ -805,7 +764,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
                                                                   Schema requestedSchema,
                                                                   HoodieTableMetaClient metaClient,
                                                                   TypedProperties props,
-                                                                  Option<Predicate> filter) throws IOException {
+                                                                  Option<Predicate> filter,
+                                                                  InstantRange instantRange) throws IOException {
     HoodieReaderContext<IndexedRecord> readerContext =
         new HoodieAvroReaderContext(storageConf, tableConfig, filter);
     return HoodieFileGroupReader.<IndexedRecord>newBuilder()
@@ -819,6 +779,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         .withStart(0)
         .withLength(Long.MAX_VALUE)
         .withShouldUseRecordPosition(false)
+        .withInstantRange(instantRange)
         .build();
   }
 }

@@ -446,12 +446,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
           + "The index name either starts with or matches exactly can be one of the following: "
           + StringUtils.join(Arrays.stream(MetadataPartitionType.values()).map(MetadataPartitionType::getPartitionPath).collect(Collectors.toList()), ", "));
 
-  public static final ConfigProperty<Boolean> FILE_GROUP_READER_ENABLED = ConfigProperty
-      .key(METADATA_PREFIX + ".file.group.reader.enabled")
-      .defaultValue(true)
-      .sinceVersion("1.1.0")
-      .withDocumentation("Use file group reader interface to merge metadata records");
-
   public long getMaxLogFileSize() {
     return getLong(MAX_LOG_FILE_SIZE_BYTES_PROP);
   }
@@ -659,10 +653,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public String getMetadataIndexToDrop() {
     return getString(DROP_METADATA_INDEX);
-  }
-
-  public boolean isFileGroupReaderEnabled() {
-    return getBoolean(FILE_GROUP_READER_ENABLED);
   }
 
   /**
