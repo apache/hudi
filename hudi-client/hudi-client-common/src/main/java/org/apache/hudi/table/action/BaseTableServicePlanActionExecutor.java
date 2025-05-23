@@ -83,12 +83,12 @@ public abstract class BaseTableServicePlanActionExecutor<T, I, K, O, R> extends 
 
         if (lastCompleteTableServiceInstant.isPresent()) {
           if (!incrementalPartitions.isEmpty()) {
-            LOG.info("Fetched incremental partitions for {}: {} as of {}", type, incrementalPartitions, instantTime);
+            LOG.info("Fetched incremental partitions for " + type + ". " + incrementalPartitions + ". Instant " + instantTime);
             return new ArrayList<>(incrementalPartitions);
           } else {
             // handle the case the writer just commits the empty commits continuously
             // the incremental partition list is empty we just skip the scheduling
-            LOG.info("Incremental partitions are empty. Skip current schedule.");
+            LOG.info("Incremental partitions are empty. Skip current schedule " + instantTime);
             return Collections.emptyList();
           }
         }
@@ -101,7 +101,7 @@ public abstract class BaseTableServicePlanActionExecutor<T, I, K, O, R> extends 
     }
 
     // get all partitions
-    LOG.info("Start to fetch all partitions for {} as of {}", type, instantTime);
+    LOG.info("Start to fetch all partitions for " + type + ". Instant " + instantTime);
     return FSUtils.getAllPartitionPaths(context, table.getMetaClient().getStorage(),
         config.getMetadataConfig(), table.getMetaClient().getBasePath());
   }

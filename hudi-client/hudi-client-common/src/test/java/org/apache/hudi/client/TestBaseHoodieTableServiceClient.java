@@ -110,7 +110,8 @@ class TestBaseHoodieTableServiceClient extends HoodieCommonTestHarness {
       when(firstTable.clean(any(), eq(cleanInstantTime))).thenReturn(null);
     }
 
-    TestTableServiceClient tableServiceClient = new TestTableServiceClient(writeConfig, Arrays.asList(firstTable, secondTable).iterator(), Option.empty(), expectedRollbackInfo, Collections.singletonList(cleanInstantTime).iterator());
+    TestTableServiceClient tableServiceClient = new TestTableServiceClient(writeConfig, Arrays.asList(firstTable, secondTable).iterator(), Option.empty(), expectedRollbackInfo,
+        Collections.singletonList(cleanInstantTime).iterator());
     tableServiceClient.clean(Option.empty(), false);
   }
 
@@ -144,7 +145,8 @@ class TestBaseHoodieTableServiceClient extends HoodieCommonTestHarness {
     HoodieCleanMetadata metadata = new HoodieCleanMetadata();
     when(firstTable.clean(any(), eq(cleanInstantTime))).thenReturn(metadata);
 
-    TestTableServiceClient tableServiceClient = new TestTableServiceClient(writeConfig, Collections.singletonList(firstTable).iterator(), Option.empty(), expectedRollbackInfo, Collections.emptyIterator());
+    TestTableServiceClient tableServiceClient = new TestTableServiceClient(writeConfig, Collections.singletonList(firstTable).iterator(), Option.empty(), expectedRollbackInfo,
+        Collections.emptyIterator());
     assertSame(metadata, tableServiceClient.clean(Option.empty(), true));
     verify(mockMetaClient).reloadActiveTimeline();
   }
@@ -188,7 +190,8 @@ class TestBaseHoodieTableServiceClient extends HoodieCommonTestHarness {
       metadata = null;
     }
 
-    TestTableServiceClient tableServiceClient = new TestTableServiceClient(writeConfig, Arrays.asList(firstTable, secondTable).iterator(), Option.empty(), expectedRollbackInfo, Collections.singletonList(cleanInstantTime).iterator());
+    TestTableServiceClient tableServiceClient = new TestTableServiceClient(writeConfig, Arrays.asList(firstTable, secondTable).iterator(), Option.empty(), expectedRollbackInfo,
+        Collections.singletonList(cleanInstantTime).iterator());
     assertEquals(metadata, tableServiceClient.clean(Option.empty(), true));
     if (generatesPlan) {
       verify(mockMetaClient).reloadActiveTimeline();
