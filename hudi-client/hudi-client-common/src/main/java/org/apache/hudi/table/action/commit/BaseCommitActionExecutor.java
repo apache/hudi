@@ -97,14 +97,14 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
     this.extraMetadata = extraMetadata;
     this.taskContextSupplier = context.getTaskContextSupplier();
     this.txnManagerOption = Option.empty();
-    initializeTransactionSupportingCast();
+    initializeLastCompletedTnxAndPendingInstants();
     if (!table.getStorageLayout().writeOperationSupported(operationType)) {
       throw new UnsupportedOperationException("Executor " + this.getClass().getSimpleName()
           + " is not compatible with table layout " + table.getStorageLayout().getClass().getSimpleName());
     }
   }
 
-  private void initializeTransactionSupportingCast() {
+  private void initializeLastCompletedTnxAndPendingInstants() {
     if (this.txnManagerOption.isPresent() && this.txnManagerOption.get().isLockRequired()) {
       // these txn metadata are only needed for auto commit when optimistic concurrent control is also enabled
       this.lastCompletedTxn = TransactionUtils.getLastCompletedTxnInstantAndMetadata(table.getMetaClient());
@@ -187,7 +187,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
   protected void completeCommit(HoodieWriteMetadata result) {
     if (!this.txnManagerOption.isPresent()) {
       this.txnManagerOption = Option.of(new TransactionManager(config, table.getStorage()));
-      initializeTransactionSupportingCast();
+      initializeLastCompletedTnxAndPendingInstants();
     }
     autoCommit(result);
     LOG.info("Completed commit for " + instantTime);

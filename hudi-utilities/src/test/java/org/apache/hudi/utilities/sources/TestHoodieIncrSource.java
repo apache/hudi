@@ -63,7 +63,6 @@ import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
 
 import org.apache.avro.Schema;
 import org.apache.spark.SparkConf;
-import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan;
@@ -767,12 +766,11 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
     // Only supports INSERT, UPSERT, and BULK_INSERT
     List<HoodieRecord> records = writeOperationType == WriteOperationType.UPSERT
         ? dataGen.generateUpdates(commit, insertRecords) : dataGen.generateInserts(commit, numRecords);
-    JavaRDD<WriteStatus> result = writeOperationType == WriteOperationType.BULK_INSERT
-        ? writeClient.bulkInsert(jsc().parallelize(records, 1), commit)
-        : writeClient.upsert(jsc().parallelize(records, 1), commit);
-    result = jsc().parallelize(result.collect(), 1);
-    writeClient.commit(commit, result, Option.empty(), tableType == COPY_ON_WRITE ? COMMIT_ACTION : DELTA_COMMIT_ACTION, Collections.emptyMap(), Option.empty());
-    assertNoWriteErrors(result.collect());
+    List<WriteStatus> statusList = writeOperationType == WriteOperationType.BULK_INSERT
+        ? writeClient.bulkInsert(jsc().parallelize(records, 1), commit).collect()
+        : writeClient.upsert(jsc().parallelize(records, 1), commit).collect();
+    writeClient.commit(commit, jsc().parallelize(statusList), Option.empty(), tableType == COPY_ON_WRITE ? COMMIT_ACTION : DELTA_COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+    assertNoWriteErrors(statusList);
     metaClient.reloadActiveTimeline();
     return new WriteResult(
         metaClient
@@ -789,12 +787,11 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
                                                String partitionPath) {
     WriteClientTestUtils.startCommitWithTime(writeClient, commit);
     List<HoodieRecord> records = dataGen.generateInsertsForPartition(commit, 100, partitionPath);
-    JavaRDD<WriteStatus> result = writeOperationType == WriteOperationType.BULK_INSERT
-        ? writeClient.bulkInsert(jsc().parallelize(records, 1), commit)
-        : writeClient.upsert(jsc().parallelize(records, 1), commit);
-    List<WriteStatus> statuses = result.collect();
-    assertNoWriteErrors(statuses);
-    writeClient.commit(commit, jsc().parallelize(statuses), Option.empty(), tableType == COPY_ON_WRITE ? COMMIT_ACTION : DELTA_COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+    List<WriteStatus> statusList = writeOperationType == WriteOperationType.BULK_INSERT
+        ? writeClient.bulkInsert(jsc().parallelize(records, 1), commit).collect()
+        : writeClient.upsert(jsc().parallelize(records, 1), commit).collect();
+    assertNoWriteErrors(statusList);
+    writeClient.commit(commit, jsc().parallelize(statusList), Option.empty(), tableType == COPY_ON_WRITE ? COMMIT_ACTION : DELTA_COMMIT_ACTION, Collections.emptyMap(), Option.empty());
     metaClient.reloadActiveTimeline();
     return new WriteResult(
         metaClient

@@ -55,7 +55,7 @@ import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.getCommit
  */
 public class TestPartitionTTLManagement extends HoodieClientTestBase {
 
-  protected HoodieWriteConfig.Builder getConfigBuilder(Boolean autoCommit) {
+  protected HoodieWriteConfig.Builder getConfigBuilder() {
     return HoodieWriteConfig.newBuilder().withPath(basePath)
         .withSchema(TRIP_EXAMPLE_SCHEMA)
         .withParallelism(2, 2)
@@ -72,7 +72,7 @@ public class TestPartitionTTLManagement extends HoodieClientTestBase {
 
   @Test
   public void testKeepByCreationTime() {
-    final HoodieWriteConfig cfg = getConfigBuilder(true)
+    final HoodieWriteConfig cfg = getConfigBuilder()
         .withPath(metaClient.getBasePath())
         .withTTLConfig(HoodieTTLConfig
             .newBuilder()
@@ -107,7 +107,7 @@ public class TestPartitionTTLManagement extends HoodieClientTestBase {
 
   @Test
   public void testKeepByTime() {
-    final HoodieWriteConfig cfg = getConfigBuilder(true)
+    final HoodieWriteConfig cfg = getConfigBuilder()
         .withPath(metaClient.getBasePath())
         .withTTLConfig(HoodieTTLConfig
             .newBuilder()
@@ -144,7 +144,7 @@ public class TestPartitionTTLManagement extends HoodieClientTestBase {
 
   @Test
   public void testInlinePartitionTTL() {
-    final HoodieWriteConfig cfg = getConfigBuilder(true)
+    final HoodieWriteConfig cfg = getConfigBuilder()
         .withPath(metaClient.getBasePath())
         .withTTLConfig(HoodieTTLConfig
             .newBuilder()

@@ -274,7 +274,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieWriteConfig cfg = getConfigBuilder(TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.BLOOM, HoodieFailedWritesCleaningPolicy.EAGER)
         .withParallelism(1, 1).withBulkInsertParallelism(1).withFinalizeWriteParallelism(1).withDeleteParallelism(1)
         .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true).build())
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).withMetadataIndexColumnStats(false).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build())
         .build();
     init(COPY_ON_WRITE, Option.of(cfg), true, false, false);
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
@@ -284,19 +284,17 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       String commitTime = "0000001";
       List<HoodieRecord> records = dataGen.generateInserts(commitTime, 20);
       WriteClientTestUtils.startCommitWithTime(client, commitTime);
-      JavaRDD<WriteStatus> rawStatuses = client.insert(jsc.parallelize(records, 1), commitTime);
-      JavaRDD<WriteStatus> writeStatuses = jsc.parallelize(rawStatuses.collect(), 1);
-      assertTrue(client.commit(commitTime, writeStatuses));
-      assertNoWriteErrors(writeStatuses.collect());
+      List<WriteStatus> statusList = client.insert(jsc.parallelize(records, 1), commitTime).collect();
+      assertTrue(client.commit(commitTime, jsc.parallelize(statusList)));
+      assertNoWriteErrors(statusList);
 
       // Upsert
       commitTime = "0000002";
       WriteClientTestUtils.startCommitWithTime(client, commitTime);
       records = dataGen.generateUniqueUpdates(commitTime, 10);
-      rawStatuses = client.upsert(jsc.parallelize(records, 1), commitTime);
-      writeStatuses = jsc.parallelize(rawStatuses.collect(), 1);
-      assertTrue(client.commit(commitTime, writeStatuses));
-      assertNoWriteErrors(writeStatuses.collect());
+      statusList = client.upsert(jsc.parallelize(records, 1), commitTime).collect();
+      assertTrue(client.commit(commitTime, jsc.parallelize(statusList)));
+      assertNoWriteErrors(statusList);
       validateMetadata(client);
     }
     // check table config
@@ -304,8 +302,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
     assertFalse(tableConfig.getMetadataPartitions().isEmpty());
     assertTrue(tableConfig.getMetadataPartitions().contains(FILES.getPartitionPath()));
-    // column_stats is explicitly disabled
-    assertFalse(tableConfig.getMetadataPartitions().contains(COLUMN_STATS.getPartitionPath()));
+    // column_stats is enabled by default
+    assertTrue(tableConfig.getMetadataPartitions().contains(COLUMN_STATS.getPartitionPath()));
     assertFalse(tableConfig.getMetadataPartitions().contains(BLOOM_FILTERS.getPartitionPath()));
 
     // enable column stats and run 1 upserts

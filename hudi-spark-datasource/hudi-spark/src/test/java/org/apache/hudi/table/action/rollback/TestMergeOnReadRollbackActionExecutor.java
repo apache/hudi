@@ -290,10 +290,9 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
     List<HoodieRecord> records = dataGenPartition3.generateInsertsContainsAllPartitions(newCommitTime, 2);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
-    JavaRDD<WriteStatus> rawStatuses = client.upsert(writeRecords, newCommitTime);
-    JavaRDD<WriteStatus> statuses = jsc.parallelize(rawStatuses.collect(), 1);
-    client.commit(newCommitTime, statuses);
-    Assertions.assertNoWriteErrors(statuses.collect());
+    List<WriteStatus> statusList = client.upsert(writeRecords, newCommitTime).collect();
+    client.commit(newCommitTime, jsc.parallelize(statusList));
+    Assertions.assertNoWriteErrors(statusList);
 
     //2. Ingest inserts + upserts to partition 1 and 2. we will eventually rollback both these commits using restore flow.
     List<FileSlice> firstPartitionCommit2FileSlices = new ArrayList<>();

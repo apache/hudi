@@ -816,9 +816,9 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
 
     List<HoodieRecord> records = dataGen.generateInsertsContainsAllPartitions(newCommitTime, 2);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
-    JavaRDD<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime);
-    assertNoWriteErrors(statuses.collect());
-    client.commit(newCommitTime, statuses);
+    List<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime).collect();
+    assertNoWriteErrors(statuses);
+    client.commit(newCommitTime, jsc.parallelize(statuses));
     return records;
   }
 
@@ -879,9 +879,9 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
     List<HoodieRecord> records = dataGen.generateInsertsContainsAllPartitions(newCommitTime, 2);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
-    JavaRDD<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime);
-    assertNoWriteErrors(statuses.collect());
-    client.commit(newCommitTime, statuses);
+    List<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime).collect();
+    assertNoWriteErrors(statuses);
+    client.commit(newCommitTime, jsc.parallelize(statuses));
     /**
      * Write 2 (updates)
      */
@@ -889,10 +889,10 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
     List<HoodieRecord> records2 = dataGen.generateUpdates(newCommitTime, records);
-    statuses = client.upsert(jsc.parallelize(records2, 1), newCommitTime);
-    assertNoWriteErrors(statuses.collect());
+    statuses = client.upsert(jsc.parallelize(records2, 1), newCommitTime).collect();
+    assertNoWriteErrors(statuses);
     if (commitSecondUpsert) {
-      client.commit(newCommitTime, statuses);
+      client.commit(newCommitTime, jsc.parallelize(statuses));
     }
 
     //2. assert filegroup and get the first partition fileslice
