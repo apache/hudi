@@ -133,7 +133,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
   @Override
   public HoodieRecord<IndexedRecord> constructHoodieRecord(BufferedRecord<IndexedRecord> bufferedRecord) {
     HoodieKey hoodieKey = new HoodieKey(bufferedRecord.getRecordKey(), partitionPath);
-    if (bufferedRecord.getRecord() == null) {
+    if (bufferedRecord.isDelete()) {
       return new HoodieEmptyRecord<>(hoodieKey, HoodieOperation.DELETE, bufferedRecord.getOrderingValue(), HoodieRecord.HoodieRecordType.AVRO);
     }
     return new HoodieAvroIndexedRecord(hoodieKey, bufferedRecord.getRecord());

@@ -99,7 +99,7 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
   @Override
   public HoodieRecord<InternalRow> constructHoodieRecord(BufferedRecord<InternalRow> bufferedRecord) {
     HoodieKey hoodieKey = new HoodieKey(bufferedRecord.getRecordKey(), partitionPath);
-    if (bufferedRecord.getRecord() == null) {
+    if (bufferedRecord.isDelete()) {
       return new HoodieEmptyRecord<>(hoodieKey, HoodieOperation.DELETE, bufferedRecord.getOrderingValue(), HoodieRecord.HoodieRecordType.SPARK);
     }
 
