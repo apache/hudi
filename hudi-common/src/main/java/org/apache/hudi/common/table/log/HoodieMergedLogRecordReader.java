@@ -168,7 +168,7 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
     LOG.info("Number of entries in Map => {}", recordBuffer.size());
   }
 
-  private Option<KeySpec> createKeySpec(Option<Predicate> filter) {
+  static Option<KeySpec> createKeySpec(Option<Predicate> filter) {
     if (filter.isEmpty()) {
       return Option.empty();
     }
