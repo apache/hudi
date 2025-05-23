@@ -283,7 +283,6 @@ class TestFileGroupRecordBuffer {
         new KeyBasedFileGroupRecordBuffer<>(
             readerContext,
             hoodieTableMetaClient,
-            RecordMergeMode.COMMIT_TIME_ORDERING,
             props,
             readStats,
             Option.empty(),
@@ -297,7 +296,6 @@ class TestFileGroupRecordBuffer {
     keyBasedBuffer = new KeyBasedFileGroupRecordBuffer<>(
             readerContext,
             hoodieTableMetaClient,
-            RecordMergeMode.COMMIT_TIME_ORDERING,
             props,
             readStats,
             Option.empty(),

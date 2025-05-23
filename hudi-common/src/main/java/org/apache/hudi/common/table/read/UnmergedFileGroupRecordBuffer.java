@@ -19,7 +19,6 @@
 
 package org.apache.hudi.common.table.read;
 
-import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DeleteRecord;
@@ -47,12 +46,11 @@ public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
   public UnmergedFileGroupRecordBuffer(
       HoodieReaderContext<T> readerContext,
       HoodieTableMetaClient hoodieTableMetaClient,
-      RecordMergeMode recordMergeMode,
       TypedProperties props,
       HoodieReadStats readStats,
       EngineBasedMerger<T> merger,
       boolean emitDelete) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, Option.empty(), merger, emitDelete);
+    super(readerContext, hoodieTableMetaClient, props, readStats, Option.empty(), merger, emitDelete);
     this.currentInstantLogBlocks = new ArrayDeque<>();
   }
 

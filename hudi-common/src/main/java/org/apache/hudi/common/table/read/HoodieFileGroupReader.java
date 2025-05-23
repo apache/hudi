@@ -190,8 +190,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     if (hasNoLogFiles) {
       return null;
     } else if (isSkipMerge) {
-      return new UnmergedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, merger, emitDelete);
+      return new UnmergedFileGroupRecordBuffer<>(readerContext, hoodieTableMetaClient, props, readStats, merger, emitDelete);
     } else if (shouldUseRecordPosition && baseFileOption.isPresent()) {
       return new PositionBasedFileGroupRecordBuffer<>(
           readerContext, hoodieTableMetaClient, recordMergeMode, baseFileOption.get().getCommitTime(), props, readStats, orderingFieldName, merger, emitDelete);

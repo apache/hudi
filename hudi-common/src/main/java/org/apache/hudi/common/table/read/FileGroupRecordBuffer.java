@@ -20,22 +20,17 @@
 package org.apache.hudi.common.table.read;
 
 import org.apache.hudi.avro.AvroSchemaCache;
-import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.KeySpec;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
-import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
@@ -66,8 +61,6 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   protected final Schema readerSchema;
   protected final Integer readerSchemaId;
   protected final Option<String> orderingFieldName;
-  protected final RecordMergeMode recordMergeMode;
-  protected final Option<String> payloadClass;
   protected final TypedProperties props;
   protected final EngineBasedMerger<T> merger;
   protected final ExternalSpillableMap<Serializable, BufferedRecord<T>> records;
@@ -85,7 +78,6 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
 
   protected FileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
                                   HoodieTableMetaClient hoodieTableMetaClient,
-                                  RecordMergeMode recordMergeMode,
                                   TypedProperties props,
                                   HoodieReadStats readStats,
                                   Option<String> orderingFieldName,
@@ -93,6 +85,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
                                   boolean emitDelete) {
     this.readerContext = readerContext;
     this.readerSchema = AvroSchemaCache.intern(readerContext.getSchemaHandler().getRequiredSchema());
+    this.readerSchemaId = readerContext.encodeAvroSchema(readerSchema);
     this.orderingFieldName = orderingFieldName;
     this.props = props;
     this.merger = merger;

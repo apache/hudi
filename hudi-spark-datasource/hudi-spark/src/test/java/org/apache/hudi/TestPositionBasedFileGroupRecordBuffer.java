@@ -136,7 +136,6 @@ public class TestPositionBasedFileGroupRecordBuffer extends TestHoodieFileGroupR
     buffer = new PositionBasedFileGroupRecordBuffer<>(
         ctx,
         metaClient,
-        mergeMode,
         baseFileInstantTime,
         props,
         readStats,

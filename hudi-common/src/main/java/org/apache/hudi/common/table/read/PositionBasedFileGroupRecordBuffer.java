@@ -20,7 +20,6 @@
 package org.apache.hudi.common.table.read;
 
 import org.apache.hudi.avro.AvroSchemaCache;
-import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DeleteRecord;
@@ -67,13 +66,12 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
 
   public PositionBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
                                             HoodieTableMetaClient hoodieTableMetaClient,
-                                            RecordMergeMode recordMergeMode,
                                             String baseFileInstantTime,
                                             TypedProperties props,
                                             HoodieReadStats readStats,
                                             Option<String> orderingFieldName,
                                             EngineBasedMerger<T> merger) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, orderingFieldName, merger, emitDelete);
+    super(readerContext, hoodieTableMetaClient, props, readStats, orderingFieldName, merger, emitDelete);
     this.baseFileInstantTime = baseFileInstantTime;
   }
 
