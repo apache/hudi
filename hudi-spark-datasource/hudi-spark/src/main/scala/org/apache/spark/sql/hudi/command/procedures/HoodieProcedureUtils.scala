@@ -80,8 +80,7 @@ object HoodieProcedureUtils {
   }
 
   /**
-   * scheduleAndExecute: schedule a new plan and then execute it, if no plan is generated during
-   * schedule, execute all pending plans
+   * scheduleAndExecute: schedule a new plan and then execute all pending plans regardless of plan scheduling outcome
    */
   case object ScheduleAndExecute extends Operation {
     override def value: String = "scheduleandexecute"
