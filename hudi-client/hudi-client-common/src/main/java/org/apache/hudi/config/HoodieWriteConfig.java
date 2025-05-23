@@ -2864,8 +2864,12 @@ public class HoodieWriteConfig extends HoodieConfig {
     return props.getInteger(WRITES_FILEID_ENCODING, HoodieMetadataPayload.RECORD_INDEX_FIELD_FILEID_ENCODING_UUID);
   }
 
-  public boolean needResolveWriteConflict(WriteOperationType operationType) {
+  public boolean needResolveWriteConflict(WriteOperationType operationType, boolean isMetadataTable, boolean streamingWritesToMetadataTableEnabled) {
     WriteConcurrencyMode mode = getWriteConcurrencyMode();
+    if (isMetadataTable && streamingWritesToMetadataTableEnabled) {
+      // for metadata table, if streaming writes are enabled, we might need to perform conflict resolution.
+      return true;
+    }
     switch (mode) {
       case SINGLE_WRITER:
         return false;

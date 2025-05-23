@@ -18,28 +18,36 @@
 
 package org.apache.hudi.client.utils;
 
+import org.apache.hudi.client.transaction.MetadataTableNonBlockingWritesConflictResolutionStrategy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.table.HoodieTable;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.Properties;
 
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createCommit;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createCommitMetadata;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createInflightCommit;
+import static org.apache.hudi.common.model.WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL;
 import static org.apache.hudi.common.model.WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -84,5 +92,45 @@ class TestTransactionUtils extends HoodieCommonTestHarness {
         () -> TransactionUtils.resolveWriteConflictIfAny(table, currentInstant, Option.of(currentMetadata), writeConfig,
             lastSuccessfulInstant, timelineRefreshedWithinTransaction, Collections.singleton(newInstantTime)));
     verify(spyMetaClient, times(timelineRefreshedWithinTransaction ? 0 : 1)).reloadActiveTimeline();
+  }
+
+  @Test
+  void resolveWriteConflictIfAnyNoExceptionForMetadataTable() throws Exception {
+    // instantiate MOR table for metadata table.
+    metaClient = HoodieTestUtils.init(basePath + "/.hoodie/metadata/", HoodieTableType.MERGE_ON_READ);
+
+    createCommit(HoodieTestTable.makeNewCommitTime(), metaClient);
+    HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
+    // consider commits before this are all successful
+    Option<HoodieInstant> lastSuccessfulInstant = timeline.getCommitsTimeline().filterCompletedInstants().lastInstant();
+    // writer 1 starts
+    String currentWriterInstant = HoodieTestTable.makeNewCommitTime();
+    createInflightCommit(currentWriterInstant, metaClient);
+    // writer 2 starts and finishes
+    String newInstantTime = HoodieTestTable.makeNewCommitTime();
+    createCommit(newInstantTime, metaClient);
+
+    Option<HoodieInstant> currentInstant = Option.of(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, currentWriterInstant));
+    HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant, "file-1");
+
+    // mimic all props for metadata table.
+    Properties props = new Properties();
+    props.setProperty(HoodieWriteConfig.STREAMING_WRITES_TO_METADATA_TABLE.key(), "true");
+    props.setProperty(HoodieTableConfig.TYPE.key(), HoodieTableType.MERGE_ON_READ.name());
+    props.setProperty(HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME.key(), MetadataTableNonBlockingWritesConflictResolutionStrategy.class.getName());
+
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(metaClient.getBasePath().toString())
+        .withWriteConcurrencyMode(NON_BLOCKING_CONCURRENCY_CONTROL)
+        .withProperties(props)
+        .build();
+    metaClient.reloadActiveTimeline();
+    HoodieTable table = mock(HoodieTable.class);
+    when(table.isMetadataTable()).thenReturn(true);
+    HoodieTableMetaClient spyMetaClient = spy(metaClient);
+    when(table.getMetaClient()).thenReturn(spyMetaClient);
+    Option<HoodieCommitMetadata> actualResult = TransactionUtils.resolveWriteConflictIfAny(table, currentInstant, Option.of(currentMetadata), writeConfig,
+            lastSuccessfulInstant, false, Collections.singleton(newInstantTime));
+    verify(spyMetaClient, times(1)).reloadActiveTimeline();
   }
 }

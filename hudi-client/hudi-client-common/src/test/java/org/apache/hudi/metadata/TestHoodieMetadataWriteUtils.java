@@ -18,6 +18,7 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.client.transaction.MetadataTableNonBlockingWritesConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
@@ -107,6 +108,7 @@ public class TestHoodieMetadataWriteUtils {
     assertEquals(expectedWriteConcurrencyMode, metadataWriteConfig.getWriteConcurrencyMode());
     if (expectedLockProviderClass != null) {
       assertEquals(expectedLockProviderClass, metadataWriteConfig.getLockProviderClass());
+      assertEquals(MetadataTableNonBlockingWritesConflictResolutionStrategy.class.getName(), metadataWriteConfig.getWriteConflictResolutionStrategy().getClass().getName());
     } else {
       assertNull(metadataWriteConfig.getLockProviderClass());
     }

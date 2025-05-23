@@ -26,6 +26,7 @@ import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.avro.model.HoodieSliceInfo;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -53,9 +54,13 @@ public class TestConflictResolutionStrategyUtil {
     writeStat.setFileId("file-1");
     commitMetadata.addWriteStat(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, writeStat);
     commitMetadata.setOperationType(WriteOperationType.INSERT);
-    HoodieTestTable.of(metaClient)
-        .addCommit(instantTime, Option.of(commitMetadata))
-        .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
+    HoodieTestTable testTable = HoodieTestTable.of(metaClient);
+    if (metaClient.getTableConfig().getTableType() == HoodieTableType.COPY_ON_WRITE) {
+      testTable = testTable.addCommit(instantTime, Option.of(commitMetadata));
+    } else {
+      testTable = testTable.addDeltaCommit(instantTime, Option.empty(), commitMetadata);
+    }
+    testTable.withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
   }
 
   public static HoodieCommitMetadata createCommitMetadata(String instantTime, String writeFileName) {
@@ -75,9 +80,15 @@ public class TestConflictResolutionStrategyUtil {
   public static void createInflightCommit(String instantTime, HoodieTableMetaClient metaClient) throws Exception {
     String fileId1 = "file-" + instantTime + "-1";
     String fileId2 = "file-" + instantTime + "-2";
-    HoodieTestTable.of(metaClient)
-        .addInflightCommit(instantTime)
-        .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
+    if (metaClient.getTableConfig().getTableType() == HoodieTableType.COPY_ON_WRITE) {
+      HoodieTestTable.of(metaClient)
+          .addInflightCommit(instantTime)
+          .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
+    } else {
+      HoodieTestTable.of(metaClient)
+          .addInflightDeltaCommit(instantTime)
+          .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
+    }
   }
 
   public static void createCompactionRequested(String instantTime, HoodieTableMetaClient metaClient) throws Exception {
