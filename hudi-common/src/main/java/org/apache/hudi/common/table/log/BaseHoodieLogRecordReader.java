@@ -202,7 +202,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
    * @param keySpecOpt           specifies target set of keys to be scanned
    * @param skipProcessingBlocks controls, whether (delta) blocks have to actually be processed
    */
-  protected final void scanInternal(Option<KeySpec> keySpecOpt, boolean skipProcessingBlocks) {
+  protected final void scanInternal(Option<LookUpKeyCollection> keySpecOpt, boolean skipProcessingBlocks) {
     synchronized (this) {
       if (enableOptimizedLogBlocksScan) {
         scanInternalV2(keySpecOpt, skipProcessingBlocks);
@@ -212,7 +212,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
     }
   }
 
-  private void scanInternalV1(Option<KeySpec> keySpecOpt) {
+  private void scanInternalV1(Option<LookUpKeyCollection> keySpecOpt) {
     currentInstantLogBlocks = new ArrayDeque<>();
     List<HoodieLogBlock> validLogBlockInstants = new ArrayList<>();
     Map<String, Map<Long, List<Pair<Integer, HoodieLogBlock>>>> blockSequenceMapPerCommit = new HashMap<>();
@@ -507,7 +507,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
     }
   }
 
-  private void scanInternalV2(Option<KeySpec> keySpecOption, boolean skipProcessingBlocks) {
+  private void scanInternalV2(Option<LookUpKeyCollection> keySpecOption, boolean skipProcessingBlocks) {
     currentInstantLogBlocks = new ArrayDeque<>();
     progress = 0.0f;
     totalLogFiles = new AtomicLong(0);
@@ -727,7 +727,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
    * Process the set of log blocks belonging to the last instant which is read fully.
    */
   private void processQueuedBlocksForInstant(Deque<HoodieLogBlock> logBlocks, int numLogFilesSeen,
-                                             Option<KeySpec> keySpecOpt) throws Exception {
+                                             Option<LookUpKeyCollection> keySpecOpt) throws Exception {
     while (!logBlocks.isEmpty()) {
       LOG.info("Number of remaining logblocks to merge {}", logBlocks.size());
       // poll the element at the bottom of the stack since that's the order it was inserted
@@ -810,11 +810,11 @@ public abstract class BaseHoodieLogRecordReader<T> {
   }
 
   private Pair<ClosableIterator<T>, Schema> getRecordsIterator(
-      HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt) throws IOException {
+      HoodieDataBlock dataBlock, Option<LookUpKeyCollection> keySpecOpt) throws IOException {
     ClosableIterator<T> blockRecordsIterator;
     if (keySpecOpt.isPresent()) {
-      KeySpec keySpec = keySpecOpt.get();
-      blockRecordsIterator = dataBlock.getEngineRecordIterator(readerContext, keySpec.getKeys(), keySpec.isFullKey());
+      LookUpKeyCollection lookUpKeyCollection = keySpecOpt.get();
+      blockRecordsIterator = dataBlock.getEngineRecordIterator(readerContext, lookUpKeyCollection);
     } else {
       blockRecordsIterator = dataBlock.getEngineRecordIterator(readerContext);
     }

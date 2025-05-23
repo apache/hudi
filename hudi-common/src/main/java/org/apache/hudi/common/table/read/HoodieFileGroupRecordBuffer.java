@@ -20,7 +20,7 @@
 package org.apache.hudi.common.table.read;
 
 import org.apache.hudi.common.model.DeleteRecord;
-import org.apache.hudi.common.table.log.KeySpec;
+import org.apache.hudi.common.table.log.LookUpKeyCollection;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.util.Option;
@@ -53,7 +53,7 @@ public interface HoodieFileGroupRecordBuffer<T> {
    * @param keySpecOpt
    * @throws IOException
    */
-  void processDataBlock(HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt) throws IOException;
+  void processDataBlock(HoodieDataBlock dataBlock, Option<LookUpKeyCollection> keySpecOpt) throws IOException;
 
   /**
    * Process a next record in a log data block.

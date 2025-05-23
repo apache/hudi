@@ -33,7 +33,7 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.log.KeySpec;
+import org.apache.hudi.common.table.log.LookUpKeyCollection;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.FileIOUtils;
@@ -353,11 +353,11 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
    * @param keySpecOpt
    * @return
    */
-  protected Pair<ClosableIterator<T>, Schema> getRecordsIterator(HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt) {
+  protected Pair<ClosableIterator<T>, Schema> getRecordsIterator(HoodieDataBlock dataBlock, Option<LookUpKeyCollection> keySpecOpt) {
     ClosableIterator<T> blockRecordsIterator;
     if (keySpecOpt.isPresent()) {
-      KeySpec keySpec = keySpecOpt.get();
-      blockRecordsIterator = dataBlock.getEngineRecordIterator(readerContext, keySpec.getKeys(), keySpec.isFullKey());
+      LookUpKeyCollection lookUpKeyCollection = keySpecOpt.get();
+      blockRecordsIterator = dataBlock.getEngineRecordIterator(readerContext, lookUpKeyCollection);
     } else {
       blockRecordsIterator = dataBlock.getEngineRecordIterator(readerContext);
     }

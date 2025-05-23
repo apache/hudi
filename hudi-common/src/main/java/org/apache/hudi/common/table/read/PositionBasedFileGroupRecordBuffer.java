@@ -25,7 +25,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.log.KeySpec;
+import org.apache.hudi.common.table.log.LookUpKeyCollection;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
@@ -82,7 +82,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
   }
 
   @Override
-  public void processDataBlock(HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt) throws IOException {
+  public void processDataBlock(HoodieDataBlock dataBlock, Option<LookUpKeyCollection> keySpecOpt) throws IOException {
     if (!readerContext.getShouldMergeUseRecordPosition()) {
       super.processDataBlock(dataBlock, keySpecOpt);
       return;

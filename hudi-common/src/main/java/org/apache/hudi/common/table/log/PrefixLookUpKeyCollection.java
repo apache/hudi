@@ -22,20 +22,34 @@ package org.apache.hudi.common.table.log;
 import java.util.List;
 
 /**
- * An interface to specify a set of keys that used to filter records
- * from log files. That is, only the records whose record key match
- * any of the specified keys can go to the downstream operations.
+ * This class specifies a set of record keys, each of which is a prefix.
+ * That is, the comparison between a record key and an element
+ * of the set is {@link String#startsWith(String)}.
  */
-public interface KeySpec {
-  List<String> getKeys();
+public class PrefixLookUpKeyCollection implements LookUpKeyCollection {
+  private final List<String> keysPrefixes;
 
-  boolean isFullKey();
-
-  static KeySpec fullKeySpec(List<String> keys) {
-    return new FullKeySpec(keys);
+  public PrefixLookUpKeyCollection(List<String> keysPrefixes) {
+    this.keysPrefixes = keysPrefixes;
   }
 
-  static KeySpec prefixKeySpec(List<String> keyPrefixes) {
-    return new PrefixKeySpec(keyPrefixes);
+  @Override
+  public List<String> getKeys() {
+    return keysPrefixes;
+  }
+
+  @Override
+  public boolean isEmpty() {
+    return keysPrefixes.isEmpty();
+  }
+
+  @Override
+  public boolean isFullKey() {
+    return false;
+  }
+
+  @Override
+  public boolean isSorted() {
+    return false;
   }
 }
