@@ -30,6 +30,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.OverwriteWithLatestMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
@@ -71,8 +72,9 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
   public HoodieAvroReaderContext(
       StorageConfiguration<?> storageConfiguration,
       HoodieTableConfig tableConfig,
-      Option<Predicate> filter) {
-    super(storageConfiguration, tableConfig, filter);
+      Option<InstantRange> instantRangeOpt,
+      Option<Predicate> filterOpt) {
+    super(storageConfiguration, tableConfig, instantRangeOpt, filterOpt);
     this.payloadClass = tableConfig.getPayloadClass();
   }
 
@@ -87,7 +89,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
     HoodieAvroFileReader reader = (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(storage)
         .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(new HoodieConfig(),
             filePath, baseFileFormat, Option.empty());
-    if (filter.isEmpty()) {
+    if (filterOpt.isEmpty()) {
       return reader.getIndexedRecordIterator(dataSchema, requiredSchema);
     } else {
       // Currently predicate is only supported for HFile reader.
@@ -96,10 +98,10 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       } else {
         // For HFile reader, only two predicates are supported: IN and StringStartsWithAny.
         HoodieAvroHFileReaderImplBase hfileReader = (HoodieAvroHFileReaderImplBase) reader;
-        List<Expression> children = filter.get().getChildren();
+        List<Expression> children = filterOpt.get().getChildren();
         List<String> keysOrPrefixes = children.subList(1, children.size())
             .stream().map(e -> (String) e.eval(null)).collect(Collectors.toList());
-        if (filter.get().getOperator().equals(Expression.Operator.IN)) { // With keys.
+        if (filterOpt.get().getOperator().equals(Expression.Operator.IN)) { // With keys.
           return hfileReader.getIndexedRecordsByKeysIterator(keysOrPrefixes, requiredSchema);
         } else {  // With key prefixes.
           return hfileReader.getIndexedRecordsByKeyPrefixIterator(keysOrPrefixes, requiredSchema);

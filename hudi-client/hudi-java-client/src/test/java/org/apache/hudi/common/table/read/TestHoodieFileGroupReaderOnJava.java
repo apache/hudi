@@ -40,8 +40,9 @@ public class TestHoodieFileGroupReaderOnJava extends HoodieFileGroupReaderOnJava
   }
 
   @Override
-  public HoodieReaderContext<IndexedRecord> getHoodieReaderContext(String tablePath, Schema avroSchema, StorageConfiguration<?> storageConf, HoodieTableMetaClient metaClient) {
-    return new HoodieAvroReaderContext(storageConf, metaClient.getTableConfig(), Option.empty());
+  public HoodieReaderContext<IndexedRecord> getHoodieReaderContext(
+      String tablePath, Schema avroSchema, StorageConfiguration<?> storageConf, HoodieTableMetaClient metaClient) {
+    return new HoodieAvroReaderContext(storageConf, metaClient.getTableConfig(), Option.empty(), Option.empty());
   }
 
   @Override
