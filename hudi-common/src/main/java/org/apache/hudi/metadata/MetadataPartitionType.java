@@ -102,6 +102,7 @@ public enum MetadataPartitionType {
     public HoodieMetadataPayload combineMetadataPayloads(HoodieMetadataPayload older, HoodieMetadataPayload newer) {
       Map<String, HoodieMetadataFileInfo> combinedFileSystemMetadata = combineFileSystemMetadata(older, newer);
       if (combinedFileSystemMetadata.isEmpty()) {
+        // if all the files in a partition are deleted after merge, delete the record
         return new HoodieMetadataPayload(Option.empty());
       }
       return new HoodieMetadataPayload(newer.key, newer.type, combinedFileSystemMetadata);

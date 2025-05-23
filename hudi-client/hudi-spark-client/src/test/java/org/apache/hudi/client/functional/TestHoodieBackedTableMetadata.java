@@ -427,33 +427,26 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     String partition1 = "p1";
     // Simulate two bulk insert operations adding two data files in partition "p1"
     String instant1 = metaClient.createNewInstantTime();
-    HoodieCommitMetadata commitMetadata1 =
-        testTable.doWriteOperation(instant1, BULK_INSERT, emptyList(), asList(partition1), 1);
+    testTable.doWriteOperation(instant1, BULK_INSERT, emptyList(), Collections.singletonList(partition1), 1);
     String instant2 = metaClient.createNewInstantTime();
-    HoodieCommitMetadata commitMetadata2 =
-        testTable.doWriteOperation(instant2, BULK_INSERT, emptyList(), asList(partition1), 1);
+    testTable.doWriteOperation(instant2, BULK_INSERT, emptyList(), Collections.singletonList(partition1), 1);
+
+    String partition2 = "p2";
+    testTable.doWriteOperation(
+        metaClient.createNewInstantTime(), BULK_INSERT, emptyList(), Collections.singletonList(partition2), 1);
 
     final HoodieTableMetaClient metadataMetaClient = createMetaClient(metadataTableBasePath);
-    String partition2 = "p2";
-    // Write until the compaction happens in the metadata table
-    testTable.doWriteOperation(
-        metaClient.createNewInstantTime(), BULK_INSERT, emptyList(), asList(partition2), 1);
     metadataMetaClient.reloadActiveTimeline();
-
 
     assertEquals(0, getNumCompactions(metadataMetaClient));
 
-    List<String> fileIdsToReplace = new ArrayList<>();
-    fileIdsToReplace.addAll(commitMetadata1.getFileIdAndRelativePaths().keySet());
-    fileIdsToReplace.addAll(commitMetadata2.getFileIdAndRelativePaths().keySet());
-
     String cleanInstant = metaClient.createNewInstantTime();
-    HoodieCleanMetadata cleanMetadata = testTable.doCleanBasedOnPartitions(cleanInstant, asList(partition1));
+    HoodieCleanMetadata cleanMetadata = testTable.doCleanBasedOnPartitions(cleanInstant, Collections.singletonList(partition1));
 
     while (getNumCompactions(metadataMetaClient) == 0) {
       // Write until the compaction happens in the metadata table
       testTable.doWriteOperation(
-          metaClient.createNewInstantTime(), BULK_INSERT, emptyList(), asList(partition2), 1);
+          metaClient.createNewInstantTime(), BULK_INSERT, emptyList(), Collections.singletonList(partition2), 1);
       metadataMetaClient.reloadActiveTimeline();
     }
 
@@ -465,8 +458,8 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
         storage,
         HoodieMetadataConfig.newBuilder().enable(true).build(),
         basePath);
-    HoodieData<HoodieRecord<HoodieMetadataPayload>> data = tableMetadata.getRecordsByKeyPrefixes(Collections.singletonList(partition1), FILES.getPartitionPath(), false);
-    assertTrue(data.collectAsList().isEmpty());
+    // validate no entry present for recordKey p1 in files partition
+    assertTrue(tableMetadata.getRecordsByKeyPrefixes(Collections.singletonList(partition1), FILES.getPartitionPath(), false).isEmpty());
 
     // validate table version
     HoodieTableVersion finalTableVersion = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
