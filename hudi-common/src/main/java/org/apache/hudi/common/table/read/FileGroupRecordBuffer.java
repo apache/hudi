@@ -166,6 +166,9 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
     return columnValue != null && readerContext.castToBoolean(columnValue);
   }
 
+  /**
+   * Returns whether the record is a DELETE marked by the '_hoodie_operation' field.
+   */
   protected final boolean isDeleteHoodieOperation(T record) {
     int hoodieOperationPos = readerContext.getSchemaHandler().getHoodieOperationPos();
     if (hoodieOperationPos < 0) {

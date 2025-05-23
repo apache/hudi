@@ -214,16 +214,20 @@ public abstract class HoodieReaderContext<T> {
   public abstract GenericRecord convertToAvroRecord(T record, Schema schema);
 
   /**
-   * Return the delete record if it's not null, otherwise get the row with record key
-   * fields only and other fields as null. When `emitDelete` is true for FileGroup reader
-   * and data for DELETE record is null, record key row is emitted to downstream to delete
-   * data from storage by record key by best effort.
+   * There are two cases to handle:
+   * 1). Return the delete record if it's not null;
+   * 2). otherwise fills an empty row with record key fields and returns.
+   *
+   * <p>For case2, when `emitDelete` is true for FileGroup reader and payload for DELETE record is empty,
+   * a record key row is emitted to downstream to delete data from storage by record key with the best effort.
+   * Returns null if the primary key semantics been lost: the requested schema does not include all the record key fields.
    *
    * @param record    delete record
    * @param recordKey record key
    *
-   * @return Engine specific row which contains record key fields only.
+   * @return Engine specific row which contains record key fields.
    */
+  @Nullable
   public abstract T getDeleteRow(T record, String recordKey);
   
   /**

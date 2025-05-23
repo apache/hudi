@@ -180,11 +180,12 @@ public class FileGroupReaderSchemaHandler<T> {
   Schema generateRequiredSchema() {
     boolean hasInstantRange = readerContext.getInstantRange().isPresent();
     if (!needsMORMerge) {
-      List<Schema.Field> addedFields = new ArrayList<>();
       if (hasInstantRange && !findNestedField(requestedSchema, HoodieRecord.COMMIT_TIME_METADATA_FIELD).isPresent()) {
+        List<Schema.Field> addedFields = new ArrayList<>();
         addedFields.add(getField(tableSchema, HoodieRecord.COMMIT_TIME_METADATA_FIELD));
+        return appendFieldsToSchemaDedupNested(requestedSchema, addedFields);
       }
-      return addedFields.isEmpty() ? requestedSchema : appendFieldsToSchemaDedupNested(requestedSchema, addedFields);
+      return requestedSchema;
     }
 
     if (hoodieTableConfig.getRecordMergeMode() == RecordMergeMode.CUSTOM) {
