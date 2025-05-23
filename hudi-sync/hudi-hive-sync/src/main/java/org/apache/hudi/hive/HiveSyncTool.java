@@ -246,15 +246,9 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
     }
 
     // Check if any sync is required
-    if (tableExists && isIncrementalSync()) {
-      Option<String> lastCommitTimeSynced = syncClient.getLastCommitTimeSynced(tableName);
-      Option<String> lastCommitCompletionTimeSynced = syncClient.getLastCommitCompletionTimeSynced(tableName);
-      if (lastCommitTimeSynced.isPresent()) {
-        if (TimelineUtils.getCommitsTimelineAfter(syncClient.getMetaClient(), lastCommitTimeSynced.get(), lastCommitCompletionTimeSynced).countInstants() == 0) {
-          LOG.info("Table {} is already synced with the latest commit {}", tableName, lastCommitTimeSynced.get());
-          return;
-        }
-      }
+    if (tableExists && isIncrementalSync() && isAlreadySynced(tableName)) {
+      LOG.info("Table {} is already synced with the latest commit.", tableName);
+      return;
     }
     // Get the parquet schema for this table looking at the latest commit
     MessageType schema = syncClient.getStorageSchema(!config.getBoolean(HIVE_SYNC_OMIT_METADATA_FIELDS));
@@ -285,6 +279,21 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
         throw new HoodieHiveSyncException("failed to sync the table " + tableName, ex);
       }
     }
+  }
+
+  private boolean isAlreadySynced(String tableName) {
+    return syncClient.getLastCommitTimeSynced(tableName)
+        .map(lastCommit -> {
+          Option<String> lastCompletion =
+              syncClient.getLastCommitCompletionTimeSynced(tableName);
+
+          return TimelineUtils
+              .getCommitsTimelineAfter(syncClient.getMetaClient(),
+                  lastCommit,
+                  lastCompletion)
+              .countInstants() == 0;
+        })
+        .orElse(false);
   }
 
   private void checkAndCreateDatabase() {
