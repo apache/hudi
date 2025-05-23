@@ -38,7 +38,6 @@ import org.slf4j.LoggerFactory;
 import java.util.ConcurrentModificationException;
 import java.util.HashSet;
 import java.util.Set;
-import java.util.function.Predicate;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
@@ -56,25 +55,32 @@ public class SimpleConcurrentFileWritesConflictResolutionStrategy
   @Override
   public Stream<HoodieInstant> getCandidateInstants(HoodieTableMetaClient metaClient, HoodieInstant currentInstant,
                                                     Option<HoodieInstant> lastSuccessfulInstant) {
-    boolean usesCompletionTimeOrdering = metaClient.getTableConfig().getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT);
+    if (metaClient.getTableConfig().getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
+      return getCandidateInstantsV8AndAbove(metaClient, currentInstant, lastSuccessfulInstant);
+    } else {
+      return getCandidateInstantsPreV8(metaClient, currentInstant, lastSuccessfulInstant);
+    }
+  }
+
+  /**
+   * To find which instants are conflicting for table versions 8 and above, we apply the following logic:
+   * <ul>
+   *   <li>Get completed instants timeline only for commits that have happened since the last successful write.</li>
+   *   <li>Get any completed replace commit that happened since the last successful write and any pending replace commit.</li>
+   * </ul>
+   * @param metaClient table meta client
+   * @param currentInstant the instant for the write this client is attempting to commit
+   * @param lastSuccessfulInstant the last successful write before this commit started
+   * @return a stream of instants that are candidates for conflict resolution
+   */
+  private Stream<HoodieInstant> getCandidateInstantsV8AndAbove(HoodieTableMetaClient metaClient, HoodieInstant currentInstant,
+                                                               Option<HoodieInstant> lastSuccessfulInstant) {
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
-    // To find which instants are conflicting, we apply the following logic
-    // 1. Get completed instants timeline only for commits that have happened since the last successful write.
-    // 2. For tables with a version lower than 8, get any scheduled or completed compaction that have started and/or finished after the current instant.
-    //    - Note: this is not required for v8 tables which use completion time ordering of log files to build file groups.
-    // 3. Get any completed replace commit that happened since the last successful write and any pending replace commit.
-    // We need to check for write conflicts since they may have mutated the same files that are being newly created by the current write.
-    Predicate<HoodieInstant> compactionInstantFilter = (HoodieInstant instant) -> {
-      if (metaClient.getTableType() == HoodieTableType.MERGE_ON_READ) {
-        // filter out the compaction instants for MoR tables when using completion time ordering
-        return !usesCompletionTimeOrdering || !instant.getAction().equals(HoodieTimeline.COMMIT_ACTION);
-      }
-      return true;
-    };
+    boolean isMoRTable = metaClient.getTableType() == HoodieTableType.MERGE_ON_READ;
     Stream<HoodieInstant> completedCommitsInstantStream = activeTimeline
         .getCommitsTimeline()
         .filterCompletedInstants()
-        .filter(compactionInstantFilter)
+        .filter(instant -> !isMoRTable || !instant.getAction().equals(HoodieTimeline.COMMIT_ACTION))
         .findInstantsAfter(lastSuccessfulInstant.isPresent() ? lastSuccessfulInstant.get().requestedTime() : HoodieTimeline.INIT_INSTANT_TS)
         .getInstantsAsStream();
 
@@ -84,17 +90,36 @@ public class SimpleConcurrentFileWritesConflictResolutionStrategy
             || (!HoodieTimeline.CLUSTERING_ACTION.equals(instant.getAction()) && compareTimestamps(instant.requestedTime(), GREATER_THAN, currentInstant.requestedTime())))
         .getInstantsAsStream();
 
-    Stream<HoodieInstant> candidates = Stream.concat(completedCommitsInstantStream, clusteringAndReplaceCommitInstants);
-    if (usesCompletionTimeOrdering) {
-      return candidates;
-    } else {
-      // For tables with a version lower than 8, we also need to check for any pending compaction instants that have started after the current instant.
-      Stream<HoodieInstant> compactionInstants = activeTimeline
-          .filterPendingCompactionTimeline()
-          .filter(instant -> compareTimestamps(instant.requestedTime(), GREATER_THAN, currentInstant.requestedTime()))
-          .getInstantsAsStream();
-      return Stream.concat(compactionInstants, candidates);
-    }
+    return Stream.concat(completedCommitsInstantStream, clusteringAndReplaceCommitInstants);
+  }
+
+  /**
+   * To find which instants are conflicting for table versions below 8, we apply the following logic:
+   * <ul>
+   *   <li>Get completed instants timeline only for commits that have happened since the last successful write.</li>
+   *   <li>Get any scheduled or completed compaction that have started and/or finished after the current instant.</li>
+   *   <li>Get any completed replace commit that happened since the last successful write and any pending replace commit.</li>
+   * </ul>
+   * @param metaClient table meta client
+   * @param currentInstant the instant for the write this client is attempting to commit
+   * @param lastSuccessfulInstant the last successful write before this commit started
+   * @return a stream of instants that are candidates for conflict resolution
+   */
+  private Stream<HoodieInstant> getCandidateInstantsPreV8(HoodieTableMetaClient metaClient, HoodieInstant currentInstant,
+                                                          Option<HoodieInstant> lastSuccessfulInstant) {
+    HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
+    Stream<HoodieInstant> completedCommitsInstantStream = activeTimeline
+        .getCommitsTimeline()
+        .filterCompletedInstants()
+        .findInstantsAfter(lastSuccessfulInstant.isPresent() ? lastSuccessfulInstant.get().requestedTime() : HoodieTimeline.INIT_INSTANT_TS)
+        .getInstantsAsStream();
+
+    Stream<HoodieInstant> compactionAndClusteringPendingTimeline = activeTimeline
+        .filterPendingReplaceClusteringAndCompactionTimeline()
+        .filter(instant -> ClusteringUtils.isClusteringInstant(activeTimeline, instant, metaClient.getInstantGenerator())
+            || (!HoodieTimeline.CLUSTERING_ACTION.equals(instant.getAction()) && compareTimestamps(instant.requestedTime(), GREATER_THAN, currentInstant.requestedTime())))
+        .getInstantsAsStream();
+    return Stream.concat(completedCommitsInstantStream, compactionAndClusteringPendingTimeline);
   }
 
   @Override
