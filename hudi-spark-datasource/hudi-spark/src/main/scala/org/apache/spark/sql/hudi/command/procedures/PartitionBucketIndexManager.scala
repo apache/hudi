@@ -21,7 +21,7 @@ import org.apache.hudi.{AvroConversionUtils, HoodieCLIUtils, HoodieSparkSqlWrite
 import org.apache.hudi.DataSourceWriteOptions.{BULK_INSERT_OPERATION_OPT_VAL, ENABLE_ROW_WRITER, OPERATION}
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.client.SparkRDDWriteClient
-import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieReaderConfig, SerializableSchema}
+import org.apache.hudi.common.config.{HoodieMetadataConfig, SerializableSchema}
 import org.apache.hudi.common.engine.{HoodieEngineContext, ReaderContextFactory}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{PartitionBucketIndexHashingConfig, WriteOperationType}
@@ -33,7 +33,6 @@ import org.apache.hudi.config.{HoodieIndexConfig, HoodieInternalConfig}
 import org.apache.hudi.config.HoodieWriteConfig.ROLLBACK_USING_MARKERS_ENABLE
 import org.apache.hudi.data.CloseableIteratorListener
 import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.expression.Predicate
 import org.apache.hudi.index.bucket.partition.{PartitionBucketIndexCalculator, PartitionBucketIndexUtils}
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.storage.StoragePath

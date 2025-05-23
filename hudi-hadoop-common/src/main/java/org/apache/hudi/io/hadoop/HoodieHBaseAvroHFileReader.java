@@ -39,6 +39,7 @@ import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.util.Lazy;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.Cell;
@@ -405,12 +406,12 @@ public class HoodieHBaseAvroHFileReader extends HoodieAvroHFileReaderImplBase {
     // key is found and the cursor is left where the key is found
     Cell c = scanner.getCell();
     byte[] valueBytes = copyValueFromCell(c);
-    IndexedRecord record = deserialize(keyBytes, valueBytes, writerSchema, readerSchema);
+    GenericRecord record = deserialize(keyBytes, valueBytes, writerSchema, readerSchema);
 
     return Option.of(record);
   }
 
-  private static IndexedRecord getRecordFromCell(Cell cell, Schema writerSchema, Schema readerSchema) throws IOException {
+  private static GenericRecord getRecordFromCell(Cell cell, Schema writerSchema, Schema readerSchema) throws IOException {
     final byte[] keyBytes = copyKeyFromCell(cell);
     final byte[] valueBytes = copyValueFromCell(cell);
     return deserialize(
