@@ -77,7 +77,7 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
 
         // Generate the second clustering plan
         spark.sql(s"insert into $tableName values(4, 'a4', 10, 1003, 1003)")
-        val secondScheduleInstant = client.scheduleClustering(HOption.empty())
+        val secondScheduleInstant = client.scheduleClustering(HOption.empty()).get()
         checkAnswer(s"call show_clustering('$tableName')")(
           Seq(secondScheduleInstant, 1, HoodieInstant.State.REQUESTED.name(), "*"),
           Seq(firstScheduleInstant, 3, HoodieInstant.State.REQUESTED.name(), "*")

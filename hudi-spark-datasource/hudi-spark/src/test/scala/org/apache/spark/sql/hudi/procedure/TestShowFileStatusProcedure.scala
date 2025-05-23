@@ -98,7 +98,7 @@ class TestShowFileStatusProcedure extends HoodieSparkProcedureTestBase {
           newInstant = client.scheduleCompaction(HOption.empty()).get()
           val result = client.compact(newInstant)
           client.commitCompaction(newInstant, result, HOption.empty())
-          assertTrue(metaClient.reloadActiveTimeline.filterCompletedInstants.containsInstant(newInstant)
+          assertTrue(metaClient.reloadActiveTimeline.filterCompletedInstants.containsInstant(newInstant))
         }
 
         spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002, 1000)")

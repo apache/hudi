@@ -30,6 +30,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
@@ -194,7 +195,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
 
       // create one compaction instance before exist inflight instance.
       String compactionTime = "101";
-      writeClient.scheduleCompactionAtInstant(compactionTime, Option.empty());
+      assertFalse(WriteClientTestUtils.scheduleTableService(writeClient, compactionTime, Option.empty(), TableServiceType.COMPACT).isPresent());
     }
   }
 
@@ -222,7 +223,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
 
       // check that compaction will not be scheduled
       String compactionTime = "107";
-      assertFalse(writeClient.scheduleCompactionAtInstant(compactionTime, Option.empty()));
+      assertFalse(WriteClientTestUtils.scheduleTableService(writeClient, compactionTime, Option.empty(), TableServiceType.COMPACT).isPresent());
     }
   }
 
@@ -464,7 +465,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
    * Do a compaction.
    */
   private HoodieWriteMetadata compact(SparkRDDWriteClient writeClient, String compactionInstantTime) {
-    writeClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty());
+    WriteClientTestUtils.scheduleTableService(writeClient, compactionInstantTime, Option.empty(), TableServiceType.COMPACT);
     HoodieWriteMetadata compactMetadata = writeClient.compact(compactionInstantTime);
     writeClient.commitCompaction(compactionInstantTime, compactMetadata, Option.empty());
     assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(compactionInstantTime));
