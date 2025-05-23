@@ -888,7 +888,7 @@ public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness 
         .withParallelism(1, 1).withDeleteParallelism(1)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024)
             .withInlineCompaction(false).build())
-        .withAutoCommit(false).withStorageConfig(HoodieStorageConfig.newBuilder()
+        .withStorageConfig(HoodieStorageConfig.newBuilder()
             .hfileMaxFileSize(1024 * 1024).parquetMaxFileSize(1024 * 1024).build())
         .forTable("test-trip-table")
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.HBASE)

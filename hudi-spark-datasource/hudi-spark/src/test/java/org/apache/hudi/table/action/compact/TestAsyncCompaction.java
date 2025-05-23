@@ -20,6 +20,7 @@
 package org.apache.hudi.table.action.compact;
 
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.client.HoodieWriteResult;
 import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteClientTestUtils;
@@ -441,7 +442,8 @@ public class TestAsyncCompaction extends CompactionTestBase {
       // replace by using insertOverwrite
       JavaRDD<HoodieRecord> replaceRecords = jsc.parallelize(dataGen.generateInserts(replaceInstantTime, numRecs), 1);
       metaClient.getActiveTimeline().createRequestedCommitWithReplaceMetadata(replaceInstantTime, HoodieTimeline.REPLACE_COMMIT_ACTION);
-      client.insertOverwrite(replaceRecords, replaceInstantTime);
+      HoodieWriteResult result = client.insertOverwrite(replaceRecords, replaceInstantTime);
+      client.commit(replaceInstantTime, result.getWriteStatuses(), Option.empty(), HoodieTimeline.REPLACE_COMMIT_ACTION, result.getPartitionToReplaceFileIds());
 
       metaClient.reloadActiveTimeline();
       hoodieTable = getHoodieTable(metaClient, cfg);

@@ -34,7 +34,7 @@ import java.util.List;
 /**
  * Interface that supports updating metadata for a given table, as actions complete.
  */
-public interface HoodieTableMetadataWriter extends Serializable, AutoCloseable {
+public interface HoodieTableMetadataWriter<I,O> extends Serializable, AutoCloseable {
 
   /**
    * Builds the given metadata partitions to create index.

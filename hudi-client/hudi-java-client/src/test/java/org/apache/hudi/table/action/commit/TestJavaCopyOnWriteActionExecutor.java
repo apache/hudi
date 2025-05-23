@@ -65,12 +65,14 @@ import java.io.File;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTime;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
@@ -155,7 +157,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
     records.add(new HoodieAvroRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3));
 
     // Insert new records
-    writeClient.insert(records, firstCommitTime);
+    writeClient.commit(firstCommitTime, writeClient.insert(records, firstCommitTime), Option.empty(), COMMIT_ACTION, Collections.emptyMap());
 
     FileStatus[] allFiles = getIncrementalFiles(partitionPath, "0", -1);
     assertEquals(1, allFiles.length);
@@ -193,6 +195,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
     metaClient = HoodieTableMetaClient.reload(metaClient);
     WriteClientTestUtils.startCommitWithTime(writeClient, newCommitTime);
     List<WriteStatus> statuses = writeClient.upsert(updatedRecords, newCommitTime);
+    writeClient.commit(newCommitTime, statuses, Option.empty(), COMMIT_ACTION, Collections.emptyMap());
 
     allFiles = getIncrementalFiles(partitionPath, firstCommitTime, -1);
     assertEquals(1, allFiles.length);
@@ -501,7 +504,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
     records.add(new HoodieAvroRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3));
 
     // Insert new records
-    writeClient.insert(records, firstCommitTime);
+    writeClient.commit(firstCommitTime, writeClient.insert(records, firstCommitTime), Option.empty(), COMMIT_ACTION, Collections.emptyMap());
 
     FileStatus[] allFiles = getIncrementalFiles(partitionPath, "0", -1);
     assertEquals(1, allFiles.length);
@@ -526,7 +529,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
 
     // Test delete two records
     List<HoodieKey> keysForDelete = new ArrayList(Arrays.asList(records.get(0).getKey(), records.get(2).getKey()));
-    writeClient.delete(keysForDelete, newCommitTime);
+    writeClient.commit(newCommitTime, writeClient.delete(keysForDelete, newCommitTime), Option.empty(), COMMIT_ACTION, Collections.emptyMap());
 
     allFiles = getIncrementalFiles(partitionPath, "0", -1);
     assertEquals(1, allFiles.length);
@@ -543,7 +546,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
 
     // Test delete last record
     keysForDelete = new ArrayList(Arrays.asList(records.get(1).getKey()));
-    writeClient.delete(keysForDelete, newCommitTime);
+    writeClient.commit(newCommitTime, writeClient.delete(keysForDelete, newCommitTime), Option.empty(), COMMIT_ACTION, Collections.emptyMap());
 
     allFiles = getIncrementalFiles(partitionPath, "0", -1);
     assertEquals(1, allFiles.length);
