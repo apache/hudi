@@ -334,14 +334,14 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
       assertLogFilesNumEqualsTo(config, 1);
 
       // schedule compaction
-      String compactionInstant = writeClient.createNewInstantTime();
-      boolean scheduled = writeClient.scheduleCompactionAtInstant(compactionInstant, Option.empty());
+      Option<String> compactionInstantOpt = writeClient.scheduleCompaction(Option.empty());
+      boolean scheduled = compactionInstantOpt.isPresent();
       if (expectedCompactedPartition.isEmpty()) {
         assertFalse(scheduled);
         return;
       }
 
-      HoodieWriteMetadata result = compact(writeClient, compactionInstant);
+      HoodieWriteMetadata result = compact(writeClient, compactionInstantOpt.get());
 
       assertTrue(!((HoodieCommitMetadata) result.getCommitMetadata().get()).getWriteStats().isEmpty());
       List<HoodieWriteStat> stats = ((HoodieCommitMetadata) result.getCommitMetadata().get()).getWriteStats();
