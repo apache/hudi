@@ -22,6 +22,7 @@ package org.apache.hudi.common.table.read;
 import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -199,6 +200,40 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   }
 
   /**
+   * Merge two log data records if needed.
+   *
+   * @param newRecord                  The new incoming record
+   * @param existingRecord             The existing record
+   * @return the {@link BufferedRecord} that needs to be updated, returns empty to skip the update.
+   */
+  protected Option<BufferedRecord<T>> doProcessNextDataRecord(BufferedRecord<T> newRecord, BufferedRecord<T> existingRecord)
+      throws IOException {
+    totalLogRecords++;
+    BufferedRecord<T> merged = merger.merge(Option.ofNullable(existingRecord), Option.of(newRecord), enablePartialMerging);
+    // if the merged record is the same as the existing record, we can skip the processing
+    if (merged == existingRecord) {
+      return Option.empty();
+    }
+    return Option.of(merged);
+  }
+
+  /**
+   * Merge a delete record with another record (data, or delete).
+   *
+   * @param deleteRecord               The delete record
+   * @param existingRecord             The existing {@link BufferedRecord}
+   *
+   * @return The option of new delete record that needs to be updated with.
+   */
+  protected Option<DeleteRecord> doProcessNextDeletedRecord(DeleteRecord deleteRecord, BufferedRecord<T> existingRecord) {
+    totalLogRecords++;
+    if (merger.shouldKeepIncomingDelete(deleteRecord, existingRecord)) {
+      return Option.of(deleteRecord);
+    }
+    return Option.empty();
+  }
+
+  /**
    * Create a record iterator for a data block. The records are filtered by a key set specified by {@code keySpecOpt}.
    *
    * @param dataBlock
@@ -253,9 +288,6 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
       if (!merged.isDelete()) {
         // Updates
         T mergedRecord = merged.getRecord();
-        if (!merged.getSchemaId().equals(readerSchemaId)) {
-          mergedRecord = readerContext.projectRecord(readerContext.getSchemaFromBufferRecord(merged), readerSchema).apply(mergedRecord);
-        }
         nextRecord = readerContext.seal(mergedRecord);
         readStats.incrementNumUpdates();
         return true;

@@ -195,8 +195,10 @@ class TestEngineBasedMerger {
     Integer schemaId = 2;
     long orderingValue = 1L;
     String recordKey = "key";
-    when(mergedRecord.getData()).thenReturn(data);
-    mockResultConversionToBufferedRecord(schemaId, mergedRecord, mergedSchema, orderingValue, recordKey, resultIsADelete);
+    HoodieRecord convertedRecord = mock(HoodieRecord.class);
+    when(mergedRecord.rewriteRecordWithNewSchema(mergedSchema, null, readerSchema)).thenReturn(convertedRecord);
+    when(convertedRecord.getData()).thenReturn(data);
+    mockResultConversionToBufferedRecord(schemaId, convertedRecord, mergedSchema, orderingValue, recordKey, resultIsADelete);
 
     BufferedRecord<TestRecord> result = merger.merge(Option.of(T1), Option.of(T2), false);
     BufferedRecord<TestRecord> expected = new BufferedRecord<>(recordKey, orderingValue, data, schemaId, resultIsADelete);
@@ -238,9 +240,7 @@ class TestEngineBasedMerger {
     long orderingValue = 1L;
     String recordKey = "key";
 
-    IndexedRecord rewrittenData = mock(IndexedRecord.class);
-    when(mergedRecord.getData()).thenReturn(rewrittenData);
-    when(readerContext.convertAvroRecord(rewrittenData)).thenReturn(data);
+    mockRewriteWithNewSchema(mergedRecord, mergedSchema, data);
     mockResultConversionToBufferedRecord(schemaId, mergedRecord, mergedSchema, orderingValue, recordKey, resultIsADelete);
 
     BufferedRecord<TestRecord> result = merger.merge(Option.of(T1), Option.of(T2), false);
@@ -269,43 +269,6 @@ class TestEngineBasedMerger {
     when(tableConfig.getPayloadClass()).thenReturn(CustomPayloadForMergerTesting.class.getName());
     EngineBasedMerger<TestRecord> merger = new EngineBasedMerger<>(readerContext, RecordMergeMode.CUSTOM, tableConfig, props);
     BufferedRecord<TestRecord> result = merger.merge(Option.of(older), Option.of(newer), false);
-    assertEquals(expected, result);
-  }
-
-  @ParameterizedTest
-  @ValueSource(strings = {
-      HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID,
-      HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID,
-      HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID})
-  void customMerger_emptyMergeResult(String mergingStrategy) throws Exception {
-    HoodieRecordMerger recordMerger = mock(HoodieRecordMerger.class);
-    when(readerContext.getRecordMerger()).thenReturn(Option.of(recordMerger));
-    when(readerContext.getSchemaHandler().getRequiredSchema()).thenReturn(readerSchema);
-    when(recordMerger.getMergingStrategy()).thenReturn(mergingStrategy);
-
-    // Mock conversion to HoodieRecords, T2 is provided as the "older" record
-    Schema olderRecorderSchema = mock(Schema.class);
-    Schema newerRecorderSchema = mock(Schema.class);
-    HoodieRecord olderRecord = mock(HoodieRecord.class);
-    HoodieRecord newerRecord = mock(HoodieRecord.class);
-    when(readerContext.getSchemaFromBufferRecord(T2)).thenReturn(olderRecorderSchema);
-    when(readerContext.getSchemaFromBufferRecord(T1)).thenReturn(newerRecorderSchema);
-    when(readerContext.constructHoodieRecord(T2)).thenReturn(olderRecord);
-    when(readerContext.constructHoodieRecord(T1)).thenReturn(newerRecord);
-
-    // Mock result
-    when(recordMerger.merge(olderRecord, olderRecorderSchema, newerRecord, newerRecorderSchema, props))
-        .thenReturn(Option.empty());
-
-    EngineBasedMerger<TestRecord> merger = new EngineBasedMerger<>(readerContext, RecordMergeMode.CUSTOM, null, props);
-
-    BufferedRecord<TestRecord> result = merger.merge(Option.of(T2), Option.of(T1), false);
-    BufferedRecord<TestRecord> expected;
-    if (mergingStrategy.equals(HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID)) {
-      expected = new BufferedRecord<>(T1.getRecordKey(), T1.getOrderingValue(), T1.getRecord(), T1.getSchemaId(), true);
-    } else {
-      expected = new BufferedRecord<>(T2.getRecordKey(), T2.getOrderingValue(), T2.getRecord(), T2.getSchemaId(), true);
-    }
     assertEquals(expected, result);
   }
 
@@ -358,6 +321,15 @@ class TestEngineBasedMerger {
   private void mockEmptyMergerAndSchema() {
     when(readerContext.getRecordMerger()).thenReturn(Option.empty());
     when(readerContext.getSchemaHandler().getRequiredSchema()).thenReturn(readerSchema);
+  }
+
+  private void mockRewriteWithNewSchema(HoodieRecord mergedRecord, Schema mergedSchema, TestRecord data) {
+    IndexedRecord indexedRecord = mock(IndexedRecord.class);
+    HoodieRecord convertedRecord = mock(HoodieRecord.class);
+    when(mergedRecord.getData()).thenReturn(indexedRecord);
+    when(mergedRecord.rewriteRecordWithNewSchema(mergedSchema, null, readerSchema)).thenReturn(convertedRecord);
+    when(convertedRecord.getData()).thenReturn(indexedRecord);
+    when(readerContext.convertAvroRecord(indexedRecord)).thenReturn(data);
   }
 
   private static class TestRecord {

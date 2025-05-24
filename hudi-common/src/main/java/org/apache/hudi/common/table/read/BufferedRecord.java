@@ -79,7 +79,7 @@ public class BufferedRecord<T> implements Serializable {
       throw new HoodieException("Failed to get isDelete from record.", e);
     }
     Comparable<?> orderingValue = record.getOrderingValue(schema, props);
-    return new BufferedRecord<>(recordKey, readerContext.convertValueToEngineType(orderingValue), data, schemaId, isDelete);
+    return new BufferedRecord<>(recordKey, orderingValue, data, schemaId, isDelete);
   }
 
   public static <T> BufferedRecord<T> forRecordWithContext(T record, Schema schema, HoodieReaderContext<T> readerContext, Option<String> orderingFieldName, boolean isDelete) {
@@ -93,10 +93,6 @@ public class BufferedRecord<T> implements Serializable {
     Comparable orderingValue = deleteRecord.getOrderingValue() == null || deleteRecord.getOrderingValue().equals(DEFAULT_ORDERING_VALUE) ? DEFAULT_ORDERING_VALUE :
         readerContext.convertValueToEngineType(deleteRecord.getOrderingValue());
     return new BufferedRecord<>(deleteRecord.getRecordKey(), orderingValue, null, null, true);
-  }
-
-  public BufferedRecord<T> asDeleteRecord() {
-    return new BufferedRecord<>(recordKey, orderingValue, record, schemaId, true);
   }
 
   public String getRecordKey() {

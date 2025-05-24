@@ -135,7 +135,7 @@ public class EngineBasedMerger<T> {
           return BufferedRecord.forRecordWithContext(combinedRecord, combinedRecordAndSchema.getRight(), readerContext, props);
         }
         return older;
-      }).orElseGet(() -> getLatestAsDeleteRecord(newer, older));
+      }).orElseThrow(() -> new IllegalStateException(""));
     } else {
       switch (recordMergeMode) {
         case COMMIT_TIME_ORDERING:
@@ -148,18 +148,30 @@ public class EngineBasedMerger<T> {
           if (payloadClass.isPresent()) {
             Option<Pair<HoodieRecord, Schema>> mergedRecord = getMergedRecord(older, newer);
             mergeResult = mergedRecord.map(combinedRecordAndSchema -> {
-              T record = readerContext.convertAvroRecord((IndexedRecord) combinedRecordAndSchema.getLeft().getData());
+              IndexedRecord indexedRecord;
+              if (!combinedRecordAndSchema.getRight().equals(readerSchema)) {
+                indexedRecord = (IndexedRecord) combinedRecordAndSchema.getLeft().rewriteRecordWithNewSchema(combinedRecordAndSchema.getRight(), null, readerSchema).getData();
+              } else {
+                indexedRecord = (IndexedRecord) combinedRecordAndSchema.getLeft().getData();
+              }
+              T record = readerContext.convertAvroRecord(indexedRecord);
               return BufferedRecord.forConvertedRecord(record, combinedRecordAndSchema.getLeft(), combinedRecordAndSchema.getRight(), readerContext, props);
             });
           } else {
             Option<Pair<HoodieRecord, Schema>> mergedRecord = recordMerger.get().merge(
                 readerContext.constructHoodieRecord(older), readerContext.getSchemaFromBufferRecord(older),
                 readerContext.constructHoodieRecord(newer), readerContext.getSchemaFromBufferRecord(newer), props);
-            mergeResult = mergedRecord.map(combinedRecordAndSchema ->
-                BufferedRecord.forRecordWithContext((HoodieRecord<T>) combinedRecordAndSchema.getLeft(),
-                    combinedRecordAndSchema.getRight(), readerContext, props));
+            mergeResult = mergedRecord.map(combinedRecordAndSchema -> {
+              HoodieRecord<T> record;
+              if (!combinedRecordAndSchema.getRight().equals(readerSchema)) {
+                record = (HoodieRecord<T>) combinedRecordAndSchema.getLeft().rewriteRecordWithNewSchema(combinedRecordAndSchema.getRight(), null, readerSchema);
+              } else {
+                record = (HoodieRecord<T>) combinedRecordAndSchema.getLeft();
+              }
+              return BufferedRecord.forRecordWithContext(record, combinedRecordAndSchema.getRight(), readerContext, props);
+            });
           }
-          return mergeResult.orElseGet(() -> getLatestAsDeleteRecord(newer, older));
+          return mergeResult.orElseThrow(() -> new IllegalStateException(""));
       }
     }
   }
@@ -206,18 +218,5 @@ public class EngineBasedMerger<T> {
       record = readerContext.convertToAvroRecord(bufferedRecord.getRecord(), recordSchema);
     }
     return new HoodieAvroRecord<>(new HoodieKey(bufferedRecord.getRecordKey(), null), HoodieRecordUtils.loadPayload(payloadClass.get(), record, bufferedRecord.getOrderingValue()));
-  }
-
-  /**
-   * Picks the "latest" record based on the merger strategy and converts that to a delete by setting the `delete` flag.
-   * @param newer the newer record passed to the merge function
-   * @param older the older record passed to the merge function
-   * @return the latest record as a delete record
-   */
-  private BufferedRecord<T> getLatestAsDeleteRecord(BufferedRecord<T> newer, BufferedRecord<T> older) {
-    if (recordMerger.map(merger -> merger.getMergingStrategy().equals(HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID)).orElse(false)) {
-      return newer.asDeleteRecord();
-    }
-    return getNewerRecordWithEventTimeOrdering(older, newer).asDeleteRecord();
   }
 }
