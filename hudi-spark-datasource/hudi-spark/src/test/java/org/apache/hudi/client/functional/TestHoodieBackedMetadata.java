@@ -236,6 +236,11 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     clientsToClose.forEach(BaseHoodieWriteClient::close);
   }
 
+  @Test
+  public void investigateTestTriggerTestHoodieBackedMetadata() {
+    throw new HoodieException("Failing test in TestHoodieBackedMetadata");
+  }
+
   /**
    * Metadata Table bootstrap scenarios.
    */
@@ -3585,7 +3590,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       HoodieWriteMetadata result = metadataWriteClient.compact(compactionInstantTime);
       metadataWriteClient.commitCompaction(compactionInstantTime, result, Option.empty());
       // validate that compaction has been complete in metadata table.
-      assertTrue(((SparkHoodieBackedTableMetadataWriter) metadataWriter).getTableMetadata().getMetadataMetaClient().reloadActiveTimeline().filterCompletedInstants().containsInstant(compactionInstantTime));
+      assertTrue(((SparkHoodieBackedTableMetadataWriter) metadataWriter).getTableMetadata().getMetadataMetaClient().reloadActiveTimeline().filterCompletedInstants()
+          .containsInstant(compactionInstantTime));
 
       // verify metadata table
       validateMetadata(client);

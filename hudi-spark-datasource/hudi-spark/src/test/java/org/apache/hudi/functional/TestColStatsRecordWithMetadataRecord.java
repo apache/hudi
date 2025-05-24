@@ -39,6 +39,7 @@ import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.io.storage.HoodieSeekingFileReader;
@@ -100,6 +101,11 @@ public class TestColStatsRecordWithMetadataRecord extends HoodieSparkClientTestH
   @AfterEach
   public void tearDown() throws Exception {
     cleanupResources();
+  }
+
+  @Test
+  public void investigateTestTriggerTestColStatsRecordWithMetadataRecord() {
+    throw new HoodieException("Failing test in TestConsistentBucketIndex");
   }
 
   @Test

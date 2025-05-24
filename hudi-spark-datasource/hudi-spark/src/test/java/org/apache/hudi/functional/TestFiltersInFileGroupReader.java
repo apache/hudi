@@ -22,12 +22,14 @@ package org.apache.hudi.functional;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SaveMode;
 import org.apache.spark.sql.internal.SQLConf;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -39,6 +41,11 @@ import java.util.Map;
  */
 @Tag("functional")
 public class TestFiltersInFileGroupReader extends TestBootstrapReadBase {
+
+  @Test
+  public void investigateTestTriggerTestFiltersInFileGroupReader() {
+    throw new HoodieException("Failing test in TestConsistentBucketIndex");
+  }
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})

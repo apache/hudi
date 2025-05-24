@@ -36,6 +36,7 @@ import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieSparkTable;
@@ -44,6 +45,7 @@ import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -71,6 +73,11 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
         Arguments.of(false, false, true),
         Arguments.of(false, false, false)
     );
+  }
+
+  @Test
+  public void investigateTestTriggerTestHoodieSparkMergeOnReadTableClustering() {
+    throw new HoodieException("Failing test in TestConsistentBucketIndex");
   }
 
   @ParameterizedTest

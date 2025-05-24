@@ -19,11 +19,13 @@
 package org.apache.hudi.functional;
 
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.exception.HoodieException;
 
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SaveMode;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -39,6 +41,12 @@ import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
  */
 @Tag("functional")
 public class TestBootstrapRead extends TestBootstrapReadBase {
+
+  @Test
+  public void investigateTestTriggerTestBootstrapRead() {
+    throw new HoodieException("Failing test in TestConsistentBucketIndex");
+  }
+
   private static Stream<Arguments> testArgs() {
     boolean fullTest = false;
     Stream.Builder<Arguments> b = Stream.builder();

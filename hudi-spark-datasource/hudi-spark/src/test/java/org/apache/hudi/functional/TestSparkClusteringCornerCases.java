@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import org.apache.spark.api.java.JavaRDD;
@@ -44,6 +45,12 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_
 
 @Tag("functional")
 public class TestSparkClusteringCornerCases extends HoodieClientTestBase {
+
+  @Test
+  public void investigateTestTriggerTestSparkClusteringCornerCases() {
+    throw new HoodieException("Failing test in TestConsistentBucketIndex");
+  }
+
   @Test
   void testClusteringWithEmptyPartitions() throws IOException {
     Properties props = getPropertiesForKeyGen(true);

@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.execution.bulkinsert.NonSortPartitionerWithRows;
 import org.apache.hudi.keygen.ComplexKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
@@ -93,6 +94,11 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieSparkClientTestBase
     schemaStr = FileIOUtils.readAsUTFString(getClass().getResourceAsStream("/exampleSchema.txt"));
     schema = DataSourceTestUtils.getStructTypeExampleSchema();
     structType = AvroConversionUtils.convertAvroSchemaToStructType(schema);
+  }
+
+  @Test
+  public void investigateTestTriggerTestHoodieDatasetBulkInsertHelper() {
+    throw new HoodieException("Failing test in TestConsistentBucketIndex");
   }
 
   @Test
