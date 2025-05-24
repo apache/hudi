@@ -1841,6 +1841,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       WriteClientTestUtils.startCommitWithTime(client, commitTime);
       List<WriteStatus> writeStatuses = client.insert(jsc.parallelize(records, 1), commitTime).collect();
       assertNoWriteErrors(writeStatuses);
+      client.commit(commitTime, jsc.parallelize(writeStatuses));
       validateMetadata(client);
 
       // Rollback the first commit
@@ -1852,6 +1853,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       WriteClientTestUtils.startCommitWithTime(client, commitTime);
       writeStatuses = client.upsert(jsc.parallelize(records, 1), commitTime).collect();
       assertNoWriteErrors(writeStatuses);
+      client.commit(commitTime, jsc.parallelize(writeStatuses));
       validateMetadata(client);
     }
   }
