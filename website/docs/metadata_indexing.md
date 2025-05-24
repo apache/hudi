@@ -159,8 +159,8 @@ hoodie.write.lock.zookeeper.base_path=<zk_base_path>
 
 ```bash
 spark-submit \
---jars "packaging/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle_2.12-1.0.1.jar,packaging/hudi-spark-bundle/target/hudi-spark3.5-bundle_2.12-1.0.1.jar" \
---class org.apache.hudi.utilities.streamer.HoodieStreamer `ls /Users/home/path/to/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle_2.12-1.0.1.jar` \
+--jars "packaging/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle_2.12-1.0.2.jar,packaging/hudi-spark-bundle/target/hudi-spark3.5-bundle_2.12-1.0.2.jar" \
+--class org.apache.hudi.utilities.streamer.HoodieStreamer `ls /Users/home/path/to/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle_2.12-1.0.2.jar` \
 --props `ls /Users/home/path/to/write/config.properties` \
 --source-class org.apache.hudi.utilities.sources.ParquetDFSSource  --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider \
 --source-ordering-field tpep_dropoff_datetime   \
@@ -212,9 +212,9 @@ Now, we can schedule indexing using `HoodieIndexer` in `schedule` mode as follow
 
 ```
 spark-submit \
---jars "packaging/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle_2.12-1.0.1.jar,packaging/hudi-spark-bundle/target/hudi-spark3.5-bundle_2.12-1.0.1.jar" \
+--jars "packaging/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle_2.12-1.0.2.jar,packaging/hudi-spark-bundle/target/hudi-spark3.5-bundle_2.12-1.0.2.jar" \
 --class org.apache.hudi.utilities.HoodieIndexer \
-/Users/home/path/to/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle_2.12-1.0.1.jar \
+/Users/home/path/to/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle_2.12-1.0.2.jar \
 --props /Users/home/path/to/indexer.properties \
 --mode schedule \
 --base-path /tmp/hudi-ny-taxi \
@@ -232,9 +232,9 @@ To execute indexing, run the indexer in `execute` mode as below.
 
 ```
 spark-submit \
---jars "packaging/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle_2.12-1.0.1.jar,packaging/hudi-spark-bundle/target/hudi-spark3.5-bundle_2.12-1.0.1.jar" \
+--jars "packaging/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle_2.12-1.0.2.jar,packaging/hudi-spark-bundle/target/hudi-spark3.5-bundle_2.12-1.0.2.jar" \
 --class org.apache.hudi.utilities.HoodieIndexer \
-/Users/home/path/to/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle_2.12-1.0.1.jar \
+/Users/home/path/to/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle_2.12-1.0.2.jar \
 --props /Users/home/path/to/indexer.properties \
 --mode execute \
 --base-path /tmp/hudi-ny-taxi \
@@ -288,9 +288,9 @@ To drop an index, just run the index in `dropindex` mode.
 
 ```
 spark-submit \
---jars "packaging/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle_2.12-1.0.1.jar,packaging/hudi-spark-bundle/target/hudi-spark3.5-bundle_2.12-1.0.1.jar" \
+--jars "packaging/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle_2.12-1.0.2.jar,packaging/hudi-spark-bundle/target/hudi-spark3.5-bundle_2.12-1.0.2.jar" \
 --class org.apache.hudi.utilities.HoodieIndexer \
-/Users/home/path/to/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle_2.12-1.0.1.jar \
+/Users/home/path/to/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle_2.12-1.0.2.jar \
 --props /Users/home/path/to/indexer.properties \
 --mode dropindex \
 --base-path /tmp/hudi-ny-taxi \

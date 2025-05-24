@@ -150,7 +150,7 @@ ingests data to Hudi table continuously from upstream sources. In this mode, Hud
 compactions. Here is an example snippet for running in continuous mode with async compactions
 
 ```properties
-spark-submit --packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:1.0.1,org.apache.hudi:hudi-spark3.5-bundle_2.12:1.0.1 \
+spark-submit --packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:1.0.2,org.apache.hudi:hudi-spark3.5-bundle_2.12:1.0.2 \
 --class org.apache.hudi.utilities.streamer.HoodieStreamer \
 --table-type MERGE_ON_READ \
 --target-base-path <hudi_base_path> \
@@ -187,7 +187,7 @@ The compactor utility allows to do scheduling and execution of compaction.
 
 Example:
 ```properties
-spark-submit --packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:1.0.1,org.apache.hudi:hudi-spark3.5-bundle_2.12:1.0.1 \
+spark-submit --packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:1.0.2,org.apache.hudi:hudi-spark3.5-bundle_2.12:1.0.2 \
 --class org.apache.hudi.utilities.HoodieCompactor \
 --base-path <base_path> \
 --table-name <table_name> \
