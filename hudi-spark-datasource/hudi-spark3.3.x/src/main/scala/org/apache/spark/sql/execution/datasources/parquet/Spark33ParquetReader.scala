@@ -252,8 +252,8 @@ object Spark33ParquetReader extends SparkParquetReaderBuilder {
       sqlConf.getConfString("spark.sql.legacy.parquet.nanosAsLong", "false").toBoolean
     )
 
-    // Should always be set by FileSourceScanExec creating this.
-    // Check conf before checking option, to allow working around an issue by changing conf.
+    // Should always be set by FileSourceScanExec while creating this.
+    // Check conf before checking the option, to allow working around an issue by changing conf.
     val returningBatch = sqlConf.parquetVectorizedReaderEnabled &&
       options.get(FileFormat.OPTION_RETURNING_BATCH)
         .getOrElse {
