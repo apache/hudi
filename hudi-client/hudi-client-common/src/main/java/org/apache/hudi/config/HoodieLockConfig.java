@@ -351,7 +351,11 @@ public class HoodieLockConfig extends HoodieConfig {
     }
 
     public HoodieLockConfig.Builder withConflictResolutionStrategy(ConflictResolutionStrategy conflictResolutionStrategy) {
-      lockConfig.setValue(WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME, conflictResolutionStrategy.getClass().getName());
+      return withConflictResolutionStrategyClassName(conflictResolutionStrategy.getClass().getName());
+    }
+
+    public HoodieLockConfig.Builder withConflictResolutionStrategyClassName(String conflictResolutionStrategyClassName) {
+      lockConfig.setValue(WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME, conflictResolutionStrategyClassName);
       return this;
     }
 

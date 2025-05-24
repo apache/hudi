@@ -139,7 +139,7 @@ public class UpgradeDowngrade {
           HoodieTableMetaClient mdtMetaClient = HoodieTableMetaClient.builder()
               .setConf(metaClient.getStorageConf().newInstance()).setBasePath(metadataTablePath).build();
           HoodieWriteConfig mdtWriteConfig = HoodieMetadataWriteUtils.createMetadataWriteConfig(
-              config, HoodieFailedWritesCleaningPolicy.EAGER);
+              config, HoodieFailedWritesCleaningPolicy.EAGER, metaClient.getTableConfig().getTableVersion());
           new UpgradeDowngrade(mdtMetaClient, mdtWriteConfig, context, upgradeDowngradeHelper)
               .run(toVersion, instantTime);
         }
