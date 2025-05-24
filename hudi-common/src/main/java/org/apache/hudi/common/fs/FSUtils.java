@@ -322,7 +322,12 @@ public class FSUtils {
   }
 
   public static String createNewFileId(String idPfx, int id) {
-    return String.format("%s-%d", idPfx, id);
+    // format: {idPrefix}-{id}
+    return new StringBuilder()
+        .append(idPfx)
+        .append('-')
+        .append(id)
+        .toString();
   }
 
   /**
