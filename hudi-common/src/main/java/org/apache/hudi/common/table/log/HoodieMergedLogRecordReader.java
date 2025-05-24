@@ -22,7 +22,6 @@ package org.apache.hudi.common.table.log;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.read.FileGroupRecordBuffer;
-import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
@@ -34,11 +33,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
-import java.io.Serializable;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -50,8 +46,7 @@ import static org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath;
  *
  * @param <T> type of engine-specific record representation.
  */
-public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
-    implements Iterable<BufferedRecord<T>>, Closeable {
+public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T> implements Closeable {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieMergedLogRecordReader.class);
   // A timer for calculating elapsed time in millis
   public final HoodieTimer timer = HoodieTimer.create();
@@ -163,15 +158,6 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
 
     LOG.info("Number of log files scanned => {}", logFilePaths.size());
     LOG.info("Number of entries in Map => {}", recordBuffer.size());
-  }
-
-  @Override
-  public Iterator<BufferedRecord<T>> iterator() {
-    return recordBuffer.getLogRecordIterator();
-  }
-
-  public Map<Serializable, BufferedRecord<T>> getRecords() {
-    return recordBuffer.getLogRecords();
   }
 
   public long getNumMergedRecordsInLog() {

@@ -28,7 +28,6 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.Iterator;
 import java.util.Map;
 
 public interface HoodieFileGroupRecordBuffer<T> {
@@ -91,11 +90,6 @@ public interface HoodieFileGroupRecordBuffer<T> {
    * @return the total number of log records processed.
    */
   long getTotalLogRecords();
-
-  /**
-   * @return An iterator on the log records.
-   */
-  Iterator<BufferedRecord<T>> getLogRecordIterator();
 
   /**
    * @return The underlying data stored in the buffer.

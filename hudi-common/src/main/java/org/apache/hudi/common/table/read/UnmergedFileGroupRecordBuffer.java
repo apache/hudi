@@ -19,7 +19,6 @@
 
 package org.apache.hudi.common.table.read;
 
-import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DeleteRecord;
@@ -38,7 +37,6 @@ import org.apache.avro.Schema;
 import java.io.Serializable;
 import java.util.ArrayDeque;
 import java.util.Deque;
-import java.util.Iterator;
 
 public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
 
@@ -48,11 +46,11 @@ public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
   public UnmergedFileGroupRecordBuffer(
       HoodieReaderContext<T> readerContext,
       HoodieTableMetaClient hoodieTableMetaClient,
-      RecordMergeMode recordMergeMode,
       TypedProperties props,
       HoodieReadStats readStats,
+      EngineBasedMerger<T> merger,
       boolean emitDelete) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, Option.empty(), emitDelete);
+    super(readerContext, hoodieTableMetaClient, props, readStats, Option.empty(), merger, emitDelete);
     this.currentInstantLogBlocks = new ArrayDeque<>();
   }
 
@@ -83,11 +81,6 @@ public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
     nextRecord = readerContext.seal(recordIterator.next());
     readStats.incrementNumInserts();
     return true;
-  }
-
-  @Override
-  public Iterator<BufferedRecord<T>> getLogRecordIterator() {
-    throw new UnsupportedOperationException("Not supported for " + this.getClass().getSimpleName());
   }
 
   @Override

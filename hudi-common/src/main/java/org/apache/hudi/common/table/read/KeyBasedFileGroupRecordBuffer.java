@@ -20,7 +20,6 @@
 package org.apache.hudi.common.table.read;
 
 import org.apache.hudi.avro.AvroSchemaCache;
-import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DeleteRecord;
@@ -50,12 +49,12 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
 
   public KeyBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
                                        HoodieTableMetaClient hoodieTableMetaClient,
-                                       RecordMergeMode recordMergeMode,
                                        TypedProperties props,
                                        HoodieReadStats readStats,
                                        Option<String> orderingFieldName,
+                                       EngineBasedMerger<T> merger,
                                        boolean emitDelete) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, orderingFieldName, emitDelete);
+    super(readerContext, hoodieTableMetaClient, props, readStats, orderingFieldName, merger, emitDelete);
   }
 
   @Override
@@ -109,8 +108,7 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
     BufferedRecord<T> existingRecord = records.get(recordKey);
     Option<DeleteRecord> recordOpt = doProcessNextDeletedRecord(deleteRecord, existingRecord);
     if (recordOpt.isPresent()) {
-      Comparable orderingValue = getOrderingValue(readerContext, recordOpt.get());
-      records.put(recordKey, BufferedRecord.forDeleteRecord(deleteRecord, orderingValue));
+      records.put(recordKey, BufferedRecord.forDeleteRecord(deleteRecord, readerContext));
     }
   }
 

@@ -33,6 +33,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
+import org.apache.hudi.common.table.read.EngineBasedMerger;
 import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.table.read.PositionBasedFileGroupRecordBuffer;
 import org.apache.hudi.common.table.read.PositionBasedSchemaHandler;
@@ -131,14 +132,15 @@ public class TestPositionBasedFileGroupRecordBuffer extends TestHoodieFileGroupR
       writeConfigs.put(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key(), HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID);
     }
     readStats = new HoodieReadStats();
+    EngineBasedMerger<InternalRow> merger = new EngineBasedMerger<>(ctx, mergeMode, metaClient.getTableConfig(), props);
     buffer = new PositionBasedFileGroupRecordBuffer<>(
         ctx,
         metaClient,
-        mergeMode,
         baseFileInstantTime,
         props,
         readStats,
         Option.of("timestamp"),
+        merger,
         false);
   }
 
