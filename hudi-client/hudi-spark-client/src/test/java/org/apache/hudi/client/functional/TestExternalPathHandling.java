@@ -160,7 +160,7 @@ public class TestExternalPathHandling extends HoodieClientTestBase {
         Collections.singletonMap(partitionPath1, Collections.singletonList(new HoodieCleanFileInfo(filePath1, false))));
     metaClient.getActiveTimeline().saveToCleanRequested(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, cleanTime), Option.of(cleanerPlan));
     HoodieInstant inflightClean = metaClient.getActiveTimeline().transitionCleanRequestedToInflight(
-        INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, cleanTime), Option.empty());
+        INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, cleanTime));
     List<HoodieCleanStat> cleanStats = Collections.singletonList(createCleanStat(partitionPath1, Arrays.asList(filePath1), instantTime2, instantTime3));
     HoodieCleanMetadata cleanMetadata = CleanerUtils.convertCleanMetadata(
         cleanTime,

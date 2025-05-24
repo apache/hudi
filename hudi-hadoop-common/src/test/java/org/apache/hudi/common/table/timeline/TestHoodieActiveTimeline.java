@@ -444,7 +444,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     timeline.saveToCleanRequested(clean, Option.empty());
     timeline = timeline.reload();
     assertTrue(timeline.containsInstant(clean));
-    inflight = timeline.transitionCleanRequestedToInflight(clean, Option.empty());
+    inflight = timeline.transitionCleanRequestedToInflight(clean);
     timeline = timeline.reload();
     assertFalse(timeline.containsInstant(clean));
     assertTrue(timeline.containsInstant(inflight));

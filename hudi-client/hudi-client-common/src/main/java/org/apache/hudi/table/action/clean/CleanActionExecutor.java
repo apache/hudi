@@ -209,7 +209,7 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
     try {
       final HoodieTimer timer = HoodieTimer.start();
       if (cleanInstant.isRequested()) {
-        inflightInstant = table.getActiveTimeline().transitionCleanRequestedToInflight(cleanInstant, Option.of(cleanerPlan));
+        inflightInstant = table.getActiveTimeline().transitionCleanRequestedToInflight(cleanInstant);
       } else {
         inflightInstant = cleanInstant;
       }
@@ -257,7 +257,8 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
       }
 
       for (HoodieInstant hoodieInstant : pendingCleanInstants) {
-        if (table.getCleanTimeline().isEmpty(hoodieInstant)) {
+        if (table.getCleanTimeline().isEmpty(CleanerUtils.getCleanRequestInstant(table.getMetaClient(), hoodieInstant))) {
+          // remove the empty instant
           table.getActiveTimeline().deleteEmptyInstantIfExists(hoodieInstant);
         } else {
           LOG.info("Finishing previously unfinished cleaner instant=" + hoodieInstant);

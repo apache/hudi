@@ -237,10 +237,9 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    * Transition Clean State from requested to inflight.
    *
    * @param requestedInstant requested instant
-   * @param metadata metadata to write into the instant file
    * @return commit instant
    */
-  HoodieInstant transitionCleanRequestedToInflight(HoodieInstant requestedInstant, Option<HoodieCleanerPlan> metadata);
+  HoodieInstant transitionCleanRequestedToInflight(HoodieInstant requestedInstant);
 
   /**
    * Transition Rollback State from inflight to Committed.

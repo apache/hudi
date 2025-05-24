@@ -400,7 +400,6 @@ public class ClusteringUtils {
    */
   public static Option<HoodieInstant> getEarliestInstantToRetainForClustering(
       HoodieActiveTimeline activeTimeline, HoodieTableMetaClient metaClient, HoodieCleaningPolicy cleanerPolicy) throws IOException {
-    InstantGenerator factory = metaClient.getInstantGenerator();
     Option<HoodieInstant> oldestInstantToRetain = Option.empty();
     HoodieTimeline replaceOrClusterTimeline = activeTimeline.getTimelineOfActions(CollectionUtils.createSet(HoodieTimeline.REPLACE_COMMIT_ACTION, HoodieTimeline.CLUSTERING_ACTION));
     if (!replaceOrClusterTimeline.empty()) {
@@ -410,7 +409,7 @@ public class ClusteringUtils {
         // The first clustering instant of which timestamp is greater than or equal to the earliest commit to retain of
         // the clean metadata.
         HoodieInstant cleanInstant = cleanInstantOpt.get();
-        HoodieCleanerPlan cleanerPlan = CleanerUtils.getCleanerPlan(metaClient, cleanInstant.isRequested() ? cleanInstant : factory.getCleanRequestedInstant(cleanInstant.requestedTime()));
+        HoodieCleanerPlan cleanerPlan = CleanerUtils.getCleanerPlan(metaClient, cleanInstant);
         Option<String> earliestInstantToRetain = Option.ofNullable(cleanerPlan.getEarliestInstantToRetain()).map(HoodieActionInstant::getTimestamp);
         String retainLowerBound;
         Option<String> earliestReplacedSavepointInClean = getEarliestReplacedSavepointInClean(activeTimeline, cleanerPolicy, cleanerPlan);
