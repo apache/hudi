@@ -57,6 +57,7 @@ import java.util.Set;
 import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -723,6 +724,32 @@ public class TestHoodieWriteConfig {
         .withPath("/tmp")
         .withProperties(props).build();
     assertEquals(bloomFilterType, config.getBloomFilterType());
+  }
+
+  @Test
+  public void testStreamingWritesToMetadataConfig() {
+    Properties props = new Properties();
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withProperties(props)
+        .withEngineType(EngineType.SPARK).build();
+
+    assertTrue(config.isStreamingWritesToMetadataEnabled(HoodieTableVersion.EIGHT));
+    assertFalse(config.isStreamingWritesToMetadataEnabled(HoodieTableVersion.SIX));
+
+    config = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withProperties(props)
+        .withEngineType(EngineType.FLINK).build();
+    assertFalse(config.isStreamingWritesToMetadataEnabled(HoodieTableVersion.SIX));
+    assertFalse(config.isStreamingWritesToMetadataEnabled(HoodieTableVersion.EIGHT));
+
+    config = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withProperties(props)
+        .withEngineType(EngineType.JAVA).build();
+    assertFalse(config.isStreamingWritesToMetadataEnabled(HoodieTableVersion.SIX));
+    assertFalse(config.isStreamingWritesToMetadataEnabled(HoodieTableVersion.EIGHT));
   }
 
   private HoodieWriteConfig createWriteConfig(Map<String, String> configs) {
