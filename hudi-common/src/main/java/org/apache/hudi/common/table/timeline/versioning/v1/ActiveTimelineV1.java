@@ -406,11 +406,11 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
   }
 
   @Override
-  public HoodieInstant transitionCleanRequestedToInflight(HoodieInstant requestedInstant, Option<HoodieCleanerPlan> metadata) {
+  public HoodieInstant transitionCleanRequestedToInflight(HoodieInstant requestedInstant) {
     ValidationUtils.checkArgument(requestedInstant.getAction().equals(HoodieTimeline.CLEAN_ACTION));
     ValidationUtils.checkArgument(requestedInstant.isRequested());
     HoodieInstant inflight = instantGenerator.createNewInstant(HoodieInstant.State.INFLIGHT, CLEAN_ACTION, requestedInstant.requestedTime());
-    transitionState(requestedInstant, inflight, metadata);
+    transitionState(requestedInstant, inflight, Option.empty());
     return inflight;
   }
 

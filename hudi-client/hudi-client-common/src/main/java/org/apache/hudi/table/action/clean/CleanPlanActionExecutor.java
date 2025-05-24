@@ -189,7 +189,7 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
       HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
       if (activeTimeline.isEmpty(cleanInstant)) {
         activeTimeline.deleteEmptyInstantIfExists(cleanInstant);
-        HoodieInstant cleanPlanInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, cleanInstant.getAction(), cleanInstant.requestedTime(), InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
+        HoodieInstant cleanPlanInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, cleanInstant.getAction(), cleanInstant.requestedTime(), InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
         try {
           // Deserialize plan.
           return Option.of(activeTimeline.readCleanerPlan(cleanPlanInstant));
