@@ -163,7 +163,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
       return;
     }
 
-    scanInternal(Option.of(AbstractHoodieLogRecordScanner.KeySpec.fullKeySpec(missingKeys)), false);
+    scanInternal(Option.of(AbstractHoodieLogRecordScanner.KeySpec.fullKeySpec(missingKeys.iterator())), false);
   }
 
   /**
@@ -196,7 +196,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
     //       and will have to scan every time as we can't know (based on just
     //       the records cached) whether particular prefix was scanned or just records
     //       matching the prefix looked up (by [[scanByFullKeys]] API)
-    scanInternal(Option.of(AbstractHoodieLogRecordScanner.KeySpec.prefixKeySpec(missingKeyPrefixes)), false);
+    scanInternal(Option.of(AbstractHoodieLogRecordScanner.KeySpec.prefixKeySpec(missingKeyPrefixes.iterator())), false);
     scannedPrefixes.addAll(missingKeyPrefixes);
   }
 

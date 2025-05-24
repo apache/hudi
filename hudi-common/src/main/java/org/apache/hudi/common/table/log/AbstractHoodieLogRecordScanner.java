@@ -59,6 +59,7 @@ import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -743,27 +744,28 @@ public abstract class AbstractHoodieLogRecordScanner {
    * Key specification with a list of column names.
    */
   protected interface KeySpec {
-    List<String> getKeys();
+    Iterator<String> getKeys();
 
     boolean isFullKey();
 
-    static KeySpec fullKeySpec(List<String> keys) {
+    static KeySpec fullKeySpec(Iterator<String> keys) {
       return new FullKeySpec(keys);
     }
 
-    static KeySpec prefixKeySpec(List<String> keyPrefixes) {
+    static KeySpec prefixKeySpec(Iterator<String> keyPrefixes) {
       return new PrefixKeySpec(keyPrefixes);
     }
   }
 
   private static class FullKeySpec implements KeySpec {
-    private final List<String> keys;
-    private FullKeySpec(List<String> keys) {
+    private final Iterator<String> keys;
+
+    private FullKeySpec(Iterator<String> keys) {
       this.keys = keys;
     }
 
     @Override
-    public List<String> getKeys() {
+    public Iterator<String> getKeys() {
       return keys;
     }
 
@@ -774,14 +776,14 @@ public abstract class AbstractHoodieLogRecordScanner {
   }
 
   private static class PrefixKeySpec implements KeySpec {
-    private final List<String> keysPrefixes;
+    private final Iterator<String> keysPrefixes;
 
-    private PrefixKeySpec(List<String> keysPrefixes) {
+    private PrefixKeySpec(Iterator<String> keysPrefixes) {
       this.keysPrefixes = keysPrefixes;
     }
 
     @Override
-    public List<String> getKeys() {
+    public Iterator<String> getKeys() {
       return keysPrefixes;
     }
 

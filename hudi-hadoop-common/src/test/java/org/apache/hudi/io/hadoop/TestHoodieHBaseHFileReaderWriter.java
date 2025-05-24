@@ -109,7 +109,7 @@ public class TestHoodieHBaseHFileReaderWriter extends TestHoodieHFileReaderWrite
               || (entry.get("_row_key").toString()).contains("key31"))).collect(Collectors.toList());
       try (ClosableIterator<IndexedRecord> iterator =
           hfileReader.getIndexedRecordsByKeysIterator(
-              Arrays.asList("key00001", "key05", "key24", "key16", "key31", "key61"),
+              Arrays.asList("key00001", "key05", "key24", "key16", "key31", "key61").iterator(),
               avroSchema)) {
         List<GenericRecord> recordsByKeys =
             StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)

@@ -25,24 +25,24 @@ import org.apache.avro.Schema;
 
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
-import java.util.List;
+import java.util.Iterator;
 
 public interface HoodieSeekingFileReader<T> extends HoodieFileReader<T> {
 
-  default ClosableIterator<HoodieRecord<T>> getRecordsByKeysIterator(List<String> sortedKeys, Schema schema) throws IOException {
+  default ClosableIterator<HoodieRecord<T>> getRecordsByKeysIterator(Iterator<String> sortedKeyIterator, Schema schema) throws IOException {
     throw new UnsupportedOperationException();
   }
 
-  default ClosableIterator<HoodieRecord<T>> getRecordsByKeysIterator(List<String> sortedKeys) throws IOException {
-    return getRecordsByKeysIterator(sortedKeys, getSchema());
+  default ClosableIterator<HoodieRecord<T>> getRecordsByKeysIterator(Iterator<String> sortedKeyIterator) throws IOException {
+    return getRecordsByKeysIterator(sortedKeyIterator, getSchema());
   }
 
-  default ClosableIterator<HoodieRecord<T>> getRecordsByKeyPrefixIterator(List<String> sortedKeyPrefixes, Schema schema) throws IOException {
+  default ClosableIterator<HoodieRecord<T>> getRecordsByKeyPrefixIterator(Iterator<String> sortedKeyPrefixIterator, Schema schema) throws IOException {
     throw new UnsupportedEncodingException();
   }
 
-  default ClosableIterator<HoodieRecord<T>> getRecordsByKeyPrefixIterator(List<String> sortedKeyPrefixes) throws IOException {
-    return getRecordsByKeyPrefixIterator(sortedKeyPrefixes, getSchema());
+  default ClosableIterator<HoodieRecord<T>> getRecordsByKeyPrefixIterator(Iterator<String> sortedKeyPrefixIterator) throws IOException {
+    return getRecordsByKeyPrefixIterator(sortedKeyPrefixIterator, getSchema());
   }
 
 }

@@ -49,6 +49,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -314,7 +315,7 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
   }
 
   @Override
-  public Map<String, HoodieRecordGlobalLocation> readRecordIndex(List<String> recordKeys) {
+  public Map<String, HoodieRecordGlobalLocation> readRecordIndex(Iterator<String> sortedRecordKeyIterator) {
     throw new HoodieMetadataException("Unsupported operation: readRecordIndex!");
   }
 

@@ -29,6 +29,7 @@ import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -74,21 +75,21 @@ public abstract class HoodieAvroHFileReaderImplBase extends HoodieAvroFileReader
    * <p>
    * Reads all the records with given schema and filtering keys.
    */
-  public static List<IndexedRecord> readRecords(HoodieAvroHFileReaderImplBase reader,
+  static List<IndexedRecord> readRecords(HoodieAvroHFileReaderImplBase reader,
                                                 List<String> keys,
                                                 Schema schema) throws IOException {
     Collections.sort(keys);
-    try (ClosableIterator<IndexedRecord> indexedRecordsByKeysIterator = reader.getIndexedRecordsByKeysIterator(keys, schema)) {
+    try (ClosableIterator<IndexedRecord> indexedRecordsByKeysIterator = reader.getIndexedRecordsByKeysIterator(keys.iterator(), schema)) {
       return toStream(indexedRecordsByKeysIterator).collect(Collectors.toList());
     }
   }
 
-  public abstract ClosableIterator<IndexedRecord> getIndexedRecordsByKeysIterator(List<String> keys,
+  public abstract ClosableIterator<IndexedRecord> getIndexedRecordsByKeysIterator(Iterator<String> sortedKeyIterator,
                                                                                   Schema readerSchema)
       throws IOException;
 
   public abstract ClosableIterator<IndexedRecord> getIndexedRecordsByKeyPrefixIterator(
-      List<String> sortedKeyPrefixes, Schema readerSchema) throws IOException;
+      Iterator<String> sortedKeyPrefixIterator, Schema readerSchema) throws IOException;
 
   protected static GenericRecord deserialize(final byte[] keyBytes,
                                              final byte[] valueBytes,

@@ -1186,10 +1186,10 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieTableMetadata metadataReader = HoodieTableMetadata.create(
         context, storage, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
     Map<String, HoodieRecordGlobalLocation> result = metadataReader
-        .readRecordIndex(records1.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()));
+        .readRecordIndex(records1.stream().map(HoodieRecord::getRecordKey).iterator());
     assertEquals(0, result.size(), "RI should not return entries that are rolled back.");
     result = metadataReader
-        .readRecordIndex(records2.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()));
+        .readRecordIndex(records2.stream().map(HoodieRecord::getRecordKey).iterator());
     assertEquals(records2.size(), result.size(), "RI should return entries in the commit.");
   }
 
@@ -3609,7 +3609,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       HoodieTableMetadata metadataReader = HoodieTableMetadata.create(
           context, storage, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
       Map<String, HoodieRecordGlobalLocation> result = metadataReader
-          .readRecordIndex(allRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()));
+          .readRecordIndex(allRecords.stream().map(HoodieRecord::getRecordKey).iterator());
       assertEquals(allRecords.size(), result.size(), "RI should have mapping for all the records in firstCommit");
 
       // Delete some records from each commit. This should also remove the RI mapping.
@@ -3624,7 +3624,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       // RI should not return mappings for deleted records
       metadataReader = HoodieTableMetadata.create(
           context, storage, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
-      result = metadataReader.readRecordIndex(allRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()));
+      result = metadataReader.readRecordIndex(allRecords.stream().map(HoodieRecord::getRecordKey).iterator());
       assertEquals(allRecords.size() - recordsToDelete.size(), result.size(), "RI should not have mapping for deleted records");
       result.keySet().forEach(mappingKey -> assertFalse(keysToDelete.contains(mappingKey), "RI should not have mapping for deleted records"));
     }
@@ -3642,7 +3642,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
       // RI should not return mappings for deleted records
       metadataReader = HoodieTableMetadata.create(context, storage, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
-      Map<String, HoodieRecordGlobalLocation> result = metadataReader.readRecordIndex(allRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()));
+      Map<String, HoodieRecordGlobalLocation> result = metadataReader.readRecordIndex(
+          allRecords.stream().map(HoodieRecord::getRecordKey).iterator());
       assertEquals(allRecords.size() - keysToDelete.size(), result.size(), "RI should not have mapping for deleted records");
       result.keySet().forEach(mappingKey -> assertFalse(keysToDelete.contains(mappingKey), "RI should not have mapping for deleted records"));
 
@@ -3652,7 +3653,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
       // New mappings should have been created for re-inserted records and should map to the new commit time
       metadataReader = HoodieTableMetadata.create(context, storage, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
-      result = metadataReader.readRecordIndex(allRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()));
+      result = metadataReader.readRecordIndex(allRecords.stream().map(HoodieRecord::getRecordKey).iterator());
       assertEquals(allRecords.size(), result.size(), "RI should have mappings for re-inserted records");
       for (String reInsertedKey : keysToDelete) {
         assertEquals(reinsertTime, result.get(reInsertedKey).getInstantTime(), "RI mapping for re-inserted keys should have new commit time");

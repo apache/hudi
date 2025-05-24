@@ -194,7 +194,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
    * @return List of IndexedRecords for the keys of interest.
    * @throws IOException in case of failures encountered when reading/parsing records
    */
-  public final <T> ClosableIterator<HoodieRecord<T>> getRecordIterator(List<String> keys, boolean fullKey, HoodieRecordType type) throws IOException {
+  public final <T> ClosableIterator<HoodieRecord<T>> getRecordIterator(Iterator<String> keys, boolean fullKey, HoodieRecordType type) throws IOException {
     return getRecordIterator(keys, fullKey, type, 0);
   }
 
@@ -211,8 +211,8 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
    * @return List of IndexedRecords for the keys of interest.
    * @throws IOException in case of failures encountered when reading/parsing records
    */
-  public final <T> ClosableIterator<HoodieRecord<T>> getRecordIterator(List<String> keys, boolean fullKey, HoodieRecordType type, int bufferSize) throws IOException {
-    boolean fullScan = keys.isEmpty();
+  public final <T> ClosableIterator<HoodieRecord<T>> getRecordIterator(Iterator<String> keys, boolean fullKey, HoodieRecordType type, int bufferSize) throws IOException {
+    boolean fullScan = !keys.hasNext();
     if (enablePointLookups && !fullScan) {
       return lookupRecords(keys, fullKey);
     }
@@ -224,7 +224,12 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
       return allRecords;
     }
 
-    HashSet<String> keySet = new HashSet<>(keys);
+    // TODO(yihua): is this valid?
+
+    HashSet<String> keySet = new HashSet<>();
+    while (keys.hasNext()) {
+      keySet.add(keys.next());
+    }
     return FilteringIterator.getInstance(allRecords, keySet, fullKey, this::getRecordKey);
   }
 
@@ -322,7 +327,8 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     }
   }
 
-  protected <T> ClosableIterator<HoodieRecord<T>> lookupRecords(List<String> keys, boolean fullKey) throws IOException {
+  protected <T> ClosableIterator<HoodieRecord<T>> lookupRecords(
+      Iterator<String> sortedKeyIterator, boolean fullKey) throws IOException {
     throw new UnsupportedOperationException(
         String.format("Point lookups are not supported by this Data block type (%s)", getBlockType())
     );

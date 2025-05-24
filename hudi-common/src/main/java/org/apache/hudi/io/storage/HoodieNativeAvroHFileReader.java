@@ -55,7 +55,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -215,17 +214,17 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
 
   @Override
   public ClosableIterator<HoodieRecord<IndexedRecord>> getRecordsByKeysIterator(
-      List<String> sortedKeys, Schema schema) throws IOException {
+      Iterator<String> sortedKeyIterator, Schema schema) throws IOException {
     HFileReader reader = newHFileReader();
     ClosableIterator<IndexedRecord> iterator =
-        new RecordByKeyIterator(reader, sortedKeys, getSchema(), schema);
+        new RecordByKeyIterator(reader, sortedKeyIterator, getSchema(), schema);
     return new CloseableMappingIterator<>(
         iterator, data -> unsafeCast(new HoodieAvroIndexedRecord(data)));
   }
 
   @Override
   public ClosableIterator<HoodieRecord<IndexedRecord>> getRecordsByKeyPrefixIterator(
-      List<String> sortedKeyPrefixes, Schema schema) throws IOException {
+      Iterator<String> sortedKeyPrefixes, Schema schema) throws IOException {
     HFileReader reader = newHFileReader();
     ClosableIterator<IndexedRecord> iterator =
         new RecordByKeyPrefixIterator(reader, sortedKeyPrefixes, getSchema(), schema);
@@ -294,18 +293,19 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
     return new HFileReaderImpl(inputStream, fileSize);
   }
 
-  public ClosableIterator<IndexedRecord> getIndexedRecordsByKeysIterator(List<String> sortedKeys,
+  @Override
+  public ClosableIterator<IndexedRecord> getIndexedRecordsByKeysIterator(Iterator<String> sortedKeyIterator,
                                                                          Schema readerSchema)
       throws IOException {
     HFileReader reader = newHFileReader();
-    return new RecordByKeyIterator(reader, sortedKeys, getSchema(), schema.get());
+    return new RecordByKeyIterator(reader, sortedKeyIterator, getSchema(), schema.get());
   }
 
   @Override
   public ClosableIterator<IndexedRecord> getIndexedRecordsByKeyPrefixIterator(
-      List<String> sortedKeyPrefixes, Schema readerSchema) throws IOException {
+      Iterator<String> sortedKeyPrefixIterator, Schema readerSchema) throws IOException {
     HFileReader reader = newHFileReader();
-    return new RecordByKeyPrefixIterator(reader, sortedKeyPrefixes, getSchema(), readerSchema);
+    return new RecordByKeyPrefixIterator(reader, sortedKeyPrefixIterator, getSchema(), readerSchema);
   }
 
   private static class RecordIterator implements ClosableIterator<IndexedRecord> {
@@ -381,9 +381,9 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
 
     private IndexedRecord next = null;
 
-    RecordByKeyIterator(HFileReader reader, List<String> sortedKeys, Schema writerSchema,
+    RecordByKeyIterator(HFileReader reader, Iterator<String> sortedKeyIterator, Schema writerSchema,
                         Schema readerSchema) throws IOException {
-      this.sortedKeyIterator = sortedKeys.iterator();
+      this.sortedKeyIterator = sortedKeyIterator;
       this.reader = reader;
       this.reader.seekTo(); // position at the beginning of the file
 
@@ -446,9 +446,9 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
     private IndexedRecord next = null;
     private boolean isFirstKeyPrefix = true;
 
-    RecordByKeyPrefixIterator(HFileReader reader, List<String> sortedKeyPrefixes,
+    RecordByKeyPrefixIterator(HFileReader reader, Iterator<String> sortedKeyPrefixIterator,
                               Schema writerSchema, Schema readerSchema) throws IOException {
-      this.sortedKeyPrefixesIterator = sortedKeyPrefixes.iterator();
+      this.sortedKeyPrefixesIterator = sortedKeyPrefixIterator;
       this.reader = reader;
       this.reader.seekTo(); // position at the beginning of the file
 

@@ -28,8 +28,8 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
@@ -57,6 +57,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -259,10 +260,10 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
    * <p>
    * If the Metadata Table is not enabled, an exception is thrown to distinguish this from the absence of the key.
    *
-   * @param recordKeys The list of record keys to read
+   * @param sortedRecordKeyIterator an iterator of sorted record keys
    */
   @Override
-  public Map<String, HoodieRecordGlobalLocation> readRecordIndex(List<String> recordKeys) {
+  public Map<String, HoodieRecordGlobalLocation> readRecordIndex(Iterator<String> sortedRecordKeyIterator) {
     // If record index is not initialized yet, we cannot return an empty result here unlike the code for reading from other
     // indexes. This is because results from this function are used for upserts and returning an empty result here would lead
     // to existing records being inserted again causing duplicates.
@@ -271,7 +272,8 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
         "Record index is not initialized in MDT");
 
     HoodieTimer timer = HoodieTimer.start();
-    Map<String, HoodieRecord<HoodieMetadataPayload>> result = getRecordsByKeys(recordKeys, MetadataPartitionType.RECORD_INDEX.getPartitionPath());
+    Map<String, HoodieRecord<HoodieMetadataPayload>> result = getRecordsBySortedKeys(
+        sortedRecordKeyIterator, MetadataPartitionType.RECORD_INDEX.getPartitionPath());
     Map<String, HoodieRecordGlobalLocation> recordKeyToLocation = new HashMap<>(result.size());
     result.forEach((key, record) -> {
       if (!record.getData().isDeleted()) {
@@ -280,7 +282,8 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
     });
 
     metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_RECORD_INDEX_TIME_STR, timer.endTimer()));
-    metrics.ifPresent(m -> m.setMetric(HoodieMetadataMetrics.LOOKUP_RECORD_INDEX_KEYS_COUNT_STR, recordKeys.size()));
+    // TODO(yihua): fix?
+    // metrics.ifPresent(m -> m.setMetric(HoodieMetadataMetrics.LOOKUP_RECORD_INDEX_KEYS_COUNT_STR, recordKeys.size()));
     metrics.ifPresent(m -> m.setMetric(HoodieMetadataMetrics.LOOKUP_RECORD_INDEX_KEYS_HITS_COUNT_STR, recordKeyToLocation.size()));
 
     return recordKeyToLocation;
@@ -305,7 +308,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
     // Now collect the record-keys and fetch the RLI records
     List<String> recordKeys = new ArrayList<>();
     secondaryKeyRecords.values().forEach(recordKeys::addAll);
-    return readRecordIndex(recordKeys);
+    return readRecordIndex(recordKeys.iterator());
   }
 
   /**
@@ -469,6 +472,8 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
   protected abstract Option<HoodieRecord<HoodieMetadataPayload>> getRecordByKey(String key, String partitionName);
 
   protected abstract Map<String, HoodieRecord<HoodieMetadataPayload>> getRecordsByKeys(List<String> keys, String partitionName);
+
+  protected abstract Map<String, HoodieRecord<HoodieMetadataPayload>> getRecordsBySortedKeys(Iterator<String> sortedKeyIterator, String partitionName);
 
   /**
    * Returns a map of (secondary-key -> set-of-record-keys) for the provided secondary keys.
