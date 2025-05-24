@@ -252,6 +252,17 @@ object Spark33ParquetReader extends SparkParquetReaderBuilder {
       sqlConf.getConfString("spark.sql.legacy.parquet.nanosAsLong", "false").toBoolean
     )
 
+    // Should always be set by FileSourceScanExec while creating this.
+    // Check conf before checking the option, to allow working around an issue by changing conf.
+    val returningBatch = sqlConf.parquetVectorizedReaderEnabled &&
+      options.get(FileFormat.OPTION_RETURNING_BATCH)
+        .getOrElse {
+          throw new IllegalArgumentException(
+            "OPTION_RETURNING_BATCH should always be set for ParquetFileFormat. " +
+              "To workaround this issue, set spark.sql.parquet.enableVectorizedReader=false.")
+        }
+        .equals("true")
+
     val parquetOptions = new ParquetOptions(options, sqlConf)
     new Spark33ParquetReader(enableVectorizedReader = vectorized,
       datetimeRebaseModeInRead = parquetOptions.datetimeRebaseModeInRead,
@@ -266,7 +277,7 @@ object Spark33ParquetReader extends SparkParquetReaderBuilder {
       timestampConversion = sqlConf.isParquetINT96TimestampConversion,
       enableOffHeapColumnVector = sqlConf.offHeapColumnVectorEnabled,
       capacity = sqlConf.parquetVectorizedReaderBatchSize,
-      returningBatch = sqlConf.parquetVectorizedReaderEnabled,
+      returningBatch = returningBatch,
       enableRecordFilter = sqlConf.parquetRecordFilterEnabled,
       timeZoneId = Some(sqlConf.sessionLocalTimeZone))
   }
