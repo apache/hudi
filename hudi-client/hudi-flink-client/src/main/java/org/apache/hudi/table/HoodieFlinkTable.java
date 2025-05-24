@@ -100,6 +100,9 @@ public abstract class HoodieFlinkTable<T>
   protected Option<HoodieTableMetadataWriter> getMetadataWriter(
       String triggeringInstantTimestamp,
       HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy) {
+    if (isMetadataTable()) {
+      throw new HoodieException("Cannot create metadata writer for metadata table");
+    }
     if (config.isMetadataTableEnabled() || getMetaClient().getTableConfig().isMetadataTableAvailable()) {
       return Option.of(FlinkHoodieBackedTableMetadataWriter.create(
           getContext().getStorageConf(), config, failedWritesCleaningPolicy, getContext(),
