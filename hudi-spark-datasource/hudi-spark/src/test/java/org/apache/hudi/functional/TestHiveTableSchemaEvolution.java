@@ -19,7 +19,6 @@
 package org.apache.hudi.functional;
 
 import org.apache.hudi.common.config.HoodieCommonConfig;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 
@@ -92,11 +91,6 @@ public class TestHiveTableSchemaEvolution {
         .getOrCreate();
 
     spark.sparkContext().setLogLevel("ERROR");
-  }
-
-  @Test
-  public void investigateTestTriggerTestHiveTableSchemaEvolution() {
-    throw new HoodieException("Failing test in TestConsistentBucketIndex");
   }
 
   @Test

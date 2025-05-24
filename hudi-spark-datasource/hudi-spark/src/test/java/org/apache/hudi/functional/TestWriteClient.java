@@ -29,7 +29,6 @@ import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.testutils.HoodieSparkClientTestBase;
 
 import org.apache.avro.Schema;
@@ -49,11 +48,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 @Tag("functional")
 public class TestWriteClient extends HoodieSparkClientTestBase {
-
-  @Test
-  public void investigateTestTriggerTestWriteClient() {
-    throw new HoodieException("Failing test in TestConsistentBucketIndex");
-  }
 
   @Test
   public void testInertsWithEmptyCommitsHavingWriterSchemaAsNull() throws Exception {

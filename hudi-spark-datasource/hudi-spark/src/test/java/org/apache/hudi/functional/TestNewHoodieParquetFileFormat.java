@@ -21,13 +21,11 @@ package org.apache.hudi.functional;
 import org.apache.hudi.DataSourceReadOptions;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.exception.HoodieException;
 
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SaveMode;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -51,11 +49,6 @@ public class TestNewHoodieParquetFileFormat extends TestBootstrapReadBase {
     b.add(Arguments.of(COPY_ON_WRITE, 1));
     b.add(Arguments.of(MERGE_ON_READ, 2));
     return b.build();
-  }
-
-  @Test
-  public void investigateTestTriggerTestNewHoodieParquetFileFormat() {
-    throw new HoodieException("Failing test in TestConsistentBucketIndex");
   }
 
   @ParameterizedTest

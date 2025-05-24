@@ -20,7 +20,6 @@
 package org.apache.hudi.functional;
 
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.util.JavaConversions;
 
 import org.apache.spark.sql.Dataset;
@@ -32,11 +31,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Tag("functional")
 public class TestSparkParquetReader extends TestBootstrapReadBase {
-
-  @Test
-  public void investigateTestTriggerTestSparkParquetReader() {
-    throw new HoodieException("Failing test in TestConsistentBucketIndex");
-  }
 
   @Test
   public void testReader() {

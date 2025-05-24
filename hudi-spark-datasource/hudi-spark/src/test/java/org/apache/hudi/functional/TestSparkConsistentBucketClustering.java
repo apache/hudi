@@ -127,11 +127,6 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
     cleanupResources();
   }
 
-  @Test
-  public void investigateTestTriggerTestSparkConsistentBucketClustering() {
-    throw new HoodieException("Failing test in TestConsistentBucketIndex");
-  }
-
   /**
    * Test resizing with bucket number upper bound and lower bound
    *
