@@ -135,7 +135,7 @@ public class EngineBasedMerger<T> {
           return BufferedRecord.forRecordWithContext(combinedRecord, combinedRecordAndSchema.getRight(), readerContext, props);
         }
         return older;
-      }).orElseThrow(() -> new IllegalStateException(""));
+      }).orElseThrow(() -> new IllegalStateException("Merger output unexpected empty result when merging two non-delete records"));
     } else {
       switch (recordMergeMode) {
         case COMMIT_TIME_ORDERING:
@@ -171,7 +171,7 @@ public class EngineBasedMerger<T> {
               return BufferedRecord.forRecordWithContext(record, combinedRecordAndSchema.getRight(), readerContext, props);
             });
           }
-          return mergeResult.orElseThrow(() -> new IllegalStateException(""));
+          return mergeResult.orElseThrow(() -> new IllegalStateException("Merger output unexpected empty result when merging two non-delete records"));
       }
     }
   }
