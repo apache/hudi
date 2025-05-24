@@ -51,6 +51,8 @@ public abstract class HFileBlock {
       HFILEBLOCK_HEADER_SIZE_NO_CHECKSUM + SIZEOF_BYTE + 2 * SIZEOF_INT32;
   // Each checksum value is an integer that can be stored in 4 bytes.
   static final int CHECKSUM_SIZE = SIZEOF_INT32;
+  private static final int DEFAULT_BYTES_PER_CHECKSUM = 16 * 1024;
+  private static final byte[] EMPTY_BYTE_ARRAY = new byte[0];
 
   static class Header {
     // Format of header is:
@@ -75,6 +77,11 @@ public abstract class HFileBlock {
   protected final HFileContext context;
   protected final Option<HFileBlockReadAttributes> readAttributesOpt;
   private final HFileBlockType blockType;
+
+  // Write properties
+  protected long startOffsetInBuff = -1;
+  protected long previousBlockOffset = -1;
+  protected int blockSize;
 
   /**
    * Initialize HFileBlock for read.
@@ -179,12 +186,6 @@ public abstract class HFileBlock {
   }
 
   // ================ Below are for Write ================
-
-  private static final int DEFAULT_BYTES_PER_CHECKSUM = 16 * 1024;
-  private static final byte[] EMPTY_BYTE_ARRAY = new byte[0];
-  protected long startOffsetInBuff = -1;
-  protected long previousBlockOffset = -1;
-  protected int blockSize;
 
   /**
    * Returns serialized "data" part of the block.
