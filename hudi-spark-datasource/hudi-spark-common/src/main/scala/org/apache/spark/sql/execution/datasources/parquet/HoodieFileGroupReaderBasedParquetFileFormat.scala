@@ -82,18 +82,33 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
   private val sanitizedTableName = AvroSchemaUtils.getAvroRecordQualifiedName(tableName)
 
   /**
-   * Support batch needs to remain consistent, even if one side of a bootstrap merge can support
-   * while the other side can't
+   * Flag saying whether vectorized reading is supported.
    */
-  private var supportBatchCalled = false
-  private var supportBatchResult = false
+  private var supportVectorizedRead = false
 
+  /**
+   * Flag saying whether batch output is supported.
+   */
+  private var supportReturningBatch = false
+
+  /**
+   * Checks if the file format supports vectorized reading, please refer to SPARK-40918.
+   *
+   * NOTE: for mor read, even for file-slice with only base file, we can read parquet file with vectorized read,
+   * but the return result of the whole data-source-scan phase cannot be batch,
+   * because when there are any log file in a file slice, it needs to be read by the file group reader.
+   * Since we are currently performing merges based on rows, the result returned by merging should be based on rows,
+   * we cannot assume that all file slices have only base files.
+   * So we need to set the batch result back to false.
+   *
+   */
   override def supportBatch(sparkSession: SparkSession, schema: StructType): Boolean = {
-    if (!supportBatchCalled || supportBatchResult) {
-      supportBatchCalled = true
-      supportBatchResult = !isMOR && !isIncremental && !isBootstrap && super.supportBatch(sparkSession, schema)
-    }
-    supportBatchResult
+    val superSupportBatch = super.supportBatch(sparkSession, schema)
+    supportVectorizedRead = !isIncremental && !isBootstrap && superSupportBatch
+    supportReturningBatch = !isMOR && supportVectorizedRead
+    logInfo(s"supportReturningBatch: $supportReturningBatch, supportVectorizedRead: $supportVectorizedRead, isIncremental: $isIncremental, " +
+      s"isBootstrap: $isBootstrap, superSupportBatch: $superSupportBatch")
+    supportReturningBatch
   }
 
   //for partition columns that we read from the file, we don't want them to be constant column vectors so we
@@ -155,8 +170,16 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
     val requestedSchema = StructType(requiredSchema.fields ++ partitionSchema.fields.filter(f => mandatoryFields.contains(f.name)))
     val requestedAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(requestedSchema, sanitizedTableName)
     val dataAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(dataSchema, sanitizedTableName)
-    val parquetFileReader = spark.sparkContext.broadcast(sparkAdapter.createParquetFileReader(supportBatchResult,
+    val parquetFileReader = spark.sparkContext.broadcast(sparkAdapter.createParquetFileReader(supportVectorizedRead,
       spark.sessionState.conf, options, augmentedStorageConf.unwrap()))
+    val fileGroupParquetFileReader = if (isMOR && supportVectorizedRead) {
+      // for file group reader to perform read, we always need to read the record without vectorized reader because our merging is based on row level.
+      // TODO: please consider to support vectorized reader in file group reader
+      spark.sparkContext.broadcast(sparkAdapter.createParquetFileReader(vectorized = false,
+        spark.sessionState.conf, options, augmentedStorageConf.unwrap()))
+    } else {
+      parquetFileReader
+    }
     val broadcastedStorageConf = spark.sparkContext.broadcast(new SerializableConfiguration(augmentedStorageConf.unwrap()))
     val fileIndexProps: TypedProperties = HoodieFileIndex.getConfigProperties(spark, options, null)
 
@@ -174,7 +197,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
             case Some(fileSlice) if !isCount && (requiredSchema.nonEmpty || fileSlice.getLogFiles.findAny().isPresent) =>
               val metaClient: HoodieTableMetaClient = HoodieTableMetaClient
                 .builder().setConf(storageConf).setBasePath(tablePath).build
-              val readerContext = new SparkFileFormatInternalRowReaderContext(parquetFileReader.value, filters, requiredFilters, storageConf, metaClient.getTableConfig)
+              val readerContext = new SparkFileFormatInternalRowReaderContext(fileGroupParquetFileReader.value, filters, requiredFilters, storageConf, metaClient.getTableConfig)
               val props = metaClient.getTableConfig.getProps
               options.foreach(kv => props.setProperty(kv._1, kv._2))
               props.put(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(), String.valueOf(maxMemoryPerCompaction))
@@ -211,7 +234,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
           }
         // CDC queries.
         case hoodiePartitionCDCFileGroupSliceMapping: HoodiePartitionCDCFileGroupMapping =>
-          buildCDCRecordIterator(hoodiePartitionCDCFileGroupSliceMapping, parquetFileReader.value, storageConf, fileIndexProps, requiredSchema)
+          buildCDCRecordIterator(hoodiePartitionCDCFileGroupSliceMapping, fileGroupParquetFileReader.value, storageConf, fileIndexProps, requiredSchema)
 
         case _ =>
           readBaseFile(file, parquetFileReader.value, requestedSchema, remainingPartitionSchema, fixedPartitionIndexes,
