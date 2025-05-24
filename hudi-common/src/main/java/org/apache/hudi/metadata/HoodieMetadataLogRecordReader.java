@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.log.InstantRange;
+import org.apache.hudi.common.table.log.LookUpKeyCollection;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.storage.HoodieStorage;
@@ -76,16 +77,16 @@ public class HoodieMetadataLogRecordReader implements Closeable {
   }
 
   @SuppressWarnings("unchecked")
-  public Map<String, HoodieRecord<HoodieMetadataPayload>> getRecordsByKeyPrefixes(List<String> sortedKeyPrefixes) {
-    if (sortedKeyPrefixes.isEmpty()) {
+  public Map<String, HoodieRecord<HoodieMetadataPayload>> getRecordsByKeyPrefixes(LookUpKeyCollection lookUpKeyCollection) {
+    if (lookUpKeyCollection.isEmpty()) {
       return Collections.emptyMap();
     }
 
     // NOTE: Locking is necessary since we're accessing [[HoodieMetadataLogRecordReader]]
     //       materialized state, to make sure there's no concurrent access
     synchronized (this) {
-      logRecordScanner.scanByKeyPrefixes(sortedKeyPrefixes);
-      Predicate<String> p = createPrefixMatchingPredicate(sortedKeyPrefixes);
+      logRecordScanner.scanByKeyPrefixes(lookUpKeyCollection.getKeys());
+      Predicate<String> p = createPrefixMatchingPredicate(lookUpKeyCollection.getKeys());
       return logRecordScanner.getRecords().entrySet()
           .stream()
           .filter(r -> r != null && p.test(r.getKey()))
@@ -99,17 +100,17 @@ public class HoodieMetadataLogRecordReader implements Closeable {
    * the delta-log blocks
    */
   @SuppressWarnings("unchecked")
-  public Map<String, HoodieRecord<HoodieMetadataPayload>> getRecordsByKeys(List<String> sortedKeys) {
-    if (sortedKeys.isEmpty()) {
+  public Map<String, HoodieRecord<HoodieMetadataPayload>> getRecordsByKeys(LookUpKeyCollection lookUpKeyCollection) {
+    if (lookUpKeyCollection.isEmpty()) {
       return Collections.emptyMap();
     }
 
     // NOTE: Locking is necessary since we're accessing [[HoodieMetadataLogRecordReader]]
     //       materialized state, to make sure there's no concurrent access
     synchronized (this) {
-      logRecordScanner.scanByFullKeys(sortedKeys);
+      logRecordScanner.scanByFullKeys(lookUpKeyCollection);
       Map<String, HoodieRecord> allRecords = logRecordScanner.getRecords();
-      return sortedKeys.stream()
+      return lookUpKeyCollection.getKeys().stream()
           .map(key -> (HoodieRecord<HoodieMetadataPayload>) allRecords.get(key))
           .filter(Objects::nonNull)
           .collect(Collectors.toMap(HoodieRecord::getRecordKey, r -> r));

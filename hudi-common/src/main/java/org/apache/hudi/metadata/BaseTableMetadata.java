@@ -30,6 +30,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
+import org.apache.hudi.common.table.log.LookUpKeyCollection;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
@@ -468,7 +469,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
 
   protected abstract Option<HoodieRecord<HoodieMetadataPayload>> getRecordByKey(String key, String partitionName);
 
-  protected abstract Map<String, HoodieRecord<HoodieMetadataPayload>> getRecordsByKeys(List<String> keys, String partitionName);
+  protected abstract Map<String, HoodieRecord<HoodieMetadataPayload>> getRecordsByKeys(LookUpKeyCollection lookUpKeyCollection, String partitionName);
 
   /**
    * Returns a map of (secondary-key -> set-of-record-keys) for the provided secondary keys.

@@ -145,16 +145,16 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
    * up in the delta-log files, scanned and subsequently materialized into the internal
    * cache
    *
-   * @param keys to be looked up
+   * @param lookUpKeyCollection to be looked up
    */
-  public void scanByFullKeys(List<String> keys) {
+  public void scanByFullKeys(LookUpKeyCollection lookUpKeyCollection) {
     // We can skip scanning in case reader is in full-scan mode, in which case all blocks
     // are processed upfront (no additional scanning is necessary)
     if (forceFullScan) {
       return; // no-op
     }
 
-    List<String> missingKeys = keys.stream()
+    List<String> missingKeys = lookUpKeyCollection.getKeys().stream()
         .filter(key -> !records.containsKey(key))
         .collect(Collectors.toList());
 
@@ -163,7 +163,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
       return;
     }
 
-    scanInternal(Option.of(AbstractHoodieLogRecordScanner.KeySpec.fullKeySpec(missingKeys)), false);
+    scanInternal(Option.of(LookUpKeyCollection.fullKeySpec(missingKeys)), false);
   }
 
   /**
@@ -196,7 +196,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
     //       and will have to scan every time as we can't know (based on just
     //       the records cached) whether particular prefix was scanned or just records
     //       matching the prefix looked up (by [[scanByFullKeys]] API)
-    scanInternal(Option.of(AbstractHoodieLogRecordScanner.KeySpec.prefixKeySpec(missingKeyPrefixes)), false);
+    scanInternal(Option.of(LookUpKeyCollection.prefixKeySpec(missingKeyPrefixes)), false);
     scannedPrefixes.addAll(missingKeyPrefixes);
   }
 

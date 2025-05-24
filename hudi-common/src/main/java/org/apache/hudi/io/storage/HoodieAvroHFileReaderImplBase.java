@@ -20,6 +20,7 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.table.log.LookUpKeyCollection;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 
@@ -28,7 +29,6 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
-import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -65,8 +65,8 @@ public abstract class HoodieAvroHFileReaderImplBase extends HoodieAvroFileReader
    * Reads all the records with given schema and filtering keys.
    */
   public static List<IndexedRecord> readRecords(HoodieAvroHFileReaderImplBase reader,
-                                                List<String> keys) throws IOException {
-    return readRecords(reader, keys, reader.getSchema());
+                                                LookUpKeyCollection lookUpKeyCollection) throws IOException {
+    return readRecords(reader, lookUpKeyCollection, reader.getSchema());
   }
 
   /**
@@ -75,20 +75,22 @@ public abstract class HoodieAvroHFileReaderImplBase extends HoodieAvroFileReader
    * Reads all the records with given schema and filtering keys.
    */
   public static List<IndexedRecord> readRecords(HoodieAvroHFileReaderImplBase reader,
-                                                List<String> keys,
+                                                LookUpKeyCollection lookUpKeyCollection,
                                                 Schema schema) throws IOException {
-    Collections.sort(keys);
-    try (ClosableIterator<IndexedRecord> indexedRecordsByKeysIterator = reader.getIndexedRecordsByKeysIterator(keys, schema)) {
+    if (!lookUpKeyCollection.isSorted()) {
+      // TODO(yihua): sort and create new collection
+    }
+    try (ClosableIterator<IndexedRecord> indexedRecordsByKeysIterator = reader.getIndexedRecordsByKeysIterator(lookUpKeyCollection, schema)) {
       return toStream(indexedRecordsByKeysIterator).collect(Collectors.toList());
     }
   }
 
-  public abstract ClosableIterator<IndexedRecord> getIndexedRecordsByKeysIterator(List<String> keys,
+  public abstract ClosableIterator<IndexedRecord> getIndexedRecordsByKeysIterator(LookUpKeyCollection lookUpKeyCollection,
                                                                                   Schema readerSchema)
       throws IOException;
 
   public abstract ClosableIterator<IndexedRecord> getIndexedRecordsByKeyPrefixIterator(
-      List<String> sortedKeyPrefixes, Schema readerSchema) throws IOException;
+      LookUpKeyCollection lookUpKeyCollection, Schema readerSchema) throws IOException;
 
   protected static GenericRecord deserialize(final byte[] keyBytes,
                                              final byte[] valueBytes,

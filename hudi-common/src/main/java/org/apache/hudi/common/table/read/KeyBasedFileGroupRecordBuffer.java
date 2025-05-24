@@ -25,7 +25,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.log.KeySpec;
+import org.apache.hudi.common.table.log.LookUpKeyCollection;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.util.Option;
@@ -64,7 +64,7 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
   }
 
   @Override
-  public void processDataBlock(HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt) throws IOException {
+  public void processDataBlock(HoodieDataBlock dataBlock, Option<LookUpKeyCollection> keySpecOpt) throws IOException {
     Pair<ClosableIterator<T>, Schema> recordsIteratorSchemaPair =
         getRecordsIterator(dataBlock, keySpecOpt);
     if (dataBlock.containsPartialUpdates()) {

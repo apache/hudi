@@ -21,8 +21,8 @@ package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.table.read.FileGroupRecordBuffer;
 import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.FileGroupRecordBuffer;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
@@ -115,7 +115,7 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
       return;
     }
 
-    scanInternal(Option.of(KeySpec.fullKeySpec(missingKeys)), false);
+    scanInternal(Option.of(LookUpKeyCollection.fullKeySpec(missingKeys)), false);
   }
 
   /**
@@ -148,7 +148,7 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
     //       and will have to scan every time as we can't know (based on just
     //       the records cached) whether particular prefix was scanned or just records
     //       matching the prefix looked up (by [[scanByFullKeys]] API)
-    scanInternal(Option.of(KeySpec.prefixKeySpec(missingKeyPrefixes)), false);
+    scanInternal(Option.of(LookUpKeyCollection.prefixKeySpec(missingKeyPrefixes)), false);
     scannedPrefixes.addAll(missingKeyPrefixes);
   }
 

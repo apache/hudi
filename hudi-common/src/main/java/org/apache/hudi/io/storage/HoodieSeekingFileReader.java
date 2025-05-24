@@ -19,30 +19,30 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.log.LookUpKeyCollection;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 
 import org.apache.avro.Schema;
 
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
-import java.util.List;
 
 public interface HoodieSeekingFileReader<T> extends HoodieFileReader<T> {
 
-  default ClosableIterator<HoodieRecord<T>> getRecordsByKeysIterator(List<String> sortedKeys, Schema schema) throws IOException {
+  default ClosableIterator<HoodieRecord<T>> getRecordsByKeysIterator(LookUpKeyCollection lookUpKeyCollection, Schema schema) throws IOException {
     throw new UnsupportedOperationException();
   }
 
-  default ClosableIterator<HoodieRecord<T>> getRecordsByKeysIterator(List<String> sortedKeys) throws IOException {
-    return getRecordsByKeysIterator(sortedKeys, getSchema());
+  default ClosableIterator<HoodieRecord<T>> getRecordsByKeysIterator(LookUpKeyCollection lookUpKeyCollection) throws IOException {
+    return getRecordsByKeysIterator(lookUpKeyCollection, getSchema());
   }
 
-  default ClosableIterator<HoodieRecord<T>> getRecordsByKeyPrefixIterator(List<String> sortedKeyPrefixes, Schema schema) throws IOException {
+  default ClosableIterator<HoodieRecord<T>> getRecordsByKeyPrefixIterator(LookUpKeyCollection lookUpKeyCollection, Schema schema) throws IOException {
     throw new UnsupportedEncodingException();
   }
 
-  default ClosableIterator<HoodieRecord<T>> getRecordsByKeyPrefixIterator(List<String> sortedKeyPrefixes) throws IOException {
-    return getRecordsByKeyPrefixIterator(sortedKeyPrefixes, getSchema());
+  default ClosableIterator<HoodieRecord<T>> getRecordsByKeyPrefixIterator(LookUpKeyCollection lookUpKeyCollection) throws IOException {
+    return getRecordsByKeyPrefixIterator(lookUpKeyCollection, getSchema());
   }
 
 }

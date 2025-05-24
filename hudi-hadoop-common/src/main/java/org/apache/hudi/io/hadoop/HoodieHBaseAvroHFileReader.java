@@ -23,6 +23,7 @@ import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.table.log.LookUpKeyCollection;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -56,7 +57,6 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.SortedSet;
@@ -121,21 +121,21 @@ public class HoodieHBaseAvroHFileReader extends HoodieAvroHFileReaderImplBase {
   }
 
   @Override
-  public ClosableIterator<HoodieRecord<IndexedRecord>> getRecordsByKeysIterator(List<String> sortedKeys, Schema schema) throws IOException {
+  public ClosableIterator<HoodieRecord<IndexedRecord>> getRecordsByKeysIterator(LookUpKeyCollection lookUpKeyCollection, Schema schema) throws IOException {
     // Iterators do not use the shared reader or scanner
     // We're caching blocks for this scanner to minimize amount of traffic
     // to the underlying storage as we fetched (potentially) sparsely distributed
     // keys
     HFile.Reader reader = getHFileReader();
     HFileScanner scanner = getHFileScanner(reader, true);
-    ClosableIterator<IndexedRecord> iterator = new RecordByKeyIterator(reader, scanner, sortedKeys, getSchema(), schema);
+    ClosableIterator<IndexedRecord> iterator = new RecordByKeyIterator(reader, scanner, lookUpKeyCollection, getSchema(), schema);
     return new CloseableMappingIterator<>(iterator, data -> unsafeCast(new HoodieAvroIndexedRecord(data)));
   }
 
   @Override
-  public ClosableIterator<HoodieRecord<IndexedRecord>> getRecordsByKeyPrefixIterator(List<String> sortedKeyPrefixes, Schema schema) throws IOException {
+  public ClosableIterator<HoodieRecord<IndexedRecord>> getRecordsByKeyPrefixIterator(LookUpKeyCollection lookUpKeyCollection, Schema schema) throws IOException {
     // Iterators do not use the shared reader or scanner
-    ClosableIterator<IndexedRecord> iterator = getIndexedRecordsByKeyPrefixIterator(sortedKeyPrefixes, schema);
+    ClosableIterator<IndexedRecord> iterator = getIndexedRecordsByKeyPrefixIterator(lookUpKeyCollection, schema);
     return new CloseableMappingIterator<>(iterator, data -> unsafeCast(new HoodieAvroIndexedRecord(data)));
   }
 
@@ -216,24 +216,24 @@ public class HoodieHBaseAvroHFileReader extends HoodieAvroHFileReaderImplBase {
   }
 
   @VisibleForTesting
-  public ClosableIterator<IndexedRecord> getIndexedRecordsByKeysIterator(List<String> keys,
+  public ClosableIterator<IndexedRecord> getIndexedRecordsByKeysIterator(LookUpKeyCollection lookUpKeyCollection,
                                                                     Schema readerSchema) throws IOException {
     // We're caching blocks for this scanner to minimize amount of traffic
     // to the underlying storage as we fetched (potentially) sparsely distributed
     // keys
     HFile.Reader reader = getHFileReader();
     HFileScanner scanner = getHFileScanner(reader, true);
-    return new RecordByKeyIterator(reader, scanner, keys, getSchema(), readerSchema);
+    return new RecordByKeyIterator(reader, scanner, lookUpKeyCollection, getSchema(), readerSchema);
   }
 
   @VisibleForTesting
-  public ClosableIterator<IndexedRecord> getIndexedRecordsByKeyPrefixIterator(List<String> sortedKeyPrefixes, Schema readerSchema) throws IOException {
+  public ClosableIterator<IndexedRecord> getIndexedRecordsByKeyPrefixIterator(LookUpKeyCollection lookUpKeyCollection, Schema readerSchema) throws IOException {
     // We're caching blocks for this scanner to minimize amount of traffic
     // to the underlying storage as we fetched (potentially) sparsely distributed
     // keys
     HFile.Reader reader = getHFileReader();
     HFileScanner scanner = getHFileScanner(reader, true);
-    return new RecordByKeyPrefixIterator(reader, scanner, sortedKeyPrefixes, getSchema(), readerSchema);
+    return new RecordByKeyPrefixIterator(reader, scanner, lookUpKeyCollection, getSchema(), readerSchema);
   }
 
   @Override
@@ -461,8 +461,8 @@ public class HoodieHBaseAvroHFileReader extends HoodieAvroHFileReaderImplBase {
 
     private IndexedRecord next = null;
 
-    RecordByKeyPrefixIterator(HFile.Reader reader, HFileScanner scanner, List<String> sortedKeyPrefixes, Schema writerSchema, Schema readerSchema) throws IOException {
-      this.sortedKeyPrefixesIterator = sortedKeyPrefixes.iterator();
+    RecordByKeyPrefixIterator(HFile.Reader reader, HFileScanner scanner, LookUpKeyCollection lookUpKeyCollection, Schema writerSchema, Schema readerSchema) throws IOException {
+      this.sortedKeyPrefixesIterator = lookUpKeyCollection.getKeys().iterator();
       this.reader = reader;
       this.scanner = scanner;
       this.scanner.seekTo(); // position at the beginning of the file
@@ -523,8 +523,8 @@ public class HoodieHBaseAvroHFileReader extends HoodieAvroHFileReaderImplBase {
 
     private IndexedRecord next = null;
 
-    RecordByKeyIterator(HFile.Reader reader, HFileScanner scanner, List<String> sortedKeys, Schema writerSchema, Schema readerSchema) throws IOException {
-      this.sortedKeyIterator = sortedKeys.iterator();
+    RecordByKeyIterator(HFile.Reader reader, HFileScanner scanner, LookUpKeyCollection lookUpKeyCollection, Schema writerSchema, Schema readerSchema) throws IOException {
+      this.sortedKeyIterator = lookUpKeyCollection.getKeys().iterator();
       this.reader = reader;
       this.scanner = scanner;
       this.scanner.seekTo(); // position at the beginning of the file

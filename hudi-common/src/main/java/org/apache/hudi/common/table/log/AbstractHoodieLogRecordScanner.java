@@ -244,7 +244,7 @@ public abstract class AbstractHoodieLogRecordScanner {
    * @param keySpecOpt specifies target set of keys to be scanned
    * @param skipProcessingBlocks controls, whether (delta) blocks have to actually be processed
    */
-  protected final void scanInternal(Option<KeySpec> keySpecOpt, boolean skipProcessingBlocks) {
+  protected final void scanInternal(Option<LookUpKeyCollection> keySpecOpt, boolean skipProcessingBlocks) {
     synchronized (this) {
       if (enableOptimizedLogBlocksScan) {
         scanInternalV2(keySpecOpt, skipProcessingBlocks);
@@ -254,7 +254,7 @@ public abstract class AbstractHoodieLogRecordScanner {
     }
   }
 
-  private void scanInternalV1(Option<KeySpec> keySpecOpt) {
+  private void scanInternalV1(Option<LookUpKeyCollection> keySpecOpt) {
     currentInstantLogBlocks = new ArrayDeque<>();
 
     progress = 0.0f;
@@ -400,7 +400,7 @@ public abstract class AbstractHoodieLogRecordScanner {
     }
   }
 
-  private void scanInternalV2(Option<KeySpec> keySpecOption, boolean skipProcessingBlocks) {
+  private void scanInternalV2(Option<LookUpKeyCollection> keySpecOption, boolean skipProcessingBlocks) {
     currentInstantLogBlocks = new ArrayDeque<>();
     progress = 0.0f;
     totalLogFiles = new AtomicLong(0);
@@ -620,7 +620,7 @@ public abstract class AbstractHoodieLogRecordScanner {
    * Iterate over the GenericRecord in the block, read the hoodie key and partition path and call subclass processors to
    * handle it.
    */
-  private void processDataBlock(HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt) throws Exception {
+  private void processDataBlock(HoodieDataBlock dataBlock, Option<LookUpKeyCollection> keySpecOpt) throws Exception {
     checkState(partitionNameOverrideOpt.isPresent() || partitionPathFieldOpt.isPresent(),
         "Either partition-name override or partition-path field had to be present");
 
@@ -665,7 +665,7 @@ public abstract class AbstractHoodieLogRecordScanner {
    * Process the set of log blocks belonging to the last instant which is read fully.
    */
   private void processQueuedBlocksForInstant(Deque<HoodieLogBlock> logBlocks, int numLogFilesSeen,
-                                             Option<KeySpec> keySpecOpt) throws Exception {
+                                             Option<LookUpKeyCollection> keySpecOpt) throws Exception {
     while (!logBlocks.isEmpty()) {
       LOG.info("Number of remaining logblocks to merge {}", logBlocks.size());
       // poll the element at the bottom of the stack since that's the order it was inserted
@@ -739,58 +739,6 @@ public abstract class AbstractHoodieLogRecordScanner {
     return payloadProps;
   }
 
-  /**
-   * Key specification with a list of column names.
-   */
-  protected interface KeySpec {
-    List<String> getKeys();
-
-    boolean isFullKey();
-
-    static KeySpec fullKeySpec(List<String> keys) {
-      return new FullKeySpec(keys);
-    }
-
-    static KeySpec prefixKeySpec(List<String> keyPrefixes) {
-      return new PrefixKeySpec(keyPrefixes);
-    }
-  }
-
-  private static class FullKeySpec implements KeySpec {
-    private final List<String> keys;
-    private FullKeySpec(List<String> keys) {
-      this.keys = keys;
-    }
-
-    @Override
-    public List<String> getKeys() {
-      return keys;
-    }
-
-    @Override
-    public boolean isFullKey() {
-      return true;
-    }
-  }
-
-  private static class PrefixKeySpec implements KeySpec {
-    private final List<String> keysPrefixes;
-
-    private PrefixKeySpec(List<String> keysPrefixes) {
-      this.keysPrefixes = keysPrefixes;
-    }
-
-    @Override
-    public List<String> getKeys() {
-      return keysPrefixes;
-    }
-
-    @Override
-    public boolean isFullKey() {
-      return false;
-    }
-  }
-
   public Deque<HoodieLogBlock> getCurrentInstantLogBlocks() {
     return currentInstantLogBlocks;
   }
@@ -800,12 +748,12 @@ public abstract class AbstractHoodieLogRecordScanner {
   }
 
   private Pair<ClosableIterator<HoodieRecord>, Schema> getRecordsIterator(
-      HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt) throws IOException {
+      HoodieDataBlock dataBlock, Option<LookUpKeyCollection> keySpecOpt) throws IOException {
     ClosableIterator<HoodieRecord> blockRecordsIterator;
     if (keySpecOpt.isPresent()) {
-      KeySpec keySpec = keySpecOpt.get();
+      LookUpKeyCollection lookUpKeyCollection = keySpecOpt.get();
       blockRecordsIterator = (ClosableIterator) dataBlock
-          .getRecordIterator(keySpec.getKeys(), keySpec.isFullKey(), recordType);
+          .getRecordIterator(lookUpKeyCollection, recordType);
     } else {
       blockRecordsIterator = (ClosableIterator) dataBlock.getRecordIterator(recordType);
     }

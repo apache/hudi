@@ -26,10 +26,10 @@ import java.util.List;
  * That is, the comparison between a record key and an element
  * of the set is {@link String#equals}.
  */
-public class FullKeySpec implements KeySpec {
+public class FullLookUpKeyCollection implements LookUpKeyCollection {
   private final List<String> keys;
 
-  public FullKeySpec(List<String> keys) {
+  public FullLookUpKeyCollection(List<String> keys) {
     this.keys = keys;
   }
 
@@ -39,7 +39,17 @@ public class FullKeySpec implements KeySpec {
   }
 
   @Override
+  public boolean isEmpty() {
+    return keys.isEmpty();
+  }
+
+  @Override
   public boolean isFullKey() {
     return true;
+  }
+
+  @Override
+  public boolean isSorted() {
+    return false;
   }
 }

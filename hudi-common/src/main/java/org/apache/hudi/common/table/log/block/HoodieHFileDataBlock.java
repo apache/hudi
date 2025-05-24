@@ -24,6 +24,7 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
+import org.apache.hudi.common.table.log.LookUpKeyCollection;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
@@ -159,7 +160,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
 
   // TODO abstract this w/in HoodieDataBlock
   @Override
-  protected <T> ClosableIterator<HoodieRecord<T>> lookupRecords(List<String> sortedKeys, boolean fullKey) throws IOException {
+  protected <T> ClosableIterator<HoodieRecord<T>> lookupRecords(LookUpKeyCollection lookUpKeyCollection) throws IOException {
     HoodieLogBlockContentLocation blockContentLoc = getBlockContentLocation().get();
 
     // NOTE: It's important to extend Hadoop configuration here to make sure configuration
@@ -177,8 +178,9 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
         .getReaderFactory(HoodieRecordType.AVRO)
         .getFileReader(hFileReaderConfig, inlinePath, HoodieFileFormat.HFILE, Option.of(getSchemaFromHeader()))) {
       // Get writer's schema from the header
-      final ClosableIterator<HoodieRecord<IndexedRecord>> recordIterator =
-          fullKey ? reader.getRecordsByKeysIterator(sortedKeys, readerSchema) : reader.getRecordsByKeyPrefixIterator(sortedKeys, readerSchema);
+      final ClosableIterator<HoodieRecord<IndexedRecord>> recordIterator = lookUpKeyCollection.isFullKey()
+          ? reader.getRecordsByKeysIterator(lookUpKeyCollection, readerSchema)
+          : reader.getRecordsByKeyPrefixIterator(lookUpKeyCollection, readerSchema);
 
       return new CloseableMappingIterator<>(recordIterator, data -> (HoodieRecord<T>) data);
     }
