@@ -28,6 +28,8 @@ import java.io.IOException;
 public interface HFileWriter extends Closeable {
   /**
    * Append a key-value pair into a data block.
+   * The caller must guarantee that the key lexicographically increments or the same
+   * as the last key.
     */
   void append(String key, byte[] value) throws IOException;
 

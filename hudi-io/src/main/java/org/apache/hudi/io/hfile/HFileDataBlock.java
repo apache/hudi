@@ -169,7 +169,7 @@ public class HFileDataBlock extends HFileBlock {
   private final List<KeyValueEntry> entries = new ArrayList<>();
 
   static HFileDataBlock createWritableDataBlock(HFileContext context,
-                                                       long previousBlockOffset) {
+                                                long previousBlockOffset) {
     return new HFileDataBlock(context, previousBlockOffset);
   }
 
