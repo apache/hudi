@@ -65,7 +65,7 @@ public enum ChecksumType {
 
   /**
    * Use designated byte value to indicate checksum type.
-   * @return Type associated with passed code.
+   * @return type associated with passed code
    */
   public static ChecksumType codeToType(final byte b) {
     for (ChecksumType t : ChecksumType.values()) {
@@ -77,9 +77,8 @@ public enum ChecksumType {
   }
 
   /**
-   * Map a checksum name to a specific type. Do our own names.
-   * @return Type associated with
-   * passed code.
+   * Map a checksum name to a specific type.
+   * @return type associated with the name
    */
   public static ChecksumType nameToType(final String name) {
     for (ChecksumType t : ChecksumType.values()) {

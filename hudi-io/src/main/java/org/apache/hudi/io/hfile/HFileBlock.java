@@ -73,8 +73,8 @@ public abstract class HFileBlock {
   }
 
   protected final HFileContext context;
+  protected final Option<HFileBlockReadAttributes> readAttributesOpt;
   private final HFileBlockType blockType;
-  protected Option<HFileBlockReadAttributes> readAttributesOpt = Option.empty();
 
   /**
    * Initialize HFileBlock for read.
@@ -98,6 +98,7 @@ public abstract class HFileBlock {
     this.blockType = blockType;
     this.blockSize = context.getBlockSize();
     this.previousBlockOffset = previousBlockOffset;
+    this.readAttributesOpt = Option.empty();
   }
 
   /**

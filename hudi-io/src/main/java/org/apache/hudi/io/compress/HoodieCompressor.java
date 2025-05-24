@@ -24,7 +24,7 @@ import java.io.InputStream;
 import java.nio.ByteBuffer;
 
 /**
- * Compression and decompress input data.
+ * Provides compression and decompression on input data.
  */
 public interface HoodieCompressor {
   /**
@@ -44,20 +44,20 @@ public interface HoodieCompressor {
                  int length) throws IOException;
 
   /**
-   * Compress data stored in byte array.
+   * Compresses data stored in byte array.
    *
-   * @param uncompressedBytes  Input data in byte array.
-   * @return                   Output data in byte array.
-   * @throws IOException       Upon error.
+   * @param uncompressedBytes  input data in byte array
+   * @return output data in byte array
+   * @throws IOException       upon error
    */
   byte[] compress(byte[] uncompressedBytes) throws IOException;
 
   /**
-   * Compress data stored in byte array.
+   * Compresses data stored in {@link ByteBuffer}.
    *
-   * @param uncompressedBytes  Input data in byte array.
-   * @return                   Output data in byte array.
-   * @throws IOException       Upon error.
+   * @param uncompressedBytes  input data in {@link ByteBuffer}
+   * @return output data in {@link ByteBuffer}
+   * @throws IOException       upon error
    */
   ByteBuffer compress(ByteBuffer uncompressedBytes) throws IOException;
 }
