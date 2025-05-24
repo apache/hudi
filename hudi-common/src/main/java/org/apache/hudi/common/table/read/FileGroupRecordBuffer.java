@@ -281,14 +281,25 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
     return Option.of(Pair.of(readerContext.projectRecord(dataBlock.getSchema(), mergedAvroSchema, mergedInternalSchema.getRight()), mergedAvroSchema));
   }
 
+  /**
+   * Merge record from base file and log file using the configured merger.
+   *
+   * @param baseRecord  old {@link BufferedRecord} from the base file
+   * @param logRecord  newer {@link BufferedRecord} from the log file, may be null
+   * @return a value pair, left is boolean value `isDelete`, and right is engine row.
+   * @throws IOException
+   */
+  private BufferedRecord<T> merge(BufferedRecord<T> baseRecord, BufferedRecord<T> logRecord) throws IOException {
+    return merger.merge(Option.of(baseRecord), Option.ofNullable(logRecord), enablePartialMerging);
+  }
+
   protected boolean hasNextBaseRecord(T baseRecord, BufferedRecord<T> logRecordInfo) throws IOException {
     if (logRecordInfo != null) {
       BufferedRecord<T> baseRecordInfo = BufferedRecord.forRecordWithContext(baseRecord, readerSchema, readerContext, orderingFieldName, false);
-      BufferedRecord<T> merged = merger.merge(Option.of(baseRecordInfo), Option.ofNullable(logRecordInfo), enablePartialMerging);
+      BufferedRecord<T> merged = merge(baseRecordInfo, logRecordInfo);
       if (!merged.isDelete()) {
         // Updates
-        T mergedRecord = merged.getRecord();
-        nextRecord = readerContext.seal(mergedRecord);
+        nextRecord = readerContext.seal(merged.getRecord());
         readStats.incrementNumUpdates();
         return true;
       } else if (emitDelete) {
