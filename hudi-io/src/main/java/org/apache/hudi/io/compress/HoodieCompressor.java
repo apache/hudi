@@ -21,11 +21,12 @@ package org.apache.hudi.io.compress;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.ByteBuffer;
 
 /**
- * Provides decompression on input data.
+ * Compression and decompress input data.
  */
-public interface HoodieDecompressor {
+public interface HoodieCompressor {
   /**
    * Decompresses the data from {@link InputStream} and writes the decompressed data to the target
    * byte array.
@@ -43,8 +44,20 @@ public interface HoodieDecompressor {
                  int length) throws IOException;
 
   /**
-   * Compress the data provided.
+   * Compress data stored in byte array.
    *
+   * @param uncompressedBytes  Input data in byte array.
+   * @return                   Output data in byte array.
+   * @throws IOException       Upon error.
    */
   byte[] compress(byte[] uncompressedBytes) throws IOException;
+
+  /**
+   * Compress data stored in byte array.
+   *
+   * @param uncompressedBytes  Input data in byte array.
+   * @return                   Output data in byte array.
+   * @throws IOException       Upon error.
+   */
+  ByteBuffer compress(ByteBuffer uncompressedBytes) throws IOException;
 }

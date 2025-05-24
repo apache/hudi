@@ -19,19 +19,22 @@
 
 package org.apache.hudi.io.compress;
 
-import org.apache.hudi.io.compress.airlift.HoodieAirliftGzipDecompressor;
-import org.apache.hudi.io.compress.builtin.HoodieNoneDecompressor;
+import org.apache.hudi.io.compress.airlift.HoodieAirliftGzipCompressor;
+import org.apache.hudi.io.compress.builtin.HoodieNoneCompressor;
 
 /**
- * Factory for {@link HoodieDecompressor}.
+ * Factory for {@link HoodieCompressor}.
  */
-public class HoodieDecompressorFactory {
-  public static HoodieDecompressor getDecompressor(CompressionCodec compressionCodec) {
+public class HoodieCompressorFactory {
+  private HoodieCompressorFactory() {
+  }
+
+  public static HoodieCompressor getCompressor(CompressionCodec compressionCodec) {
     switch (compressionCodec) {
       case NONE:
-        return new HoodieNoneDecompressor();
+        return new HoodieNoneCompressor();
       case GZIP:
-        return new HoodieAirliftGzipDecompressor();
+        return new HoodieAirliftGzipCompressor();
       default:
         throw new IllegalArgumentException(
             "The decompression is not supported for compression codec: " + compressionCodec);

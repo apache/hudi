@@ -22,12 +22,15 @@ package org.apache.hudi.io.hfile;
 import org.apache.hudi.common.util.io.ByteBufferBackedInputStream;
 import org.apache.hudi.io.ByteArraySeekableDataInputStream;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.DataOutputStream;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
@@ -39,51 +42,55 @@ import java.util.Arrays;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TestHFileWriter {
+class TestHFileWriter {
   private static final Logger LOG = LoggerFactory.getLogger(TestHFileWriter.class);
   private static final String TEST_FILE = "test.hfile";
   private static final HFileContext CONTEXT = HFileContext.builder().build();
 
+  @AfterEach
+  public void tearDown() throws IOException {
+    Files.deleteIfExists(Paths.get(TEST_FILE));
+  }
+
   @Test
   void testOverflow() throws Exception {
-    try {
-      // 1. Write data.
-      writeTestFile();
-
-      // 2. Validate file size.
-      validateHFileSize();
-
-      // 3. Validate file structure.
-      validateHFileStructure();
-
-      // 4. Validate consistency with HFileReader.
-      validateConsistencyWithHFileReader();
-
-      LOG.info("All validations passed!");
-    } finally {
-      Files.deleteIfExists(Paths.get(TEST_FILE));
-    }
+    // 1. Write data.
+    writeTestFile();
+    // 2. Validate file size.
+    validateHFileSize();
+    // 3. Validate file structure.
+    validateHFileStructure();
+    // 4. Validate consistency with HFileReader.
+    validateConsistencyWithHFileReader();
+    LOG.info("All validations passed!");
   }
 
   @Test
   void testSameKeyLocation() throws IOException {
     // 50 bytes for data part limit.
-    HFileContext context = new HFileContext.Builder().blockSize(50).build();
-    String testFile = "test_data.hfile";
+    HFileContext context = new HFileContext.Builder().blockSize(200).build();
+    String testFile = TEST_FILE;
     try (DataOutputStream outputStream =
              new DataOutputStream(Files.newOutputStream(Paths.get(testFile)));
         HFileWriter writer = new HFileWriterImpl(context, outputStream)) {
-      writer.append("key1", "value1".getBytes());
-      writer.append("key1", "value2".getBytes());
-      writer.append("key1", "value3".getBytes());
-      writer.append("key2", "value4".getBytes());
+      for (int i = 0; i < 10; i++) {
+        writer.append("key1", String.format("value%d", i).getBytes());
+      }
+      for (int i = 0; i < 10; i++) {
+        writer.append(
+            String.format("other-key-%d", i),
+            String.format("value%d", i).getBytes());
+      }
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
 
     // Validate.
     try (FileChannel channel = FileChannel.open(Paths.get(testFile), StandardOpenOption.READ)) {
+      InputStream seekableStream = new SeekableFileInputStream(channel);
       ByteBuffer buf = channel.map(FileChannel.MapMode.READ_ONLY, 0, channel.size());
+      HFileReaderImpl reader = new HFileReaderImpl(channel, channel.size());
+
       // Point to the first data block.
       buf.position(0);
 
@@ -97,9 +104,9 @@ public class TestHFileWriter {
       // Validate data.
       // Each record is about 20 bytes.
       // The first block should contain 3 pairs, and the second one contains 1.
-      validateKeyValue(buf, "key1", "value1");
-      validateKeyValue(buf, "key1", "value2");
-      validateKeyValue(buf, "key1", "value3");
+      for (int i = 0; i < 10; i++) {
+        validateKeyValue(buf, "key1", String.format("value%d", i));
+      }
 
       // Validate magic.
       buf.get(dataBlockMagic);
@@ -108,9 +115,9 @@ public class TestHFileWriter {
       // Skip header.
       buf.position(buf.position() + 25);
       // Validate data.
-      validateKeyValue(buf, "key2", "value4");
-    } finally {
-      Files.deleteIfExists(Paths.get(testFile));
+      for (int i = 0; i < 10; i++) {
+        validateKeyValue(buf, String.format("other-key-%d", i), String.format("value%d", i));
+      }
     }
   }
 
@@ -118,7 +125,7 @@ public class TestHFileWriter {
   void testUniqueKeyLocation() throws IOException {
     // 50 bytes for data part limit.
     HFileContext context = new HFileContext.Builder().blockSize(50).build();
-    String testFile = "test_data.hfile";
+    String testFile = TEST_FILE;
     try (DataOutputStream outputStream =
              new DataOutputStream(Files.newOutputStream(Paths.get(testFile)));
          HFileWriter writer = new HFileWriterImpl(context, outputStream)) {
@@ -158,8 +165,6 @@ public class TestHFileWriter {
       // Validate data.
       validateKeyValue(buf, "key3", "value3");
       validateKeyValue(buf, "key4", "value4");
-    } finally {
-      Files.deleteIfExists(Paths.get(testFile));
     }
   }
 

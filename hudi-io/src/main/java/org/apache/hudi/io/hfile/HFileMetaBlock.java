@@ -36,43 +36,29 @@ public class HFileMetaBlock extends HFileBlock {
   public ByteBuffer readContent() {
     return ByteBuffer.wrap(
         getByteBuff(),
-        readAttributesOpt.get().startOffsetInBuff + HFILEBLOCK_HEADER_SIZE,
-        readAttributesOpt.get().uncompressedSizeWithoutHeader);
+        readAttributesOpt.get().getStartOffsetInBuff() + HFILEBLOCK_HEADER_SIZE,
+        readAttributesOpt.get().getUncompressedSizeWithoutHeader());
   }
 
   // ================ Below are for Write ================
 
-  protected final List<KeyValueEntry> entries = new ArrayList<>();
+  protected KeyValueEntry entry;
 
-  public HFileMetaBlock(HFileContext context) {
+  public HFileMetaBlock(HFileContext context, KeyValueEntry keyValueEntry) {
     super(context, HFileBlockType.META, -1L);
+    this.entry = keyValueEntry;
   }
 
   public byte[] getFirstKey() {
-    return entries.get(0).key;
-  }
-
-  public void add(byte[] key, byte[] value) {
-    KeyValueEntry kv = new KeyValueEntry(key, value);
-    add(kv, false);
-  }
-
-  protected void add(KeyValueEntry kv, boolean sorted) {
-    entries.add(kv);
-    if (sorted) {
-      entries.sort(KeyValueEntry::compareTo);
-    }
+    return entry.key;
   }
 
   @Override
-  public ByteBuffer getPayload() {
+  public ByteBuffer getUncompressedBlockDataToWrite() {
     ByteBuffer dataBuf = ByteBuffer.allocate(context.getBlockSize());
-    // Rule 1: there must be only one key-value entry.
-    assert (1 == entries.size())
-        : "only 1 value is allowed in meta block";
-    // Rule 2: only value should be store in the block.
+    // Note that: only value should be store in the block.
     // The key is stored in the meta index block.
-    dataBuf.put(entries.get(0).value);
+    dataBuf.put(entry.value);
     dataBuf.flip();
     return dataBuf;
   }

@@ -20,8 +20,8 @@
 package org.apache.hudi.io.hfile;
 
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.compress.CompressionCodec;
-import org.apache.hudi.io.compress.airlift.HoodieAirliftGzipDecompressor;
 
 import com.google.protobuf.CodedOutputStream;
 
@@ -31,14 +31,11 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 
-import static org.apache.hudi.io.compress.CompressionCodec.GZIP;
 import static org.apache.hudi.io.hfile.DataSize.MAGIC_LENGTH;
 import static org.apache.hudi.io.hfile.DataSize.SIZEOF_BYTE;
 import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT32;
 import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT64;
-import static org.apache.hudi.io.hfile.HFileBlockWriteAttributes.CHECKSUM_TYPE;
-import static org.apache.hudi.io.hfile.HFileBlockWriteAttributes.DEFAULT_BYTES_PER_CHECKSUM;
-import static org.apache.hudi.io.hfile.HFileBlockWriteAttributes.EMPTY_BYTE_ARRAY;
+import static org.apache.hudi.io.util.IOUtils.readInt;
 
 /**
  * Represents a block in a HFile. The types of blocks are defined in {@link HFileBlockType}.
@@ -52,7 +49,6 @@ public abstract class HFileBlock {
   // followed by another 4 byte value to store sizeofDataOnDisk.
   public static final int HFILEBLOCK_HEADER_SIZE =
       HFILEBLOCK_HEADER_SIZE_NO_CHECKSUM + SIZEOF_BYTE + 2 * SIZEOF_INT32;
-
   // Each checksum value is an integer that can be stored in 4 bytes.
   static final int CHECKSUM_SIZE = SIZEOF_INT32;
 
@@ -78,9 +74,7 @@ public abstract class HFileBlock {
 
   protected final HFileContext context;
   private final HFileBlockType blockType;
-
-  protected Option<HFileBlockReadAttributes> readAttributesOpt;
-  protected Option<HFileBlockWriteAttributes> writeAttributesOpt;
+  protected Option<HFileBlockReadAttributes> readAttributesOpt = Option.empty();
 
   /**
    * Initialize HFileBlock for read.
@@ -91,9 +85,7 @@ public abstract class HFileBlock {
                        int startOffsetInBuff) {
     this.context = context;
     this.blockType = blockType;
-    HFileBlockReadAttributes readAttributes =
-        new HFileBlockReadAttributes(this.context, byteBuff, startOffsetInBuff);
-    this.readAttributesOpt = Option.of(readAttributes);
+    this.readAttributesOpt = Option.of(new HFileBlockReadAttributes(this.context, byteBuff, startOffsetInBuff));
   }
 
   /**
@@ -104,11 +96,8 @@ public abstract class HFileBlock {
                        long previousBlockOffset) {
     this.context = context;
     this.blockType = blockType;
-    HFileBlockWriteAttributes writeAttributes = new HFileBlockWriteAttributes.Builder()
-        .blockSize(context.getBlockSize())
-        .previousBlockOffset(previousBlockOffset)
-        .build();
-    writeAttributesOpt = Option.of(writeAttributes);
+    this.blockSize = context.getBlockSize();
+    this.previousBlockOffset = previousBlockOffset;
   }
 
   /**
@@ -177,7 +166,7 @@ public abstract class HFileBlock {
             readAttributesOpt.get().compressedByteBuff,
             readAttributesOpt.get().startOffsetInCompressedBuff + HFILEBLOCK_HEADER_SIZE,
             readAttributesOpt.get().onDiskSizeWithoutHeader)) {
-          context.getDecompressor().decompress(
+          context.getCompressor().decompress(
               byteBuffInputStream,
               readAttributesOpt.get().byteBuff,
               HFILEBLOCK_HEADER_SIZE,
@@ -190,13 +179,19 @@ public abstract class HFileBlock {
 
   // ================ Below are for Write ================
 
+  private static final int DEFAULT_BYTES_PER_CHECKSUM = 16 * 1024;
+  private static final byte[] EMPTY_BYTE_ARRAY = new byte[0];
+  protected long startOffsetInBuff = -1;
+  protected long previousBlockOffset = -1;
+  protected int blockSize;
+
   /**
    * Returns serialized "data" part of the block.
    * This function should be implemented by each block type separately.
    * By default, it does nothing.
    */
-  public ByteBuffer getPayload() {
-    return ByteBuffer.allocate(0);
+  protected ByteBuffer getUncompressedBlockDataToWrite() {
+    return null;
   }
 
   /**
@@ -204,119 +199,206 @@ public abstract class HFileBlock {
    */
   public ByteBuffer serialize() throws IOException {
     // Block payload.
-    ByteBuffer payloadBuff = getPayload();
+    ByteBuffer uncompressedBlockData = getUncompressedBlockDataToWrite();
     // Compress if specified.
-    ByteBuffer compressedPayload = compress(payloadBuff);
+    ByteBuffer compressedBlockData = compress(uncompressedBlockData);
     // Buffer for building block.
     ByteBuffer buf = ByteBuffer.allocate(Math.max(
         context.getBlockSize() * 2,
-        compressedPayload.limit() + HFILEBLOCK_HEADER_SIZE * 2));
+        compressedBlockData.limit() + HFILEBLOCK_HEADER_SIZE * 2));
+
     // Block header
     // 1. Magic is always 8 bytes.
     buf.put(blockType.getMagic(), 0, 8);
     // 2. onDiskSizeWithoutHeader.
-    buf.putInt(compressedPayload.limit());
+    buf.putInt(compressedBlockData.limit());
     // 3. uncompressedSizeWithoutHeader.
-    buf.putInt(payloadBuff.limit());
-    // 4. previous block offset.
-    buf.putLong(writeAttributesOpt.get().previousBlockOffset);
-    // TODO: set checksum type properly.
-    // 5. checksum type.
-    buf.put(CHECKSUM_TYPE.getCode());
-    // TODO: verify that if hudi uses 4 bytes for checksum always.
-    // 6. bytes covered per checksum.
+    buf.putInt(uncompressedBlockData.limit());
+    // 4. Previous block offset.
+    buf.putLong(previousBlockOffset);
+    // 5. Checksum type.
+    buf.put(context.getChecksumType().getCode());
+    // 6. Bytes covered per checksum.
     buf.putInt(DEFAULT_BYTES_PER_CHECKSUM);
     // 7. onDiskDataSizeWithHeader
     int onDiskDataSizeWithHeader =
-        HFileBlock.HFILEBLOCK_HEADER_SIZE + payloadBuff.limit();
+        HFileBlock.HFILEBLOCK_HEADER_SIZE + uncompressedBlockData.limit();
     buf.putInt(onDiskDataSizeWithHeader);
-    // 8. payload.
-    buf.put(compressedPayload);
-    // 9. Checksum
-    buf.put(calcChecksumBytes(CHECKSUM_TYPE));
+    // 8. Payload.
+    buf.put(compressedBlockData);
+    // 9. Checksum.
+    buf.put(calcChecksumBytes(context.getChecksumType()));
 
     // Update sizes
     buf.flip();
     return buf;
   }
 
+  /**
+   * Compress block data without header and checksum.
+   */
   protected ByteBuffer compress(ByteBuffer payload) throws IOException {
-    if (context.getCompressionCodec() == GZIP) {
-      byte[] temp = new byte[payload.remaining()];
-      payload.get(temp);
-      return ByteBuffer.wrap(new HoodieAirliftGzipDecompressor().compress(temp));
-    } else {
-      return payload;
-    }
+    return context.getCompressor().compress(payload);
   }
 
-  // TODO: support non-NULL checksum types.
   /**
    * Returns checksum bytes if checksum type is not NULL.
+   * Note that current HfileReaderImpl does not support non-NULL checksum.
    */
   private byte[] calcChecksumBytes(ChecksumType type) {
     if (type == ChecksumType.NULL) {
       return EMPTY_BYTE_ARRAY;
-    } else if (type == ChecksumType.CRC32) {
-      return EMPTY_BYTE_ARRAY;
     } else {
-      return EMPTY_BYTE_ARRAY;
+      throw new HoodieException("Only NULL checksum type is supported");
     }
   }
 
   /**
    * Sets start offset of the block in the buffer.
    */
-  public void setStartOffsetInBuff(long startOffsetInBuff) {
-    this.writeAttributesOpt.get().startOffsetInBuff = startOffsetInBuff;
+  protected void setStartOffsetInBuff(long startOffsetInBuff) {
+    this.startOffsetInBuff = startOffsetInBuff;
   }
 
   /**
    * Gets start offset of the block in the buffer.
    */
-  public long getStartOffsetInBuff() {
-    return this.writeAttributesOpt.get().startOffsetInBuff;
+  protected long getStartOffsetInBuff() {
+    return this.startOffsetInBuff;
   }
 
   /**
-   * Returns the number of bytes that should be used by checksum.
-   * @param onDiskBlockBytesWithHeaderSize
-   * @param bytesPerChecksum
-   * @return
+   * Returns the bytes of the variable length encoding for an integer.
+   * @param length       an integer, normally representing a length.
+   * @return             variable length encoding.
+   * @throws IOException upon error.
    */
-  private long calcNumChecksumBytes(int onDiskBlockBytesWithHeaderSize, int bytesPerChecksum) {
-    return numBytes(onDiskBlockBytesWithHeaderSize, bytesPerChecksum);
-  }
-
-  /**
-   * Returns the number of bytes needed to store the checksums for a specified data size
-   * @param datasize         number of bytes of data
-   * @param bytesPerChecksum number of bytes in a checksum chunk
-   * @return The number of bytes needed to store the checksum values
-   */
-  static long numBytes(long datasize, int bytesPerChecksum) {
-    return numChunks(datasize, bytesPerChecksum) * HFileBlock.CHECKSUM_SIZE;
-  }
-
-  /**
-   * Returns the number of checksum chunks needed to store the checksums for a specified data size
-   * @param datasize         number of bytes of data
-   * @param bytesPerChecksum number of bytes in a checksum chunk
-   * @return The number of checksum chunks
-   */
-  static long numChunks(long datasize, int bytesPerChecksum) {
-    long numChunks = datasize / bytesPerChecksum;
-    if (datasize % bytesPerChecksum != 0) {
-      numChunks++;
-    }
-    return numChunks;
-  }
-
-  static byte[] getVariableLengthEncodes(int length) throws IOException {
+  static byte[] getVariableLengthEncodedBytes(int length) throws IOException {
     ByteArrayOutputStream varintBuffer = new ByteArrayOutputStream();
     CodedOutputStream varintOutput = CodedOutputStream.newInstance(varintBuffer);
     varintOutput.writeUInt32NoTag(length);
     varintOutput.flush();
     return varintBuffer.toByteArray();
+  }
+
+  /**
+   * Wrapper class for all parameters used for hfile read.
+   */
+  public static class HFileBlockReadAttributes {
+    private final byte[] byteBuff;
+    private final int startOffsetInBuff;
+    private final int sizeCheckSum;
+    private final int uncompressedEndOffset;
+    private final int onDiskSizeWithoutHeader;
+    private final int uncompressedSizeWithoutHeader;
+    private final int bytesPerChecksum;
+    private boolean isUnpacked = false;
+    private byte[] compressedByteBuff;
+    private int startOffsetInCompressedBuff;
+
+    public HFileBlockReadAttributes(HFileContext context,
+                                    byte[] byteBuff,
+                                    int startOffsetInBuff) {
+      this.onDiskSizeWithoutHeader = readInt(
+          byteBuff, startOffsetInBuff + HFileBlock.Header.ON_DISK_SIZE_WITHOUT_HEADER_INDEX);
+      this.uncompressedSizeWithoutHeader = readInt(
+          byteBuff, startOffsetInBuff + HFileBlock.Header.UNCOMPRESSED_SIZE_WITHOUT_HEADER_INDEX);
+      this.bytesPerChecksum = readInt(
+          byteBuff, startOffsetInBuff + HFileBlock.Header.BYTES_PER_CHECKSUM_INDEX);
+      this.sizeCheckSum = numChecksumBytes(
+          onDiskSizeWithoutHeader + (long) HFILEBLOCK_HEADER_SIZE, bytesPerChecksum);
+      if (CompressionCodec.NONE.equals(context.getCompressionCodec())) {
+        isUnpacked = true;
+        this.startOffsetInBuff = startOffsetInBuff;
+        this.byteBuff = byteBuff;
+      } else {
+        this.startOffsetInCompressedBuff = startOffsetInBuff;
+        this.compressedByteBuff = byteBuff;
+        this.startOffsetInBuff = 0;
+        this.byteBuff = allocateBufferForUnpacking();
+      }
+      this.uncompressedEndOffset =
+          this.startOffsetInBuff + HFILEBLOCK_HEADER_SIZE + uncompressedSizeWithoutHeader;
+    }
+
+    public byte[] getByteBuff() {
+      return byteBuff;
+    }
+
+    public int getStartOffsetInBuff() {
+      return startOffsetInBuff;
+    }
+
+    public int getSizeCheckSum() {
+      return sizeCheckSum;
+    }
+
+    public int getUncompressedEndOffset() {
+      return uncompressedEndOffset;
+    }
+
+    public int getOnDiskSizeWithoutHeader() {
+      return onDiskSizeWithoutHeader;
+    }
+
+    public int getUncompressedSizeWithoutHeader() {
+      return uncompressedSizeWithoutHeader;
+    }
+
+    public int getBytesPerChecksum() {
+      return bytesPerChecksum;
+    }
+
+    public boolean isUnpacked() {
+      return isUnpacked;
+    }
+
+    public byte[] getCompressedByteBuff() {
+      return compressedByteBuff;
+    }
+
+    public int getStartOffsetInCompressedBuff() {
+      return startOffsetInCompressedBuff;
+    }
+
+    /**
+     * Allocates new byte buffer for the uncompressed bytes.
+     *
+     * @return a new byte array based on the size of uncompressed data, holding the same header
+     * bytes.
+     */
+    private byte[] allocateBufferForUnpacking() {
+      int capacity = HFILEBLOCK_HEADER_SIZE + uncompressedSizeWithoutHeader + sizeCheckSum;
+      return new byte[capacity];
+    }
+
+    /**
+     * Returns the number of bytes needed to store the checksums based on data size.
+     *
+     * @param numBytes         number of bytes of data.
+     * @param bytesPerChecksum number of bytes covered by one checksum.
+     * @return the number of bytes needed to store the checksum values.
+     */
+    private static int numChecksumBytes(long numBytes, int bytesPerChecksum) {
+      return numChecksumChunks(numBytes, bytesPerChecksum) * HFileBlock.CHECKSUM_SIZE;
+    }
+
+    /**
+     * Returns the number of checksum chunks needed to store the checksums based on data size.
+     *
+     * @param numBytes         number of bytes of data.
+     * @param bytesPerChecksum number of bytes in a checksum chunk.
+     * @return the number of checksum chunks.
+     */
+    private static int numChecksumChunks(long numBytes, int bytesPerChecksum) {
+      long numChunks = numBytes / bytesPerChecksum;
+      if (numBytes % bytesPerChecksum != 0) {
+        numChunks++;
+      }
+      if (numChunks > Integer.MAX_VALUE / HFileBlock.CHECKSUM_SIZE) {
+        throw new IllegalArgumentException("The number of chunks is too large: " + numChunks);
+      }
+      return (int) numChunks;
+    }
   }
 }

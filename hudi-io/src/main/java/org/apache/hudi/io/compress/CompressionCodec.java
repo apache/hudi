@@ -23,8 +23,9 @@ import org.apache.hudi.common.util.ValidationUtils;
 
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * Available compression codecs.
@@ -64,8 +65,9 @@ public enum CompressionCodec {
    * Create a mapping from its name to the compression codec.
    */
   private static Map<String, CompressionCodec> createNameToCompressionCodecMap() {
-    Map<String, CompressionCodec> result = new HashMap<>();
-    Arrays.stream(CompressionCodec.values()).forEach(codec -> result.put(codec.getName(), codec));
-    return Collections.unmodifiableMap(result);
+    return Collections.unmodifiableMap(
+        Arrays.stream(CompressionCodec.values())
+            .collect(Collectors.toMap(CompressionCodec::getName, Function.identity()))
+    );
   }
 }

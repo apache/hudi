@@ -19,6 +19,10 @@
 
 package org.apache.hudi.io.hfile;
 
+/**
+ * Type of checksum used to validate the integrity of data block.
+ * It determines the number of bytes used for checksum.
+ */
 public enum ChecksumType {
 
   NULL((byte) 0) {
@@ -60,8 +64,8 @@ public enum ChecksumType {
   }
 
   /**
-   * Cannot rely on enum ordinals . They change if item is removed or moved. Do our own codes. n
-   * * @return Type associated with passed code.
+   * Use designated byte value to indicate checksum type.
+   * @return Type associated with passed code.
    */
   public static ChecksumType codeToType(final byte b) {
     for (ChecksumType t : ChecksumType.values()) {
@@ -73,7 +77,8 @@ public enum ChecksumType {
   }
 
   /**
-   * Map a checksum name to a specific type. Do our own names. n * @return Type associated with
+   * Map a checksum name to a specific type. Do our own names.
+   * @return Type associated with
    * passed code.
    */
   public static ChecksumType nameToType(final String name) {

@@ -40,27 +40,30 @@ public class HFileFileInfoBlock extends HFileBlock {
   // Magic we put ahead of a serialized protobuf message
   public static final byte[] PB_MAGIC = new byte[] {'P', 'B', 'U', 'F'};
 
-  private final Map<String, byte[]> entries = new HashMap<>();
-
   public HFileFileInfoBlock(HFileContext context,
                             byte[] byteBuff,
                             int startOffsetInBuff) {
     super(context, HFileBlockType.FILE_INFO, byteBuff, startOffsetInBuff);
   }
 
+  private HFileFileInfoBlock(HFileContext context) {
+    super(context, HFileBlockType.FILE_INFO, -1L);
+  }
+
   public HFileInfo readFileInfo() throws IOException {
     int pbMagicLength = PB_MAGIC.length;
     if (IOUtils.compareTo(PB_MAGIC, 0, pbMagicLength,
-        readAttributesOpt.get().byteBuff,
-        readAttributesOpt.get().startOffsetInBuff + HFILEBLOCK_HEADER_SIZE, pbMagicLength) != 0) {
+        readAttributesOpt.get().getByteBuff(),
+        readAttributesOpt.get().getStartOffsetInBuff() + HFILEBLOCK_HEADER_SIZE, pbMagicLength) != 0) {
       throw new IOException(
           "Unexpected Protobuf magic at the beginning of the HFileFileInfoBlock: "
-              + fromUTF8Bytes(readAttributesOpt.get().byteBuff, readAttributesOpt.get().startOffsetInBuff + HFILEBLOCK_HEADER_SIZE, pbMagicLength));
+              + fromUTF8Bytes(readAttributesOpt.get().getByteBuff(),
+              readAttributesOpt.get().getStartOffsetInBuff() + HFILEBLOCK_HEADER_SIZE, pbMagicLength));
     }
     ByteArrayInputStream inputStream = new ByteArrayInputStream(
-        readAttributesOpt.get().byteBuff,
-        readAttributesOpt.get().startOffsetInBuff + HFILEBLOCK_HEADER_SIZE + pbMagicLength,
-        readAttributesOpt.get().uncompressedSizeWithoutHeader);
+        readAttributesOpt.get().getByteBuff(),
+        readAttributesOpt.get().getStartOffsetInBuff() + HFILEBLOCK_HEADER_SIZE + pbMagicLength,
+        readAttributesOpt.get().getUncompressedSizeWithoutHeader());
     Map<UTF8StringKey, byte[]> fileInfoMap = new HashMap<>();
     HFileProtos.InfoProto infoProto = HFileProtos.InfoProto.parseDelimitedFrom(inputStream);
     for (HFileProtos.BytesBytesPair pair : infoProto.getMapEntryList()) {
@@ -71,21 +74,22 @@ public class HFileFileInfoBlock extends HFileBlock {
   }
 
   // ================ Below are for Write ================
-
-  public HFileFileInfoBlock(HFileContext context) {
-    super(context, HFileBlockType.FILE_INFO, -1L);
+  public static HFileFileInfoBlock createWritableFileInfoBlock(HFileContext context) {
+    return new HFileFileInfoBlock(context);
   }
 
+  private final Map<String, byte[]> fileInfoToWrite = new HashMap<>();
+
   public void add(String name, byte[] value) {
-    entries.put(name, value);
+    fileInfoToWrite.put(name, value);
   }
 
   @Override
-  public ByteBuffer getPayload() {
+  public ByteBuffer getUncompressedBlockDataToWrite() {
     ByteBuffer buff = ByteBuffer.allocate(context.getBlockSize() * 2);
     HFileProtos.InfoProto.Builder builder =
         HFileProtos.InfoProto.newBuilder();
-    for (Map.Entry<String, byte[]> e : entries.entrySet()) {
+    for (Map.Entry<String, byte[]> e : fileInfoToWrite.entrySet()) {
       HFileProtos.BytesBytesPair bbp = HFileProtos.BytesBytesPair
           .newBuilder()
           .setFirst(ByteString.copyFrom(getUTF8Bytes(e.getKey())))
@@ -96,7 +100,7 @@ public class HFileFileInfoBlock extends HFileBlock {
     buff.put(PB_MAGIC);
     byte[] payload = builder.build().toByteArray();
     try {
-      buff.put(getVariableLengthEncodes(payload.length));
+      buff.put(getVariableLengthEncodedBytes(payload.length));
     } catch (IOException e) {
       throw new RuntimeException("Failed to calculate File Info variable length");
     }

@@ -21,16 +21,12 @@ package org.apache.hudi.io.hfile;
 
 import org.apache.hudi.common.util.Option;
 
-import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT16;
-
 public class HFileIndexBlock extends HFileBlock {
   protected final List<BlockIndexEntry> entries = new ArrayList<>();
-  protected long payloadSize = -1L;
+  protected long blockDataSize = -1L;
 
   public HFileIndexBlock(HFileContext context,
                          HFileBlockType blockType,
@@ -53,38 +49,7 @@ public class HFileIndexBlock extends HFileBlock {
     return entries.size();
   }
 
-  public long getPayloadSize() {
-    return payloadSize;
-  }
-
   public boolean isEmpty() {
     return entries.isEmpty();
-  }
-
-  @Override
-  public ByteBuffer getPayload() {
-    ByteBuffer buf = ByteBuffer.allocate(context.getBlockSize() * 2);
-    for (BlockIndexEntry entry : entries) {
-      buf.putLong(entry.getOffset());
-      buf.putInt(entry.getSize());
-      // Key length + 2.
-      try {
-        byte[] keyLength = getVariableLengthEncodes(
-            entry.getFirstKey().getLength() + SIZEOF_INT16);
-        buf.put(keyLength);
-      } catch (IOException e) {
-        throw new RuntimeException(
-            "Failed to serialize number: " + entry.getFirstKey().getLength() + SIZEOF_INT16);
-      }
-      // Key length.
-      buf.putShort((short) entry.getFirstKey().getLength());
-      // Key.
-      buf.put(entry.getFirstKey().getBytes());
-    }
-    buf.flip();
-
-    // Set metrics.
-    payloadSize = buf.limit();
-    return buf;
   }
 }

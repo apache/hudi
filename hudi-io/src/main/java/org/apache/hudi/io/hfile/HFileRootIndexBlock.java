@@ -21,10 +21,13 @@ package org.apache.hudi.io.hfile;
 
 import org.apache.hudi.common.util.Option;
 
+import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.TreeMap;
 
+import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT16;
 import static org.apache.hudi.io.util.IOUtils.copy;
 import static org.apache.hudi.io.util.IOUtils.decodeVarLongSizeOnDisk;
 import static org.apache.hudi.io.util.IOUtils.readInt;
@@ -41,7 +44,11 @@ public class HFileRootIndexBlock extends HFileIndexBlock {
     super(context, HFileBlockType.ROOT_INDEX, byteBuff, startOffsetInBuff);
   }
 
-  public HFileRootIndexBlock(HFileContext context) {
+  public static HFileRootIndexBlock createWritableRootIndexBlock(HFileContext context) {
+    return new HFileRootIndexBlock(context);
+  }
+
+  private HFileRootIndexBlock(HFileContext context) {
     super(context, HFileBlockType.ROOT_INDEX);
   }
 
@@ -77,17 +84,44 @@ public class HFileRootIndexBlock extends HFileIndexBlock {
   public List<BlockIndexEntry> readBlockIndexEntry(int numEntries,
                                                    boolean contentKeyOnly) {
     List<BlockIndexEntry> indexEntryList = new ArrayList<>();
-    int buffOffset = readAttributesOpt.get().startOffsetInBuff + HFILEBLOCK_HEADER_SIZE;
+    int buffOffset = readAttributesOpt.get().getStartOffsetInCompressedBuff() + HFILEBLOCK_HEADER_SIZE;
     for (int i = 0; i < numEntries; i++) {
-      long offset = readLong(readAttributesOpt.get().byteBuff, buffOffset);
-      int size = readInt(readAttributesOpt.get().byteBuff, buffOffset + 8);
-      int varLongSizeOnDist = decodeVarLongSizeOnDisk(readAttributesOpt.get().byteBuff, buffOffset + 12);
-      int keyLength = (int) readVarLong(readAttributesOpt.get().byteBuff, buffOffset + 12, varLongSizeOnDist);
-      byte[] keyBytes = copy(readAttributesOpt.get().byteBuff, buffOffset + 12 + varLongSizeOnDist, keyLength);
+      long offset = readLong(readAttributesOpt.get().getByteBuff(), buffOffset);
+      int size = readInt(readAttributesOpt.get().getByteBuff(), buffOffset + 8);
+      int varLongSizeOnDist = decodeVarLongSizeOnDisk(readAttributesOpt.get().getByteBuff(), buffOffset + 12);
+      int keyLength = (int) readVarLong(readAttributesOpt.get().getByteBuff(), buffOffset + 12, varLongSizeOnDist);
+      byte[] keyBytes = copy(readAttributesOpt.get().getByteBuff(), buffOffset + 12 + varLongSizeOnDist, keyLength);
       Key key = contentKeyOnly ? new UTF8StringKey(keyBytes) : new Key(keyBytes);
       indexEntryList.add(new BlockIndexEntry(key, Option.empty(), offset, size));
       buffOffset += (12 + varLongSizeOnDist + keyLength);
     }
     return indexEntryList;
+  }
+
+  @Override
+  public ByteBuffer getUncompressedBlockDataToWrite() {
+    ByteBuffer buf = ByteBuffer.allocate(context.getBlockSize() * 2);
+    for (BlockIndexEntry entry : entries) {
+      buf.putLong(entry.getOffset());
+      buf.putInt(entry.getSize());
+      // Key length + 2.
+      try {
+        byte[] keyLength = getVariableLengthEncodedBytes(
+            entry.getFirstKey().getLength() + SIZEOF_INT16);
+        buf.put(keyLength);
+      } catch (IOException e) {
+        throw new RuntimeException(
+            "Failed to serialize number: " + entry.getFirstKey().getLength() + SIZEOF_INT16);
+      }
+      // Key length.
+      buf.putShort((short) entry.getFirstKey().getLength());
+      // Key.
+      buf.put(entry.getFirstKey().getBytes());
+    }
+    buf.flip();
+
+    // Set metrics.
+    blockDataSize = buf.limit();
+    return buf;
   }
 }

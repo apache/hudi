@@ -23,19 +23,23 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 
 public class HFileMetaIndexBlock extends HFileIndexBlock {
-  public HFileMetaIndexBlock(HFileContext context) {
+  public static HFileMetaIndexBlock createWritableMetaIndexBlock(HFileContext context) {
+    return new HFileMetaIndexBlock(context);
+  }
+
+  private HFileMetaIndexBlock(HFileContext context) {
     super(context, HFileBlockType.ROOT_INDEX);
   }
 
   @Override
-  public ByteBuffer getPayload() {
+  public ByteBuffer getUncompressedBlockDataToWrite() {
     ByteBuffer buf = ByteBuffer.allocate(context.getBlockSize() * 2);
     for (BlockIndexEntry entry : entries) {
       buf.putLong(entry.getOffset());
       buf.putInt(entry.getSize());
       // Key length.
       try {
-        byte[] keyLength = getVariableLengthEncodes(entry.getFirstKey().getLength());
+        byte[] keyLength = getVariableLengthEncodedBytes(entry.getFirstKey().getLength());
         buf.put(keyLength);
       } catch (IOException e) {
         throw new RuntimeException(
@@ -48,7 +52,7 @@ public class HFileMetaIndexBlock extends HFileIndexBlock {
     buf.flip();
 
     // Set metrics.
-    payloadSize = buf.limit();
+    blockDataSize = buf.limit();
     return buf;
   }
 }

@@ -46,6 +46,8 @@ import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT16;
  * Pure Java implementation of HFile writer (HFile v3 format) for Hudi.
  */
 public class HFileWriterImpl implements HFileWriter {
+  private static final String BYTE_ARRAY_COMPARATOR
+      = "org.apache.hadoop.hbase.util.Bytes.ByteArrayComparator";
   private final OutputStream outputStream;
   private final HFileContext context;
   // Meta Info map.
@@ -56,8 +58,8 @@ public class HFileWriterImpl implements HFileWriter {
   private final HFileRootIndexBlock rootIndexBlock;
   private final HFileMetaIndexBlock metaIndexBlock;
   private final HFileFileInfoBlock fileInfoBlock;
-  private long uncompressedBytes;
-  private long totalUncompressedBytes;
+  private long uncompressedDataBlockBytes;
+  private long totalUncompressedDataBlockBytes;
   private long currentOffset;
   private long loadOnOpenSectionOffset;
   private final int blockSize;
@@ -73,13 +75,13 @@ public class HFileWriterImpl implements HFileWriter {
     this.outputStream = outputStream;
     this.context = context;
     this.blockSize = this.context.getBlockSize();
-    this.uncompressedBytes = 0L;
-    this.totalUncompressedBytes = 0L;
+    this.uncompressedDataBlockBytes = 0L;
+    this.totalUncompressedDataBlockBytes = 0L;
     this.currentOffset = 0L;
-    this.currentDataBlock = new HFileDataBlock(context);
-    this.rootIndexBlock = new HFileRootIndexBlock(context);
-    this.metaIndexBlock = new HFileMetaIndexBlock(context);
-    this.fileInfoBlock = new HFileFileInfoBlock(context);
+    this.currentDataBlock = HFileDataBlock.createWritableDataBlock(context, -1L);
+    this.rootIndexBlock = HFileRootIndexBlock.createWritableRootIndexBlock(context);
+    this.metaIndexBlock = HFileMetaIndexBlock.createWritableMetaIndexBlock(context);
+    this.fileInfoBlock = HFileFileInfoBlock.createWritableFileInfoBlock(context);
     initFileInfo();
   }
 
@@ -88,15 +90,16 @@ public class HFileWriterImpl implements HFileWriter {
     byte[] keyBytes = StringUtils.getUTF8Bytes(key);
     lastKey = keyBytes;
     // Records with the same key must be put into the same block.
+    // Here 9 = 4 bytes of key length + 4 bytes of value length + 1 byte MVCC.
     if (!Arrays.equals(currentDataBlock.getLastKeyContent(), keyBytes)
-        && uncompressedBytes + keyBytes.length + value.length + 9 > blockSize) {
+        && uncompressedDataBlockBytes + keyBytes.length + value.length + 9 > blockSize) {
       flushCurrentDataBlock();
-      uncompressedBytes = 0;
+      uncompressedDataBlockBytes = 0;
     }
     currentDataBlock.add(keyBytes, value);
     int uncompressedKeyValueSize = keyBytes.length + value.length;
-    uncompressedBytes += uncompressedKeyValueSize + 9;
-    totalUncompressedBytes += uncompressedKeyValueSize + 9;
+    uncompressedDataBlockBytes += uncompressedKeyValueSize + 9;
+    totalUncompressedDataBlockBytes += uncompressedKeyValueSize + 9;
   }
 
   // Append a metadata kv pair.
@@ -137,16 +140,16 @@ public class HFileWriterImpl implements HFileWriter {
     rootIndexBlock.add(
         currentDataBlock.getFirstKey(), lastDataBlockOffset, blockBuffer.limit());
     // 4. Create a new data block.
-    currentDataBlock = new HFileDataBlock(context, currentOffset);
+    currentDataBlock = HFileDataBlock.createWritableDataBlock(context, currentOffset);
   }
 
   // NOTE that: reader assumes that every meta info piece
   // should be a separate meta block.
   private void flushMetaBlocks() throws IOException {
     for (Map.Entry<String, byte[]> e : metaInfo.entrySet()) {
-      HFileMetaBlock currentMetaBlock = new HFileMetaBlock(context);
       byte[] key = StringUtils.getUTF8Bytes(e.getKey());
-      currentMetaBlock.add(key, e.getValue());
+      HFileMetaBlock currentMetaBlock =
+          new HFileMetaBlock(context, new KeyValueEntry(key, e.getValue()));
       ByteBuffer blockBuffer = currentMetaBlock.serialize();
       long blockOffset = currentOffset;
       currentMetaBlock.setStartOffsetInBuff(currentOffset);
@@ -178,7 +181,7 @@ public class HFileWriterImpl implements HFileWriter {
     HFileProtos.TrailerProto.Builder builder = HFileProtos.TrailerProto.newBuilder();
     builder.setFileInfoOffset(fileInfoBlock.getStartOffsetInBuff());
     builder.setLoadOnOpenDataOffset(loadOnOpenSectionOffset);
-    builder.setUncompressedDataIndexSize(totalUncompressedBytes);
+    builder.setUncompressedDataIndexSize(totalUncompressedDataBlockBytes);
     builder.setDataIndexCount(rootIndexBlock.getNumOfEntries());
     builder.setMetaIndexCount(metaIndexBlock.getNumOfEntries());
     builder.setEntryCount(totalNumberOfRecords);
@@ -186,7 +189,7 @@ public class HFileWriterImpl implements HFileWriter {
     builder.setNumDataIndexLevels(1);
     builder.setFirstDataBlockOffset(firstDataBlockOffset);
     builder.setLastDataBlockOffset(lastDataBlockOffset);
-    builder.setComparatorClassName("NA");
+    builder.setComparatorClassName(BYTE_ARRAY_COMPARATOR);
     // Set codec.
     if (context.getCompressionCodec() == CompressionCodec.GZIP) {
       builder.setCompressionCodec(1);

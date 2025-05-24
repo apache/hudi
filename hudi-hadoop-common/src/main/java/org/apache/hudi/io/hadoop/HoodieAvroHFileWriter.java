@@ -43,10 +43,6 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hbase.HColumnDescriptor;
-import org.apache.hadoop.hbase.io.hfile.CacheConfig;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -66,7 +62,6 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 public class HoodieAvroHFileWriter
     implements HoodieAvroFileWriter {
   private static final AtomicLong RECORD_INDEX_COUNT = new AtomicLong(1);
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieAvroHFileWriter.class);
   private final Path file;
   private final HoodieHFileConfig hfileConfig;
   private final boolean isWrapperFileSystem;
@@ -81,13 +76,9 @@ public class HoodieAvroHFileWriter
   private String maxRecordKey;
   private String prevRecordKey;
 
-  // This is private in CacheConfig so have been copied here.
-  private static final String DROP_BEHIND_CACHE_COMPACTION_KEY = "hbase.hfile.drop.behind.compaction";
-
   public HoodieAvroHFileWriter(String instantTime, StoragePath file, HoodieHFileConfig hfileConfig, Schema schema,
                                TaskContextSupplier taskContextSupplier, boolean populateMetaFields) throws IOException {
-
-    Configuration conf = HadoopFSUtils.registerFileSystem(file, hfileConfig.getHadoopConf());
+    Configuration conf = HadoopFSUtils.registerFileSystem(file, (Configuration) hfileConfig.getStorageConf().unwrap());
     this.file = HoodieWrapperFileSystem.convertToHoodiePath(file, conf);
     FileSystem fs = this.file.getFileSystem(conf);
     this.isWrapperFileSystem = fs instanceof HoodieWrapperFileSystem;
@@ -108,13 +99,6 @@ public class HoodieAvroHFileWriter
         .blockSize(hfileConfig.getBlockSize())
         .compressionCodec(hfileConfig.getCompressionCodec())
         .build();
-
-    conf.set(CacheConfig.PREFETCH_BLOCKS_ON_OPEN_KEY,
-        String.valueOf(hfileConfig.shouldPrefetchBlocksOnOpen()));
-    conf.set(HColumnDescriptor.CACHE_DATA_IN_L1, String.valueOf(hfileConfig.shouldCacheDataInL1()));
-    conf.set(DROP_BEHIND_CACHE_COMPACTION_KEY,
-        String.valueOf(hfileConfig.shouldDropBehindCacheCompaction()));
-
     StorageConfiguration<Configuration> storageConf = new HadoopStorageConfiguration(conf);
     StoragePath filePath = new StoragePath(this.file.toUri());
     OutputStream outputStream =  HoodieStorageUtils.getStorage(filePath, storageConf).create(filePath);

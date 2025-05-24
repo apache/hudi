@@ -44,14 +44,23 @@ public class HFileDataBlock extends HFileBlock {
   // End offset of content in the block, relative to the start of the start of the block
   protected final int uncompressedContentEndRelativeOffset;
 
+  // For read purpose.
   protected HFileDataBlock(HFileContext context,
                            byte[] byteBuff,
                            int startOffsetInBuff) {
     super(context, HFileBlockType.DATA, byteBuff, startOffsetInBuff);
 
-    this.uncompressedContentEndRelativeOffset = this.readAttributesOpt.get().uncompressedEndOffset
-        - this.readAttributesOpt.get().sizeCheckSum
-        - this.readAttributesOpt.get().startOffsetInBuff;
+    this.uncompressedContentEndRelativeOffset =
+        this.readAttributesOpt.get().getUncompressedEndOffset()
+        - this.readAttributesOpt.get().getSizeCheckSum()
+        - this.readAttributesOpt.get().getStartOffsetInBuff();
+  }
+
+  // For write purpose.
+  private HFileDataBlock(HFileContext context, long previousBlockOffset) {
+    super(context, HFileBlockType.DATA, previousBlockOffset);
+    // This is not used for write.
+    uncompressedContentEndRelativeOffset = -1;
   }
 
   /**
@@ -76,7 +85,7 @@ public class HFileDataBlock extends HFileBlock {
    * of the data block; the cursor points to the actual first key of the data block which is
    * lexicographically greater than the lookup key.
    */
-  public int seekTo(HFileCursor cursor, Key key, int blockStartOffsetInFile) {
+  int seekTo(HFileCursor cursor, Key key, int blockStartOffsetInFile) {
     int relativeOffset = cursor.getOffset() - blockStartOffsetInFile;
     int lastRelativeOffset = relativeOffset;
     Option<KeyValue> lastKeyValue = cursor.getKeyValue();
@@ -129,8 +138,8 @@ public class HFileDataBlock extends HFileBlock {
    * @param offset offset to read relative to the start of {@code byteBuff}.
    * @return the {@link KeyValue} instance.
    */
-  public KeyValue readKeyValue(int offset) {
-    return new KeyValue(readAttributesOpt.get().byteBuff, offset);
+  KeyValue readKeyValue(int offset) {
+    return new KeyValue(readAttributesOpt.get().getByteBuff(), offset);
   }
 
   /**
@@ -141,14 +150,14 @@ public class HFileDataBlock extends HFileBlock {
    *                               HFile.
    * @return {@code true} if there is next {@link KeyValue}; {code false} otherwise.
    */
-  public boolean next(HFileCursor cursor, int blockStartOffsetInFile) {
+  boolean next(HFileCursor cursor, int blockStartOffsetInFile) {
     int offset = cursor.getOffset() - blockStartOffsetInFile;
     Option<KeyValue> keyValue = cursor.getKeyValue();
     if (!keyValue.isPresent()) {
       keyValue = Option.of(readKeyValue(offset));
     }
     cursor.increment((long) KEY_OFFSET + (long) keyValue.get().getKeyLength()
-        + (long) keyValue.get().getValueLength() + ZERO_TS_VERSION_BYTE_LENGTH);
+        + keyValue.get().getValueLength() + ZERO_TS_VERSION_BYTE_LENGTH);
     return cursor.getOffset() - blockStartOffsetInFile < uncompressedContentEndRelativeOffset;
   }
 
@@ -157,48 +166,32 @@ public class HFileDataBlock extends HFileBlock {
   }
 
   // ================ Below are for Write ================
-  protected final List<KeyValueEntry> entries = new ArrayList<>();
+  private final List<KeyValueEntry> entries = new ArrayList<>();
 
-  public HFileDataBlock(HFileContext context) {
-    this(context,-1L);
+  static HFileDataBlock createWritableDataBlock(HFileContext context,
+                                                       long previousBlockOffset) {
+    return new HFileDataBlock(context, previousBlockOffset);
   }
 
-  public HFileDataBlock(HFileContext context, long previousBlockOffset) {
-    super(context, HFileBlockType.DATA, previousBlockOffset);
-    // This is not used for write.
-    uncompressedContentEndRelativeOffset = -1;
-  }
-
-  public List<KeyValueEntry> getEntries() {
-    return entries;
-  }
-
-  public boolean isEmpty() {
+  boolean isEmpty() {
     return entries.isEmpty();
   }
 
-  public void add(byte[] key, byte[] value) {
+  void add(byte[] key, byte[] value) {
     KeyValueEntry kv = new KeyValueEntry(key, value);
     // Assume all entries are sorted before write.
-    add(kv, false);
+    entries.add(kv);
   }
 
-  public int getNumOfEntries() {
+  int getNumOfEntries() {
     return entries.size();
   }
 
-  protected void add(KeyValueEntry kv, boolean sorted) {
-    entries.add(kv);
-    if (sorted) {
-      entries.sort(KeyValueEntry::compareTo);
-    }
-  }
-
-  public byte[] getFirstKey() {
+  byte[] getFirstKey() {
     return entries.get(0).key;
   }
 
-  public byte[] getLastKeyContent() {
+  byte[] getLastKeyContent() {
     if (entries.isEmpty()) {
       return new byte[0];
     }
@@ -206,14 +199,14 @@ public class HFileDataBlock extends HFileBlock {
   }
 
   @Override
-  public ByteBuffer getPayload() {
+  protected ByteBuffer getUncompressedBlockDataToWrite() {
     ByteBuffer dataBuf = ByteBuffer.allocate(context.getBlockSize() * 2);
     for (KeyValueEntry kv : entries) {
-      // Length of key + length of a short variable indicating length of key;
+      // Length of key + length of a short variable indicating length of key.
       dataBuf.putInt(kv.key.length + SIZEOF_INT16);
-      // Length of value;
+      // Length of value.
       dataBuf.putInt(kv.value.length);
-      // Key content length;
+      // Key content length.
       dataBuf.putShort((short)kv.key.length);
       // Key.
       dataBuf.put(kv.key);

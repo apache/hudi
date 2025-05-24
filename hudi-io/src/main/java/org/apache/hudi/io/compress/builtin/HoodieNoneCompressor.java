@@ -20,18 +20,19 @@
 package org.apache.hudi.io.compress.builtin;
 
 import org.apache.hudi.io.compress.CompressionCodec;
-import org.apache.hudi.io.compress.HoodieDecompressor;
+import org.apache.hudi.io.compress.HoodieCompressor;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.ByteBuffer;
 
 import static org.apache.hudi.io.util.IOUtils.readFully;
 
 /**
- * Implementation of {@link HoodieDecompressor} for {@link CompressionCodec#NONE} compression
+ * Implementation of {@link HoodieCompressor} for {@link CompressionCodec#NONE} compression
  * codec (no compression) by directly reading the input stream.
  */
-public class HoodieNoneDecompressor implements HoodieDecompressor {
+public class HoodieNoneCompressor implements HoodieCompressor {
   @Override
   public int decompress(InputStream compressedInput,
                         byte[] targetByteArray,
@@ -42,6 +43,11 @@ public class HoodieNoneDecompressor implements HoodieDecompressor {
 
   @Override
   public byte[] compress(byte[] uncompressedBytes) {
+    return uncompressedBytes;
+  }
+
+  @Override
+  public ByteBuffer compress(ByteBuffer uncompressedBytes) throws IOException {
     return uncompressedBytes;
   }
 }
