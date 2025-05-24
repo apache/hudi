@@ -106,10 +106,10 @@ class RunCompactionProcedure extends BaseProcedure with ProcedureBuilder with Sp
       }
 
       if (operation.isSchedule) {
-        val instantTime = client.createNewInstantTime()
-        if (client.scheduleCompactionAtInstant(instantTime, HOption.empty[java.util.Map[String, String]])) {
-          filteredPendingCompactionInstants = Seq(instantTime)
-        }
+        val instantTime = client.scheduleCompaction(HOption.empty[java.util.Map[String, String]])
+        instantTime.ifPresent(instant => {
+          filteredPendingCompactionInstants = Seq(instant)
+        })
       }
 
       logInfo(s"Compaction instants to run: ${filteredPendingCompactionInstants.mkString(",")}.")

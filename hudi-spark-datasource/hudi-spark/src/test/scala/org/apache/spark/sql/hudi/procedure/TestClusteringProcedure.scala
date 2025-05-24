@@ -73,13 +73,11 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
         spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002, 1002)")
         val client = HoodieCLIUtils.createHoodieWriteClient(spark, basePath, Map.empty, Option(tableName))
         // Generate the first clustering plan
-        val firstScheduleInstant = client.createNewInstantTime()
-        client.scheduleClusteringAtInstant(firstScheduleInstant, HOption.empty())
+        val firstScheduleInstant = client.scheduleClustering(HOption.empty()).get()
 
         // Generate the second clustering plan
         spark.sql(s"insert into $tableName values(4, 'a4', 10, 1003, 1003)")
-        val secondScheduleInstant = client.createNewInstantTime()
-        client.scheduleClusteringAtInstant(secondScheduleInstant, HOption.empty())
+        val secondScheduleInstant = client.scheduleClustering(HOption.empty()).get()
         checkAnswer(s"call show_clustering('$tableName')")(
           Seq(secondScheduleInstant, 1, HoodieInstant.State.REQUESTED.name(), "*"),
           Seq(firstScheduleInstant, 3, HoodieInstant.State.REQUESTED.name(), "*")
@@ -175,8 +173,7 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
         spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002, 1002)")
         val client = HoodieCLIUtils.createHoodieWriteClient(spark, basePath, Map.empty, Option(tableName))
         // Generate the first clustering plan
-        val firstScheduleInstant = client.createNewInstantTime()
-        client.scheduleClusteringAtInstant(firstScheduleInstant, HOption.empty())
+        val firstScheduleInstant = client.scheduleClustering(HOption.empty()).get()
         checkAnswer(s"call show_clustering(path => '$basePath', show_involved_partition => true)")(
           Seq(firstScheduleInstant, 3, HoodieInstant.State.REQUESTED.name(), "partition=1000,partition=1001,partition=1002")
         )

@@ -207,8 +207,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
       if (isComplete) {
         action = HoodieTimeline.DELTA_COMMIT_ACTION;
       }
-      String logCompactionTime = InProcessTimeGenerator.createNewInstantTime();
-      client.scheduleLogCompactionAtInstant(logCompactionTime, Option.empty());
+      String logCompactionTime = (String) client.scheduleLogCompaction(Option.empty()).get();
       HoodieWriteMetadata writeMetadata = client.logCompact(logCompactionTime);
       if (isComplete) {
         client.commitLogCompaction(logCompactionTime, writeMetadata, Option.empty());

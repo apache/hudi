@@ -33,6 +33,7 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -707,7 +708,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
 
       // Test small file handling after compaction
       instantTime = "002";
-      client.scheduleCompactionAtInstant(instantTime, Option.of(metadata.getExtraMetadata()));
+      WriteClientTestUtils.scheduleTableService(client, instantTime, Option.of(metadata.getExtraMetadata()), TableServiceType.COMPACT);
       HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client.compact(instantTime);
       client.commitCompaction(instantTime, compactionMetadata, Option.of(table));
       assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(instantTime));
