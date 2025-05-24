@@ -244,18 +244,6 @@ public abstract class HFileBlock {
   }
 
   /**
-   * Returns checksum bytes if checksum type is not NULL.
-   * Note that current HfileReaderImpl does not support non-NULL checksum.
-   */
-  private byte[] calcChecksumBytes(ChecksumType type) {
-    if (type == ChecksumType.NULL) {
-      return EMPTY_BYTE_ARRAY;
-    } else {
-      throw new HoodieException("Only NULL checksum type is supported");
-    }
-  }
-
-  /**
    * Sets start offset of the block in the buffer.
    */
   protected void setStartOffsetInBuff(long startOffsetInBuff) {
@@ -267,6 +255,17 @@ public abstract class HFileBlock {
    */
   protected long getStartOffsetInBuff() {
     return this.startOffsetInBuff;
+  }
+
+  /**
+   * Returns checksum bytes if checksum type is not NULL.
+   * Note that current HfileReaderImpl does not support non-NULL checksum.
+   */
+  private byte[] calcChecksumBytes(ChecksumType type) {
+    if (type == ChecksumType.NULL) {
+      return EMPTY_BYTE_ARRAY;
+    }
+    throw new HoodieException("Only NULL checksum type is supported");
   }
 
   /**
