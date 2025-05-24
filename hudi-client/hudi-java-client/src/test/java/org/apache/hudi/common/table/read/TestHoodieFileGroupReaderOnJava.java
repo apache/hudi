@@ -22,6 +22,7 @@ package org.apache.hudi.common.table.read;
 import org.apache.hudi.avro.HoodieAvroReaderContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
@@ -39,8 +40,9 @@ public class TestHoodieFileGroupReaderOnJava extends HoodieFileGroupReaderOnJava
   }
 
   @Override
-  public HoodieReaderContext<IndexedRecord> getHoodieReaderContext(String tablePath, Schema avroSchema, StorageConfiguration<?> storageConf, HoodieTableMetaClient metaClient) {
-    return new HoodieAvroReaderContext(storageConf, metaClient.getTableConfig());
+  public HoodieReaderContext<IndexedRecord> getHoodieReaderContext(
+      String tablePath, Schema avroSchema, StorageConfiguration<?> storageConf, HoodieTableMetaClient metaClient) {
+    return new HoodieAvroReaderContext(storageConf, metaClient.getTableConfig(), Option.empty(), Option.empty());
   }
 
   @Override

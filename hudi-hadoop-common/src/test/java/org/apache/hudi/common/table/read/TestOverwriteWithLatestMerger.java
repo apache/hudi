@@ -25,6 +25,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.reader.HoodieFileGroupReaderTestHarness;
 import org.apache.hudi.common.testutils.reader.HoodieFileSliceTestUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 
 import org.apache.avro.generic.IndexedRecord;
@@ -109,7 +110,8 @@ public class TestOverwriteWithLatestMerger extends HoodieFileGroupReaderTestHarn
     initMetaClient();
     initTestDataGenerator(new String[]{PARTITION_PATH});
     testTable = HoodieTestTable.of(metaClient);
-    readerContext = new HoodieAvroReaderContext(storageConf, metaClient.getTableConfig());
+    readerContext = new HoodieAvroReaderContext(
+        storageConf, metaClient.getTableConfig(), Option.empty(), Option.empty());
     setUpMockCommits();
   }
 
