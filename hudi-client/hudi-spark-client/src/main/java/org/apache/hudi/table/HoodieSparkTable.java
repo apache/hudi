@@ -75,6 +75,8 @@ public abstract class HoodieSparkTable<T>
         hoodieSparkTable = new HoodieSparkCopyOnWriteTable<>(config, context, metaClient);
         break;
       case MERGE_ON_READ:
+        // to fix.
+        // if metadata table -> new HoodieSparkMergeOnReadMetadataTable<>(config, context, metaClient);
         hoodieSparkTable = new HoodieSparkMergeOnReadTable<>(config, context, metaClient);
         break;
       default:
