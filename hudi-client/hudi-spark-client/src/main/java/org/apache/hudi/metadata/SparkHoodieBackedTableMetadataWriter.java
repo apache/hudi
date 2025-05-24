@@ -248,7 +248,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
   @Override
   public BaseHoodieWriteClient<?, JavaRDD<HoodieRecord>, ?, JavaRDD<WriteStatus>> initializeWriteClient() {
-    return new SparkRDDMetadataWriteClient(engineContext, metadataWriteConfig, Option.empty());
+    return new SparkRDDWriteClient(engineContext, metadataWriteConfig, Option.empty());
   }
 
   @Override
