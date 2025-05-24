@@ -226,7 +226,7 @@ public abstract class HFileBlock {
     // 8. Payload.
     buf.put(compressedBlockData);
     // 9. Checksum.
-    buf.put(calcChecksumBytes(context.getChecksumType()));
+    buf.put(generateChecksumBytes(context.getChecksumType()));
 
     // Update sizes
     buf.flip();
@@ -256,9 +256,9 @@ public abstract class HFileBlock {
 
   /**
    * Returns checksum bytes if checksum type is not NULL.
-   * Note that current HfileReaderImpl does not support non-NULL checksum.
+   * Note that current HFileReaderImpl does not support non-NULL checksum.
    */
-  private byte[] calcChecksumBytes(ChecksumType type) {
+  private byte[] generateChecksumBytes(ChecksumType type) {
     if (type == ChecksumType.NULL) {
       return EMPTY_BYTE_ARRAY;
     }
