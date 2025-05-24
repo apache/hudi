@@ -286,7 +286,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
    *
    * @param baseRecord  old {@link BufferedRecord} from the base file
    * @param logRecord  newer {@link BufferedRecord} from the log file, may be null
-   * @return a value pair, left is boolean value `isDelete`, and right is engine row.
+   * @return a {@link BufferedRecord<T>} for the result.
    * @throws IOException
    */
   private BufferedRecord<T> merge(BufferedRecord<T> baseRecord, BufferedRecord<T> logRecord) throws IOException {
