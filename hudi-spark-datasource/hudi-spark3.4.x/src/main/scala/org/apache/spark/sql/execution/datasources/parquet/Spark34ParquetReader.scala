@@ -19,7 +19,6 @@
 
 package org.apache.spark.sql.execution.datasources.parquet
 
-import org.apache.hudi.common.util
 import org.apache.hudi.internal.schema.InternalSchema
 
 import org.apache.hadoop.conf.Configuration
@@ -38,6 +37,7 @@ import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types._
+import org.apache.spark.sql.vectorized.ColumnarBatch
 
 class Spark34ParquetReader(enableVectorizedReader: Boolean,
                            datetimeRebaseModeInRead: String,
@@ -54,7 +54,7 @@ class Spark34ParquetReader(enableVectorizedReader: Boolean,
                            capacity: Int,
                            returningBatch: Boolean,
                            enableRecordFilter: Boolean,
-                           timeZoneId: Option[String]) extends SparkParquetReaderBase(
+                           timeZoneId: Option[String]) extends SparkFileReaderBase(
   enableVectorizedReader = enableVectorizedReader,
   enableParquetFilterPushDown = enableParquetFilterPushDown,
   pushDownDate = pushDownDate,
@@ -237,7 +237,7 @@ object Spark34ParquetReader extends SparkParquetReaderBuilder {
   def build(vectorized: Boolean,
             sqlConf: SQLConf,
             options: Map[String, String],
-            hadoopConf: Configuration): SparkParquetReader = {
+            hadoopConf: Configuration): SparkFileReader = {
     //set hadoopconf
     hadoopConf.set(ParquetInputFormat.READ_SUPPORT_CLASS, classOf[ParquetReadSupport].getName)
     hadoopConf.set(SQLConf.SESSION_LOCAL_TIMEZONE.key, sqlConf.sessionLocalTimeZone)
@@ -256,9 +256,9 @@ object Spark34ParquetReader extends SparkParquetReaderBuilder {
 
     val returningBatch = sqlConf.parquetVectorizedReaderEnabled &&
       options.getOrElse(FileFormat.OPTION_RETURNING_BATCH,
-        throw new IllegalArgumentException(
-          "OPTION_RETURNING_BATCH should always be set for ParquetFileFormat. " +
-            "To workaround this issue, set spark.sql.parquet.enableVectorizedReader=false."))
+          throw new IllegalArgumentException(
+            "OPTION_RETURNING_BATCH should always be set for ParquetFileFormat. " +
+              "To workaround this issue, set spark.sql.parquet.enableVectorizedReader=false."))
         .equals("true")
 
     val parquetOptions = new ParquetOptions(options, sqlConf)
