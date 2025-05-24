@@ -26,8 +26,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -43,12 +41,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TestSparkMetadataTableUpsertPartitioner extends HoodieClientTestBase {
 
-  private static final Logger LOG = LoggerFactory.getLogger(TestSparkMetadataTableUpsertPartitioner.class);
   private static final Random RANDOM = new Random(0xDEED);
   private static final String RANDOM_INSTANT_TIME = "100000";
 
   @Test
-  public void testUpsertPartitioner() throws Exception {
+  public void testUpsertPartitioner() {
 
     List<BucketInfo> bucketInfoList = new ArrayList<>();
     Map<String, Integer> fileIdToSparkPartitionIndexMap = new HashMap<>();

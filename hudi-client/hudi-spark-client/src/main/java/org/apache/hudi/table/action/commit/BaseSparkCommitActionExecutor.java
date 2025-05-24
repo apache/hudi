@@ -207,7 +207,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
   /**
    * Count the number of updates/inserts for each file in each partition.
    */
-  private Pair<HashMap<String, WorkloadStat>, WorkloadStat> buildProfile(HoodieData<HoodieRecord<T>> inputRecords) {
+  private Pair<Map<String, WorkloadStat>, WorkloadStat> buildProfile(HoodieData<HoodieRecord<T>> inputRecords) {
     HashMap<String, WorkloadStat> partitionPathStatMap = new HashMap<>();
     WorkloadStat globalStat = new WorkloadStat();
 

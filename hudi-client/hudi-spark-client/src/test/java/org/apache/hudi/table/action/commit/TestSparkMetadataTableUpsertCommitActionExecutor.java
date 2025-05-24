@@ -31,7 +31,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
 import org.apache.spark.Partitioner;
@@ -72,8 +71,7 @@ public class TestSparkMetadataTableUpsertCommitActionExecutor extends SparkClien
         "0001"));
 
     SparkMetadataTableUpsertCommitActionExecutor commitActionExecutor = new MockSparkMetadataTableUpsertCommitActionExecutor(context(),
-        writeConfig, table, "0001", recordHoodieData, mdtPartitionPathFileGroupIdList,
-        statusHoodieData);
+        writeConfig, table, "0001", recordHoodieData, mdtPartitionPathFileGroupIdList, statusHoodieData);
     commitActionExecutor.execute(recordHoodieData);
     // since the mdt partitions does not contain FILES partition, inflight instant may not be added.
     assertFalse(metaClient.reloadActiveTimeline().getWriteTimeline().filterInflights().containsInstant("0001"));
@@ -101,11 +99,6 @@ public class TestSparkMetadataTableUpsertCommitActionExecutor extends SparkClien
     @Override
     protected HoodieData<WriteStatus> mapPartitionsAsRDD(HoodieData<HoodieRecord<T>> dedupedRecords, Partitioner partitioner) {
       return writeStatusHoodieData;
-    }
-
-    @Override
-    protected void updateIndexAndCommitIfNeeded(HoodieData<WriteStatus> writeStatusRDD, HoodieWriteMetadata<HoodieData<WriteStatus>> result) {
-      // no op
     }
 
   }
