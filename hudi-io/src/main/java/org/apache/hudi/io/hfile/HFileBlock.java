@@ -189,12 +189,9 @@ public abstract class HFileBlock {
 
   /**
    * Returns serialized "data" part of the block.
-   * This function should be implemented by each block type separately.
-   * By default, it does nothing.
+   * This function must be implemented by each block type separately.
    */
-  protected ByteBuffer getUncompressedBlockDataToWrite() {
-    return null;
-  }
+  protected abstract ByteBuffer getUncompressedBlockDataToWrite();
 
   /**
    * Return serialized block including header, data, checksum.

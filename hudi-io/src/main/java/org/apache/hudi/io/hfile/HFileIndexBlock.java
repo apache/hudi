@@ -24,7 +24,7 @@ import org.apache.hudi.common.util.Option;
 import java.util.ArrayList;
 import java.util.List;
 
-public class HFileIndexBlock extends HFileBlock {
+public abstract class HFileIndexBlock extends HFileBlock {
   protected final List<BlockIndexEntry> entries = new ArrayList<>();
   protected long blockDataSize = -1L;
 
