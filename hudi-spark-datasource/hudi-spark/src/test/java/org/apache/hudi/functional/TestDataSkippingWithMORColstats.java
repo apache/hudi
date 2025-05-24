@@ -30,6 +30,7 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.testutils.HoodieSparkClientTestBase;
 
 import org.apache.spark.SparkException;
@@ -107,6 +108,11 @@ public class TestDataSkippingWithMORColstats extends HoodieSparkClientTestBase {
     cleanupSparkContexts();
     cleanupTestDataGenerator();
     metaClient = null;
+  }
+
+  @Test
+  public void investigateTestTriggerTestDataSkippingWithMORColstats() {
+    throw new HoodieException("Failing test in TestConsistentBucketIndex");
   }
 
   /**

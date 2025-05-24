@@ -41,6 +41,7 @@ import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.testutils.GenericRecordValidationTestUtils;
 import org.apache.hudi.testutils.HoodieClientTestBase;
@@ -52,6 +53,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -113,6 +115,11 @@ public class TestDataValidationCheckForLogCompactionActions extends HoodieClient
     cleanupFileSystem();
     cleanupExecutorService();
     System.gc();
+  }
+
+  @Test
+  public void investigateTestTriggerTestDataValidationCheckForLogCompactionActions() {
+    throw new HoodieException("Failing test in TestConsistentBucketIndex");
   }
 
   /**
