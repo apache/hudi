@@ -71,8 +71,7 @@ public class TestSparkMetadataTableUpsertCommitActionExecutor extends SparkClien
         "0001"));
 
     SparkMetadataTableUpsertCommitActionExecutor commitActionExecutor = new MockSparkMetadataTableUpsertCommitActionExecutor(context(),
-        writeConfig, table, "0001", recordHoodieData, mdtPartitionPathFileGroupIdList,
-        statusHoodieData);
+        writeConfig, table, "0001", recordHoodieData, mdtPartitionPathFileGroupIdList, statusHoodieData);
     commitActionExecutor.execute(recordHoodieData);
     // since the mdt partitions does not contain FILES partition, inflight instant may not be added.
     assertFalse(metaClient.reloadActiveTimeline().getWriteTimeline().filterInflights().containsInstant("0001"));

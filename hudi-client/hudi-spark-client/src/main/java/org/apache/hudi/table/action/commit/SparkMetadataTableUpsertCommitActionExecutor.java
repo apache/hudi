@@ -32,10 +32,9 @@ import org.apache.hudi.table.action.deltacommit.SparkUpsertPreppedDeltaCommitAct
 import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.storage.StorageLevel;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -48,11 +47,8 @@ import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
  * @param <T>
  */
 public class SparkMetadataTableUpsertCommitActionExecutor<T> extends SparkUpsertPreppedDeltaCommitActionExecutor<T> {
-  private static final Logger LOG = LoggerFactory.getLogger(SparkMetadataTableUpsertCommitActionExecutor.class);
 
-  private static final HashMap<String, WorkloadStat> EMPTY_MAP = new HashMap<>();
   private static final WorkloadStat PLACEHOLDER_GLOBAL_STAT = new WorkloadStat();
-
   private final List<Pair<String, String>> mdtPartitionPathFileGroupIdList;
 
   public SparkMetadataTableUpsertCommitActionExecutor(HoodieSparkEngineContext context, HoodieWriteConfig config, HoodieTable table, String instantTime,
@@ -69,7 +65,7 @@ public class SparkMetadataTableUpsertCommitActionExecutor<T> extends SparkUpsert
   @Override
   protected WorkloadProfile prepareWorkloadProfile(HoodieData<HoodieRecord<T>> inputRecordsWithClusteringUpdate) {
     // create workload profile only when we are writing to FILES partition in Metadata table.
-    WorkloadProfile workloadProfile = new WorkloadProfile(Pair.of(EMPTY_MAP, PLACEHOLDER_GLOBAL_STAT));
+    WorkloadProfile workloadProfile = new WorkloadProfile(Pair.of(Collections.emptyMap(), PLACEHOLDER_GLOBAL_STAT));
     return workloadProfile;
   }
 
@@ -94,7 +90,7 @@ public class SparkMetadataTableUpsertCommitActionExecutor<T> extends SparkUpsert
       bucketInfoList.add(new BucketInfo(BucketType.UPDATE, partitionPathFileIdPair.getValue(), partitionPathFileIdPair.getKey()));
       counter++;
     }
-    return new SparkMetadataTableUpsertPartitioner(bucketInfoList, fileIdToSparkPartitionIndexMap);
+    return new SparkMetadataTableUpsertPartitioner<>(bucketInfoList, fileIdToSparkPartitionIndexMap);
   }
 
   @Override
