@@ -35,7 +35,6 @@ import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -93,11 +92,6 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
   @AfterEach
   public void tearDown() throws IOException {
     cleanupResources();
-  }
-
-  @Test
-  public void investigateTestTriggerTestSparkSortAndSizeClustering() {
-    throw new HoodieException("Failing test in TestConsistentBucketIndex");
   }
 
   @Test

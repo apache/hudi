@@ -47,7 +47,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieBootstrapConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
@@ -167,11 +166,6 @@ public class TestOrcBootstrap extends HoodieSparkClientTestBase {
     TypeDescription orcSchema = orcReader.getSchema();
 
     return AvroOrcUtils.createAvroSchemaWithDefaultValue(orcSchema, "test_orc_record", null, true);
-  }
-
-  @Test
-  public void investigateTestTriggerTestOrcBootstrap() {
-    throw new HoodieException("Failing test in TestConsistentBucketIndex");
   }
 
   @Test

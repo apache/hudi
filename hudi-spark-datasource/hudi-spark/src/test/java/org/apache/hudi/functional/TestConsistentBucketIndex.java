@@ -55,7 +55,6 @@ import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -124,11 +123,6 @@ public class TestConsistentBucketIndex extends HoodieSparkClientTestHarness {
   @AfterEach
   public void tearDown() throws IOException {
     cleanupResources();
-  }
-
-  @Test
-  public void investigateTestTriggerTestConsistentBucketIndex() {
-    throw new HoodieException("Failing test in TestConsistentBucketIndex");
   }
 
   /**

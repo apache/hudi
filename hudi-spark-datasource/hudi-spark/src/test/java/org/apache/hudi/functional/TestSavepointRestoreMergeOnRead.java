@@ -27,7 +27,6 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.StoragePathFilter;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.testutils.HoodieClientTestBase;
@@ -51,11 +50,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 @Tag("functional")
 public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
-
-  @Test
-  public void investigateTestTriggerTestSavepointRestoreMergeOnRead() {
-    throw new HoodieException("Failing test in TestConsistentBucketIndex");
-  }
 
   /**
    * Actions: DC1, DC2, DC3, savepoint DC3,(snapshot query) DC4, C5, DC6, DC7. restore to DC3.
