@@ -44,7 +44,6 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_
 
 @Tag("functional")
 public class TestSparkClusteringCornerCases extends HoodieClientTestBase {
-
   @Test
   void testClusteringWithEmptyPartitions() throws IOException {
     Properties props = getPropertiesForKeyGen(true);

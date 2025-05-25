@@ -39,7 +39,6 @@ import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
  */
 @Tag("functional")
 public class TestBootstrapRead extends TestBootstrapReadBase {
-
   private static Stream<Arguments> testArgs() {
     boolean fullTest = false;
     Stream.Builder<Arguments> b = Stream.builder();
