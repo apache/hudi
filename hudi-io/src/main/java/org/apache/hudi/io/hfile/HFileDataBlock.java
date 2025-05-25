@@ -21,6 +21,7 @@ package org.apache.hudi.io.hfile;
 
 import org.apache.hudi.common.util.Option;
 
+import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
@@ -200,7 +201,8 @@ public class HFileDataBlock extends HFileBlock {
 
   @Override
   protected ByteBuffer getUncompressedBlockDataToWrite() {
-    ByteBuffer dataBuf = ByteBuffer.allocate(context.getBlockSize() * 2);
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    ByteBuffer dataBuf = ByteBuffer.allocate(context.getBlockSize());
     for (KeyValueEntry kv : entries) {
       // Length of key + length of a short variable indicating length of key.
       dataBuf.putInt(kv.key.length + SIZEOF_INT16);
@@ -214,8 +216,11 @@ public class HFileDataBlock extends HFileBlock {
       dataBuf.put(kv.value);
       // MVCC.
       dataBuf.put((byte)0);
+      // Copy to output stream.
+      baos.write(dataBuf.array(), 0, dataBuf.position());
+      // Clear the buffer.
+      dataBuf.clear();
     }
-    dataBuf.flip();
-    return dataBuf;
+    return ByteBuffer.wrap(baos.toByteArray());
   }
 }

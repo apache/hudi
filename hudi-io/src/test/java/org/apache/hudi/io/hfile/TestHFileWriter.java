@@ -21,6 +21,7 @@ package org.apache.hudi.io.hfile;
 
 import org.apache.hudi.common.util.io.ByteBufferBackedInputStream;
 import org.apache.hudi.io.ByteArraySeekableDataInputStream;
+import org.apache.hudi.io.SeekableDataInputStream;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -70,18 +71,18 @@ class TestHFileWriter {
   @Test
   void testSameKeyLocation() throws IOException {
     // 50 bytes for data part limit.
-    HFileContext context = new HFileContext.Builder().blockSize(200).build();
+    HFileContext context = new HFileContext.Builder().blockSize(50).build();
     String testFile = TEST_FILE;
     try (DataOutputStream outputStream =
              new DataOutputStream(Files.newOutputStream(Paths.get(testFile)));
         HFileWriter writer = new HFileWriterImpl(context, outputStream)) {
       for (int i = 0; i < 10; i++) {
-        writer.append("key1", String.format("value%d", i).getBytes());
+        writer.append("key00", String.format("value%02d", i).getBytes());
       }
-      for (int i = 0; i < 10; i++) {
+      for (int i = 1; i < 11; i++) {
         writer.append(
-            String.format("other-key-%d", i),
-            String.format("value%d", i).getBytes());
+            String.format("key%02d", i),
+            String.format("value%02d", i).getBytes());
       }
     } catch (IOException e) {
       throw new RuntimeException(e);
@@ -90,33 +91,24 @@ class TestHFileWriter {
     // Validate.
     try (FileChannel channel = FileChannel.open(Paths.get(testFile), StandardOpenOption.READ)) {
       ByteBuffer buf = channel.map(FileChannel.MapMode.READ_ONLY, 0, channel.size());
-
-      // Point to the first data block.
-      buf.position(0);
-
-      // Validate magic.
-      byte[] dataBlockMagic = new byte[8];
-      buf.get(dataBlockMagic);
-      assertArrayEquals(DATA.getMagic(), dataBlockMagic);
-
-      // Skip header.
-      buf.position(buf.position() + 25);
-      // Validate data.
-      // Each record is about 20 bytes.
-      // The first block should contain 3 pairs, and the second one contains 1.
-      for (int i = 0; i < 10; i++) {
-        validateKeyValue(buf, "key1", String.format("value%d", i));
-      }
-
-      // Validate magic.
-      buf.get(dataBlockMagic);
-      assertArrayEquals(DATA.getMagic(), dataBlockMagic);
-
-      // Skip header.
-      buf.position(buf.position() + 25);
-      // Validate data.
-      for (int i = 0; i < 10; i++) {
-        validateKeyValue(buf, String.format("other-key-%d", i), String.format("value%d", i));
+      SeekableDataInputStream inputStream =
+          new ByteArraySeekableDataInputStream(new ByteBufferBackedInputStream(buf));
+      HFileReaderImpl reader = new HFileReaderImpl(inputStream, channel.size());
+      reader.initializeMetadata();
+      assertEquals(20, reader.getNumKeyValueEntries());
+      HFileTrailer trailer = reader.getTrailer();
+      assertEquals(6, trailer.getDataIndexCount());
+      int i = 0;
+      for (Key key : reader.getDataBlockIndexMap().keySet()) {
+        System.out.println(key.getContentInString());
+        assertArrayEquals(
+            String.format("key%02d", i).getBytes(),
+            key.getContentInString().getBytes());
+        if (i == 0) {
+          i++;
+        } else {
+          i += 2;
+        }
       }
     }
   }
@@ -129,10 +121,10 @@ class TestHFileWriter {
     try (DataOutputStream outputStream =
              new DataOutputStream(Files.newOutputStream(Paths.get(testFile)));
          HFileWriter writer = new HFileWriterImpl(context, outputStream)) {
-      writer.append("key1", "value1".getBytes());
-      writer.append("key2", "value2".getBytes());
-      writer.append("key3", "value3".getBytes());
-      writer.append("key4", "value4".getBytes());
+      for (int i = 0; i < 50; i++) {
+        writer.append(
+            String.format("key%02d", i), String.format("value%02d", i).getBytes());
+      }
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
@@ -140,31 +132,29 @@ class TestHFileWriter {
     // Validate.
     try (FileChannel channel = FileChannel.open(Paths.get(testFile), StandardOpenOption.READ)) {
       ByteBuffer buf = channel.map(FileChannel.MapMode.READ_ONLY, 0, channel.size());
-      // Point to the first data block.
-      buf.position(0);
-
-      // Validate magic.
-      byte[] dataBlockMagic = new byte[8];
-      buf.get(dataBlockMagic);
-      assertArrayEquals(DATA.getMagic(), dataBlockMagic);
-
-      // Skip header.
-      buf.position(buf.position() + 25);
-      // Validate data.
-      // Each record is about 20 bytes.
-      // The first block should contain 2 pairs, and the second contains 2.
-      validateKeyValue(buf, "key1", "value1");
-      validateKeyValue(buf, "key2", "value2");
-
-      // Validate magic.
-      buf.get(dataBlockMagic);
-      assertArrayEquals("DATABLK*".getBytes(), dataBlockMagic);
-
-      // Skip header.
-      buf.position(buf.position() + 25);
-      // Validate data.
-      validateKeyValue(buf, "key3", "value3");
-      validateKeyValue(buf, "key4", "value4");
+      SeekableDataInputStream inputStream =
+          new ByteArraySeekableDataInputStream(new ByteBufferBackedInputStream(buf));
+      HFileReaderImpl reader = new HFileReaderImpl(inputStream, channel.size());
+      reader.initializeMetadata();
+      assertEquals(50, reader.getNumKeyValueEntries());
+      HFileTrailer trailer = reader.getTrailer();
+      assertEquals(25, trailer.getDataIndexCount());
+      reader.seekTo();
+      for (int i = 0; i < 50; i++) {
+        KeyValue kv = reader.getKeyValue().get();
+        System.out.println(kv.getKey().getContentInString());
+        assertArrayEquals(
+            String.format("key%02d", i).getBytes(),
+            kv.getKey().getContentInString().getBytes());
+        assertArrayEquals(
+            String.format("value%02d", i).getBytes(),
+            Arrays.copyOfRange(
+                kv.getBytes(),
+                kv.getValueOffset(),
+                kv.getValueOffset() + kv.getValueLength())
+        );
+        reader.next();
+      }
     }
   }
 

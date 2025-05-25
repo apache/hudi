@@ -32,25 +32,31 @@ import java.util.stream.Collectors;
  * There should not be any assumption on the ordering or ordinal of the defined enums.
  */
 public enum CompressionCodec {
-  NONE("none"),
-  BZIP2("bz2"),
-  GZIP("gz"),
-  LZ4("lz4"),
-  LZO("lzo"),
-  SNAPPY("snappy"),
-  ZSTD("zstd");
+  NONE("none", 2),
+  BZIP2("bz2", 5),
+  GZIP("gz", 1),
+  LZ4("lz4", 4),
+  LZO("lzo", 0),
+  SNAPPY("snappy", 3),
+  ZSTD("zstd", 6);
 
   private static final Map<String, CompressionCodec>
       NAME_TO_COMPRESSION_CODEC_MAP = createNameToCompressionCodecMap();
 
   private final String name;
+  private final int code;
 
-  CompressionCodec(final String name) {
+  CompressionCodec(final String name, int code) {
     this.name = name;
+    this.code = code;
   }
 
   public String getName() {
     return name;
+  }
+  
+  public int getCode() {
+    return code;
   }
 
   public static CompressionCodec findCodecByName(String name) {

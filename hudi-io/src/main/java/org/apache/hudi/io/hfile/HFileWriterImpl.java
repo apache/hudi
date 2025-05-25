@@ -20,7 +20,6 @@
 package org.apache.hudi.io.hfile;
 
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.io.compress.CompressionCodec;
 import org.apache.hudi.io.hfile.protobuf.generated.HFileProtos;
 
 import com.google.protobuf.ByteString;
@@ -191,12 +190,7 @@ public class HFileWriterImpl implements HFileWriter {
     builder.setFirstDataBlockOffset(firstDataBlockOffset);
     builder.setLastDataBlockOffset(lastDataBlockOffset);
     builder.setComparatorClassName(COMPARATOR_CLASS_NAME);
-    // Set codec.
-    if (context.getCompressionCodec() == CompressionCodec.GZIP) {
-      builder.setCompressionCodec(1);
-    } else {
-      builder.setCompressionCodec(2);
-    }
+    builder.setCompressionCodec(context.getCompressionCodec().getCode());
     builder.setEncryptionKey(ByteString.EMPTY);
     HFileProtos.TrailerProto trailerProto = builder.build();
 
