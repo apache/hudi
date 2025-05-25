@@ -19,25 +19,25 @@
 
 package org.apache.hudi.io.compress;
 
+import org.apache.hudi.io.compress.airlift.HoodieAirliftGzipCompressor;
+import org.apache.hudi.io.compress.builtin.HoodieNoneCompressor;
 import org.apache.hudi.io.util.IOUtils;
 
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Random;
-import java.util.zip.GZIPOutputStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
- * Tests all implementation of {@link HoodieDecompressor}.
+ * Tests all implementation of {@link HoodieCompressor}.
  */
-public class TestHoodieDecompressor {
+public class TestHoodieCompressor {
   private static final int INPUT_LENGTH = 394850;
   private static final int[] READ_PART_SIZE_LIST =
       new int[] {1200, 30956, 204958, INPUT_LENGTH + 50};
@@ -49,7 +49,7 @@ public class TestHoodieDecompressor {
     switch (codec) {
       case NONE:
       case GZIP:
-        HoodieDecompressor decompressor = HoodieDecompressorFactory.getDecompressor(codec);
+        HoodieCompressor decompressor = HoodieCompressorFactory.getCompressor(codec);
         byte[] actualOutput = new byte[INPUT_LENGTH + 100];
         try (InputStream stream = prepareInputStream(codec)) {
           for (int sizeToRead : READ_PART_SIZE_LIST) {
@@ -65,20 +65,18 @@ public class TestHoodieDecompressor {
         break;
       default:
         assertThrows(
-            IllegalArgumentException.class, () -> HoodieDecompressorFactory.getDecompressor(codec));
+            IllegalArgumentException.class, () -> HoodieCompressorFactory.getCompressor(codec));
     }
   }
 
   private static InputStream prepareInputStream(CompressionCodec codec) throws IOException {
     switch (codec) {
       case NONE:
-        return new ByteArrayInputStream(INPUT_BYTES);
+        return new ByteArrayInputStream(
+            new HoodieNoneCompressor().compress(INPUT_BYTES));
       case GZIP:
-        ByteArrayOutputStream stream = new ByteArrayOutputStream();
-        try (GZIPOutputStream gzipOutputStream = new GZIPOutputStream(stream)) {
-          gzipOutputStream.write(INPUT_BYTES);
-        }
-        return new ByteArrayInputStream(stream.toByteArray());
+        return new ByteArrayInputStream(
+            new HoodieAirliftGzipCompressor().compress(INPUT_BYTES));
       default:
         throw new IllegalArgumentException("Not supported in tests.");
     }

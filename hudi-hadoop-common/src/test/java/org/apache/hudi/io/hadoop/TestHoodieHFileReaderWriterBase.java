@@ -33,6 +33,7 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
+import org.apache.hudi.io.storage.HoodieHBaseKVComparator;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
@@ -73,7 +74,6 @@ import java.util.stream.StreamSupport;
 import static org.apache.hudi.common.testutils.FileSystemTestUtils.RANDOM;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.apache.hudi.common.util.CollectionUtils.toStream;
-import static org.apache.hudi.io.hadoop.HoodieHFileConfig.HFILE_COMPARATOR;
 import static org.apache.hudi.io.hfile.TestHFileReader.BOOTSTRAP_INDEX_HFILE_SUFFIX;
 import static org.apache.hudi.io.hfile.TestHFileReader.COMPLEX_SCHEMA_HFILE_SUFFIX;
 import static org.apache.hudi.io.hfile.TestHFileReader.SIMPLE_SCHEMA_HFILE_SUFFIX;
@@ -485,7 +485,7 @@ public abstract class TestHoodieHFileReaderWriterBase extends TestHoodieReaderWr
     FileSystem fs = HadoopFSUtils.getFs(getFilePath().toString(), new Configuration());
     byte[] content = readHFileFromResources(simpleHFile);
     verifyHFileReader(
-        content, hfilePrefix, true, HFILE_COMPARATOR.getClass(), NUM_RECORDS_FIXTURE);
+        content, hfilePrefix, true, HoodieHBaseKVComparator.class, NUM_RECORDS_FIXTURE);
 
     HoodieStorage storage = HoodieTestUtils.getStorage(getFilePath());
     try (HoodieAvroHFileReaderImplBase hfileReader = createHFileReader(storage, content)) {
@@ -497,7 +497,7 @@ public abstract class TestHoodieHFileReaderWriterBase extends TestHoodieReaderWr
 
     content = readHFileFromResources(complexHFile);
     verifyHFileReader(
-        content, hfilePrefix, true, HFILE_COMPARATOR.getClass(), NUM_RECORDS_FIXTURE);
+        content, hfilePrefix, true, HoodieHBaseKVComparator.class, NUM_RECORDS_FIXTURE);
     try (HoodieAvroHFileReaderImplBase hfileReader = createHFileReader(storage, content)) {
       Schema avroSchema =
           getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchemaWithUDT.avsc");

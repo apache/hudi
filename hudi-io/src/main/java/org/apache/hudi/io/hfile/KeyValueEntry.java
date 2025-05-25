@@ -17,24 +17,26 @@
  * under the License.
  */
 
-package org.apache.hudi.io.compress;
+package org.apache.hudi.io.hfile;
 
-import org.apache.hudi.io.compress.airlift.HoodieAirliftGzipDecompressor;
-import org.apache.hudi.io.compress.builtin.HoodieNoneDecompressor;
+import java.nio.ByteBuffer;
 
 /**
- * Factory for {@link HoodieDecompressor}.
+ * This is data structure used to store the data before written
+ * into the file. By comparison, {@link KeyValue} is used for read.
  */
-public class HoodieDecompressorFactory {
-  public static HoodieDecompressor getDecompressor(CompressionCodec compressionCodec) {
-    switch (compressionCodec) {
-      case NONE:
-        return new HoodieNoneDecompressor();
-      case GZIP:
-        return new HoodieAirliftGzipDecompressor();
-      default:
-        throw new IllegalArgumentException(
-            "The decompression is not supported for compression codec: " + compressionCodec);
-    }
+public class KeyValueEntry implements Comparable<KeyValueEntry> {
+  public final byte[] key;
+  public final byte[] value;
+
+  public KeyValueEntry(byte[] key, byte[] value) {
+    this.key = key;
+    this.value = value;
+  }
+
+  @Override
+  public int compareTo(KeyValueEntry o) {
+    return ByteBuffer.wrap(this.key)
+        .compareTo(ByteBuffer.wrap(o.key));
   }
 }

@@ -264,6 +264,14 @@ public class HFileReaderImpl implements HFileReader {
     stream.close();
   }
 
+  HFileTrailer getTrailer() {
+    return trailer;
+  }
+
+  Map<Key, BlockIndexEntry> getDataBlockIndexMap() {
+    return dataBlockIndexEntryMap;
+  }
+
   /**
    * Reads and parses the HFile trailer.
    *
