@@ -198,12 +198,15 @@ public abstract class HFileBlock {
     }
     return (int) numChunks;
   }
+
   public HFileBlockType getBlockType() {
     return blockType;
   }
+
   public byte[] getByteBuff() {
     return byteBuff;
   }
+
   public int getOnDiskSizeWithHeader() {
     return onDiskSizeWithoutHeader + HFILEBLOCK_HEADER_SIZE;
   }

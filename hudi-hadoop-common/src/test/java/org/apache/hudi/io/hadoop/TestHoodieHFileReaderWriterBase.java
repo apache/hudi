@@ -142,7 +142,7 @@ public abstract class TestHoodieHFileReaderWriterBase extends TestHoodieReaderWr
   protected void verifySchema(HoodieStorage storage, String schemaPath) throws IOException {
     try (HoodieAvroFileReader reader = createReader(storage)) {
       assertEquals(
-          getSchemaFromResource(HFileReaderImpl.class, schemaPath),
+          getSchemaFromResource(TestHoodieHFileReaderWriterBase.class, schemaPath),
           reader.getSchema());
     } catch (Exception e) {
       throw new RuntimeException(e);
