@@ -24,9 +24,7 @@ import org.apache.hudi.io.compress.CompressionCodec;
 import org.apache.hudi.io.hfile.protobuf.generated.HFileProtos;
 
 import com.google.protobuf.ByteString;
-import com.google.protobuf.CodedOutputStream;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
@@ -36,9 +34,11 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT16;
+import static org.apache.hudi.io.hfile.HFileBlock.getVariableLengthEncodedBytes;
 import static org.apache.hudi.io.hfile.HFileBlockType.TRAILER;
 import static org.apache.hudi.io.hfile.HFileInfo.LAST_KEY;
 import static org.apache.hudi.io.hfile.HFileInfo.MAX_MVCC_TS_KEY;
+import static org.apache.hudi.io.hfile.HFileTrailer.TRAILER_SIZE;
 
 /**
  * Pure Java implementation of HFile writer (HFile v3 format) for Hudi.
@@ -46,6 +46,7 @@ import static org.apache.hudi.io.hfile.HFileInfo.MAX_MVCC_TS_KEY;
 public class HFileWriterImpl implements HFileWriter {
   private static final String COMPARATOR_CLASS_NAME
       = "org.apache.hudi.io.storage.HoodieHBaseKVComparator";
+  private static final byte HFILE_VERSION = (byte) 3;
   private final OutputStream outputStream;
   private final HFileContext context;
   // Meta Info map.
@@ -199,21 +200,14 @@ public class HFileWriterImpl implements HFileWriter {
     builder.setEncryptionKey(ByteString.EMPTY);
     HFileProtos.TrailerProto trailerProto = builder.build();
 
-    // Encode the varint size into a ByteBuffer
-    // This is necessary to make the parsing work.
-    ByteArrayOutputStream varintBuffer = new ByteArrayOutputStream();
-    CodedOutputStream varintOutput = CodedOutputStream.newInstance(varintBuffer);
-    varintOutput.writeUInt32NoTag(trailerProto.getSerializedSize());
-    varintOutput.flush();
-
-    ByteBuffer trailer = ByteBuffer.allocate(4096);
-    trailer.limit(4096);
+    ByteBuffer trailer = ByteBuffer.allocate(TRAILER_SIZE);
+    trailer.limit(TRAILER_SIZE);
     trailer.put(TRAILER.getMagic());
-    trailer.put(varintBuffer.toByteArray());
+    trailer.put(getVariableLengthEncodedBytes(trailerProto.getSerializedSize()));
     trailer.put(trailerProto.toByteArray());
     // Force trailer to have fixed length.
-    trailer.position(4095);
-    trailer.put((byte)3);
+    trailer.position(TRAILER_SIZE - 1);
+    trailer.put(HFILE_VERSION);
 
     trailer.flip();
     writeBuffer(trailer);
