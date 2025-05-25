@@ -23,12 +23,13 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 
 public class HFileMetaIndexBlock extends HFileIndexBlock {
-  public static HFileMetaIndexBlock createWritableMetaIndexBlock(HFileContext context) {
-    return new HFileMetaIndexBlock(context);
-  }
 
   private HFileMetaIndexBlock(HFileContext context) {
     super(context, HFileBlockType.ROOT_INDEX);
+  }
+
+  public static HFileMetaIndexBlock createWritableMetaIndexBlock(HFileContext context) {
+    return new HFileMetaIndexBlock(context);
   }
 
   @Override
