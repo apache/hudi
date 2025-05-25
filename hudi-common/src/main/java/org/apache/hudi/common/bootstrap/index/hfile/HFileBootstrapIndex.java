@@ -25,7 +25,6 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
@@ -144,9 +143,7 @@ public class HFileBootstrapIndex extends BootstrapIndex {
 
   @Override
   public BootstrapIndex.IndexWriter createWriter(String bootstrapBasePath) {
-    return (IndexWriter) ReflectionUtils.loadClass("org.apache.hudi.common.bootstrap.index.hfile.HBaseHFileBootstrapIndexWriter",
-        new Class<?>[] {String.class, HoodieTableMetaClient.class},
-        bootstrapBasePath, metaClient);
+    return new HFileBootstrapIndexWriter(bootstrapBasePath, metaClient);
   }
 
   @Override
@@ -155,7 +152,7 @@ public class HFileBootstrapIndex extends BootstrapIndex {
       StoragePath[] indexPaths = new StoragePath[] {partitionIndexPath(metaClient), fileIdIndexPath(metaClient)};
       for (StoragePath indexPath : indexPaths) {
         if (metaClient.getStorage().exists(indexPath)) {
-          LOG.info("Dropping bootstrap index. Deleting file : " + indexPath);
+          LOG.info("Dropping bootstrap index. Deleting file: {}", indexPath);
           metaClient.getStorage().deleteDirectory(indexPath);
         }
       }

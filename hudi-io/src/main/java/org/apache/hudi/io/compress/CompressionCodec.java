@@ -19,6 +19,14 @@
 
 package org.apache.hudi.io.compress;
 
+import org.apache.hudi.common.util.ValidationUtils;
+
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+
 /**
  * Available compression codecs.
  * There should not be any assumption on the ordering or ordinal of the defined enums.
@@ -32,6 +40,9 @@ public enum CompressionCodec {
   SNAPPY("snappy"),
   ZSTD("zstd");
 
+  private static final Map<String, CompressionCodec>
+      NAME_TO_COMPRESSION_CODEC_MAP = createNameToCompressionCodecMap();
+
   private final String name;
 
   CompressionCodec(final String name) {
@@ -40,5 +51,23 @@ public enum CompressionCodec {
 
   public String getName() {
     return name;
+  }
+
+  public static CompressionCodec findCodecByName(String name) {
+    CompressionCodec codec =
+        NAME_TO_COMPRESSION_CODEC_MAP.get(name.toLowerCase());
+    ValidationUtils.checkArgument(
+        codec != null, String.format("Cannot find compression codec: %s", name));
+    return codec;
+  }
+
+  /**
+   * Create a mapping from its name to the compression codec.
+   */
+  private static Map<String, CompressionCodec> createNameToCompressionCodecMap() {
+    return Collections.unmodifiableMap(
+        Arrays.stream(CompressionCodec.values())
+            .collect(Collectors.toMap(CompressionCodec::getName, Function.identity()))
+    );
   }
 }

@@ -17,26 +17,29 @@
  * under the License.
  */
 
-package org.apache.hudi.io.compress.builtin;
+package org.apache.hudi.io.hfile;
 
-import org.apache.hudi.io.compress.CompressionCodec;
-import org.apache.hudi.io.compress.HoodieDecompressor;
-
+import java.io.Closeable;
 import java.io.IOException;
-import java.io.InputStream;
-
-import static org.apache.hudi.io.util.IOUtils.readFully;
 
 /**
- * Implementation of {@link HoodieDecompressor} for {@link CompressionCodec#NONE} compression
- * codec (no compression) by directly reading the input stream.
+ * The interface for HFile writer to implement.
  */
-public class HoodieNoneDecompressor implements HoodieDecompressor {
-  @Override
-  public int decompress(InputStream compressedInput,
-                        byte[] targetByteArray,
-                        int offset,
-                        int length) throws IOException {
-    return readFully(compressedInput, targetByteArray, offset, length);
-  }
+public interface HFileWriter extends Closeable {
+  /**
+   * Append a key-value pair into a data block.
+   * The caller must guarantee that the key lexicographically increments or the same
+   * as the last key.
+    */
+  void append(String key, byte[] value) throws IOException;
+
+  /**
+   * Append a piece of file info.
+   */
+  void appendFileInfo(String name, byte[] value);
+
+  /**
+   * Append a piece of meta info.
+   */
+  void appendMetaInfo(String name, byte[] value);
 }

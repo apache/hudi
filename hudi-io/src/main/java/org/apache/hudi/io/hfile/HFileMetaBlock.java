@@ -25,15 +25,44 @@ import java.nio.ByteBuffer;
  * Represents a {@link HFileBlockType#META} block.
  */
 public class HFileMetaBlock extends HFileBlock {
+  protected KeyValueEntry entry;
+
   protected HFileMetaBlock(HFileContext context,
                            byte[] byteBuff,
                            int startOffsetInBuff) {
     super(context, HFileBlockType.META, byteBuff, startOffsetInBuff);
   }
 
+  private HFileMetaBlock(HFileContext context, KeyValueEntry keyValueEntry) {
+    super(context, HFileBlockType.META, -1L);
+    this.entry = keyValueEntry;
+  }
+
+  static HFileMetaBlock createWritableMetaBlock(HFileContext context,
+                                                KeyValueEntry keyValueEntry) {
+    return new HFileMetaBlock(context, keyValueEntry);
+  }
+
   public ByteBuffer readContent() {
     return ByteBuffer.wrap(
         getByteBuff(),
-        startOffsetInBuff + HFILEBLOCK_HEADER_SIZE, uncompressedSizeWithoutHeader);
+        readAttributesOpt.get().getStartOffsetInBuff() + HFILEBLOCK_HEADER_SIZE,
+        readAttributesOpt.get().getUncompressedSizeWithoutHeader());
+  }
+
+  // ================ Below are for Write ================
+
+  public byte[] getFirstKey() {
+    return entry.key;
+  }
+
+  @Override
+  public ByteBuffer getUncompressedBlockDataToWrite() {
+    ByteBuffer dataBuf = ByteBuffer.allocate(context.getBlockSize());
+    // Note that: only value should be store in the block.
+    // The key is stored in the meta index block.
+    dataBuf.put(entry.value);
+    dataBuf.flip();
+    return dataBuf;
   }
 }

@@ -21,7 +21,9 @@ package org.apache.hudi.io.hfile;
 
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.exception.HoodieException;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -47,20 +49,25 @@ public class HFileLeafIndexBlock extends HFileBlock {
     super(context, blockType, byteBuff, startOffsetInBuff);
   }
 
+  @Override
+  protected ByteBuffer getUncompressedBlockDataToWrite() {
+    throw new HoodieException("HFile writer does not support leaf index block");
+  }
+
   /**
    * Reads the index block and returns the block index entries.
    */
   public List<BlockIndexEntry> readBlockIndex() {
     // 0. Print block magic
-    int buffOffset = startOffsetInBuff + HFILEBLOCK_HEADER_SIZE;
+    int buffOffset = readAttributesOpt.get().getStartOffsetInBuff() + HFILEBLOCK_HEADER_SIZE;
 
     // 1. Get the number of entries.
-    int numEntries = readInt(byteBuff, buffOffset);
+    int numEntries = readInt(readAttributesOpt.get().getByteBuff(), buffOffset);
     buffOffset += DataSize.SIZEOF_INT32;
     // 2. Parse the secondary index.
     List<Integer> relativeOffsets = new ArrayList<>();
     for (int i = 0; i <= numEntries; i++) {
-      relativeOffsets.add(readInt(byteBuff, buffOffset));
+      relativeOffsets.add(readInt(readAttributesOpt.get().getByteBuff(), buffOffset));
       buffOffset += DataSize.SIZEOF_INT32;
     }
     // 3. Read index entries.
@@ -68,13 +75,13 @@ public class HFileLeafIndexBlock extends HFileBlock {
     int secondIndexAfterOffset = buffOffset;
     for (int i = 0; i < numEntries; i++) {
       ValidationUtils.checkState(buffOffset - secondIndexAfterOffset == relativeOffsets.get(i));
-      long offset = readLong(byteBuff, buffOffset);
-      int size = readInt(byteBuff, buffOffset + 8);
+      long offset = readLong(readAttributesOpt.get().getByteBuff(), buffOffset);
+      int size = readInt(readAttributesOpt.get().getByteBuff(), buffOffset + 8);
       // Key parsing requires different logic than that of root index.
       int keyStartOffset = buffOffset + 12;
       int nextEntryStartOffset = secondIndexAfterOffset + relativeOffsets.get(i + 1);
       int keyLength = nextEntryStartOffset - keyStartOffset;
-      byte[] keyBytes = copy(byteBuff, buffOffset + 12, keyLength);
+      byte[] keyBytes = copy(readAttributesOpt.get().getByteBuff(), buffOffset + 12, keyLength);
       Key key = new Key(keyBytes);
       indexEntries.add(new BlockIndexEntry(key, Option.empty(), offset, size));
       buffOffset += (12 + keyLength);

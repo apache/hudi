@@ -33,7 +33,6 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.hbase.CellComparatorImpl;
 import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.hadoop.hbase.io.hfile.HFile;
 import org.junit.jupiter.api.Disabled;
@@ -56,7 +55,8 @@ import static org.apache.hudi.io.hfile.TestHFileReader.VALUE_CREATOR;
 import static org.apache.hudi.io.storage.TestHoodieReaderWriterUtils.writeHFileForTesting;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class TestHoodieHBaseHFileReaderWriter extends TestHoodieHFileReaderWriterBase {
+@Disabled("HUDI-9084")
+class TestHoodieHBaseHFileReaderWriter extends TestHoodieHFileReaderWriterBase {
   @Override
   protected HoodieAvroFileReader createReader(
       HoodieStorage storage) throws Exception {
@@ -74,20 +74,12 @@ public class TestHoodieHBaseHFileReaderWriter extends TestHoodieHFileReaderWrite
   protected void verifyHFileReader(byte[] content,
                                    String hfileName,
                                    boolean mayUseDefaultComparator,
-                                   Class<?> expectedComparatorClazz,
                                    int count) throws IOException {
     HoodieStorage storage = HoodieTestUtils.getStorage(getFilePath());
     try (HFile.Reader reader =
              HoodieHFileUtils.createHFileReader(storage, new StoragePath(DUMMY_BASE_PATH), content)) {
       // HFile version is 3
       assertEquals(3, reader.getTrailer().getMajorVersion());
-      if (mayUseDefaultComparator && hfileName.contains("hudi_0_9")) {
-        // Pre Hudi 0.10, the default comparator is used for metadata table HFiles
-        // For bootstrap index HFiles, the custom comparator is always used
-        assertEquals(CellComparatorImpl.class, reader.getComparator().getClass());
-      } else {
-        assertEquals(expectedComparatorClazz, reader.getComparator().getClass());
-      }
       assertEquals(count, reader.getEntries());
     }
   }

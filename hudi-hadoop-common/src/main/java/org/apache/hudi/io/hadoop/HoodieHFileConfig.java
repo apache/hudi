@@ -20,55 +20,37 @@
 package org.apache.hudi.io.hadoop;
 
 import org.apache.hudi.common.bloom.BloomFilter;
-import org.apache.hudi.io.storage.HoodieHBaseKVComparator;
-
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.hbase.CellComparator;
-import org.apache.hadoop.hbase.HColumnDescriptor;
-import org.apache.hadoop.hbase.io.compress.Compression;
-import org.apache.hadoop.hbase.io.hfile.CacheConfig;
+import org.apache.hudi.io.compress.CompressionCodec;
+import org.apache.hudi.storage.StorageConfiguration;
 
 public class HoodieHFileConfig {
-
-  public static final CellComparator HFILE_COMPARATOR = new HoodieHBaseKVComparator();
-  public static final boolean PREFETCH_ON_OPEN = CacheConfig.DEFAULT_PREFETCH_ON_OPEN;
-  public static final boolean CACHE_DATA_IN_L1 = HColumnDescriptor.DEFAULT_CACHE_DATA_IN_L1;
-  // This is private in CacheConfig so have been copied here.
-  public static final boolean DROP_BEHIND_CACHE_COMPACTION = true;
-
-  private final Compression.Algorithm compressionAlgorithm;
+  private final CompressionCodec compressionCodec;
   private final int blockSize;
   private final long maxFileSize;
-  private final boolean prefetchBlocksOnOpen;
-  private final boolean cacheDataInL1;
-  private final boolean dropBehindCacheCompaction;
-  private final Configuration hadoopConf;
+  private final StorageConfiguration storageConf;
   private final BloomFilter bloomFilter;
-  private final CellComparator hfileComparator;
   private final String keyFieldName;
 
-  public HoodieHFileConfig(Configuration hadoopConf, Compression.Algorithm compressionAlgorithm, int blockSize,
-                           long maxFileSize, String keyFieldName,
-                           boolean prefetchBlocksOnOpen, boolean cacheDataInL1, boolean dropBehindCacheCompaction,
-                           BloomFilter bloomFilter, CellComparator hfileComparator) {
-    this.hadoopConf = hadoopConf;
-    this.compressionAlgorithm = compressionAlgorithm;
+  public HoodieHFileConfig(StorageConfiguration storageConf,
+                           CompressionCodec compressionCodec,
+                           int blockSize,
+                           long maxFileSize,
+                           String keyFieldName,
+                           BloomFilter bloomFilter) {
+    this.storageConf = storageConf;
+    this.compressionCodec = compressionCodec;
     this.blockSize = blockSize;
     this.maxFileSize = maxFileSize;
-    this.prefetchBlocksOnOpen = prefetchBlocksOnOpen;
-    this.cacheDataInL1 = cacheDataInL1;
-    this.dropBehindCacheCompaction = dropBehindCacheCompaction;
     this.bloomFilter = bloomFilter;
-    this.hfileComparator = hfileComparator;
     this.keyFieldName = keyFieldName;
   }
 
-  public Configuration getHadoopConf() {
-    return hadoopConf;
+  public StorageConfiguration getStorageConf() {
+    return storageConf;
   }
 
-  public Compression.Algorithm getCompressionAlgorithm() {
-    return compressionAlgorithm;
+  public CompressionCodec getCompressionCodec() {
+    return compressionCodec;
   }
 
   public int getBlockSize() {
@@ -79,28 +61,12 @@ public class HoodieHFileConfig {
     return maxFileSize;
   }
 
-  public boolean shouldPrefetchBlocksOnOpen() {
-    return prefetchBlocksOnOpen;
-  }
-
-  public boolean shouldCacheDataInL1() {
-    return cacheDataInL1;
-  }
-
-  public boolean shouldDropBehindCacheCompaction() {
-    return dropBehindCacheCompaction;
-  }
-
   public boolean useBloomFilter() {
     return bloomFilter != null;
   }
 
   public BloomFilter getBloomFilter() {
     return bloomFilter;
-  }
-
-  public CellComparator getHFileComparator() {
-    return hfileComparator;
   }
 
   public String getKeyFieldName() {

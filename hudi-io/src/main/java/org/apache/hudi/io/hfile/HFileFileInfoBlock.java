@@ -22,12 +22,16 @@ package org.apache.hudi.io.hfile;
 import org.apache.hudi.io.hfile.protobuf.generated.HFileProtos;
 import org.apache.hudi.io.util.IOUtils;
 
+import com.google.protobuf.ByteString;
+
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
 
 import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
  * Represents a {@link HFileBlockType#FILE_INFO} block.
@@ -35,6 +39,8 @@ import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 public class HFileFileInfoBlock extends HFileBlock {
   // Magic we put ahead of a serialized protobuf message
   public static final byte[] PB_MAGIC = new byte[] {'P', 'B', 'U', 'F'};
+  // Write properties
+  private final Map<String, byte[]> fileInfoToWrite = new HashMap<>();
 
   public HFileFileInfoBlock(HFileContext context,
                             byte[] byteBuff,
@@ -42,17 +48,24 @@ public class HFileFileInfoBlock extends HFileBlock {
     super(context, HFileBlockType.FILE_INFO, byteBuff, startOffsetInBuff);
   }
 
+  private HFileFileInfoBlock(HFileContext context) {
+    super(context, HFileBlockType.FILE_INFO, -1L);
+  }
+
   public HFileInfo readFileInfo() throws IOException {
     int pbMagicLength = PB_MAGIC.length;
     if (IOUtils.compareTo(PB_MAGIC, 0, pbMagicLength,
-        byteBuff, startOffsetInBuff + HFILEBLOCK_HEADER_SIZE, pbMagicLength) != 0) {
+        readAttributesOpt.get().getByteBuff(),
+        readAttributesOpt.get().getStartOffsetInBuff() + HFILEBLOCK_HEADER_SIZE, pbMagicLength) != 0) {
       throw new IOException(
           "Unexpected Protobuf magic at the beginning of the HFileFileInfoBlock: "
-              + fromUTF8Bytes(byteBuff, startOffsetInBuff + HFILEBLOCK_HEADER_SIZE, pbMagicLength));
+              + fromUTF8Bytes(readAttributesOpt.get().getByteBuff(),
+              readAttributesOpt.get().getStartOffsetInBuff() + HFILEBLOCK_HEADER_SIZE, pbMagicLength));
     }
     ByteArrayInputStream inputStream = new ByteArrayInputStream(
-        byteBuff,
-        startOffsetInBuff + HFILEBLOCK_HEADER_SIZE + pbMagicLength, uncompressedSizeWithoutHeader);
+        readAttributesOpt.get().getByteBuff(),
+        readAttributesOpt.get().getStartOffsetInBuff() + HFILEBLOCK_HEADER_SIZE + pbMagicLength,
+        readAttributesOpt.get().getUncompressedSizeWithoutHeader());
     Map<UTF8StringKey, byte[]> fileInfoMap = new HashMap<>();
     HFileProtos.InfoProto infoProto = HFileProtos.InfoProto.parseDelimitedFrom(inputStream);
     for (HFileProtos.BytesBytesPair pair : infoProto.getMapEntryList()) {
@@ -60,5 +73,39 @@ public class HFileFileInfoBlock extends HFileBlock {
           new UTF8StringKey(pair.getFirst().toByteArray()), pair.getSecond().toByteArray());
     }
     return new HFileInfo(fileInfoMap);
+  }
+
+  // ================ Below are for Write ================
+  public static HFileFileInfoBlock createWritableFileInfoBlock(HFileContext context) {
+    return new HFileFileInfoBlock(context);
+  }
+
+  public void add(String name, byte[] value) {
+    fileInfoToWrite.put(name, value);
+  }
+
+  @Override
+  public ByteBuffer getUncompressedBlockDataToWrite() {
+    ByteBuffer buff = ByteBuffer.allocate(context.getBlockSize() * 2);
+    HFileProtos.InfoProto.Builder builder =
+        HFileProtos.InfoProto.newBuilder();
+    for (Map.Entry<String, byte[]> e : fileInfoToWrite.entrySet()) {
+      HFileProtos.BytesBytesPair bbp = HFileProtos.BytesBytesPair
+          .newBuilder()
+          .setFirst(ByteString.copyFrom(getUTF8Bytes(e.getKey())))
+          .setSecond(ByteString.copyFrom(e.getValue()))
+          .build();
+      builder.addMapEntry(bbp);
+    }
+    buff.put(PB_MAGIC);
+    byte[] payload = builder.build().toByteArray();
+    try {
+      buff.put(getVariableLengthEncodedBytes(payload.length));
+    } catch (IOException e) {
+      throw new RuntimeException("Failed to calculate File Info variable length");
+    }
+    buff.put(payload);
+    buff.flip();
+    return buff;
   }
 }
