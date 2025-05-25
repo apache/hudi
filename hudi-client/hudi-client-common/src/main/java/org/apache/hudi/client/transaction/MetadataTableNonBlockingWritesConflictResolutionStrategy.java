@@ -26,8 +26,6 @@ import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.table.HoodieTable;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.stream.Stream;
 
 /**
@@ -36,11 +34,9 @@ import java.util.stream.Stream;
  */
 public class MetadataTableNonBlockingWritesConflictResolutionStrategy implements ConflictResolutionStrategy {
 
-  private final List<HoodieInstant> emptyHoodieInstants = new ArrayList(0);
-
   @Override
   public Stream<HoodieInstant> getCandidateInstants(HoodieTableMetaClient metaClient, HoodieInstant currentInstant, Option<HoodieInstant> lastSuccessfulInstant) {
-    return emptyHoodieInstants.stream();
+    return Stream.empty();
   }
 
   @Override

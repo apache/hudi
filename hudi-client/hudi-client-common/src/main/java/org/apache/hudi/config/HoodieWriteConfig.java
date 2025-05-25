@@ -2864,10 +2864,13 @@ public class HoodieWriteConfig extends HoodieConfig {
     return props.getInteger(WRITES_FILEID_ENCODING, HoodieMetadataPayload.RECORD_INDEX_FIELD_FILEID_ENCODING_UUID);
   }
 
-  public boolean needResolveWriteConflict(WriteOperationType operationType, boolean isMetadataTable, boolean streamingWritesToMetadataTableEnabled) {
+  public boolean needResolveWriteConflict(WriteOperationType operationType, boolean isMetadataTable, HoodieWriteConfig config,
+                                          HoodieTableConfig tableConfig) {
     WriteConcurrencyMode mode = getWriteConcurrencyMode();
-    if (isMetadataTable && streamingWritesToMetadataTableEnabled) {
+    if (isMetadataTable && config.isStreamingWritesToMetadataEnabled(tableConfig.getTableVersion())) {
       // for metadata table, if streaming writes are enabled, we might need to perform conflict resolution.
+      // datatable NBCC is still evolving and might go through evolution compared to its current state.
+      // But incase of metadata table, when streaming writes are enabled, we are just looking to let every commit succeed w/o any resolution as such.
       return true;
     }
     switch (mode) {

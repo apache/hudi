@@ -72,8 +72,7 @@ public class TransactionUtils {
       boolean timelineRefreshedWithinTransaction,
       Set<String> pendingInstants) throws HoodieWriteConflictException {
     WriteOperationType operationType = thisCommitMetadata.map(HoodieCommitMetadata::getOperationType).orElse(null);
-    if (config.needResolveWriteConflict(operationType, table.isMetadataTable(),
-        config.isStreamingWritesToMetadataEnabled(table.getMetaClient().getTableConfig().getTableVersion()))) {
+    if (config.needResolveWriteConflict(operationType, table.isMetadataTable(), config, table.getMetaClient().getTableConfig())) {
       // deal with pendingInstants
       if (!timelineRefreshedWithinTransaction) {
         table.getMetaClient().reloadActiveTimeline();
