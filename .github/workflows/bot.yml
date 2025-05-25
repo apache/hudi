@@ -34,12 +34,12 @@ concurrency:
 
 jobs:
   skip-check:
-    runs-on: ubuntu-latest
+    runs-on: arc-4-cores-spot-staging
     outputs:
       skip: ${{ steps.determine-skip.outputs.skip }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 2 # Fetch commits for diffing
 
@@ -71,19 +71,18 @@ jobs:
 
   utilities:
     needs: skip-check
-    runs-on: ubuntu-latest
-    timeout-minutes: 120
+    runs-on: arc-16-cores-ondemand-staging
     strategy:
       matrix:
         include:
             - scalaProfile: "scala-2.12"
               sparkProfile: "spark3.5"
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0 # Needs master to view latest
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v1
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-region: us-west-2
           role-to-assume: arn:aws:iam::194159489498:role/GithubActionsPublishHudi-RepositoryPublisherRole-10H7ABJVFNSQ9
@@ -102,6 +101,10 @@ jobs:
           server-id: codeartifact
           server-username: AWS
           server-password: CODEARTIFACT_AUTH_TOKEN
+      - name: Set up Maven
+        uses: stCarolas/setup-maven@v5
+        with:
+          maven-version: 3.9.9
       - name: Build
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -135,8 +138,7 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
         run: |  
           export JAVA_HOME="${{env.JAVA_HOME_17_X64}}"
-          WORKING_DIR="/home/runner/work/hudi-internal/hudi-internal"
-          jacoco_xml_report_files=$(find ${WORKING_DIR} -name 'jacoco.xml' | awk '{printf "%s%s",sep,$0; sep=","} END{print ""}')
+          jacoco_xml_report_files=$(find $PWD -name 'jacoco.xml' | awk '{printf "%s%s",sep,$0; sep=","} END{print ""}')
           echo "Jacoco xml reports: ${jacoco_xml_report_files}"
           if [ ${{ github.event_name }} == 'pull_request' ]; then
             mvn sonar:sonar -Dargline="-Xmx8192m" -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" $MVN_ARGS -Dsonar.projectName="hudi-internal-utilities" -Dsonar.projectKey=onehouseinc_hudi-internal_utilities \
@@ -156,14 +158,14 @@ jobs:
           fi
   utilities_bundle_misc:
     needs: skip-check
-    runs-on: ubuntu-latest
+    runs-on: arc-16-cores-ondemand-staging
     strategy:
       matrix:
         include:
           - scalaProfile: "scala-2.12"
             sparkProfile: "spark3.5"
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0 # Needs master to view latest
       - name: Configure AWS credentials
@@ -186,6 +188,10 @@ jobs:
           server-id: codeartifact
           server-username: AWS
           server-password: CODEARTIFACT_AUTH_TOKEN
+      - name: Set up Maven
+        uses: stCarolas/setup-maven@v5
+        with:
+          maven-version: 3.9.9
       - name: Build
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -212,8 +218,7 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
         run: |
           export JAVA_HOME="${{env.JAVA_HOME_17_X64}}"
-          WORKING_DIR="/home/runner/work/hudi-internal/hudi-internal"
-          jacoco_xml_report_files=$(find ${WORKING_DIR} -name 'jacoco.xml' | awk '{printf "%s%s",sep,$0; sep=","} END{print ""}')
+          jacoco_xml_report_files=$(find $PWD -name 'jacoco.xml' | awk '{printf "%s%s",sep,$0; sep=","} END{print ""}')
           echo "Jacoco xml reports: ${jacoco_xml_report_files}"
           if [ ${{ github.event_name }} == 'pull_request' ]; then
             mvn sonar:sonar -DargLine="-Xmx8192m" -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" $MVN_ARGS -Dsonar.projectName="hudi-internal-utilities-bundle-misc" -Dsonar.projectKey=onehouseinc_hudi-internal_utilities-bundle-misc \
@@ -233,14 +238,14 @@ jobs:
           fi
   hudi-client-and-common:
     needs: skip-check
-    runs-on: ubuntu-latest
+    runs-on: arc-16-cores-ondemand-staging
     strategy:
       matrix:
         include:
           - scalaProfile: "scala-2.12"
             sparkProfile: "spark3.5"
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         with:
             fetch-depth: 0 # Needs master to view latest
       - name: Configure AWS credentials
@@ -263,6 +268,10 @@ jobs:
           server-id: codeartifact
           server-username: AWS
           server-password: CODEARTIFACT_AUTH_TOKEN
+      - name: Set up Maven
+        uses: stCarolas/setup-maven@v5
+        with:
+          maven-version: 3.9.9
       - name: Build
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -289,8 +298,7 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
         run: |
           export JAVA_HOME="${{env.JAVA_HOME_17_X64}}"
-          WORKING_DIR="/home/runner/work/hudi-internal/hudi-internal"
-          jacoco_xml_report_files=$(find ${WORKING_DIR} -name 'jacoco.xml' | awk '{printf "%s%s",sep,$0; sep=","} END{print ""}')
+          jacoco_xml_report_files=$(find $PWD -name 'jacoco.xml' | awk '{printf "%s%s",sep,$0; sep=","} END{print ""}')
           echo "Jacoco xml reports: ${jacoco_xml_report_files}"
           if [ ${{ github.event_name }} == 'pull_request' ]; then
             mvn sonar:sonar -DargLine="-Xmx8192m" -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" $MVN_ARGS -Dsonar.projectName="hudi-internal-hudi-client-and-common" -Dsonar.projectKey=onehouseinc_hudi-internal_hudi-client-and-common \
@@ -310,14 +318,14 @@ jobs:
           fi
   spark-tests:
     needs: skip-check
-    runs-on: ubuntu-latest
+    runs-on: arc-16-cores-ondemand-staging
     strategy:
       matrix:
         include:
           - scalaProfile: "scala-2.12"
             sparkProfile: "spark3.5"
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0 # Needs master to view latest
       - name: Configure AWS credentials
@@ -340,6 +348,10 @@ jobs:
           server-id: codeartifact
           server-username: AWS
           server-password: CODEARTIFACT_AUTH_TOKEN
+      - name: Set up Maven
+        uses: stCarolas/setup-maven@v5
+        with:
+          maven-version: 3.9.9
       - name: Build
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -363,8 +375,7 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
         run: |
           export JAVA_HOME="${{env.JAVA_HOME_17_X64}}"
-          WORKING_DIR="/home/runner/work/hudi-internal/hudi-internal"
-          jacoco_xml_report_files=$(find ${WORKING_DIR} -name 'jacoco.xml' | awk '{printf "%s%s",sep,$0; sep=","} END{print ""}')
+          jacoco_xml_report_files=$(find $PWD -name 'jacoco.xml' | awk '{printf "%s%s",sep,$0; sep=","} END{print ""}')
           echo "Jacoco xml reports: ${jacoco_xml_report_files}"
           if [ ${{ github.event_name }} == 'pull_request' ]; then
             mvn sonar:sonar -DargLine="-Xmx8192m" -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" $MVN_ARGS -Dsonar.projectName="hudi-internal-spark-tests" -Dsonar.projectKey=onehouseinc_hudi-internal_spark-tests \
@@ -382,5 +393,3 @@ jobs:
               -Dsonar.coverage.jacoco.xmlReportPaths="${jacoco_xml_report_files}" \
               -Dsonar.branch.name=${{ github.HEAD_REF }}
           fi
-
-

@@ -56,6 +56,9 @@ import software.amazon.awssdk.services.glue.model.StorageDescriptor;
 import software.amazon.awssdk.services.glue.model.Table;
 import software.amazon.awssdk.services.glue.model.TableInput;
 import software.amazon.awssdk.services.glue.model.UpdateTableRequest;
+import software.amazon.awssdk.services.sts.StsClient;
+import software.amazon.awssdk.services.sts.model.GetCallerIdentityRequest;
+import software.amazon.awssdk.services.sts.model.GetCallerIdentityResponse;
 import org.apache.parquet.schema.MessageType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -105,17 +108,20 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   private final boolean skipTableArchive;
   private final String enableMetadataTable;
   private final Map<String, Table> initialTableByName = new HashMap<>();
+  private final String catalogId;
 
   public AWSGlueCatalogSyncClient(HiveSyncConfig config, HoodieTableMetaClient metaClient) {
-    this(GlueAsyncClient.builder().build(), config, metaClient);
+    this(GlueAsyncClient.builder().build(), StsClient.create(), config, metaClient);
   }
 
-  AWSGlueCatalogSyncClient(GlueAsyncClient awsGlue, HiveSyncConfig config, HoodieTableMetaClient metaClient) {
+  AWSGlueCatalogSyncClient(GlueAsyncClient awsGlue, StsClient stsClient, HiveSyncConfig config, HoodieTableMetaClient metaClient) {
     super(config, metaClient);
     this.awsGlue = awsGlue;
     this.databaseName = config.getStringOrDefault(META_SYNC_DATABASE_NAME);
     this.skipTableArchive = config.getBooleanOrDefault(GlueCatalogSyncClientConfig.GLUE_SKIP_TABLE_ARCHIVE);
     this.enableMetadataTable = Boolean.toString(config.getBoolean(GLUE_METADATA_FILE_LISTING)).toUpperCase();
+    GetCallerIdentityResponse identityResponse = stsClient.getCallerIdentity(GetCallerIdentityRequest.builder().build());
+    this.catalogId = config.getStringOrDefault(GlueCatalogSyncClientConfig.GLUE_CATALOG_ID, identityResponse.account());
   }
 
   private Table getInitialTable(String tableName) {
@@ -129,6 +135,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
       String nextToken = null;
       do {
         GetPartitionsResponse result = awsGlue.getPartitions(GetPartitionsRequest.builder()
+            .catalogId(catalogId)
             .databaseName(databaseName)
             .tableName(tableName)
             .nextToken(nextToken)
@@ -165,7 +172,11 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
 
       for (List<PartitionInput> batch : CollectionUtils.batches(partitionInputs, MAX_PARTITIONS_PER_REQUEST)) {
         BatchCreatePartitionRequest request = BatchCreatePartitionRequest.builder()
-                .databaseName(databaseName).tableName(tableName).partitionInputList(batch).build();
+            .databaseName(databaseName)
+            .catalogId(catalogId)
+            .tableName(tableName)
+            .partitionInputList(batch)
+            .build();
         futures.add(awsGlue.batchCreatePartition(request));
       }
 
@@ -208,7 +219,11 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
       List<CompletableFuture<BatchUpdatePartitionResponse>> futures = new ArrayList<>();
       for (List<BatchUpdatePartitionRequestEntry> batch : CollectionUtils.batches(updatePartitionEntries, MAX_PARTITIONS_PER_REQUEST)) {
         BatchUpdatePartitionRequest request = BatchUpdatePartitionRequest.builder()
-                .databaseName(databaseName).tableName(tableName).entries(batch).build();
+            .databaseName(databaseName)
+            .catalogId(catalogId)
+            .tableName(tableName)
+            .entries(batch)
+            .build();
         futures.add(awsGlue.batchUpdatePartition(request));
       }
 
@@ -243,6 +258,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
         }).collect(Collectors.toList());
 
         BatchDeletePartitionRequest batchDeletePartitionRequest = BatchDeletePartitionRequest.builder()
+            .catalogId(catalogId)
             .databaseName(databaseName)
             .tableName(tableName)
             .partitionsToDelete(partitionValueLists)
@@ -333,6 +349,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
           .build();
 
       UpdateTableRequest request = UpdateTableRequest.builder()
+          .catalogId(catalogId)
           .databaseName(databaseName)
           .tableInput(updatedTableInput)
           .build();
@@ -364,6 +381,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
           .build();
 
       UpdateTableRequest request = UpdateTableRequest.builder()
+          .catalogId(catalogId)
           .databaseName(databaseName)
           .skipArchive(skipTableArchive)
           .tableInput(updatedTableInput)
@@ -471,6 +489,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
           .build();
 
       CreateTableRequest request = CreateTableRequest.builder()
+              .catalogId(catalogId)
               .databaseName(databaseName)
               .tableInput(tableInput)
               .build();
@@ -508,6 +527,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   @Override
   public boolean tableExists(String tableName) {
     GetTableRequest request = GetTableRequest.builder()
+        .catalogId(catalogId)
         .databaseName(databaseName)
         .name(tableName)
         .build();
@@ -531,7 +551,10 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
 
   @Override
   public boolean databaseExists(String databaseName) {
-    GetDatabaseRequest request = GetDatabaseRequest.builder().name(databaseName).build();
+    GetDatabaseRequest request = GetDatabaseRequest.builder()
+        .catalogId(catalogId)
+        .name(databaseName)
+        .build();
     try {
       return Objects.nonNull(awsGlue.getDatabase(request).get().database());
     } catch (ExecutionException e) {
@@ -552,6 +575,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
       return;
     }
     CreateDatabaseRequest request = CreateDatabaseRequest.builder()
+            .catalogId(catalogId)
             .databaseInput(DatabaseInput.builder()
             .name(databaseName)
             .description("Automatically created by " + this.getClass().getName())
@@ -600,6 +624,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   @Override
   public void dropTable(String tableName) {
     DeleteTableRequest deleteTableRequest = DeleteTableRequest.builder()
+        .catalogId(catalogId)
         .databaseName(databaseName)
         .name(tableName)
         .build();
@@ -680,8 +705,9 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     MATERIALIZED_VIEW
   }
 
-  private static Table getTable(GlueAsyncClient awsGlue, String databaseName, String tableName) throws HoodieGlueSyncException {
+  private Table getTable(GlueAsyncClient awsGlue, String databaseName, String tableName) throws HoodieGlueSyncException {
     GetTableRequest request = GetTableRequest.builder()
+        .catalogId(catalogId)
         .databaseName(databaseName)
         .name(tableName)
         .build();
@@ -694,7 +720,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     }
   }
 
-  private static boolean updateTableParameters(GlueAsyncClient awsGlue, String databaseName, String tableName, Map<String, String> updatingParams, boolean skipTableArchive) {
+  private boolean updateTableParameters(GlueAsyncClient awsGlue, String databaseName, String tableName, Map<String, String> updatingParams, boolean skipTableArchive) {
     if (isNullOrEmpty(updatingParams)) {
       return false;
     }
@@ -721,6 +747,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
           .build();
 
       UpdateTableRequest request =  UpdateTableRequest.builder().databaseName(databaseName)
+          .catalogId(catalogId)
           .tableInput(updatedTableInput)
           .skipArchive(skipTableArchive)
           .build();
