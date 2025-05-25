@@ -286,7 +286,7 @@ public abstract class HFileBlock {
     buf.putInt(DEFAULT_BYTES_PER_CHECKSUM);
     // 7. onDiskDataSizeWithHeader
     int onDiskDataSizeWithHeader =
-        HFileBlock.HFILEBLOCK_HEADER_SIZE + uncompressedBlockData.limit();
+        HFileBlock.HFILEBLOCK_HEADER_SIZE + compressedBlockData.limit();
     buf.putInt(onDiskDataSizeWithHeader);
     // 8. Payload.
     buf.put(compressedBlockData);

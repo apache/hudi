@@ -43,6 +43,7 @@ import static org.apache.hudi.io.hfile.HFileBlockType.DATA;
 import static org.apache.hudi.io.hfile.HFileBlockType.TRAILER;
 import static org.apache.hudi.io.hfile.HFileInfo.LAST_KEY;
 import static org.apache.hudi.io.hfile.HFileInfo.MAX_MVCC_TS_KEY;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestHFileWriter {
@@ -100,7 +101,6 @@ class TestHFileWriter {
       assertEquals(6, trailer.getDataIndexCount());
       int i = 0;
       for (Key key : reader.getDataBlockIndexMap().keySet()) {
-        System.out.println(key.getContentInString());
         assertArrayEquals(
             String.format("key%02d", i).getBytes(),
             key.getContentInString().getBytes());
@@ -172,7 +172,7 @@ class TestHFileWriter {
   private static void validateHFileSize() throws IOException {
     Path path = Paths.get(TEST_FILE);
     long actualSize = Files.size(path);
-    long expectedSize = 4372L;
+    long expectedSize = 4366L;
     assertEquals(expectedSize, actualSize);
   }
 
@@ -258,12 +258,6 @@ class TestHFileWriter {
   private static void assertArrayEquals(byte[] expected, byte[] actual) {
     if (!Arrays.equals(expected, actual)) {
       throw new AssertionError("Byte array mismatch");
-    }
-  }
-
-  private static void assertEquals(long expected, long actual) {
-    if (expected != actual) {
-      throw new AssertionError("Value mismatch: " + expected + " vs " + actual);
     }
   }
 }
