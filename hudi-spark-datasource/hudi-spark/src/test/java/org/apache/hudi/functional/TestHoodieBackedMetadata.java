@@ -237,11 +237,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     clientsToClose.forEach(BaseHoodieWriteClient::close);
   }
 
-  @Test
-  public void investigateTestTriggerTestHoodieBackedMetadata() {
-    throw new HoodieException("Failing test in TestHoodieBackedMetadata");
-  }
-
   /**
    * Metadata Table bootstrap scenarios.
    */

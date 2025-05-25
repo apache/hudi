@@ -39,7 +39,6 @@ import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -73,11 +72,6 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
   @BeforeEach
   public void setUpTestTable() {
     testTable = HoodieSparkWriteableTestTable.of(metaClient);
-  }
-
-  @Test
-  public void investigateTestTriggerTestHoodieClientOnMergeOnReadStorage() {
-    throw new HoodieException("Failing test in TestConsistentBucketIndex");
   }
 
   @Test
