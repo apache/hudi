@@ -33,6 +33,7 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -41,6 +42,9 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT16;
+import static org.apache.hudi.io.hfile.HFileBlockType.TRAILER;
+import static org.apache.hudi.io.hfile.HFileInfo.LAST_KEY;
+import static org.apache.hudi.io.hfile.HFileInfo.MAX_MVCC_TS_KEY;
 
 /**
  * Pure Java implementation of HFile writer (HFile v3 format) for Hudi.
@@ -172,7 +176,9 @@ public class HFileWriterImpl implements HFileWriter {
     metaIndexBlock.setStartOffsetInBuff(currentOffset);
     writeBuffer(metaIndexBuffer);
     // Write File Info.
-    fileInfoBlock.add("hfile.LASTKEY", addKeyLength(lastKey));
+    fileInfoBlock.add(
+        new String(LAST_KEY.getBytes(), StandardCharsets.UTF_8),
+        addKeyLength(lastKey));
     fileInfoBlock.setStartOffsetInBuff(currentOffset);
     writeBuffer(fileInfoBlock.serialize());
   }
@@ -208,7 +214,7 @@ public class HFileWriterImpl implements HFileWriter {
 
     ByteBuffer trailer = ByteBuffer.allocate(4096);
     trailer.limit(4096);
-    trailer.put(StringUtils.getUTF8Bytes("TRABLK\"$"));
+    trailer.put(TRAILER.getMagic());
     trailer.put(varintBuffer.toByteArray());
     trailer.put(trailerProto.toByteArray());
     // Force trailer to have fixed length.
@@ -226,7 +232,9 @@ public class HFileWriterImpl implements HFileWriter {
   }
 
   private void initFileInfo() {
-    fileInfoBlock.add("hfile.MAX_MEMSTORE_TS_KEY", new byte[]{0});
+    fileInfoBlock.add(
+        new String(MAX_MVCC_TS_KEY.getBytes(), StandardCharsets.UTF_8),
+        new byte[]{0});
   }
 
   // Note: HFileReaderImpl assumes that:

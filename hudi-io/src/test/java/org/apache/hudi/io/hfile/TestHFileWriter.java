@@ -21,6 +21,7 @@ package org.apache.hudi.io.hfile;
 
 import org.apache.hudi.common.util.io.ByteBufferBackedInputStream;
 import org.apache.hudi.io.ByteArraySeekableDataInputStream;
+import org.apache.hudi.storage.HoodieStorage;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -40,6 +41,10 @@ import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
 
+import static org.apache.hudi.io.hfile.HFileBlockType.DATA;
+import static org.apache.hudi.io.hfile.HFileBlockType.TRAILER;
+import static org.apache.hudi.io.hfile.HFileInfo.LAST_KEY;
+import static org.apache.hudi.io.hfile.HFileInfo.MAX_MVCC_TS_KEY;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestHFileWriter {
@@ -87,9 +92,7 @@ class TestHFileWriter {
 
     // Validate.
     try (FileChannel channel = FileChannel.open(Paths.get(testFile), StandardOpenOption.READ)) {
-      InputStream seekableStream = new SeekableFileInputStream(channel);
       ByteBuffer buf = channel.map(FileChannel.MapMode.READ_ONLY, 0, channel.size());
-      HFileReaderImpl reader = new HFileReaderImpl(channel, channel.size());
 
       // Point to the first data block.
       buf.position(0);
@@ -97,7 +100,7 @@ class TestHFileWriter {
       // Validate magic.
       byte[] dataBlockMagic = new byte[8];
       buf.get(dataBlockMagic);
-      assertArrayEquals("DATABLK*".getBytes(), dataBlockMagic);
+      assertArrayEquals(DATA.getMagic(), dataBlockMagic);
 
       // Skip header.
       buf.position(buf.position() + 25);
@@ -110,7 +113,7 @@ class TestHFileWriter {
 
       // Validate magic.
       buf.get(dataBlockMagic);
-      assertArrayEquals("DATABLK*".getBytes(), dataBlockMagic);
+      assertArrayEquals(DATA.getMagic(), dataBlockMagic);
 
       // Skip header.
       buf.position(buf.position() + 25);
@@ -146,7 +149,7 @@ class TestHFileWriter {
       // Validate magic.
       byte[] dataBlockMagic = new byte[8];
       buf.get(dataBlockMagic);
-      assertArrayEquals("DATABLK*".getBytes(), dataBlockMagic);
+      assertArrayEquals(DATA.getMagic(), dataBlockMagic);
 
       // Skip header.
       buf.position(buf.position() + 25);
@@ -183,7 +186,7 @@ class TestHFileWriter {
     Path path = Paths.get(TEST_FILE);
     long actualSize = Files.size(path);
     long expectedSize = 4372L;
-    assertEquals(expectedSize, actualSize); // Will now pass
+    assertEquals(expectedSize, actualSize);
   }
 
   private static void validateHFileStructure() throws IOException {
@@ -203,9 +206,8 @@ class TestHFileWriter {
             new ByteBufferBackedInputStream(content)), content.limit())) {
       reader.initializeMetadata();
       assertEquals(3, reader.getNumKeyValueEntries());
-      assertTrue(reader.getMetaInfo(new UTF8StringKey("hfile.LASTKEY")).isPresent());
-      assertEquals(1, reader.getMetaInfo(
-          new UTF8StringKey("hfile.MAX_MEMSTORE_TS_KEY")).get().length);
+      assertTrue(reader.getMetaInfo(LAST_KEY).isPresent());
+      assertEquals(1, reader.getMetaInfo(MAX_MVCC_TS_KEY).get().length);
     }
   }
 
@@ -222,7 +224,7 @@ class TestHFileWriter {
     // Verify magic
     byte[] trailerMagic = new byte[8];
     buf.get(trailerMagic);
-    assertArrayEquals("TRABLK\"$".getBytes(), trailerMagic);
+    assertArrayEquals(TRAILER.getMagic(), trailerMagic);
 
     // Verify version (last 4 bytes of trailer)
     buf.position(trailerStart + 4096 - 4);
@@ -239,7 +241,7 @@ class TestHFileWriter {
     // Validate magic.
     byte[] dataBlockMagic = new byte[8];
     buf.get(dataBlockMagic);
-    assertArrayEquals("DATABLK*".getBytes(), dataBlockMagic);
+    assertArrayEquals(DATA.getMagic(), dataBlockMagic);
 
     // Skip header.
     buf.position(buf.position() + 25);
