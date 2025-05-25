@@ -85,7 +85,7 @@ public class HFileRootIndexBlock extends HFileIndexBlock {
   public List<BlockIndexEntry> readBlockIndexEntry(int numEntries,
                                                    boolean contentKeyOnly) {
     List<BlockIndexEntry> indexEntryList = new ArrayList<>();
-    int buffOffset = readAttributesOpt.get().getStartOffsetInCompressedBuff() + HFILEBLOCK_HEADER_SIZE;
+    int buffOffset = readAttributesOpt.get().getStartOffsetInBuff() + HFILEBLOCK_HEADER_SIZE;
     for (int i = 0; i < numEntries; i++) {
       long offset = readLong(readAttributesOpt.get().getByteBuff(), buffOffset);
       int size = readInt(readAttributesOpt.get().getByteBuff(), buffOffset + 8);
