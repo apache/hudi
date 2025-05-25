@@ -56,7 +56,8 @@ import static org.apache.hudi.io.hfile.TestHFileReader.VALUE_CREATOR;
 import static org.apache.hudi.io.storage.TestHoodieReaderWriterUtils.writeHFileForTesting;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class TestHoodieHBaseHFileReaderWriter extends TestHoodieHFileReaderWriterBase {
+@Disabled("HUDI-9084")
+class TestHoodieHBaseHFileReaderWriter extends TestHoodieHFileReaderWriterBase {
   @Override
   protected HoodieAvroFileReader createReader(
       HoodieStorage storage) throws Exception {

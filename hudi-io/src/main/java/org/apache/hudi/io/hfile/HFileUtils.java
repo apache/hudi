@@ -19,12 +19,7 @@
 
 package org.apache.hudi.io.hfile;
 
-import org.apache.hudi.io.compress.CompressionCodec;
 import org.apache.hudi.io.util.IOUtils;
-
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
 
 import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 
@@ -32,22 +27,6 @@ import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
  * Util methods for reading and writing HFile.
  */
 public class HFileUtils {
-  private static final Map<Integer, CompressionCodec> HFILE_COMPRESSION_CODEC_MAP = createCompressionCodecMap();
-
-  /**
-   * Gets the compression codec based on the ID.  This ID is written to the HFile on storage.
-   *
-   * @param id ID indicating the compression codec.
-   * @return compression codec based on the ID.
-   */
-  public static CompressionCodec decodeCompressionCodec(int id) {
-    CompressionCodec codec = HFILE_COMPRESSION_CODEC_MAP.get(id);
-    if (codec == null) {
-      throw new IllegalArgumentException("Compression code not found for ID: " + id);
-    }
-    return codec;
-  }
-
   /**
    * Reads the HFile major version from the input.
    *
@@ -105,24 +84,5 @@ public class HFileUtils {
    */
   public static String getValue(KeyValue kv) {
     return fromUTF8Bytes(kv.getBytes(), kv.getValueOffset(), kv.getValueLength());
-  }
-
-  /**
-   * The ID mapping cannot change or else that breaks all existing HFiles out there,
-   * even the ones that are not compressed! (They use the NONE algorithm)
-   * This is because HFile stores the ID to indicate which compression codec is used.
-   *
-   * @return the mapping of ID to compression codec.
-   */
-  private static Map<Integer, CompressionCodec> createCompressionCodecMap() {
-    Map<Integer, CompressionCodec> result = new HashMap<>();
-    result.put(0, CompressionCodec.LZO);
-    result.put(1, CompressionCodec.GZIP);
-    result.put(2, CompressionCodec.NONE);
-    result.put(3, CompressionCodec.SNAPPY);
-    result.put(4, CompressionCodec.LZ4);
-    result.put(5, CompressionCodec.BZIP2);
-    result.put(6, CompressionCodec.ZSTD);
-    return Collections.unmodifiableMap(result);
   }
 }

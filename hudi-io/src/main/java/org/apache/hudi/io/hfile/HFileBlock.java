@@ -19,11 +19,16 @@
 
 package org.apache.hudi.io.hfile;
 
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.compress.CompressionCodec;
 
+import com.google.protobuf.CodedOutputStream;
+
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.ByteBuffer;
 
 import static org.apache.hudi.io.hfile.DataSize.MAGIC_LENGTH;
 import static org.apache.hudi.io.hfile.DataSize.SIZEOF_BYTE;
@@ -43,9 +48,10 @@ public abstract class HFileBlock {
   // followed by another 4 byte value to store sizeofDataOnDisk.
   public static final int HFILEBLOCK_HEADER_SIZE =
       HFILEBLOCK_HEADER_SIZE_NO_CHECKSUM + SIZEOF_BYTE + 2 * SIZEOF_INT32;
-
   // Each checksum value is an integer that can be stored in 4 bytes.
   static final int CHECKSUM_SIZE = SIZEOF_INT32;
+  private static final int DEFAULT_BYTES_PER_CHECKSUM = 16 * 1024;
+  private static final byte[] EMPTY_BYTE_ARRAY = new byte[0];
 
   static class Header {
     // Format of header is:
@@ -80,6 +86,13 @@ public abstract class HFileBlock {
   protected byte[] compressedByteBuff;
   protected int startOffsetInCompressedBuff;
 
+  // Write properties
+  private long startOffsetInBuffForWrite = -1;
+  private long previousBlockOffsetForWrite = -1;
+
+  /**
+   * Initialize HFileBlock for read.
+   */
   protected HFileBlock(HFileContext context,
                        HFileBlockType blockType,
                        byte[] byteBuff,
@@ -105,6 +118,25 @@ public abstract class HFileBlock {
     }
     this.uncompressedEndOffset =
         this.startOffsetInBuff + HFILEBLOCK_HEADER_SIZE + uncompressedSizeWithoutHeader;
+  }
+
+  /**
+   * Initialize HFileBlock for write.
+   */
+  protected HFileBlock(HFileContext context,
+                       HFileBlockType blockType,
+                       long previousBlockOffsetForWrite) {
+    this.context = context;
+    this.blockType = blockType;
+    this.previousBlockOffsetForWrite = previousBlockOffsetForWrite;
+    // Set other reader properties to invalid values
+    this.byteBuff = null;
+    this.startOffsetInBuff = -1;
+    this.sizeCheckSum = -1;
+    this.uncompressedEndOffset = -1;
+    this.onDiskSizeWithoutHeader = -1;
+    this.uncompressedSizeWithoutHeader = -1;
+    this.bytesPerChecksum = -1;
   }
 
   /**
@@ -196,7 +228,7 @@ public abstract class HFileBlock {
             compressedByteBuff, startOffsetInCompressedBuff, byteBuff, 0, HFILEBLOCK_HEADER_SIZE);
         try (InputStream byteBuffInputStream = new ByteArrayInputStream(
             compressedByteBuff, startOffsetInCompressedBuff + HFILEBLOCK_HEADER_SIZE, onDiskSizeWithoutHeader)) {
-          context.getDecompressor().decompress(
+          context.getCompressor().decompress(
               byteBuffInputStream,
               byteBuff,
               HFILEBLOCK_HEADER_SIZE,
@@ -216,5 +248,92 @@ public abstract class HFileBlock {
   protected byte[] allocateBufferForUnpacking() {
     int capacity = HFILEBLOCK_HEADER_SIZE + uncompressedSizeWithoutHeader + sizeCheckSum;
     return new byte[capacity];
+  }
+
+  // ================ Below are for Write ================
+
+  /**
+   * Returns serialized "data" part of the block.
+   * This function must be implemented by each block type separately.
+   */
+  protected abstract ByteBuffer getUncompressedBlockDataToWrite();
+
+  /**
+   * Return serialized block including header, data, checksum.
+   */
+  public ByteBuffer serialize() throws IOException {
+    // Block payload.
+    ByteBuffer uncompressedBlockData = getUncompressedBlockDataToWrite();
+    // Compress if specified.
+    ByteBuffer compressedBlockData = context.getCompressor().compress(uncompressedBlockData);
+    // Buffer for building block.
+    ByteBuffer buf = ByteBuffer.allocate(Math.max(
+        context.getBlockSize() * 2,
+        compressedBlockData.limit() + HFILEBLOCK_HEADER_SIZE * 2));
+
+    // Block header
+    // 1. Magic is always 8 bytes.
+    buf.put(blockType.getMagic(), 0, 8);
+    // 2. onDiskSizeWithoutHeader.
+    buf.putInt(compressedBlockData.limit());
+    // 3. uncompressedSizeWithoutHeader.
+    buf.putInt(uncompressedBlockData.limit());
+    // 4. Previous block offset.
+    buf.putLong(previousBlockOffsetForWrite);
+    // 5. Checksum type.
+    buf.put(context.getChecksumType().getCode());
+    // 6. Bytes covered per checksum.
+    buf.putInt(DEFAULT_BYTES_PER_CHECKSUM);
+    // 7. onDiskDataSizeWithHeader
+    int onDiskDataSizeWithHeader =
+        HFileBlock.HFILEBLOCK_HEADER_SIZE + compressedBlockData.limit();
+    buf.putInt(onDiskDataSizeWithHeader);
+    // 8. Payload.
+    buf.put(compressedBlockData);
+    // 9. Checksum.
+    buf.put(generateChecksumBytes(context.getChecksumType()));
+
+    // Update sizes
+    buf.flip();
+    return buf;
+  }
+
+  /**
+   * Sets start offset of the block in the buffer.
+   */
+  protected void setStartOffsetInBuffForWrite(long startOffsetInBuffForWrite) {
+    this.startOffsetInBuffForWrite = startOffsetInBuffForWrite;
+  }
+
+  /**
+   * Gets start offset of the block in the buffer.
+   */
+  protected long getStartOffsetInBuffForWrite() {
+    return this.startOffsetInBuffForWrite;
+  }
+
+  /**
+   * Returns checksum bytes if checksum type is not NULL.
+   * Note that current HFileReaderImpl does not support non-NULL checksum.
+   */
+  private byte[] generateChecksumBytes(ChecksumType type) {
+    if (type == ChecksumType.NULL) {
+      return EMPTY_BYTE_ARRAY;
+    }
+    throw new HoodieException("Only NULL checksum type is supported");
+  }
+
+  /**
+   * Returns the bytes of the variable length encoding for an integer.
+   * @param length       an integer, normally representing a length.
+   * @return             variable length encoding.
+   * @throws IOException upon error.
+   */
+  static byte[] getVariableLengthEncodedBytes(int length) throws IOException {
+    ByteArrayOutputStream varintBuffer = new ByteArrayOutputStream();
+    CodedOutputStream varintOutput = CodedOutputStream.newInstance(varintBuffer);
+    varintOutput.writeUInt32NoTag(length);
+    varintOutput.flush();
+    return varintBuffer.toByteArray();
   }
 }

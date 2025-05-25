@@ -17,36 +17,27 @@
  * under the License.
  */
 
-package org.apache.hudi.io.hfile;
+package org.apache.hudi.io.compress;
 
-import java.nio.charset.StandardCharsets;
+import org.apache.hudi.io.compress.airlift.HoodieAirliftGzipCompressor;
+import org.apache.hudi.io.compress.builtin.HoodieNoneCompressor;
 
 /**
- * Represent a UTF8 String key only, with no length information encoded.
+ * Factory for {@link HoodieCompressor}.
  */
-public class UTF8StringKey extends Key {
-  public UTF8StringKey(String key) {
-    super(key.getBytes(StandardCharsets.UTF_8));
+public class HoodieCompressorFactory {
+  private HoodieCompressorFactory() {
   }
 
-  public UTF8StringKey(byte[] key) {
-    super(key);
-  }
-
-  @Override
-  public int getContentOffset() {
-    return getOffset();
-  }
-
-  @Override
-  public int getContentLength() {
-    return getLength();
-  }
-
-  @Override
-  public String toString() {
-    return "UTF8StringKey{"
-        + new String(getBytes())
-        + "}";
+  public static HoodieCompressor getCompressor(CompressionCodec compressionCodec) {
+    switch (compressionCodec) {
+      case NONE:
+        return new HoodieNoneCompressor();
+      case GZIP:
+        return new HoodieAirliftGzipCompressor();
+      default:
+        throw new IllegalArgumentException(
+            "The compressor is not supported for compression codec: " + compressionCodec);
+    }
   }
 }

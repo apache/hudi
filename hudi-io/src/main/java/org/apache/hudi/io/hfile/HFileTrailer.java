@@ -28,7 +28,6 @@ import java.util.Arrays;
 
 import static org.apache.hudi.io.hfile.DataSize.MAGIC_LENGTH;
 import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT32;
-import static org.apache.hudi.io.hfile.HFileUtils.decodeCompressionCodec;
 
 /**
  * Represents a HFile trailer, which is serialized and deserialized using
@@ -159,7 +158,7 @@ public class HFileTrailer {
       comparatorClassName = trailerProto.getComparatorClassName();
     }
     if (trailerProto.hasCompressionCodec()) {
-      compressionCodec = decodeCompressionCodec(trailerProto.getCompressionCodec());
+      compressionCodec = CompressionCodec.decodeCompressionCodec(trailerProto.getCompressionCodec());
     } else {
       compressionCodec = CompressionCodec.NONE;
     }

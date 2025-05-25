@@ -29,13 +29,13 @@ import java.util.Map;
  */
 public class HFileInfo {
   private static final String RESERVED_PREFIX = "hfile.";
-  private static final UTF8StringKey LAST_KEY =
+  static final UTF8StringKey LAST_KEY =
       new UTF8StringKey(RESERVED_PREFIX + "LASTKEY");
   private static final UTF8StringKey FILE_CREATION_TIME_TS =
       new UTF8StringKey(RESERVED_PREFIX + "CREATE_TIME_TS");
   private static final UTF8StringKey KEY_VALUE_VERSION =
       new UTF8StringKey("KEY_VALUE_VERSION");
-  private static final UTF8StringKey MAX_MVCC_TS_KEY =
+  static final UTF8StringKey MAX_MVCC_TS_KEY =
       new UTF8StringKey("MAX_MEMSTORE_TS_KEY");
 
   private static final int KEY_VALUE_VERSION_WITH_MVCC_TS = 1;

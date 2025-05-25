@@ -21,10 +21,14 @@ package org.apache.hudi.io.hfile;
 
 import org.apache.hudi.common.util.Option;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.TreeMap;
 
+import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT16;
 import static org.apache.hudi.io.util.IOUtils.copy;
 import static org.apache.hudi.io.util.IOUtils.decodeVarLongSizeOnDisk;
 import static org.apache.hudi.io.util.IOUtils.readInt;
@@ -34,11 +38,19 @@ import static org.apache.hudi.io.util.IOUtils.readVarLong;
 /**
  * Represents a {@link HFileBlockType#ROOT_INDEX} block.
  */
-public class HFileRootIndexBlock extends HFileBlock {
+public class HFileRootIndexBlock extends HFileIndexBlock {
   public HFileRootIndexBlock(HFileContext context,
                              byte[] byteBuff,
                              int startOffsetInBuff) {
     super(context, HFileBlockType.ROOT_INDEX, byteBuff, startOffsetInBuff);
+  }
+
+  private HFileRootIndexBlock(HFileContext context) {
+    super(context, HFileBlockType.ROOT_INDEX);
+  }
+
+  public static HFileRootIndexBlock createRootIndexBlockToWrite(HFileContext context) {
+    return new HFileRootIndexBlock(context);
   }
 
   /**
@@ -85,5 +97,38 @@ public class HFileRootIndexBlock extends HFileBlock {
       buffOffset += (12 + varLongSizeOnDist + keyLength);
     }
     return indexEntryList;
+  }
+
+  @Override
+  public ByteBuffer getUncompressedBlockDataToWrite() {
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    ByteBuffer buf = ByteBuffer.allocate(context.getBlockSize());
+    for (BlockIndexEntry entry : entries) {
+      buf.putLong(entry.getOffset());
+      buf.putInt(entry.getSize());
+
+      // Key length + 2.
+      try {
+        byte[] keyLength = getVariableLengthEncodedBytes(
+            entry.getFirstKey().getLength() + SIZEOF_INT16);
+        buf.put(keyLength);
+      } catch (IOException e) {
+        throw new RuntimeException(
+            "Failed to serialize number: " + entry.getFirstKey().getLength() + SIZEOF_INT16);
+      }
+      // Key length.
+      buf.putShort((short) entry.getFirstKey().getLength());
+      // Key.
+      buf.put(entry.getFirstKey().getBytes());
+      // Copy to output stream.
+      baos.write(buf.array(), 0, buf.position());
+      // Clear the buffer.
+      buf.clear();
+    }
+
+    // Output all data in a buffer.
+    byte[] allData = baos.toByteArray();
+    blockDataSize = allData.length;
+    return ByteBuffer.wrap(allData);
   }
 }
