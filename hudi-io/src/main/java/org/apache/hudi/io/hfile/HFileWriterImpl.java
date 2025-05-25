@@ -20,8 +20,6 @@
 package org.apache.hudi.io.hfile;
 
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.io.ByteBufferBackedInputStream;
-import org.apache.hudi.io.ByteArraySeekableDataInputStream;
 import org.apache.hudi.io.compress.CompressionCodec;
 import org.apache.hudi.io.hfile.protobuf.generated.HFileProtos;
 
@@ -29,14 +27,10 @@ import com.google.protobuf.ByteString;
 import com.google.protobuf.CodedOutputStream;
 
 import java.io.ByteArrayOutputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -191,7 +185,7 @@ public class HFileWriterImpl implements HFileWriter {
     builder.setDataIndexCount(rootIndexBlock.getNumOfEntries());
     builder.setMetaIndexCount(metaIndexBlock.getNumOfEntries());
     builder.setEntryCount(totalNumberOfRecords);
-    // TODO: support multiple levels.
+    // TODO(HUDI-9464): support multiple levels.
     builder.setNumDataIndexLevels(1);
     builder.setFirstDataBlockOffset(firstDataBlockOffset);
     builder.setLastDataBlockOffset(lastDataBlockOffset);
@@ -248,28 +242,4 @@ public class HFileWriterImpl implements HFileWriter {
     byteBuffer.put(key);
     return byteBuffer.array();
   }
-
-  // Example to demonstrate the code is runnable.
-  public static void main(String[] args) throws Exception {
-    String fileName = "test.hfile";
-    HFileContext context = HFileContext.builder().build();
-    try (OutputStream outputStream = new DataOutputStream(
-        Files.newOutputStream(Paths.get(fileName)));
-         HFileWriterImpl writer = new HFileWriterImpl(context, outputStream)) {
-      writer.append("key1", "value1".getBytes());
-      writer.append("key2", "value2".getBytes());
-    }
-
-    Path file = Paths.get("test.hfile");
-    byte[] content = Files.readAllBytes(file);
-    try (HFileReader reader = new HFileReaderImpl(
-        new ByteArraySeekableDataInputStream(
-            new ByteBufferBackedInputStream(content)), content.length)) {
-      reader.initializeMetadata();
-      reader.getNumKeyValueEntries();
-    }
-  }
 }
-
-
-
