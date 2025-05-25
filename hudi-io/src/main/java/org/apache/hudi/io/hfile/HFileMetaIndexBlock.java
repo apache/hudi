@@ -28,7 +28,7 @@ public class HFileMetaIndexBlock extends HFileIndexBlock {
     super(context, HFileBlockType.ROOT_INDEX);
   }
 
-  public static HFileMetaIndexBlock createWritableMetaIndexBlock(HFileContext context) {
+  public static HFileMetaIndexBlock createMetaIndexBlockToWrite(HFileContext context) {
     return new HFileMetaIndexBlock(context);
   }
 

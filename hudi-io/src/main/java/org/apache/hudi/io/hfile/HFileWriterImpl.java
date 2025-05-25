@@ -76,10 +76,10 @@ public class HFileWriterImpl implements HFileWriter {
     this.uncompressedDataBlockBytes = 0L;
     this.totalUncompressedDataBlockBytes = 0L;
     this.currentOffset = 0L;
-    this.currentDataBlock = HFileDataBlock.createWritableDataBlock(context, -1L);
-    this.rootIndexBlock = HFileRootIndexBlock.createWritableRootIndexBlock(context);
-    this.metaIndexBlock = HFileMetaIndexBlock.createWritableMetaIndexBlock(context);
-    this.fileInfoBlock = HFileFileInfoBlock.createWritableFileInfoBlock(context);
+    this.currentDataBlock = HFileDataBlock.createDataBlockToWrite(context, -1L);
+    this.rootIndexBlock = HFileRootIndexBlock.createRootIndexBlockToWrite(context);
+    this.metaIndexBlock = HFileMetaIndexBlock.createMetaIndexBlockToWrite(context);
+    this.fileInfoBlock = HFileFileInfoBlock.createFileInfoBlockToWrite(context);
     initFileInfo();
   }
 
@@ -138,7 +138,7 @@ public class HFileWriterImpl implements HFileWriter {
     rootIndexBlock.add(
         currentDataBlock.getFirstKey(), lastDataBlockOffset, blockBuffer.limit());
     // 4. Create a new data block.
-    currentDataBlock = HFileDataBlock.createWritableDataBlock(context, currentOffset);
+    currentDataBlock = HFileDataBlock.createDataBlockToWrite(context, currentOffset);
   }
 
   // NOTE that: reader assumes that every meta info piece
@@ -146,7 +146,7 @@ public class HFileWriterImpl implements HFileWriter {
   private void flushMetaBlocks() throws IOException {
     for (Map.Entry<String, byte[]> e : metaInfo.entrySet()) {
       HFileMetaBlock currentMetaBlock =
-          HFileMetaBlock.createWritableMetaBlock(
+          HFileMetaBlock.createMetaBlockToWrite(
               context, new KeyValueEntry(StringUtils.getUTF8Bytes(e.getKey()), e.getValue()));
       ByteBuffer blockBuffer = currentMetaBlock.serialize();
       long blockOffset = currentOffset;

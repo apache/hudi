@@ -52,6 +52,10 @@ public class HFileFileInfoBlock extends HFileBlock {
     super(context, HFileBlockType.FILE_INFO, -1L);
   }
 
+  public static HFileFileInfoBlock createFileInfoBlockToWrite(HFileContext context) {
+    return new HFileFileInfoBlock(context);
+  }
+
   public HFileInfo readFileInfo() throws IOException {
     int pbMagicLength = PB_MAGIC.length;
     if (IOUtils.compareTo(PB_MAGIC, 0, pbMagicLength,
@@ -76,9 +80,6 @@ public class HFileFileInfoBlock extends HFileBlock {
   }
 
   // ================ Below are for Write ================
-  public static HFileFileInfoBlock createWritableFileInfoBlock(HFileContext context) {
-    return new HFileFileInfoBlock(context);
-  }
 
   public void add(String name, byte[] value) {
     fileInfoToWrite.put(name, value);

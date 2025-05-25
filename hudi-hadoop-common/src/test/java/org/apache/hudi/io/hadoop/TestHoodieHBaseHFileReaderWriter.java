@@ -82,7 +82,6 @@ class TestHoodieHBaseHFileReaderWriter extends TestHoodieHFileReaderWriterBase {
              HoodieHFileUtils.createHFileReader(storage, new StoragePath(DUMMY_BASE_PATH), content)) {
       // HFile version is 3
       assertEquals(3, reader.getTrailer().getMajorVersion());
-      assertEquals(count, reader.getEntries());
       if (mayUseDefaultComparator && hfileName.contains("hudi_0_9")) {
         // Pre Hudi 0.10, the default comparator is used for metadata table HFiles
         // For bootstrap index HFiles, the custom comparator is always used
@@ -90,6 +89,7 @@ class TestHoodieHBaseHFileReaderWriter extends TestHoodieHFileReaderWriterBase {
       } else {
         assertEquals(expectedComparatorClazz, reader.getComparator().getClass());
       }
+      assertEquals(count, reader.getEntries());
     }
   }
 

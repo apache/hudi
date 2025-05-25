@@ -28,14 +28,14 @@ public abstract class HFileIndexBlock extends HFileBlock {
   protected final List<BlockIndexEntry> entries = new ArrayList<>();
   protected long blockDataSize = -1L;
 
-  public HFileIndexBlock(HFileContext context,
+  protected HFileIndexBlock(HFileContext context,
                          HFileBlockType blockType,
                          byte[] byteBuff,
                          int startOffsetInBuff) {
     super(context, blockType, byteBuff, startOffsetInBuff);
   }
 
-  public HFileIndexBlock(HFileContext context,
+  protected HFileIndexBlock(HFileContext context,
                          HFileBlockType blockType) {
     super(context, blockType, -1L);
   }

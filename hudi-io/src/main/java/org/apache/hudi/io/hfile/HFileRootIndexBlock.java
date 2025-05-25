@@ -45,12 +45,12 @@ public class HFileRootIndexBlock extends HFileIndexBlock {
     super(context, HFileBlockType.ROOT_INDEX, byteBuff, startOffsetInBuff);
   }
 
-  public static HFileRootIndexBlock createWritableRootIndexBlock(HFileContext context) {
-    return new HFileRootIndexBlock(context);
-  }
-
   private HFileRootIndexBlock(HFileContext context) {
     super(context, HFileBlockType.ROOT_INDEX);
+  }
+
+  public static HFileRootIndexBlock createRootIndexBlockToWrite(HFileContext context) {
+    return new HFileRootIndexBlock(context);
   }
 
   /**

@@ -38,8 +38,8 @@ public class HFileMetaBlock extends HFileBlock {
     this.entry = keyValueEntry;
   }
 
-  static HFileMetaBlock createWritableMetaBlock(HFileContext context,
-                                                KeyValueEntry keyValueEntry) {
+  static HFileMetaBlock createMetaBlockToWrite(HFileContext context,
+                                               KeyValueEntry keyValueEntry) {
     return new HFileMetaBlock(context, keyValueEntry);
   }
 

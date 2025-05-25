@@ -44,6 +44,7 @@ public class HFileDataBlock extends HFileBlock {
 
   // End offset of content in the block, relative to the start of the start of the block
   protected final int uncompressedContentEndRelativeOffset;
+  private final List<KeyValueEntry> entriesToWrite = new ArrayList<>();
 
   // For read purpose.
   protected HFileDataBlock(HFileContext context,
@@ -62,6 +63,11 @@ public class HFileDataBlock extends HFileBlock {
     super(context, HFileBlockType.DATA, previousBlockOffset);
     // This is not used for write.
     uncompressedContentEndRelativeOffset = -1;
+  }
+
+  static HFileDataBlock createDataBlockToWrite(HFileContext context,
+                                               long previousBlockOffset) {
+    return new HFileDataBlock(context, previousBlockOffset);
   }
 
   /**
@@ -167,43 +173,37 @@ public class HFileDataBlock extends HFileBlock {
   }
 
   // ================ Below are for Write ================
-  private final List<KeyValueEntry> entries = new ArrayList<>();
-
-  static HFileDataBlock createWritableDataBlock(HFileContext context,
-                                                long previousBlockOffset) {
-    return new HFileDataBlock(context, previousBlockOffset);
-  }
 
   boolean isEmpty() {
-    return entries.isEmpty();
+    return entriesToWrite.isEmpty();
   }
 
   void add(byte[] key, byte[] value) {
     KeyValueEntry kv = new KeyValueEntry(key, value);
     // Assume all entries are sorted before write.
-    entries.add(kv);
+    entriesToWrite.add(kv);
   }
 
   int getNumOfEntries() {
-    return entries.size();
+    return entriesToWrite.size();
   }
 
   byte[] getFirstKey() {
-    return entries.get(0).key;
+    return entriesToWrite.get(0).key;
   }
 
   byte[] getLastKeyContent() {
-    if (entries.isEmpty()) {
+    if (entriesToWrite.isEmpty()) {
       return new byte[0];
     }
-    return entries.get(entries.size() - 1).key;
+    return entriesToWrite.get(entriesToWrite.size() - 1).key;
   }
 
   @Override
   protected ByteBuffer getUncompressedBlockDataToWrite() {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     ByteBuffer dataBuf = ByteBuffer.allocate(context.getBlockSize());
-    for (KeyValueEntry kv : entries) {
+    for (KeyValueEntry kv : entriesToWrite) {
       // Length of key + length of a short variable indicating length of key.
       dataBuf.putInt(kv.key.length + SIZEOF_INT16);
       // Length of value.
