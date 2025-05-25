@@ -39,6 +39,8 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 public class HFileFileInfoBlock extends HFileBlock {
   // Magic we put ahead of a serialized protobuf message
   public static final byte[] PB_MAGIC = new byte[] {'P', 'B', 'U', 'F'};
+  // Write properties
+  private final Map<String, byte[]> fileInfoToWrite = new HashMap<>();
 
   public HFileFileInfoBlock(HFileContext context,
                             byte[] byteBuff,
@@ -77,8 +79,6 @@ public class HFileFileInfoBlock extends HFileBlock {
   public static HFileFileInfoBlock createWritableFileInfoBlock(HFileContext context) {
     return new HFileFileInfoBlock(context);
   }
-
-  private final Map<String, byte[]> fileInfoToWrite = new HashMap<>();
 
   public void add(String name, byte[] value) {
     fileInfoToWrite.put(name, value);

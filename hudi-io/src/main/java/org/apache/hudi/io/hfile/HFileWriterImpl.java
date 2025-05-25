@@ -149,7 +149,7 @@ public class HFileWriterImpl implements HFileWriter {
     for (Map.Entry<String, byte[]> e : metaInfo.entrySet()) {
       byte[] key = StringUtils.getUTF8Bytes(e.getKey());
       HFileMetaBlock currentMetaBlock =
-          new HFileMetaBlock(context, new KeyValueEntry(key, e.getValue()));
+          HFileMetaBlock.createWritableMetaBlock(context, new KeyValueEntry(key, e.getValue()));
       ByteBuffer blockBuffer = currentMetaBlock.serialize();
       long blockOffset = currentOffset;
       currentMetaBlock.setStartOffsetInBuff(currentOffset);

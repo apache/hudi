@@ -20,17 +20,27 @@
 package org.apache.hudi.io.hfile;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * Represents a {@link HFileBlockType#META} block.
  */
 public class HFileMetaBlock extends HFileBlock {
+  protected KeyValueEntry entry;
+
   protected HFileMetaBlock(HFileContext context,
                            byte[] byteBuff,
                            int startOffsetInBuff) {
     super(context, HFileBlockType.META, byteBuff, startOffsetInBuff);
+  }
+
+  private HFileMetaBlock(HFileContext context, KeyValueEntry keyValueEntry) {
+    super(context, HFileBlockType.META, -1L);
+    this.entry = keyValueEntry;
+  }
+
+  static HFileMetaBlock createWritableMetaBlock(HFileContext context,
+                                                KeyValueEntry keyValueEntry) {
+    return new HFileMetaBlock(context, keyValueEntry);
   }
 
   public ByteBuffer readContent() {
@@ -41,13 +51,6 @@ public class HFileMetaBlock extends HFileBlock {
   }
 
   // ================ Below are for Write ================
-
-  protected KeyValueEntry entry;
-
-  public HFileMetaBlock(HFileContext context, KeyValueEntry keyValueEntry) {
-    super(context, HFileBlockType.META, -1L);
-    this.entry = keyValueEntry;
-  }
 
   public byte[] getFirstKey() {
     return entry.key;
