@@ -44,8 +44,8 @@ import static org.apache.hudi.io.hfile.HFileInfo.MAX_MVCC_TS_KEY;
  * Pure Java implementation of HFile writer (HFile v3 format) for Hudi.
  */
 public class HFileWriterImpl implements HFileWriter {
-  private static final String BYTE_ARRAY_COMPARATOR
-      = "org.apache.hadoop.hbase.util.Bytes.ByteArrayComparator";
+  private static final String COMPARATOR_CLASS_NAME
+      = "org.apache.hudi.io.storage.HoodieHBaseKVComparator";
   private final OutputStream outputStream;
   private final HFileContext context;
   // Meta Info map.
@@ -189,7 +189,7 @@ public class HFileWriterImpl implements HFileWriter {
     builder.setNumDataIndexLevels(1);
     builder.setFirstDataBlockOffset(firstDataBlockOffset);
     builder.setLastDataBlockOffset(lastDataBlockOffset);
-    builder.setComparatorClassName(BYTE_ARRAY_COMPARATOR);
+    builder.setComparatorClassName(COMPARATOR_CLASS_NAME);
     // Set codec.
     if (context.getCompressionCodec() == CompressionCodec.GZIP) {
       builder.setCompressionCodec(1);
