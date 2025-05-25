@@ -79,8 +79,8 @@ public abstract class HFileBlock {
   private final HFileBlockType blockType;
 
   // Write properties
-  private long startOffsetInBuff = -1;
-  private long previousBlockOffset = -1;
+  private long startOffsetInBuffForWrite = -1;
+  private long previousBlockOffsetForWrite = -1;
 
   /**
    * Initialize HFileBlock for read.
@@ -99,10 +99,10 @@ public abstract class HFileBlock {
    */
   protected HFileBlock(HFileContext context,
                        HFileBlockType blockType,
-                       long previousBlockOffset) {
+                       long previousBlockOffsetForWrite) {
     this.context = context;
     this.blockType = blockType;
-    this.previousBlockOffset = previousBlockOffset;
+    this.previousBlockOffsetForWrite = previousBlockOffsetForWrite;
     this.readAttributesOpt = Option.empty();
   }
 
@@ -212,7 +212,7 @@ public abstract class HFileBlock {
     // 3. uncompressedSizeWithoutHeader.
     buf.putInt(uncompressedBlockData.limit());
     // 4. Previous block offset.
-    buf.putLong(previousBlockOffset);
+    buf.putLong(previousBlockOffsetForWrite);
     // 5. Checksum type.
     buf.put(context.getChecksumType().getCode());
     // 6. Bytes covered per checksum.
@@ -234,15 +234,15 @@ public abstract class HFileBlock {
   /**
    * Sets start offset of the block in the buffer.
    */
-  protected void setStartOffsetInBuff(long startOffsetInBuff) {
-    this.startOffsetInBuff = startOffsetInBuff;
+  protected void setStartOffsetInBuffForWrite(long startOffsetInBuffForWrite) {
+    this.startOffsetInBuffForWrite = startOffsetInBuffForWrite;
   }
 
   /**
    * Gets start offset of the block in the buffer.
    */
-  protected long getStartOffsetInBuff() {
-    return this.startOffsetInBuff;
+  protected long getStartOffsetInBuffForWrite() {
+    return this.startOffsetInBuffForWrite;
   }
 
   /**

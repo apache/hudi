@@ -150,7 +150,7 @@ public class HFileWriterImpl implements HFileWriter {
               context, new KeyValueEntry(StringUtils.getUTF8Bytes(e.getKey()), e.getValue()));
       ByteBuffer blockBuffer = currentMetaBlock.serialize();
       long blockOffset = currentOffset;
-      currentMetaBlock.setStartOffsetInBuff(currentOffset);
+      currentMetaBlock.setStartOffsetInBuffForWrite(currentOffset);
       writeBuffer(blockBuffer);
       metaIndexBlock.add(
           currentMetaBlock.getFirstKey(), blockOffset, blockBuffer.limit());
@@ -161,25 +161,25 @@ public class HFileWriterImpl implements HFileWriter {
     loadOnOpenSectionOffset = currentOffset;
     // Write Root Data Index
     ByteBuffer dataIndexBuffer = rootIndexBlock.serialize();
-    rootIndexBlock.setStartOffsetInBuff(currentOffset);
+    rootIndexBlock.setStartOffsetInBuffForWrite(currentOffset);
     writeBuffer(dataIndexBuffer);
     // Write Meta Data Index.
     // Note: Even this block is empty, it has to be there
     //  due to the behavior of the reader.
     ByteBuffer metaIndexBuffer = metaIndexBlock.serialize();
-    metaIndexBlock.setStartOffsetInBuff(currentOffset);
+    metaIndexBlock.setStartOffsetInBuffForWrite(currentOffset);
     writeBuffer(metaIndexBuffer);
     // Write File Info.
     fileInfoBlock.add(
         new String(LAST_KEY.getBytes(), StandardCharsets.UTF_8),
         addKeyLength(lastKey));
-    fileInfoBlock.setStartOffsetInBuff(currentOffset);
+    fileInfoBlock.setStartOffsetInBuffForWrite(currentOffset);
     writeBuffer(fileInfoBlock.serialize());
   }
 
   private void writeTrailer() throws IOException {
     HFileProtos.TrailerProto.Builder builder = HFileProtos.TrailerProto.newBuilder();
-    builder.setFileInfoOffset(fileInfoBlock.getStartOffsetInBuff());
+    builder.setFileInfoOffset(fileInfoBlock.getStartOffsetInBuffForWrite());
     builder.setLoadOnOpenDataOffset(loadOnOpenSectionOffset);
     builder.setUncompressedDataIndexSize(totalUncompressedDataBlockBytes);
     builder.setDataIndexCount(rootIndexBlock.getNumOfEntries());
