@@ -37,7 +37,7 @@ public class HoodieCompressorFactory {
         return new HoodieAirliftGzipCompressor();
       default:
         throw new IllegalArgumentException(
-            "The decompression is not supported for compression codec: " + compressionCodec);
+            "The compressor is not supported for compression codec: " + compressionCodec);
     }
   }
 }

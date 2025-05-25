@@ -158,7 +158,7 @@ public class HFileDataBlock extends HFileBlock {
       keyValue = Option.of(readKeyValue(offset));
     }
     cursor.increment((long) KEY_OFFSET + (long) keyValue.get().getKeyLength()
-        + keyValue.get().getValueLength() + ZERO_TS_VERSION_BYTE_LENGTH);
+        + (long) keyValue.get().getValueLength() + ZERO_TS_VERSION_BYTE_LENGTH);
     return cursor.getOffset() - blockStartOffsetInFile < uncompressedContentEndRelativeOffset;
   }
 

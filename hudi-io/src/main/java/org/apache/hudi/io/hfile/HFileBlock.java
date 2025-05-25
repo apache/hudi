@@ -79,9 +79,8 @@ public abstract class HFileBlock {
   private final HFileBlockType blockType;
 
   // Write properties
-  protected long startOffsetInBuff = -1;
-  protected long previousBlockOffset = -1;
-  protected int blockSize;
+  private long startOffsetInBuff = -1;
+  private long previousBlockOffset = -1;
 
   /**
    * Initialize HFileBlock for read.
@@ -103,7 +102,6 @@ public abstract class HFileBlock {
                        long previousBlockOffset) {
     this.context = context;
     this.blockType = blockType;
-    this.blockSize = context.getBlockSize();
     this.previousBlockOffset = previousBlockOffset;
     this.readAttributesOpt = Option.empty();
   }
@@ -200,7 +198,7 @@ public abstract class HFileBlock {
     // Block payload.
     ByteBuffer uncompressedBlockData = getUncompressedBlockDataToWrite();
     // Compress if specified.
-    ByteBuffer compressedBlockData = compress(uncompressedBlockData);
+    ByteBuffer compressedBlockData = context.getCompressor().compress(uncompressedBlockData);
     // Buffer for building block.
     ByteBuffer buf = ByteBuffer.allocate(Math.max(
         context.getBlockSize() * 2,
@@ -231,13 +229,6 @@ public abstract class HFileBlock {
     // Update sizes
     buf.flip();
     return buf;
-  }
-
-  /**
-   * Compress block data without header and checksum.
-   */
-  protected ByteBuffer compress(ByteBuffer payload) throws IOException {
-    return context.getCompressor().compress(payload);
   }
 
   /**

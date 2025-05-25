@@ -42,21 +42,26 @@ public enum CompressionCodec {
 
   private static final Map<String, CompressionCodec>
       NAME_TO_COMPRESSION_CODEC_MAP = createNameToCompressionCodecMap();
+  private static final Map<Integer, CompressionCodec>
+      ID_TO_COMPRESSION_CODEC_MAP = createIdToCompressionCodecMap();
 
   private final String name;
-  private final int code;
+  // CompressionCodec ID to be stored in HFile on storage
+  // The ID of each codec cannot change or else that breaks all existing HFiles out there
+  // even the ones that are not compressed! (They use the NONE algorithm)
+  private final int id;
 
-  CompressionCodec(final String name, int code) {
+  CompressionCodec(final String name, int id) {
     this.name = name;
-    this.code = code;
+    this.id = id;
   }
 
   public String getName() {
     return name;
   }
-  
-  public int getCode() {
-    return code;
+
+  public int getId() {
+    return id;
   }
 
   public static CompressionCodec findCodecByName(String name) {
@@ -68,12 +73,35 @@ public enum CompressionCodec {
   }
 
   /**
-   * Create a mapping from its name to the compression codec.
+   * Gets the compression codec based on the ID.  This ID is written to the HFile on storage.
+   *
+   * @param id ID indicating the compression codec
+   * @return compression codec based on the ID
+   */
+  public static CompressionCodec decodeCompressionCodec(int id) {
+    CompressionCodec codec = ID_TO_COMPRESSION_CODEC_MAP.get(id);
+    ValidationUtils.checkArgument(
+        codec != null, "Compression code not found for ID: " + id);
+    return codec;
+  }
+
+  /**
+   * @return the mapping of name to compression codec.
    */
   private static Map<String, CompressionCodec> createNameToCompressionCodecMap() {
     return Collections.unmodifiableMap(
         Arrays.stream(CompressionCodec.values())
             .collect(Collectors.toMap(CompressionCodec::getName, Function.identity()))
+    );
+  }
+
+  /**
+   * @return the mapping of ID to compression codec.
+   */
+  private static Map<Integer, CompressionCodec> createIdToCompressionCodecMap() {
+    return Collections.unmodifiableMap(
+        Arrays.stream(CompressionCodec.values())
+            .collect(Collectors.toMap(CompressionCodec::getId, Function.identity()))
     );
   }
 }

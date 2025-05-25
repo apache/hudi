@@ -145,9 +145,9 @@ public class HFileWriterImpl implements HFileWriter {
   // should be a separate meta block.
   private void flushMetaBlocks() throws IOException {
     for (Map.Entry<String, byte[]> e : metaInfo.entrySet()) {
-      byte[] key = StringUtils.getUTF8Bytes(e.getKey());
       HFileMetaBlock currentMetaBlock =
-          HFileMetaBlock.createWritableMetaBlock(context, new KeyValueEntry(key, e.getValue()));
+          HFileMetaBlock.createWritableMetaBlock(
+              context, new KeyValueEntry(StringUtils.getUTF8Bytes(e.getKey()), e.getValue()));
       ByteBuffer blockBuffer = currentMetaBlock.serialize();
       long blockOffset = currentOffset;
       currentMetaBlock.setStartOffsetInBuff(currentOffset);
@@ -190,7 +190,7 @@ public class HFileWriterImpl implements HFileWriter {
     builder.setFirstDataBlockOffset(firstDataBlockOffset);
     builder.setLastDataBlockOffset(lastDataBlockOffset);
     builder.setComparatorClassName(COMPARATOR_CLASS_NAME);
-    builder.setCompressionCodec(context.getCompressionCodec().getCode());
+    builder.setCompressionCodec(context.getCompressionCodec().getId());
     builder.setEncryptionKey(ByteString.EMPTY);
     HFileProtos.TrailerProto trailerProto = builder.build();
 
