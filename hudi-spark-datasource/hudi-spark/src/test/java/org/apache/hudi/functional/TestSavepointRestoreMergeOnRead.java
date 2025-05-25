@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.client.functional;
+package org.apache.hudi.functional;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
@@ -24,6 +24,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -316,6 +317,7 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
       updateBatchWithoutCommit(client.createNewInstantTime(),
           Objects.requireNonNull(baseRecordsToUpdate, "The records to update should not be null"));
       // rollback the delta_commit
+      metaClient = HoodieTableMetaClient.reload(metaClient);
       assertTrue(client.rollbackFailedWrites(metaClient), "The last delta_commit should be rolled back");
 
       // another update

@@ -668,7 +668,7 @@ public class HoodieClientTestBase extends HoodieSparkClientTestHarness {
       WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
       List<HoodieRecord> records = dataGen.generateUpdates(newCommitTime, baseRecordsToUpdate);
       JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
-      client.upsert(writeRecords, newCommitTime);
+      client.upsert(writeRecords, newCommitTime).collect();
     }
   }
 

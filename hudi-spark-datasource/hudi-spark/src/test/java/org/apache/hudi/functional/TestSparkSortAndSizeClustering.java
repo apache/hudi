@@ -63,7 +63,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness {
 
-
   private HoodieWriteConfig config;
   private HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0);
 

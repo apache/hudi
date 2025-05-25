@@ -16,10 +16,11 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.client.functional;
+package org.apache.hudi.functional;
 
 import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.functional.TestHoodieMetadataBase;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
