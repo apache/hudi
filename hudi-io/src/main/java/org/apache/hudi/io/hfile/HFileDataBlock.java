@@ -53,9 +53,7 @@ public class HFileDataBlock extends HFileBlock {
     super(context, HFileBlockType.DATA, byteBuff, startOffsetInBuff);
 
     this.uncompressedContentEndRelativeOffset =
-        this.readAttributesOpt.get().getUncompressedEndOffset()
-        - this.readAttributesOpt.get().getSizeCheckSum()
-        - this.readAttributesOpt.get().getStartOffsetInBuff();
+        this.uncompressedEndOffset - this.sizeCheckSum - this.startOffsetInBuff;
   }
 
   // For write purpose.
@@ -146,7 +144,7 @@ public class HFileDataBlock extends HFileBlock {
    * @return the {@link KeyValue} instance.
    */
   KeyValue readKeyValue(int offset) {
-    return new KeyValue(readAttributesOpt.get().getByteBuff(), offset);
+    return new KeyValue(byteBuff, offset);
   }
 
   /**

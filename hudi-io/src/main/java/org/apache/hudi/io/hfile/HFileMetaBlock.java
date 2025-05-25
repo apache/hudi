@@ -46,8 +46,7 @@ public class HFileMetaBlock extends HFileBlock {
   public ByteBuffer readContent() {
     return ByteBuffer.wrap(
         getByteBuff(),
-        readAttributesOpt.get().getStartOffsetInBuff() + HFILEBLOCK_HEADER_SIZE,
-        readAttributesOpt.get().getUncompressedSizeWithoutHeader());
+        startOffsetInBuff + HFILEBLOCK_HEADER_SIZE, uncompressedSizeWithoutHeader);
   }
 
   // ================ Below are for Write ================

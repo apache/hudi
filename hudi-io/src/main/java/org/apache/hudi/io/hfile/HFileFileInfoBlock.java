@@ -59,17 +59,14 @@ public class HFileFileInfoBlock extends HFileBlock {
   public HFileInfo readFileInfo() throws IOException {
     int pbMagicLength = PB_MAGIC.length;
     if (IOUtils.compareTo(PB_MAGIC, 0, pbMagicLength,
-        readAttributesOpt.get().getByteBuff(),
-        readAttributesOpt.get().getStartOffsetInBuff() + HFILEBLOCK_HEADER_SIZE, pbMagicLength) != 0) {
+        byteBuff, startOffsetInBuff + HFILEBLOCK_HEADER_SIZE, pbMagicLength) != 0) {
       throw new IOException(
           "Unexpected Protobuf magic at the beginning of the HFileFileInfoBlock: "
-              + fromUTF8Bytes(readAttributesOpt.get().getByteBuff(),
-              readAttributesOpt.get().getStartOffsetInBuff() + HFILEBLOCK_HEADER_SIZE, pbMagicLength));
+              + fromUTF8Bytes(byteBuff, startOffsetInBuff + HFILEBLOCK_HEADER_SIZE, pbMagicLength));
     }
     ByteArrayInputStream inputStream = new ByteArrayInputStream(
-        readAttributesOpt.get().getByteBuff(),
-        readAttributesOpt.get().getStartOffsetInBuff() + HFILEBLOCK_HEADER_SIZE + pbMagicLength,
-        readAttributesOpt.get().getUncompressedSizeWithoutHeader());
+        byteBuff,
+        startOffsetInBuff + HFILEBLOCK_HEADER_SIZE + pbMagicLength, uncompressedSizeWithoutHeader);
     Map<UTF8StringKey, byte[]> fileInfoMap = new HashMap<>();
     HFileProtos.InfoProto infoProto = HFileProtos.InfoProto.parseDelimitedFrom(inputStream);
     for (HFileProtos.BytesBytesPair pair : infoProto.getMapEntryList()) {

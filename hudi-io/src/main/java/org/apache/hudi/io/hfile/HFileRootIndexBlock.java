@@ -85,13 +85,13 @@ public class HFileRootIndexBlock extends HFileIndexBlock {
   public List<BlockIndexEntry> readBlockIndexEntry(int numEntries,
                                                    boolean contentKeyOnly) {
     List<BlockIndexEntry> indexEntryList = new ArrayList<>();
-    int buffOffset = readAttributesOpt.get().getStartOffsetInBuff() + HFILEBLOCK_HEADER_SIZE;
+    int buffOffset = startOffsetInBuff + HFILEBLOCK_HEADER_SIZE;
     for (int i = 0; i < numEntries; i++) {
-      long offset = readLong(readAttributesOpt.get().getByteBuff(), buffOffset);
-      int size = readInt(readAttributesOpt.get().getByteBuff(), buffOffset + 8);
-      int varLongSizeOnDist = decodeVarLongSizeOnDisk(readAttributesOpt.get().getByteBuff(), buffOffset + 12);
-      int keyLength = (int) readVarLong(readAttributesOpt.get().getByteBuff(), buffOffset + 12, varLongSizeOnDist);
-      byte[] keyBytes = copy(readAttributesOpt.get().getByteBuff(), buffOffset + 12 + varLongSizeOnDist, keyLength);
+      long offset = readLong(byteBuff, buffOffset);
+      int size = readInt(byteBuff, buffOffset + 8);
+      int varLongSizeOnDist = decodeVarLongSizeOnDisk(byteBuff, buffOffset + 12);
+      int keyLength = (int) readVarLong(byteBuff, buffOffset + 12, varLongSizeOnDist);
+      byte[] keyBytes = copy(byteBuff, buffOffset + 12 + varLongSizeOnDist, keyLength);
       Key key = contentKeyOnly ? new UTF8StringKey(keyBytes) : new Key(keyBytes);
       indexEntryList.add(new BlockIndexEntry(key, Option.empty(), offset, size));
       buffOffset += (12 + varLongSizeOnDist + keyLength);
