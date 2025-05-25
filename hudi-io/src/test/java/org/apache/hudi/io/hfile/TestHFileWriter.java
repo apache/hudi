@@ -21,7 +21,6 @@ package org.apache.hudi.io.hfile;
 
 import org.apache.hudi.common.util.io.ByteBufferBackedInputStream;
 import org.apache.hudi.io.ByteArraySeekableDataInputStream;
-import org.apache.hudi.storage.HoodieStorage;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -29,9 +28,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.DataOutputStream;
-import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
