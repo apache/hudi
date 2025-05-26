@@ -79,9 +79,9 @@ class TestCleanPlanActionExecutor {
     }
 
     HoodieEngineContext engineContext = new HoodieLocalEngineContext(new HadoopStorageConfiguration(false));
-    CleanPlanActionExecutor<?, ?, ?, ?> executor = new CleanPlanActionExecutor<>(engineContext, HoodieWriteConfig.newBuilder().withPath("file://tmp").build(), table, "002", Option.empty());
+    CleanPlanActionExecutor<?, ?, ?, ?> executor = new CleanPlanActionExecutor<>(engineContext, HoodieWriteConfig.newBuilder().withPath("file://tmp").build(), table, Option.empty());
 
-    Option<HoodieCleanerPlan> actualPlan = executor.requestClean("002");
+    Option<HoodieCleanerPlan> actualPlan = executor.requestClean();
     assertEquals(Option.of(cleanerPlan), actualPlan);
     verify(activeTimeline).deleteEmptyInstantIfExists(lastCompletedInstant);
   }
@@ -102,9 +102,9 @@ class TestCleanPlanActionExecutor {
     when(activeTimeline.readCleanerPlan(lastRequestInstant)).thenThrow(new HoodieIOException("failed to read"));
 
     HoodieEngineContext engineContext = new HoodieLocalEngineContext(new HadoopStorageConfiguration(false));
-    CleanPlanActionExecutor<?, ?, ?, ?> executor = new CleanPlanActionExecutor<>(engineContext, HoodieWriteConfig.newBuilder().withPath("file://tmp").build(), table, "002", Option.empty());
+    CleanPlanActionExecutor<?, ?, ?, ?> executor = new CleanPlanActionExecutor<>(engineContext, HoodieWriteConfig.newBuilder().withPath("file://tmp").build(), table, Option.empty());
 
-    assertThrows(HoodieIOException.class, () -> executor.requestClean("002"));
+    assertThrows(HoodieIOException.class, () -> executor.requestClean());
   }
 
   @Test
@@ -122,10 +122,10 @@ class TestCleanPlanActionExecutor {
     when(activeTimeline.isEmpty(lastCompletedInstant)).thenReturn(false);
 
     HoodieEngineContext engineContext = new HoodieLocalEngineContext(new HadoopStorageConfiguration(false));
-    CleanPlanActionExecutor<?, ?, ?, ?> executor = spy(new CleanPlanActionExecutor<>(engineContext, HoodieWriteConfig.newBuilder().withPath("file://tmp").build(), table, "002", Option.empty()));
+    CleanPlanActionExecutor<?, ?, ?, ?> executor = spy(new CleanPlanActionExecutor<>(engineContext, HoodieWriteConfig.newBuilder().withPath("file://tmp").build(), table, Option.empty()));
     HoodieCleanerPlan emptyPlan = new HoodieCleanerPlan();
     doReturn(emptyPlan).when(executor).requestClean(engineContext);
-    assertEquals(Option.empty(), executor.requestClean("002"));
+    assertEquals(Option.empty(), executor.requestClean());
   }
 
   @Test
@@ -138,10 +138,10 @@ class TestCleanPlanActionExecutor {
     when(table.getCleanTimeline().filterCompletedInstants().lastInstant()).thenReturn(Option.empty());
 
     HoodieEngineContext engineContext = new HoodieLocalEngineContext(new HadoopStorageConfiguration(false));
-    CleanPlanActionExecutor<?, ?, ?, ?> executor = spy(new CleanPlanActionExecutor<>(engineContext, HoodieWriteConfig.newBuilder().withPath("file://tmp").build(), table, "002", Option.empty()));
+    CleanPlanActionExecutor<?, ?, ?, ?> executor = spy(new CleanPlanActionExecutor<>(engineContext, HoodieWriteConfig.newBuilder().withPath("file://tmp").build(), table, Option.empty()));
     HoodieCleanerPlan emptyPlan = new HoodieCleanerPlan();
     doReturn(emptyPlan).when(executor).requestClean(engineContext);
-    assertEquals(Option.empty(), executor.requestClean("002"));
+    assertEquals(Option.empty(), executor.requestClean());
   }
 
   private static void mockEmptyLastCompletedClean(HoodieTable table, HoodieInstant lastCompletedInstant, HoodieActiveTimeline activeTimeline) {
