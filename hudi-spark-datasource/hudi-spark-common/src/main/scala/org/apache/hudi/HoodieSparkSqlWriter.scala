@@ -841,17 +841,9 @@ class HoodieSparkSqlWriterInternal {
     val instantTime = executor.getInstantTime
 
     try {
-      val (writeSuccessful, compactionInstant, clusteringInstant) = mode match {
-        case _ if overwriteOperationType == null =>
-          val syncHiveSuccess = metaSync(sqlContext.sparkSession, writeConfig, basePath, df.schema)
-          (syncHiveSuccess, HOption.empty().asInstanceOf[HOption[String]], HOption.empty().asInstanceOf[HOption[String]])
-        case _ =>
-          try {
-            commitAndPerformPostOperations(sqlContext.sparkSession, df.schema, writeResult, parameters, writeClient, tableConfig, jsc,
-              TableInstantInfo(basePath, instantTime, executor.getCommitActionType, executor.getWriteOperationType), Option.empty)
-
-          }
-      }
+      val (writeSuccessful, compactionInstant, clusteringInstant) = commitAndPerformPostOperations(
+        sqlContext.sparkSession, df.schema, writeResult, parameters, writeClient, tableConfig, jsc,
+        TableInstantInfo(basePath, instantTime, executor.getCommitActionType, executor.getWriteOperationType), Option.empty)
       (writeSuccessful, HOption.ofNullable(instantTime), compactionInstant, clusteringInstant, writeClient, tableConfig)
     } finally {
       // close the write client in all cases
