@@ -590,7 +590,9 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
     //    if they have different base instant time, should not merge;
     // 3. the new file slice has compaction been scheduled, should not merge if old and new base instant time is different.
     // 4. the new file slice base log file still in pending, should merge.
-    return isFileSliceWithoutCompactionBarrier(newSlice) || newSlice.getBaseInstantTime().equals(oldSlice.getBaseInstantTime()) || newSlice.getBaseInstantTime().equals(HoodieActiveTimeline.INIT_INSTANT_TS);
+    return isFileSliceWithoutCompactionBarrier(newSlice)
+        || newSlice.getBaseInstantTime().equals(oldSlice.getBaseInstantTime())
+        || newSlice.getBaseInstantTime().equals(HoodieActiveTimeline.INIT_INSTANT_TS);
   }
 
   private static boolean isFileSliceWithoutCompactionBarrier(FileSlice fileSlice) {
