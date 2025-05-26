@@ -423,7 +423,11 @@ public class StreamerUtil {
    * Generates the bucket ID using format {partition path}_{fileID}.
    */
   public static String generateBucketKey(String partitionPath, String fileId) {
-    return partitionPath + "_" + fileId;
+    return new StringBuilder()
+        .append(partitionPath)
+        .append('_')
+        .append(fileId)
+        .toString();
   }
 
   /**
