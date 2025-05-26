@@ -53,7 +53,7 @@ import static org.apache.hudi.common.util.CleanerUtils.SAVEPOINTED_TIMESTAMPS;
 import static org.apache.hudi.common.util.MapUtils.nonEmpty;
 
 public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieCleanerPlan>> {
-
+  public static final HoodieCleanerPlan EMPTY_CLEANER_PLAN = new HoodieCleanerPlan();
   private static final Logger LOG = LoggerFactory.getLogger(CleanPlanActionExecutor.class);
   private final Option<Map<String, String>> extraMetadata;
 
@@ -194,7 +194,7 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
         } catch (IOException ex) {
           // If it is empty we catch error and repair.
           if (activeTimeline.isEmpty(cleanPlanInstant)) {
-            return Option.of(new HoodieCleanerPlan());
+            return Option.of(EMPTY_CLEANER_PLAN);
           }
           throw new HoodieIOException("Failed to parse cleaner plan", ex);
         }

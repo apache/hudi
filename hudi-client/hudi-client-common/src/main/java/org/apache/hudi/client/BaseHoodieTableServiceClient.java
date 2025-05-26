@@ -95,6 +95,7 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THA
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.metadata.HoodieTableMetadata.isMetadataTable;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.isIndexingCommit;
+import static org.apache.hudi.table.action.clean.CleanPlanActionExecutor.EMPTY_CLEANER_PLAN;
 
 /**
  * Base class for all shared logic between table service clients regardless of engine.
@@ -817,7 +818,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     Option<HoodieCleanerPlan> cleanerPlan = table.createCleanerPlan(context, Option.empty());
     if (cleanerPlan.isPresent()) {
       // handle special case where planner returns empty plan due to corruption of existing instant
-      if (cleanerPlan.get().equals(new HoodieCleanerPlan())) {
+      if (EMPTY_CLEANER_PLAN == cleanerPlan.get()) {
         return table.getCleanTimeline().filterCompletedInstants().lastInstant().map(HoodieInstant::requestedTime);
       }
       txnManager.beginTransaction(Option.empty(), Option.empty());
