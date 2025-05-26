@@ -218,7 +218,7 @@ public class HFileWriterImpl implements HFileWriter {
         new String(MAX_MVCC_TS_KEY.getBytes(), StandardCharsets.UTF_8),
         new byte[]{0});
   }
-  
+
   // Note: HFileReaderImpl assumes that:
   //   The last key should contain the content length bytes.
   public byte[] addKeyLength(byte[] key) {

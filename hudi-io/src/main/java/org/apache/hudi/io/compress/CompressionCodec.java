@@ -45,9 +45,6 @@ public enum CompressionCodec {
   private static final Map<Integer, CompressionCodec>
       ID_TO_COMPRESSION_CODEC_MAP = createIdToCompressionCodecMap();
 
-  private static final Map<String, CompressionCodec>
-      HFILE_NAME_TO_COMPRESSION_CODEC_MAP = createNameToCompressionCodecMap();
-
   private final String name;
   // CompressionCodec ID to be stored in HFile on storage
   // The ID of each codec cannot change or else that breaks all existing HFiles out there
