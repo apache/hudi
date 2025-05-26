@@ -225,11 +225,7 @@ public abstract class HFileBlock {
       if (compression != CompressionCodec.NONE) {
         // Copy the block header which is not compressed
         System.arraycopy(
-            compressedByteBuff,
-            startOffsetInCompressedBuff,
-            byteBuff,
-            0,
-            HFILEBLOCK_HEADER_SIZE);
+            compressedByteBuff, startOffsetInCompressedBuff, byteBuff, 0, HFILEBLOCK_HEADER_SIZE);
         try (InputStream byteBuffInputStream = new ByteArrayInputStream(
             compressedByteBuff, startOffsetInCompressedBuff + HFILEBLOCK_HEADER_SIZE, onDiskSizeWithoutHeader)) {
           context.getCompressor().decompress(
