@@ -97,8 +97,7 @@ public class ITTestBucketStreamWrite {
     if (isCow) {
       TestData.checkWrittenData(tempFile, EXPECTED, 4);
     } else {
-      HoodieStorage storage = HoodieTestUtils.getStorage(tempFile.getAbsolutePath());
-      TestData.checkWrittenDataMOR(storage, tempFile, EXPECTED, 4);
+      TestData.checkWrittenDataMOR(tempFile, EXPECTED, 4);
     }
   }
 
@@ -110,8 +109,7 @@ public class ITTestBucketStreamWrite {
     if (isCow) {
       TestData.checkWrittenDataCOW(tempFile, EXPECTED_AS_LIST);
     } else {
-      HoodieStorage storage = HoodieTestUtils.getStorage(tempFile.getAbsolutePath());
-      TestData.checkWrittenDataMOR(storage, tempFile, EXPECTED, 4);
+      TestData.checkWrittenDataMOR(tempFile, EXPECTED, 4);
     }
   }
 
