@@ -780,3 +780,7 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 --- [2025-05-21 16:04:35] [release-v1.125.0] ---
 [ENG-26489][INTERNAL] Introduce Kafka ignore config prefix list option (#1373)
 [AUDIT-1321]: Changelog for release-v1.124.0 (#1377)
+
+--- [2025-05-26 16:04:07] [release-v1.126.0] ---
+[ENG-26950][INTERNAL] Cross catalog sync for glue (#1376)
+[AUDIT-1071]: Changelog for release-v1.125.0 (#1381)
