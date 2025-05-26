@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
@@ -588,7 +589,8 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
     // 2. the old file slice has no compaction scheduled, while the new file slice does,
     //    if they have different base instant time, should not merge;
     // 3. the new file slice has compaction been scheduled, should not merge if old and new base instant time is different.
-    return isFileSliceWithoutCompactionBarrier(newSlice) || newSlice.getBaseInstantTime().equals(oldSlice.getBaseInstantTime());
+    // 4. the new file slice base log file still in pending, should merge.
+    return isFileSliceWithoutCompactionBarrier(newSlice) || newSlice.getBaseInstantTime().equals(oldSlice.getBaseInstantTime()) || newSlice.getBaseInstantTime().equals(HoodieActiveTimeline.INIT_INSTANT_TS);
   }
 
   private static boolean isFileSliceWithoutCompactionBarrier(FileSlice fileSlice) {
