@@ -22,7 +22,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieSyncTableStrategy;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.TimelineUtils;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
@@ -286,12 +286,9 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
         .map(lastCommit -> {
           Option<String> lastCompletion =
               syncClient.getLastCommitCompletionTimeSynced(tableName);
-
-          return TimelineUtils
-              .getCommitsTimelineAfter(syncClient.getMetaClient(),
-                  lastCommit,
-                  lastCompletion)
-              .countInstants() == 0;
+          String currentLastCommit = syncClient.getActiveTimeline().lastInstant().map(HoodieInstant::requestedTime).orElse(null);
+          return Objects.equals(lastCommit, currentLastCommit) && lastCompletion.map(clientLastCompletion ->
+              Objects.equals(clientLastCompletion, syncClient.getActiveTimeline().getLatestCompletionTime().orElse(null))).orElse(true);
         })
         .orElse(false);
   }
