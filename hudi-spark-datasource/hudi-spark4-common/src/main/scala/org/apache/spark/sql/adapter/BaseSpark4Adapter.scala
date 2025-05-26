@@ -20,11 +20,10 @@ package org.apache.spark.sql.adapter
 import org.apache.hudi.{AvroConversionUtils, DefaultSource, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, Spark4HoodiePartitionCDCFileGroupMapping, Spark4HoodiePartitionFileSliceMapping, SparkBaseRowSerDe}
 import org.apache.hudi.client.model.{HoodieInternalRow, Spark4HoodieInternalRow}
 import org.apache.hudi.client.utils.SparkRowSerDe
-import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
+import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit
 import org.apache.hudi.common.util.JsonUtils
-import org.apache.hudi.common.util.collection.{FlatLists, Spark4FlatLists}
 import org.apache.hudi.spark.internal.ReflectUtil
 import org.apache.hudi.storage.StoragePath
 
@@ -54,7 +53,7 @@ import java.util.concurrent.ConcurrentHashMap
 import scala.collection.JavaConverters._
 
 /**
- * Base implementation of [[SparkAdapter]] for Spark 3.x branch
+ * Base implementation of [[SparkAdapter]] for Spark 4.x branch
  */
 abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
 
@@ -116,10 +115,6 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
 
   def stopSparkContext(jssc: JavaSparkContext, exitCode: Int): Unit
 
-  override def compareUTF8String(a: UTF8String, b: UTF8String): Int = a.binaryCompare(b)
-
-  override def createComparableList(t: Array[AnyRef]): FlatLists.ComparableList[Comparable[HoodieRecord[_]]] = Spark4FlatLists.ofComparableArray(t)
-
   override def createInternalRow(metaFields: Array[UTF8String],
                                  sourceRow: InternalRow,
                                  sourceContainsMetaFields: Boolean): HoodieInternalRow = {
@@ -141,21 +136,6 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
                                  start: Origin,
                                  stop: Origin): ParseException = {
     new ParseException(command, start, stop, exception.getErrorClass, exception.getMessageParameters.asScala.toMap)
-  }
-
-  override def compareValues[T <% Comparable[T]](a: T, b: T): Int = {
-    if (a == null) {
-      -1
-    } else if (b == null) {
-      1
-    } else {
-      // [SPARK-46832] UTF8String doesn't support compareTo anymore
-      if (a.isInstanceOf[UTF8String] && b.isInstanceOf[UTF8String]) {
-        a.asInstanceOf[UTF8String].binaryCompare(b.asInstanceOf[UTF8String])
-      } else {
-        a.compareTo(b)
-      }
-    }
   }
 
   override def splitFiles(sparkSession: SparkSession,

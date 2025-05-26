@@ -35,7 +35,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.avro.Schema;
-import org.apache.hudi.common.util.SparkSortUtils;
 import org.apache.spark.sql.HoodieInternalRowUtils;
 import org.apache.spark.sql.HoodieUnsafeRowUtils;
 import org.apache.spark.sql.catalyst.InternalRow;
@@ -172,11 +171,5 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
   @Override
   public InternalRow getDeleteRow(InternalRow record, String recordKey) {
     throw new UnsupportedOperationException("Not supported for " + this.getClass().getSimpleName());
-  }
-
-  @Override
-  public int compareValues(Comparable a, Comparable b) {
-    // [SPARK-46832] UTF8String doesn't support compareTo anymore
-    return SparkSortUtils.compareValues(a, b);
   }
 }

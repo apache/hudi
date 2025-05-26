@@ -350,7 +350,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
           // because we use 0 as the default value which means natural order
           boolean chooseExisting = !deleteOrderingVal.equals(0)
               && ReflectionUtils.isSameClass(existingOrderingVal, deleteOrderingVal)
-              && readerContext.compareValues(existingOrderingVal, deleteOrderingVal) > 0;
+              && existingOrderingVal.compareTo(deleteOrderingVal) > 0;
           if (chooseExisting) {
             // The DELETE message is obsolete if the old message has greater orderingVal.
             return Option.empty();
@@ -447,7 +447,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
           Comparable newOrderingValue = newerRecord.getOrderingValue();
           Comparable oldOrderingValue = olderRecord.getOrderingValue();
           if (!olderRecord.isCommitTimeOrderingDelete()
-              && readerContext.compareValues(oldOrderingValue, newOrderingValue) > 0) {
+              && oldOrderingValue.compareTo(newOrderingValue) > 0) {
             return Pair.of(olderRecord.isDelete(), olderRecord.getRecord());
           }
           return Pair.of(newerRecord.isDelete(), newerRecord.getRecord());
@@ -513,7 +513,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
       // handle records coming from DELETE statements(the orderingVal is constant 0)
       return true;
     }
-    return readerContext.compareValues(newRecord.getOrderingValue(), oldRecord.getOrderingValue()) >= 0;
+    return newRecord.getOrderingValue().compareTo(oldRecord.getOrderingValue()) >= 0;
   }
 
   private Option<Pair<HoodieRecord, Schema>> getMergedRecord(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) throws IOException {

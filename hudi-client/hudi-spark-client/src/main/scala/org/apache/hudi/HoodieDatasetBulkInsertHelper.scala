@@ -19,7 +19,6 @@ package org.apache.hudi
 
 import org.apache.hudi.HoodieSparkUtils.injectSQLConf
 import org.apache.hudi.client.WriteStatus
-import org.apache.hudi.client.model.HoodieInternalRow
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.data.HoodieData
 import org.apache.hudi.common.engine.TaskContextSupplier
@@ -264,13 +263,7 @@ object HoodieDatasetBulkInsertHelper
       .reduceByKey ((oneRow, otherRow) => {
         val onePreCombineVal = getNestedInternalRowValue(oneRow, preCombineFieldPath).asInstanceOf[Comparable[AnyRef]]
         val otherPreCombineVal = getNestedInternalRowValue(otherRow, preCombineFieldPath).asInstanceOf[Comparable[AnyRef]]
-        if (isStringType) {
-          if (sparkAdapter.compareUTF8String(onePreCombineVal.asInstanceOf[UTF8String], otherPreCombineVal.asInstanceOf[UTF8String]) >= 0) {
-            oneRow
-          } else {
-            otherRow
-          }
-        } else if (onePreCombineVal.compareTo(otherPreCombineVal.asInstanceOf[AnyRef]) >= 0) {
+        if (onePreCombineVal.compareTo(otherPreCombineVal.asInstanceOf[AnyRef]) >= 0) {
           oneRow
         } else {
           otherRow

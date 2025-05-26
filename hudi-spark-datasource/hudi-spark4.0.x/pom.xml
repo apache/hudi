@@ -243,7 +243,7 @@
       </exclusions>
     </dependency>
 
-    <!-- Hoodie Spark 3.x common  -->
+    <!-- Hoodie Spark 4.x common  -->
     <dependency>
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-spark4-common</artifactId>
