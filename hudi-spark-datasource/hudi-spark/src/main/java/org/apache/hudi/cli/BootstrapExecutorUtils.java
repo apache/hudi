@@ -151,7 +151,6 @@ public class BootstrapExecutorUtils implements Serializable {
             .withCompactionConfig(HoodieCompactionConfig.newBuilder().withInlineCompaction(false).build())
             .forTable(cfg.tableName)
             .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
-            .withAutoCommit(true)
             .withKeyGenerator(keyGenClass)
             .withPayloadConfig(HoodiePayloadConfig.newBuilder().withPayloadClass(cfg.payloadClass).build())
             .withProps(props);

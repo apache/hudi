@@ -368,7 +368,7 @@ public class HoodieFlinkWriteClient<T>
   }
 
   @Override
-  protected HoodieWriteMetadata<List<WriteStatus>> compact(String compactionInstantTime, boolean shouldComplete) {
+  public HoodieWriteMetadata<List<WriteStatus>> compact(String compactionInstantTime, boolean shouldComplete) {
     // only used for metadata table, the compaction happens in single thread
     return tableServiceClient.compact(compactionInstantTime, shouldComplete);
   }

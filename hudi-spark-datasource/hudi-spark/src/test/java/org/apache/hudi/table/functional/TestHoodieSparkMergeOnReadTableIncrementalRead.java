@@ -38,6 +38,7 @@ import org.apache.hudi.hadoop.realtime.HoodieHFileRealtimeInputFormat;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.testutils.HoodieMergeOnReadTestUtils;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
@@ -167,7 +168,9 @@ public class TestHoodieSparkMergeOnReadTableIncrementalRead extends SparkClientF
       validateFiles(partitionPath, 2, incrementalRTFiles, true, rtJobConf, 400, commitTime1, updateTime, insertsTime);
 
       // perform the scheduled compaction
-      client.compact(compactionCommitTime);
+      HoodieWriteMetadata result = client.compact(compactionCommitTime);
+      client.commitCompaction(compactionCommitTime, result, Option.empty());
+      assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(compactionCommitTime));
 
       // verify new write shows up in snapshot mode after compaction is complete
       snapshotROFiles = getROSnapshotFiles(partitionPath);

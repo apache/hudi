@@ -112,13 +112,13 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       long start, long length, boolean shouldUseRecordPosition) {
     this(readerContext, storage, tablePath, latestCommitTime, fileSlice, dataSchema,
         requestedSchema, internalSchemaOpt, hoodieTableMetaClient, props, start, length,
-        shouldUseRecordPosition, false);
+        shouldUseRecordPosition, false, false);
   }
 
   private HoodieFileGroupReader(HoodieReaderContext<T> readerContext, HoodieStorage storage, String tablePath,
                                String latestCommitTime, FileSlice fileSlice, Schema dataSchema, Schema requestedSchema,
                                Option<InternalSchema> internalSchemaOpt, HoodieTableMetaClient hoodieTableMetaClient, TypedProperties props,
-                               long start, long length, boolean shouldUseRecordPosition, boolean allowInflightInstants) {
+                               long start, long length, boolean shouldUseRecordPosition, boolean allowInflightInstants, boolean emitDelete) {
     this.readerContext = readerContext;
     this.storage = storage;
     this.hoodieBaseFileOption = fileSlice.getBaseFile();
@@ -169,7 +169,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     this.readStats = new HoodieReadStats();
     this.recordBuffer = getRecordBuffer(readerContext, hoodieTableMetaClient,
         recordMergeMode, props, hoodieBaseFileOption, this.logFiles.isEmpty(),
-        isSkipMerge, shouldUseRecordPosition, readStats);
+        isSkipMerge, shouldUseRecordPosition, readStats, emitDelete);
     this.allowInflightInstants = allowInflightInstants;
   }
 
@@ -184,18 +184,19 @@ public final class HoodieFileGroupReader<T> implements Closeable {
                                                    boolean hasNoLogFiles,
                                                    boolean isSkipMerge,
                                                    boolean shouldUseRecordPosition,
-                                                   HoodieReadStats readStats) {
+                                                   HoodieReadStats readStats,
+                                                   boolean emitDelete) {
     if (hasNoLogFiles) {
       return null;
     } else if (isSkipMerge) {
       return new UnmergedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats);
+          readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, emitDelete);
     } else if (shouldUseRecordPosition && baseFileOption.isPresent()) {
       return new PositionBasedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, recordMergeMode, baseFileOption.get().getCommitTime(), props, readStats, orderingFieldName);
+          readerContext, hoodieTableMetaClient, recordMergeMode, baseFileOption.get().getCommitTime(), props, readStats, orderingFieldName, emitDelete);
     } else {
       return new KeyBasedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, orderingFieldName);
+          readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, orderingFieldName, emitDelete);
     }
   }
 
@@ -224,17 +225,19 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     }
 
     StoragePathInfo baseFileStoragePathInfo = baseFile.getPathInfo();
+    final ClosableIterator<T> recordIterator;
     if (baseFileStoragePathInfo != null) {
-      return readerContext.getFileRecordIterator(
+      recordIterator = readerContext.getFileRecordIterator(
           baseFileStoragePathInfo, start, length,
           readerContext.getSchemaHandler().getTableSchema(),
           readerContext.getSchemaHandler().getRequiredSchema(), storage);
     } else {
-      return readerContext.getFileRecordIterator(
+      recordIterator = readerContext.getFileRecordIterator(
           baseFile.getStoragePath(), start, length,
           readerContext.getSchemaHandler().getTableSchema(),
           readerContext.getSchemaHandler().getRequiredSchema(), storage);
     }
+    return readerContext.getInstantRange().isPresent() ? readerContext.applyInstantRangeFilter(recordIterator) : recordIterator;
   }
 
   private ClosableIterator<T> makeBootstrapBaseFileIterator(HoodieBaseFile baseFile) throws IOException {
@@ -341,6 +344,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
         .withLogFiles(logFiles)
         .withReverseReader(false)
         .withBufferSize(getIntWithAltKeys(props, HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE))
+        .withInstantRange(readerContext.getInstantRange())
         .withPartition(getRelativePartitionPath(
             new StoragePath(path), logFiles.get(0).getPath().getParent()))
         .withRecordBuffer(recordBuffer)
@@ -435,6 +439,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     private long length = Long.MAX_VALUE;
     private boolean shouldUseRecordPosition = false;
     private boolean allowInflightInstants = false;
+    private boolean emitDelete;
 
     public Builder<T> withReaderContext(HoodieReaderContext<T> readerContext) {
       this.readerContext = readerContext;
@@ -497,6 +502,11 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       return this;
     }
 
+    public Builder<T> withEmitDelete(boolean emitDelete) {
+      this.emitDelete = emitDelete;
+      return this;
+    }
+
     public HoodieFileGroupReader<T> build() {
       ValidationUtils.checkArgument(readerContext != null, "Reader context is required");
       ValidationUtils.checkArgument(hoodieTableMetaClient != null, "Hoodie table meta client is required");
@@ -515,7 +525,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       return new HoodieFileGroupReader<>(
           readerContext, storage, tablePath, latestCommitTime, fileSlice,
           dataSchema, requestedSchema, internalSchemaOpt, hoodieTableMetaClient,
-          props, start, length, shouldUseRecordPosition, allowInflightInstants);
+          props, start, length, shouldUseRecordPosition, allowInflightInstants, emitDelete);
     }
   }
 }

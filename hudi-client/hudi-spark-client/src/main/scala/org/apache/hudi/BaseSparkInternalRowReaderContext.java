@@ -92,6 +92,11 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
   }
 
   @Override
+  public String getMetaFieldValue(InternalRow record, int pos) {
+    return record.getString(pos);
+  }
+
+  @Override
   public HoodieRecord<InternalRow> constructHoodieRecord(BufferedRecord<InternalRow> bufferedRecord) {
     HoodieKey hoodieKey = new HoodieKey(bufferedRecord.getRecordKey(), partitionPath);
     if (bufferedRecord.isDelete()) {
@@ -162,6 +167,11 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
       return UTF8String.fromString((String) value);
     }
     return value;
+  }
+
+  @Override
+  public InternalRow getDeleteRow(InternalRow record, String recordKey) {
+    throw new UnsupportedOperationException("Not supported for " + this.getClass().getSimpleName());
   }
 
   @Override

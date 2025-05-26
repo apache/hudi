@@ -150,6 +150,10 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
     return instant;
   }
 
+  public String createCompletionTime() {
+    return this.metaClient.createNewInstantTime(false);
+  }
+
   @Override
   public <T> void saveAsComplete(HoodieInstant instant, Option<T> metadata) {
     LOG.info("Marking instant complete {}", instant);
@@ -161,6 +165,11 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
 
   @Override
   public <T> void saveAsComplete(boolean shouldLock, HoodieInstant instant, Option<T> metadata) {
+    saveAsComplete(instant, metadata);
+  }
+
+  @Override
+  public <T> void saveAsComplete(boolean shouldLock, HoodieInstant instant, Option<T> metadata, Option<String> completionTimeOpt) {
     saveAsComplete(instant, metadata);
   }
 
@@ -397,11 +406,11 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
   }
 
   @Override
-  public HoodieInstant transitionCleanRequestedToInflight(HoodieInstant requestedInstant, Option<HoodieCleanerPlan> metadata) {
+  public HoodieInstant transitionCleanRequestedToInflight(HoodieInstant requestedInstant) {
     ValidationUtils.checkArgument(requestedInstant.getAction().equals(HoodieTimeline.CLEAN_ACTION));
     ValidationUtils.checkArgument(requestedInstant.isRequested());
     HoodieInstant inflight = instantGenerator.createNewInstant(HoodieInstant.State.INFLIGHT, CLEAN_ACTION, requestedInstant.requestedTime());
-    transitionState(requestedInstant, inflight, metadata);
+    transitionState(requestedInstant, inflight, Option.empty());
     return inflight;
   }
 

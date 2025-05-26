@@ -21,7 +21,9 @@ package org.apache.hudi.io.hfile;
 
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.exception.HoodieException;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -45,6 +47,11 @@ public class HFileLeafIndexBlock extends HFileBlock {
                                 byte[] byteBuff,
                                 int startOffsetInBuff) {
     super(context, blockType, byteBuff, startOffsetInBuff);
+  }
+
+  @Override
+  protected ByteBuffer getUncompressedBlockDataToWrite() {
+    throw new HoodieException("HFile writer does not support leaf index block");
   }
 
   /**

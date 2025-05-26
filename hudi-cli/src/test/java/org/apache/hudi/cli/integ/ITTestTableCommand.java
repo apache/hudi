@@ -207,13 +207,14 @@ public class ITTestTableCommand extends HoodieCLIIntegrationTestBase {
                       List<HoodieRecord> records, String newCommitTime) throws IOException {
     WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
-    operateFunc(SparkRDDWriteClient::upsert, client, writeRecords, newCommitTime);
+    JavaRDD<WriteStatus> result = operateFunc(SparkRDDWriteClient::upsert, client, writeRecords, newCommitTime);
+    client.commit(newCommitTime, result);
   }
 
-  private void operateFunc(
+  private JavaRDD<WriteStatus> operateFunc(
       Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieRecord>, String> writeFn,
       SparkRDDWriteClient<HoodieAvroPayload> client, JavaRDD<HoodieRecord> writeRecords, String commitTime)
       throws IOException {
-    writeFn.apply(client, writeRecords, commitTime);
+    return writeFn.apply(client, writeRecords, commitTime);
   }
 }

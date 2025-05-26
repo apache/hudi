@@ -29,7 +29,7 @@ import java.util.function.Predicate;
  */
 public class FilterIterator<R> implements Iterator<R> {
 
-  private final Iterator<R> source;
+  protected final Iterator<R> source;
 
   private final Predicate<R> filter;
 

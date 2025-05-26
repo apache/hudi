@@ -99,6 +99,11 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
   }
 
   @Override
+  public IndexedRecord getDeleteRow(IndexedRecord record, String recordKey) {
+    throw new UnsupportedOperationException("Not supported for " + this.getClass().getSimpleName());
+  }
+
+  @Override
   public Option<HoodieRecordMerger> getRecordMerger(RecordMergeMode mergeMode, String mergeStrategyId, String mergeImplClasses) {
     switch (mergeMode) {
       case EVENT_TIME_ORDERING:
@@ -119,6 +124,11 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
   @Override
   public Object getValue(IndexedRecord record, Schema schema, String fieldName) {
     return getFieldValueFromIndexedRecord(record, schema, fieldName);
+  }
+
+  @Override
+  public String getMetaFieldValue(IndexedRecord record, int pos) {
+    return record.get(pos).toString();
   }
 
   @Override

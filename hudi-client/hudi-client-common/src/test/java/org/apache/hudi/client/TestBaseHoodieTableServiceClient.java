@@ -24,6 +24,7 @@ import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -47,6 +48,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
@@ -245,6 +247,11 @@ class TestBaseHoodieTableServiceClient extends HoodieCommonTestHarness {
       super(new HoodieLocalEngineContext(getDefaultStorageConf()), writeConfig, timelineService);
       this.tables = tables;
       this.expectedRollbackInfo = expectedRollbackInfo;
+    }
+
+    @Override
+    protected List<HoodieWriteStat> triggerWritesAndFetchWriteStats(HoodieWriteMetadata<String> writeMetadata) {
+      return null;
     }
 
     @Override
