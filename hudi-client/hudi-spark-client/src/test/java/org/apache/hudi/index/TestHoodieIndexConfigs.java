@@ -54,7 +54,7 @@ public class TestHoodieIndexConfigs {
   }
 
   @ParameterizedTest
-  @EnumSource(value = IndexType.class, names = {"BLOOM", "GLOBAL_BLOOM", "SIMPLE", "GLOBAL_SIMPLE", "HBASE", "BUCKET", "RECORD_INDEX"})
+  @EnumSource(value = IndexType.class, names = {"BLOOM", "GLOBAL_BLOOM", "SIMPLE", "GLOBAL_SIMPLE", "BUCKET", "RECORD_INDEX"})
   public void testCreateIndex(IndexType indexType) {
     HoodieWriteConfig config;
     HoodieWriteConfig.Builder clientConfigBuilder = HoodieWriteConfig.newBuilder();

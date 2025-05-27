@@ -311,7 +311,7 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
             .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024).build())
             .withStorageConfig(HoodieStorageConfig.newBuilder().parquetMaxFileSize(1024).build())
             .withIndexConfig(HoodieIndexConfig.newBuilder()
-                    .withIndexType(HoodieIndex.IndexType.GLOBAL_SIMPLE)
+                    .withIndexType(HoodieIndex.IndexType.INMEMORY)
                     .withHBaseIndexConfig(HoodieHBaseIndexConfig.newBuilder().build())
                     .build())
             .build();

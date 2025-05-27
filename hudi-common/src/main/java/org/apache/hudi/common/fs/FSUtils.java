@@ -738,7 +738,7 @@ public class FSUtils {
   }
 
   public static StoragePath getPathWithoutScheme(StoragePath path) {
-    return path.isAbsolute()
+    return path.isAbsolute() && path.toUri().getAuthority() != null
         ? new StoragePath(path.toUri().getAuthority(), path.toUri().getPath()) : path;
   }
 
