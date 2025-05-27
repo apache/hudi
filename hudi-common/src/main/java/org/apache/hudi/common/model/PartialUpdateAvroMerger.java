@@ -72,10 +72,10 @@ public class PartialUpdateAvroMerger extends EventTimeBasedAvroRecordMerger {
     }
   }
 
-  private HoodieRecord mergeRecord(HoodieRecord lowOrderRecord,
-                                   Schema lowOrderSchema,
-                                   HoodieRecord highOrderRecord,
-                                   Schema highOrderSchema) {
+  HoodieRecord mergeRecord(HoodieRecord lowOrderRecord,
+                           Schema lowOrderSchema,
+                           HoodieRecord highOrderRecord,
+                           Schema highOrderSchema) {
     // Currently assume there is no schema evolution, solve it in HUDI-9253
     ValidationUtils.checkArgument(
         lowOrderSchema.getFields().size() == highOrderSchema.getFields().size());

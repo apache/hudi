@@ -49,7 +49,7 @@ public class PartialUpdateWithNonDefaultValueAvroMerger extends PartialUpdateAvr
       if (field.hasDefaultValue()) {
         defaultValue = field.defaultVal();
       }
-      if (highVal != defaultValue) {
+      if (highVal != null && highVal != defaultValue) {
         value = highVal;
       }
       result.put(i, value);

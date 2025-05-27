@@ -57,7 +57,8 @@ public class EventTimeBasedAvroRecordMerger implements HoodieRecordMerger {
     return HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID;
   }
 
-  protected boolean isCommitTimeOrderingDelete(HoodieRecord record, Schema schema,
+  protected boolean isCommitTimeOrderingDelete(HoodieRecord record,
+                                               Schema schema,
                                                TypedProperties props) throws IOException {
     Comparable orderingValue = record.getOrderingValue(schema, props);
     return record.isDelete(schema, props) && orderingValue.equals(DEFAULT_ORDERING_VALUE);
