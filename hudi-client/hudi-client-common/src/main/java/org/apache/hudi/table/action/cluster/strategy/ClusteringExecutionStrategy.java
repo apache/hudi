@@ -46,8 +46,6 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import org.apache.avro.Schema;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -61,7 +59,6 @@ import static org.apache.hudi.common.config.HoodieReaderConfig.MERGE_USE_RECORD_
  * Pluggable implementation for writing data into new file groups based on ClusteringPlan.
  */
 public abstract class ClusteringExecutionStrategy<T, I, K, O> implements Serializable {
-  private static final Logger LOG = LoggerFactory.getLogger(ClusteringExecutionStrategy.class);
 
   private final HoodieTable<T, I, K, O> hoodieTable;
   private final transient HoodieEngineContext engineContext;
@@ -103,7 +100,7 @@ public abstract class ClusteringExecutionStrategy<T, I, K, O> implements Seriali
 
     HoodieTable table = getHoodieTable();
 
-    FileSlice fileSlice = clusteringOperation2FileSlice(table.getMetaClient().getBasePath().toString(), operation);
+    FileSlice fileSlice = clusteringOperationToFileSlice(table.getMetaClient().getBasePath().toString(), operation);
     final boolean usePosition = getWriteConfig().getBooleanOrDefault(MERGE_USE_RECORD_POSITIONS);
     Option<InternalSchema> internalSchema = SerDeHelper.fromJson(getWriteConfig().getInternalSchema());
     try {
@@ -116,7 +113,7 @@ public abstract class ClusteringExecutionStrategy<T, I, K, O> implements Seriali
   /**
    * Construct FileSlice from a given clustering operation {@code clusteringOperation}.
    */
-  protected FileSlice clusteringOperation2FileSlice(String basePath, ClusteringOperation clusteringOperation) {
+  protected FileSlice clusteringOperationToFileSlice(String basePath, ClusteringOperation clusteringOperation) {
     String partitionPath = clusteringOperation.getPartitionPath();
     boolean baseFileExists = !StringUtils.isNullOrEmpty(clusteringOperation.getDataFilePath());
     HoodieBaseFile baseFile = baseFileExists ? new HoodieBaseFile(new StoragePath(basePath, clusteringOperation.getDataFilePath()).toString()) : null;

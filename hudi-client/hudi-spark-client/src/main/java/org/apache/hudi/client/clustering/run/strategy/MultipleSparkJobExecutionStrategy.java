@@ -404,7 +404,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
     RDD<InternalRow> internalRowRDD = jsc.parallelize(clusteringOps, clusteringOps.size()).flatMap(new FlatMapFunction<ClusteringOperation, InternalRow>() {
       @Override
       public Iterator<InternalRow> call(ClusteringOperation clusteringOperation) throws Exception {
-        FileSlice fileSlice = clusteringOperation2FileSlice(basePath, clusteringOperation);
+        FileSlice fileSlice = clusteringOperationToFileSlice(basePath, clusteringOperation);
         // instantiate other supporting cast
         Schema readerSchema = serializableTableSchemaWithMetaFields.get();
         Option<InternalSchema> internalSchemaOption = Option.empty();
