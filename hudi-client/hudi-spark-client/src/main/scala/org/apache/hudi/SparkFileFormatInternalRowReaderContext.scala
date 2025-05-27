@@ -32,7 +32,6 @@ import org.apache.hudi.common.util.collection.{CachingIterator, ClosableIterator
 import org.apache.hudi.io.storage.{HoodieSparkFileReaderFactory, HoodieSparkParquetReader}
 import org.apache.hudi.storage.{HoodieStorage, StorageConfiguration, StoragePath}
 import org.apache.hudi.util.CloseableInternalRowIterator
-import org.apache.hudi.expression.Predicate
 
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericRecord, IndexedRecord}

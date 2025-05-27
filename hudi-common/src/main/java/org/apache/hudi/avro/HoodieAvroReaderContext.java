@@ -89,7 +89,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
     HoodieAvroFileReader reader = (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(storage)
         .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(new HoodieConfig(),
             filePath, baseFileFormat, Option.empty());
-    if (filterOpt.isEmpty()) {
+    if (keyFilterOpt.isEmpty()) {
       return reader.getIndexedRecordIterator(dataSchema, requiredSchema);
     } else {
       // Currently predicate is only supported for HFile reader.
@@ -98,10 +98,10 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       } else {
         // For HFile reader, only two predicates are supported: IN and StringStartsWithAny.
         HoodieAvroHFileReaderImplBase hfileReader = (HoodieAvroHFileReaderImplBase) reader;
-        List<Expression> children = filterOpt.get().getChildren();
+        List<Expression> children = keyFilterOpt.get().getChildren();
         List<String> keysOrPrefixes = children.subList(1, children.size())
             .stream().map(e -> (String) e.eval(null)).collect(Collectors.toList());
-        if (filterOpt.get().getOperator().equals(Expression.Operator.IN)) { // With keys.
+        if (keyFilterOpt.get().getOperator().equals(Expression.Operator.IN)) { // With keys.
           return hfileReader.getIndexedRecordsByKeysIterator(keysOrPrefixes, requiredSchema);
         } else {  // With key prefixes.
           return hfileReader.getIndexedRecordsByKeyPrefixIterator(keysOrPrefixes, requiredSchema);

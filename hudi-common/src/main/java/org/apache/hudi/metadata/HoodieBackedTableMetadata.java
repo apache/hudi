@@ -47,6 +47,7 @@ import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -78,7 +79,6 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -251,7 +251,14 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         Option.of(transformKeyPrefixesToPredicate(sortedKeyPrefixes)),
         instantRange);
     ClosableIterator<IndexedRecord> it = fileGroupReader.getClosableIterator();
-    return new HoodieRecordIterator(it, partitionName);
+    return new CloseableMappingIterator<>(
+        it,
+        metadataRecord -> {
+          HoodieKey key = new HoodieKey(
+              ((GenericRecord) metadataRecord).get(KEY_FIELD_NAME).toString(), partitionName);
+          HoodieMetadataPayload payload = new HoodieMetadataPayload(Option.of((GenericRecord) metadataRecord));
+          return new HoodieAvroRecord<>(key, payload);
+        });
   }
 
   private Predicate transformKeysToPredicate(List<String> keys) {
@@ -262,43 +269,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   private Predicate transformKeyPrefixesToPredicate(List<String> keyPrefixes) {
     List<Expression> right = keyPrefixes.stream().map(kp -> Literal.from(kp)).collect(Collectors.toList());
     return Predicates.startsWithAny(null, right);
-  }
-
-  public static class HoodieRecordIterator implements Iterator<HoodieRecord<HoodieMetadataPayload>> {
-    private final ClosableIterator<IndexedRecord> baseIterator;
-    private final String partitionName;
-    private GenericRecord metadataRecord;
-
-    public HoodieRecordIterator(ClosableIterator<IndexedRecord> baseIterator, String partitionName) {
-      this.baseIterator = baseIterator;
-      this.partitionName = partitionName;
-    }
-
-    @Override
-    public boolean hasNext() {
-      if (metadataRecord != null) {
-        return true;
-      }
-
-      if (baseIterator.hasNext()) {
-        metadataRecord = (GenericRecord) baseIterator.next();
-        return true;
-      } else {
-        return false;
-      }
-    }
-
-    @Override
-    public HoodieRecord<HoodieMetadataPayload> next() {
-      if (metadataRecord == null) {
-        throw new NoSuchElementException();
-      }
-      HoodieKey key = new HoodieKey(metadataRecord.get(KEY_FIELD_NAME).toString(), partitionName);
-      HoodieMetadataPayload payload = new HoodieMetadataPayload(Option.of(metadataRecord));
-      metadataRecord = null;
-
-      return new HoodieAvroRecord<>(key, payload);
-    }
   }
 
   @Override
