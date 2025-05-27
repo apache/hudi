@@ -24,6 +24,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.StoragePath;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import org.apache.avro.reflect.AvroIgnore;
 
 import javax.annotation.Nullable;
 
@@ -119,6 +120,7 @@ public class HoodieWriteStat extends HoodieReadStats {
   private RuntimeStats runtimeStats;
 
   @JsonIgnore
+  @AvroIgnore
   private Option<Map<String, HoodieColumnRangeMetadata<Comparable>>> recordsStats = Option.empty();
 
   public HoodieWriteStat() {
