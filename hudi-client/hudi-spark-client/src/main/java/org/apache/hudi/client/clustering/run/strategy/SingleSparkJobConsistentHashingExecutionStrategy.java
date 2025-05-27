@@ -83,8 +83,8 @@ public class SingleSparkJobConsistentHashingExecutionStrategy<T> extends SingleS
   }
 
   @Override
-  protected List<WriteStatus> performClusteringForGroup(ReaderContextFactory<T> readerContextFactory, ClusteringGroupInfo clusteringGroup, Map<String, String> strategyParams, boolean preserveHoodieMetadata, SerializableSchema schema,
-                                                        TaskContextSupplier taskContextSupplier, String instantTime) {
+  protected List<WriteStatus> performClusteringForGroup(ReaderContextFactory<T> readerContextFactory, ClusteringGroupInfo clusteringGroup, Map<String, String> strategyParams,
+                                                        boolean preserveHoodieMetadata, SerializableSchema schema, TaskContextSupplier taskContextSupplier, String instantTime) {
     // deal with split / merge operations
     ValidationUtils.checkArgument(clusteringGroup.getNumOutputGroups() >= 1, "Number of output groups should be at least 1");
     if (clusteringGroup.getNumOutputGroups() == 1) {
@@ -107,7 +107,8 @@ public class SingleSparkJobConsistentHashingExecutionStrategy<T> extends SingleS
     }
   }
 
-  private List<WriteStatus> performBucketMergeForGroup(ReaderContextFactory<T> readerContextFactory, ClusteringGroupInfo clusteringGroup, Map<String, String> strategyParams, boolean preserveHoodieMetadata, SerializableSchema schema,
+  private List<WriteStatus> performBucketMergeForGroup(ReaderContextFactory<T> readerContextFactory, ClusteringGroupInfo clusteringGroup, Map<String, String> strategyParams,
+                                                       boolean preserveHoodieMetadata, SerializableSchema schema,
                                                        TaskContextSupplier taskContextSupplier, String instantTime) {
     long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(new SparkTaskContextSupplier(), writeConfig);
     LOG.info("MaxMemoryPerCompaction run as part of clustering => {}", maxMemoryPerCompaction);
@@ -194,7 +195,8 @@ public class SingleSparkJobConsistentHashingExecutionStrategy<T> extends SingleS
     }
   }
 
-  private List<WriteStatus> performBucketSplitForGroup(ReaderContextFactory<T> readerContextFactory, ClusteringGroupInfo clusteringGroup, Map<String, String> strategyParams, boolean preserveHoodieMetadata, SerializableSchema schema,
+  private List<WriteStatus> performBucketSplitForGroup(ReaderContextFactory<T> readerContextFactory, ClusteringGroupInfo clusteringGroup, Map<String, String> strategyParams,
+                                                       boolean preserveHoodieMetadata, SerializableSchema schema,
                                                        TaskContextSupplier taskContextSupplier, String instantTime) {
     ValidationUtils.checkArgument(clusteringGroup.getOperations().size() == 1, "Split operation should have only one operation");
     Option<Map<String, String>> extraMetadata = clusteringGroup.getExtraMetadata();
