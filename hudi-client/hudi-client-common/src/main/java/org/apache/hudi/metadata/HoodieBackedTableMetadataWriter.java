@@ -446,6 +446,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       }
     }
 
+    Lazy<List<Pair<String, FileSlice>>> lazyLatestMergedPartitionFileSliceList = getLazyLatestMergedPartitionFileSliceList();
     for (MetadataPartitionType partitionType : partitionsToInit) {
       // Find the commit timestamp to use for this partition. Each initialization should use its own unique commit time.
       String instantTimeForPartition = generateUniqueInstantTime(initializationTime);
@@ -471,7 +472,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
             partitionName = COLUMN_STATS.getPartitionPath();
             break;
           case RECORD_INDEX:
-            fileGroupCountAndRecordsPair = initializeRecordIndexPartition();
+            fileGroupCountAndRecordsPair = initializeRecordIndexPartition(lazyLatestMergedPartitionFileSliceList);
             partitionName = RECORD_INDEX.getPartitionPath();
             break;
           case EXPRESSION_INDEX:
@@ -483,7 +484,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
               continue;
             }
             partitionName = expressionIndexPartitionsToInit.iterator().next();
-            fileGroupCountAndRecordsPair = initializeExpressionIndexPartition(partitionName, instantTimeForPartition);
+            fileGroupCountAndRecordsPair = initializeExpressionIndexPartition(partitionName, instantTimeForPartition, lazyLatestMergedPartitionFileSliceList);
             break;
           case PARTITION_STATS:
             // For PARTITION_STATS, COLUMN_STATS should also be enabled
@@ -492,7 +493,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
                   HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key());
               continue;
             }
-            fileGroupCountAndRecordsPair = initializePartitionStatsIndex();
+            fileGroupCountAndRecordsPair = initializePartitionStatsIndex(lazyLatestMergedPartitionFileSliceList);
             partitionName = PARTITION_STATS.getPartitionPath();
             break;
           case SECONDARY_INDEX:
@@ -504,7 +505,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
               continue;
             }
             partitionName = secondaryIndexPartitionsToInit.iterator().next();
-            fileGroupCountAndRecordsPair = initializeSecondaryIndexPartition(partitionName);
+            fileGroupCountAndRecordsPair = initializeSecondaryIndexPartition(partitionName, lazyLatestMergedPartitionFileSliceList);
             break;
           default:
             throw new HoodieMetadataException(String.format("Unsupported MDT partition type: %s", partitionType));
@@ -576,8 +577,10 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     }
   }
 
-  private Pair<Integer, HoodieData<HoodieRecord>> initializePartitionStatsIndex() throws IOException {
-    HoodieData<HoodieRecord> records = HoodieTableMetadataUtil.convertFilesToPartitionStatsRecords(engineContext, getPartitionFileSlicePairs(), dataWriteConfig.getMetadataConfig(),
+  private Pair<Integer, HoodieData<HoodieRecord>> initializePartitionStatsIndex(
+      Lazy<List<Pair<String, FileSlice>>> lazyLatestMergedPartitionFileSliceList) {
+    HoodieData<HoodieRecord> records = HoodieTableMetadataUtil.convertFilesToPartitionStatsRecords(
+        engineContext, lazyLatestMergedPartitionFileSliceList.get(), dataWriteConfig.getMetadataConfig(),
         dataMetaClient, Option.empty(), Option.of(dataWriteConfig.getRecordMerger().getRecordType()));
     final int fileGroupCount = dataWriteConfig.getMetadataConfig().getPartitionStatsIndexFileGroupCount();
     return Pair.of(fileGroupCount, records);
@@ -641,10 +644,10 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
 
   protected abstract EngineType getEngineType();
 
-  private Pair<Integer, HoodieData<HoodieRecord>> initializeExpressionIndexPartition(String indexName, String instantTime) throws Exception {
+  private Pair<Integer, HoodieData<HoodieRecord>> initializeExpressionIndexPartition(String indexName, String instantTime, Lazy<List<Pair<String, FileSlice>>> lazyLatestMergedPartitionFileSliceList) throws Exception {
     HoodieIndexDefinition indexDefinition = getIndexDefinition(indexName);
     ValidationUtils.checkState(indexDefinition != null, "Expression Index definition is not present for index " + indexName);
-    List<Pair<String, FileSlice>> partitionFileSlicePairs = getPartitionFileSlicePairs();
+    List<Pair<String, FileSlice>> partitionFileSlicePairs = lazyLatestMergedPartitionFileSliceList.get();
     List<Pair<String, Pair<String, Long>>> partitionFilePathSizeTriplet = new ArrayList<>();
     partitionFileSlicePairs.forEach(entry -> {
       if (entry.getValue().getBaseFile().isPresent()) {
@@ -669,10 +672,11 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     return HoodieTableMetadataUtil.getHoodieIndexDefinition(indexName, dataMetaClient);
   }
 
-  private Pair<Integer, HoodieData<HoodieRecord>> initializeSecondaryIndexPartition(String indexName) throws IOException {
+  private Pair<Integer, HoodieData<HoodieRecord>> initializeSecondaryIndexPartition(
+      String indexName, Lazy<List<Pair<String, FileSlice>>> lazyLatestMergedPartitionFileSliceList) {
     HoodieIndexDefinition indexDefinition = getIndexDefinition(indexName);
     ValidationUtils.checkState(indexDefinition != null, "Secondary Index definition is not present for index " + indexName);
-    List<Pair<String, FileSlice>> partitionFileSlicePairs = getPartitionFileSlicePairs();
+    List<Pair<String, FileSlice>> partitionFileSlicePairs = lazyLatestMergedPartitionFileSliceList.get();
 
     int parallelism = Math.min(partitionFileSlicePairs.size(), dataWriteConfig.getMetadataConfig().getSecondaryIndexParallelism());
     HoodieData<HoodieRecord> records = readSecondaryKeysFromFileSlices(
@@ -693,18 +697,22 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     return Pair.of(fileGroupCount, records);
   }
 
-  private List<Pair<String, FileSlice>> getPartitionFileSlicePairs() throws IOException {
-    String latestInstant = dataMetaClient.getActiveTimeline().filterCompletedAndCompactionInstants().lastInstant()
-        .map(HoodieInstant::requestedTime).orElse(SOLO_COMMIT_TIMESTAMP);
-    try (HoodieTableFileSystemView fsView = getMetadataView()) {
-      // Collect the list of latest file slices present in each partition
-      List<String> partitions = metadata.getAllPartitionPaths();
-      fsView.loadAllPartitions();
-      List<Pair<String, FileSlice>> partitionFileSlicePairs = new ArrayList<>();
-      partitions.forEach(partition -> fsView.getLatestMergedFileSlicesBeforeOrOn(partition, latestInstant)
-          .forEach(fs -> partitionFileSlicePairs.add(Pair.of(partition, fs))));
-      return partitionFileSlicePairs;
-    }
+  private Lazy<List<Pair<String, FileSlice>>> getLazyLatestMergedPartitionFileSliceList() {
+    return Lazy.lazily(() -> {
+      String latestInstant = dataMetaClient.getActiveTimeline().filterCompletedAndCompactionInstants().lastInstant()
+          .map(HoodieInstant::requestedTime).orElse(SOLO_COMMIT_TIMESTAMP);
+      try (HoodieTableFileSystemView fsView = getMetadataView()) {
+        // Collect the list of latest file slices present in each partition
+        List<String> partitions = metadata.getAllPartitionPaths();
+        fsView.loadAllPartitions();
+        List<Pair<String, FileSlice>> partitionFileSlicePairs = new ArrayList<>();
+        partitions.forEach(partition -> fsView.getLatestMergedFileSlicesBeforeOrOn(partition, latestInstant)
+            .forEach(fs -> partitionFileSlicePairs.add(Pair.of(partition, fs))));
+        return partitionFileSlicePairs;
+      } catch (IOException e) {
+        throw new HoodieIOException("Cannot get the latest merged file slices", e);
+      }
+    });
   }
 
   private Pair<Integer, HoodieData<HoodieRecord>> initializeRecordIndexPartition(
