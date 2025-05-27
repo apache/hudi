@@ -943,7 +943,7 @@ public class TestData {
     }
   }
 
-  public static ClosableIterator<RowData> getRecordIterator(
+  private static ClosableIterator<RowData> getRecordIterator(
       FileSlice fileSlice,
       Schema tableSchema,
       HoodieTableMetaClient metaClient,

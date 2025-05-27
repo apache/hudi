@@ -104,10 +104,10 @@ public class TestRecordKeyToRowDataConverter {
         RowDataToAvroConverters.createConverter(rowType);
     GenericRecord avroRecord =
         (GenericRecord) converter.convert(AvroSchemaConverter.convertToSchema(rowType), rowData);
-    RecordKeyToRowDataConverter stringToRowDataConverter =
+    RecordKeyToRowDataConverter keyToRowDataConverter =
         new RecordKeyToRowDataConverter(new int[]{0, 1, 2, 3, 4, 5, 6}, rowType);
     final String recordKey = KeyGenUtils.getRecordKey(avroRecord, rowType.getFieldNames(), false);
-    RowData converted = stringToRowDataConverter.convert(recordKey);
+    RowData converted = keyToRowDataConverter.convert(recordKey);
     assertThat(converted, is(rowData));
   }
 }

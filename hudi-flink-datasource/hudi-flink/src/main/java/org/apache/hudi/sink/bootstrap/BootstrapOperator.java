@@ -234,7 +234,7 @@ public class BootstrapOperator
    *
    * @return A record key iterator for the file slice.
    */
-  protected ClosableIterator<String> getRecordKeyIterator(FileSlice fileSlice, Schema tableSchema) throws IOException {
+  private ClosableIterator<String> getRecordKeyIterator(FileSlice fileSlice, Schema tableSchema) throws IOException {
     FileSlice scanFileSlice = new FileSlice(fileSlice.getPartitionPath(), fileSlice.getBaseInstantTime(), fileSlice.getFileId());
     // filter out crushed base file
     fileSlice.getBaseFile().map(f -> isValidFile(f.getPathInfo()) ? f : null).ifPresent(scanFileSlice::setBaseFile);

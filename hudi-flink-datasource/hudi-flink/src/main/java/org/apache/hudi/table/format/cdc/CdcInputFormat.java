@@ -398,8 +398,8 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
             return true;
           } else {
             // an existed record is updated.
-            HoodieRecord<RowData> historyAvroRecord = new HoodieFlinkRecord(existed);
-            HoodieRecord<RowData> merged = mergeRowWithLog(historyAvroRecord, record).get();
+            HoodieRecord<RowData> historyRecord = new HoodieFlinkRecord(existed);
+            HoodieRecord<RowData> merged = mergeRowWithLog(historyRecord, record).get();
             if (merged.getData() != existed) {
               // update happens
               existed.setRowKind(RowKind.UPDATE_BEFORE);

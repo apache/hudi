@@ -54,9 +54,7 @@ public class RecordKeyToRowDataConverter {
   // position of `_hoodie_record_key`
   private final int keyMetaPos;
 
-  public RecordKeyToRowDataConverter(
-      int[] fieldsPos,
-      RowType rowType) {
+  public RecordKeyToRowDataConverter(int[] fieldsPos, RowType rowType) {
     this.fieldsPos = fieldsPos;
     this.rowArity = rowType.getFieldCount();
     this.keyMetaPos = rowType.getFieldNames().indexOf(HoodieRecord.RECORD_KEY_METADATA_FIELD);

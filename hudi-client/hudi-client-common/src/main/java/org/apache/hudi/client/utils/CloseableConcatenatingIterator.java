@@ -24,7 +24,7 @@ import java.util.Iterator;
 import java.util.List;
 
 /**
- * Provides closeable iterator interface over List of iterators. Consumes all records from first iterator element
+ * Provides closeable iterator interface over list of iterators. Consumes all records from first iterator element
  * before moving to next iterator in the list. That is concatenating elements across multiple iterators.
  */
 public class CloseableConcatenatingIterator<T> extends ConcatenatingIterator<T> {
