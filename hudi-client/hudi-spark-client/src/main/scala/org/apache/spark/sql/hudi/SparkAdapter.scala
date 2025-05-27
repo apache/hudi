@@ -284,6 +284,8 @@ trait SparkAdapter extends Serializable {
                         start: Origin,
                         stop: Origin): ParseException
 
+  def getHoodieUTF8StringFactory: HoodieUTF8StringFactory
+
   def splitFiles(sparkSession: SparkSession,
                  partitionDirectory: PartitionDirectory,
                  isSplitable: Boolean,

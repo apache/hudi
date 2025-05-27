@@ -30,7 +30,7 @@ import org.apache.hudi.storage.StoragePath
 import org.apache.avro.Schema
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.{AnalysisException, SparkSession, SQLContext}
+import org.apache.spark.sql.{AnalysisException, HoodieUTF8StringFactory, Spark4HoodieUTF8StringFactory, SparkSession, SQLContext}
 import org.apache.spark.sql.avro.{HoodieAvroSchemaConverters, HoodieSparkAvroSchemaConverters}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Expression, InterpretedPredicate, Predicate}
@@ -137,6 +137,8 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
                                  stop: Origin): ParseException = {
     new ParseException(command, start, stop, exception.getErrorClass, exception.getMessageParameters.asScala.toMap)
   }
+
+  override def getHoodieUTF8StringFactory: HoodieUTF8StringFactory = Spark4HoodieUTF8StringFactory
 
   override def splitFiles(sparkSession: SparkSession,
                           partitionDirectory: PartitionDirectory,
