@@ -92,6 +92,12 @@ public class SparkRDDWriteClient<T> extends
     return SparkHoodieIndexFactory.createIndex(config);
   }
 
+  public boolean commit(String instantTime, JavaRDD<WriteStatus> writeStatuses, Option<Map<String, String>> extraMetadata,
+                        String commitActionType, Map<String, List<String>> partitionToReplacedFileIds,
+                        Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc) {
+    return commit(instantTime, writeStatuses, extraMetadata, commitActionType, partitionToReplacedFileIds, extraPreCommitFunc, new NoOpWriteStatusHandlerCallback());
+  }
+
   /**
    * Complete changes performed at the given instantTime marker with specified action.
    */
@@ -115,7 +121,7 @@ public class SparkRDDWriteClient<T> extends
       totalErrorRecords.getAndAdd(pair.getValue().getTotalErrorRecords());
     });
     boolean canProceed = writeStatusHandlerCallback.processWriteStatuses(totalRecords.get(), totalErrorRecords.get(),
-        writeStatuses.filter(status -> !status.isMetadataTable()).map(WriteStatus::removeMetadataStats).collect());
+        HoodieJavaRDD.of(writeStatuses.filter(status -> !status.isMetadataTable()).map(WriteStatus::removeMetadataStats)));
 
     // only if callback returns true, lets proceed. If not, bail out.
     if (canProceed) {
