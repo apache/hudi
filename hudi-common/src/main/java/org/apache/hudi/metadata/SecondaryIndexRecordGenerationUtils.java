@@ -132,8 +132,9 @@ public class SecondaryIndexRecordGenerationUtils {
           records.add(createSecondaryIndexRecord(recordKey, secondaryKey, indexDefinition.getIndexName(), false));
         } else {
           // delete previous entry and insert new value if secondaryKey is different
-          if (!recordKeyToSecondaryKeyForPreviousFileSlice.get(recordKey).equals(secondaryKey)) {
-            records.add(createSecondaryIndexRecord(recordKey, recordKeyToSecondaryKeyForPreviousFileSlice.get(recordKey), indexDefinition.getIndexName(), true));
+          String previousSecondaryKey = recordKeyToSecondaryKeyForPreviousFileSlice.get(recordKey);
+          if (!previousSecondaryKey.equals(secondaryKey)) {
+            records.add(createSecondaryIndexRecord(recordKey, previousSecondaryKey, indexDefinition.getIndexName(), true));
             records.add(createSecondaryIndexRecord(recordKey, secondaryKey, indexDefinition.getIndexName(), false));
           }
         }

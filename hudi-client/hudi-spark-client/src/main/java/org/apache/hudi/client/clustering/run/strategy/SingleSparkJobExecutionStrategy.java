@@ -23,6 +23,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.ClusteringGroupInfo;
 import org.apache.hudi.common.model.HoodieKey;
@@ -56,8 +57,9 @@ public abstract class SingleSparkJobExecutionStrategy<T>
     final SerializableSchema serializableSchema = new SerializableSchema(schema);
     final List<ClusteringGroupInfo> clusteringGroupInfos = clusteringPlan.getInputGroups().stream().map(ClusteringGroupInfo::create).collect(Collectors.toList());
 
+    ReaderContextFactory<T> readerContextFactory = getEngineContext().getReaderContextFactory(getHoodieTable().getMetaClient());
     HoodieData<WriteStatus> writeStatus = getEngineContext().parallelize(clusteringGroupInfos).map(group -> {
-      return performClusteringForGroup(group, clusteringPlan.getStrategy().getStrategyParams(),
+      return performClusteringForGroup(readerContextFactory, group, clusteringPlan.getStrategy().getStrategyParams(),
           Option.ofNullable(clusteringPlan.getPreserveHoodieMetadata()).orElse(false),
           serializableSchema, taskContextSupplier, instantTime);
     }).flatMap(List::iterator);
@@ -69,7 +71,7 @@ public abstract class SingleSparkJobExecutionStrategy<T>
   /**
    * Submit a task to execute clustering for the group.
    */
-  protected abstract List<WriteStatus> performClusteringForGroup(ClusteringGroupInfo clusteringGroup, Map<String, String> strategyParams,
+  protected abstract List<WriteStatus> performClusteringForGroup(ReaderContextFactory<T> readerContextFactory, ClusteringGroupInfo clusteringGroup, Map<String, String> strategyParams,
                                                                  boolean preserveHoodieMetadata, SerializableSchema schema,
                                                                  TaskContextSupplier taskContextSupplier, String instantTime);
 
