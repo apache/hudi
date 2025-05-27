@@ -738,8 +738,8 @@ public class FSUtils {
   }
 
   public static StoragePath getPathWithoutScheme(StoragePath path) {
-    return path.isAbsolute() && path.toUri().getAuthority() != null
-        ? new StoragePath(path.toUri().getAuthority(), path.toUri().getPath()) : path;
+    return path.isAbsolute()
+        ? new StoragePath(path.toUri().getRawSchemeSpecificPart()) : path;
   }
 
   // Converts s3a to s3a
