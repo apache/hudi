@@ -291,13 +291,13 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
   private HoodieData<HoodieRecord<T>> readRecordsForGroup(JavaSparkContext jsc, HoodieClusteringGroup clusteringGroup, String instantTime) {
     List<ClusteringOperation> clusteringOps = clusteringGroup.getSlices().stream().map(ClusteringOperation::create).collect(Collectors.toList());
     int readParallelism = Math.min(writeConfig.getClusteringGroupReadParallelism(), clusteringOps.size());
-
+    ReaderContextFactory<T> readerContextFactory = getEngineContext().getReaderContextFactory(getHoodieTable().getMetaClient());
     return HoodieJavaRDD.of(jsc.parallelize(clusteringOps, readParallelism).mapPartitions(clusteringOpsPartition -> {
       List<Supplier<ClosableIterator<HoodieRecord<T>>>> suppliers = new ArrayList<>();
       long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(new SparkTaskContextSupplier(), getWriteConfig());
       LOG.info("MaxMemoryPerCompaction run as part of clustering => {}", maxMemoryPerCompaction);
       clusteringOpsPartition.forEachRemaining(clusteringOp -> {
-        Supplier<ClosableIterator<HoodieRecord<T>>> iteratorSupplier = () -> getRecordIterator(clusteringOp, instantTime, maxMemoryPerCompaction);
+        Supplier<ClosableIterator<HoodieRecord<T>>> iteratorSupplier = () -> getRecordIterator(readerContextFactory, clusteringOp, instantTime, maxMemoryPerCompaction);
         suppliers.add(iteratorSupplier);
       });
       return CloseableIteratorListener.addListener(new LazyConcatenatingIterator<>(suppliers));

@@ -96,13 +96,12 @@ public abstract class ClusteringExecutionStrategy<T, I, K, O> implements Seriali
     return this.writeConfig;
   }
 
-  protected ClosableIterator<HoodieRecord<T>> getRecordIterator(ClusteringOperation operation, String instantTime, long maxMemory) {
+  protected ClosableIterator<HoodieRecord<T>> getRecordIterator(ReaderContextFactory<T> readerContextFactory, ClusteringOperation operation, String instantTime, long maxMemory) {
     HoodieWriteConfig config = getWriteConfig();
     TypedProperties props = TypedProperties.copy(config.getProps());
     props.setProperty(MAX_MEMORY_FOR_MERGE.key(), Long.toString(maxMemory));
 
     HoodieTable table = getHoodieTable();
-    ReaderContextFactory<T> readerContextFactory = getEngineContext().getReaderContextFactory(table.getMetaClient());
 
     FileSlice fileSlice = clusteringOperation2FileSlice(table.getMetaClient().getBasePath().toString(), operation);
     final boolean usePosition = getWriteConfig().getBooleanOrDefault(MERGE_USE_RECORD_POSITIONS);

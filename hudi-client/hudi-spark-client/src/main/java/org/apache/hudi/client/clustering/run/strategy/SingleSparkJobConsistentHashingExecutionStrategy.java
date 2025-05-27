@@ -24,6 +24,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.utils.LazyConcatenatingIterator;
 import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.ClusteringGroupInfo;
@@ -119,8 +120,9 @@ public class SingleSparkJobConsistentHashingExecutionStrategy<T> extends SingleS
     ValidationUtils.checkArgument(newBucket.isPresent(), "New bucket should be present for merge operation");
     ConsistentHashingNode newBucketNode = newBucket.get();
     List<Supplier<ClosableIterator<HoodieRecord<T>>>> readerSuppliers = new ArrayList<>(clusteringGroup.getOperations().size());
+    ReaderContextFactory<T> readerContextFactory = getEngineContext().getReaderContextFactory(getHoodieTable().getMetaClient());
     clusteringGroup.getOperations().stream().forEach(op -> {
-      Supplier<ClosableIterator<HoodieRecord<T>>> supplier = () -> getRecordIterator(op, instantTime, maxMemoryPerCompaction);
+      Supplier<ClosableIterator<HoodieRecord<T>>> supplier = () -> getRecordIterator(readerContextFactory, op, instantTime, maxMemoryPerCompaction);
       readerSuppliers.add(supplier);
     });
     LazyConcatenatingIterator<HoodieRecord<T>> inputRecordsIter = new LazyConcatenatingIterator<>(readerSuppliers);
@@ -206,7 +208,8 @@ public class SingleSparkJobConsistentHashingExecutionStrategy<T> extends SingleS
     metadata.setChildrenNodes(nodes);
     ConsistentBucketIdentifier identifier = new ConsistentBucketIdentifier(metadata);
     ClusteringOperation operation = clusteringGroup.getOperations().get(0);
-    ClosableIterator<HoodieRecord<T>> iterator = getRecordIterator(operation, instantTime, IOUtils.getMaxMemoryPerCompaction(new SparkTaskContextSupplier(), writeConfig));
+    ReaderContextFactory<T> readerContextFactory = getEngineContext().getReaderContextFactory(getHoodieTable().getMetaClient());
+    ClosableIterator<HoodieRecord<T>> iterator = getRecordIterator(readerContextFactory, operation, instantTime, IOUtils.getMaxMemoryPerCompaction(new SparkTaskContextSupplier(), writeConfig));
     Function<HoodieRecord<T>, String> fileIdPrefixExtractor = record -> identifier.getBucket(record.getRecordKey(), this.indexKeyFields).getFileIdPrefix();
 
     HoodieConsumer<HoodieRecord<T>, List<WriteStatus>> insertHandler =
