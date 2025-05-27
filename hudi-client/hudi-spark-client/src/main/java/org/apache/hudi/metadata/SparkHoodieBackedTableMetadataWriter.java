@@ -20,7 +20,6 @@ package org.apache.hudi.metadata;
 
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.client.HoodieWriteResult;
-import org.apache.hudi.client.SparkRDDMetadataWriteClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.utils.SparkMetadataWriterUtils;
