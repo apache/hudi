@@ -20,21 +20,28 @@ package org.apache.hudi.table.action.cluster.strategy;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.engine.ReaderContextFactory;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.ClusteringOperation;
+import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
-import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.table.log.HoodieFileSliceReader;
-import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
-import org.apache.hudi.common.util.collection.CloseableMappingIterator;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
-import org.apache.hudi.io.storage.HoodieFileReader;
-import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.internal.schema.utils.SerDeHelper;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
@@ -44,6 +51,11 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.List;
+import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE;
+import static org.apache.hudi.common.config.HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS;
 
 /**
  * Pluggable implementation for writing data into new file groups based on ClusteringPlan.
@@ -84,51 +96,51 @@ public abstract class ClusteringExecutionStrategy<T, I, K, O> implements Seriali
     return this.writeConfig;
   }
 
-  protected ClosableIterator<HoodieRecord<T>> getRecordIteratorWithLogFiles(ClusteringOperation operation, String instantTime, long maxMemory,
-                                                                            Option<BaseKeyGenerator> keyGeneratorOpt, Option<HoodieFileReader> baseFileReaderOpt) {
+  protected ClosableIterator<HoodieRecord<T>> getRecordIterator(ClusteringOperation operation, String instantTime, long maxMemory) {
     HoodieWriteConfig config = getWriteConfig();
-    HoodieTable table = getHoodieTable();
-    HoodieTableConfig tableConfig = table.getMetaClient().getTableConfig();
-    HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
-        .withStorage(table.getStorage())
-        .withBasePath(table.getMetaClient().getBasePath())
-        .withLogFilePaths(operation.getDeltaFilePaths())
-        .withReaderSchema(readerSchemaWithMetaFields)
-        .withLatestInstantTime(instantTime)
-        .withMaxMemorySizeInBytes(maxMemory)
-        .withReverseReader(config.getCompactionReverseLogReadEnabled())
-        .withBufferSize(config.getMaxDFSStreamBufferSize())
-        .withSpillableMapBasePath(config.getSpillableMapBasePath())
-        .withPartition(operation.getPartitionPath())
-        .withOptimizedLogBlocksScan(config.enableOptimizedLogBlocksScan())
-        .withDiskMapType(config.getCommonConfig().getSpillableDiskMapType())
-        .withBitCaskDiskMapCompressionEnabled(config.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
-        .withRecordMerger(config.getRecordMerger())
-        .withTableMetaClient(table.getMetaClient())
-        .build();
+    TypedProperties props = TypedProperties.copy(config.getProps());
+    props.setProperty(MAX_MEMORY_FOR_MERGE.key(), Long.toString(maxMemory));
 
+    HoodieTable table = getHoodieTable();
+    ReaderContextFactory<T> readerContextFactory = getEngineContext().getReaderContextFactory(table.getMetaClient());
+
+    FileSlice fileSlice = clusteringOperation2FileSlice(table.getMetaClient().getBasePath().toString(), operation);
+    final boolean usePosition = getWriteConfig().getBooleanOrDefault(MERGE_USE_RECORD_POSITIONS);
+    Option<InternalSchema> internalSchema = SerDeHelper.fromJson(getWriteConfig().getInternalSchema());
     try {
-      return new HoodieFileSliceReader(baseFileReaderOpt, scanner, readerSchemaWithMetaFields, tableConfig.getPreCombineField(), config.getRecordMerger(),
-          tableConfig.getProps(),
-          tableConfig.populateMetaFields() ? Option.empty() : Option.of(Pair.of(tableConfig.getRecordKeyFieldProp(),
-              tableConfig.getPartitionFieldProp())), keyGeneratorOpt);
+      return getFileGroupReader(table.getMetaClient(), fileSlice, readerSchemaWithMetaFields, internalSchema, readerContextFactory, instantTime, usePosition).getClosableHoodieRecordIterator();
     } catch (IOException e) {
       throw new HoodieClusteringException("Error reading file slices", e);
     }
   }
 
-  protected ClosableIterator<HoodieRecord<T>> getRecordIteratorWithBaseFileOnly(Option<BaseKeyGenerator> keyGeneratorOpt, HoodieFileReader baseFileReader) {
-    // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
-    //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
-    //       it since these records will be shuffled later.
-    ClosableIterator<HoodieRecord> baseRecordsIterator;
-    try {
-      baseRecordsIterator = baseFileReader.getRecordIterator(readerSchemaWithMetaFields);
-    } catch (IOException e) {
-      throw new HoodieClusteringException("Error reading base file", e);
-    }
-    return new CloseableMappingIterator(
-        baseRecordsIterator,
-        rec -> ((HoodieRecord) rec).copy().wrapIntoHoodieRecordPayloadWithKeyGen(readerSchemaWithMetaFields, writeConfig.getProps(), keyGeneratorOpt));
+  /**
+   * Construct FileSlice from a given clustering operation {@code clusteringOperation}.
+   */
+  protected FileSlice clusteringOperation2FileSlice(String basePath, ClusteringOperation clusteringOperation) {
+    String partitionPath = clusteringOperation.getPartitionPath();
+    boolean baseFileExists = !StringUtils.isNullOrEmpty(clusteringOperation.getDataFilePath());
+    HoodieBaseFile baseFile = baseFileExists ? new HoodieBaseFile(new StoragePath(basePath, clusteringOperation.getDataFilePath()).toString()) : null;
+    List<HoodieLogFile> logFiles = clusteringOperation.getDeltaFilePaths().stream().map(p ->
+            new HoodieLogFile(new StoragePath(FSUtils.constructAbsolutePath(
+                basePath, partitionPath), p)))
+        .sorted(new HoodieLogFile.LogFileComparator())
+        .collect(Collectors.toList());
+
+    ValidationUtils.checkState(baseFileExists || !logFiles.isEmpty(), "Both base file and log files are missing from this clustering operation " + clusteringOperation);
+    String baseInstantTime = baseFileExists ? baseFile.getCommitTime() : logFiles.get(0).getDeltaCommitTime();
+    FileSlice fileSlice = new FileSlice(partitionPath, baseInstantTime, clusteringOperation.getFileId());
+    fileSlice.setBaseFile(baseFile);
+    logFiles.forEach(fileSlice::addLogFile);
+    return fileSlice;
+  }
+
+  protected static <R> HoodieFileGroupReader<R> getFileGroupReader(HoodieTableMetaClient metaClient, FileSlice fileSlice, Schema readerSchema, Option<InternalSchema> internalSchemaOption,
+                                                                   ReaderContextFactory<R> readerContextFactory, String instantTime, boolean usePosition) {
+    HoodieReaderContext<R> readerContext = readerContextFactory.getContext();
+    return HoodieFileGroupReader.<R>newBuilder()
+        .withReaderContext(readerContext).withHoodieTableMetaClient(metaClient).withLatestCommitTime(instantTime)
+        .withFileSlice(fileSlice).withDataSchema(readerSchema).withRequestedSchema(readerSchema).withInternalSchema(internalSchemaOption)
+        .withShouldUseRecordPosition(usePosition).withProps(metaClient.getTableConfig().getProps()).build();
   }
 }

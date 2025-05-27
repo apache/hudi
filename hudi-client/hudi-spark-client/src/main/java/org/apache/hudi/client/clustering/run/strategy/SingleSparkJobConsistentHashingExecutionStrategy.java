@@ -43,9 +43,6 @@ import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.io.IOUtils;
 import org.apache.hudi.io.WriteHandleFactory;
-import org.apache.hudi.io.storage.HoodieFileReader;
-import org.apache.hudi.keygen.BaseKeyGenerator;
-import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.cluster.strategy.BaseConsistentHashingBucketClusteringPlanStrategy;
 import org.apache.hudi.util.ExecutorFactory;
@@ -215,16 +212,5 @@ public class SingleSparkJobConsistentHashingExecutionStrategy<T> extends SingleS
     HoodieConsumer<HoodieRecord<T>, List<WriteStatus>> insertHandler =
         new InsertHandler(writeConfig, instantTime, getHoodieTable(), taskContextSupplier, new FixedIdSuffixCreateHandleFactory(), false, fileIdPrefixExtractor, readerSchema);
     return ExecutorFactory.create(writeConfig, iterator, insertHandler, op -> op, getHoodieTable().getPreExecuteRunnable()).execute();
-  }
-
-  private ClosableIterator<HoodieRecord<T>> getRecordIterator(ClusteringOperation operation, String instantTime, long maxMemory) {
-    Option<HoodieFileReader> baseOrBootstrapFileReader = getBaseOrBootstrapFileReader(operation);
-    Option<BaseKeyGenerator> keyGeneratorOpt = HoodieSparkKeyGeneratorFactory.createBaseKeyGenerator(writeConfig);
-    if (operation.getDeltaFilePaths().isEmpty()) {
-      ValidationUtils.checkArgument(baseOrBootstrapFileReader.isPresent(), "Base or bootstrap file reader should be present for operation");
-      return getRecordIteratorWithBaseFileOnly(keyGeneratorOpt, baseOrBootstrapFileReader.get());
-    } else {
-      return getRecordIteratorWithLogFiles(operation, instantTime, maxMemory, keyGeneratorOpt, baseOrBootstrapFileReader);
-    }
   }
 }
