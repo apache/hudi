@@ -1017,6 +1017,14 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   }
 
   @Test
+  public void testStreamingCopyClustering() throws Exception {
+    String strategy = "org.apache.hudi.client.clustering.run.strategy.SparkStreamCopyClusteringExecutionStrategy";
+    HoodieClusteringConfig config = createClusteringBuilder(true, 1).withClusteringExecutionStrategyClass(strategy).build();
+    testInsertAndClustering(config, true, true,
+        false, SqlQueryEqualityPreCommitValidator.class.getName(), COUNT_SQL_QUERY_FOR_VALIDATION, "");
+  }
+
+  @Test
   public void testAndValidateClusteringOutputFiles() throws IOException {
     testAndValidateClusteringOutputFiles(createBrokenClusteringClient(new HoodieException(CLUSTERING_FAILURE)), createClusteringBuilder(true, 2).build(), list2Rdd, rdd2List);
   }

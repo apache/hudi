@@ -39,7 +39,7 @@ public class TypedProperties extends Properties implements Serializable {
     super(null);
   }
 
-  protected TypedProperties(Properties defaults) {
+  public TypedProperties(Properties defaults) {
     if (Objects.nonNull(defaults)) {
       for (Enumeration<?> e = defaults.propertyNames(); e.hasMoreElements(); ) {
         Object k = e.nextElement();

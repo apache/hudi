@@ -19,6 +19,7 @@
 package org.apache.hudi.common.bloom;
 
 import org.apache.hudi.common.util.Base64CodecUtil;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIndexException;
 
 import java.io.ByteArrayInputStream;
@@ -124,6 +125,43 @@ public class HoodieDynamicBoundedBloomFilter implements BloomFilter {
   private void extractAndSetInternalBloomFilter(DataInputStream dis) throws IOException {
     internalDynamicBloomFilter = new InternalDynamicBloomFilter();
     internalDynamicBloomFilter.readFields(dis);
+  }
+
+  @Override
+  public void or(BloomFilter other) {
+    if (other != null) {
+      ValidationUtils.checkArgument(other instanceof HoodieDynamicBoundedBloomFilter,
+          "HoodieDynamicBoundedBloomFilter can only perform OR operations with other HoodieDynamicBoundedBloomFilter.");
+      HoodieDynamicBoundedBloomFilter otherFilter = (HoodieDynamicBoundedBloomFilter) other;
+      int sourceMatrixLength = this.getMatrixLength();
+      int targetMatrixLength = otherFilter.getMatrixLength();
+      if (targetMatrixLength > sourceMatrixLength) {
+        this.rescaleFromTarget(targetMatrixLength);
+      } else {
+        otherFilter.rescaleFromTarget(sourceMatrixLength);
+      }
+      this.internalDynamicBloomFilter.or(otherFilter.internalDynamicBloomFilter);
+    }
+  }
+
+  /**
+   * rescale the internal dynamic bloom filter by length
+   * @param targetMatrixLength
+   * @return
+   */
+  private HoodieDynamicBoundedBloomFilter rescaleFromTarget(int targetMatrixLength) {
+    int initMatrixLength = this.internalDynamicBloomFilter.getMatrixLength();
+    int needAddRowNum = targetMatrixLength - initMatrixLength;
+    if (needAddRowNum > 0) {
+      for (int i = 0; i < needAddRowNum; i++) {
+        this.internalDynamicBloomFilter.addRow();
+      }
+    }
+    return this;
+  }
+
+  private int getMatrixLength() {
+    return this.internalDynamicBloomFilter.getMatrixLength();
   }
 }
 
