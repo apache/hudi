@@ -644,7 +644,8 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
 
   protected abstract EngineType getEngineType();
 
-  private Pair<Integer, HoodieData<HoodieRecord>> initializeExpressionIndexPartition(String indexName, String instantTime, Lazy<List<Pair<String, FileSlice>>> lazyLatestMergedPartitionFileSliceList) throws Exception {
+  private Pair<Integer, HoodieData<HoodieRecord>> initializeExpressionIndexPartition(String indexName, String instantTime,
+                                                                                     Lazy<List<Pair<String, FileSlice>>> lazyLatestMergedPartitionFileSliceList) throws Exception {
     HoodieIndexDefinition indexDefinition = getIndexDefinition(indexName);
     ValidationUtils.checkState(indexDefinition != null, "Expression Index definition is not present for index " + indexName);
     List<Pair<String, FileSlice>> partitionFileSlicePairs = lazyLatestMergedPartitionFileSliceList.get();
@@ -1139,7 +1140,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       reInitWriteClient();
     }
 
-    getWriteClient().startCommitWithTime(instantTime, HoodieTimeline.DELTA_COMMIT_ACTION);
+    getWriteClient().startCommitForMetadataTable(metadataMetaClient, instantTime, HoodieTimeline.DELTA_COMMIT_ACTION);
   }
 
   public void wrapUpStreamingWriteToMetadataTableAndCompleteCommit(String instantTime, HoodieEngineContext context, List<HoodieWriteStat> metadataWriteStatsSoFar, HoodieCommitMetadata metadata) {
