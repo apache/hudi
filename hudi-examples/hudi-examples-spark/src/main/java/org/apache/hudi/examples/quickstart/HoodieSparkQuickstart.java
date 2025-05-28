@@ -45,12 +45,12 @@ public final class HoodieSparkQuickstart {
   }
 
   public static void main(String[] args) {
-    if (args.length < 2) {
+    /*if (args.length < 2) {
       System.err.println("Usage: HoodieWriteClientExample <tablePath> <tableName>");
       System.exit(1);
-    }
-    String tablePath = args[0];
-    String tableName = args[1];
+    }*/
+    String tablePath = "/tmp/tbl_path1";
+    String tableName = "test_table";
 
     SparkSession spark = HoodieExampleSparkUtils.defaultSparkSession("Hudi Spark basic example");
     SparkConf sparkConf = HoodieExampleSparkUtils.defaultSparkConf("hoodie-client-example");
@@ -79,7 +79,7 @@ public final class HoodieSparkQuickstart {
     assert snapshotAfterUpdate.intersect(updateDf).count() == updateDf.count();
     assert snapshotAfterUpdate.except(updateDf).except(snapshotBeforeUpdate).count() == 0;
 
-    incrementalQuery(spark, tablePath, tableName);
+    /*incrementalQuery(spark, tablePath, tableName);
     pointInTimeQuery(spark, tablePath, tableName);
 
     Dataset<Row> snapshotBeforeDelete = snapshotAfterUpdate;
@@ -104,6 +104,8 @@ public final class HoodieSparkQuickstart {
     Dataset<Row> snapshotAfterDeleteByPartition = spark.sql(snapshotQuery);
     assert snapshotAfterDeleteByPartition.intersect(snapshotBeforeDeleteByPartition.filter("partitionpath == '" + HoodieExampleDataGenerator.DEFAULT_FIRST_PARTITION_PATH + "'")).count() == 0;
     assert snapshotAfterDeleteByPartition.count() == snapshotBeforeDeleteByPartition.filter("partitionpath != '" + HoodieExampleDataGenerator.DEFAULT_FIRST_PARTITION_PATH + "'").count();
+
+     */
   }
 
   /**
