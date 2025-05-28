@@ -76,7 +76,7 @@ public class SparkMetadataTableUpsertCommitActionExecutor<T> extends SparkUpsert
     // with streaming writes support, we might write to metadata table multiple times for the same instant times.
     // ie. writeClient.startCommit(t1), writeClient.upsert(batch1, t1), writeClient.upsert(batch2, t1), writeClient.commit(t1, ...)
     // So, here we are generating inflight file only in the last known writes, which we know will only have FILES partition.
-    if (!initialCall) {
+    if (initialCall) {
       super.saveWorkloadProfileMetadataToInflight(profile, instantTime);
     }
   }

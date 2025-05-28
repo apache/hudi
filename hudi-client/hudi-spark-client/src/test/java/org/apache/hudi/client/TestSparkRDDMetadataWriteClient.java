@@ -163,14 +163,14 @@ public class TestSparkRDDMetadataWriteClient extends HoodieClientTestBase {
       List<FileSlice> fileSlices =
           HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataMetaClient, Option.ofNullable(fsView), MetadataPartitionType.FILES.getPartitionPath());
       mdtPartitionsFileIdMapping.put(MetadataPartitionType.FILES.getPartitionPath(), fileSlices.stream().map(fileSlice -> fileSlice.getFileId()).collect(Collectors.toList()));
-      fileSlices.stream().forEach(fileSlice -> {
+      fileSlices.forEach(fileSlice -> {
         filesPartitionFileGroupIdList.add(new HoodieFileGroupId(MetadataPartitionType.FILES.getPartitionPath(), fileSlice.getFileId()));
       });
 
       fileSlices =
           HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataMetaClient, Option.ofNullable(fsView), MetadataPartitionType.RECORD_INDEX.getPartitionPath());
       mdtPartitionsFileIdMapping.put(MetadataPartitionType.RECORD_INDEX.getPartitionPath(), fileSlices.stream().map(fileSlice -> fileSlice.getFileId()).collect(Collectors.toList()));
-      fileSlices.stream().forEach(fileSlice -> {
+      fileSlices.forEach(fileSlice -> {
         nonFilesPartitionsFileGroupIdList.add(new HoodieFileGroupId(MetadataPartitionType.RECORD_INDEX.getPartitionPath(), fileSlice.getFileId()));
       });
     }
@@ -184,12 +184,14 @@ public class TestSparkRDDMetadataWriteClient extends HoodieClientTestBase {
     metaClient = HoodieTableMetaClient.reload(metaClient);
     metadataMetaClient = HoodieTableMetaClient.reload(metadataMetaClient);
     try (HoodieTableFileSystemView fsView = HoodieTableMetadataUtil.getFileSystemViewForMetadataTable(metadataMetaClient)) {
-      FileSlice filesFileSlice =
-          HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataMetaClient, Option.ofNullable(fsView), MetadataPartitionType.FILES.getPartitionPath()).get(0);
+      List<FileSlice> filesFileSliceList = HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataMetaClient, Option.ofNullable(fsView), MetadataPartitionType.FILES.getPartitionPath());
+      assertEquals(1, filesFileSliceList.size(), "File partition is expected to contain just 1 file slice");
+      FileSlice filesFileSlice = filesFileSliceList.get(0);
       readFromMDTFileSliceAndValidate(metadataMetaClient, hoodieWriteConfig, filesFileSlice, filesPartitionExpectedRecordsMap, validMetadataInstant);
 
-      FileSlice rliFileSlice =
-          HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataMetaClient, Option.ofNullable(fsView), MetadataPartitionType.RECORD_INDEX.getPartitionPath()).get(0);
+      List<FileSlice> rliFileSliceList = HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataMetaClient, Option.ofNullable(fsView), MetadataPartitionType.RECORD_INDEX.getPartitionPath());
+      assertEquals(1, rliFileSliceList.size(), "RLI partition is expected to contain just 1 file slice");
+      FileSlice rliFileSlice = rliFileSliceList.get(0);
       readFromMDTFileSliceAndValidate(metadataMetaClient, hoodieWriteConfig, rliFileSlice, rliPartitionExpectedRecordsMap, validMetadataInstant);
     }
   }
@@ -210,11 +212,11 @@ public class TestSparkRDDMetadataWriteClient extends HoodieClientTestBase {
       Map<String, HoodieRecord<HoodieMetadataPayload>> actualMdtRecordMap =
           readFromBaseAndMergeWithLogRecords(readers.getKey(), sortedKeysForFilesPartition, logRecords, fileSlice.getPartitionPath());
       assertEquals(actualMdtRecordMap.size(), expectedRecordsMap.size());
-      actualMdtRecordMap.forEach((k, v) -> {
-        assertTrue(expectedRecordsMap.containsKey(k));
-        if (!k.equals(RECORDKEY_PARTITION_LIST)) {
+      actualMdtRecordMap.forEach((recordKey, record) -> {
+        assertTrue(expectedRecordsMap.containsKey(recordKey));
+        if (!recordKey.equals(RECORDKEY_PARTITION_LIST)) {
           // ignore __all_partition_records sinec it could have partitions from first commit which could be from HoodieTestDatagenerator.
-          assertEquals(((HoodieMetadataPayload) expectedRecordsMap.get(k).getData()).getFilenames(), ((HoodieMetadataPayload) v.getData()).getFilenames());
+          assertEquals(((HoodieMetadataPayload) expectedRecordsMap.get(recordKey).getData()).getFilenames(), ((HoodieMetadataPayload) record.getData()).getFilenames());
         }
       });
     } finally {

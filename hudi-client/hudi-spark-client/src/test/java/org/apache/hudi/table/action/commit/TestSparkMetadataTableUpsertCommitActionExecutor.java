@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -73,17 +74,19 @@ public class TestSparkMetadataTableUpsertCommitActionExecutor extends SparkClien
     SparkMetadataTableUpsertCommitActionExecutor commitActionExecutor = new MockSparkMetadataTableUpsertCommitActionExecutor(context(),
         writeConfig, table, "0001", recordHoodieData, hoodieFileGroupIdList, statusHoodieData, true);
     commitActionExecutor.execute(recordHoodieData);
-    // since this is initial call, inflight instant may not be added.
-    assertFalse(metaClient.reloadActiveTimeline().getWriteTimeline().filterInflights().containsInstant("0001"));
+    // since this is initial call, inflight instant should be added.
+    assertTrue(metaClient.reloadActiveTimeline().getWriteTimeline().filterInflights().containsInstant("0001"));
 
-    // just add FILES partition. we should expect the inflight instant to be added to timeline.
     hoodieFileGroupIdList.clear();
     hoodieFileGroupIdList.add(new HoodieFileGroupId(MetadataPartitionType.FILES.getPartitionPath(), "files-00001"));
 
     commitActionExecutor = new MockSparkMetadataTableUpsertCommitActionExecutor(context(),
         writeConfig, table, "0001", recordHoodieData, hoodieFileGroupIdList, statusHoodieData, false);
     commitActionExecutor.execute(recordHoodieData);
-    assertTrue(metaClient.reloadActiveTimeline().getWriteTimeline().filterInflights().containsInstant("0001"));
+    // ensure inflight is still intact and is not complete yet unless we commit
+    HoodieActiveTimeline reloadedActiveTimeline = metaClient.reloadActiveTimeline();
+    assertTrue(reloadedActiveTimeline.getWriteTimeline().filterInflights().containsInstant("0001"));
+    assertFalse(reloadedActiveTimeline.getWriteTimeline().filterCompletedInstants().containsInstant("0001"));
   }
 
   static class MockSparkMetadataTableUpsertCommitActionExecutor<T> extends SparkMetadataTableUpsertCommitActionExecutor<T> {
