@@ -28,6 +28,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.merge.SparkRecordMergingUtils;
 
 import org.apache.avro.Schema;
+import org.apache.spark.sql.HoodieUTF8StringFactory;
 
 import java.io.IOException;
 
@@ -35,6 +36,9 @@ import java.io.IOException;
  * Record merger for spark that implements the default merger strategy
  */
 public class DefaultSparkRecordMerger extends HoodieSparkRecordMerger {
+
+  private final HoodieUTF8StringFactory hoodieUTF8StringFactory =
+      SparkAdapterSupport$.MODULE$.sparkAdapter().getHoodieUTF8StringFactory();
 
   @Override
   public String getMergingStrategy() {
@@ -61,7 +65,7 @@ public class DefaultSparkRecordMerger extends HoodieSparkRecordMerger {
     if (deleteHandlingResult != null) {
       return deleteHandlingResult;
     }
-
+    // TODO use hoodieUTF8StringFactory
     if (older.getOrderingValue(oldSchema, props).compareTo(newer.getOrderingValue(newSchema, props)) > 0) {
       return Option.of(SparkRecordMergingUtils.mergePartialRecords(
           (HoodieSparkRecord) newer, newSchema, (HoodieSparkRecord) older, oldSchema, readerSchema, props));

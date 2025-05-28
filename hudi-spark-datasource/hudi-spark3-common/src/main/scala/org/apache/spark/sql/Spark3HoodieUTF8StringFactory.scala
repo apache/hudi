@@ -16,12 +16,13 @@
  */
 
 package org.apache.spark.sql
+
 import org.apache.hudi.{HoodieUTF8String, Spark3HoodieUTF8String}
 
 import org.apache.spark.unsafe.types.UTF8String
 
 object Spark3HoodieUTF8StringFactory extends HoodieUTF8StringFactory {
 
-  override def createHoodieUTF8String(utf8String: UTF8String): HoodieUTF8String = new Spark3HoodieUTF8String(utf8String)
+  override def wrapUTF8String(utf8String: UTF8String): HoodieUTF8String = new Spark3HoodieUTF8String(utf8String)
 
 }

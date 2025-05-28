@@ -23,6 +23,16 @@ import org.apache.spark.unsafe.types.UTF8String
 
 trait HoodieUTF8StringFactory {
 
-  def createHoodieUTF8String(utf8String: UTF8String): HoodieUTF8String
+  def wrapUTF8String(utf8String: UTF8String): HoodieUTF8String
 
+  private def wrapUTF8StringIfNecessary(obj: AnyRef): AnyRef = {
+    obj match {
+      case string: UTF8String => wrapUTF8String(string)
+      case _ => obj
+    }
+  }
+
+  def wrapArrayOfObjects(objects: Array[AnyRef]): Array[AnyRef] = {
+    objects.map(obj => wrapUTF8StringIfNecessary(obj))
+  }
 }

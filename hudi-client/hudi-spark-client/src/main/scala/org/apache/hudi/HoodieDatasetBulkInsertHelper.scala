@@ -57,6 +57,8 @@ object HoodieDatasetBulkInsertHelper
     with Logging
     with SparkAdapterSupport {
 
+  private val hoodieUTF8StringFactory = sparkAdapter.getHoodieUTF8StringFactory
+
   /**
    * Prepares [[DataFrame]] for bulk-insert into Hudi table, taking following steps:
    *
@@ -261,12 +263,24 @@ object HoodieDatasetBulkInsertHelper
         (rowKey, row.copy())
       }
       .reduceByKey ((oneRow, otherRow) => {
-        val onePreCombineVal = getNestedInternalRowValue(oneRow, preCombineFieldPath).asInstanceOf[Comparable[AnyRef]]
-        val otherPreCombineVal = getNestedInternalRowValue(otherRow, preCombineFieldPath).asInstanceOf[Comparable[AnyRef]]
-        if (onePreCombineVal.compareTo(otherPreCombineVal.asInstanceOf[AnyRef]) >= 0) {
-          oneRow
+        if (!isStringType) {
+          val onePreCombineVal = getNestedInternalRowValue(oneRow, preCombineFieldPath).asInstanceOf[Comparable[AnyRef]]
+          val otherPreCombineVal = getNestedInternalRowValue(otherRow, preCombineFieldPath).asInstanceOf[Comparable[AnyRef]]
+          if (onePreCombineVal.compareTo(otherPreCombineVal.asInstanceOf[AnyRef]) >= 0) {
+            oneRow
+          } else {
+            otherRow
+          }
         } else {
-          otherRow
+          val onePreCombineVal = hoodieUTF8StringFactory.wrapUTF8String(
+            getNestedInternalRowValue(oneRow, preCombineFieldPath).asInstanceOf[UTF8String])
+          val otherPreCombineVal = hoodieUTF8StringFactory.wrapUTF8String(
+            getNestedInternalRowValue(otherRow, preCombineFieldPath).asInstanceOf[UTF8String])
+          if (onePreCombineVal.compareTo(otherPreCombineVal) >= 0) {
+            oneRow
+          } else {
+            otherRow
+          }
         }
       }, targetParallelism)
       .values
