@@ -21,12 +21,12 @@ package org.apache.hudi.table.action.commit;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.table.HoodieSparkTable;
@@ -61,8 +61,8 @@ public class TestSparkMetadataTableUpsertCommitActionExecutor extends SparkClien
     List<HoodieRecord> records = dataGen.generateInserts("0001", 100);
     HoodieData<HoodieRecord> recordHoodieData = context().parallelize(records, 1);
 
-    List<Pair<String, String>> mdtPartitionPathFileGroupIdList = new ArrayList<>();
-    mdtPartitionPathFileGroupIdList.add(Pair.of(MetadataPartitionType.RECORD_INDEX.getPartitionPath(), "record-index-00001"));
+    List<HoodieFileGroupId> hoodieFileGroupIdList = new ArrayList<>();
+    hoodieFileGroupIdList.add(new HoodieFileGroupId(MetadataPartitionType.RECORD_INDEX.getPartitionPath(), "record-index-00001"));
 
     HoodieData<WriteStatus> statusHoodieData = mock(HoodieData.class);
 
@@ -71,17 +71,17 @@ public class TestSparkMetadataTableUpsertCommitActionExecutor extends SparkClien
         "0001"));
 
     SparkMetadataTableUpsertCommitActionExecutor commitActionExecutor = new MockSparkMetadataTableUpsertCommitActionExecutor(context(),
-        writeConfig, table, "0001", recordHoodieData, mdtPartitionPathFileGroupIdList, statusHoodieData, true);
+        writeConfig, table, "0001", recordHoodieData, hoodieFileGroupIdList, statusHoodieData, true);
     commitActionExecutor.execute(recordHoodieData);
     // since this is initial call, inflight instant may not be added.
     assertFalse(metaClient.reloadActiveTimeline().getWriteTimeline().filterInflights().containsInstant("0001"));
 
     // just add FILES partition. we should expect the inflight instant to be added to timeline.
-    mdtPartitionPathFileGroupIdList.clear();
-    mdtPartitionPathFileGroupIdList.add(Pair.of(MetadataPartitionType.FILES.getPartitionPath(), "files-00001"));
+    hoodieFileGroupIdList.clear();
+    hoodieFileGroupIdList.add(new HoodieFileGroupId(MetadataPartitionType.FILES.getPartitionPath(), "files-00001"));
 
     commitActionExecutor = new MockSparkMetadataTableUpsertCommitActionExecutor(context(),
-        writeConfig, table, "0001", recordHoodieData, mdtPartitionPathFileGroupIdList, statusHoodieData, false);
+        writeConfig, table, "0001", recordHoodieData, hoodieFileGroupIdList, statusHoodieData, false);
     commitActionExecutor.execute(recordHoodieData);
     assertTrue(metaClient.reloadActiveTimeline().getWriteTimeline().filterInflights().containsInstant("0001"));
   }
@@ -90,10 +90,10 @@ public class TestSparkMetadataTableUpsertCommitActionExecutor extends SparkClien
     private final HoodieData<WriteStatus> writeStatusHoodieData;
     public MockSparkMetadataTableUpsertCommitActionExecutor(HoodieSparkEngineContext context, HoodieWriteConfig config, HoodieTable table,
                                                             String instantTime, HoodieData<HoodieRecord<T>> preppedRecords,
-                                                            List<Pair<String, String>> mdtPartitionPathFileGroupIdList,
+                                                            List<HoodieFileGroupId> hoodieFileGroupIdList,
                                                             HoodieData<WriteStatus> writeStatusHoodieData,
                                                             boolean initialCall) {
-      super(context, config, table, instantTime, preppedRecords, mdtPartitionPathFileGroupIdList, initialCall);
+      super(context, config, table, instantTime, preppedRecords, hoodieFileGroupIdList, initialCall);
       this.writeStatusHoodieData = writeStatusHoodieData;
     }
 

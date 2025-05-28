@@ -20,6 +20,7 @@ package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -47,14 +48,14 @@ import java.util.Map;
 public class SparkMetadataTableUpsertCommitActionExecutor<T> extends SparkUpsertPreppedDeltaCommitActionExecutor<T> {
 
   private static final WorkloadStat PLACEHOLDER_GLOBAL_STAT = new WorkloadStat();
-  private final List<Pair<String, String>> mdtPartitionPathFileGroupIdList;
+  private final List<HoodieFileGroupId> mdtFileGroupIdList;
   private final boolean initialCall;
 
   public SparkMetadataTableUpsertCommitActionExecutor(HoodieSparkEngineContext context, HoodieWriteConfig config, HoodieTable table, String instantTime,
-                                                      HoodieData<HoodieRecord<T>> preppedRecords, List<Pair<String, String>> mdtPartitionPathFileGroupIdList,
+                                                      HoodieData<HoodieRecord<T>> preppedRecords, List<HoodieFileGroupId> mdtFileGroupIdList,
                                                       boolean initialCall) {
     super(context, config, table, instantTime, preppedRecords);
-    this.mdtPartitionPathFileGroupIdList = mdtPartitionPathFileGroupIdList;
+    this.mdtFileGroupIdList = mdtFileGroupIdList;
     this.initialCall = initialCall;
   }
 
@@ -85,10 +86,10 @@ public class SparkMetadataTableUpsertCommitActionExecutor<T> extends SparkUpsert
     List<BucketInfo> bucketInfoList = new ArrayList<>();
     Map<String, Integer> fileIdToSparkPartitionIndexMap = new HashMap<>();
     int counter = 0;
-    while (counter < mdtPartitionPathFileGroupIdList.size()) {
-      Pair<String, String> partitionPathFileIdPair = mdtPartitionPathFileGroupIdList.get(counter);
-      fileIdToSparkPartitionIndexMap.put(partitionPathFileIdPair.getValue(), counter);
-      bucketInfoList.add(new BucketInfo(BucketType.UPDATE, partitionPathFileIdPair.getValue(), partitionPathFileIdPair.getKey()));
+    while (counter < mdtFileGroupIdList.size()) {
+      HoodieFileGroupId fileGroupId = mdtFileGroupIdList.get(counter);
+      fileIdToSparkPartitionIndexMap.put(fileGroupId.getFileId(), counter);
+      bucketInfoList.add(new BucketInfo(BucketType.UPDATE, fileGroupId.getFileId(), fileGroupId.getPartitionPath()));
       counter++;
     }
     return new SparkMetadataTableUpsertPartitioner<>(bucketInfoList, fileIdToSparkPartitionIndexMap);

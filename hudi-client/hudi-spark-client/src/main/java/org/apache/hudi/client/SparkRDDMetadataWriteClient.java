@@ -22,12 +22,12 @@ import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.table.HoodieSparkMergeOnReadMetadataTable;
@@ -69,12 +69,12 @@ public class SparkRDDMetadataWriteClient<T> extends SparkRDDWriteClient<T> {
    * @param instantTime Instant time of the commit
    * @return Collection of WriteStatus to inspect errors and counts
    */
-  public JavaRDD<WriteStatus> upsertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords, String instantTime, Option<List<Pair<String, String>>> partitionFileIdPairsOpt) {
+  public JavaRDD<WriteStatus> upsertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords, String instantTime, Option<List<HoodieFileGroupId>> partitionFileIdPairsOpt) {
     HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table =
         initTable(WriteOperationType.UPSERT_PREPPED, Option.ofNullable(instantTime));
     table.validateUpsertSchema();
-    boolean initialCall = preWriteCompletedInstants.contains(instantTime);
-    if (!initialCall) {
+    boolean initialCall = !preWriteCompletedInstants.contains(instantTime);
+    if (initialCall) {
       // we do not want to call prewrite more than once for the same instant, since we could be writing to metadata table more than once w/ streaming writes.
       preWrite(instantTime, WriteOperationType.UPSERT_PREPPED, table.getMetaClient());
       preWriteCompletedInstants.add(instantTime);

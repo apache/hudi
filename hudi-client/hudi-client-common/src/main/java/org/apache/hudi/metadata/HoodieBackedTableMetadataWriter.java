@@ -40,6 +40,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFileGroup;
+import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -95,7 +96,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
@@ -1371,9 +1371,9 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   protected void commitInternal(String instantTime, Map<String, HoodieData<HoodieRecord>> partitionRecordsMap, boolean isInitializing,
                                 Option<BulkInsertPartitioner> bulkInsertPartitioner) {
     ValidationUtils.checkState(metadataMetaClient != null, "Metadata table is not fully initialized yet.");
-    Pair<HoodieData<HoodieRecord>, List<Pair<String, String>>> result = prepRecords(partitionRecordsMap);
+    Pair<HoodieData<HoodieRecord>, List<HoodieFileGroupId>> result = prepRecords(partitionRecordsMap);
     HoodieData<HoodieRecord> preppedRecords = result.getKey();
-    List<Pair<String, String>> partitionFileIdPairs = result.getValue();
+    List<HoodieFileGroupId> hoodieFileGroupIdList = result.getValue();
     I preppedRecordInputs = convertHoodieDataToEngineSpecificData(preppedRecords);
 
     BaseHoodieWriteClient<?, I, ?, O> writeClient = getWriteClient();
@@ -1467,12 +1467,14 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   /**
    * Tag each record with the location in the given partition.
    * The record is tagged with respective file slice's location based on its record key.
+   * @return Pair of {@link HoodieData} of {@link HoodieRecord} referring to the prepared records to be ingested to metadata table and
+   * List of {@link HoodieFileGroupId} containing all file groups from the partitions being written in metadata table.
    */
-  protected Pair<HoodieData<HoodieRecord>, List<Pair<String, String>>> prepRecords(Map<String, HoodieData<HoodieRecord>> partitionRecordsMap) {
+  protected Pair<HoodieData<HoodieRecord>, List<HoodieFileGroupId>> prepRecords(Map<String, HoodieData<HoodieRecord>> partitionRecordsMap) {
     // The result set
     HoodieData<HoodieRecord> allPartitionRecords = engineContext.emptyHoodieData();
     try (HoodieTableFileSystemView fsView = HoodieTableMetadataUtil.getFileSystemViewForMetadataTable(metadataMetaClient)) {
-      List<Pair<String, String>> partitionFileIdPairs = new ArrayList<>();
+      List<HoodieFileGroupId> hoodieFileGroupIdList = new ArrayList<>();
       for (Map.Entry<String, HoodieData<HoodieRecord>> entry : partitionRecordsMap.entrySet()) {
         final String partitionName = entry.getKey();
         HoodieData<HoodieRecord> records = entry.getValue();
@@ -1485,23 +1487,23 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
         }
         final int fileGroupCount = fileSlices.size();
         ValidationUtils.checkArgument(fileGroupCount > 0, String.format("FileGroup count for MDT partition %s should be > 0", partitionName));
+        fileSlices.stream().forEach(fileSlice -> {
+          hoodieFileGroupIdList.add(new HoodieFileGroupId(partitionName, fileSlice.getFileId()));
+        });
 
         List<FileSlice> finalFileSlices = fileSlices;
-        Set<String> mappedFileIds = new HashSet<>();
         HoodieData<HoodieRecord> rddSinglePartitionRecords = records.map(r -> {
           FileSlice slice = finalFileSlices.get(HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(r.getRecordKey(),
               fileGroupCount));
           r.unseal();
           r.setCurrentLocation(new HoodieRecordLocation(slice.getBaseInstantTime(), slice.getFileId()));
           r.seal();
-          mappedFileIds.add(slice.getFileId());
           return r;
         });
 
         allPartitionRecords = allPartitionRecords.union(rddSinglePartitionRecords);
-        mappedFileIds.stream().forEach(fileId -> partitionFileIdPairs.add(Pair.of(partitionName, fileId)));
       }
-      return Pair.of(allPartitionRecords, partitionFileIdPairs);
+      return Pair.of(allPartitionRecords, hoodieFileGroupIdList);
     }
   }
 

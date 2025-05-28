@@ -26,18 +26,17 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
-import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
@@ -56,7 +55,6 @@ import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -103,10 +101,10 @@ public class TestSparkRDDMetadataWriteClient extends HoodieClientTestBase {
     // fetch metadata file slice info
     HoodieWriteConfig mdtWriteConfig = HoodieMetadataWriteUtils.createMetadataWriteConfig(hoodieWriteConfig, HoodieFailedWritesCleaningPolicy.EAGER);
     Map<String, List<String>> mdtPartitionsFileIdMapping = new HashMap<>();
-    List<Pair<String, String>> nonFilesPartitionsFileSlicePairs = new ArrayList<>();
-    List<Pair<String, String>> filesPartitionFileSlicePairs = new ArrayList<>();
+    List<HoodieFileGroupId> nonFilesPartitionFileGroupIdList = new ArrayList<>();
+    List<HoodieFileGroupId> filesPartitionFileGroupIdList = new ArrayList<>();
     HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setBasePath(mdtWriteConfig.getBasePath()).setConf(context.getStorageConf()).build();
-    fetchMetadataFileSliceInfo(metadataMetaClient, filesPartitionFileSlicePairs, nonFilesPartitionsFileSlicePairs, mdtPartitionsFileIdMapping);
+    fetchMetadataFileSliceInfo(metadataMetaClient, filesPartitionFileGroupIdList, nonFilesPartitionFileGroupIdList, mdtPartitionsFileIdMapping);
 
     List<HoodieRecord> filesPartitionExpectedRecords = new ArrayList<>();
     Map<String, HoodieRecord> filesPartitionExpectedRecordsMap = new HashMap<>();
@@ -128,7 +126,7 @@ public class TestSparkRDDMetadataWriteClient extends HoodieClientTestBase {
 
       // ingest RLI records to metadata table.
       client.startCommitForMetadataTable(metadataMetaClient, commitTimeOfInterest, DELTA_COMMIT_ACTION);
-      JavaRDD<WriteStatus> partialWriteStatusesRDD = client.upsertPreppedRecords(jsc.parallelize(rliRecords), commitTimeOfInterest, Option.of(nonFilesPartitionsFileSlicePairs));
+      JavaRDD<WriteStatus> partialWriteStatusesRDD = client.upsertPreppedRecords(jsc.parallelize(rliRecords), commitTimeOfInterest, Option.of(nonFilesPartitionFileGroupIdList));
       List<WriteStatus> partialWriteStatuses = partialWriteStatusesRDD.collect();
 
       // validate that the commit is still pending since we are streaming write to metadata table.
@@ -138,7 +136,7 @@ public class TestSparkRDDMetadataWriteClient extends HoodieClientTestBase {
       assertTrue(reloadedMdtActiveTimeline.filterInflightsAndRequested().getInstants().stream().anyMatch(instant -> instant.requestedTime().equals(finalCommitTimeOfInterest)));
 
       // write to FILES partition
-      JavaRDD<WriteStatus> filePartitionWriteStatusesRDD = client.upsertPreppedRecords(jsc.parallelize(filesPartitionExpectedRecords), commitTimeOfInterest, Option.of(filesPartitionFileSlicePairs));
+      JavaRDD<WriteStatus> filePartitionWriteStatusesRDD = client.upsertPreppedRecords(jsc.parallelize(filesPartitionExpectedRecords), commitTimeOfInterest, Option.of(filesPartitionFileGroupIdList));
       List<WriteStatus> filesPartitionWriteStatus = filePartitionWriteStatusesRDD.collect();
       List<HoodieWriteStat> allWriteStats = new ArrayList<>();
       allWriteStats.addAll(partialWriteStatuses.stream().map(writeStatus -> writeStatus.getStat()).collect(Collectors.toList()));
@@ -159,21 +157,21 @@ public class TestSparkRDDMetadataWriteClient extends HoodieClientTestBase {
     }
   }
 
-  private void fetchMetadataFileSliceInfo(HoodieTableMetaClient metadataMetaClient, List<Pair<String, String>> filesPartitionFileSlicePairs,
-                                          List<Pair<String, String>> nonFilesPartitionsFileSlicePairs, Map<String, List<String>> mdtPartitionsFileIdMapping) {
+  private void fetchMetadataFileSliceInfo(HoodieTableMetaClient metadataMetaClient, List<HoodieFileGroupId> filesPartitionFileGroupIdList,
+                                          List<HoodieFileGroupId> nonFilesPartitionsFileGroupIdList, Map<String, List<String>> mdtPartitionsFileIdMapping) {
     try (HoodieTableFileSystemView fsView = HoodieTableMetadataUtil.getFileSystemViewForMetadataTable(metadataMetaClient)) {
       List<FileSlice> fileSlices =
           HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataMetaClient, Option.ofNullable(fsView), MetadataPartitionType.FILES.getPartitionPath());
       mdtPartitionsFileIdMapping.put(MetadataPartitionType.FILES.getPartitionPath(), fileSlices.stream().map(fileSlice -> fileSlice.getFileId()).collect(Collectors.toList()));
       fileSlices.stream().forEach(fileSlice -> {
-        filesPartitionFileSlicePairs.add(Pair.of(MetadataPartitionType.FILES.getPartitionPath(), fileSlice.getFileId()));
+        filesPartitionFileGroupIdList.add(new HoodieFileGroupId(MetadataPartitionType.FILES.getPartitionPath(), fileSlice.getFileId()));
       });
 
       fileSlices =
           HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataMetaClient, Option.ofNullable(fsView), MetadataPartitionType.RECORD_INDEX.getPartitionPath());
       mdtPartitionsFileIdMapping.put(MetadataPartitionType.RECORD_INDEX.getPartitionPath(), fileSlices.stream().map(fileSlice -> fileSlice.getFileId()).collect(Collectors.toList()));
       fileSlices.stream().forEach(fileSlice -> {
-        nonFilesPartitionsFileSlicePairs.add(Pair.of(MetadataPartitionType.FILES.getPartitionPath(), fileSlice.getFileId()));
+        nonFilesPartitionsFileGroupIdList.add(new HoodieFileGroupId(MetadataPartitionType.RECORD_INDEX.getPartitionPath(), fileSlice.getFileId()));
       });
     }
   }
@@ -322,7 +320,6 @@ public class TestSparkRDDMetadataWriteClient extends HoodieClientTestBase {
                                                            HoodieTableMetaClient metadataMetaClient,
                                                            HoodieMetadataConfig metadataConfig,
                                                            String validMetadataInstant) {
-    HoodieTimer timer = HoodieTimer.start();
     List<String> sortedLogFilePaths = logFiles.stream()
         .sorted(HoodieLogFile.getLogFileComparator())
         .map(o -> o.getPath().toString())
@@ -358,17 +355,6 @@ public class TestSparkRDDMetadataWriteClient extends HoodieClientTestBase {
         .build();
 
     return logRecordScanner;
-  }
-
-  protected void readWithFileGroupReader(
-      HoodieFileGroupReader<IndexedRecord> fileGroupReader,
-      List<IndexedRecord> recordList,
-      Schema recordSchema) throws IOException {
-    try (ClosableIterator<IndexedRecord> fileGroupReaderIterator = fileGroupReader.getClosableIterator()) {
-      while (fileGroupReaderIterator.hasNext()) {
-        recordList.add(fileGroupReaderIterator.next());
-      }
-    }
   }
 
   private void prepareFilesPartitionRecords(String filesPartitionFileId, String commitTime, List<HoodieRecord> filesPartitionExpectedRecords,

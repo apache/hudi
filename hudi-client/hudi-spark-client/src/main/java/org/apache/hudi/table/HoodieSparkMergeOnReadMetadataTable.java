@@ -22,10 +22,10 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.commit.SparkMetadataTableUpsertCommitActionExecutor;
@@ -44,10 +44,10 @@ public class HoodieSparkMergeOnReadMetadataTable<T> extends HoodieSparkMergeOnRe
   }
 
   public HoodieWriteMetadata<HoodieData<WriteStatus>> upsertPrepped(HoodieEngineContext context, String instantTime,
-                                                                    HoodieData<HoodieRecord<T>> preppedRecords, Option<List<Pair<String, String>>> partitionFileIdPairsOpt,
+                                                                    HoodieData<HoodieRecord<T>> preppedRecords, Option<List<HoodieFileGroupId>> hoodieFileGroupIdListOpt,
                                                                     boolean initialCall) {
     // upsert partitioner for metadata table when all records are upsert and locations are known upfront
     return new SparkMetadataTableUpsertCommitActionExecutor<>((HoodieSparkEngineContext) context, config, this, instantTime, preppedRecords,
-        partitionFileIdPairsOpt.get(), initialCall).execute();
+        hoodieFileGroupIdListOpt.get(), initialCall).execute();
   }
 }
