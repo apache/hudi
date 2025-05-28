@@ -65,7 +65,6 @@ public class CleanFunction<T> extends AbstractRichFunction
       executor.execute(() -> {
         this.isCleaning = true;
         try {
-          LOG.info("Starting clean");
           this.writeClient.clean();
         } finally {
           this.isCleaning = false;

@@ -1005,7 +1005,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param instantTime Compaction Instant Time
    * @param extraMetadata Extra Metadata to be stored
    * @deprecated As of release 1.1.0, use {@link #scheduleCompaction(Option)} instead.
-   * The instant time must be generated within the same transaction as the plan for proper consistency guarantees.
+   * The instant time must be generated within the same lock as the plan for proper consistency guarantees.
    */
   @Deprecated
   public boolean scheduleCompactionAtInstant(String instantTime, Option<Map<String, String>> extraMetadata) throws HoodieIOException {
@@ -1133,7 +1133,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param instantTime Log Compaction Instant Time
    * @param extraMetadata Extra Metadata to be stored
    * @deprecated As of release 1.1.0, use {@link #scheduleLogCompaction(Option)} instead.
-   * The instant time must be generated within the same transaction as the plan for proper consistency guarantees.
+   * The instant time must be generated within the same lock as the plan for proper consistency guarantees.
    */
   @Deprecated
   public boolean scheduleLogCompactionAtInstant(String instantTime, Option<Map<String, String>> extraMetadata) throws HoodieIOException {
@@ -1202,7 +1202,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param instantTime clustering Instant Time
    * @param extraMetadata Extra Metadata to be stored
    * @deprecated As of release 1.1.0, use {@link #scheduleClustering(Option)} instead.
-   * The instant time must be generated within the same transaction as the plan for proper consistency guarantees.
+   * The instant time must be generated within the same lock as the plan for proper consistency guarantees.
    */
   @Deprecated
   public boolean scheduleClusteringAtInstant(String instantTime, Option<Map<String, String>> extraMetadata) throws HoodieIOException {
