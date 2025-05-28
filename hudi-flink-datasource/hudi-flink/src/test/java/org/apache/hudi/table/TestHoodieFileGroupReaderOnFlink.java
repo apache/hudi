@@ -127,7 +127,7 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
 
   @Override
   protected void readWithFileGroupReader(
-      HoodieFileGroupReader<RowData> fileGroupReader,
+      HoodieFileGroupReader<RowData, RowData> fileGroupReader,
       List<RowData> recordList,
       Schema recordSchema) throws IOException {
     RowDataSerializer rowDataSerializer = RowDataAvroQueryContexts.getRowDataSerializer(recordSchema);

@@ -42,7 +42,7 @@ public class BufferedRecord<T> implements Serializable {
   private final String recordKey;
   private final Comparable orderingValue;
   private T record;
-  private final Integer schemaId;
+  private Integer schemaId;
   private final boolean isDelete;
 
   private BufferedRecord(String recordKey, Comparable orderingValue, T record, Integer schemaId, boolean isDelete) {
@@ -51,6 +51,10 @@ public class BufferedRecord<T> implements Serializable {
     this.record = record;
     this.schemaId = schemaId;
     this.isDelete = isDelete;
+  }
+
+  public static <T> BufferedRecord<T> create(T record, String recordKey, Comparable orderingValue, Integer schemaId, boolean isDelete) {
+    return new BufferedRecord<>(recordKey, orderingValue, record, schemaId, isDelete);
   }
 
   public static <T> BufferedRecord<T> forRecordWithContext(HoodieRecord<T> record, Schema schema, HoodieReaderContext<T> readerContext, Properties props) {
@@ -106,5 +110,16 @@ public class BufferedRecord<T> implements Serializable {
       record = readerContext.seal(readerContext.toBinaryRow(readerContext.getSchemaFromBufferRecord(this), record));
     }
     return this;
+  }
+
+  public BufferedRecord<T> seal(HoodieReaderContext<T> readerContext) {
+    if (record != null) {
+      record = readerContext.seal(record);
+    }
+    return this;
+  }
+
+  public BufferedRecord<T> copy(T record, Integer schemaId) {
+    return new BufferedRecord<>(recordKey, orderingValue, record, schemaId, isDelete);
   }
 }

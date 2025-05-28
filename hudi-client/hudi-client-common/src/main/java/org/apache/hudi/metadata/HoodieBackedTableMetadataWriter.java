@@ -759,7 +759,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       Schema dataSchema = AvroSchemaCache.intern(HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(dataWriteConfig.getWriteSchema()), dataWriteConfig.allowOperationMetadataField()));
       Schema requestedSchema = metaClient.getTableConfig().populateMetaFields() ? getRecordKeySchema() : dataSchema;
       Option<InternalSchema> internalSchemaOption = SerDeHelper.fromJson(dataWriteConfig.getInternalSchema());
-      HoodieFileGroupReader<T> fileGroupReader = HoodieFileGroupReader.<T>newBuilder()
+      HoodieFileGroupReader<T, T> fileGroupReader = HoodieFileGroupReader.<T, T>newBuilder()
           .withReaderContext(readerContext)
           .withHoodieTableMetaClient(metaClient)
           .withFileSlice(fileSlice)

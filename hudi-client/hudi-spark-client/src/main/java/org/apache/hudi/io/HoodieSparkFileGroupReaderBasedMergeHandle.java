@@ -91,7 +91,7 @@ public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends Base
     long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(taskContextSupplier, config);
     props.put(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(), String.valueOf(maxMemoryPerCompaction));
     // Initializes file group reader
-    try (HoodieFileGroupReader<T> fileGroupReader = HoodieFileGroupReader.<T>newBuilder().withReaderContext(readerContext).withHoodieTableMetaClient(hoodieTable.getMetaClient())
+    try (HoodieFileGroupReader<T, T> fileGroupReader = HoodieFileGroupReader.<T, T>newBuilder().withReaderContext(readerContext).withHoodieTableMetaClient(hoodieTable.getMetaClient())
         .withLatestCommitTime(instantTime).withFileSlice(fileSlice).withDataSchema(writeSchemaWithMetaFields).withRequestedSchema(writeSchemaWithMetaFields)
         .withInternalSchema(internalSchemaOption).withProps(props).withShouldUseRecordPosition(usePosition).build()) {
       // Reads the records from the file slice

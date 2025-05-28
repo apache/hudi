@@ -216,7 +216,7 @@ public class SecondaryIndexRecordGenerationUtils {
                                                                                                 TypedProperties props,
                                                                                                 boolean allowInflightInstants) throws Exception {
     String secondaryKeyField = String.join(".", indexDefinition.getSourceFields());
-    HoodieFileGroupReader<T> fileGroupReader = HoodieFileGroupReader.<T>newBuilder()
+    HoodieFileGroupReader<T, T> fileGroupReader = HoodieFileGroupReader.<T, T>newBuilder()
         .withReaderContext(readerContext)
         .withFileSlice(fileSlice)
         .withHoodieTableMetaClient(metaClient)

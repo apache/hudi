@@ -33,6 +33,7 @@ import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.table.log.HoodieCDCLogRecordIterator;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
+import org.apache.hudi.common.table.read.IteratorMode;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -205,9 +206,9 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
    */
   private ClosableIterator<HoodieRecord<RowData>> getSplitRecordIterator(MergeOnReadInputSplit split) throws IOException {
     final Schema tableSchema = AvroSchemaCache.intern(new Schema.Parser().parse(tableState.getAvroSchema()));
-    HoodieFileGroupReader<RowData> fileGroupReader =
-        createFileGroupReader(split, tableSchema, tableSchema, FlinkOptions.REALTIME_PAYLOAD_COMBINE, true);
-    return fileGroupReader.getClosableHoodieRecordIterator();
+    HoodieFileGroupReader<RowData, HoodieRecord<RowData>> fileGroupReader =
+        createFileGroupReader(split, tableSchema, tableSchema, FlinkOptions.REALTIME_PAYLOAD_COMBINE, IteratorMode.HOODIE_RECORD, true);
+    return fileGroupReader.getClosableIterator();
   }
 
   // -------------------------------------------------------------------------

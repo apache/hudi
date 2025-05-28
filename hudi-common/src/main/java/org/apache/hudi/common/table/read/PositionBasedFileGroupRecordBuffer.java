@@ -56,7 +56,7 @@ import java.util.function.Function;
  * Here the position means that record position in the base file. The records from the base file is accessed from an iterator object. These records are merged when the
  * {@link #hasNext} method is called.
  */
-public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupRecordBuffer<T> {
+public class PositionBasedFileGroupRecordBuffer<T, O> extends KeyBasedFileGroupRecordBuffer<T, O> {
   private static final Logger LOG = LoggerFactory.getLogger(PositionBasedFileGroupRecordBuffer.class);
 
   private static final String ROW_INDEX_COLUMN_NAME = "row_index";
@@ -72,8 +72,9 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
                                             TypedProperties props,
                                             HoodieReadStats readStats,
                                             Option<String> orderingFieldName,
+                                            IteratorConverters.IteratorConverter<T, O> iteratorConverter,
                                             boolean emitDelete) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, orderingFieldName, emitDelete);
+    super(readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, orderingFieldName, iteratorConverter, emitDelete);
     this.baseFileInstantTime = baseFileInstantTime;
   }
 
@@ -131,7 +132,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
 
         long recordPosition = recordPositions.get(recordIndex++);
         T evolvedNextRecord = schemaTransformerWithEvolvedSchema.getLeft().apply(nextRecord);
-        boolean isDelete = isBuiltInDeleteRecord(evolvedNextRecord) || isCustomDeleteRecord(evolvedNextRecord) || isDeleteHoodieOperation(evolvedNextRecord);
+        boolean isDelete = isDeleteRecord(evolvedNextRecord);
         BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(evolvedNextRecord, schema, readerContext, orderingFieldName, isDelete);
         processNextDataRecord(bufferedRecord, recordPosition);
       }
@@ -232,27 +233,23 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
         ROW_INDEX_TEMPORARY_COLUMN_NAME, nextRecordPosition);
     BufferedRecord<T> logRecordInfo = records.remove(nextRecordPosition++);
 
-    final Pair<Boolean, T> isDeleteAndRecord;
-    T resultRecord = null;
+    final BufferedRecord<T> mergedRecord;
     if (logRecordInfo != null) {
       BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(baseRecord, readerSchema, readerContext, orderingFieldName, false);
-      isDeleteAndRecord = merge(bufferedRecord, logRecordInfo);
-      if (!isDeleteAndRecord.getLeft()) {
-        resultRecord = isDeleteAndRecord.getRight();
+      mergedRecord = merge(bufferedRecord, logRecordInfo);
+      if (!mergedRecord.isDelete()) {
+        nextRecord = iteratorConverter.convert(mergedRecord);
         readStats.incrementNumUpdates();
+        return true;
       } else {
         readStats.incrementNumDeletes();
+        return false;
       }
     } else {
-      resultRecord = baseRecord;
+      nextRecord = iteratorConverter.convert(baseRecord, orderingFieldName, FALSE_SUPPLIER);
       readStats.incrementNumInserts();
-    }
-
-    if (resultRecord != null) {
-      nextRecord = readerContext.seal(resultRecord);
       return true;
     }
-    return false;
   }
 
   private boolean doHasNextFallbackBaseRecord(T baseRecord) throws IOException {

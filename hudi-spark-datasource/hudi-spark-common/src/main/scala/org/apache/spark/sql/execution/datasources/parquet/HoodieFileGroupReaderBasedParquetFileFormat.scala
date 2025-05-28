@@ -206,7 +206,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
               } else {
                 0
               }
-              val reader = HoodieFileGroupReader.newBuilder()
+              val reader: HoodieFileGroupReader[InternalRow, InternalRow] = HoodieFileGroupReader.newBuilder()
                 .withReaderContext(readerContext)
                 .withHoodieTableMetaClient(metaClient)
                 .withLatestCommitTime(queryTimestamp)
