@@ -21,8 +21,6 @@ package org.apache.hudi.expression;
 import org.apache.hudi.internal.schema.Type;
 import org.apache.hudi.internal.schema.Types;
 
-import javax.xml.bind.DatatypeConverter;
-
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.util.UUID;
@@ -114,9 +112,26 @@ public class Literal<T> extends LeafExpression {
     }
 
     if (value instanceof ByteBuffer) {
-      return DatatypeConverter.printHexBinary(((ByteBuffer)value).array());
+      return printHexBinary(((ByteBuffer)value).array());
     }
 
     return value.toString();
+  }
+
+  public static String printHexBinary(byte[] bytes) {
+    if (bytes == null) {
+      return "null";
+    }
+
+    char[] hexArray = "0123456789ABCDEF".toCharArray();
+    char[] hexChars = new char[bytes.length * 2];
+
+    for (int j = 0; j < bytes.length; j++) {
+      int v = bytes[j] & 0xFF;  // handle negative bytes
+      hexChars[j * 2] = hexArray[v >>> 4];       // high nibble
+      hexChars[j * 2 + 1] = hexArray[v & 0x0F];   // low nibble
+    }
+
+    return new String(hexChars);
   }
 }
