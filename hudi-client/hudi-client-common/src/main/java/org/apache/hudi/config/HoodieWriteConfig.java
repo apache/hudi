@@ -841,8 +841,8 @@ public class HoodieWriteConfig extends HoodieConfig {
       .sinceVersion("1.0.0")
       .withDocumentation("Whether to enable incremental table service. So far Clustering and Compaction support incremental processing.");
 
-  public static final ConfigProperty<Boolean> SPARK_STREAMING_WRITES_TO_METADATA_TABLE = ConfigProperty
-      .key("hoodie.write.spark.streaming.writes.to.metadata")
+  public static final ConfigProperty<Boolean> STREAMING_WRITES_TO_METADATA_TABLE = ConfigProperty
+      .key("hoodie.write.streaming.writes.to.metadata")
       .defaultValue(false)
       .markAdvanced()
       .sinceVersion("1.1.0")
@@ -2932,7 +2932,7 @@ public class HoodieWriteConfig extends HoodieConfig {
    */
   public boolean isStreamingWritesToMetadataEnabled(HoodieTableVersion tableVersion) {
     if (tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
-      return getBoolean(SPARK_STREAMING_WRITES_TO_METADATA_TABLE);
+      return getBoolean(STREAMING_WRITES_TO_METADATA_TABLE);
     } else {
       return false;
     }
@@ -3501,7 +3501,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     protected void setDefaults() {
       writeConfig.setDefaultValue(MARKERS_TYPE, getDefaultMarkersType(engineType));
       // set default for streaming writes to metadata table.
-      writeConfig.setDefaultValue(SPARK_STREAMING_WRITES_TO_METADATA_TABLE, getDefaultForStreamingWritesToMetadataTable(engineType));
+      writeConfig.setDefaultValue(STREAMING_WRITES_TO_METADATA_TABLE, getDefaultForStreamingWritesToMetadataTable(engineType));
       // Check for mandatory properties
       writeConfig.setDefaults(HoodieWriteConfig.class.getName());
       // Set default values of HoodieHBaseIndexConfig
