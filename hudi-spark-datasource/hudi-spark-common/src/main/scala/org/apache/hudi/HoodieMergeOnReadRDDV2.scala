@@ -48,13 +48,13 @@ case class HoodieMergeOnReadPartition(index: Int, split: HoodieMergeOnReadFileSp
  *   This could occur, when row could be merged with corresponding delta-log record while leveraging only
  *   projected columns</li>
  *
- *   <li>Required-schema reader (skip-merging): is used when when no merging will be performed (skip-merged).
+ *   <li>Optional-schema reader (payload-combine): is used when performing payload-combine merge during read.
  *   This could occur, when file-group has no delta-log files</li>
  * </ol>
  */
 private[hudi] case class HoodieMergeOnReadBaseFileReaders(fullSchemaReader: BaseFileReader,
                                                           requiredSchemaReader: BaseFileReader,
-                                                          requiredSchemaReaderSkipMerging: BaseFileReader)
+                                                          optionalSchemaReader: BaseFileReader)
 
 /**
  * RDD enabling Hudi's Merge-on-Read (MOR) semantic
@@ -88,7 +88,7 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
     val partition = split.asInstanceOf[HoodieMergeOnReadPartition]
     val iter = partition.split match {
       case dataFileOnlySplit if dataFileOnlySplit.logFiles.isEmpty =>
-        val projectedReader = projectReader(fileReaders.requiredSchemaReaderSkipMerging, requiredSchema.structTypeSchema)
+        val projectedReader = projectReader(fileReaders.requiredSchemaReader, requiredSchema.structTypeSchema)
         projectedReader(dataFileOnlySplit.dataFile.get)
 
       case logFileOnlySplit if logFileOnlySplit.dataFile.isEmpty =>
@@ -97,7 +97,7 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
       case split =>
         mergeType match {
           case DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL =>
-            val reader = fileReaders.requiredSchemaReaderSkipMerging
+            val reader = fileReaders.requiredSchemaReader
             new SkipMergeIterator(split, reader, tableSchema, requiredSchema, tableState, getHadoopConf)
 
           case DataSourceReadOptions.REALTIME_PAYLOAD_COMBINE_OPT_VAL =>
@@ -146,7 +146,7 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
     //       Record Payload classes then we can avoid reading and parsing the records w/ _full_ schema,
     //       and instead only rely on projected one, nevertheless being able to perform merging correctly
     if (isProjectionCompatible(tableState)) {
-      fileReaders.requiredSchemaReader
+      fileReaders.optionalSchemaReader
     } else {
       fileReaders.fullSchemaReader
     }
