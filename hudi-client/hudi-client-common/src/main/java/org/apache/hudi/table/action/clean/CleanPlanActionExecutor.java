@@ -28,7 +28,6 @@ import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.versioning.v1.InstantComparatorV1;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -53,7 +52,6 @@ import static org.apache.hudi.common.util.CleanerUtils.SAVEPOINTED_TIMESTAMPS;
 import static org.apache.hudi.common.util.MapUtils.nonEmpty;
 
 public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieCleanerPlan>> {
-  public static final HoodieCleanerPlan EMPTY_CLEANER_PLAN = new HoodieCleanerPlan();
   private static final Logger LOG = LoggerFactory.getLogger(CleanPlanActionExecutor.class);
   private final Option<Map<String, String>> extraMetadata;
 
@@ -165,11 +163,11 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
 
   private Map<String, String> prepareExtraMetadata(List<String> savepointedTimestamps) {
     if (savepointedTimestamps.isEmpty()) {
-      return Collections.emptyMap();
+      return extraMetadata.orElse(Collections.emptyMap());
     } else {
-      Map<String, String> extraMetadata = new HashMap<>();
-      extraMetadata.put(SAVEPOINTED_TIMESTAMPS, savepointedTimestamps.stream().collect(Collectors.joining(",")));
-      return extraMetadata;
+      Map<String, String> metadataWithSavepoints = extraMetadata.orElseGet(() -> new HashMap<>());
+      metadataWithSavepoints.put(SAVEPOINTED_TIMESTAMPS, savepointedTimestamps.stream().collect(Collectors.joining(",")));
+      return metadataWithSavepoints;
     }
   }
 
@@ -182,24 +180,27 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
   protected Option<HoodieCleanerPlan> requestClean() {
     // Check if the last clean completed successfully and wrote out its metadata. If not, it should be retried.
     Option<HoodieInstant> lastClean = table.getCleanTimeline().filterCompletedInstants().lastInstant();
-    if (lastClean.isPresent()) {
+    while (lastClean.map(table.getActiveTimeline()::isEmpty).orElse(false)) {
       HoodieInstant cleanInstant = lastClean.get();
       HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
-      if (activeTimeline.isEmpty(cleanInstant)) {
-        activeTimeline.deleteEmptyInstantIfExists(cleanInstant);
-        HoodieInstant cleanPlanInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, cleanInstant.getAction(), cleanInstant.requestedTime(), InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
-        try {
-          // Deserialize plan.
-          return Option.of(activeTimeline.readCleanerPlan(cleanPlanInstant));
-        } catch (IOException ex) {
-          // If it is empty we catch error and repair.
-          if (activeTimeline.isEmpty(cleanPlanInstant)) {
-            return Option.of(EMPTY_CLEANER_PLAN);
-          }
+      activeTimeline.deleteEmptyInstantIfExists(cleanInstant);
+      HoodieInstant cleanPlanInstant = instantGenerator.getCleanRequestedInstant(cleanInstant.requestedTime());
+      try {
+        // Deserialize plan.
+        return Option.of(activeTimeline.readCleanerPlan(cleanPlanInstant));
+      } catch (IOException ex) {
+        // If it is empty we catch error and repair by deleting the empty plan and inflight instant.
+        if (activeTimeline.isEmpty(cleanPlanInstant)) {
+          activeTimeline.deleteEmptyInstantIfExists(instantGenerator.getCleanInflightInstant(cleanInstant.requestedTime()));
+          activeTimeline.deleteEmptyInstantIfExists(cleanPlanInstant);
+        } else {
           throw new HoodieIOException("Failed to parse cleaner plan", ex);
         }
       }
+      table.getMetaClient().reloadActiveTimeline();
+      lastClean = table.getCleanTimeline().filterCompletedInstants().lastInstant();
     }
+
     final HoodieCleanerPlan cleanerPlan = requestClean(context);
     Option<HoodieCleanerPlan> option = Option.empty();
     if (nonEmpty(cleanerPlan.getFilePathsToBeDeletedPerPartition())

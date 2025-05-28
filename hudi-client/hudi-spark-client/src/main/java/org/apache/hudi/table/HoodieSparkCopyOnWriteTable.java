@@ -282,7 +282,7 @@ public class HoodieSparkCopyOnWriteTable<T>
 
   @Override
   public HoodieCleanMetadata clean(HoodieEngineContext context, String cleanInstantTime) {
-    return new CleanActionExecutor<>(context, config, this, cleanInstantTime, false).execute();
+    return new CleanActionExecutor<>(context, config, this, cleanInstantTime).execute();
   }
 
   @Override
