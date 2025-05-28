@@ -32,7 +32,6 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
-import org.apache.hudi.config.HoodieHBaseIndexConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
@@ -237,7 +236,6 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
             .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024).build())
             .withIndexConfig(HoodieIndexConfig.newBuilder()
                     .withIndexType(HoodieIndex.IndexType.GLOBAL_SIMPLE)
-                    .withHBaseIndexConfig(HoodieHBaseIndexConfig.newBuilder().build())
                     .build())
             .build();
 
@@ -312,7 +310,6 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
             .withStorageConfig(HoodieStorageConfig.newBuilder().parquetMaxFileSize(1024).build())
             .withIndexConfig(HoodieIndexConfig.newBuilder()
                     .withIndexType(HoodieIndex.IndexType.INMEMORY)
-                    .withHBaseIndexConfig(HoodieHBaseIndexConfig.newBuilder().build())
                     .build())
             .build();
 
