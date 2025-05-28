@@ -311,5 +311,11 @@
       <artifactId>tally-core</artifactId>
       <version>${tally.version}</version>
     </dependency>
+
+    <!-- Other Utils -->
+    <dependency>
+      <groupId>javax.xml.bind</groupId>
+      <artifactId>jaxb-api</artifactId>
+    </dependency>
   </dependencies>
 </project>

@@ -348,11 +348,6 @@
                 </exclusion>
             </exclusions>
         </dependency>
-        <dependency>
-            <groupId>javax.validation</groupId>
-            <artifactId>validation-api</artifactId>
-            <version>2.0.1.Final</version>
-        </dependency>
         <!-- Test dependencies -->
         <dependency>
             <groupId>org.apache.hudi</groupId>

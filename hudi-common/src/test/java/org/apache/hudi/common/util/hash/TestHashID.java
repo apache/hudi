@@ -25,6 +25,8 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import javax.xml.bind.DatatypeConverter;
+
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.nio.file.Files;
@@ -137,7 +139,7 @@ public class TestHashID {
     for (Map.Entry<HashID.Size, Map<String, String>> allSizeEntries : expectedValuesMap.entrySet()) {
       for (Map.Entry<String, String> sizeEntry : allSizeEntries.getValue().entrySet()) {
         final byte[] actualHashBytes = HashID.hash(sizeEntry.getKey(), allSizeEntries.getKey());
-        final byte[] expectedHashBytes = parseHexBinary(sizeEntry.getValue());
+        final byte[] expectedHashBytes = DatatypeConverter.parseHexBinary(sizeEntry.getValue());
         assertArrayEquals(expectedHashBytes, actualHashBytes);
       }
     }
@@ -158,39 +160,6 @@ public class TestHashID {
       String hash = HashID.generateXXHashAsString(inputs.get(i), size);
       // Magic number test to guard against accidental upgrade that changes the hash value
       assertEquals(expectedHash.get(i), hash);
-    }
-  }
-
-  public static byte[] parseHexBinary(String hex) {
-    if (hex == null) {
-      throw new IllegalArgumentException("Input string may not be null.");
-    }
-
-    int len = hex.length();
-    if (len % 2 != 0) {
-      throw new IllegalArgumentException("Hex binary string must have even length.");
-    }
-
-    byte[] result = new byte[len / 2];
-
-    for (int i = 0; i < len; i += 2) {
-      int high = fromHexChar(hex.charAt(i));
-      int low = fromHexChar(hex.charAt(i + 1));
-      result[i / 2] = (byte) ((high << 4) + low);
-    }
-
-    return result;
-  }
-
-  private static int fromHexChar(char c) {
-    if (c >= '0' && c <= '9') {
-      return c - '0';
-    } else if (c >= 'A' && c <= 'F') {
-      return c - 'A' + 10;
-    } else if (c >= 'a' && c <= 'f') {
-      return c - 'a' + 10;
-    } else {
-      throw new IllegalArgumentException("Invalid hex character: " + c);
     }
   }
 }
