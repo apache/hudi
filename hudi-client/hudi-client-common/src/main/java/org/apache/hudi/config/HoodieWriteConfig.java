@@ -837,6 +837,13 @@ public class HoodieWriteConfig extends HoodieConfig {
           + " or when using a custom Hoodie Concat Handle Implementation controlled by the config " + CONCAT_HANDLE_CLASS_NAME.key()
               + " enabling this config results in fallback to the default implementations if instantiation of the custom implementation fails");
 
+  public static final ConfigProperty<String> FREEZE_WRITE_CONFIGS = ConfigProperty
+      .key("hoodie.write.config.freeze")
+      .defaultValue("")
+      .markAdvanced()
+      .sinceVersion("0.15.1")
+      .withDocumentation("Freeze the options to be used for the write. This is useful to prevent options from being overwritten.");
+
   /**
    * Config key with boolean value that indicates whether record being written during MERGE INTO Spark SQL
    * operation are already prepped.

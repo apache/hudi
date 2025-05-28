@@ -24,7 +24,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieCommonConfig, HoodieConfig, TypedProperties}
 import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
-import org.apache.hudi.config.HoodieWriteConfig.SPARK_SQL_MERGE_INTO_PREPPED_KEY
+import org.apache.hudi.config.HoodieWriteConfig.{FREEZE_WRITE_CONFIGS, SPARK_SQL_MERGE_INTO_PREPPED_KEY}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.keygen.{NonpartitionedKeyGenerator, SimpleKeyGenerator}
@@ -49,6 +49,15 @@ object HoodieWriterUtils {
    */
   def parametersWithWriteDefaults(parameters: Map[String, String]): Map[String, String] = {
     val globalProps = DFSPropertiesConfiguration.getGlobalProps.asScala
+    val freezeList: Set[String] = {
+      // look first in SQL/DF options, then in globalProps
+      val raw = parameters
+        .get(FREEZE_WRITE_CONFIGS.key)
+        .orElse(globalProps.get(FREEZE_WRITE_CONFIGS.key))
+        .getOrElse("")
+      raw.split(",").map(_.trim).filter(_.nonEmpty).toSet
+    }
+
     val props = TypedProperties.fromMap(parameters)
     val hoodieConfig: HoodieConfig = new HoodieConfig(props)
     hoodieConfig.setDefaultValue(OPERATION)
@@ -85,7 +94,22 @@ object HoodieWriterUtils {
     hoodieConfig.setDefaultValue(MAKE_NEW_COLUMNS_NULLABLE)
     hoodieConfig.setDefaultValue(DROP_PARTITION_COLUMNS)
     hoodieConfig.setDefaultValue(KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED)
-    Map() ++ hoodieConfig.getProps.asScala ++ globalProps ++ DataSourceOptionsHelper.translateConfigurations(parameters)
+
+    // Allow for freezing configs.
+    val filteredSpark  = DataSourceOptionsHelper.translateConfigurations(parameters).filterNot {
+      case (k, _) =>
+        log.warn(s"Config key: $k is frozen. Value: ${parameters.get(k)} will not take effect.")
+        freezeList(k)
+    }
+
+    // final merge order: code defaults -> global defaults -> spark.conf -> SQL OPTIONS
+    val merged =
+      Map() ++
+      hoodieConfig.getProps.asScala.toMap ++
+      globalProps ++
+      filteredSpark
+
+    merged
   }
 
   /**

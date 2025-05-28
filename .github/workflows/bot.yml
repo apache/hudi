@@ -238,7 +238,7 @@ jobs:
           fi
   hudi-client-and-common:
     needs: skip-check
-    runs-on: arc-16-cores-ondemand-staging
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         include:
