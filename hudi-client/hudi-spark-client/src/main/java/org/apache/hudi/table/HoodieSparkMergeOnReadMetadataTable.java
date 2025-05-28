@@ -43,11 +43,11 @@ public class HoodieSparkMergeOnReadMetadataTable<T> extends HoodieSparkMergeOnRe
     super(config, context, metaClient);
   }
 
-  @Override
   public HoodieWriteMetadata<HoodieData<WriteStatus>> upsertPrepped(HoodieEngineContext context, String instantTime,
-                                                                    HoodieData<HoodieRecord<T>> preppedRecords, Option<List<Pair<String, String>>> partitionFileIdPairsOpt) {
+                                                                    HoodieData<HoodieRecord<T>> preppedRecords, Option<List<Pair<String, String>>> partitionFileIdPairsOpt,
+                                                                    boolean initialCall) {
     // upsert partitioner for metadata table when all records are upsert and locations are known upfront
     return new SparkMetadataTableUpsertCommitActionExecutor<>((HoodieSparkEngineContext) context, config, this, instantTime, preppedRecords,
-        partitionFileIdPairsOpt.get()).execute();
+        partitionFileIdPairsOpt.get(), initialCall).execute();
   }
 }

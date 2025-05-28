@@ -39,8 +39,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
-
 /**
  * Upsert commit action executor for Metadata table.
  *
@@ -50,11 +48,14 @@ public class SparkMetadataTableUpsertCommitActionExecutor<T> extends SparkUpsert
 
   private static final WorkloadStat PLACEHOLDER_GLOBAL_STAT = new WorkloadStat();
   private final List<Pair<String, String>> mdtPartitionPathFileGroupIdList;
+  private final boolean initialCall;
 
   public SparkMetadataTableUpsertCommitActionExecutor(HoodieSparkEngineContext context, HoodieWriteConfig config, HoodieTable table, String instantTime,
-                                                      HoodieData<HoodieRecord<T>> preppedRecords, List<Pair<String, String>> mdtPartitionPathFileGroupIdList) {
+                                                      HoodieData<HoodieRecord<T>> preppedRecords, List<Pair<String, String>> mdtPartitionPathFileGroupIdList,
+                                                      boolean initialCall) {
     super(context, config, table, instantTime, preppedRecords);
     this.mdtPartitionPathFileGroupIdList = mdtPartitionPathFileGroupIdList;
+    this.initialCall = initialCall;
   }
 
   @Override
@@ -74,7 +75,7 @@ public class SparkMetadataTableUpsertCommitActionExecutor<T> extends SparkUpsert
     // with streaming writes support, we might write to metadata table multiple times for the same instant times.
     // ie. writeClient.startCommit(t1), writeClient.upsert(batch1, t1), writeClient.upsert(batch2, t1), writeClient.commit(t1, ...)
     // So, here we are generating inflight file only in the last known writes, which we know will only have FILES partition.
-    if (mdtPartitionPathFileGroupIdList.size() == 1 && mdtPartitionPathFileGroupIdList.get(0).getKey().equals(FILES.getPartitionPath())) {
+    if (!initialCall) {
       super.saveWorkloadProfileMetadataToInflight(profile, instantTime);
     }
   }

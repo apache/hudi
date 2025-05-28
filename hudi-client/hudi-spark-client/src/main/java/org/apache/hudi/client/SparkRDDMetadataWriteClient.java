@@ -30,6 +30,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
+import org.apache.hudi.table.HoodieSparkMergeOnReadMetadataTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
@@ -60,21 +61,26 @@ public class SparkRDDMetadataWriteClient<T> extends SparkRDDWriteClient<T> {
   }
 
   /**
-   * Used for streaming writes to metadata table.
-   * With streaming writes, writes to metadata happens in the same RDD stage boundary as data table writes and hence this takes a special
-   * route where dag will not be dereferenced at all. If we take regular router, workload profile building might dereference the dag.
+   * Upserts the given prepared records into the Hoodie table, at the supplied instantTime.
+   * <p>
+   * This implementation requires that the input records are already tagged, and de-duped if needed.
+   *
+   * @param preppedRecords Prepared HoodieRecords to upsert
+   * @param instantTime Instant time of the commit
+   * @return Collection of WriteStatus to inspect errors and counts
    */
-  @Override
   public JavaRDD<WriteStatus> upsertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords, String instantTime, Option<List<Pair<String, String>>> partitionFileIdPairsOpt) {
     HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table =
         initTable(WriteOperationType.UPSERT_PREPPED, Option.ofNullable(instantTime));
     table.validateUpsertSchema();
-    if (!preWriteCompletedInstants.contains(instantTime)) {
+    boolean initialCall = preWriteCompletedInstants.contains(instantTime);
+    if (!initialCall) {
       // we do not want to call prewrite more than once for the same instant, since we could be writing to metadata table more than once w/ streaming writes.
       preWrite(instantTime, WriteOperationType.UPSERT_PREPPED, table.getMetaClient());
       preWriteCompletedInstants.add(instantTime);
     }
-    HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.upsertPrepped(context, instantTime, HoodieJavaRDD.of(preppedRecords), partitionFileIdPairsOpt);
+    HoodieWriteMetadata<HoodieData<WriteStatus>> result = ((HoodieSparkMergeOnReadMetadataTable) table).upsertPrepped(context, instantTime, HoodieJavaRDD.of(preppedRecords),
+        partitionFileIdPairsOpt, initialCall);
     HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getWriteStatuses()));
     return postWrite(resultRDD, instantTime, table);
   }

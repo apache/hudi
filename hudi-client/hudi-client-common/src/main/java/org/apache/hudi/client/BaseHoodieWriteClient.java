@@ -432,19 +432,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   public abstract O upsertPreppedRecords(I preppedRecords, final String instantTime);
 
   /**
-   * Upserts the given prepared records into the Hoodie table, at the supplied instantTime.
-   * <p>
-   * This implementation requires that the input records are already tagged, and de-duped if needed.
-   *
-   * @param preppedRecords Prepared HoodieRecords to upsert
-   * @param instantTime Instant time of the commit
-   * @return Collection of WriteStatus to inspect errors and counts
-   */
-  public O upsertPreppedRecords(I preppedRecords, final String instantTime, Option<List<Pair<String, String>>> partitionFileIdPairsOpt) {
-    return upsertPreppedRecords(preppedRecords, instantTime);
-  }
-
-  /**
    * Inserts the given HoodieRecords, into the table. This API is intended to be used for normal writes.
    * <p>
    * This implementation skips the index check and is able to leverage benefits such as small file handling/blocking
