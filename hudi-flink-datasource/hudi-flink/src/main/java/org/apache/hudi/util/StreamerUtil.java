@@ -43,7 +43,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
-import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -85,12 +84,10 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.StringReader;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Properties;
-import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.model.HoodieFileFormat.HOODIE_LOG;
 import static org.apache.hudi.common.model.HoodieFileFormat.ORC;
@@ -368,24 +365,6 @@ public class StreamerUtil {
   public static Triple<RecordMergeMode, String, String> inferMergingBehavior(Configuration conf) {
     return HoodieTableConfig.inferCorrectMergingBehavior(
         getMergeMode(conf), getPayloadClass(conf), getMergeStrategyId(conf), OptionsResolver.getPreCombineField(conf), HoodieTableVersion.EIGHT);
-  }
-
-  /**
-   * Get the {@link HoodieRecordMerger} from configuration for Flink reader.
-   *
-   * @param conf Flink configuration
-   * @return The {@link HoodieRecordMerger} for Flink reader.
-   */
-  public static HoodieRecordMerger getRecordMergerForReader(Configuration conf, String tablePath) {
-    List<String> mergers = Collections.emptyList();
-    if (conf.contains(FlinkOptions.RECORD_MERGER_IMPLS)) {
-      mergers = Arrays.stream(conf.get(FlinkOptions.RECORD_MERGER_IMPLS).split(","))
-          .map(String::trim)
-          .distinct()
-          .collect(Collectors.toList());
-    }
-
-    return HoodieRecordUtils.createRecordMerger(tablePath, EngineType.FLINK, mergers, conf.get(FlinkOptions.RECORD_MERGER_STRATEGY_ID));
   }
 
   /**

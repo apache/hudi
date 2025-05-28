@@ -385,6 +385,14 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     });
   }
 
+  /**
+   * @return A record key iterator over the records.
+   */
+  public ClosableIterator<String> getClosableKeyIterator() throws IOException {
+    return new CloseableMappingIterator<>(getClosableIterator(),
+        nextRecord -> readerContext.getRecordKey(nextRecord, readerContext.getSchemaHandler().getRequestedSchema()));
+  }
+
   public static class HoodieFileGroupReaderIterator<T> implements ClosableIterator<T> {
     private HoodieFileGroupReader<T> reader;
 

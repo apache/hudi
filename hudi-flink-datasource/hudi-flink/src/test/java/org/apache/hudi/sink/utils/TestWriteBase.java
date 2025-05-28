@@ -28,7 +28,6 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
-import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -36,8 +35,6 @@ import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.event.CommitAckEvent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
-import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
@@ -534,14 +531,9 @@ public class TestWriteBase {
       if (OptionsResolver.isCowTable(conf)) {
         TestData.checkWrittenData(this.baseFile, expected, partitions);
       } else {
-        checkWrittenDataMor(baseFile, expected, partitions);
+        TestData.checkWrittenDataMOR(baseFile, expected, partitions);
       }
       return this;
-    }
-
-    private void checkWrittenDataMor(File baseFile, Map<String, String> expected, int partitions) throws Exception {
-      HoodieStorage storage = HoodieStorageUtils.getStorage(basePath, HoodieTestUtils.getDefaultStorageConf());
-      TestData.checkWrittenDataMOR(storage, baseFile, expected, partitions);
     }
 
     public TestHarness checkWrittenDataCOW(Map<String, List<String>> expected) throws IOException {

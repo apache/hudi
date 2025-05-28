@@ -18,49 +18,28 @@
 
 package org.apache.hudi.table.format.mor;
 
-import org.apache.hudi.common.config.HoodieReaderConfig;
-import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
-import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.model.HoodieOperation;
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
-import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
-import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.source.ExpressionPredicates.Predicate;
 import org.apache.hudi.table.format.FilePathUtils;
-import org.apache.hudi.table.format.FlinkRowDataReaderContext;
 import org.apache.hudi.table.format.FormatUtils;
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.table.format.RecordIterators;
-import org.apache.hudi.util.AvroToRowDataConverters;
-import org.apache.hudi.util.FlinkClientUtil;
 import org.apache.hudi.util.FlinkWriteClients;
-import org.apache.hudi.util.RowDataProjection;
-import org.apache.hudi.util.RowDataToAvroConverters;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.io.DefaultInputSplitAssigner;
 import org.apache.flink.api.common.io.RichInputFormat;
@@ -69,22 +48,12 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.io.InputSplitAssigner;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.DataType;
-import org.apache.flink.table.types.logical.RowType;
-import org.apache.flink.types.RowKind;
 
 import java.io.IOException;
 import java.util.Collections;
-import java.util.HashSet;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Set;
-import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-
-import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.HOODIE_COMMIT_TIME_COL_POS;
-import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.HOODIE_RECORD_KEY_COL_POS;
 
 /**
  * The base InputFormat class to read from Hoodie data + log files.
@@ -142,7 +111,7 @@ public class MergeOnReadInputFormat
    * Flag saying whether to emit the deletes. In streaming read mode, downstream
    * operators need the DELETE messages to retract the legacy accumulator.
    */
-  private boolean emitDelete;
+  protected boolean emitDelete;
 
   /**
    * Flag saying whether the input format has been closed.
@@ -218,7 +187,9 @@ public class MergeOnReadInputFormat
             + "hoodie table path: " + split.getTablePath()
             + "flink partition Index: " + split.getSplitNumber()
             + "merge type: " + split.getMergeType());
-    return getSplitIterator(split, mergeType);
+    final Schema tableSchema = AvroSchemaCache.intern(new Schema.Parser().parse(tableState.getAvroSchema()));
+    final Schema requiredSchema = AvroSchemaCache.intern(new Schema.Parser().parse(tableState.getRequiredAvroSchema()));
+    return getSplitRowIterator(split, tableSchema, requiredSchema, mergeType, emitDelete);
   }
 
   @Override
@@ -291,31 +262,19 @@ public class MergeOnReadInputFormat
     }
   }
 
-  protected ClosableIterator<RowData> getBaseFileIteratorWithMetadata(String path) {
-    try {
-      return getBaseFileIterator(path, IntStream.range(0, this.tableState.getRowType().getFieldCount()).toArray());
-    } catch (IOException e) {
-      throw new HoodieException("Get reader error for path: " + path, e);
-    }
-  }
-
   protected ClosableIterator<RowData> getBaseFileIterator(String path) throws IOException {
-    return getBaseFileIterator(path, this.requiredPos);
-  }
-
-  private ClosableIterator<RowData> getBaseFileIterator(String path, int[] requiredPos) throws IOException {
     LinkedHashMap<String, Object> partObjects = FilePathUtils.generatePartitionSpecs(
         path,
         fieldNames,
         fieldTypes,
-        conf.getString(FlinkOptions.PARTITION_DEFAULT_NAME),
-        conf.getString(FlinkOptions.PARTITION_PATH_FIELD),
-        conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING)
+        conf.get(FlinkOptions.PARTITION_DEFAULT_NAME),
+        conf.get(FlinkOptions.PARTITION_PATH_FIELD),
+        conf.get(FlinkOptions.HIVE_STYLE_PARTITIONING)
     );
 
     return RecordIterators.getParquetRecordIterator(
         internalSchemaManager,
-        this.conf.getBoolean(FlinkOptions.READ_UTC_TIMEZONE),
+        this.conf.get(FlinkOptions.READ_UTC_TIMEZONE),
         true,
         HadoopConfigurations.getParquetConf(this.conf, hadoopConf),
         fieldNames.toArray(new String[0]),
@@ -330,17 +289,43 @@ public class MergeOnReadInputFormat
   }
 
   /**
-   * Get record iterator using {@link HoodieFileGroupReader}.
+   * Get a {@link RowData} iterator using {@link HoodieFileGroupReader}.
    *
-   * @param split input split
-   * @param mergeType merge type for FileGroup reader
+   * @param split          input split
+   * @param tableSchema    schema of the table
+   * @param requiredSchema required query schema
+   * @param mergeType      merge type for FileGroup reader
+   * @param emitDelete     flag saying whether DELETE record should be emitted
    *
    * @return {@link RowData} iterator for the given split.
    */
-  private ClosableIterator<RowData> getSplitIterator(MergeOnReadInputSplit split, String mergeType) throws IOException {
-    final Schema tableSchema = new Schema.Parser().parse(tableState.getAvroSchema());
-    final Schema requiredSchema = new Schema.Parser().parse(tableState.getRequiredAvroSchema());
+  protected ClosableIterator<RowData> getSplitRowIterator(
+      MergeOnReadInputSplit split,
+      Schema tableSchema,
+      Schema requiredSchema,
+      String mergeType,
+      boolean emitDelete) throws IOException {
+    HoodieFileGroupReader<RowData> fileGroupReader = createFileGroupReader(split, tableSchema, requiredSchema, mergeType, emitDelete);
+    return fileGroupReader.getClosableIterator();
+  }
 
+  /**
+   * Create a {@link HoodieFileGroupReader}.
+   *
+   * @param split          input split
+   * @param tableSchema    schema of the table
+   * @param requiredSchema required query schema
+   * @param mergeType      merge type for FileGroup reader
+   * @param emitDelete     flag saying whether DELETE record should be emitted
+   *
+   * @return A {@link HoodieFileGroupReader}.
+   */
+  protected HoodieFileGroupReader<RowData> createFileGroupReader(
+      MergeOnReadInputSplit split,
+      Schema tableSchema,
+      Schema requiredSchema,
+      String mergeType,
+      boolean emitDelete) {
     FileSlice fileSlice = new FileSlice(
         // partitionPath is not needed for FG reader on Flink
         new HoodieFileGroupId("", split.getFileId()),
@@ -348,248 +333,13 @@ public class MergeOnReadInputFormat
         "",
         split.getBasePath().map(HoodieBaseFile::new).orElse(null),
         split.getLogPaths().map(logFiles -> logFiles.stream().map(HoodieLogFile::new).collect(Collectors.toList())).orElse(Collections.emptyList()));
-
-    FlinkRowDataReaderContext readerContext =
-        new FlinkRowDataReaderContext(
-            HadoopFSUtils.getStorageConf(hadoopConf),
-            () -> internalSchemaManager,
-            predicates,
-            metaClient.getTableConfig(),
-            split.getInstantRange());
-    TypedProperties typedProps = FlinkClientUtil.getMergedTableAndWriteProps(metaClient.getTableConfig(), writeConfig);
-    typedProps.put(HoodieReaderConfig.MERGE_TYPE.key(), mergeType);
-
-    HoodieFileGroupReader<RowData> fileGroupReader = HoodieFileGroupReader.<RowData>newBuilder()
-        .withReaderContext(readerContext)
-        .withHoodieTableMetaClient(metaClient)
-        .withLatestCommitTime(split.getLatestCommit())
-        .withFileSlice(fileSlice)
-        .withDataSchema(tableSchema)
-        .withRequestedSchema(requiredSchema)
-        .withInternalSchema(Option.ofNullable(internalSchemaManager.getQuerySchema()))
-        .withProps(typedProps)
-        .withShouldUseRecordPosition(false)
-        .withEmitDelete(emitDelete)
-        .build();
-    return fileGroupReader.getClosableIterator();
-  }
-
-  protected static Option<IndexedRecord> getInsertVal(HoodieAvroRecord<?> hoodieRecord, Schema tableSchema) {
-    try {
-      return hoodieRecord.getData().getInsertValue(tableSchema);
-    } catch (IOException e) {
-      throw new HoodieException("Get avro insert value error for key: " + hoodieRecord.getRecordKey(), e);
-    }
-  }
-
-  protected ClosableIterator<RowData> getFullLogFileIterator(MergeOnReadInputSplit split) {
-    final Schema tableSchema = new Schema.Parser().parse(tableState.getAvroSchema());
-    final AvroToRowDataConverters.AvroToRowDataConverter avroToRowDataConverter =
-        AvroToRowDataConverters.createRowConverter(tableState.getRowType(), conf.getBoolean(FlinkOptions.READ_UTC_TIMEZONE));
-    final HoodieMergedLogRecordScanner scanner = FormatUtils.logScanner(split, tableSchema, InternalSchema.getEmptyInternalSchema(), conf, hadoopConf);
-    final Iterator<String> logRecordsKeyIterator = scanner.getRecords().keySet().iterator();
-
-    return new ClosableIterator<RowData>() {
-      private RowData currentRecord;
-
-      @Override
-      public boolean hasNext() {
-        while (logRecordsKeyIterator.hasNext()) {
-          String curAvroKey = logRecordsKeyIterator.next();
-          Option<IndexedRecord> curAvroRecord = null;
-          final HoodieAvroRecord<?> hoodieRecord = (HoodieAvroRecord) scanner.getRecords().get(curAvroKey);
-          try {
-            curAvroRecord = hoodieRecord.getData().getInsertValue(tableSchema);
-          } catch (IOException e) {
-            throw new HoodieException("Get avro insert value error for key: " + curAvroKey, e);
-          }
-          if (curAvroRecord.isPresent()) {
-            final IndexedRecord avroRecord = curAvroRecord.get();
-            final RowKind rowKind = FormatUtils.getRowKindSafely(avroRecord, tableState.getOperationPos());
-            if (rowKind == RowKind.DELETE) {
-              // skip the delete record
-              continue;
-            }
-            currentRecord = (RowData) avroToRowDataConverter.convert(avroRecord);
-            currentRecord.setRowKind(rowKind);
-            return true;
-          }
-          // else:
-          // delete record found
-          // skipping if the condition is unsatisfied
-          // continue;
-
-        }
-        return false;
-      }
-
-      @Override
-      public RowData next() {
-        return currentRecord;
-      }
-
-      @Override
-      public void close() {
-        scanner.close();
-      }
-    };
+    return FormatUtils.createFileGroupReader(metaClient, writeConfig, internalSchemaManager, fileSlice,
+        tableSchema, requiredSchema, split.getLatestCommit(), mergeType, emitDelete, predicates, split.getInstantRange());
   }
 
   // -------------------------------------------------------------------------
   //  Inner Class
   // -------------------------------------------------------------------------
-
-  protected static class MergeIterator implements ClosableIterator<RowData> {
-    // base file record iterator
-    private final ClosableIterator<RowData> nested;
-    // log keys used for merging
-    private final Iterator<String> logKeysIterator;
-    // scanner
-    private final HoodieMergedLogRecordScanner scanner;
-
-    private final Schema tableSchema;
-    private final boolean emitDelete;
-    private final int operationPos;
-    private final RowDataToAvroConverters.RowDataToAvroConverter rowDataToAvroConverter;
-    private final AvroToRowDataConverters.AvroToRowDataConverter avroToRowDataConverter;
-
-    private final Option<RowDataProjection> projection;
-    private final Option<Function<IndexedRecord, GenericRecord>> avroProjection;
-
-    private final InstantRange instantRange;
-
-    private final HoodieRecordMerger recordMerger;
-
-    private final Set<String> keyToSkip = new HashSet<>();
-
-    private final TypedProperties payloadProps;
-
-    private RowData currentRecord;
-
-    public MergeIterator(
-        Configuration flinkConf,
-        org.apache.hadoop.conf.Configuration hadoopConf,
-        MergeOnReadInputSplit split,
-        RowType tableRowType,
-        RowType requiredRowType,
-        Schema tableSchema,
-        InternalSchema querySchema,
-        Option<RowDataProjection> projection,
-        Option<Function<IndexedRecord, GenericRecord>> avroProjection,
-        boolean emitDelete,
-        int operationPos,
-        ClosableIterator<RowData> nested) { // the iterator should be with full schema
-      this.tableSchema = tableSchema;
-      this.nested = nested;
-      this.scanner = FormatUtils.logScanner(split, tableSchema, querySchema, flinkConf, hadoopConf);
-      this.payloadProps = StreamerUtil.getPayloadConfig(flinkConf).getProps();
-      this.logKeysIterator = scanner.getRecords().keySet().iterator();
-      this.emitDelete = emitDelete;
-      this.operationPos = operationPos;
-      this.avroProjection = avroProjection;
-      this.rowDataToAvroConverter = RowDataToAvroConverters.createConverter(tableRowType, flinkConf.getBoolean(FlinkOptions.WRITE_UTC_TIMEZONE));
-      this.avroToRowDataConverter = AvroToRowDataConverters.createRowConverter(requiredRowType, flinkConf.getBoolean(FlinkOptions.READ_UTC_TIMEZONE));
-      this.projection = projection;
-      this.instantRange = split.getInstantRange().orElse(null);
-      this.recordMerger = StreamerUtil.getRecordMergerForReader(flinkConf, split.getTablePath());
-    }
-
-    @Override
-    public boolean hasNext() {
-      while (this.nested.hasNext()) {
-        currentRecord = this.nested.next();
-        if (instantRange != null) {
-          boolean isInRange = instantRange.isInRange(currentRecord.getString(HOODIE_COMMIT_TIME_COL_POS).toString());
-          if (!isInRange) {
-            // filter base file by instant range
-            continue;
-          }
-        }
-        final String curKey = currentRecord.getString(HOODIE_RECORD_KEY_COL_POS).toString();
-        if (scanner.getRecords().containsKey(curKey)) {
-          keyToSkip.add(curKey);
-          Option<HoodieRecord<IndexedRecord>> mergedAvroRecord = mergeRowWithLog(currentRecord, curKey);
-          if (!mergedAvroRecord.isPresent()) {
-            // deleted
-            continue;
-          } else {
-            final RowKind rowKind = FormatUtils.getRowKindSafely(mergedAvroRecord.get().getData(), this.operationPos);
-            if (!emitDelete && rowKind == RowKind.DELETE) {
-              // deleted
-              continue;
-            }
-            IndexedRecord avroRecord = avroProjection.isPresent()
-                ? avroProjection.get().apply(mergedAvroRecord.get().getData())
-                : mergedAvroRecord.get().getData();
-            this.currentRecord = (RowData) avroToRowDataConverter.convert(avroRecord);
-            this.currentRecord.setRowKind(rowKind);
-            return true;
-          }
-        }
-        // project the full record in base with required positions
-        if (projection.isPresent()) {
-          currentRecord = projection.get().project(currentRecord);
-        }
-        return true;
-      }
-      // read the logs
-      while (logKeysIterator.hasNext()) {
-        final String curKey = logKeysIterator.next();
-        if (!keyToSkip.contains(curKey)) {
-          Option<IndexedRecord> insertAvroRecord = getInsertValue(curKey);
-          if (insertAvroRecord.isPresent()) {
-            // the record is a DELETE if insertAvroRecord not present, skipping
-            IndexedRecord avroRecord = avroProjection.isPresent()
-                ? avroProjection.get().apply(insertAvroRecord.get())
-                : insertAvroRecord.get();
-            this.currentRecord = (RowData) avroToRowDataConverter.convert(avroRecord);
-            FormatUtils.setRowKind(this.currentRecord, insertAvroRecord.get(), this.operationPos);
-            return true;
-          }
-        }
-      }
-      return false;
-    }
-
-    private Option<IndexedRecord> getInsertValue(String curKey) {
-      final HoodieAvroRecord<?> record = (HoodieAvroRecord) scanner.getRecords().get(curKey);
-      if (!emitDelete && HoodieOperation.isDelete(record.getOperation())) {
-        return Option.empty();
-      }
-      try {
-        return record.getData().getInsertValue(tableSchema);
-      } catch (IOException e) {
-        throw new HoodieIOException("Get insert value from payload exception", e);
-      }
-    }
-
-    @Override
-    public RowData next() {
-      return currentRecord;
-    }
-
-    @Override
-    public void close() {
-      if (this.nested != null) {
-        this.nested.close();
-      }
-      if (this.scanner != null) {
-        this.scanner.close();
-      }
-    }
-
-    @SuppressWarnings("unchecked")
-    private Option<HoodieRecord<IndexedRecord>> mergeRowWithLog(RowData curRow, String curKey) {
-      final HoodieRecord<?> record = scanner.getRecords().get(curKey);
-      GenericRecord historyAvroRecord = (GenericRecord) rowDataToAvroConverter.convert(tableSchema, curRow);
-      HoodieAvroIndexedRecord hoodieAvroIndexedRecord = new HoodieAvroIndexedRecord(historyAvroRecord);
-      try {
-        return recordMerger.merge(hoodieAvroIndexedRecord, tableSchema, record, tableSchema, payloadProps).map(Pair::getLeft);
-      } catch (IOException e) {
-        throw new HoodieIOException("Merge base and delta payloads exception", e);
-      }
-    }
-  }
 
   /**
    * Builder for {@link MergeOnReadInputFormat}.

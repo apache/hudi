@@ -44,7 +44,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.io.storage.HoodieIOFactory;
-import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.source.ExpressionPredicates;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -54,7 +53,7 @@ import org.apache.hudi.util.RowDataAvroQueryContexts;
 import org.apache.hudi.util.RowDataUtils;
 import org.apache.hudi.util.RowProjection;
 import org.apache.hudi.util.SchemaEvolvingRowDataProjection;
-import org.apache.hudi.util.StringToRowDataConverter;
+import org.apache.hudi.util.RecordKeyToRowDataConverter;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -91,7 +90,7 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
   // for DELETE cases, it'll not be initialized if primary key semantics is lost.
   // For e.g, if the pk fields are [a, b] but user only select a, then the pk
   // semantics is lost.
-  private StringToRowDataConverter recordKeyRowConverter;
+  private RecordKeyToRowDataConverter recordKeyRowConverter;
 
   public FlinkRowDataReaderContext(
       StorageConfiguration<?> storageConfiguration,
@@ -146,7 +145,7 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
         .map(k -> Option.ofNullable(requiredSchema.getField(k)).map(Schema.Field::pos).orElse(-1))
         .mapToInt(Integer::intValue)
         .toArray();
-    recordKeyRowConverter = new StringToRowDataConverter(
+    recordKeyRowConverter = new RecordKeyToRowDataConverter(
         pkFieldsPos, (RowType) RowDataAvroQueryContexts.fromAvroSchema(requiredSchema).getRowType().getLogicalType());
   }
 
@@ -304,8 +303,7 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
     if (recordKeyRowConverter == null) {
       return null;
     }
-    final String[] pkVals = KeyGenUtils.extractRecordKeys(recordKey);
-    RowData recordKeyRow = recordKeyRowConverter.convert(pkVals);
+    RowData recordKeyRow = recordKeyRowConverter.convert(recordKey);
     recordKeyRow.setRowKind(RowKind.DELETE);
     return recordKeyRow;
   }

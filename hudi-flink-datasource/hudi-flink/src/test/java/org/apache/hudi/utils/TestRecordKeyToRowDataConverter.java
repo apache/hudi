@@ -21,7 +21,7 @@ package org.apache.hudi.utils;
 import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.RowDataToAvroConverters;
-import org.apache.hudi.util.StringToRowDataConverter;
+import org.apache.hudi.util.RecordKeyToRowDataConverter;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.flink.table.api.DataTypes;
@@ -39,15 +39,17 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.temporal.ChronoField;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * Test cases for {@link StringToRowDataConverter}.
+ * Test cases for {@link RecordKeyToRowDataConverter}.
  */
-public class TestStringToRowDataConverter {
+public class TestRecordKeyToRowDataConverter {
   @Test
   void testConvert() {
     String[] fields = new String[] {"1.1", "3.4", "2021-03-30", "56669000", "1617119069000", "1617119069666111", "12345.67"};
@@ -61,8 +63,11 @@ public class TestStringToRowDataConverter {
         DataTypes.DECIMAL(7, 2).getLogicalType()
     };
     RowType rowType = RowType.of(fieldTypes);
-    StringToRowDataConverter converter = new StringToRowDataConverter(new int[]{0, 1, 2, 3, 4, 5, 6}, rowType);
-    RowData actual = converter.convert(fields);
+    RecordKeyToRowDataConverter converter = new RecordKeyToRowDataConverter(new int[]{0, 1, 2, 3, 4, 5, 6}, rowType);
+    String recordKey = IntStream.range(0, rowType.getFieldCount())
+        .mapToObj(i -> rowType.getFieldNames().get(i) + ":" + fields[i])
+        .collect(Collectors.joining(","));
+    RowData actual = converter.convert(recordKey);
     Object[] expected = new Object[] {
         1.1f, 3.4D, (int) LocalDate.parse("2021-03-30").toEpochDay(),
         LocalTime.parse("15:44:29").get(ChronoField.MILLI_OF_DAY),
@@ -99,11 +104,10 @@ public class TestStringToRowDataConverter {
         RowDataToAvroConverters.createConverter(rowType);
     GenericRecord avroRecord =
         (GenericRecord) converter.convert(AvroSchemaConverter.convertToSchema(rowType), rowData);
-    StringToRowDataConverter stringToRowDataConverter =
-        new StringToRowDataConverter(new int[]{0, 1, 2, 3, 4, 5, 6}, rowType);
+    RecordKeyToRowDataConverter keyToRowDataConverter =
+        new RecordKeyToRowDataConverter(new int[]{0, 1, 2, 3, 4, 5, 6}, rowType);
     final String recordKey = KeyGenUtils.getRecordKey(avroRecord, rowType.getFieldNames(), false);
-    final String[] recordKeys = KeyGenUtils.extractRecordKeys(recordKey);
-    RowData converted = stringToRowDataConverter.convert(recordKeys);
+    RowData converted = keyToRowDataConverter.convert(recordKey);
     assertThat(converted, is(rowData));
   }
 }
