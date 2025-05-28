@@ -3,7 +3,6 @@ package org.apache.hudi.parquet.io;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.io.storage.HoodieParquetConfig;
 import org.apache.hudi.io.storage.rewrite.HoodieFileMetadataMerger;
 import org.apache.hudi.io.storage.rewrite.HoodieFileRewriter;
 import org.apache.hudi.io.storage.rewrite.HoodieFileRewriterFactory;
@@ -32,22 +31,12 @@ public class HoodieParquetRewriterFactory extends HoodieFileRewriterFactory {
     ValidationUtils.checkArgument(writeSchemaWithMetaFields != null,
         "write schema for ParquetFileRewriter can not be null");
     MessageType writeSchema = new AvroSchemaConverter(conf).convert(writeSchemaWithMetaFields);
-
     String compressionCodecName = config.getStringOrDefault(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME);
-    HoodieParquetConfig parquetConfig = new HoodieParquetConfig(null,
-        CompressionCodecName.fromConf(compressionCodecName.isEmpty() ? null : compressionCodecName),
-        config.getIntOrDefault(HoodieStorageConfig.PARQUET_BLOCK_SIZE),
-        config.getIntOrDefault(HoodieStorageConfig.PARQUET_PAGE_SIZE),
-        config.getLongOrDefault(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE),
-        null,
-        config.getDoubleOrDefault(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION),
-        config.getBooleanOrDefault(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED));
-
     return new HoodieParquetFileRewriter(
         inputFilePaths,
         targetFilePath,
         conf,
-        parquetConfig,
+        CompressionCodecName.fromConf(compressionCodecName.isEmpty() ? null : compressionCodecName),
         metadataMerger,
         writeSchema);
   }

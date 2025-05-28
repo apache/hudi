@@ -18,7 +18,6 @@
 
 package org.apache.hudi.parquet.io;
 
-import org.apache.hudi.io.storage.HoodieParquetConfig;
 import org.apache.hudi.io.storage.rewrite.HoodieFileMetadataMerger;
 import org.apache.hudi.io.storage.rewrite.HoodieFileRewriter;
 import org.apache.hudi.storage.StoragePath;
@@ -28,6 +27,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.parquet.HadoopReadOptions;
 import org.apache.parquet.Preconditions;
 import org.apache.parquet.hadoop.metadata.BlockMetaData;
+import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.parquet.hadoop.metadata.FileMetaData;
 import org.apache.parquet.hadoop.util.CompressionConverter;
 import org.apache.parquet.hadoop.util.HadoopInputFile;
@@ -62,13 +62,13 @@ public class HoodieParquetFileRewriter extends HoodieParquetRewriterBase impleme
       List<StoragePath> inputFilesPath,
       StoragePath outPutFile,
       Configuration conf,
-      HoodieParquetConfig parquetConfig,
+      CompressionCodecName codecName,
       HoodieFileMetadataMerger metadataMerger,
       MessageType writeSchema) {
     super(new Path(outPutFile.toUri()), conf);
     this.metadataMerger = metadataMerger;
     openInputFiles(inputFilesPath, conf);
-    initFileWriter(parquetConfig, writeSchema);
+    initFileWriter(codecName, writeSchema);
     initNextReader();
   }
 

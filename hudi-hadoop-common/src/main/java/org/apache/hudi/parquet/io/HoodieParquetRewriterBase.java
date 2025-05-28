@@ -20,7 +20,6 @@ package org.apache.hudi.parquet.io;
 
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.io.storage.HoodieParquetConfig;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
@@ -80,6 +79,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.parquet.column.ParquetProperties.DEFAULT_COLUMN_INDEX_TRUNCATE_LENGTH;
 import static org.apache.parquet.column.ParquetProperties.DEFAULT_STATISTICS_TRUNCATE_LENGTH;
+import static org.apache.parquet.hadoop.ParquetWriter.DEFAULT_BLOCK_SIZE;
 import static org.apache.parquet.hadoop.ParquetWriter.MAX_PADDING_SIZE_DEFAULT;
 
 /**
@@ -129,16 +129,16 @@ public abstract class HoodieParquetRewriterBase implements Closeable {
     maskColumns.put(ColumnPath.fromDotString(HoodieRecord.FILENAME_METADATA_FIELD), maskValue);
   }
 
-  protected void initFileWriter(HoodieParquetConfig config, MessageType schema) {
+  protected void initFileWriter(CompressionCodecName newCodecName, MessageType schema) {
     try {
       this.requiredSchema = schema;
-      this.newCodecName = config.getCompressionCodecName();
+      this.newCodecName = newCodecName;
       ParquetFileWriter.Mode writerMode = ParquetFileWriter.Mode.CREATE;
       writer = new ParquetFileWriter(
           HadoopOutputFile.fromPath(outPutFile, conf),
           schema,
           writerMode,
-          config.getBlockSize(),
+          DEFAULT_BLOCK_SIZE,
           MAX_PADDING_SIZE_DEFAULT,
           DEFAULT_COLUMN_INDEX_TRUNCATE_LENGTH,
           DEFAULT_STATISTICS_TRUNCATE_LENGTH,

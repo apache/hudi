@@ -18,9 +18,6 @@
 
 package org.apache.hudi.parquet.io;
 
-import org.apache.hudi.common.config.HoodieConfig;
-import org.apache.hudi.common.config.HoodieStorageConfig;
-import org.apache.hudi.io.storage.HoodieParquetConfig;
 import org.apache.hudi.io.storage.rewrite.HoodieFileMetadataMerger;
 import org.apache.hudi.storage.StoragePath;
 
@@ -249,15 +246,9 @@ public class TestHoodieParquetFileRewriter {
         .map(StoragePath::new)
         .collect(Collectors.toList());
     StoragePath outputPath = new StoragePath(outputFile);
-    HoodieParquetConfig parquetConfig = new HoodieParquetConfig(null,
-        CompressionCodecName.fromConf(codec),
-        120 * 1024 * 1024,
-        1 * 1024 * 1024,
-        120 * 1024 * 1024,
-        null,
-        0.1,
-        HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED.defaultValue());
-    return new HoodieParquetFileRewriter(inputPaths, outputPath, conf, parquetConfig, new HoodieFileMetadataMerger(), schema);
+    CompressionCodecName codecName = CompressionCodecName.fromConf(codec);
+    HoodieFileMetadataMerger metadataMerger = new HoodieFileMetadataMerger();
+    return new HoodieParquetFileRewriter(inputPaths, outputPath, conf, codecName, metadataMerger, schema);
   }
 
   private MessageType createSchema() {
