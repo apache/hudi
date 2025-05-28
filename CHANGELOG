@@ -784,3 +784,7 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 --- [2025-05-26 16:04:07] [release-v1.126.0] ---
 [ENG-26950][INTERNAL] Cross catalog sync for glue (#1376)
 [AUDIT-1071]: Changelog for release-v1.125.0 (#1381)
+
+--- [2025-05-28 00:12:15] [release-v1.127.0] ---
+[ENG-27296][INTERNAL] Block hudi conf overrides in SparkSqlWriter (#1380)
+[AUDIT-1071]: Changelog for release-v1.126.0 (#1386)
