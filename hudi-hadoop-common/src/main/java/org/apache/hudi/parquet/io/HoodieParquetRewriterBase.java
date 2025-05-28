@@ -191,12 +191,6 @@ public abstract class HoodieParquetRewriterBase implements Closeable {
       if (descriptor == null) {
         continue;
       }
-
-      // If a column is encrypted, we simply throw exception.
-      // Later we can add a feature to trans-encrypt it with different keys
-      if (chunk.isEncrypted()) {
-        throw new IOException("Column " + chunk.getPath().toDotString() + " is already encrypted");
-      }
       reader.setStreamPosition(chunk.getStartingPos());
       CompressionCodecName newCodecName = this.newCodecName == null ? chunk.getCodec() : this.newCodecName;
 
@@ -332,9 +326,7 @@ public abstract class HoodieParquetRewriterBase implements Closeable {
                 toIntWithCheck(rowCount),
                 converter.getEncoding(headerV1.getRepetition_level_encoding()),
                 converter.getEncoding(headerV1.getDefinition_level_encoding()),
-                converter.getEncoding(headerV1.getEncoding()),
-                metaEncryptor,
-                dataPageHeaderAAD);
+                converter.getEncoding(headerV1.getEncoding()));
           } else {
             writer.writeDataPage(toIntWithCheck(headerV1.getNum_values()),
                 pageHeader.getUncompressed_page_size(),
@@ -342,9 +334,7 @@ public abstract class HoodieParquetRewriterBase implements Closeable {
                 statistics,
                 converter.getEncoding(headerV1.getRepetition_level_encoding()),
                 converter.getEncoding(headerV1.getDefinition_level_encoding()),
-                converter.getEncoding(headerV1.getEncoding()),
-                metaEncryptor,
-                dataPageHeaderAAD);
+                converter.getEncoding(headerV1.getEncoding()));
           }
           pageOrdinal++;
           break;
@@ -495,7 +485,7 @@ public abstract class HoodieParquetRewriterBase implements Closeable {
     MessageType newSchema = newSchema(schema, descriptor);
     ColumnChunkPageWriteStore cPageStore = new ColumnChunkPageWriteStore(
         compressor, newSchema, props.getAllocator(), props.getColumnIndexTruncateLength(),
-        props.getPageWriteChecksumEnabled(), writer.getEncryptor(), numBlocksRewritten);
+        props.getPageWriteChecksumEnabled(), null, numBlocksRewritten);
     ColumnWriteStore cStore = props.newColumnWriteStore(newSchema, cPageStore);
     ColumnWriter cWriter = cStore.getColumnWriter(descriptor);
 
@@ -537,7 +527,7 @@ public abstract class HoodieParquetRewriterBase implements Closeable {
         props.getAllocator(),
         props.getColumnIndexTruncateLength(),
         props.getPageWriteChecksumEnabled(),
-        writer.getEncryptor(),
+        null,
         numBlocksRewritten);
     ColumnWriteStore cStore = props.newColumnWriteStore(newSchema, cPageStore);
     ColumnWriter cWriter = cStore.getColumnWriter(descriptor);

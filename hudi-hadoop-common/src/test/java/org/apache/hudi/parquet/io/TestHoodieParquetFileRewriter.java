@@ -24,7 +24,6 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.HadoopReadOptions;
-import org.apache.parquet.ParquetReadOptions;
 import org.apache.parquet.Version;
 import org.apache.parquet.column.ParquetProperties;
 import org.apache.parquet.example.data.Group;
@@ -45,8 +44,6 @@ import org.apache.parquet.hadoop.util.CompressionConverter.TransParquetFileReade
 import org.apache.parquet.hadoop.util.HadoopInputFile;
 import org.apache.parquet.internal.column.columnindex.ColumnIndex;
 import org.apache.parquet.internal.column.columnindex.OffsetIndex;
-import org.apache.parquet.io.InputFile;
-import org.apache.parquet.io.SeekableInputStream;
 import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.PrimitiveType;
@@ -316,11 +313,7 @@ public class TestHoodieParquetFileRewriter {
   }
 
   private ParquetMetadata getFileMetaData(String file) throws IOException {
-    ParquetReadOptions readOptions = ParquetReadOptions.builder().build();
-    InputFile inputFile = HadoopInputFile.fromPath(new Path(file), conf);
-    try (SeekableInputStream in = inputFile.newStream()) {
-      return ParquetFileReader.readFooter(inputFile, readOptions, in);
-    }
+    return ParquetFileReader.readFooter(conf, new Path(file));
   }
 
   private void verifyCodec(String file, CompressionCodecName expectedCodecs) throws IOException {
