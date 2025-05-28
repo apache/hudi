@@ -53,6 +53,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import org.apache.spark.api.java.JavaRDD;
+import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -92,7 +93,9 @@ public class TestHoodieFileSystemViews extends HoodieClientTestBase {
       for (boolean enableMdt : Arrays.asList(true, false)) {
         for (FileSystemViewStorageType viewStorageType : Arrays.asList(FileSystemViewStorageType.MEMORY, FileSystemViewStorageType.SPILLABLE_DISK)) {
           for (int writerVersion : Arrays.asList(6, 8)) {
-            testCases.add(Arguments.of(tableType, enableMdt, viewStorageType, writerVersion));
+            for (int i = 0; i < 100; i++) {
+              testCases.add(Arguments.of(tableType, enableMdt, viewStorageType, writerVersion));
+            }
           }
         }
       }
@@ -235,7 +238,7 @@ public class TestHoodieFileSystemViews extends HoodieClientTestBase {
   }
 
   private void assertBaseFileListEquality(List<HoodieBaseFile> baseFileList1, List<HoodieBaseFile> baseFileList2) {
-    assertEquals(baseFileList1.size(), baseFileList2.size());
+    assertEquals(baseFileList1.size(), baseFileList2.size(), String.format("baseFiles1: %s baseFiles2: %s", baseFileList1, baseFileList2));
     Map<String, HoodieBaseFile> fileNameToBaseFileMap1 = new HashMap<>();
     baseFileList1.forEach(entry -> {
       fileNameToBaseFileMap1.put(entry.getFileName(), entry);
