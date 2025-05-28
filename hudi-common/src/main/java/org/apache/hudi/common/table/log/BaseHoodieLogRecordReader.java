@@ -135,14 +135,14 @@ public abstract class BaseHoodieLogRecordReader<T> {
   private final List<String> validBlockInstants = new ArrayList<>();
   // Use scanV2 method.
   private final boolean enableOptimizedLogBlocksScan;
-  protected FileGroupRecordBuffer<T> recordBuffer;
+  protected FileGroupRecordBuffer<T, ?> recordBuffer;
   // Allows to consider inflight instants while merging log records
   protected boolean allowInflightInstants;
 
   protected BaseHoodieLogRecordReader(HoodieReaderContext readerContext, HoodieStorage storage, List<String> logFilePaths,
                                       boolean reverseReader, int bufferSize, Option<InstantRange> instantRange,
                                       boolean withOperationField, boolean forceFullScan, Option<String> partitionNameOverride,
-                                      Option<String> keyFieldOverride, boolean enableOptimizedLogBlocksScan, FileGroupRecordBuffer<T> recordBuffer,
+                                      Option<String> keyFieldOverride, boolean enableOptimizedLogBlocksScan, FileGroupRecordBuffer<T, ?> recordBuffer,
                                       boolean allowInflightInstants) {
     this.readerContext = readerContext;
     this.readerSchema = readerContext.getSchemaHandler().getRequiredSchema();

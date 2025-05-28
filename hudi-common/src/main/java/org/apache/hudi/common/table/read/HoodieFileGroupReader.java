@@ -28,19 +28,17 @@ import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.PartitionPathParser;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordReader;
+import org.apache.hudi.common.table.read.IteratorConverters.IteratorConverter;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.common.util.collection.CachingIterator;
 import org.apache.hudi.common.util.collection.ClosableIterator;
-import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.EmptyIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.Triple;
@@ -57,7 +55,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY;
@@ -74,8 +71,10 @@ import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
  *
  * @param <T> The type of engine-specific record representation, e.g.,{@code InternalRow}
  *            in Spark and {@code RowData} in Flink.
+ * @param <O> The type of iterator element, e.g., engine-specific record, record key with
+ *             String type or {@code HoodieRecord}, which is determined by {@code IteratorMode}.
  */
-public final class HoodieFileGroupReader<T> implements Closeable {
+public final class HoodieFileGroupReader<T, O> implements Closeable {
   private final HoodieReaderContext<T> readerContext;
   private final Option<HoodieBaseFile> hoodieBaseFileOption;
   private final List<HoodieLogFile> logFiles;
@@ -89,9 +88,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   // Length of bytes to read from the base file
   private final long length;
   // Core structure to store and process records.
-  private final FileGroupRecordBuffer<T> recordBuffer;
-  private ClosableIterator<T> baseFileIterator;
-  private final Option<UnaryOperator<T>> outputConverter;
+  private final FileGroupRecordBuffer<T, O> recordBuffer;
   private final HoodieReadStats readStats;
   // Allows to consider inflight instants while merging log records using HoodieMergedLogRecordReader
   // The inflight instants need to be considered while updating RLI records. RLI needs to fetch the revived
@@ -112,14 +109,14 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       TypedProperties props,
       long start, long length, boolean shouldUseRecordPosition) {
     this(readerContext, storage, tablePath, latestCommitTime, fileSlice, dataSchema,
-        requestedSchema, internalSchemaOpt, hoodieTableMetaClient, props, start, length,
-        shouldUseRecordPosition, false, false);
+        requestedSchema, internalSchemaOpt, hoodieTableMetaClient, props, null, start,
+        length, shouldUseRecordPosition, false, false);
   }
 
   private HoodieFileGroupReader(HoodieReaderContext<T> readerContext, HoodieStorage storage, String tablePath,
-                                String latestCommitTime, FileSlice fileSlice, Schema dataSchema, Schema requestedSchema,
-                                Option<InternalSchema> internalSchemaOpt, HoodieTableMetaClient hoodieTableMetaClient, TypedProperties props,
-                                long start, long length, boolean shouldUseRecordPosition, boolean allowInflightInstants, boolean emitDelete) {
+                               String latestCommitTime, FileSlice fileSlice, Schema dataSchema, Schema requestedSchema,
+                               Option<InternalSchema> internalSchemaOpt, HoodieTableMetaClient hoodieTableMetaClient, TypedProperties props,
+                               IteratorMode iteratorMode, long start, long length, boolean shouldUseRecordPosition, boolean allowInflightInstants, boolean emitDelete) {
     this.readerContext = readerContext;
     this.storage = storage;
     this.hoodieBaseFileOption = fileSlice.getBaseFile();
@@ -156,7 +153,6 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     readerContext.setSchemaHandler(readerContext.supportsParquetRowIndex()
         ? new PositionBasedSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, tableConfig, props)
         : new FileGroupReaderSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, tableConfig, props));
-    this.outputConverter = readerContext.getSchemaHandler().getOutputConverter();
     this.orderingFieldName = recordMergeMode == RecordMergeMode.COMMIT_TIME_ORDERING
         ? Option.empty()
         : Option.ofNullable(ConfigUtils.getOrderingField(props))
@@ -168,16 +164,17 @@ public final class HoodieFileGroupReader<T> implements Closeable {
           return Option.of(preCombineField);
         });
     this.readStats = new HoodieReadStats();
+    IteratorConverter<T, O> iteratorConverter = (IteratorConverter<T, O>) IteratorConverters.createIteratorConverter(readerContext, iteratorMode);
     this.recordBuffer = getRecordBuffer(readerContext, hoodieTableMetaClient,
-        recordMergeMode, props, hoodieBaseFileOption, this.logFiles.isEmpty(),
-        isSkipMerge, shouldUseRecordPosition, readStats, emitDelete);
+        recordMergeMode, props, hoodieBaseFileOption, logFiles.isEmpty(),
+        isSkipMerge, shouldUseRecordPosition, readStats, iteratorConverter, emitDelete);
     this.allowInflightInstants = allowInflightInstants;
   }
 
   /**
    * Initialize correct record buffer
    */
-  private FileGroupRecordBuffer<T> getRecordBuffer(HoodieReaderContext<T> readerContext,
+  private FileGroupRecordBuffer<T, O> getRecordBuffer(HoodieReaderContext<T> readerContext,
                                                    HoodieTableMetaClient hoodieTableMetaClient,
                                                    RecordMergeMode recordMergeMode,
                                                    TypedProperties props,
@@ -186,18 +183,17 @@ public final class HoodieFileGroupReader<T> implements Closeable {
                                                    boolean isSkipMerge,
                                                    boolean shouldUseRecordPosition,
                                                    HoodieReadStats readStats,
+                                                   IteratorConverter<T, O> iteratorConverter,
                                                    boolean emitDelete) {
-    if (hasNoLogFiles) {
-      return null;
-    } else if (isSkipMerge) {
+    if (isSkipMerge || hasNoLogFiles) {
       return new UnmergedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, emitDelete);
+          readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, iteratorConverter, emitDelete);
     } else if (shouldUseRecordPosition && baseFileOption.isPresent()) {
       return new PositionBasedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, recordMergeMode, baseFileOption.get().getCommitTime(), props, readStats, orderingFieldName, emitDelete);
+          readerContext, hoodieTableMetaClient, recordMergeMode, baseFileOption.get().getCommitTime(), props, readStats, orderingFieldName, iteratorConverter, emitDelete);
     } else {
       return new KeyBasedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, orderingFieldName, emitDelete);
+          readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, orderingFieldName, iteratorConverter, emitDelete);
     }
   }
 
@@ -206,13 +202,10 @@ public final class HoodieFileGroupReader<T> implements Closeable {
    */
   private void initRecordIterators() throws IOException {
     ClosableIterator<T> iter = makeBaseFileIterator();
-    if (logFiles.isEmpty()) {
-      this.baseFileIterator = CachingIterator.wrap(iter, readerContext);
-    } else {
-      this.baseFileIterator = iter;
+    if (!logFiles.isEmpty()) {
       scanLogFiles();
-      recordBuffer.setBaseFileIterator(baseFileIterator);
     }
+    recordBuffer.setBaseFileIterator(iter);
   }
 
   private ClosableIterator<T> makeBaseFileIterator() throws IOException {
@@ -314,11 +307,14 @@ public final class HoodieFileGroupReader<T> implements Closeable {
    * @throws IOException on reader error.
    */
   boolean hasNext() throws IOException {
-    if (recordBuffer == null) {
-      return baseFileIterator.hasNext();
-    } else {
-      return recordBuffer.hasNext();
-    }
+    return recordBuffer.hasNext();
+  }
+
+  /**
+   * @return The next record after calling {@link #hasNext}.
+   */
+  O next() {
+    return recordBuffer.next();
   }
 
   /**
@@ -326,17 +322,6 @@ public final class HoodieFileGroupReader<T> implements Closeable {
    */
   public HoodieReadStats getStats() {
     return readStats;
-  }
-
-  /**
-   * @return The next record after calling {@link #hasNext}.
-   */
-  T next() {
-    T nextVal = recordBuffer == null ? baseFileIterator.next() : recordBuffer.next();
-    if (outputConverter.isPresent()) {
-      return outputConverter.get().apply(nextVal);
-    }
-    return nextVal;
   }
 
   private void scanLogFiles() {
@@ -365,41 +350,20 @@ public final class HoodieFileGroupReader<T> implements Closeable {
 
   @Override
   public void close() throws IOException {
-    if (baseFileIterator != null) {
-      baseFileIterator.close();
-    }
     if (recordBuffer != null) {
       recordBuffer.close();
     }
   }
 
-  public ClosableIterator<T> getClosableIterator() throws IOException {
+  public ClosableIterator<O> getClosableIterator() throws IOException {
     initRecordIterators();
     return new HoodieFileGroupReaderIterator<>(this);
   }
 
-  /**
-   * @return An iterator over the records that wraps the engine-specific record in a HoodieRecord.
-   */
-  public ClosableIterator<HoodieRecord<T>> getClosableHoodieRecordIterator() throws IOException {
-    return new CloseableMappingIterator<>(getClosableIterator(), nextRecord -> {
-      BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(nextRecord, readerContext.getSchemaHandler().getRequestedSchema(), readerContext, orderingFieldName, false);
-      return readerContext.constructHoodieRecord(bufferedRecord);
-    });
-  }
+  public static class HoodieFileGroupReaderIterator<T, O> implements ClosableIterator<O> {
+    private HoodieFileGroupReader<T, O> reader;
 
-  /**
-   * @return A record key iterator over the records.
-   */
-  public ClosableIterator<String> getClosableKeyIterator() throws IOException {
-    return new CloseableMappingIterator<>(getClosableIterator(),
-        nextRecord -> readerContext.getRecordKey(nextRecord, readerContext.getSchemaHandler().getRequestedSchema()));
-  }
-
-  public static class HoodieFileGroupReaderIterator<T> implements ClosableIterator<T> {
-    private HoodieFileGroupReader<T> reader;
-
-    public HoodieFileGroupReaderIterator(HoodieFileGroupReader<T> reader) {
+    public HoodieFileGroupReaderIterator(HoodieFileGroupReader<T, O> reader) {
       this.reader = reader;
     }
 
@@ -413,7 +377,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     }
 
     @Override
-    public T next() {
+    public O next() {
       return reader.next();
     }
 
@@ -431,11 +395,11 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     }
   }
 
-  public static <T> Builder<T> newBuilder() {
+  public static <T, O> Builder<T, O> newBuilder() {
     return new Builder<>();
   }
 
-  public static class Builder<T> {
+  public static class Builder<T, O> {
     private HoodieReaderContext<T> readerContext;
     private HoodieStorage storage;
     private String tablePath;
@@ -451,74 +415,80 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     private boolean shouldUseRecordPosition = false;
     private boolean allowInflightInstants = false;
     private boolean emitDelete;
+    private IteratorMode iteratorMode = IteratorMode.ENGINE_RECORD;
 
-    public Builder<T> withReaderContext(HoodieReaderContext<T> readerContext) {
+    public Builder<T, O> withReaderContext(HoodieReaderContext<T> readerContext) {
       this.readerContext = readerContext;
       return this;
     }
 
-    public Builder<T> withLatestCommitTime(String latestCommitTime) {
+    public Builder<T, O> withLatestCommitTime(String latestCommitTime) {
       this.latestCommitTime = latestCommitTime;
       return this;
     }
 
-    public Builder<T> withFileSlice(FileSlice fileSlice) {
+    public Builder<T, O> withFileSlice(FileSlice fileSlice) {
       this.fileSlice = fileSlice;
       return this;
     }
 
-    public Builder<T> withDataSchema(Schema dataSchema) {
+    public Builder<T, O> withDataSchema(Schema dataSchema) {
       this.dataSchema = dataSchema;
       return this;
     }
 
-    public Builder<T> withRequestedSchema(Schema requestedSchema) {
+    public Builder<T, O> withRequestedSchema(Schema requestedSchema) {
       this.requestedSchema = requestedSchema;
       return this;
     }
 
-    public Builder<T> withInternalSchema(Option<InternalSchema> internalSchemaOpt) {
+    public Builder<T, O> withInternalSchema(Option<InternalSchema> internalSchemaOpt) {
       this.internalSchemaOpt = internalSchemaOpt;
       return this;
     }
 
-    public Builder<T> withHoodieTableMetaClient(HoodieTableMetaClient hoodieTableMetaClient) {
+    public Builder<T, O> withHoodieTableMetaClient(HoodieTableMetaClient hoodieTableMetaClient) {
       this.hoodieTableMetaClient = hoodieTableMetaClient;
       this.tablePath = hoodieTableMetaClient.getBasePath().toString();
       return this;
     }
 
-    public Builder<T> withProps(TypedProperties props) {
+    public Builder<T, O> withProps(TypedProperties props) {
       this.props = props;
       return this;
     }
 
-    public Builder<T> withStart(long start) {
+    public Builder<T, O> withStart(long start) {
       this.start = start;
       return this;
     }
 
-    public Builder<T> withLength(long length) {
+    public Builder<T, O> withLength(long length) {
       this.length = length;
       return this;
     }
 
-    public Builder<T> withShouldUseRecordPosition(boolean shouldUseRecordPosition) {
+    public Builder<T, O> withShouldUseRecordPosition(boolean shouldUseRecordPosition) {
       this.shouldUseRecordPosition = shouldUseRecordPosition;
       return this;
     }
 
-    public Builder<T> withAllowInflightInstants(boolean allowInflightInstants) {
+    public Builder<T, O> withAllowInflightInstants(boolean allowInflightInstants) {
       this.allowInflightInstants = allowInflightInstants;
       return this;
     }
 
-    public Builder<T> withEmitDelete(boolean emitDelete) {
+    public Builder<T, O> withEmitDelete(boolean emitDelete) {
       this.emitDelete = emitDelete;
       return this;
     }
 
-    public HoodieFileGroupReader<T> build() {
+    public Builder<T, O> withIteratorMode(IteratorMode iteratorMode) {
+      this.iteratorMode = iteratorMode;
+      return this;
+    }
+
+    public HoodieFileGroupReader<T, O> build() {
       ValidationUtils.checkArgument(readerContext != null, "Reader context is required");
       ValidationUtils.checkArgument(hoodieTableMetaClient != null, "Hoodie table meta client is required");
       ValidationUtils.checkArgument(tablePath != null, "Table path is required");
@@ -532,11 +502,10 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       ValidationUtils.checkArgument(requestedSchema != null, "Requested schema is required");
       ValidationUtils.checkArgument(props != null, "Props is required");
 
-
       return new HoodieFileGroupReader<>(
           readerContext, storage, tablePath, latestCommitTime, fileSlice,
-          dataSchema, requestedSchema, internalSchemaOpt, hoodieTableMetaClient,
-          props, start, length, shouldUseRecordPosition, allowInflightInstants, emitDelete);
+          dataSchema, requestedSchema, internalSchemaOpt, hoodieTableMetaClient, props,
+          iteratorMode, start, length, shouldUseRecordPosition, allowInflightInstants, emitDelete);
     }
   }
 }

@@ -46,7 +46,7 @@ import java.util.Iterator;
  * The records from the base file is accessed from an iterator object. These records are merged when the
  * {@link #hasNext} method is called.
  */
-public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
+public class KeyBasedFileGroupRecordBuffer<T, O> extends FileGroupRecordBuffer<T, O> {
 
   public KeyBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
                                        HoodieTableMetaClient hoodieTableMetaClient,
@@ -54,8 +54,9 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
                                        TypedProperties props,
                                        HoodieReadStats readStats,
                                        Option<String> orderingFieldName,
+                                       IteratorConverters.IteratorConverter<T, O> iteratorConverter,
                                        boolean emitDelete) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, orderingFieldName, emitDelete);
+    super(readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, orderingFieldName, iteratorConverter, emitDelete);
   }
 
   @Override
@@ -78,7 +79,7 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
     try (ClosableIterator<T> recordIterator = recordsIteratorSchemaPair.getLeft()) {
       while (recordIterator.hasNext()) {
         T nextRecord = recordIterator.next();
-        boolean isDelete = isBuiltInDeleteRecord(nextRecord) || isCustomDeleteRecord(nextRecord) || isDeleteHoodieOperation(nextRecord);
+        boolean isDelete = isDeleteRecord(nextRecord);
         BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(nextRecord, schema, readerContext, orderingFieldName, isDelete);
         processNextDataRecord(bufferedRecord, bufferedRecord.getRecordKey());
       }
@@ -117,12 +118,6 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
   @Override
   public boolean containsLogRecord(String recordKey) {
     return records.containsKey(recordKey);
-  }
-
-  protected boolean hasNextBaseRecord(T baseRecord) throws IOException {
-    String recordKey = readerContext.getRecordKey(baseRecord, readerSchema);
-    BufferedRecord<T> logRecordInfo = records.remove(recordKey);
-    return hasNextBaseRecord(baseRecord, logRecordInfo);
   }
 
   @Override

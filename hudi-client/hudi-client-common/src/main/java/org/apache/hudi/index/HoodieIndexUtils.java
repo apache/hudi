@@ -43,6 +43,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
+import org.apache.hudi.common.table.read.IteratorMode;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.HoodieTimer;
@@ -281,7 +282,7 @@ public class HoodieIndexUtils {
       Option<InternalSchema> internalSchemaOption = SerDeHelper.fromJson(config.getInternalSchema());
       FileSlice fileSlice = fileSliceOption.get();
       HoodieReaderContext<R> readerContext = readerContextFactory.getContext();
-      HoodieFileGroupReader<R> fileGroupReader = HoodieFileGroupReader.<R>newBuilder()
+      HoodieFileGroupReader<R, HoodieRecord<R>> fileGroupReader = HoodieFileGroupReader.<R, HoodieRecord<R>>newBuilder()
           .withReaderContext(readerContext)
           .withHoodieTableMetaClient(metaClient)
           .withLatestCommitTime(instantTime.get())
@@ -290,10 +291,11 @@ public class HoodieIndexUtils {
           .withRequestedSchema(dataSchema)
           .withInternalSchema(internalSchemaOption)
           .withProps(metaClient.getTableConfig().getProps())
+          .withIteratorMode(IteratorMode.HOODIE_RECORD)
           .build();
       try {
         final HoodieRecordLocation currentLocation = new HoodieRecordLocation(fileSlice.getBaseInstantTime(), fileSlice.getFileId());
-        return new CloseableMappingIterator<>(fileGroupReader.getClosableHoodieRecordIterator(), hoodieRecord -> {
+        return new CloseableMappingIterator<>(fileGroupReader.getClosableIterator(), hoodieRecord -> {
           hoodieRecord.unseal();
           hoodieRecord.setCurrentLocation(currentLocation);
           hoodieRecord.seal();
