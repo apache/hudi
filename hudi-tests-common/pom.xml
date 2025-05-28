@@ -202,7 +202,7 @@
             <artifactId>hadoop-hdfs-client</artifactId>
             <version>${hadoop.version}</version>
             <classifier>tests</classifier>
-            <scope>test</scope>
+            <scope>compile</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.hadoop</groupId>
