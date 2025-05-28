@@ -71,7 +71,7 @@ class TestEventTimeBasedAvroRecordMerger {
     when(newRecord.isDelete(newSchema, props)).thenReturn(false);
 
     Option<Pair<HoodieRecord, Schema>> result = merger.merge(oldRecord, oldSchema, newRecord, newSchema, props);
-    assertFalse(result.isPresent());
+    assertEquals(oldRecord, result.get().getLeft());
   }
 
   @Test

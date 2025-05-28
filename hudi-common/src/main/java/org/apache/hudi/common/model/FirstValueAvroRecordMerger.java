@@ -25,6 +25,54 @@ import org.apache.avro.Schema;
 
 import java.io.IOException;
 
+/**
+ * The following is the description of FirstValueAvroPayload.
+ *
+ * Payload clazz that is used for Hudi Table.
+ *
+ * <p>Simplified FirstValueAvroPayload Logic:
+ * <pre>
+ *
+ *  Illustration with simple data.
+ *  the order field is 'ts', recordkey is 'id' and schema is :
+ *  {
+ *    [
+ *      {"name":"id","type":"string"},
+ *      {"name":"ts","type":"long"},
+ *      {"name":"name","type":"string"},
+ *      {"name":"price","type":"string"}
+ *    ]
+ *  }
+ *
+ *  case 1
+ *  Current data:
+ *      id      ts      name    price
+ *      1       1       name_1  price_1
+ *  Insert data:
+ *      id      ts      name    price
+ *      1       1       name_2  price_2
+ *
+ *  Result data after #preCombine or #combineAndGetUpdateValue:
+ *      id      ts      name    price
+ *      1       1       name_1  price_1
+ *
+ *  If precombine is the same, would keep the first one record
+ *
+ *  case 2
+ *  Current data:
+ *      id      ts      name    price
+ *      1       1       name_1  price_1
+ *  Insert data:
+ *      id      ts      name    price
+ *      1       2       name_2  price_2
+ *
+ *  Result data after preCombine or combineAndGetUpdateValue:
+ *      id      ts      name    price
+ *      1       2       name_2  price_2
+ *
+ *  The other functionalities are inherited from DefaultHoodieRecordPayload.
+ * </pre>
+ */
 public class FirstValueAvroRecordMerger extends EventTimeBasedAvroRecordMerger {
   public static FirstValueAvroRecordMerger INSTANCE = new FirstValueAvroRecordMerger();
   protected boolean shouldKeepNewerRecord(HoodieRecord oldRecord,

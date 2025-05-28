@@ -30,7 +30,10 @@ import java.io.IOException;
 import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 
 /**
- * Implements the event time based merging for Avro records.
+ * Implements the event time based merging for native Avro records.
+ *
+ * This is to replace {@link HoodieAvroRecordMerger} class, which is
+ * designed to support payload based Avro records.
  */
 public class EventTimeBasedAvroRecordMerger implements HoodieRecordMerger {
   public static final EventTimeBasedAvroRecordMerger INSTANCE = new EventTimeBasedAvroRecordMerger();
@@ -44,7 +47,7 @@ public class EventTimeBasedAvroRecordMerger implements HoodieRecordMerger {
     if (shouldKeepNewerRecord(oldRecord, newRecord, oldSchema, newSchema, props)) {
       return Option.of(Pair.of(newRecord, newSchema));
     }
-    return Option.empty();
+    return Option.of(Pair.of(oldRecord, oldSchema));
   }
 
   @Override

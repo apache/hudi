@@ -24,6 +24,17 @@ import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
+/**
+ * Description from original class: OverwriteNonDefaultsWithLatestAvroPayload
+ *
+ * subclass of OverwriteWithLatestAvroPayload.
+ *
+ * <ol>
+ * <li>preCombine - Picks the latest delta record for a key, based on an ordering field;
+ * <li>combineAndGetUpdateValue/getInsertValue - overwrite the storage for the specified fields
+ * with the fields from the latest delta record that doesn't equal defaultValue.
+ * </ol>
+ */
 public class PartialUpdateWithNonDefaultValueAvroMerger extends PartialUpdateAvroMerger {
   public static final PartialUpdateWithNonDefaultValueAvroMerger INSTANCE =
       new PartialUpdateWithNonDefaultValueAvroMerger();
