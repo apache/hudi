@@ -40,8 +40,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
-
 /**
  * Upsert commit action executor for Metadata table.
  *
@@ -75,12 +73,7 @@ public class SparkMetadataTableUpsertCommitActionExecutor<T> extends SparkUpsert
 
   protected void saveWorkloadProfileMetadataToInflight(WorkloadProfile profile, String instantTime)
       throws HoodieCommitException {
-    // with streaming writes support, we might write to metadata table multiple times for the same instant times.
-    // ie. writeClient.startCommit(t1), writeClient.upsert(batch1, t1), writeClient.upsert(batch2, t1), writeClient.commit(t1, ...)
-    // So, here we are generating inflight file only in the last known writes, which we know will only have FILES partition.
-    if (mdtPartitionPathFileGroupIdList.size() == 1 && mdtPartitionPathFileGroupIdList.get(0).getKey().equals(FILES.getPartitionPath())) {
-      super.saveWorkloadProfileMetadataToInflight(profile, instantTime);
-    }
+    super.saveWorkloadProfileMetadataToInflight(profile, instantTime);
   }
 
   @Override

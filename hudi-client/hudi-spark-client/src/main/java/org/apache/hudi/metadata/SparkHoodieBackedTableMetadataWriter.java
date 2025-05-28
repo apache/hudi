@@ -54,9 +54,7 @@ import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
-import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.api.java.function.PairFunction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -66,8 +64,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-
-import scala.Tuple2;
 
 import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.EAGER;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
@@ -165,34 +161,8 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   @Override
-  protected HoodieData<HoodieRecord> repartitionByMDTFileSlice(HoodieData<HoodieRecord> records, int numPartitions) {
-    return HoodieJavaRDD.of(HoodieJavaRDD.getJavaRDD(records).mapToPair(new PairFunction<HoodieRecord, Pair<String, String>, HoodieRecord>() {
-
-      @Override
-      public Tuple2<Pair<String, String>, HoodieRecord> call(HoodieRecord record) throws Exception {
-        return new Tuple2<>(Pair.of(record.getPartitionPath(), record.getCurrentLocation().getFileId()), record);
-      }
-    }).partitionBy(new Partitioner() {
-      @Override
-      public int numPartitions() {
-        return numPartitions;
-      }
-
-      @Override
-      public int getPartition(Object key) {
-        Pair<String, String> entry = (Pair<String, String>) key;
-        return mapPartitionKeyToSparkPartition(entry.getKey().concat(entry.getValue()), numPartitions);
-      }
-    }).values());
-  }
-
-  @Override
-  public JavaRDD<WriteStatus> streamWriteToMetadataTable(Pair<List<Pair<String, String>>, HoodieData<HoodieRecord>> mdtRecordsHoodieData, String instantTime, boolean initialCall) {
+  public JavaRDD<WriteStatus> streamWriteToMetadataTable(Pair<List<Pair<String, String>>, HoodieData<HoodieRecord>> mdtRecordsHoodieData, String instantTime) {
     JavaRDD<HoodieRecord> mdtRecords = HoodieJavaRDD.getJavaRDD(mdtRecordsHoodieData.getValue());
-
-    if (initialCall) {
-      preWrite(instantTime);
-    }
     engineContext.setJobStatus(this.getClass().getSimpleName(), String.format("Upserting at %s into metadata table %s", instantTime, metadataWriteConfig.getTableName()));
     // TODO: Introduce prepped upsert call after client APIs are added
     JavaRDD<WriteStatus> metadataWriteStatusesSoFar = getWriteClient().upsertPreppedRecords(mdtRecords, instantTime, Option.of(mdtRecordsHoodieData.getKey()));
@@ -311,7 +281,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   protected MetadataIndexGenerator getMetadataIndexGenerator() {
-    return new SparkMetadataIndexGenerator();
+    return new MetadataIndexGenerator();
   }
 
   @Override

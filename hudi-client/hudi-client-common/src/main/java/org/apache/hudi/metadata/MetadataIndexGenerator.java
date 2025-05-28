@@ -19,14 +19,10 @@
 package org.apache.hudi.metadata;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.data.HoodieData;
-import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.function.SerializableFunction;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.model.HoodieRecordLocation;
-import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -38,10 +34,8 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 
 import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
 
@@ -85,11 +79,6 @@ public class MetadataIndexGenerator implements Serializable {
     }
   }
 
-  protected HoodieData<HoodieRecord> prepareFilesPartitionRecords(HoodieEngineContext context, HoodieCommitMetadata commitMetadata, String instantTime) {
-    return context.parallelize(
-        HoodieTableMetadataUtil.convertMetadataToFilesPartitionRecords(commitMetadata, instantTime), 1);
-  }
-
   protected static List<Pair<String, HoodieRecord>> processWriteStatusForRLI(WriteStatus writeStatus, HoodieWriteConfig dataWriteConfig) {
     List<Pair<String, HoodieRecord>> allRecords = new ArrayList<>();
     for (HoodieRecordDelegate recordDelegate : writeStatus.getWrittenRecordDelegates()) {
@@ -126,29 +115,5 @@ public class MetadataIndexGenerator implements Serializable {
       }
     }
     return allRecords;
-  }
-
-  HoodieData<Pair<String, HoodieRecord>> prepareMDTRecordsGroupedByHudiPartition(HoodieData<WriteStatus> writeStatusHoodieData) {
-    HoodieData<WriteStatus> writeStatusPartitionedByHudiPartition = repartitionRecordsByHudiPartition(writeStatusHoodieData, Math.min(writeStatusHoodieData.getNumPartitions(), 10));
-    HoodieData<Pair<String, HoodieRecord>> perPartitionRecords = writeStatusPartitionedByHudiPartition.map(WriteStatus::getStat)
-        .mapPartitions(new ProcessWriteStatsMapPartitionFunc(), true);
-    return perPartitionRecords;
-  }
-
-  protected HoodieData<WriteStatus> repartitionRecordsByHudiPartition(HoodieData<WriteStatus> records, int numPartitions) {
-    // override.
-    return records;
-  }
-
-  static class ProcessWriteStatsMapPartitionFunc
-      implements SerializableFunction<Iterator<HoodieWriteStat>, Iterator<Pair<String, HoodieRecord>>> {
-
-    @Override
-    public Iterator<Pair<String, HoodieRecord>> apply(Iterator<HoodieWriteStat> v1) throws Exception {
-      // generate partition stats record when enabled.
-      Map<String, List<HoodieWriteStat>> allWriteStats = new HashMap<>();
-      List<Pair<String, HoodieRecord>> toReturn = new ArrayList<>();
-      return toReturn.iterator();
-    }
   }
 }

@@ -219,7 +219,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
   @Override
   MetadataIndexGenerator getMetadataIndexGenerator() {
-    return null;
+    throw new UnsupportedOperationException("Streaming writes are not supported for Flink");
   }
 
   @Override

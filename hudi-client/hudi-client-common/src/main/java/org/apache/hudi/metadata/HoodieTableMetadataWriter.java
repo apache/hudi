@@ -58,15 +58,14 @@ public interface HoodieTableMetadataWriter<I,O> extends Serializable, AutoClosea
 
   /**
    * This api will be used in streaming writes to metadata flow, where in a write in data table is already written to all data table, all partitions in Metadata table
-   * using {@code #streamWriteToAllPartitions} and the action is triggered for all writes together. Post that, marker reconciliation of data table is executed and then
-   * we call {@code #writeToFilesPartitionAndCommit} where in, we write to FILES partition in metadata table and complete the commit. This will also take care of
-   * executing marker reconciliation in metadata table for all metadata table partitions.
+   * using {@code #streamWriteToAllPartitions} and the action is triggered for all writes together. Post that, marker reconciliation of data table is executed and we
+   * complete the commit. This will also take care of executing marker reconciliation in metadata table for all metadata table partitions.
    * @param instantTime instant time of interest.
    * @param context {@link HoodieEngineContext} of interest.
    * @param metadataWriteStatsSoFar List<HoodieWriteStat> for partial/streaming writes to metadata table completed so far.
    * @param commitMetadata {@link HoodieCommitMetadata} of interest.
    */
-  void wrapUpStreamingWriteToMetadataTableAndCompleteCommit(String instantTime, HoodieEngineContext context, List<HoodieWriteStat> metadataWriteStatsSoFar, HoodieCommitMetadata commitMetadata);
+  void completeStreamingCommit(String instantTime, HoodieEngineContext context, List<HoodieWriteStat> metadataWriteStatsSoFar, HoodieCommitMetadata commitMetadata);
 
   /**
    * Builds the given metadata partitions to create index.
