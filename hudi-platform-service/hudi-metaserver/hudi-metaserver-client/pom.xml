@@ -42,6 +42,10 @@
             <artifactId>hudi-hadoop-common</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <dependency>
+            <groupId>org.apache.hadoop</groupId>
+            <artifactId>hadoop-common</artifactId>
+        </dependency>
 
         <!-- Test -->
         <dependency>
