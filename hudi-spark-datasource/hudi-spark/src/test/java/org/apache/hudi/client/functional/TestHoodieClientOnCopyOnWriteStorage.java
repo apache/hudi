@@ -1620,11 +1620,10 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         .build();
 
     // create client with new config.
-    String clusteringCommitTime = client.createNewInstantTime();
-    SparkRDDWriteClient clusteringWriteClient = getHoodieWriteClient(clusteringWriteConfig);
+    SparkRDDWriteClient<?> clusteringWriteClient = getHoodieWriteClient(clusteringWriteConfig);
 
     // Schedule and execute clustering, this should fail since there is a conflict between ingestion inflight commit.
-    clusteringWriteClient.scheduleClusteringAtInstant(clusteringCommitTime, Option.empty());
+    String clusteringCommitTime = clusteringWriteClient.scheduleClustering(Option.empty()).get();
     assertThrows(HoodieClusteringException.class, () -> clusteringWriteClient.cluster(clusteringCommitTime, true));
 
     // Do a rollback on the replacecommit that is failed
@@ -1679,12 +1678,10 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         .build();
 
     // create client with new config.
-    SparkRDDWriteClient clusteringWriteClient = getHoodieWriteClient(clusteringWriteConfig);
-
-    String clusteringCommitTime = clusteringWriteClient.createNewInstantTime();
+    SparkRDDWriteClient<?> clusteringWriteClient = getHoodieWriteClient(clusteringWriteConfig);
 
     // Schedule and execute clustering, this complete successfully.
-    clusteringWriteClient.scheduleClusteringAtInstant(clusteringCommitTime, Option.empty());
+    String clusteringCommitTime = clusteringWriteClient.scheduleClustering(Option.empty()).get();
     clusteringWriteClient.cluster(clusteringCommitTime, true);
 
     // When ingestion writer is committing it should throw an exception.
