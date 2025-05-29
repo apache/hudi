@@ -841,13 +841,13 @@ public class HoodieWriteConfig extends HoodieConfig {
       .sinceVersion("1.0.0")
       .withDocumentation("Whether to enable incremental table service. So far Clustering and Compaction support incremental processing.");
 
-  public static final ConfigProperty<Boolean> STREAMING_WRITES_TO_METADATA_TABLE = ConfigProperty
-      .key("hoodie.write.streaming.writes.to.metadata")
+  public static final ConfigProperty<Boolean> METADATA_STREAMING_WRITES = ConfigProperty
+      .key("hoodie.write.metadata.streaming.write.enabled")
       .defaultValue(false)
       .markAdvanced()
       .sinceVersion("1.1.0")
       .withDocumentation("Whether to enable streaming writes to metadata table or not. With streaming writes, we execute writes to both data table and metadata table "
-          + "using one RDD stage boundary. If not, writes to data table and metadata table happens across stage boundaries. By default "
+          + "in streaming manner rather than two disjoint writes. By default "
           + "streaming writes to metadata table is enabled for SPARK engine for incremental operations and disabled for all other cases.");
   
   /**
@@ -2920,7 +2920,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   /**
    * Whether to enable streaming writes to metadata table or not.
-   * We have support for streaming writes only in SPARK engine (due to spark task retries intricacies) and for table version > 8 due to the
+   * We have support for streaming writes only in SPARK engine (due to spark task retries intricacies) and for table version >= 8 due to the
    * pre-requisite of NBCC.
    * To support streaming writes, we need NBCC support for metadata table, since there could an ingestion and a table service from data table
    * concurrently trying to write to metadata table.
@@ -2930,9 +2930,9 @@ public class HoodieWriteConfig extends HoodieConfig {
    * @param tableVersion {@link HoodieTableVersion} of interest.
    * @return true if streaming writes are enabled. false otherwise.
    */
-  public boolean isStreamingWritesToMetadataEnabled(HoodieTableVersion tableVersion) {
+  public boolean isMetadataStreamingWritesEnabled(HoodieTableVersion tableVersion) {
     if (tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
-      return getBoolean(STREAMING_WRITES_TO_METADATA_TABLE);
+      return getBoolean(METADATA_STREAMING_WRITES);
     } else {
       return false;
     }
@@ -3501,7 +3501,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     protected void setDefaults() {
       writeConfig.setDefaultValue(MARKERS_TYPE, getDefaultMarkersType(engineType));
       // set default for streaming writes to metadata table.
-      writeConfig.setDefaultValue(STREAMING_WRITES_TO_METADATA_TABLE, getDefaultForStreamingWritesToMetadataTable(engineType));
+      writeConfig.setDefaultValue(METADATA_STREAMING_WRITES, getDefaultForStreamingWritesToMetadataTable(engineType));
       // Check for mandatory properties
       writeConfig.setDefaults(HoodieWriteConfig.class.getName());
       // Set default values of HoodieHBaseIndexConfig
