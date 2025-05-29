@@ -2867,20 +2867,22 @@ public class HoodieWriteConfig extends HoodieConfig {
   public boolean needResolveWriteConflict(WriteOperationType operationType, boolean isMetadataTable, HoodieWriteConfig config,
                                           HoodieTableConfig tableConfig) {
     WriteConcurrencyMode mode = getWriteConcurrencyMode();
-    if (isMetadataTable && config.isStreamingWritesToMetadataEnabled(tableConfig.getTableVersion())) {
-      // for metadata table, if streaming writes are enabled, we might need to perform conflict resolution.
-      // datatable NBCC is still evolving and might go through evolution compared to its current state.
-      // But incase of metadata table, when streaming writes are enabled, we are just looking to let every commit succeed w/o any resolution as such.
-      return true;
-    }
     switch (mode) {
       case SINGLE_WRITER:
         return false;
       case OPTIMISTIC_CONCURRENCY_CONTROL:
         return true;
-      case NON_BLOCKING_CONCURRENCY_CONTROL:
-        // NB-CC don't need to resolve write conflict except bulk insert operation
-        return WriteOperationType.BULK_INSERT == operationType;
+      case NON_BLOCKING_CONCURRENCY_CONTROL: {
+        if (isMetadataTable && config.isStreamingWritesToMetadataEnabled(tableConfig.getTableVersion())) {
+          // datatable NBCC is still evolving and might go through evolution compared to its current state.
+          // But incase of metadata table, when streaming writes are enabled, we are leveraging MetadataTableNonBlockingWritesConflictResolutionStrategy to do conflict resolution
+          // still keeping future capabilities open to enhance MetadataTableNonBlockingWritesConflictResolutionStrategy.
+          return true;
+        } else {
+          // NB-CC don't need to resolve write conflict except bulk insert operation
+          return WriteOperationType.BULK_INSERT == operationType;
+        }
+      }
       default:
         throw new IllegalArgumentException("Invalid WriteConcurrencyMode " + mode);
     }

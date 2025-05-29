@@ -23,13 +23,12 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -40,13 +39,12 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR
 
 public class TestMetadataTableNonBlockingWritesConflictResolutionStrategy extends HoodieCommonTestHarness {
 
-  @BeforeEach
-  public void init() throws IOException {
-    initMetaClient();
-  }
-
   @Test
   public void testWithConcurrentWrites() throws Exception {
+    initPath();
+    basePath = basePath + "/.hoodie/metadata";
+    metaClient = HoodieTestUtils.init(basePath, getTableType());
+
     createCommit(metaClient.createNewInstantTime(), metaClient);
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     // consider commits before this are all successful

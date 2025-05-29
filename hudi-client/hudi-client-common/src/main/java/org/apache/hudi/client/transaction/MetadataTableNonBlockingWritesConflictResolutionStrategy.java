@@ -22,6 +22,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.table.HoodieTable;
@@ -36,6 +37,7 @@ public class MetadataTableNonBlockingWritesConflictResolutionStrategy implements
 
   @Override
   public Stream<HoodieInstant> getCandidateInstants(HoodieTableMetaClient metaClient, HoodieInstant currentInstant, Option<HoodieInstant> lastSuccessfulInstant) {
+    ValidationUtils.checkArgument(metaClient.isMetadataTable(), "MetadataTableNonBlockingWritesConflictResolutionStrategy can only be used for metadata table");
     return Stream.empty();
   }
 
