@@ -39,13 +39,11 @@ import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantGenerator;
-import org.apache.hudi.common.table.timeline.TimelineLayout;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
@@ -287,8 +285,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
    * @param extraMetadata Extra Metadata to be stored
    */
   public Option<String> scheduleCompaction(Option<Map<String, String>> extraMetadata) throws HoodieIOException {
-    String instantTime = createNewInstantTime();
-    return scheduleCompactionAtInstant(instantTime, extraMetadata) ? Option.of(instantTime) : Option.empty();
+    return scheduleTableService(extraMetadata, TableServiceType.COMPACT);
   }
 
   /**
@@ -390,18 +387,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
    * @param extraMetadata Extra Metadata to be stored
    */
   public Option<String> scheduleLogCompaction(Option<Map<String, String>> extraMetadata) throws HoodieIOException {
-    String instantTime = createNewInstantTime();
-    return scheduleLogCompactionAtInstant(instantTime, extraMetadata) ? Option.of(instantTime) : Option.empty();
-  }
-
-  /**
-   * Schedules a new log compaction instant with passed-in instant time.
-   *
-   * @param instantTime   Log Compaction Instant Time
-   * @param extraMetadata Extra Metadata to be stored
-   */
-  public boolean scheduleLogCompactionAtInstant(String instantTime, Option<Map<String, String>> extraMetadata) throws HoodieIOException {
-    return scheduleTableService(instantTime, extraMetadata, TableServiceType.LOG_COMPACT).isPresent();
+    return scheduleTableService(extraMetadata, TableServiceType.LOG_COMPACT);
   }
 
   /**
@@ -448,33 +434,12 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
   }
 
   /**
-   * Schedules a new compaction instant with passed-in instant time.
-   *
-   * @param instantTime   Compaction Instant Time
-   * @param extraMetadata Extra Metadata to be stored
-   */
-  public boolean scheduleCompactionAtInstant(String instantTime, Option<Map<String, String>> extraMetadata) throws HoodieIOException {
-    return scheduleTableService(instantTime, extraMetadata, TableServiceType.COMPACT).isPresent();
-  }
-
-  /**
    * Schedules a new clustering instant.
    *
    * @param extraMetadata Extra Metadata to be stored
    */
   public Option<String> scheduleClustering(Option<Map<String, String>> extraMetadata) throws HoodieIOException {
-    String instantTime = createNewInstantTime();
-    return scheduleClusteringAtInstant(instantTime, extraMetadata) ? Option.of(instantTime) : Option.empty();
-  }
-
-  /**
-   * Schedules a new clustering instant with passed-in instant time.
-   *
-   * @param instantTime   clustering Instant Time
-   * @param extraMetadata Extra Metadata to be stored
-   */
-  public boolean scheduleClusteringAtInstant(String instantTime, Option<Map<String, String>> extraMetadata) throws HoodieIOException {
-    return scheduleTableService(instantTime, extraMetadata, TableServiceType.CLUSTER).isPresent();
+    return scheduleTableService(extraMetadata, TableServiceType.CLUSTER);
   }
 
   /**
@@ -666,71 +631,65 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
    *
    * @param extraMetadata    Metadata to pass onto the scheduled service instant
    * @param tableServiceType Type of table service to schedule
-   * @return
+   * @return the requested instant time if the service was scheduled
    */
-  public Option<String> scheduleTableService(String instantTime, Option<Map<String, String>> extraMetadata,
+  public Option<String> scheduleTableService(Option<Map<String, String>> extraMetadata,
                                              TableServiceType tableServiceType) {
-    // A lock is required to guard against race conditions between an ongoing writer and scheduling a table service.
-    HoodieTableConfig tableConfig = HoodieTableConfig.loadFromHoodieProps(storage, config.getBasePath());
-    InstantGenerator instantGenerator = TimelineLayout.fromVersion(tableConfig.getTableVersion().getTimelineLayoutVersion()).getInstantGenerator();
-    final Option<HoodieInstant> inflightInstant = Option.of(instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED,
-        tableServiceType.getAction(), instantTime));
-    try {
-      this.txnManager.beginTransaction(inflightInstant, Option.empty());
-      LOG.info("Scheduling table service {} for table {}", tableServiceType, config.getBasePath());
-      return scheduleTableServiceInternal(instantTime, extraMetadata, tableServiceType);
-    } finally {
-      this.txnManager.endTransaction(inflightInstant);
-    }
+    return scheduleTableServiceInternal(Option.empty(), extraMetadata, tableServiceType);
   }
 
-  protected Option<String> scheduleTableServiceInternal(String instantTime, Option<Map<String, String>> extraMetadata,
-                                                        TableServiceType tableServiceType) {
+  Option<String> scheduleTableServiceInternal(Option<String> providedInstantTime, Option<Map<String, String>> extraMetadata,
+                                              TableServiceType tableServiceType) {
     if (!tableServicesEnabled(config)) {
       return Option.empty();
     }
-
-    Option<String> option = Option.empty();
-    HoodieTable<?, ?, ?, ?> table = createTable(config, storageConf);
-
-    switch (tableServiceType) {
-      case ARCHIVE:
-        LOG.info("Scheduling archiving is not supported. Skipping.");
-        break;
-      case CLUSTER:
-        LOG.info("Scheduling clustering at instant time: {} for table {}", instantTime, config.getBasePath());
-        Option<HoodieClusteringPlan> clusteringPlan = table
-            .scheduleClustering(context, instantTime, extraMetadata);
-        option = clusteringPlan.isPresent() ? Option.of(instantTime) : Option.empty();
-        break;
-      case COMPACT:
-        LOG.info("Scheduling compaction at instant time: {} for table {}", instantTime, config.getBasePath());
-        Option<HoodieCompactionPlan> compactionPlan = table
-            .scheduleCompaction(context, instantTime, extraMetadata);
-        option = compactionPlan.isPresent() ? Option.of(instantTime) : Option.empty();
-        break;
-      case LOG_COMPACT:
-        LOG.info("Scheduling log compaction at instant time: {} for table {}", instantTime, config.getBasePath());
-        Option<HoodieCompactionPlan> logCompactionPlan = table
-            .scheduleLogCompaction(context, instantTime, extraMetadata);
-        option = logCompactionPlan.isPresent() ? Option.of(instantTime) : Option.empty();
-        break;
-      case CLEAN:
-        LOG.info("Scheduling cleaning at instant time: {} for table {}", instantTime, config.getBasePath());
-        Option<HoodieCleanerPlan> cleanerPlan = table
-            .scheduleCleaning(context, instantTime, extraMetadata);
-        option = cleanerPlan.isPresent() ? Option.of(instantTime) : Option.empty();
-        break;
-      default:
-        throw new IllegalArgumentException("Invalid TableService " + tableServiceType);
+    if (tableServiceType == TableServiceType.ARCHIVE) {
+      LOG.info("Archival does not need scheduling. Skipping.");
+      return Option.empty();
     }
-
-    Option<String> instantRange = delegateToTableServiceManager(tableServiceType, table);
-    if (instantRange.isPresent()) {
-      LOG.info("Delegate instant [{}] to table service manager", instantRange.get());
+    if (tableServiceType == TableServiceType.CLEAN) {
+      // Cleaning is a frequent operation that does not conflict with other operations and is idempotent,
+      // so it is handled differently to avoid locking for planning.
+      return scheduleCleaning(createTable(config, storageConf), providedInstantTime);
     }
+    txnManager.beginTransaction(Option.empty(), Option.empty());
+    try {
+      Option<String> option;
+      HoodieTable<?, ?, ?, ?> table = createTable(config, storageConf);
+      String instantTime = providedInstantTime.orElseGet(() -> createNewInstantTime(false));
 
-    return option;
+      switch (tableServiceType) {
+        case CLUSTER:
+          LOG.info("Scheduling clustering at instant time: {} for table {}", instantTime, config.getBasePath());
+          Option<HoodieClusteringPlan> clusteringPlan = table
+              .scheduleClustering(context, instantTime, extraMetadata);
+          option = clusteringPlan.map(plan -> instantTime);
+          break;
+        case COMPACT:
+          LOG.info("Scheduling compaction at instant time: {} for table {}", instantTime, config.getBasePath());
+          Option<HoodieCompactionPlan> compactionPlan = table
+              .scheduleCompaction(context, instantTime, extraMetadata);
+          option = compactionPlan.map(plan -> instantTime);
+          break;
+        case LOG_COMPACT:
+          LOG.info("Scheduling log compaction at instant time: {} for table {}", instantTime, config.getBasePath());
+          Option<HoodieCompactionPlan> logCompactionPlan = table
+              .scheduleLogCompaction(context, instantTime, extraMetadata);
+          option = logCompactionPlan.map(plan -> instantTime);
+          break;
+        default:
+          throw new IllegalArgumentException("Invalid TableService " + tableServiceType);
+      }
+
+      Option<String> instantRange = delegateToTableServiceManager(tableServiceType, table);
+      if (instantRange.isPresent()) {
+        LOG.info("Delegate instant [{}] to table service manager", instantRange.get());
+      }
+
+      return option;
+    } finally {
+      txnManager.endTransaction(Option.empty());
+    }
   }
 
   protected HoodieTable createTableAndValidate(HoodieWriteConfig config,
@@ -796,30 +755,13 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
    * Clean up any stale/old files/data lying around (either on file storage or index storage) based on the
    * configurations and CleaningPolicy used. (typically files that no longer can be used by a running query can be
    * cleaned). This API provides the flexibility to schedule clean instant asynchronously via
-   * {@link BaseHoodieTableServiceClient#scheduleTableService(String, Option, TableServiceType)} and disable inline scheduling
+   * {@link BaseHoodieTableServiceClient#scheduleTableService(Option, TableServiceType)} and disable inline scheduling
    * of clean.
    *
-   * @param cleanInstantTime instant time for clean.
    * @param scheduleInline   true if needs to be scheduled inline. false otherwise.
    */
   @Nullable
-  @Deprecated
-  public HoodieCleanMetadata clean(String cleanInstantTime, boolean scheduleInline, boolean skipLocking) throws HoodieIOException {
-    return clean(cleanInstantTime, scheduleInline);
-  }
-
-  /**
-   * Clean up any stale/old files/data lying around (either on file storage or index storage) based on the
-   * configurations and CleaningPolicy used. (typically files that no longer can be used by a running query can be
-   * cleaned). This API provides the flexibility to schedule clean instant asynchronously via
-   * {@link BaseHoodieTableServiceClient#scheduleTableService(String, Option, TableServiceType)} and disable inline scheduling
-   * of clean.
-   *
-   * @param cleanInstantTime instant time for clean.
-   * @param scheduleInline   true if needs to be scheduled inline. false otherwise.
-   */
-  @Nullable
-  public HoodieCleanMetadata clean(String cleanInstantTime, boolean scheduleInline) throws HoodieIOException {
+  HoodieCleanMetadata clean(Option<String> suppliedCleanInstant, boolean scheduleInline) throws HoodieIOException {
     if (!tableServicesEnabled(config)) {
       return null;
     }
@@ -833,13 +775,13 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     } else {
       table = initialTable;
     }
-    boolean hasInflightClean = table.getActiveTimeline().getCleanerTimeline().filterInflightsAndRequested().firstInstant().isPresent();
-    boolean scheduledClean = false;
-    if (config.allowMultipleCleans() || !hasInflightClean) {
+    Option<String> inflightClean = table.getActiveTimeline().getCleanerTimeline().filterInflightsAndRequested().firstInstant().map(HoodieInstant::requestedTime);
+    Option<String> cleanInstantTime = Option.empty();
+    if (config.allowMultipleCleans() || inflightClean.isEmpty()) {
       LOG.info("Cleaner started for table {}", config.getBasePath());
       // proceed only if multiple clean schedules are enabled or if there are no pending cleans.
       if (scheduleInline) {
-        scheduledClean = scheduleTableServiceInternal(cleanInstantTime, Option.empty(), TableServiceType.CLEAN).isPresent();
+        cleanInstantTime = scheduleCleaning(table, suppliedCleanInstant);
       }
 
       if (shouldDelegateToTableServiceManager(config, ActionType.clean)) {
@@ -848,20 +790,53 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       }
     }
 
-    if (hasInflightClean || scheduledClean) {
+    if (inflightClean.isPresent() || cleanInstantTime.isPresent()) {
       table.getMetaClient().reloadActiveTimeline();
       // Proceeds to execute any requested or inflight clean instances in the timeline
-      HoodieCleanMetadata metadata = table.clean(context, cleanInstantTime);
+      String cleanInstantToExecute = cleanInstantTime.isPresent() ? cleanInstantTime.get() : inflightClean.get();
+      HoodieCleanMetadata metadata = table.clean(context, cleanInstantToExecute);
       if (timerContext != null && metadata != null) {
         long durationMs = metrics.getDurationInMs(timerContext.stop());
         metrics.updateCleanMetrics(durationMs, metadata.getTotalFilesDeleted());
         LOG.info("Cleaned {} files Earliest Retained Instant :{} cleanerElapsedMs: {}",
             metadata.getTotalFilesDeleted(), metadata.getEarliestCommitToRetain(), durationMs);
       }
-      releaseResources(cleanInstantTime);
+      releaseResources(cleanInstantToExecute);
       return metadata;
     }
     return null;
+  }
+
+  /**
+   * Computes a cleaner plan and persists it to the timeline if cleaning is required.
+   *
+   * @param table table to schedule cleaning on.
+   * @param suppliedCleanInstant Optional supplied clean instant time that overrides the generated time. This can only be used for testing.
+   * @return the requested instant time if the service was scheduled
+   */
+  private Option<String> scheduleCleaning(HoodieTable<?, ?, ?, ?> table, Option<String> suppliedCleanInstant) {
+    Option<HoodieCleanerPlan> cleanerPlan = table.createCleanerPlan(context, Option.empty());
+    if (cleanerPlan.isPresent()) {
+      txnManager.beginTransaction(Option.empty(), Option.empty());
+      try {
+        String cleanInstantTime = suppliedCleanInstant.orElseGet(() -> createNewInstantTime(false));
+        final HoodieInstant cleanInstant = table.getMetaClient().createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, cleanInstantTime);
+        // Save to both aux and timeline folder
+        table.getActiveTimeline().saveToCleanRequested(cleanInstant, cleanerPlan);
+        LOG.info("Requesting Cleaning with instant time {}", cleanInstant);
+        Option<String> instantRange = delegateToTableServiceManager(TableServiceType.CLEAN, table);
+        if (instantRange.isPresent()) {
+          LOG.info("Delegate instant [{}] to table service manager", instantRange.get());
+        }
+        return Option.of(cleanInstantTime);
+      } catch (HoodieIOException e) {
+        LOG.error("Got exception when saving cleaner requested file", e);
+        throw e;
+      } finally {
+        txnManager.endTransaction(Option.empty());
+      }
+    }
+    return Option.empty();
   }
 
   /**

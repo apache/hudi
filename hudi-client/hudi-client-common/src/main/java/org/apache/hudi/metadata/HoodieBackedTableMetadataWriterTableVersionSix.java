@@ -285,11 +285,6 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I, O> exten
   }
 
   @Override
-  String createCleanInstantTime(String instantTime) {
-    return createCleanTimestamp(instantTime);
-  }
-
-  @Override
   String createRestoreInstantTime() {
     return createRestoreTimestamp(getWriteClient().createNewInstantTime(false));
   }

@@ -543,16 +543,14 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   public abstract void rollbackBootstrap(HoodieEngineContext context, String instantTime);
 
   /**
-   * Schedule cleaning for the instant time.
+   * Generates a cleaner plan if required.
    *
-   * @param context HoodieEngineContext
-   * @param instantTime Instant Time for scheduling cleaning
+   * @param context       HoodieEngineContext
    * @param extraMetadata additional metadata to write into plan
    * @return HoodieCleanerPlan, if there is anything to clean.
    */
-  public abstract Option<HoodieCleanerPlan> scheduleCleaning(HoodieEngineContext context,
-                                                             String instantTime,
-                                                             Option<Map<String, String>> extraMetadata);
+  public abstract Option<HoodieCleanerPlan> createCleanerPlan(HoodieEngineContext context,
+                                                              Option<Map<String, String>> extraMetadata);
 
   /**
    * Executes a new clean action.
