@@ -1373,7 +1373,6 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     ValidationUtils.checkState(metadataMetaClient != null, "Metadata table is not fully initialized yet.");
     Pair<HoodieData<HoodieRecord>, List<HoodieFileGroupId>> result = prepRecords(partitionRecordsMap);
     HoodieData<HoodieRecord> preppedRecords = result.getKey();
-    List<HoodieFileGroupId> hoodieFileGroupIdList = result.getValue();
     I preppedRecordInputs = convertHoodieDataToEngineSpecificData(preppedRecords);
 
     BaseHoodieWriteClient<?, I, ?, O> writeClient = getWriteClient();

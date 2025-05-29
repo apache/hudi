@@ -21,13 +21,12 @@ package org.apache.hudi.client;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.table.HoodieSparkMergeOnReadMetadataTable;
@@ -36,20 +35,18 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import org.apache.spark.api.java.JavaRDD;
 
-import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.function.BiConsumer;
 
 /**
  * Write client to assist with writing to metadata table.
+ *
  * @param <T>
  */
 public class SparkRDDMetadataWriteClient<T> extends SparkRDDWriteClient<T> {
 
-  // tracks the instants for which preWrite has been invoked.
-  private final Set<String> preWriteCompletedInstants = new HashSet<>();
+  // tracks the instants for which upsertPrepped is invoked.
+  private Option<String> firstInstantOpt = Option.empty();
+  private int invocationCounts = 0;
 
   public SparkRDDMetadataWriteClient(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
     super(context, clientConfig);
@@ -66,33 +63,28 @@ public class SparkRDDMetadataWriteClient<T> extends SparkRDDWriteClient<T> {
    * This implementation requires that the input records are already tagged, and de-duped if needed.
    *
    * @param preppedRecords Prepared HoodieRecords to upsert
-   * @param instantTime Instant time of the commit
+   * @param instantTime    Instant time of the commit
    * @return Collection of WriteStatus to inspect errors and counts
    */
   public JavaRDD<WriteStatus> upsertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords, String instantTime, Option<List<HoodieFileGroupId>> hoodieFileGroupIdList) {
     HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table =
         initTable(WriteOperationType.UPSERT_PREPPED, Option.ofNullable(instantTime));
     table.validateUpsertSchema();
-    boolean initialCall = !preWriteCompletedInstants.contains(instantTime);
+    boolean initialCall = firstInstantOpt.isEmpty();
+    invocationCounts++;
     if (initialCall) {
       // we do not want to call prewrite more than once for the same instant, since we could be writing to metadata table more than once w/ streaming writes.
       preWrite(instantTime, WriteOperationType.UPSERT_PREPPED, table.getMetaClient());
-      preWriteCompletedInstants.add(instantTime);
+      firstInstantOpt = Option.of(instantTime);
+    } else {
+      ValidationUtils.checkArgument(firstInstantOpt.get().equals(instantTime), "Upsert Prepped invoked for metadata table using same write client instance "
+          + " for two different instant times " + firstInstantOpt.get() + " and " + instantTime);
     }
+    ValidationUtils.checkArgument(invocationCounts <= 2, "Upsert Prepped invoked more then twice for the same instant time with metadata write client "
+        + firstInstantOpt.get());
     HoodieWriteMetadata<HoodieData<WriteStatus>> result = ((HoodieSparkMergeOnReadMetadataTable) table).upsertPrepped(context, instantTime, HoodieJavaRDD.of(preppedRecords),
         hoodieFileGroupIdList, initialCall);
     HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getWriteStatuses()));
     return postWrite(resultRDD, instantTime, table);
-  }
-
-  /**
-   * Complete changes performed at the given instantTime marker with specified action.
-   */
-  @Override
-  public boolean commit(String instantTime, JavaRDD<WriteStatus> writeStatuses, Option<Map<String, String>> extraMetadata,
-                        String commitActionType, Map<String, List<String>> partitionToReplacedFileIds,
-                        Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc) {
-    preWriteCompletedInstants.remove(instantTime);
-    return super.commit(instantTime, writeStatuses, extraMetadata, commitActionType, partitionToReplacedFileIds, extraPreCommitFunc);
   }
 }
