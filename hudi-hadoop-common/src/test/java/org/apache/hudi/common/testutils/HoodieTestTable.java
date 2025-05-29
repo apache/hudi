@@ -60,7 +60,6 @@ import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.timeline.versioning.DefaultInstantGenerator;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2MigrationHandler;
-import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
@@ -467,20 +466,12 @@ public class HoodieTestTable implements AutoCloseable {
   }
 
   public Pair<HoodieCleanerPlan, HoodieCleanMetadata> getHoodieCleanMetadata(String commitTime, HoodieTestTableState testTableState) {
-    List<String> deletedPartitions = testTableState.getPartitionsToDeleteForCleaner(commitTime);
     HoodieCleanerPlan cleanerPlan = new HoodieCleanerPlan(new HoodieActionInstant(commitTime, CLEAN_ACTION, EMPTY_STRING),
-        EMPTY_STRING, EMPTY_STRING, new HashMap<>(), CleanPlanV2MigrationHandler.VERSION, new HashMap<>(), deletedPartitions, Collections.EMPTY_MAP);
+        EMPTY_STRING, EMPTY_STRING, new HashMap<>(), CleanPlanV2MigrationHandler.VERSION, new HashMap<>(), new ArrayList<>(), Collections.EMPTY_MAP);
     List<HoodieCleanStat> cleanStats = new ArrayList<>();
     for (Map.Entry<String, List<String>> entry : testTableState.getPartitionToFileIdMapForCleaner(commitTime).entrySet()) {
-      if (deletedPartitions.contains(entry.getKey())) {
-        cleanStats.add(new HoodieCleanStat(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS,
-            entry.getKey(), entry.getValue(), entry.getValue(), Collections.emptyList(), commitTime, "",
-            CollectionUtils.createImmutableList(), CollectionUtils.createImmutableList(),
-            CollectionUtils.createImmutableList(), true));
-      } else {
-        cleanStats.add(new HoodieCleanStat(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS,
-            entry.getKey(), entry.getValue(), entry.getValue(), Collections.emptyList(), commitTime, ""));
-      }
+      cleanStats.add(new HoodieCleanStat(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS,
+          entry.getKey(), entry.getValue(), entry.getValue(), Collections.emptyList(), commitTime, ""));
     }
     return Pair.of(cleanerPlan, convertCleanMetadata(commitTime, Option.of(0L), cleanStats, Collections.EMPTY_MAP));
   }
@@ -1167,27 +1158,16 @@ public class HoodieTestTable implements AutoCloseable {
     return doClean(commitTime, partitionFileCountsToDelete, Collections.emptyMap());
   }
 
-  public HoodieCleanMetadata doClean(String commitTime, Map<String, Integer> partitionFileCountsToDelete, List<String> partitionsToBeDeleted) throws IOException {
-    return doClean(commitTime, partitionFileCountsToDelete, partitionsToBeDeleted, Collections.emptyMap());
-  }
-
   public HoodieCleanMetadata doClean(String commitTime, Map<String, Integer> partitionFileCountsToDelete, Map<String, String> extraMetadata) throws IOException {
-    return doClean(commitTime, partitionFileCountsToDelete, Collections.emptyList(), extraMetadata);
-  }
-
-  public HoodieCleanMetadata doClean(String commitTime, Map<String, Integer> partitionFileCountsToDelete, List<String> partitionsToDelete, Map<String, String> extraMetadata) throws IOException {
     Map<String, List<String>> partitionFilesToDelete = new HashMap<>();
     for (Map.Entry<String, Integer> entry : partitionFileCountsToDelete.entrySet()) {
       partitionFilesToDelete.put(entry.getKey(), getEarliestFilesInPartition(entry.getKey(), entry.getValue()));
     }
     HoodieTestTableState testTableState = new HoodieTestTableState();
     for (Map.Entry<String, List<String>> entry : partitionFilesToDelete.entrySet()) {
-      testTableState = testTableState.createTestTableStateForFilesToClean(commitTime, entry.getKey(), entry.getValue());
+      testTableState = testTableState.createTestTableStateForCleaner(commitTime, entry.getKey(), entry.getValue());
       deleteFilesInPartition(entry.getKey(), entry.getValue());
     }
-
-    testTableState = testTableState.createTestTableStateForPartitionsToClean(commitTime, partitionsToDelete);
-
     Pair<HoodieCleanerPlan, HoodieCleanMetadata> cleanerMeta = getHoodieCleanMetadata(commitTime, testTableState);
     HoodieCleanMetadata cleanMetadata = cleanerMeta.getValue();
     cleanerMeta.getKey().setExtraMetadata(extraMetadata);
@@ -1220,16 +1200,7 @@ public class HoodieTestTable implements AutoCloseable {
         }
       }
     }
-    return doClean(cleanCommitTime, partitionFileCountsToDelete, Collections.emptyList());
-  }
-
-  public HoodieCleanMetadata doCleanBasedOnPartitions(String cleanCommitTime, List<String> partitionsToClean) throws IOException {
-    Map<String, Integer> partitionFileCountsToDelete = new HashMap<>();
-    for (String partition : partitionsToClean) {
-      FileStatus[] allFiles = listAllFilesInPartition(partition);
-      partitionFileCountsToDelete.put(partition, allFiles.length);
-    }
-    return doClean(cleanCommitTime, partitionFileCountsToDelete, partitionsToClean);
+    return doClean(cleanCommitTime, partitionFileCountsToDelete);
   }
 
   public HoodieSavepointMetadata doSavepoint(String commitTime) throws IOException {
@@ -1546,12 +1517,6 @@ public class HoodieTestTable implements AutoCloseable {
      */
     Map<String, Map<String, List<Pair<String, Integer[]>>>> commitsToPartitionToLogFileInfoStats = new HashMap<>();
 
-    /**
-     * Map<commitTime, List<partitionPath>>
-     * Used to build clean metadata for partitions that got deleted
-     */
-    Map<String, List<String>> commitsToPartitionForCleaner = new HashMap<>();
-
     HoodieTestTableState() {
     }
 
@@ -1559,7 +1524,7 @@ public class HoodieTestTable implements AutoCloseable {
       return new HoodieTestTableState();
     }
 
-    HoodieTestTableState createTestTableStateForFilesToClean(String commitTime, String partitionPath, List<String> filesToClean) {
+    HoodieTestTableState createTestTableStateForCleaner(String commitTime, String partitionPath, List<String> filesToClean) {
       if (!commitsToPartitionToFileIdForCleaner.containsKey(commitTime)) {
         commitsToPartitionToFileIdForCleaner.put(commitTime, new HashMap<>());
       }
@@ -1571,24 +1536,8 @@ public class HoodieTestTable implements AutoCloseable {
       return this;
     }
 
-    HoodieTestTableState createTestTableStateForPartitionsToClean(String commitTime, List<String> partitionsToClean) {
-      if (!commitsToPartitionForCleaner.containsKey(commitTime)) {
-        commitsToPartitionForCleaner.put(commitTime, new ArrayList<>());
-      }
-
-      commitsToPartitionForCleaner.get(commitTime).addAll(partitionsToClean);
-      return this;
-    }
-
     Map<String, List<String>> getPartitionToFileIdMapForCleaner(String commitTime) {
       return this.commitsToPartitionToFileIdForCleaner.get(commitTime);
-    }
-
-    List<String> getPartitionsToDeleteForCleaner(String commitTime) {
-      if (this.commitsToPartitionForCleaner.containsKey(commitTime)) {
-        return this.commitsToPartitionForCleaner.get(commitTime);
-      }
-      return Collections.emptyList();
     }
 
     HoodieTestTableState createTestTableStateForBaseFileLengthsOnly(String commitTime, String partitionPath,

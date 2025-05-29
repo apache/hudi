@@ -411,61 +411,6 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     assertEquals(tableVersion, finalTableVersion.versionCode());
   }
 
-  @ParameterizedTest
-  @CsvSource({"COPY_ON_WRITE,6", "COPY_ON_WRITE,8", "MERGE_ON_READ,6", "MERGE_ON_READ,8"})
-  void testDeletePartitionKeyOnCleanPartition(final HoodieTableType tableType, int tableVersion) throws Exception {
-    initPath();
-    writeConfig = getWriteConfigBuilder(true, true, false)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
-            .enable(true)
-            .withMaxNumDeltaCommitsBeforeCompaction(6)
-            .build())
-        .build();
-    writeConfig.setValue(HoodieWriteConfig.WRITE_TABLE_VERSION, String.valueOf(tableVersion));
-    init(tableType, writeConfig);
-    String partition1 = "p1";
-    // Simulate two bulk insert operations adding two data files in partition "p1"
-    String instant1 = metaClient.createNewInstantTime();
-    testTable.doWriteOperation(instant1, BULK_INSERT, emptyList(), Collections.singletonList(partition1), 1);
-    String instant2 = metaClient.createNewInstantTime();
-    testTable.doWriteOperation(instant2, BULK_INSERT, emptyList(), Collections.singletonList(partition1), 1);
-
-    String partition2 = "p2";
-    testTable.doWriteOperation(
-        metaClient.createNewInstantTime(), BULK_INSERT, emptyList(), Collections.singletonList(partition2), 1);
-
-    final HoodieTableMetaClient metadataMetaClient = createMetaClient(metadataTableBasePath);
-    metadataMetaClient.reloadActiveTimeline();
-
-    assertEquals(0, getNumCompactions(metadataMetaClient));
-
-    String cleanInstant = metaClient.createNewInstantTime();
-    HoodieCleanMetadata cleanMetadata = testTable.doCleanBasedOnPartitions(cleanInstant, Collections.singletonList(partition1));
-
-    while (getNumCompactions(metadataMetaClient) == 0) {
-      // Write until the compaction happens in the metadata table
-      testTable.doWriteOperation(
-          metaClient.createNewInstantTime(), BULK_INSERT, emptyList(), Collections.singletonList(partition2), 1);
-      metadataMetaClient.reloadActiveTimeline();
-    }
-
-    List<String> deleteFileList = cleanMetadata.getPartitionMetadata().get(partition1).getDeletePathPatterns();
-    assertFalse(deleteFileList.isEmpty());
-
-    HoodieBackedTableMetadata tableMetadata = new HoodieBackedTableMetadata(
-        new HoodieLocalEngineContext(storageConf),
-        storage,
-        HoodieMetadataConfig.newBuilder().enable(true).build(),
-        basePath);
-    // validate no entry present for recordKey p1 in files partition
-    assertTrue(tableMetadata.getRecordsByKeyPrefixes(Collections.singletonList(partition1), FILES.getPartitionPath(), false).isEmpty());
-
-    // validate table version
-    HoodieTableVersion finalTableVersion = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
-        .getTableConfig().getTableVersion();
-    assertEquals(tableVersion, finalTableVersion.versionCode());
-  }
-
   private int getNumCompactions(HoodieTableMetaClient metaClient) {
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     return timeline
