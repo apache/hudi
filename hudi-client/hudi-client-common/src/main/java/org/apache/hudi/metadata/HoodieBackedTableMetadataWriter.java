@@ -1583,7 +1583,6 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
    * deltacommit.
    */
   void compactIfNecessary(BaseHoodieWriteClient<?,I,?,O> writeClient, Option<String> latestDeltaCommitTimeOpt) {
-    // TODO how to handle this case where compaction needs to be written in the past
     // IMPORTANT: Trigger compaction with max instant time that is smaller than(or equals) the earliest pending instant from DT.
     // The compaction planner will manage to filter out the log files that finished with greater completion time.
     // see BaseHoodieCompactionPlanGenerator.generateCompactionPlan for more details.
