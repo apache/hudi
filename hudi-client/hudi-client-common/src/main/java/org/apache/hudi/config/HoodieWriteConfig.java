@@ -849,7 +849,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Whether to enable streaming writes to metadata table or not. With streaming writes, we execute writes to both data table and metadata table "
           + "in streaming manner rather than two disjoint writes. By default "
           + "streaming writes to metadata table is enabled for SPARK engine for incremental operations and disabled for all other cases.");
-  
+
   /**
    * Config key with boolean value that indicates whether record being written during MERGE INTO Spark SQL
    * operation are already prepped.
@@ -2874,8 +2874,8 @@ public class HoodieWriteConfig extends HoodieConfig {
         return true;
       case NON_BLOCKING_CONCURRENCY_CONTROL: {
         if (isMetadataTable && config.isMetadataStreamingWritesEnabled(tableConfig.getTableVersion())) {
-          // datatable NBCC is still evolving and might go through evolution compared to its current state.
-          // But incase of metadata table, when streaming writes are enabled, no two writes can conflict and hence.
+          // datatable NB-CC is still evolving and might go through evolution compared to its current state.
+          // But in case of metadata table, when streaming writes are enabled, no two writes can conflict and hence.
           return false;
         } else {
           // NB-CC don't need to resolve write conflict except bulk insert operation
@@ -2930,17 +2930,20 @@ public class HoodieWriteConfig extends HoodieConfig {
    * Whether to enable streaming writes to metadata table or not.
    * We have support for streaming writes only in SPARK engine (due to spark task retries intricacies) and for table version >= 8 due to the
    * pre-requisite of NBCC.
-   * To support streaming writes, we need NBCC support for metadata table, since there could an ingestion and a table service from data table
+   *
+   * <p>To support streaming writes, we need NBCC support for metadata table, since there could have an ingestion and a table service from data table
    * concurrently trying to write to metadata table.
-   * In Spark, when streaming writes are enabled, incremental operations from data table like insert, upsert, delete and table services
-   * (compaction and clustering) will take the streaming writes flow, while all other operations (like delete_partition, insert_overwrite, etc) go through
+   *
+   * <p>In Spark, when streaming writes are enabled, incremental operations from data table like insert, upsert, delete and table services
+   * (compaction and clustering) will take the streaming writes flow, while all other operations (like delete_partition, insert_overwrite, etc.) go through
    * legacy metadata write paths (since these might involve reading entire partition and not purely rely on incremental data written).
+   *
    * @param tableVersion {@link HoodieTableVersion} of interest.
    * @return true if streaming writes are enabled. false otherwise.
    */
   public boolean isMetadataStreamingWritesEnabled(HoodieTableVersion tableVersion) {
     if (tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
-      return getBoolean(METADATA_STREAMING_WRITES);
+      return metadataConfig.isStreamingWriteEnabled();
     } else {
       return false;
     }
@@ -3508,8 +3511,6 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     protected void setDefaults() {
       writeConfig.setDefaultValue(MARKERS_TYPE, getDefaultMarkersType(engineType));
-      // set default for streaming writes to metadata table.
-      writeConfig.setDefaultValue(METADATA_STREAMING_WRITES, getDefaultForStreamingWritesToMetadataTable(engineType));
       // Check for mandatory properties
       writeConfig.setDefaults(HoodieWriteConfig.class.getName());
       // Set default values of HoodieHBaseIndexConfig
@@ -3692,18 +3693,6 @@ public class HoodieWriteConfig extends HoodieConfig {
         case JAVA:
           // Timeline-server-based marker is not supported for Flink and Java engines
           return MarkerType.DIRECT.toString();
-        default:
-          throw new HoodieNotSupportedException("Unsupported engine " + engineType);
-      }
-    }
-
-    private boolean getDefaultForStreamingWritesToMetadataTable(EngineType engineType) {
-      switch (engineType) {
-        case SPARK:
-          return true;
-        case FLINK:
-        case JAVA:
-          return false;
         default:
           throw new HoodieNotSupportedException("Unsupported engine " + engineType);
       }

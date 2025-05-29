@@ -86,7 +86,7 @@ public class TestHoodieMetadataWriteUtils {
 
     // disable streaming writes to metadata table.
     Properties properties = new Properties();
-    properties.put(HoodieWriteConfig.METADATA_STREAMING_WRITES.key(), "false");
+    properties.put(HoodieMetadataConfig.STREAMING_WRITE_ENABLED.key(), "false");
     writeConfig = HoodieWriteConfig.newBuilder()
         .withPath("/tmp/base_path/.hoodie/metadata/")
         .withCleanConfig(HoodieCleanConfig.newBuilder()

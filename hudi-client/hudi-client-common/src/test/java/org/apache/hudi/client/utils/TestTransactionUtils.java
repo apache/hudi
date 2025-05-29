@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client.utils;
 
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -113,7 +114,7 @@ class TestTransactionUtils extends HoodieCommonTestHarness {
 
     // mimic all props for metadata table.
     Properties props = new Properties();
-    props.setProperty(HoodieWriteConfig.METADATA_STREAMING_WRITES.key(), "true");
+    props.setProperty(HoodieMetadataConfig.STREAMING_WRITE_ENABLED.key(), "true");
     props.setProperty(HoodieTableConfig.TYPE.key(), HoodieTableType.MERGE_ON_READ.name());
 
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
