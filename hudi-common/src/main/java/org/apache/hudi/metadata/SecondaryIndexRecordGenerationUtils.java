@@ -158,7 +158,7 @@ public class SecondaryIndexRecordGenerationUtils {
                                                                     boolean allowInflightInstants) throws Exception {
     Map<String, String> recordKeyToSecondaryKey = new HashMap<>();
     try (ClosableIterator<Pair<String, String>> recordKeyAndSecondaryIndexValueIter =
-             createSecondaryIndexGenerator(readerContext, metaClient, fileSlice, tableSchema, indexDefinition, instantTime, props, allowInflightInstants)) {
+             createSecondaryIndexRecordGenerator(readerContext, metaClient, fileSlice, tableSchema, indexDefinition, instantTime, props, allowInflightInstants)) {
       while (recordKeyAndSecondaryIndexValueIter.hasNext()) {
         Pair<String, String> recordKeyAndSecondaryIndexValue = recordKeyAndSecondaryIndexValueIter.next();
         recordKeyToSecondaryKey.put(recordKeyAndSecondaryIndexValue.getKey(), recordKeyAndSecondaryIndexValue.getValue());
@@ -198,20 +198,23 @@ public class SecondaryIndexRecordGenerationUtils {
       } else {
         readerSchema = tableSchema;
       }
-      ClosableIterator<Pair<String, String>> secondaryIndexGenerator = createSecondaryIndexGenerator(readerContextFactory.getContext(), metaClient, fileSlice, readerSchema, indexDefinition,
+      ClosableIterator<Pair<String, String>> secondaryIndexGenerator = createSecondaryIndexRecordGenerator(readerContextFactory.getContext(), metaClient, fileSlice, readerSchema, indexDefinition,
           metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().map(HoodieInstant::requestedTime).orElse(""), props, false);
       return new CloseableMappingIterator<>(secondaryIndexGenerator, pair -> createSecondaryIndexRecord(pair.getKey(), pair.getValue(), indexDefinition.getIndexName(), false));
     });
   }
 
-  private static <T> ClosableIterator<Pair<String, String>> createSecondaryIndexGenerator(HoodieReaderContext<T> readerContext,
-                                                                                          HoodieTableMetaClient metaClient,
-                                                                                          FileSlice fileSlice,
-                                                                                          Schema tableSchema,
-                                                                                          HoodieIndexDefinition indexDefinition,
-                                                                                          String instantTime,
-                                                                                          TypedProperties props,
-                                                                                          boolean allowInflightInstants) throws Exception {
+  /**
+   * Constructs an iterator with a pair of the record key and the secondary index value for each record in the file slice.
+   */
+  private static <T> ClosableIterator<Pair<String, String>> createSecondaryIndexRecordGenerator(HoodieReaderContext<T> readerContext,
+                                                                                                HoodieTableMetaClient metaClient,
+                                                                                                FileSlice fileSlice,
+                                                                                                Schema tableSchema,
+                                                                                                HoodieIndexDefinition indexDefinition,
+                                                                                                String instantTime,
+                                                                                                TypedProperties props,
+                                                                                                boolean allowInflightInstants) throws Exception {
     String secondaryKeyField = String.join(".", indexDefinition.getSourceFields());
     HoodieFileGroupReader<T> fileGroupReader = HoodieFileGroupReader.<T>newBuilder()
         .withReaderContext(readerContext)

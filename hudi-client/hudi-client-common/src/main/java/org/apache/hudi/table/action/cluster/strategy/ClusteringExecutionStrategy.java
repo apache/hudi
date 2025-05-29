@@ -24,7 +24,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.ReaderContextFactory;
-import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.ClusteringOperation;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -41,7 +41,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
-import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
@@ -115,18 +114,19 @@ public abstract class ClusteringExecutionStrategy<T, I, K, O> implements Seriali
    */
   protected FileSlice clusteringOperationToFileSlice(String basePath, ClusteringOperation clusteringOperation) {
     String partitionPath = clusteringOperation.getPartitionPath();
-    boolean baseFileExists = !StringUtils.isNullOrEmpty(clusteringOperation.getDataFilePath());
-    HoodieBaseFile baseFile = baseFileExists ? new HoodieBaseFile(new StoragePath(basePath, clusteringOperation.getDataFilePath()).toString()) : null;
-    List<HoodieLogFile> logFiles = clusteringOperation.getDeltaFilePaths().stream().map(p ->
-            new HoodieLogFile(new StoragePath(FSUtils.constructAbsolutePath(
-                basePath, partitionPath), p)))
-        .sorted(new HoodieLogFile.LogFileComparator())
-        .collect(Collectors.toList());
+    Option<HoodieBaseFile> baseFile;
+    if (!StringUtils.isNullOrEmpty(clusteringOperation.getDataFilePath())) {
+      BaseFile bootstrapFile = StringUtils.isNullOrEmpty(clusteringOperation.getBootstrapFilePath()) ? null : new BaseFile(clusteringOperation.getBootstrapFilePath());
+      baseFile = Option.of(new HoodieBaseFile(clusteringOperation.getDataFilePath(), bootstrapFile));
+    } else {
+      baseFile = Option.empty();
+    }
+    List<HoodieLogFile> logFiles = clusteringOperation.getDeltaFilePaths().stream().map(HoodieLogFile::new).collect(Collectors.toList());
 
-    ValidationUtils.checkState(baseFileExists || !logFiles.isEmpty(), "Both base file and log files are missing from this clustering operation " + clusteringOperation);
-    String baseInstantTime = baseFileExists ? baseFile.getCommitTime() : logFiles.get(0).getDeltaCommitTime();
+    ValidationUtils.checkState(!baseFile.isEmpty() || !logFiles.isEmpty(), () -> "Both base file and log files are missing from this clustering operation " + clusteringOperation);
+    String baseInstantTime = baseFile.map(HoodieBaseFile::getCommitTime).orElseGet(() -> logFiles.get(0).getDeltaCommitTime());
     FileSlice fileSlice = new FileSlice(partitionPath, baseInstantTime, clusteringOperation.getFileId());
-    fileSlice.setBaseFile(baseFile);
+    baseFile.ifPresent(fileSlice::setBaseFile);
     logFiles.forEach(fileSlice::addLogFile);
     return fileSlice;
   }
