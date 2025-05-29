@@ -2873,11 +2873,10 @@ public class HoodieWriteConfig extends HoodieConfig {
       case OPTIMISTIC_CONCURRENCY_CONTROL:
         return true;
       case NON_BLOCKING_CONCURRENCY_CONTROL: {
-        if (isMetadataTable && config.isStreamingWritesToMetadataEnabled(tableConfig.getTableVersion())) {
+        if (isMetadataTable && config.isMetadataStreamingWritesEnabled(tableConfig.getTableVersion())) {
           // datatable NBCC is still evolving and might go through evolution compared to its current state.
-          // But incase of metadata table, when streaming writes are enabled, we are leveraging MetadataTableNonBlockingWritesConflictResolutionStrategy to do conflict resolution
-          // still keeping future capabilities open to enhance MetadataTableNonBlockingWritesConflictResolutionStrategy.
-          return true;
+          // But incase of metadata table, when streaming writes are enabled, no two writes can conflict and hence.
+          return false;
         } else {
           // NB-CC don't need to resolve write conflict except bulk insert operation
           return WriteOperationType.BULK_INSERT == operationType;

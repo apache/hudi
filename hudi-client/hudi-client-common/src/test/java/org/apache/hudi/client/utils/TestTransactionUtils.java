@@ -18,7 +18,6 @@
 
 package org.apache.hudi.client.utils;
 
-import org.apache.hudi.client.transaction.MetadataTableNonBlockingWritesConflictResolutionStrategy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -30,7 +29,6 @@ import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.table.HoodieTable;
@@ -115,9 +113,8 @@ class TestTransactionUtils extends HoodieCommonTestHarness {
 
     // mimic all props for metadata table.
     Properties props = new Properties();
-    props.setProperty(HoodieWriteConfig.STREAMING_WRITES_TO_METADATA_TABLE.key(), "true");
+    props.setProperty(HoodieWriteConfig.METADATA_STREAMING_WRITES.key(), "true");
     props.setProperty(HoodieTableConfig.TYPE.key(), HoodieTableType.MERGE_ON_READ.name());
-    props.setProperty(HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME.key(), MetadataTableNonBlockingWritesConflictResolutionStrategy.class.getName());
 
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
         .withPath(metaClient.getBasePath().toString())

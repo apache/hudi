@@ -20,7 +20,6 @@ package org.apache.hudi.metadata;
 
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.client.FailOnFirstErrorWriteStatus;
-import org.apache.hudi.client.transaction.MetadataTableNonBlockingWritesConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
@@ -92,12 +91,11 @@ public class HoodieMetadataWriteUtils {
       HoodieWriteConfig writeConfig, HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
       HoodieTableVersion datatableVersion) {
     String tableName = writeConfig.getTableName() + METADATA_TABLE_NAME_SUFFIX;
-    boolean isStreamingWritesToMetadataEnabled = writeConfig.isStreamingWritesToMetadataEnabled(datatableVersion);
+    boolean isStreamingWritesToMetadataEnabled = writeConfig.isMetadataStreamingWritesEnabled(datatableVersion);
     WriteConcurrencyMode concurrencyMode = isStreamingWritesToMetadataEnabled
         ? WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL : WriteConcurrencyMode.SINGLE_WRITER;
     HoodieLockConfig lockConfig = isStreamingWritesToMetadataEnabled
-        ? HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class)
-        .withConflictResolutionStrategyClassName(MetadataTableNonBlockingWritesConflictResolutionStrategy.class.getName()).build() : HoodieLockConfig.newBuilder().build();
+        ? HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class).build() : HoodieLockConfig.newBuilder().build();
     // HUDI-9407 tracks adding support for separate lock configuration for MDT. Until then, all writes to MDT will happen within data table lock.
 
     if (isStreamingWritesToMetadataEnabled) {

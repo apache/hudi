@@ -18,7 +18,6 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.hudi.client.transaction.MetadataTableNonBlockingWritesConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
@@ -87,7 +86,7 @@ public class TestHoodieMetadataWriteUtils {
 
     // disable streaming writes to metadata table.
     Properties properties = new Properties();
-    properties.put(HoodieWriteConfig.STREAMING_WRITES_TO_METADATA_TABLE.key(), "false");
+    properties.put(HoodieWriteConfig.METADATA_STREAMING_WRITES.key(), "false");
     writeConfig = HoodieWriteConfig.newBuilder()
         .withPath("/tmp/base_path/.hoodie/metadata/")
         .withCleanConfig(HoodieCleanConfig.newBuilder()
@@ -108,7 +107,6 @@ public class TestHoodieMetadataWriteUtils {
     assertEquals(expectedWriteConcurrencyMode, metadataWriteConfig.getWriteConcurrencyMode());
     if (expectedLockProviderClass != null) {
       assertEquals(expectedLockProviderClass, metadataWriteConfig.getLockProviderClass());
-      assertEquals(MetadataTableNonBlockingWritesConflictResolutionStrategy.class.getName(), metadataWriteConfig.getWriteConflictResolutionStrategy().getClass().getName());
     } else {
       assertNull(metadataWriteConfig.getLockProviderClass());
     }
