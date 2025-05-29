@@ -38,6 +38,7 @@ import org.slf4j.LoggerFactory;
 import java.util.ConcurrentModificationException;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.function.Predicate;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
@@ -86,8 +87,7 @@ public class SimpleConcurrentFileWritesConflictResolutionStrategy
 
     Stream<HoodieInstant> clusteringAndReplaceCommitInstants = activeTimeline
         .filterPendingReplaceOrClusteringTimeline()
-        .filter(instant -> ClusteringUtils.isClusteringInstant(activeTimeline, instant, metaClient.getInstantGenerator())
-            || (!HoodieTimeline.CLUSTERING_ACTION.equals(instant.getAction()) && compareTimestamps(instant.requestedTime(), GREATER_THAN, currentInstant.requestedTime())))
+        .filter(instant -> isClusteringOrRecentlyRequestedInstant(activeTimeline, metaClient, currentInstant).test(instant))
         .getInstantsAsStream();
 
     return Stream.concat(completedCommitsInstantStream, clusteringAndReplaceCommitInstants);
@@ -108,18 +108,26 @@ public class SimpleConcurrentFileWritesConflictResolutionStrategy
   private Stream<HoodieInstant> getCandidateInstantsPreV8(HoodieTableMetaClient metaClient, HoodieInstant currentInstant,
                                                           Option<HoodieInstant> lastSuccessfulInstant) {
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
-    Stream<HoodieInstant> completedCommitsInstantStream = activeTimeline
-        .getCommitsTimeline()
-        .filterCompletedInstants()
-        .findInstantsAfter(lastSuccessfulInstant.isPresent() ? lastSuccessfulInstant.get().requestedTime() : HoodieTimeline.INIT_INSTANT_TS)
-        .getInstantsAsStream();
+    Stream<HoodieInstant> completedCommitsInstantStream = getCommitsCompletedSinceLastCommit(lastSuccessfulInstant, activeTimeline);
 
     Stream<HoodieInstant> compactionAndClusteringPendingTimeline = activeTimeline
         .filterPendingReplaceClusteringAndCompactionTimeline()
-        .filter(instant -> ClusteringUtils.isClusteringInstant(activeTimeline, instant, metaClient.getInstantGenerator())
-            || (!HoodieTimeline.CLUSTERING_ACTION.equals(instant.getAction()) && compareTimestamps(instant.requestedTime(), GREATER_THAN, currentInstant.requestedTime())))
+        .filter(instant -> isClusteringOrRecentlyRequestedInstant(activeTimeline, metaClient, currentInstant).test(instant))
         .getInstantsAsStream();
     return Stream.concat(completedCommitsInstantStream, compactionAndClusteringPendingTimeline);
+  }
+
+  private static Stream<HoodieInstant> getCommitsCompletedSinceLastCommit(Option<HoodieInstant> lastSuccessfulInstant, HoodieActiveTimeline activeTimeline) {
+    return activeTimeline
+        .getCommitsTimeline()
+        .filterCompletedInstants()
+        .findInstantsAfter(lastSuccessfulInstant.map(HoodieInstant::requestedTime).orElse(HoodieTimeline.INIT_INSTANT_TS))
+        .getInstantsAsStream();
+  }
+
+  private Predicate<HoodieInstant> isClusteringOrRecentlyRequestedInstant(HoodieActiveTimeline activeTimeline, HoodieTableMetaClient metaClient, HoodieInstant currentInstant) {
+    return instant -> ClusteringUtils.isClusteringInstant(activeTimeline, instant, metaClient.getInstantGenerator())
+        || (!HoodieTimeline.CLUSTERING_ACTION.equals(instant.getAction()) && compareTimestamps(instant.requestedTime(), GREATER_THAN, currentInstant.requestedTime()));
   }
 
   @Override
