@@ -161,11 +161,7 @@ public class TestHoodieFileSystemViews extends HoodieClientTestBase {
       // mimic failed write for last completed operation and retry few more operations.
       HoodieInstant lastInstant = metaClient.reloadActiveTimeline().getWriteTimeline().lastInstant().get();
       HoodieCommitMetadata commitMetadata = metaClient.getActiveTimeline().readCommitMetadata(lastInstant);
-      StoragePath instantPath = HoodieTestUtils
-          .getCompleteInstantPath(metaClient.getStorage(),
-              metaClient.getTimelinePath(),
-              lastInstant.requestedTime(), lastInstant.getAction(), HoodieTableVersion.fromVersionCode(writeVersion));
-      metaClient.getStorage().deleteFile(instantPath);
+      client.rollback(lastInstant.requestedTime());
 
       expectedFileSystemView.sync();
       actualFileSystemView.sync();
