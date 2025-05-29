@@ -788,3 +788,7 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 --- [2025-05-28 00:12:15] [release-v1.127.0] ---
 [ENG-27296][INTERNAL] Block hudi conf overrides in SparkSqlWriter (#1380)
 [AUDIT-1071]: Changelog for release-v1.126.0 (#1386)
+
+--- [2025-05-29 23:21:35] [release-v1.128.0] ---
+[ENG-27460][INTERNAL] Make prometheus reporter http server run on a daemon thread (#1388)
+[AUDIT-1071]: Changelog for release-v1.127.0 (#1387)
