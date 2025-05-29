@@ -129,6 +129,7 @@ class TestTransactionUtils extends HoodieCommonTestHarness {
     when(table.getMetaClient()).thenReturn(spyMetaClient);
     Option<HoodieCommitMetadata> actualResult = TransactionUtils.resolveWriteConflictIfAny(table, currentInstant, Option.of(currentMetadata), writeConfig,
             lastSuccessfulInstant, false, Collections.singleton(newInstantTime));
-    verify(spyMetaClient, times(1)).reloadActiveTimeline();
+    // since we bypass entire conflict resolution
+    verify(spyMetaClient, times(0)).reloadActiveTimeline();
   }
 }
