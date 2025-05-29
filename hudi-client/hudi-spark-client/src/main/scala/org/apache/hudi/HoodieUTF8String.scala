@@ -19,8 +19,11 @@ package org.apache.hudi
 
 import org.apache.spark.unsafe.types.UTF8String
 
-abstract class HoodieUTF8String(utf8String: UTF8String) extends Comparable[HoodieUTF8String] {
+import java.io.Serializable
+
+abstract class HoodieUTF8String(utf8String: UTF8String) extends Comparable[HoodieUTF8String] with Serializable {
 
   def getUtf8String: UTF8String = utf8String
 
+  override def toString: String = utf8String.toString
 }

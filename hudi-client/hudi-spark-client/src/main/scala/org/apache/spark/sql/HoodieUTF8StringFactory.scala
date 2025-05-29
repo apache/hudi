@@ -21,7 +21,7 @@ import org.apache.hudi.HoodieUTF8String
 
 import org.apache.spark.unsafe.types.UTF8String
 
-trait HoodieUTF8StringFactory {
+trait HoodieUTF8StringFactory extends Serializable {
 
   def wrapUTF8String(utf8String: UTF8String): HoodieUTF8String
 

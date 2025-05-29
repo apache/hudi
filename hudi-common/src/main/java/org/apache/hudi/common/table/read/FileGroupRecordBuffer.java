@@ -348,6 +348,8 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
           Comparable deleteOrderingVal = deleteRecord.getOrderingValue();
           // Checks the ordering value does not equal to 0
           // because we use 0 as the default value which means natural order
+          // TODO we need to wrap values before comparing, but how to do it here?
+          // FileGroupRecordBuffer is in hudi-common, but HoodieUTF8String APIs are in hudi-spark-client module
           boolean chooseExisting = !deleteOrderingVal.equals(0)
               && ReflectionUtils.isSameClass(existingOrderingVal, deleteOrderingVal)
               && existingOrderingVal.compareTo(deleteOrderingVal) > 0;
