@@ -116,7 +116,16 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
                                        HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                        HoodieEngineContext engineContext,
                                        Option<String> inflightInstantTimestamp) {
-    super(hadoopConf, writeConfig, failedWritesCleaningPolicy, engineContext, inflightInstantTimestamp);
+    this(hadoopConf, writeConfig, failedWritesCleaningPolicy, engineContext, inflightInstantTimestamp, false);
+  }
+
+  SparkHoodieBackedTableMetadataWriter(StorageConfiguration<?> hadoopConf,
+                                       HoodieWriteConfig writeConfig,
+                                       HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
+                                       HoodieEngineContext engineContext,
+                                       Option<String> inflightInstantTimestamp,
+                                       boolean streamingWrites) {
+    super(hadoopConf, writeConfig, failedWritesCleaningPolicy, engineContext, inflightInstantTimestamp, streamingWrites);
   }
 
   @Override
@@ -144,6 +153,37 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   @Override
   protected JavaRDD<HoodieRecord> convertHoodieDataToEngineSpecificData(HoodieData<HoodieRecord> records) {
     return HoodieJavaRDD.getJavaRDD(records);
+  }
+
+  @Override
+  protected HoodieData<WriteStatus> convertEngineSpecificDataToHoodieData(JavaRDD<WriteStatus> records) {
+    return HoodieJavaRDD.of(records);
+  }
+
+  @Override
+  public JavaRDD<WriteStatus> streamWriteToMetadataTable(Pair<List<Pair<String, String>>, HoodieData<HoodieRecord>> mdtRecordsHoodieData, String instantTime) {
+    JavaRDD<HoodieRecord> mdtRecords = HoodieJavaRDD.getJavaRDD(mdtRecordsHoodieData.getValue());
+    engineContext.setJobStatus(this.getClass().getSimpleName(), String.format("Upserting at %s into metadata table %s", instantTime, metadataWriteConfig.getTableName()));
+    // TODO: Introduce prepped upsert call after client APIs are added
+    JavaRDD<WriteStatus> metadataWriteStatusesSoFar = getWriteClient().upsertPreppedRecords(mdtRecords, instantTime, Option.of(mdtRecordsHoodieData.getKey()));
+    return metadataWriteStatusesSoFar;
+  }
+
+  /**
+   * Map a record key to a file group in partition of interest.
+   * <p>
+   * Note: For hashing, the algorithm is same as String.hashCode() but is being defined here as hashCode()
+   * implementation is not guaranteed by the JVM to be consistent across JVM versions and implementations.
+   *
+   * @return An integer hash of the given string
+   */
+  public static int mapPartitionKeyToSparkPartition(String partitionKey, int numPartitions) {
+    int h = 0;
+    for (int i = 0; i < partitionKey.length(); ++i) {
+      h = 31 * h + partitionKey.charAt(i);
+    }
+
+    return Math.abs(Math.abs(h) % numPartitions);
   }
 
   @Override
@@ -238,6 +278,10 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
       exprIndexRecords = exprIndexRecords.union(expressionIndexComputationMetadata.getPartitionStatRecordsOption().get());
     }
     return exprIndexRecords;
+  }
+
+  protected MetadataIndexGenerator getMetadataIndexGenerator() {
+    return new MetadataIndexGenerator();
   }
 
   @Override

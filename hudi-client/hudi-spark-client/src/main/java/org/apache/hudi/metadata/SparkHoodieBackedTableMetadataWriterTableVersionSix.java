@@ -94,6 +94,11 @@ public class SparkHoodieBackedTableMetadataWriterTableVersionSix extends HoodieB
   }
 
   @Override
+  MetadataIndexGenerator getMetadataIndexGenerator() {
+    throw new UnsupportedOperationException("Streaming writes are not supported for Spark table version six");
+  }
+
+  @Override
   protected void initRegistry() {
     if (metadataWriteConfig.isMetricsOn()) {
       Registry registry;
@@ -118,6 +123,11 @@ public class SparkHoodieBackedTableMetadataWriterTableVersionSix extends HoodieB
   @Override
   protected JavaRDD<HoodieRecord> convertHoodieDataToEngineSpecificData(HoodieData<HoodieRecord> records) {
     return HoodieJavaRDD.getJavaRDD(records);
+  }
+
+  @Override
+  protected HoodieData<WriteStatus> convertEngineSpecificDataToHoodieData(JavaRDD<WriteStatus> records) {
+    return null;
   }
 
   @Override
