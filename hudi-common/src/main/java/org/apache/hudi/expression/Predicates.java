@@ -293,6 +293,10 @@ public class Predicates {
       return value.toString() + " " + getOperator().symbol + " "
           + validValues.stream().map(Expression::toString).collect(Collectors.joining(",", "(", ")"));
     }
+
+    public List<Expression> getRightChildren() {
+      return validValues;
+    }
   }
 
   public static class IsNull implements Predicate {
@@ -444,6 +448,10 @@ public class Predicates {
         }
       }
       return false;
+    }
+
+    public List<Expression> getRightChildren() {
+      return right;
     }
   }
 }

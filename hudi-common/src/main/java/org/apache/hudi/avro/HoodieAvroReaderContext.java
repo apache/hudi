@@ -38,8 +38,10 @@ import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.expression.Expression;
 import org.apache.hudi.expression.Predicate;
+import org.apache.hudi.expression.Predicates;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
 import org.apache.hudi.io.storage.HoodieIOFactory;
@@ -96,15 +98,20 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       if (!(reader instanceof HoodieAvroHFileReaderImplBase)) {
         return reader.getIndexedRecordIterator(dataSchema, requiredSchema);
       } else {
-        // For HFile reader, only two predicates are supported: IN and StringStartsWithAny.
+        // Two predicates are supported currently: IN and StringStartsWithAny.
         HoodieAvroHFileReaderImplBase hfileReader = (HoodieAvroHFileReaderImplBase) reader;
-        List<Expression> children = keyFilterOpt.get().getChildren();
-        List<String> keysOrPrefixes = children.subList(1, children.size())
-            .stream().map(e -> (String) e.eval(null)).collect(Collectors.toList());
-        if (keyFilterOpt.get().getOperator().equals(Expression.Operator.IN)) { // With keys.
+        if (keyFilterOpt.get().getOperator().equals(Expression.Operator.IN)) {
+          List<Expression> children = ((Predicates.In) keyFilterOpt.get()).getRightChildren();
+          List<String> keysOrPrefixes = children.stream()
+              .map(e -> (String) e.eval(null)).collect(Collectors.toList());
           return hfileReader.getIndexedRecordsByKeysIterator(keysOrPrefixes, requiredSchema);
-        } else {  // With key prefixes.
+        } else if (keyFilterOpt.get().getOperator().equals(Expression.Operator.STARTS_WITH)) {
+          List<Expression> children = ((Predicates.StringStartsWithAny) keyFilterOpt.get()).getRightChildren();
+          List<String> keysOrPrefixes = children.stream()
+              .map(e -> (String) e.eval(null)).collect(Collectors.toList());
           return hfileReader.getIndexedRecordsByKeyPrefixIterator(keysOrPrefixes, requiredSchema);
+        } else {
+          throw new HoodieNotSupportedException("Unrecognized predicate: " + keyFilterOpt.get());
         }
       }
     }
