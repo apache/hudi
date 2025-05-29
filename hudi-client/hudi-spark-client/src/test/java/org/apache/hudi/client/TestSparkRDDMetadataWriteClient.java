@@ -33,6 +33,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -99,7 +100,8 @@ public class TestSparkRDDMetadataWriteClient extends HoodieClientTestBase {
     initDataTableWithACommit(hoodieWriteConfig);
 
     // fetch metadata file slice info
-    HoodieWriteConfig mdtWriteConfig = HoodieMetadataWriteUtils.createMetadataWriteConfig(hoodieWriteConfig, HoodieFailedWritesCleaningPolicy.EAGER);
+    HoodieWriteConfig mdtWriteConfig = HoodieMetadataWriteUtils.createMetadataWriteConfig(hoodieWriteConfig, HoodieFailedWritesCleaningPolicy.EAGER,
+        HoodieTableVersion.EIGHT);
     Map<String, List<String>> mdtPartitionsFileIdMapping = new HashMap<>();
     List<HoodieFileGroupId> nonFilesPartitionFileGroupIdList = new ArrayList<>();
     List<HoodieFileGroupId> filesPartitionFileGroupIdList = new ArrayList<>();
