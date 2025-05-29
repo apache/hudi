@@ -2223,36 +2223,34 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   }
 
   test("Test Hudi should not record empty preCombineKey in hoodie.properties") {
-    withSQLConf("hoodie.datasource.write.operation" -> "insert") {
-      withTempDir { tmp =>
-        val tableName = generateTableName
-        spark.sql(
-          s"""
-             |create table $tableName (
-             |  id int,
-             |  name string,
-             |  price double
-             |) using hudi
-             |tblproperties(primaryKey = 'id')
-             |location '${tmp.getCanonicalPath}/$tableName'
-        """.stripMargin)
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double
+           |) using hudi
+           |tblproperties(primaryKey = 'id')
+           |location '${tmp.getCanonicalPath}/$tableName'
+      """.stripMargin)
 
-        spark.sql(s"insert into $tableName select 1, 'name1', 11")
-        checkAnswer(s"select id, name, price from $tableName")(
-          Seq(1, "name1", 11.0)
-        )
+      spark.sql(s"insert into $tableName select 1, 'name1', 11")
+      checkAnswer(s"select id, name, price from $tableName")(
+        Seq(1, "name1", 11.0)
+      )
 
-        spark.sql(s"insert overwrite table $tableName select 2, 'name2', 12")
-        checkAnswer(s"select id, name, price from $tableName")(
-          Seq(2, "name2", 12.0)
-        )
+      spark.sql(s"insert overwrite table $tableName select 2, 'name2', 12")
+      checkAnswer(s"select id, name, price from $tableName")(
+        Seq(2, "name2", 12.0)
+      )
 
-        spark.sql(s"insert into $tableName select 3, 'name3', 13")
-        checkAnswer(s"select id, name, price from $tableName")(
-          Seq(2, "name2", 12.0),
-          Seq(3, "name3", 13.0)
-        )
-      }
+      spark.sql(s"insert into $tableName select 3, 'name3', 13")
+      checkAnswer(s"select id, name, price from $tableName")(
+        Seq(2, "name2", 12.0),
+        Seq(3, "name3", 13.0)
+      )
     }
   }
 

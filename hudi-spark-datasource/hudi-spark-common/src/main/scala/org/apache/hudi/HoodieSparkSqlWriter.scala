@@ -237,7 +237,7 @@ class HoodieSparkSqlWriterInternal {
 
     // Validate datasource and tableconfig keygen are the same
     validateKeyGeneratorConfig(originKeyGeneratorClassName, tableConfig)
-    validateTableConfig(sqlContext.sparkSession, optParams, tableConfig, mode == SaveMode.Overwrite)
+    validateTableConfig(sqlContext.sparkSession, optParams, tableConfig)
 
     asyncCompactionTriggerFnDefined = streamingWritesParamsOpt.map(_.asyncCompactionTriggerFn.isDefined).orElse(Some(false)).get
     asyncClusteringTriggerFnDefined = streamingWritesParamsOpt.map(_.asyncClusteringTriggerFn.isDefined).orElse(Some(false)).get
@@ -704,7 +704,7 @@ class HoodieSparkSqlWriterInternal {
     tableExists = fs.exists(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME))
     // fetch table config for an already existing table and SaveMode is not Overwrite.
     val tableConfig = getHoodieTableConfig(sparkContext, path, mode, hoodieTableConfigOpt)
-    validateTableConfig(sqlContext.sparkSession, optParams, tableConfig, mode == SaveMode.Overwrite)
+    validateTableConfig(sqlContext.sparkSession, optParams, tableConfig)
 
     val (parameters, hoodieConfig) = mergeParamsAndGetHoodieConfig(optParams, tableConfig, mode, streamingWritesParamsOpt.isDefined)
     val tableName = hoodieConfig.getStringOrThrow(HoodieWriteConfig.TBL_NAME, s"'${HoodieWriteConfig.TBL_NAME.key}' must be set.")
@@ -878,13 +878,6 @@ class HoodieSparkSqlWriterInternal {
     if (!WriteOperationType.isDelete(operation)) {
       if (mode == SaveMode.ErrorIfExists && tableExists) {
         throw new HoodieException(s"hoodie table at $tablePath already exists.")
-      } else if (mode == SaveMode.Overwrite && tableExists && operation != WriteOperationType.INSERT_OVERWRITE_TABLE) {
-        // When user set operation as INSERT_OVERWRITE_TABLE,
-        // overwrite will use INSERT_OVERWRITE_TABLE operator in doWriteOperation
-        // TODO HUDI-6286 should not delete old data if using `Overwrite` mode
-        log.warn(s"hoodie table at $tablePath already exists. Deleting existing data & overwriting with new data.")
-        fs.delete(tablePath, true)
-        tableExists = false
       }
     } else {
       // Delete Operation only supports Append mode

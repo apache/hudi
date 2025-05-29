@@ -211,86 +211,77 @@ object HoodieWriterUtils {
     }
   }
 
-  def validateTableConfig(spark: SparkSession, params: Map[String, String],
-                          tableConfig: HoodieConfig): Unit = {
-    validateTableConfig(spark, params, tableConfig, false)
-  }
-
   /**
    * Detects conflicts between new parameters and existing table configurations
    */
-  def validateTableConfig(spark: SparkSession, params: Map[String, String],
-                          tableConfig: HoodieConfig, isOverWriteMode: Boolean): Unit = {
-    // If Overwrite is set as save mode, we don't need to do table config validation.
-    if (!isOverWriteMode) {
-      val resolver = spark.sessionState.conf.resolver
-      val diffConfigs = StringBuilder.newBuilder
-      params.foreach { case (key, value) =>
-        if (!shouldIgnoreConfig(key, value, params, tableConfig)) {
-          val existingValue = getStringFromTableConfigWithAlternatives(tableConfig, key)
-          if (null != existingValue && !resolver(existingValue, value)) {
-            diffConfigs.append(s"$key:\t$value\t${tableConfig.getString(key)}\n")
-          }
+  def validateTableConfig(spark: SparkSession, params: Map[String, String], tableConfig: HoodieConfig): Unit = {
+    val resolver = spark.sessionState.conf.resolver
+    val diffConfigs = StringBuilder.newBuilder
+    params.foreach { case (key, value) =>
+      if (!shouldIgnoreConfig(key, value, params, tableConfig)) {
+        val existingValue = getStringFromTableConfigWithAlternatives(tableConfig, key)
+        if (null != existingValue && !resolver(existingValue, value)) {
+          diffConfigs.append(s"$key:\t$value\t${tableConfig.getString(key)}\n")
+        }
+      }
+    }
+
+    if (null != tableConfig) {
+      val datasourceRecordKey = params.getOrElse(RECORDKEY_FIELD.key(), null)
+      val tableConfigRecordKey = tableConfig.getString(HoodieTableConfig.RECORDKEY_FIELDS)
+      if (tableConfig.contains(HoodieTableConfig.VERSION) && tableConfig.getInt(HoodieTableConfig.VERSION) > 1 ) {
+        if ((null != datasourceRecordKey && null != tableConfigRecordKey
+          && datasourceRecordKey != tableConfigRecordKey) || (null != datasourceRecordKey && datasourceRecordKey.nonEmpty
+          && tableConfigRecordKey == null)) {
+          // if both are non null, they should match.
+          // if incoming record key is non empty, table config should also be non empty.
+          diffConfigs.append(s"RecordKey:\t$datasourceRecordKey\t$tableConfigRecordKey\n")
         }
       }
 
-      if (null != tableConfig) {
-        val datasourceRecordKey = params.getOrElse(RECORDKEY_FIELD.key(), null)
-        val tableConfigRecordKey = tableConfig.getString(HoodieTableConfig.RECORDKEY_FIELDS)
-        if (tableConfig.contains(HoodieTableConfig.VERSION) && tableConfig.getInt(HoodieTableConfig.VERSION) > 1 ) {
-          if ((null != datasourceRecordKey && null != tableConfigRecordKey
-            && datasourceRecordKey != tableConfigRecordKey) || (null != datasourceRecordKey && datasourceRecordKey.nonEmpty
-            && tableConfigRecordKey == null)) {
-            // if both are non null, they should match.
-            // if incoming record key is non empty, table config should also be non empty.
-            diffConfigs.append(s"RecordKey:\t$datasourceRecordKey\t$tableConfigRecordKey\n")
-          }
-        }
-
-        val datasourcePreCombineKey = params.getOrElse(PRECOMBINE_FIELD.key(), null)
-        val tableConfigPreCombineKey = tableConfig.getString(HoodieTableConfig.PRECOMBINE_FIELD)
-        if (null != datasourcePreCombineKey && null != tableConfigPreCombineKey && datasourcePreCombineKey != tableConfigPreCombineKey) {
-          diffConfigs.append(s"PreCombineKey:\t$datasourcePreCombineKey\t$tableConfigPreCombineKey\n")
-        }
-
-        val datasourceKeyGen = getOriginKeyGenerator(params)
-        val tableConfigKeyGen = KeyGeneratorType.getKeyGeneratorClassName(tableConfig)
-        if (null != datasourceKeyGen && null != tableConfigKeyGen
-          && datasourceKeyGen != tableConfigKeyGen) {
-          diffConfigs.append(s"KeyGenerator:\t$datasourceKeyGen\t$tableConfigKeyGen\n")
-        }
-
-        // Please note that the validation of partition path fields needs the key generator class
-        // for the table, since the custom key generator expects a different format of
-        // the value of the write config "hoodie.datasource.write.partitionpath.field"
-        // e.g., "col:simple,ts:timestamp", whereas the table config "hoodie.table.partition.fields"
-        // in hoodie.properties stores "col,ts".
-        // The "params" here may only contain the write config of partition path field,
-        // so we need to pass in the validated key generator class name.
-        val validatedKeyGenClassName = if (tableConfigKeyGen != null) {
-          Option(tableConfigKeyGen)
-        } else if (datasourceKeyGen != null) {
-          Option(datasourceKeyGen)
-        } else {
-          None
-        }
-        val datasourcePartitionFields = params.getOrElse(PARTITIONPATH_FIELD.key(), null)
-        val currentPartitionFields = if (datasourcePartitionFields == null) {
-          null
-        } else {
-          SparkKeyGenUtils.getPartitionColumns(validatedKeyGenClassName, TypedProperties.fromMap(params.asJava))
-        }
-        val tableConfigPartitionFields = HoodieTableConfig.getPartitionFieldProp(tableConfig).orElse(null)
-        if (null != datasourcePartitionFields && null != tableConfigPartitionFields
-          && currentPartitionFields != tableConfigPartitionFields) {
-          diffConfigs.append(s"PartitionPath:\t$currentPartitionFields\t$tableConfigPartitionFields\n")
-        }
+      val datasourcePreCombineKey = params.getOrElse(PRECOMBINE_FIELD.key(), null)
+      val tableConfigPreCombineKey = tableConfig.getString(HoodieTableConfig.PRECOMBINE_FIELD)
+      if (null != datasourcePreCombineKey && null != tableConfigPreCombineKey && datasourcePreCombineKey != tableConfigPreCombineKey) {
+        diffConfigs.append(s"PreCombineKey:\t$datasourcePreCombineKey\t$tableConfigPreCombineKey\n")
       }
 
-      if (diffConfigs.nonEmpty) {
-        diffConfigs.insert(0, "\nConfig conflict(key\tcurrent value\texisting value):\n")
-        throw new HoodieException(diffConfigs.toString.trim)
+      val datasourceKeyGen = getOriginKeyGenerator(params)
+      val tableConfigKeyGen = KeyGeneratorType.getKeyGeneratorClassName(tableConfig)
+      if (null != datasourceKeyGen && null != tableConfigKeyGen
+        && datasourceKeyGen != tableConfigKeyGen) {
+        diffConfigs.append(s"KeyGenerator:\t$datasourceKeyGen\t$tableConfigKeyGen\n")
       }
+
+      // Please note that the validation of partition path fields needs the key generator class
+      // for the table, since the custom key generator expects a different format of
+      // the value of the write config "hoodie.datasource.write.partitionpath.field"
+      // e.g., "col:simple,ts:timestamp", whereas the table config "hoodie.table.partition.fields"
+      // in hoodie.properties stores "col,ts".
+      // The "params" here may only contain the write config of partition path field,
+      // so we need to pass in the validated key generator class name.
+      val validatedKeyGenClassName = if (tableConfigKeyGen != null) {
+        Option(tableConfigKeyGen)
+      } else if (datasourceKeyGen != null) {
+        Option(datasourceKeyGen)
+      } else {
+        None
+      }
+      val datasourcePartitionFields = params.getOrElse(PARTITIONPATH_FIELD.key(), null)
+      val currentPartitionFields = if (datasourcePartitionFields == null) {
+        null
+      } else {
+        SparkKeyGenUtils.getPartitionColumns(validatedKeyGenClassName, TypedProperties.fromMap(params.asJava))
+      }
+      val tableConfigPartitionFields = HoodieTableConfig.getPartitionFieldProp(tableConfig).orElse(null)
+      if (null != datasourcePartitionFields && null != tableConfigPartitionFields
+        && currentPartitionFields != tableConfigPartitionFields) {
+        diffConfigs.append(s"PartitionPath:\t$currentPartitionFields\t$tableConfigPartitionFields\n")
+      }
+    }
+
+    if (diffConfigs.nonEmpty) {
+      diffConfigs.insert(0, "\nConfig conflict(key\tcurrent value\texisting value):\n")
+      throw new HoodieException(diffConfigs.toString.trim)
     }
 
     // Check schema evolution for bootstrap table.
