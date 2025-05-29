@@ -51,7 +51,7 @@ public class TestWriteClient extends HoodieSparkClientTestBase {
 
   @Test
   public void testInertsWithEmptyCommitsHavingWriterSchemaAsNull() throws Exception {
-    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder().withAutoCommit(false);
+    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder();
     addConfigsForPopulateMetaFields(cfgBuilder, false);
     // Re-init meta client with write config props.
     metaClient = HoodieTestUtils.init(basePath, HoodieTableType.MERGE_ON_READ, cfgBuilder.build().getProps());
@@ -64,7 +64,7 @@ public class TestWriteClient extends HoodieSparkClientTestBase {
       assertTrue(client.commit(firstCommit, result), "Commit should succeed");
 
       // Re-init client with null writer schema.
-      cfgBuilder = getConfigBuilder((String) null).withAutoCommit(false);
+      cfgBuilder = getConfigBuilder((String) null);
       addConfigsForPopulateMetaFields(cfgBuilder, false);
       client = getHoodieWriteClient(cfgBuilder.build());
       String secondCommit = "002";

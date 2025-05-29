@@ -61,12 +61,12 @@ class TestCleanPlanActionExecutor {
 
     // signal that last clean commit is just an empty file
     HoodieInstant lastCompletedInstant = new HoodieInstant(HoodieInstant.State.COMPLETED, "clean", "001", InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
-    HoodieInstant lastInflightInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, "clean", "001", InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
+    HoodieInstant lastRequestInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, "clean", "001", InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
     mockEmptyLastCompletedClean(table, lastCompletedInstant, activeTimeline);
 
     HoodieCleanerPlan cleanerPlan;
     if (isEmptyPlan) {
-      when(activeTimeline.readCleanerPlan(lastInflightInstant)).thenReturn(HoodieCleanerPlan.class.newInstance());
+      when(activeTimeline.readCleanerPlan(lastRequestInstant)).thenReturn(HoodieCleanerPlan.class.newInstance());
       cleanerPlan = new HoodieCleanerPlan();
     } else {
       cleanerPlan = HoodieCleanerPlan.newBuilder()
@@ -75,7 +75,7 @@ class TestCleanPlanActionExecutor {
           .setPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name())
           .setVersion(TimelineLayoutVersion.CURR_VERSION)
           .build();
-      when(activeTimeline.readCleanerPlan(lastInflightInstant)).thenReturn(cleanerPlan);
+      when(activeTimeline.readCleanerPlan(lastRequestInstant)).thenReturn(cleanerPlan);
     }
 
     HoodieEngineContext engineContext = new HoodieLocalEngineContext(new HadoopStorageConfiguration(false));
@@ -96,10 +96,10 @@ class TestCleanPlanActionExecutor {
 
     // signal that last clean commit is just an empty file
     HoodieInstant lastCompletedInstant = new HoodieInstant(HoodieInstant.State.COMPLETED, "clean", "001", InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
-    HoodieInstant lastInflightInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, "clean", "001", InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
+    HoodieInstant lastRequestInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, "clean", "001", InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
     mockEmptyLastCompletedClean(table, lastCompletedInstant, activeTimeline);
 
-    when(activeTimeline.readCleanerPlan(lastInflightInstant)).thenThrow(new HoodieIOException("failed to read"));
+    when(activeTimeline.readCleanerPlan(lastRequestInstant)).thenThrow(new HoodieIOException("failed to read"));
 
     HoodieEngineContext engineContext = new HoodieLocalEngineContext(new HadoopStorageConfiguration(false));
     CleanPlanActionExecutor<?, ?, ?, ?> executor = new CleanPlanActionExecutor<>(engineContext, HoodieWriteConfig.newBuilder().withPath("file://tmp").build(), table, "002", Option.empty());

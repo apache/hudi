@@ -43,7 +43,6 @@ import org.apache.parquet.hadoop.util.ConfigurationUtil;
 import org.apache.parquet.hadoop.util.SerializationUtil;
 
 import java.io.IOException;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -64,7 +63,8 @@ public abstract class RecordIterators {
       InternalSchemaManager internalSchemaManager,
       DataType dataType,
       Schema requestedSchema,
-      StoragePath path) throws IOException {
+      StoragePath path,
+      List<Predicate> predicates) throws IOException {
     List<String> fieldNames = ((RowType) dataType.getLogicalType()).getFieldNames();
     List<DataType> fieldTypes = dataType.getChildren();
     int[] selectedFields = requestedSchema.getFields().stream().map(Schema.Field::name)
@@ -87,7 +87,7 @@ public abstract class RecordIterators {
         new org.apache.flink.core.fs.Path(path.toUri()),
         0L,
         Long.MAX_VALUE,
-        Collections.emptyList());
+        predicates);
   }
 
   public static ClosableIterator<RowData> getParquetRecordIterator(

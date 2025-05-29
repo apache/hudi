@@ -26,6 +26,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
@@ -50,8 +51,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.TIMELINE_FACTORY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -124,14 +127,15 @@ public class TestMultiFS extends HoodieSparkClientTestHarness {
 
 
     try (SparkRDDWriteClient hdfsWriteClient = getHoodieWriteClient(cfg);
-         SparkRDDWriteClient localWriteClient = getHoodieWriteClient(localConfig)) {
+         SparkRDDWriteClient localWriteClient = getHoodieWriteClient(localConfig, false)) {
 
       // Write generated data to hdfs (only inserts)
       String readCommitTime = hdfsWriteClient.startCommit();
       LOG.info("Starting commit " + readCommitTime);
       List<HoodieRecord> records = dataGen.generateInserts(readCommitTime, 10);
       JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 2);
-      hdfsWriteClient.upsert(writeRecords, readCommitTime);
+      JavaRDD<WriteStatus> writeStatusJavaRDD = hdfsWriteClient.upsert(writeRecords, readCommitTime);
+      hdfsWriteClient.commit(readCommitTime, writeStatusJavaRDD, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
 
       // Read from hdfs
       FileSystem fs = HadoopFSUtils.getFs(dfsBasePath, HoodieTestUtils.getDefaultStorageConf());
@@ -152,7 +156,8 @@ public class TestMultiFS extends HoodieSparkClientTestHarness {
       List<HoodieRecord> localRecords = dataGen.generateInserts(writeCommitTime, 10);
       JavaRDD<HoodieRecord> localWriteRecords = jsc.parallelize(localRecords, 2);
       LOG.info("Writing to path: " + tablePath);
-      localWriteClient.upsert(localWriteRecords, writeCommitTime);
+      writeStatusJavaRDD = localWriteClient.upsert(localWriteRecords, writeCommitTime);
+      localWriteClient.commit(writeCommitTime, writeStatusJavaRDD, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
 
       LOG.info("Reading from path: " + tablePath);
       fs = HadoopFSUtils.getFs(tablePath, HoodieTestUtils.getDefaultStorageConf());

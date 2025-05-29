@@ -138,7 +138,8 @@ public class TestPositionBasedFileGroupRecordBuffer extends TestHoodieFileGroupR
         baseFileInstantTime,
         props,
         readStats,
-        Option.of("timestamp"));
+        Option.of("timestamp"),
+        false);
   }
 
   public Map<HoodieLogBlock.HeaderMetadataType, String> getHeader(boolean shouldWriteRecordPositions,

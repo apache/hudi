@@ -158,14 +158,6 @@ public class FlinkWriteClients {
       Configuration conf,
       boolean enableEmbeddedTimelineService,
       boolean loadFsViewStorageConfig) {
-    return getHoodieClientConfig(conf, enableEmbeddedTimelineService, loadFsViewStorageConfig, false);
-  }
-
-  public static HoodieWriteConfig getHoodieClientConfig(
-      Configuration conf,
-      boolean enableEmbeddedTimelineService,
-      boolean loadFsViewStorageConfig,
-      boolean forScanner) {
     HoodieWriteConfig.Builder builder =
         HoodieWriteConfig.newBuilder()
             .withEngineType(EngineType.FLINK)
@@ -235,19 +227,15 @@ public class FlinkWriteClients {
             .withPayloadConfig(getPayloadConfig(conf))
             .withEmbeddedTimelineServerEnabled(enableEmbeddedTimelineService)
             .withEmbeddedTimelineServerReuseEnabled(true) // make write client embedded timeline service singleton
-            .withAutoCommit(false)
             .withAllowOperationMetadataField(conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED))
             .withProps(flinkConf2TypedProperties(conf))
             .withSchema(getSourceSchema(conf).toString());
 
-    // currently only set there merge configurations for writing, for reader, will support in HUDI-9146
-    if (!forScanner) {
-      // <merge_mode, payload_class, merge_strategy_id>
-      Triple<RecordMergeMode, String, String> mergingBehavior = StreamerUtil.inferMergingBehavior(conf);
-      builder.withRecordMergeStrategyId(mergingBehavior.getRight())
-          .withRecordMergeMode(mergingBehavior.getLeft())
-          .withRecordMergeImplClasses(StreamerUtil.getMergerClasses(conf, mergingBehavior.getLeft(), mergingBehavior.getMiddle()));
-    }
+    // <merge_mode, payload_class, merge_strategy_id>
+    Triple<RecordMergeMode, String, String> mergingBehavior = StreamerUtil.inferMergingBehavior(conf);
+    builder.withRecordMergeStrategyId(mergingBehavior.getRight())
+        .withRecordMergeMode(mergingBehavior.getLeft())
+        .withRecordMergeImplClasses(StreamerUtil.getMergerClasses(conf, mergingBehavior.getLeft(), mergingBehavior.getMiddle()));
 
     Option<HoodieLockConfig> lockConfig = getLockConfig(conf);
     if (lockConfig.isPresent()) {
