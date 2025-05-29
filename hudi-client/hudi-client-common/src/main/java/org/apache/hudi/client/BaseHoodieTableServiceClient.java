@@ -1141,15 +1141,15 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
         rollbackPlanOption = Option.of(pendingRollbackInfo.get().getRollbackPlan());
         rollbackInstantTime = pendingRollbackInfo.get().getRollbackInstant().requestedTime();
       } else {
+        if (commitInstantOpt.isEmpty()) {
+          LOG.warn("Cannot find instant {} in the timeline of table {} for rollback", commitInstantTime, config.getBasePath());
+          return false;
+        }
         if (!skipLocking) {
           txnManager.beginTransaction(Option.empty(), Option.empty());
         }
         try {
           rollbackInstantTime = suppliedRollbackInstantTime.orElseGet(() -> createNewInstantTime(false));
-          if (commitInstantOpt.isEmpty()) {
-            LOG.warn("Cannot find instant {} in the timeline of table {} for rollback", commitInstantTime, config.getBasePath());
-            return false;
-          }
           rollbackPlanOption = table.scheduleRollback(context, rollbackInstantTime, commitInstantOpt.get(), false, config.shouldRollbackUsingMarkers(), false);
         } finally {
           if (!skipLocking) {
