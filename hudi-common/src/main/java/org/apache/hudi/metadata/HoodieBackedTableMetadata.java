@@ -81,6 +81,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED;
+import static org.apache.hudi.common.config.HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE;
+import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE;
+import static org.apache.hudi.common.config.HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FULL_SCAN_LOG_FILES;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.KEY_FIELD_NAME;
@@ -222,7 +226,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
   private Iterator<HoodieRecord<HoodieMetadataPayload>> getByKeyPrefixes(FileSlice fileSlice,
                                                                          List<String> sortedKeyPrefixes,
-                                                                         String partitionName) {
+                                                                         String partitionName) throws IOException {
     Option<HoodieInstant> latestMetadataInstant =
         metadataMetaClient.getActiveTimeline().filterCompletedInstants().lastInstant();
     String latestMetadataInstantTime =
@@ -239,32 +243,28 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         metadataMetaClient.getTableConfig(),
         Option.of(instantRange),
         Option.of(transformKeyPrefixesToPredicate(sortedKeyPrefixes)));
-    try (HoodieFileGroupReader<IndexedRecord> fileGroupReader = HoodieFileGroupReader.<IndexedRecord>newBuilder()
+    HoodieFileGroupReader<IndexedRecord> fileGroupReader = HoodieFileGroupReader.<IndexedRecord>newBuilder()
         .withReaderContext(readerContext)
         .withHoodieTableMetaClient(metadataMetaClient)
         .withLatestCommitTime(latestMetadataInstantTime)
         .withFileSlice(fileSlice)
         .withDataSchema(schema)
         .withRequestedSchema(schema)
-        .withProps(new TypedProperties())
+        .withProps(buildFileGroupReaderProperties(metadataConfig))
         .withStart(0)
         .withLength(Long.MAX_VALUE)
         .withShouldUseRecordPosition(false)
-        .build()) {
-      ClosableIterator<IndexedRecord> it = fileGroupReader.getClosableIterator();
-      return new CloseableMappingIterator<>(
-          it,
-          metadataRecord -> {
-            HoodieMetadataPayload payload = new HoodieMetadataPayload(Option.of((GenericRecord) metadataRecord));
-            String rowKey = payload.key != null
-                ? payload.key : ((GenericRecord) metadataRecord).get(KEY_FIELD_NAME).toString();
-            HoodieKey key = new HoodieKey(rowKey, partitionName);
-            return new HoodieAvroRecord<>(key, payload);
-          });
-    } catch (IOException e) {
-      throw new HoodieIOException(
-          "Error merging records from metadata table for " + sortedKeyPrefixes.size() + " key prefixes : ", e);
-    }
+        .build();
+    ClosableIterator<IndexedRecord> it = fileGroupReader.getClosableIterator();
+    return new CloseableMappingIterator<>(
+        it,
+        metadataRecord -> {
+          HoodieMetadataPayload payload = new HoodieMetadataPayload(Option.of((GenericRecord) metadataRecord));
+          String rowKey = payload.key != null
+              ? payload.key : ((GenericRecord) metadataRecord).get(KEY_FIELD_NAME).toString();
+          HoodieKey key = new HoodieKey(rowKey, partitionName);
+          return new HoodieAvroRecord<>(key, payload);
+        });
   }
 
   private Predicate transformKeysToPredicate(List<String> keys) {
@@ -355,7 +355,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         .withFileSlice(fileSlice)
         .withDataSchema(schema)
         .withRequestedSchema(schema)
-        .withProps(new TypedProperties())
+        .withProps(buildFileGroupReaderProperties(metadataConfig))
         .withStart(0)
         .withLength(Long.MAX_VALUE)
         .withShouldUseRecordPosition(false)
@@ -596,5 +596,27 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         .collectAsList()
         .stream()
         .collect(Collectors.groupingBy(Pair::getKey, Collectors.mapping(Pair::getValue, Collectors.toSet())));
+  }
+
+  /**
+   * Derive necessary properties for FG reader.
+   */
+  TypedProperties buildFileGroupReaderProperties(HoodieMetadataConfig metadataConfig) {
+    HoodieCommonConfig commonConfig = HoodieCommonConfig.newBuilder()
+        .fromProperties(metadataConfig.getProps()).build();
+    TypedProperties props = TypedProperties.copy(metadataConfig.getProps());
+    props.setProperty(
+        MAX_MEMORY_FOR_MERGE.key(),
+        Long.toString(metadataConfig.getMaxReaderMemory()));
+    props.setProperty(
+        SPILLABLE_MAP_BASE_PATH.key(),
+        metadataConfig.getSplliableMapDir());
+    props.setProperty(
+        SPILLABLE_DISK_MAP_TYPE.key(),
+        commonConfig.getSpillableDiskMapType().name());
+    props.setProperty(
+        DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(),
+        Boolean.toString(commonConfig.isBitCaskDiskMapCompressionEnabled()));
+    return props;
   }
 }
