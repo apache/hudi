@@ -19,6 +19,7 @@ package org.apache.hudi
 
 import org.apache.hudi.HoodieSparkUtils.injectSQLConf
 import org.apache.hudi.client.WriteStatus
+import org.apache.hudi.client.model.HoodieInternalRow
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.data.HoodieData
 import org.apache.hudi.common.engine.TaskContextSupplier
@@ -56,8 +57,6 @@ object HoodieDatasetBulkInsertHelper
   extends ParallelismHelper[DataFrame](toJavaSerializableFunctionUnchecked(df => getNumPartitions(df)))
     with Logging
     with SparkAdapterSupport {
-
-  private val hoodieUTF8StringFactory = sparkAdapter.getHoodieUTF8StringFactory
 
   /**
    * Prepares [[DataFrame]] for bulk-insert into Hudi table, taking following steps:
@@ -263,24 +262,18 @@ object HoodieDatasetBulkInsertHelper
         (rowKey, row.copy())
       }
       .reduceByKey ((oneRow, otherRow) => {
-        if (!isStringType) {
-          val onePreCombineVal = getNestedInternalRowValue(oneRow, preCombineFieldPath).asInstanceOf[Comparable[AnyRef]]
-          val otherPreCombineVal = getNestedInternalRowValue(otherRow, preCombineFieldPath).asInstanceOf[Comparable[AnyRef]]
-          if (onePreCombineVal.compareTo(otherPreCombineVal.asInstanceOf[AnyRef]) >= 0) {
+        val onePreCombineVal = getNestedInternalRowValue(oneRow, preCombineFieldPath).asInstanceOf[Comparable[AnyRef]]
+        val otherPreCombineVal = getNestedInternalRowValue(otherRow, preCombineFieldPath).asInstanceOf[Comparable[AnyRef]]
+        if (isStringType) {
+          if (sparkAdapter.compareUTF8String(onePreCombineVal.asInstanceOf[UTF8String], otherPreCombineVal.asInstanceOf[UTF8String]) >= 0) {
             oneRow
           } else {
             otherRow
           }
+        } else if (onePreCombineVal.compareTo(otherPreCombineVal.asInstanceOf[AnyRef]) >= 0) {
+          oneRow
         } else {
-          val onePreCombineVal = hoodieUTF8StringFactory.wrapUTF8String(
-            getNestedInternalRowValue(oneRow, preCombineFieldPath).asInstanceOf[UTF8String])
-          val otherPreCombineVal = hoodieUTF8StringFactory.wrapUTF8String(
-            getNestedInternalRowValue(otherRow, preCombineFieldPath).asInstanceOf[UTF8String])
-          if (onePreCombineVal.compareTo(otherPreCombineVal) >= 0) {
-            oneRow
-          } else {
-            otherRow
-          }
+          otherRow
         }
       }, targetParallelism)
       .values

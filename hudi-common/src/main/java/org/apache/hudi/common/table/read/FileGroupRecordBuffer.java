@@ -348,11 +348,9 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
           Comparable deleteOrderingVal = deleteRecord.getOrderingValue();
           // Checks the ordering value does not equal to 0
           // because we use 0 as the default value which means natural order
-          // TODO we need to wrap values before comparing, but how to do it here?
-          // FileGroupRecordBuffer is in hudi-common, but HoodieUTF8String APIs are in hudi-spark-client module
           boolean chooseExisting = !deleteOrderingVal.equals(0)
               && ReflectionUtils.isSameClass(existingOrderingVal, deleteOrderingVal)
-              && existingOrderingVal.compareTo(deleteOrderingVal) > 0;
+              && readerContext.compareValues(existingOrderingVal, deleteOrderingVal) > 0;
           if (chooseExisting) {
             // The DELETE message is obsolete if the old message has greater orderingVal.
             return Option.empty();
@@ -449,7 +447,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
           Comparable newOrderingValue = newerRecord.getOrderingValue();
           Comparable oldOrderingValue = olderRecord.getOrderingValue();
           if (!olderRecord.isCommitTimeOrderingDelete()
-              && oldOrderingValue.compareTo(newOrderingValue) > 0) {
+              && readerContext.compareValues(oldOrderingValue, newOrderingValue) > 0) {
             return Pair.of(olderRecord.isDelete(), olderRecord.getRecord());
           }
           return Pair.of(newerRecord.isDelete(), newerRecord.getRecord());
@@ -515,7 +513,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
       // handle records coming from DELETE statements(the orderingVal is constant 0)
       return true;
     }
-    return newRecord.getOrderingValue().compareTo(oldRecord.getOrderingValue()) >= 0;
+    return readerContext.compareValues(newRecord.getOrderingValue(), oldRecord.getOrderingValue()) >= 0;
   }
 
   private Option<Pair<HoodieRecord, Schema>> getMergedRecord(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) throws IOException {

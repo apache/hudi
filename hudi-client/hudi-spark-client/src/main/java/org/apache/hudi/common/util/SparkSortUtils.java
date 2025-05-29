@@ -18,31 +18,20 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.collection.FlatLists;
 
 import org.apache.avro.Schema;
 
+import static org.apache.hudi.common.util.SortUtils.prependPartitionPath;
+import static org.apache.hudi.common.util.SortUtils.prependPartitionPathAndSuffixRecordKey;
+
 /**
  * Utility functions used by BULK_INSERT practitioners while sorting records.
  */
-public class SortUtils {
-  static Object[] prependPartitionPath(String partitionPath, Object[] columnValues) {
-    Object[] prependColumnValues = new Object[columnValues.length + 1];
-    System.arraycopy(columnValues, 0, prependColumnValues, 1, columnValues.length);
-    prependColumnValues[0] = partitionPath;
-    return prependColumnValues;
-  }
-
-  static Object[] prependPartitionPathAndSuffixRecordKey(String partitionPath, String recordKey, Object[] columnValues) {
-    Object[] newColumnValues = new Object[columnValues.length + 2];
-    System.arraycopy(columnValues, 0, newColumnValues, 1, columnValues.length);
-    newColumnValues[0] = partitionPath;
-    newColumnValues[newColumnValues.length - 1] = recordKey;
-    return newColumnValues;
-  }
-
+public class SparkSortUtils {
   /**
    * Given a hoodie record, returns a comparable list of sorted columns.
    *
@@ -52,8 +41,8 @@ public class SortUtils {
    * @param suffixRecordKey                   HoodieWriteConfig.BULKINSERT_SUFFIX_RECORD_KEY_SORT_COLUMNS
    * @param consistentLogicalTimestampEnabled KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED
    */
-  public static FlatLists.ComparableList<Comparable<HoodieRecord>> getComparableSortColumns(
-      HoodieRecord record,
+  public static FlatLists.ComparableList<Comparable<HoodieRecord<?>>> getComparableSortColumns(
+      HoodieRecord<?> record,
       String[] sortColumnNames,
       Schema schema,
       boolean suffixRecordKey,
@@ -62,16 +51,21 @@ public class SortUtils {
     if (record.getRecordType() == HoodieRecord.HoodieRecordType.SPARK) {
       Object[] columnValues = record.getColumnValues(schema, sortColumnNames, consistentLogicalTimestampEnabled);
       if (suffixRecordKey) {
-        return FlatLists.ofComparableArray(
+        return SparkAdapterSupport$.MODULE$.sparkAdapter().createComparableList(
             prependPartitionPathAndSuffixRecordKey(record.getPartitionPath(), record.getRecordKey(), columnValues));
       }
-      return FlatLists.ofComparableArray(prependPartitionPath(record.getPartitionPath(), columnValues));
+      return SparkAdapterSupport$.MODULE$.sparkAdapter().createComparableList(
+          prependPartitionPath(record.getPartitionPath(), columnValues));
     } else if (record.getRecordType() == HoodieRecord.HoodieRecordType.AVRO) {
-      return FlatLists.ofComparableArray(
+      return SparkAdapterSupport$.MODULE$.sparkAdapter().createComparableList(
           HoodieAvroUtils.getSortColumnValuesWithPartitionPathAndRecordKey(
               record, sortColumnNames, schema, suffixRecordKey, consistentLogicalTimestampEnabled
           ));
     }
     throw new IllegalArgumentException("Invalid recordType" + record.getRecordType());
+  }
+
+  public static int compareValues(Comparable a, Comparable b) {
+    return SparkAdapterSupport$.MODULE$.sparkAdapter().compareValues(a, b, o -> (Comparable)o);
   }
 }

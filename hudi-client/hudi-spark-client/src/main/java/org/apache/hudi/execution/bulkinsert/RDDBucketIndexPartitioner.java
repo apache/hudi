@@ -32,7 +32,6 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.sql.HoodieUTF8StringFactory;
 
 import java.io.Serializable;
 import java.util.Comparator;
@@ -47,11 +46,8 @@ public abstract class RDDBucketIndexPartitioner<T> extends BucketIndexBulkInsert
 
   public static final Logger LOG = LogManager.getLogger(RDDBucketIndexPartitioner.class);
 
-  private final HoodieUTF8StringFactory hoodieUTF8StringFactory;
-
   public RDDBucketIndexPartitioner(HoodieTable table, String sortString, boolean preserveHoodieMetadata) {
     super(table, sortString, preserveHoodieMetadata);
-    this.hoodieUTF8StringFactory = SparkAdapterSupport$.MODULE$.sparkAdapter().getHoodieUTF8StringFactory();
   }
 
   /**
@@ -89,10 +85,8 @@ public abstract class RDDBucketIndexPartitioner<T> extends BucketIndexBulkInsert
     final String[] sortColumns = sortColumnNames;
     final SerializableSchema schema = new SerializableSchema(HoodieAvroUtils.addMetadataFields((new Schema.Parser().parse(table.getConfig().getSchema()))));
     Comparator<HoodieRecord<T>> comparator = (Comparator<HoodieRecord<T>> & Serializable) (t1, t2) -> {
-      FlatLists.ComparableList obj1 = FlatLists.ofComparableArray(hoodieUTF8StringFactory.wrapArrayOfObjects(
-          t1.getColumnValues(schema.get(), sortColumns, consistentLogicalTimestampEnabled)));
-      FlatLists.ComparableList obj2 = FlatLists.ofComparableArray(hoodieUTF8StringFactory.wrapArrayOfObjects(
-          t2.getColumnValues(schema.get(), sortColumns, consistentLogicalTimestampEnabled)));
+      FlatLists.ComparableList obj1 = SparkAdapterSupport$.MODULE$.sparkAdapter().createComparableList(t1.getColumnValues(schema.get(), sortColumns, consistentLogicalTimestampEnabled));
+      FlatLists.ComparableList obj2 = SparkAdapterSupport$.MODULE$.sparkAdapter().createComparableList(t2.getColumnValues(schema.get(), sortColumns, consistentLogicalTimestampEnabled));
       return obj1.compareTo(obj2);
     };
 

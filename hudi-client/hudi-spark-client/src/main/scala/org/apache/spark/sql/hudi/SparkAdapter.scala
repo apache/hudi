@@ -27,8 +27,9 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.hudi.{HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping}
 import org.apache.hudi.client.model.HoodieInternalRow
-import org.apache.hudi.common.model.FileSlice
+import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
 import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit
+import org.apache.hudi.common.util.collection.FlatLists
 
 import org.apache.spark.sql._
 import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSchemaConverters, HoodieAvroSerializer}
@@ -269,6 +270,18 @@ trait SparkAdapter extends Serializable {
                 alwaysNullable: Boolean = false,
                 isTimestampNTZ: Boolean = false): StructType
 
+  /**
+   * [SPARK-46832] Using UTF8String compareTo directly would throw UnsupportedOperationException since Spark 4.0
+   */
+  def compareUTF8String(a: UTF8String, b: UTF8String): Int = a.compareTo(b)
+
+  /**
+   * [SPARK-46832] Using UTF8String compareTo directly would throw UnsupportedOperationException since Spark 4.0
+   * FlatLists is a static class and we cannot override any methods within to change the logic for comparison
+   * So we have to create [[Spark4FlatLists]] for Spark 4.0+
+   */
+  def createComparableList(t: Array[AnyRef]): FlatLists.ComparableList[Comparable[HoodieRecord[_]]] = FlatLists.ofComparableArray(t)
+
   def createInternalRow(metaFields: Array[UTF8String],
                         sourceRow: InternalRow,
                         sourceContainsMetaFields: Boolean): HoodieInternalRow
@@ -284,7 +297,7 @@ trait SparkAdapter extends Serializable {
                         start: Origin,
                         stop: Origin): ParseException
 
-  def getHoodieUTF8StringFactory: HoodieUTF8StringFactory
+  def compareValues[T <% Comparable[T]](a: T, b: T): Int = a.compareTo(b)
 
   def splitFiles(sparkSession: SparkSession,
                  partitionDirectory: PartitionDirectory,
