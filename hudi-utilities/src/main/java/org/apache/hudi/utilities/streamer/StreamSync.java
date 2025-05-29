@@ -1342,7 +1342,6 @@ public class StreamSync implements Serializable, Closeable {
 
       long totalRecords = tableTotalRecords;
       long totalErroredRecords = tableTotalErroredRecords;
-      // TODO: Remove flag isErrorTableWriteUnificationEnabled, should not be required anymore
       if (isErrorTableWriteUnificationEnabled) {
         totalRecords += errorTableWriteStatusRDDOpt.map(status -> status.mapToDouble(WriteStatus::getTotalRecords).sum().longValue()).orElse(0L);
         totalErroredRecords += errorTableWriteStatusRDDOpt.map(status -> status.mapToDouble(WriteStatus::getTotalErrorRecords).sum().longValue()).orElse(0L);

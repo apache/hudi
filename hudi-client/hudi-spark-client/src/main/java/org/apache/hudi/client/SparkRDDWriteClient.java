@@ -111,7 +111,7 @@ public class SparkRDDWriteClient<T> extends
     // If streaming writes are enabled, writes to both data table and metadata table gets triggers at this juncture.
     // If not, writes to data table gets triggered here.
     // When streaming writes are enabled, WriteStatus is expected to contain all stats required to generate metadata table records and so it could be fatter.
-    // So, here we are converting it to LeanWriteStatus which drops all additional stats and only retains the information required to proceed from here on.
+    // So, here we are dropping all additional stats and only retains the information required to proceed from here on.
     List<Pair<Boolean, WriteStatus>> leanWriteStatuses = writeStatuses.map(writeStatus -> Pair.of(writeStatus.isMetadataTable(), writeStatus.removeMetadataStatsAndErrorRecords())).collect();
     // Compute stats for the writes and invoke callback
     AtomicLong totalRecords = new AtomicLong(0);
