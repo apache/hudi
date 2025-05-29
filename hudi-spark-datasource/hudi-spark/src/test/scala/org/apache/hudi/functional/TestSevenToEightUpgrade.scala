@@ -198,8 +198,7 @@ class TestSevenToEightUpgrade extends RecordLevelIndexTestBase {
     val client = DataSourceUtils.createHoodieClient(
       spark.sparkContext, "", basePath, tableName, cleanOptions.asJava
     ).asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]]
-    val cleanInstant = client.scheduleTableService(Option.empty(), TableServiceType.CLEAN)
-    client.clean(cleanInstant.get())
+    client.clean()
     client.close()
 
     // ------------------------------------------------------------------

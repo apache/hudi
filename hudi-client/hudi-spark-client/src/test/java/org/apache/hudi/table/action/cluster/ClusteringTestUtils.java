@@ -108,12 +108,6 @@ public class ClusteringTestUtils {
         .build();
   }
 
-  public static String runClustering(SparkRDDWriteClient clusteringClient, boolean skipExecution, boolean shouldCommit) {
-    // Schedule and execute clustering.
-    String clusteringCommitTime = clusteringClient.createNewInstantTime();
-    return runClusteringOnInstant(clusteringClient, skipExecution, shouldCommit, clusteringCommitTime);
-  }
-
   public static HoodieClusteringPlan getClusteringPlan(HoodieTableMetaClient client, HoodieInstant clusteringInstant) {
     return ClusteringUtils.getClusteringPlan(client, clusteringInstant).get().getRight();
   }
@@ -124,8 +118,8 @@ public class ClusteringTestUtils {
     return getClusteringPlan(client, clusteringInstant);
   }
 
-  public static String runClusteringOnInstant(SparkRDDWriteClient clusteringClient, boolean skipExecution, boolean shouldCommit, String clusteringCommitTime) {
-    clusteringClient.scheduleClusteringAtInstant(clusteringCommitTime, Option.empty());
+  public static String runClustering(SparkRDDWriteClient<?> clusteringClient, boolean skipExecution, boolean shouldCommit) {
+    String clusteringCommitTime = clusteringClient.scheduleClustering(Option.empty()).get();
     if (!skipExecution) {
       clusteringClient.cluster(clusteringCommitTime, shouldCommit);
     }

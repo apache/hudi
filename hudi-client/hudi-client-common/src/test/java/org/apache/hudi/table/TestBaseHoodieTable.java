@@ -166,7 +166,7 @@ public class TestBaseHoodieTable extends HoodieTable {
   }
 
   @Override
-  public Option<HoodieCleanerPlan> scheduleCleaning(HoodieEngineContext context, String instantTime, Option extraMetadata) {
+  public Option<HoodieCleanerPlan> createCleanerPlan(HoodieEngineContext context, Option extraMetadata) {
     return null;
   }
 

@@ -1640,8 +1640,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
 
       // Compaction
       if (metaClient.getTableType() == HoodieTableType.MERGE_ON_READ) {
-        newCommitTime = client.createNewInstantTime();
-        boolean tmp = client.scheduleCompactionAtInstant(newCommitTime, Option.empty());
+        newCommitTime = (String) client.scheduleCompaction(Option.empty()).get();
         HoodieWriteMetadata writeMetadata = client.compact(newCommitTime);
         client.commitCompaction(newCommitTime, writeMetadata, Option.empty());
         assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(newCommitTime));
@@ -1664,8 +1663,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
 
       // Compaction
       if (metaClient.getTableType() == HoodieTableType.MERGE_ON_READ) {
-        newCommitTime = client.createNewInstantTime();
-        client.scheduleCompactionAtInstant(newCommitTime, Option.empty());
+        newCommitTime = (String) client.scheduleCompaction(Option.empty()).get();
         HoodieWriteMetadata writeMetadata = client.compact(newCommitTime);
         client.commitCompaction(newCommitTime, writeMetadata, Option.empty());
         assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(newCommitTime));
@@ -1681,8 +1679,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
       assertNoWriteErrors(writeStatuses);
 
       // Clean
-      newCommitTime = client.createNewInstantTime();
-      client.clean(newCommitTime);
+      client.clean();
       validateMetadata(client);
 
       // Restore
@@ -2508,8 +2505,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, writeConfig)) {
       // Perform a clean
-      String cleanInstantTime = "00" + index++;
-      HoodieCleanMetadata cleanMetadata = client.clean(cleanInstantTime);
+      HoodieCleanMetadata cleanMetadata = client.clean();
       // 1 partition should be cleaned
       assertEquals(cleanMetadata.getPartitionMetadata().size(), 1);
       // 1 file cleaned
@@ -2534,8 +2530,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
           .countInstants(), 0);
 
       // Initiate another clean. The previous leftover clean will be attempted and no other clean will be scheduled.
-      String newCleanInstantTime = "00" + index++;
-      cleanMetadata = client.clean(newCleanInstantTime);
+      cleanMetadata = client.clean();
 
       // 1 partition should be cleaned
       assertEquals(cleanMetadata.getPartitionMetadata().size(), 1);
@@ -2624,11 +2619,11 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
             .withClusteringExecutionStrategyClass(JavaSortAndSizeExecutionStrategy.class.getName())
             .build())
         .build();
-    HoodieJavaWriteClient clusteringClient = getHoodieWriteClient(clusterWriteCfg);
-    clusteringClient.scheduleTableService("0000003", Option.empty(), TableServiceType.CLUSTER);
+    HoodieJavaWriteClient<?> clusteringClient = getHoodieWriteClient(clusterWriteCfg);
+    String instantTime = clusteringClient.scheduleTableService(Option.empty(), TableServiceType.CLUSTER).get();
 
     // Execute pending clustering operation
-    clusteringClient.cluster("0000003", true);
+    clusteringClient.cluster(instantTime, true);
 
     // verify metadata table
     validateMetadata(client);
@@ -2662,17 +2657,15 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieJavaWriteClient client = getHoodieWriteClient(cfg);
 
     // Insert one batch 0000001
-    String commitTime = "0000001";
+    String commitTime = client.startCommit();
     List<HoodieRecord> records = dataGen.generateInserts(commitTime, 100);
-    WriteClientTestUtils.startCommitWithTime(client, commitTime);
     List<WriteStatus> writeStatuses = client.insert(records, commitTime);
     client.commit(commitTime, writeStatuses);
     assertNoWriteErrors(writeStatuses);
 
     // Insert second batch 0000002
-    commitTime = "0000002";
+    commitTime = client.startCommit();
     records = dataGen.generateInserts(commitTime, 100);
-    WriteClientTestUtils.startCommitWithTime(client, commitTime);
     writeStatuses = client.insert(records, commitTime);
     client.commit(commitTime, writeStatuses);
     assertNoWriteErrors(writeStatuses);
@@ -2687,13 +2680,12 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
             .build())
         .build();
     HoodieJavaWriteClient clusteringClient = getHoodieWriteClient(clusterWriteCfg);
-    clusteringClient.scheduleTableService("0000003", Option.empty(), TableServiceType.CLUSTER);
+    Option<String> clusteringInstant = clusteringClient.scheduleTableService(Option.empty(), TableServiceType.CLUSTER);
 
     // Insert second batch 0000004
-    commitTime = "0000004";
-    records = dataGen.generateInserts(commitTime, 100);
     client = getHoodieWriteClient(cfg);
-    WriteClientTestUtils.startCommitWithTime(client, commitTime);
+    commitTime = client.startCommit();
+    records = dataGen.generateInserts(commitTime, 100);
     writeStatuses = client.insert(records, commitTime);
     client.commit(commitTime, writeStatuses);
     assertNoWriteErrors(writeStatuses);
@@ -2709,23 +2701,23 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
       HoodieWriteConfig metadataWriteConfig = HoodieWriteConfig.newBuilder()
           .withProperties(metadataProps).build();
       try (HoodieJavaWriteClient metadataWriteClient = new HoodieJavaWriteClient(context, metadataWriteConfig)) {
-        final String compactionInstantTime = client.createNewInstantTime();
-        assertTrue(metadataWriteClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty()));
+        final Option<String> compactionInstantTime = metadataWriteClient.scheduleCompaction(Option.empty());
+        assertTrue(compactionInstantTime.isPresent());
 
-        HoodieWriteMetadata writeMetadata = metadataWriteClient.compact(compactionInstantTime);
-        metadataWriteClient.commitCompaction(compactionInstantTime, writeMetadata, Option.empty());
+        HoodieWriteMetadata writeMetadata = metadataWriteClient.compact(compactionInstantTime.get());
+        metadataWriteClient.commitCompaction(compactionInstantTime.get(), writeMetadata, Option.empty());
         HoodieTableMetaClient mdtMetaClient = HoodieTableMetaClient.builder()
             .setBasePath(metadataTableBasePath)
             .setConf(storageConf)
             .build();
-        assertTrue(mdtMetaClient.getActiveTimeline().filterCompletedInstants().containsInstant(compactionInstantTime));
+        assertTrue(mdtMetaClient.getActiveTimeline().filterCompletedInstants().containsInstant(compactionInstantTime.get()));
 
         // verify metadata table
         validateMetadata(client);
 
         // Execute pending clustering operation
         clusteringClient = getHoodieWriteClient(clusterWriteCfg);
-        clusteringClient.cluster("0000003", true);
+        clusteringClient.cluster(clusteringInstant.get(), true);
 
         // verify metadata table
         validateMetadata(client);

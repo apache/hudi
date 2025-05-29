@@ -163,7 +163,7 @@ stages:
             displayName: Top 100 long-running testcases
       - job: UT_FT_2
         displayName: FTA hudi-spark
-        timeoutInMinutes: '75'
+        timeoutInMinutes: '90'
         steps:
           - task: Maven@4
             displayName: maven install
@@ -198,7 +198,7 @@ stages:
             displayName: Top 100 long-running testcases
       - job: UT_FT_3
         displayName: UT Hudi SQL features & spark-datasource Java Test 1
-        timeoutInMinutes: '75'
+        timeoutInMinutes: '90'
         steps:
           - task: Maven@4
             displayName: maven install

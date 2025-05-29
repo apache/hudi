@@ -543,8 +543,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
         val client = HoodieCLIUtils.createHoodieWriteClient(spark, basePath, Map.empty, Option(tableName))
 
         // Generate the first clustering plan
-        val firstScheduleInstant = client.createNewInstantTime()
-        client.scheduleClusteringAtInstant(firstScheduleInstant, HOption.empty())
+        val firstScheduleInstant = client.scheduleClustering(HOption.empty()).get()
 
         checkAnswer(s"call show_clustering('$tableName')")(
           Seq(firstScheduleInstant, 3, HoodieInstant.State.REQUESTED.name(), "*")
@@ -592,11 +591,11 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
       val client = HoodieCLIUtils.createHoodieWriteClient(spark, basePath, Map.empty, Option(tableName))
 
       // Generate the first compaction plan
-      val firstScheduleInstant = client.createNewInstantTime()
-      assertTrue(client.scheduleCompactionAtInstant(firstScheduleInstant, HOption.empty()))
+      val firstScheduleInstant = client.scheduleCompaction(HOption.empty())
+      assertTrue(firstScheduleInstant.isPresent)
 
       checkAnswer(s"call show_compaction('$tableName')")(
-        Seq(firstScheduleInstant, 5, HoodieInstant.State.REQUESTED.name())
+        Seq(firstScheduleInstant.get(), 5, HoodieInstant.State.REQUESTED.name())
       )
 
       val partition = "ts=1002"
@@ -641,8 +640,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
       val client = HoodieCLIUtils.createHoodieWriteClient(spark, basePath, Map.empty, Option(tableName))
 
       // Generate the first log_compaction plan
-      val firstScheduleInstant = client.createNewInstantTime()
-      assertTrue(client.scheduleLogCompactionAtInstant(firstScheduleInstant, HOption.empty()))
+      assertTrue(client.scheduleLogCompaction(HOption.empty()).isPresent)
 
       val partition = "ts=1000"
       val errMsg = s"Failed to drop partitions. Please ensure that there are no pending table service actions (clustering/compaction) for the partitions to be deleted: [$partition]"

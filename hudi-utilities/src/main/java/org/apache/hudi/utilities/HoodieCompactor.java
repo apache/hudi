@@ -280,13 +280,7 @@ public class HoodieCompactor {
     try (SparkRDDWriteClient client =
              UtilHelpers.createHoodieClient(jsc, cfg.basePath, "", cfg.parallelism, Option.of(cfg.strategyClassName), props)) {
 
-      if (StringUtils.isNullOrEmpty(cfg.compactionInstantTime)) {
-        LOG.warn("No instant time is provided for scheduling compaction.");
-        return client.scheduleCompaction(Option.empty());
-      }
-
-      client.scheduleCompactionAtInstant(cfg.compactionInstantTime, Option.empty());
-      return Option.of(cfg.compactionInstantTime);
+      return client.scheduleCompaction(Option.empty());
     }
   }
 

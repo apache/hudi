@@ -52,6 +52,7 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -121,7 +122,7 @@ public class TestMultiWriterWithPreferWriterIngestion extends HoodieClientTestBa
     validInstants.add(instantTime3);
     ExecutorService executors = Executors.newFixedThreadPool(2);
     SparkRDDWriteClient client1 = getHoodieWriteClient(cfg);
-    SparkRDDWriteClient client2 = getHoodieWriteClient(cfg);
+    SparkRDDWriteClient<?> client2 = getHoodieWriteClient(cfg);
     // Create upserts, schedule cleaning, schedule compaction in parallel
     String instant4 = client.createNewInstantTime();
     Future future1 = executors.submit(() -> {
@@ -135,27 +136,26 @@ public class TestMultiWriterWithPreferWriterIngestion extends HoodieClientTestBa
         throw new RuntimeException(e1);
       }
     });
-    String instant5 = client.createNewInstantTime();
-    Future future2 = executors.submit(() -> {
+    CompletableFuture<String> future2 = CompletableFuture.supplyAsync(() -> {
       try {
-        client2.scheduleTableService(instant5, Option.empty(), TableServiceType.COMPACT);
+        return client2.scheduleTableService(Option.empty(), TableServiceType.COMPACT).get();
       } catch (Exception e2) {
         if (tableType == HoodieTableType.MERGE_ON_READ) {
           throw new RuntimeException(e2);
         }
+        return null;
       }
-    });
-    String instant6 = client.createNewInstantTime();
-    Future future3 = executors.submit(() -> {
+    }, executors);
+    CompletableFuture<String> future3 = CompletableFuture.supplyAsync(() -> {
       try {
-        client2.scheduleTableService(instant6, Option.empty(), TableServiceType.CLEAN);
+        return client2.scheduleTableService(Option.empty(), TableServiceType.CLEAN).orElse(null);
       } catch (Exception e2) {
         throw new RuntimeException(e2);
       }
     });
     future1.get();
-    future2.get();
-    future3.get();
+    String instant5 = future2.get();
+    String instant6 = future3.get();
     // Create inserts, run cleaning, run compaction in parallel
     String instant7 = client.createNewInstantTime();
     future1 = executors.submit(() -> {
@@ -167,7 +167,7 @@ public class TestMultiWriterWithPreferWriterIngestion extends HoodieClientTestBa
         throw new RuntimeException(e1);
       }
     });
-    future2 = executors.submit(() -> {
+    Future<?> future4 = executors.submit(() -> {
       try {
         HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client2.compact(instant5);
         client2.commitCompaction(instant5, compactionMetadata, Option.empty());
@@ -179,21 +179,21 @@ public class TestMultiWriterWithPreferWriterIngestion extends HoodieClientTestBa
         }
       }
     });
-    future3 = executors.submit(() -> {
+    Future<?> future5 = executors.submit(() -> {
       try {
-        client2.clean(instant6, false);
-        validInstants.add(instant6);
+        client2.clean();
+        metaClient.reloadActiveTimeline().getCleanerTimeline().lastInstant().map(HoodieInstant::requestedTime).ifPresent(validInstants::add);
       } catch (Exception e2) {
         throw new RuntimeException(e2);
       }
     });
     future1.get();
-    future2.get();
-    future3.get();
-    Set<String> completedInstants = metaClient.getActiveTimeline().getCommitsTimeline()
+    future4.get();
+    future5.get();
+    Set<String> completedInstants = metaClient.reloadActiveTimeline().getCommitsTimeline()
         .filterCompletedInstants().getInstantsAsStream().map(HoodieInstant::requestedTime)
         .collect(Collectors.toSet());
-    Assertions.assertTrue(validInstants.containsAll(completedInstants));
+    Assertions.assertEquals(validInstants, completedInstants);
   }
 
   @ParameterizedTest

@@ -159,11 +159,10 @@ public class ITTestHoodieFlinkClustering {
     // To compute the clustering instant time and do clustering.
     try (HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf)) {
       HoodieFlinkTable<?> table = writeClient.getHoodieTable();
-      String clusteringInstantTime = writeClient.createNewInstantTime();
 
-      boolean scheduled = writeClient.scheduleClusteringAtInstant(clusteringInstantTime, Option.empty());
+      Option<String> clusteringInstantTime = writeClient.scheduleClustering(Option.empty());
 
-      assertTrue(scheduled, "The clustering plan should be scheduled");
+      assertTrue(clusteringInstantTime.isPresent(), "The clustering plan should be scheduled");
 
       // fetch the instant based on the configured execution sequence
       table.getMetaClient().reloadActiveTimeline();
@@ -178,14 +177,14 @@ public class ITTestHoodieFlinkClustering {
       HoodieClusteringPlan clusteringPlan = clusteringPlanOption.get().getRight();
 
       // Mark instant as clustering inflight
-      HoodieInstant instant = INSTANT_GENERATOR.getClusteringCommitRequestedInstant(clusteringInstantTime);
+      HoodieInstant instant = INSTANT_GENERATOR.getClusteringCommitRequestedInstant(clusteringInstantTime.get());
       table.getActiveTimeline().transitionClusterRequestedToInflight(instant, Option.empty());
 
       final Schema tableAvroSchema = StreamerUtil.getTableAvroSchema(table.getMetaClient(), false);
       final DataType rowDataType = AvroSchemaConverter.convertToDataType(tableAvroSchema);
       final RowType rowType = (RowType) rowDataType.getLogicalType();
 
-      DataStream<ClusteringCommitEvent> dataStream = env.addSource(new ClusteringPlanSourceFunction(clusteringInstantTime, clusteringPlan, conf))
+      DataStream<ClusteringCommitEvent> dataStream = env.addSource(new ClusteringPlanSourceFunction(clusteringInstantTime.get(), clusteringPlan, conf))
           .name("clustering_source")
           .uid("uid_clustering_source")
           .rebalance()
@@ -293,21 +292,17 @@ public class ITTestHoodieFlinkClustering {
 
     try (HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf)) {
       // To compute the clustering instant time.
-      String clusteringInstantTime = writeClient.createNewInstantTime();
+      Option<String> clusteringInstantTime = writeClient.scheduleClustering(Option.empty());
 
-      boolean scheduled = writeClient.scheduleClusteringAtInstant(clusteringInstantTime, Option.empty());
-
-      assertFalse(scheduled, "1 delta commit, the clustering plan should not be scheduled");
+      assertFalse(clusteringInstantTime.isPresent(), "1 delta commit, the clustering plan should not be scheduled");
 
       tableEnv.executeSql(TestSQL.INSERT_T1).await();
       // wait for the asynchronous commit to finish
       TimeUnit.SECONDS.sleep(3);
 
-      clusteringInstantTime = writeClient.createNewInstantTime();
+      clusteringInstantTime = writeClient.scheduleClustering(Option.empty());
 
-      scheduled = writeClient.scheduleClusteringAtInstant(clusteringInstantTime, Option.empty());
-
-      assertTrue(scheduled, "2 delta commits, the clustering plan should be scheduled");
+      assertTrue(clusteringInstantTime.isPresent(), "2 delta commits, the clustering plan should be scheduled");
     }
   }
 
@@ -368,11 +363,9 @@ public class ITTestHoodieFlinkClustering {
 
     try (HoodieFlinkWriteClient<?> writeClient = FlinkWriteClients.createWriteClient(conf)) {
       HoodieFlinkTable<?> table = writeClient.getHoodieTable();
-      String firstClusteringInstant = writeClient.createNewInstantTime();
+      Option<String> firstClusteringInstant = writeClient.scheduleClustering(Option.empty());
 
-      boolean scheduled = writeClient.scheduleClusteringAtInstant(firstClusteringInstant, Option.empty());
-
-      assertTrue(scheduled, "The clustering plan should be scheduled");
+      assertTrue(firstClusteringInstant.isPresent(), "The clustering plan should be scheduled");
 
       // fetch the instant based on the configured execution sequence
       table.getMetaClient().reloadActiveTimeline();
@@ -387,7 +380,7 @@ public class ITTestHoodieFlinkClustering {
       HoodieClusteringPlan clusteringPlan = clusteringPlanOption.get().getRight();
 
       // Mark instant as clustering inflight
-      HoodieInstant instant = INSTANT_GENERATOR.getClusteringCommitRequestedInstant(firstClusteringInstant);
+      HoodieInstant instant = INSTANT_GENERATOR.getClusteringCommitRequestedInstant(firstClusteringInstant.get());
       table.getActiveTimeline().transitionClusterRequestedToInflight(instant, Option.empty());
 
       final Schema tableAvroSchema = StreamerUtil.getTableAvroSchema(table.getMetaClient(), false);
@@ -395,7 +388,7 @@ public class ITTestHoodieFlinkClustering {
       final RowType rowType = (RowType) rowDataType.getLogicalType();
 
       DataStream<ClusteringCommitEvent> dataStream =
-          env.addSource(new ClusteringPlanSourceFunction(firstClusteringInstant, clusteringPlan, conf))
+          env.addSource(new ClusteringPlanSourceFunction(firstClusteringInstant.get(), clusteringPlan, conf))
               .name("clustering_source")
               .uid("uid_clustering_source")
               .rebalance()
@@ -425,9 +418,7 @@ public class ITTestHoodieFlinkClustering {
       // archive the first commit, retain the second commit before the inflight cluster commit
       writeClient.archive();
 
-      scheduled = writeClient.scheduleClusteringAtInstant(writeClient.createNewInstantTime(), Option.empty());
-
-      assertTrue(scheduled, "The clustering plan should be scheduled");
+      assertTrue(writeClient.scheduleClustering(Option.empty()).isPresent(), "The clustering plan should be scheduled");
       table.getMetaClient().reloadActiveTimeline();
       timeline = table.getActiveTimeline().filterPendingClusteringTimeline()
           .filter(i -> i.getState() == HoodieInstant.State.REQUESTED);
@@ -437,7 +428,7 @@ public class ITTestHoodieFlinkClustering {
       // clustering plan has no previous file slice generated by previous pending clustering
       assertFalse(inputFileGroups
           .stream().anyMatch(fg -> fg.getSlices()
-              .stream().anyMatch(s -> s.getDataFilePath().contains(firstClusteringInstant))));
+              .stream().anyMatch(s -> s.getDataFilePath().contains(firstClusteringInstant.get()))));
     }
   }
 
@@ -641,11 +632,9 @@ public class ITTestHoodieFlinkClustering {
 
     try (HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf)) {
       HoodieFlinkTable<?> table = writeClient.getHoodieTable();
-      String clusteringInstantTime = writeClient.createNewInstantTime();
+      Option<String> clusteringInstantTime = writeClient.scheduleClustering(Option.empty());
 
-      boolean scheduled = writeClient.scheduleClusteringAtInstant(clusteringInstantTime, Option.empty());
-
-      assertTrue(scheduled, "The clustering plan should be scheduled");
+      assertTrue(clusteringInstantTime.isPresent(), "The clustering plan should be scheduled");
 
       // fetch the instant based on the configured execution sequence
       table.getMetaClient().reloadActiveTimeline();
@@ -660,10 +649,10 @@ public class ITTestHoodieFlinkClustering {
       HoodieClusteringPlan clusteringPlan = clusteringPlanOption.get().getRight();
 
       // Mark instant as clustering inflight
-      HoodieInstant instant = INSTANT_GENERATOR.getClusteringCommitRequestedInstant(clusteringInstantTime);
+      HoodieInstant instant = INSTANT_GENERATOR.getClusteringCommitRequestedInstant(clusteringInstantTime.get());
       table.getActiveTimeline().transitionClusterRequestedToInflight(instant, Option.empty());
 
-      DataStream<ClusteringCommitEvent> dataStream = env.addSource(new ClusteringPlanSourceFunction(clusteringInstantTime, clusteringPlan, conf))
+      DataStream<ClusteringCommitEvent> dataStream = env.addSource(new ClusteringPlanSourceFunction(clusteringInstantTime.get(), clusteringPlan, conf))
           .name("clustering_source")
           .uid("uid_clustering_source")
           .rebalance()
@@ -738,11 +727,9 @@ public class ITTestHoodieFlinkClustering {
 
     try (HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf)) {
       HoodieFlinkTable<?> table = writeClient.getHoodieTable();
-      String clusteringInstantTime = writeClient.createNewInstantTime();
+      Option<String> clusteringInstantTime = writeClient.scheduleClustering(Option.empty());
 
-      boolean scheduled = writeClient.scheduleClusteringAtInstant(clusteringInstantTime, Option.empty());
-
-      assertTrue(scheduled, "The clustering plan should be scheduled");
+      assertTrue(clusteringInstantTime.isPresent(), "The clustering plan should be scheduled");
 
       tableEnv.executeSql(TestSQL.INSERT_T1);
 
@@ -759,14 +746,14 @@ public class ITTestHoodieFlinkClustering {
       HoodieClusteringPlan clusteringPlan = clusteringPlanOption.get().getRight();
 
       // Mark instant as clustering inflight
-      HoodieInstant instant = INSTANT_GENERATOR.getClusteringCommitRequestedInstant(clusteringInstantTime);
+      HoodieInstant instant = INSTANT_GENERATOR.getClusteringCommitRequestedInstant(clusteringInstantTime.get());
       table.getActiveTimeline().transitionClusterRequestedToInflight(instant, Option.empty());
 
       final Schema tableAvroSchema = StreamerUtil.getTableAvroSchema(table.getMetaClient(), false);
       final DataType rowDataType = AvroSchemaConverter.convertToDataType(tableAvroSchema);
       final RowType rowType = (RowType) rowDataType.getLogicalType();
 
-      DataStream<ClusteringCommitEvent> dataStream = env.addSource(new ClusteringPlanSourceFunction(clusteringInstantTime, clusteringPlan, conf))
+      DataStream<ClusteringCommitEvent> dataStream = env.addSource(new ClusteringPlanSourceFunction(clusteringInstantTime.get(), clusteringPlan, conf))
           .name("clustering_source")
           .uid("uid_clustering_source")
           .rebalance()

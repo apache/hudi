@@ -245,10 +245,6 @@ public class HoodieClusteringJob {
   }
 
   private Option<String> doSchedule(SparkRDDWriteClient<HoodieRecordPayload> client) {
-    if (cfg.clusteringInstantTime != null) {
-      client.scheduleClusteringAtInstant(cfg.clusteringInstantTime, Option.empty());
-      return Option.of(cfg.clusteringInstantTime);
-    }
     return client.scheduleClustering(Option.empty());
   }
 
