@@ -159,8 +159,8 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
     return results;
   }
 
-  protected Pair<HashMap<String, WorkloadStat>, WorkloadStat> buildProfile(List<HoodieRecord<T>> inputRecords) {
-    HashMap<String, WorkloadStat> partitionPathStatMap = new HashMap<>();
+  protected Pair<Map<String, WorkloadStat>, WorkloadStat> buildProfile(List<HoodieRecord<T>> inputRecords) {
+    Map<String, WorkloadStat> partitionPathStatMap = new HashMap<>();
     WorkloadStat globalStat = new WorkloadStat();
 
     Map<Pair<String, Option<HoodieRecordLocation>>, Long> partitionLocationCounts = inputRecords
