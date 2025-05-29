@@ -1040,10 +1040,15 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @return instant time for the requested INDEX action
    */
   public Option<String> scheduleIndexing(List<MetadataPartitionType> partitionTypes, List<String> partitionPaths) {
-    String instantTime = createNewInstantTime();
-    Option<HoodieIndexPlan> indexPlan = createTable(config)
-        .scheduleIndexing(context, instantTime, partitionTypes, partitionPaths);
-    return indexPlan.isPresent() ? Option.of(instantTime) : Option.empty();
+    txnManager.beginTransaction(Option.empty(), Option.empty());
+    try {
+      String instantTime = createNewInstantTime(false);
+      Option<HoodieIndexPlan> indexPlan = createTable(config)
+          .scheduleIndexing(context, instantTime, partitionTypes, partitionPaths);
+      return indexPlan.map(plan -> instantTime);
+    } finally {
+      txnManager.endTransaction(Option.empty());
+    }
   }
 
   /**
