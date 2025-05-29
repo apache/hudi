@@ -734,22 +734,22 @@ public class TestHoodieWriteConfig {
         .withProperties(props)
         .withEngineType(EngineType.SPARK).build();
 
-    assertTrue(config.isStreamingWritesToMetadataEnabled(HoodieTableVersion.EIGHT));
-    assertFalse(config.isStreamingWritesToMetadataEnabled(HoodieTableVersion.SIX));
+    assertTrue(config.isMetadataStreamingWritesEnabled(HoodieTableVersion.EIGHT));
+    assertFalse(config.isMetadataStreamingWritesEnabled(HoodieTableVersion.SIX));
 
     config = HoodieWriteConfig.newBuilder()
         .withPath("/tmp")
         .withProperties(props)
         .withEngineType(EngineType.FLINK).build();
-    assertFalse(config.isStreamingWritesToMetadataEnabled(HoodieTableVersion.SIX));
-    assertFalse(config.isStreamingWritesToMetadataEnabled(HoodieTableVersion.EIGHT));
+    assertFalse(config.isMetadataStreamingWritesEnabled(HoodieTableVersion.SIX));
+    assertFalse(config.isMetadataStreamingWritesEnabled(HoodieTableVersion.EIGHT));
 
     config = HoodieWriteConfig.newBuilder()
         .withPath("/tmp")
         .withProperties(props)
         .withEngineType(EngineType.JAVA).build();
-    assertFalse(config.isStreamingWritesToMetadataEnabled(HoodieTableVersion.SIX));
-    assertFalse(config.isStreamingWritesToMetadataEnabled(HoodieTableVersion.EIGHT));
+    assertFalse(config.isMetadataStreamingWritesEnabled(HoodieTableVersion.SIX));
+    assertFalse(config.isMetadataStreamingWritesEnabled(HoodieTableVersion.EIGHT));
   }
 
   private HoodieWriteConfig createWriteConfig(Map<String, String> configs) {
