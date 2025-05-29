@@ -69,7 +69,7 @@ public class SparkRDDMetadataWriteClient<T> extends SparkRDDWriteClient<T> {
    * @param instantTime Instant time of the commit
    * @return Collection of WriteStatus to inspect errors and counts
    */
-  public JavaRDD<WriteStatus> upsertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords, String instantTime, Option<List<HoodieFileGroupId>> partitionFileIdPairsOpt) {
+  public JavaRDD<WriteStatus> upsertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords, String instantTime, Option<List<HoodieFileGroupId>> hoodieFileGroupIdList) {
     HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table =
         initTable(WriteOperationType.UPSERT_PREPPED, Option.ofNullable(instantTime));
     table.validateUpsertSchema();
@@ -80,7 +80,7 @@ public class SparkRDDMetadataWriteClient<T> extends SparkRDDWriteClient<T> {
       preWriteCompletedInstants.add(instantTime);
     }
     HoodieWriteMetadata<HoodieData<WriteStatus>> result = ((HoodieSparkMergeOnReadMetadataTable) table).upsertPrepped(context, instantTime, HoodieJavaRDD.of(preppedRecords),
-        partitionFileIdPairsOpt, initialCall);
+        hoodieFileGroupIdList, initialCall);
     HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getWriteStatuses()));
     return postWrite(resultRDD, instantTime, table);
   }

@@ -104,9 +104,7 @@ public class TestSparkMetadataTableUpsertCommitActionExecutor extends SparkClien
     protected HoodieData<WriteStatus> mapPartitionsAsRDD(HoodieData<HoodieRecord<T>> dedupedRecords, Partitioner partitioner) {
       return writeStatusHoodieData;
     }
-
   }
-
 }
 
 

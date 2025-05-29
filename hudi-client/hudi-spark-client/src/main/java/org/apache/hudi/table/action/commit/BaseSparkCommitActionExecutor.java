@@ -172,9 +172,9 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
       sourceReadAndIndexDurationMs = sourceReadAndIndexTimer.get().endTimer();
       LOG.info("Source read and index timer {}", sourceReadAndIndexDurationMs);
     }
+    // partition using the insert partitioner
     final Partitioner partitioner = getPartitioner(workloadProfile);
 
-    // partition using the insert partitioner
     saveWorkloadProfileMetadataToInflight(workloadProfile, instantTime);
 
     context.setJobStatus(this.getClass().getSimpleName(), "Doing partition and writing data: " + config.getTableName());

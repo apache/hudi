@@ -1485,9 +1485,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
         }
         final int fileGroupCount = fileSlices.size();
         ValidationUtils.checkArgument(fileGroupCount > 0, String.format("FileGroup count for MDT partition %s should be > 0", partitionName));
-        fileSlices.stream().forEach(fileSlice -> {
-          hoodieFileGroupIdList.add(new HoodieFileGroupId(partitionName, fileSlice.getFileId()));
-        });
+        hoodieFileGroupIdList.addAll(fileSlices.stream().map(fileSlice -> new HoodieFileGroupId(partitionName, fileSlice.getFileId())).collect(Collectors.toList()));
 
         List<FileSlice> finalFileSlices = fileSlices;
         HoodieData<HoodieRecord> rddSinglePartitionRecords = records.map(r -> {
