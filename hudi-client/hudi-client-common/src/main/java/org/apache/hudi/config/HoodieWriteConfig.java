@@ -1289,8 +1289,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     setValue(AVRO_SCHEMA_STRING, schemaStr);
   }
 
-  public void setRecordMergerClass(String recordMergerStrategy) {
-    setValue(RECORD_MERGE_STRATEGY_ID, recordMergerStrategy);
+  public void setRecordMergerClass(String recordMergerClass) {
+    setValue(RECORD_MERGE_IMPL_CLASSES, recordMergerClass);
   }
 
   /**

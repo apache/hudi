@@ -125,7 +125,8 @@ public class TestCustomMerger extends HoodieFileGroupReaderTestHarness {
     initMetaClient();
     initTestDataGenerator(new String[]{PARTITION_PATH});
     testTable = HoodieTestTable.of(metaClient);
-    readerContext = new HoodieAvroReaderContext(storageConf, metaClient.getTableConfig());
+    readerContext = new HoodieAvroReaderContext(
+        storageConf, metaClient.getTableConfig(), Option.empty(), Option.empty());
     setUpMockCommits();
   }
 

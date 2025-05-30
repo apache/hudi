@@ -18,7 +18,9 @@
 
 package org.apache.hudi.util;
 
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.keygen.KeyGenUtils;
 
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.table.data.DecimalData;
@@ -40,31 +42,39 @@ import java.util.Arrays;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
- * A converter that converts a string array into internal row data fields.
+ * A converter that creates a {@link RowData} from hoodie record key.
  * The converter is designed to be stateful(not pure stateless tool)
  * in order to reuse the specific converters.
  */
 @Internal
-public class StringToRowDataConverter {
+public class RecordKeyToRowDataConverter {
   private final Converter[] converters;
   private final int[] fieldsPos;
   private final int rowArity;
+  // position of `_hoodie_record_key`
+  private final int keyMetaPos;
 
-  public StringToRowDataConverter(int[] fieldsPos, RowType rowType) {
+  public RecordKeyToRowDataConverter(int[] fieldsPos, RowType rowType) {
     this.fieldsPos = fieldsPos;
     this.rowArity = rowType.getFieldCount();
+    this.keyMetaPos = rowType.getFieldNames().indexOf(HoodieRecord.RECORD_KEY_METADATA_FIELD);
     this.converters = Arrays.stream(fieldsPos)
         .mapToObj(f -> getConverter(rowType.getTypeAt(f)))
         .toArray(Converter[]::new);
   }
 
-  public RowData convert(String[] fields) {
-    ValidationUtils.checkArgument(converters.length == fields.length,
+  public RowData convert(String recordKey) {
+    final String[] pkVals = KeyGenUtils.extractRecordKeys(recordKey);
+    ValidationUtils.checkArgument(converters.length == pkVals.length,
         "Field types and values should equal with number");
 
     GenericRowData rowData = new GenericRowData(rowArity);
-    for (int i = 0; i < fields.length; i++) {
-      rowData.setField(fieldsPos[i], converters[i].convert(fields[i]));
+    // set record key metadata field if it's in the data schema.
+    if (keyMetaPos > -1) {
+      rowData.setField(keyMetaPos, StringData.fromString(recordKey));
+    }
+    for (int i = 0; i < pkVals.length; i++) {
+      rowData.setField(fieldsPos[i], converters[i].convert(pkVals[i]));
     }
     return rowData;
   }
