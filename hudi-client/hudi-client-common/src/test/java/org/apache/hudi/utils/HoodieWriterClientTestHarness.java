@@ -1197,7 +1197,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
 
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY).withRollbackUsingMarkers(true)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).withMetadataIndexColumnStats(true).withColumnStatsIndexForColumns("driver,rider")
-            .withMetadataIndexColumnStatsFileGroupCount(1).build())
+            .withMetadataIndexColumnStatsFileGroupCount(1).withEngineType(getEngineType()).build())
         .withWriteTableVersion(6);
 
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
