@@ -827,24 +827,9 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
       // We want the upsert to go through only after the compaction
       // and cleaning schedule completion. So, waiting on latch here.
       latchCountDownAndWait(scheduleCountDownLatch, waitAndRunSecond);
-      if (tableType == HoodieTableType.MERGE_ON_READ && !(resolutionStrategy instanceof PreferWriterConflictResolutionStrategy)) {
-        // HUDI-6897: Improve SimpleConcurrentFileWritesConflictResolutionStrategy for NB-CC
-        // There is no need to throw concurrent modification exception for the simple strategy under NB-CC, because the compactor would finally resolve the conflicts instead.
-
-        // Since the concurrent modifications went in, this upsert has
-        // to fail
-        assertThrows(HoodieWriteConflictException.class, () -> {
-          createCommitWithUpserts(cfg, client1, thirdCommitTime, Option.of(commitTimeBetweenPrevAndNew), upsertCommitTime, numRecords);
-        });
-      } else {
-        // We don't have the compaction for COW and so this upsert
-        // has to pass
-        final String newCommitTime = client1.createNewInstantTime();
-        assertDoesNotThrow(() -> {
-          createCommitWithUpserts(cfg, client1, thirdCommitTime, Option.of(commitTimeBetweenPrevAndNew), newCommitTime, numRecords);
-        });
-        validInstants.add(newCommitTime);
-      }
+      // Writes should pass since scheduled compaction does not conflict with upsert for v8 and above
+      assertDoesNotThrow(() -> createCommitWithUpserts(cfg, client1, thirdCommitTime, Option.of(commitTimeBetweenPrevAndNew), upsertCommitTime, numRecords));
+      validInstants.add(upsertCommitTime);
     });
 
     Future future2 = executors.submit(() -> {
