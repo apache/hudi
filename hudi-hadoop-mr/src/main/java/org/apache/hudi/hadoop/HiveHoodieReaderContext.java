@@ -98,7 +98,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
                                     ObjectInspectorCache objectInspectorCache,
                                     StorageConfiguration<?> storageConfiguration,
                                     HoodieTableConfig tableConfig) {
-    super(storageConfiguration, tableConfig);
+    super(storageConfiguration, tableConfig, Option.empty(), Option.empty());
     this.readerCreator = readerCreator;
     this.partitionCols = partitionCols;
     this.partitionColSet = new HashSet<>(this.partitionCols);
@@ -132,8 +132,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
 
   @Override
   public ClosableIterator<ArrayWritable> getFileRecordIterator(
-      StoragePathInfo storagePathInfo, long start, long length, Schema dataSchema, Schema requiredSchema,
-      HoodieStorage storage) throws IOException {
+      StoragePathInfo storagePathInfo, long start, long length, Schema dataSchema, Schema requiredSchema, HoodieStorage storage) throws IOException {
     return getFileRecordIterator(storagePathInfo.getPath(), storagePathInfo.getLocations(), start, length, dataSchema, requiredSchema, storage);
   }
 

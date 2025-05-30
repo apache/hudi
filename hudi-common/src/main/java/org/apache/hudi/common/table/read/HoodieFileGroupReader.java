@@ -63,6 +63,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath;
+import static org.apache.hudi.common.fs.FSUtils.isMdtBaseFile;
 import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
 
 /**
@@ -116,9 +117,9 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   }
 
   private HoodieFileGroupReader(HoodieReaderContext<T> readerContext, HoodieStorage storage, String tablePath,
-                               String latestCommitTime, FileSlice fileSlice, Schema dataSchema, Schema requestedSchema,
-                               Option<InternalSchema> internalSchemaOpt, HoodieTableMetaClient hoodieTableMetaClient, TypedProperties props,
-                               long start, long length, boolean shouldUseRecordPosition, boolean allowInflightInstants, boolean emitDelete) {
+                                String latestCommitTime, FileSlice fileSlice, Schema dataSchema, Schema requestedSchema,
+                                Option<InternalSchema> internalSchemaOpt, HoodieTableMetaClient hoodieTableMetaClient, TypedProperties props,
+                                long start, long length, boolean shouldUseRecordPosition, boolean allowInflightInstants, boolean emitDelete) {
     this.readerContext = readerContext;
     this.storage = storage;
     this.hoodieBaseFileOption = fileSlice.getBaseFile();
@@ -237,7 +238,9 @@ public final class HoodieFileGroupReader<T> implements Closeable {
           readerContext.getSchemaHandler().getTableSchema(),
           readerContext.getSchemaHandler().getRequiredSchema(), storage);
     }
-    return readerContext.getInstantRange().isPresent() ? readerContext.applyInstantRangeFilter(recordIterator) : recordIterator;
+    return readerContext.getInstantRange().isPresent() && !isMdtBaseFile(baseFile)
+        ? readerContext.applyInstantRangeFilter(recordIterator)
+        : recordIterator;
   }
 
   private ClosableIterator<T> makeBootstrapBaseFileIterator(HoodieBaseFile baseFile) throws IOException {

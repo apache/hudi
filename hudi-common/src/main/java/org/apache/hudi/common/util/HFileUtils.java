@@ -20,6 +20,7 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
@@ -109,7 +110,32 @@ public class HFileUtils extends FileFormatUtils {
 
   @Override
   public ClosableIterator<HoodieKey> getHoodieKeyIterator(HoodieStorage storage, StoragePath filePath, Option<BaseKeyGenerator> keyGeneratorOpt, Option<String> partitionPath) {
-    throw new UnsupportedOperationException("HFileUtils does not support getHoodieKeyIterator");
+    try {
+      HoodieFileReader reader = HoodieIOFactory
+          .getIOFactory(storage)
+          .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
+          .getFileReader(new HoodieReaderConfig(), filePath, HoodieFileFormat.HFILE);
+      ClosableIterator<String> keyIterator = reader.getRecordKeyIterator();
+      return new ClosableIterator<HoodieKey>() {
+        @Override
+        public void close() {
+          keyIterator.close();
+        }
+
+        @Override
+        public boolean hasNext() {
+          return keyIterator.hasNext();
+        }
+
+        @Override
+        public HoodieKey next() {
+          String key = keyIterator.next();
+          return new HoodieKey(key, partitionPath.orElse(null));
+        }
+      };
+    } catch (IOException e) {
+      throw new HoodieIOException("Unable to read the HFile: ", e);
+    }
   }
 
   @Override
@@ -156,11 +182,11 @@ public class HFileUtils extends FileFormatUtils {
 
   @Override
   public ByteArrayOutputStream serializeRecordsToLogBlock(HoodieStorage storage,
-                                           List<HoodieRecord> records,
-                                           Schema writerSchema,
-                                           Schema readerSchema,
-                                           String keyFieldName,
-                                           Map<String, String> paramsMap) throws IOException {
+                                                          List<HoodieRecord> records,
+                                                          Schema writerSchema,
+                                                          Schema readerSchema,
+                                                          String keyFieldName,
+                                                          Map<String, String> paramsMap) throws IOException {
     CompressionCodec compressionCodec = getHFileCompressionAlgorithm(paramsMap);
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     OutputStream ostream = new DataOutputStream(baos);

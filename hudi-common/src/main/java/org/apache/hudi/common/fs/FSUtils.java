@@ -23,6 +23,7 @@ import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.avro.model.HoodiePath;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -69,6 +70,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
 
 /**
  * Utility functions related to accessing the file storage.
@@ -759,5 +762,12 @@ public class FSUtils {
 
   private static Option<HoodieLogFile> getLatestLogFile(Stream<HoodieLogFile> logFiles) {
     return Option.fromJavaOptional(logFiles.min(HoodieLogFile.getReverseLogFileComparator()));
+  }
+
+  public static boolean isMdtBaseFile(HoodieBaseFile baseFile) {
+    StoragePathInfo baseFileStoragePathInfo = baseFile.getPathInfo();
+    return (baseFileStoragePathInfo != null
+        && baseFileStoragePathInfo.getPath().toString().contains(METAFOLDER_NAME))
+        || baseFile.getStoragePath().toString().contains(METAFOLDER_NAME);
   }
 }

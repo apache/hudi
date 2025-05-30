@@ -62,7 +62,7 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
 
   protected BaseSparkInternalRowReaderContext(StorageConfiguration<?> storageConfig,
                                               HoodieTableConfig tableConfig) {
-    super(storageConfig, tableConfig);
+    super(storageConfig, tableConfig, Option.empty(), Option.empty());
   }
 
   @Override
