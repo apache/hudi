@@ -604,7 +604,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   TypedProperties buildFileGroupReaderProperties(HoodieMetadataConfig metadataConfig) {
     HoodieCommonConfig commonConfig = HoodieCommonConfig.newBuilder()
         .fromProperties(metadataConfig.getProps()).build();
-    TypedProperties props = TypedProperties.copy(metadataConfig.getProps());
+    TypedProperties props = new TypedProperties();
     props.setProperty(
         MAX_MEMORY_FOR_MERGE.key(),
         Long.toString(metadataConfig.getMaxReaderMemory()));
