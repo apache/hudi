@@ -1662,6 +1662,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     });
   }
 
+  /**
+   * No-op WriteStatusHandler callback. We will return true w/o doing any processing from the callback.
+   */
   public static class NoOpWriteStatusHandlerCallback implements WriteStatusHandlerCallback {
 
     @Override
