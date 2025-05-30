@@ -35,7 +35,7 @@ import org.apache.hadoop.fs.Path
 import org.apache.parquet.hadoop.metadata.FileMetaData
 import org.apache.spark.sql.HoodieSchemaUtils
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, UnsafeProjection}
-import org.apache.spark.sql.execution.datasources.parquet.Spark4ParquetSchemaEvolutionUtils.pruneInternalSchema
+import org.apache.spark.sql.execution.datasources.parquet.ParquetSchemaEvolutionUtils.pruneInternalSchema
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.{AtomicType, DataType, StructType}
 
@@ -43,11 +43,11 @@ import java.time.ZoneId
 
 import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
 
-class Spark4ParquetSchemaEvolutionUtils(sharedConf: Configuration,
-                                        filePath: Path,
-                                        requiredSchema: StructType,
-                                        partitionSchema: StructType,
-                                        internalSchemaOpt: util.Option[InternalSchema]) extends SparkAdapterSupport{
+class ParquetSchemaEvolutionUtils(sharedConf: Configuration,
+                                                 filePath: Path,
+                                                 requiredSchema: StructType,
+                                                 partitionSchema: StructType,
+                                                 internalSchemaOpt: util.Option[InternalSchema]) extends SparkAdapterSupport{
   // Fetch internal schema
   private lazy val querySchemaOption: util.Option[InternalSchema] = pruneInternalSchema(internalSchemaOpt, requiredSchema)
 
@@ -171,7 +171,7 @@ class Spark4ParquetSchemaEvolutionUtils(sharedConf: Configuration,
                             useOffHeap: Boolean,
                             capacity: Int): VectorizedParquetRecordReader = {
     if (shouldUseInternalSchema) {
-      new Spark4HoodieVectorizedParquetRecordReader(
+      new HoodieVectorizedParquetRecordReader(
         convertTz,
         datetimeRebaseMode,
         datetimeRebaseTz,
@@ -193,7 +193,7 @@ class Spark4ParquetSchemaEvolutionUtils(sharedConf: Configuration,
   }
 }
 
-object Spark4ParquetSchemaEvolutionUtils {
+object ParquetSchemaEvolutionUtils {
   def pruneInternalSchema(internalSchemaOpt:  util.Option[InternalSchema], requiredSchema: StructType): util.Option[InternalSchema] = {
     if (internalSchemaOpt.isPresent && requiredSchema.nonEmpty) {
       util.Option.of(SparkInternalSchemaConverter.convertAndPruneStructTypeToInternalSchema(requiredSchema, internalSchemaOpt.get()))

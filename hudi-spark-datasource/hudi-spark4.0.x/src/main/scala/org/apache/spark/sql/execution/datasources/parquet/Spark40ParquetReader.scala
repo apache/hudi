@@ -91,7 +91,7 @@ class Spark40ParquetReader(enableVectorizedReader: Boolean,
     val filePath = file.toPath
     val split = new FileSplit(filePath, file.start, file.length, Array.empty[String])
 
-    val schemaEvolutionUtils = new Spark4ParquetSchemaEvolutionUtils(sharedConf, filePath, requiredSchema,
+    val schemaEvolutionUtils = new ParquetSchemaEvolutionUtils(sharedConf, filePath, requiredSchema,
       partitionSchema, internalSchemaOpt)
 
     val fileFooter = if (enableVectorizedReader) {

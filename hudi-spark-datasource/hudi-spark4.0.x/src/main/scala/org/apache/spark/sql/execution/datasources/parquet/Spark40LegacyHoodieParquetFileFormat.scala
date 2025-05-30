@@ -274,7 +274,7 @@ class Spark40LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
       if (enableVectorizedReader) {
         val vectorizedReader =
           if (shouldUseInternalSchema) {
-            new Spark4HoodieVectorizedParquetRecordReader(
+            new HoodieVectorizedParquetRecordReader(
               convertTz.orNull,
               datetimeRebaseSpec.mode.toString,
               datetimeRebaseSpec.timeZone,

@@ -31,31 +31,34 @@ import org.apache.spark.sql.vectorized.ColumnVector;
 import org.apache.spark.sql.vectorized.ColumnarBatch;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.time.ZoneId;
 import java.util.HashMap;
 import java.util.Map;
 
-public class SparkBaseHoodieVectorizedParquetRecordReader extends VectorizedParquetRecordReader {
+public class HoodieVectorizedParquetRecordReader extends VectorizedParquetRecordReader {
 
   // save the col type change info.
-  protected final Map<Integer, Pair<DataType, DataType>> typeChangeInfos;
+  private final Map<Integer, Pair<DataType, DataType>> typeChangeInfos;
 
-  protected ColumnarBatch columnarBatch;
+  private ColumnarBatch columnarBatch;
 
-  protected Map<Integer, WritableColumnVector> idToColumnVectors;
+  private Map<Integer, WritableColumnVector> idToColumnVectors;
 
-  protected ColumnVector[] columnVectors;
+  private ColumnVector[] columnVectors;
 
   // The capacity of vectorized batch.
-  protected final int capacity;
+  private final int capacity;
 
   // If true, this class returns batches instead of rows.
-  protected boolean returnColumnarBatch;
+  private boolean returnColumnarBatch;
 
   // The memory mode of the columnarBatch.
-  protected final MemoryMode memoryMode;
+  private final MemoryMode memoryMode;
 
-  public SparkBaseHoodieVectorizedParquetRecordReader(
+  private Field batchIdxField;
+
+  public HoodieVectorizedParquetRecordReader(
       ZoneId convertTz,
       String datetimeRebaseMode,
       String datetimeRebaseTz,
@@ -130,8 +133,43 @@ public class SparkBaseHoodieVectorizedParquetRecordReader extends VectorizedParq
   }
 
   @Override
+  public boolean nextBatch() throws IOException {
+    boolean result = super.nextBatch();
+    if (idToColumnVectors != null) {
+      idToColumnVectors.entrySet().stream().forEach(e -> e.getValue().reset());
+    }
+    resultBatch();
+    return result;
+  }
+
+  @Override
   public void enableReturningBatches() {
     returnColumnarBatch = true;
     super.enableReturningBatches();
+  }
+
+  @Override
+  public Object getCurrentValue() {
+    if (typeChangeInfos == null || typeChangeInfos.isEmpty()) {
+      return super.getCurrentValue();
+    }
+
+    if (returnColumnarBatch) {
+      return columnarBatch == null ? super.getCurrentValue() : columnarBatch;
+    }
+
+    return columnarBatch == null ? super.getCurrentValue() : columnarBatch.getRow(batchIdxFromSuper() - 1);
+  }
+
+  private int batchIdxFromSuper() {
+    try {
+      if (batchIdxField == null) {
+        batchIdxField = VectorizedParquetRecordReader.class.getDeclaredField("batchIdx");
+        batchIdxField.setAccessible(true);
+      }
+      return (Integer) batchIdxField.get(this);
+    } catch (NoSuchFieldException | IllegalAccessException e) {
+      throw new RuntimeException(e);
+    }
   }
 }
