@@ -166,7 +166,8 @@ public class TestHoodieMetadataPayload extends HoodieCommonTestHarness {
         HoodieMetadataPayload.createPartitionFilesRecord(PARTITION_NAME, Collections.emptyMap(), allDeletedFileList);
 
     HoodieMetadataPayload combinedPayload = allDeletionRecord.getData().preCombine(additionRecord.getData());
-    assertTrue(combinedPayload.isDeleted());
+    assertEquals(HoodieMetadataPayload.createPartitionFilesRecord(PARTITION_NAME, Collections.emptyMap(), Collections.emptyList()).getData(), combinedPayload);
+    assertTrue(combinedPayload.filesystemMetadata.isEmpty());
 
     // test all partition record
     HoodieRecord<HoodieMetadataPayload> allPartitionsRecord = HoodieMetadataPayload.createPartitionListRecord(Arrays.asList(PARTITION_NAME, PARTITION_NAME2, PARTITION_NAME3), false);

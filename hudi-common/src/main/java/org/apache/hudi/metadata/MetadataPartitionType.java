@@ -26,7 +26,6 @@ import org.apache.hudi.avro.model.HoodieSecondaryIndexInfo;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.index.expression.HoodieExpressionIndex;
@@ -100,12 +99,7 @@ public enum MetadataPartitionType {
 
     @Override
     public HoodieMetadataPayload combineMetadataPayloads(HoodieMetadataPayload older, HoodieMetadataPayload newer) {
-      Map<String, HoodieMetadataFileInfo> combinedFileSystemMetadata = combineFileSystemMetadata(older, newer);
-      if (combinedFileSystemMetadata.isEmpty()) {
-        // if all the files in a partition are deleted after merge, delete the record
-        return new HoodieMetadataPayload(Option.empty());
-      }
-      return new HoodieMetadataPayload(newer.key, newer.type, combinedFileSystemMetadata);
+      return new HoodieMetadataPayload(newer.key, newer.type, combineFileSystemMetadata(older, newer));
     }
   },
   COLUMN_STATS(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS, "col-stats-", 3) {
