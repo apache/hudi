@@ -240,7 +240,6 @@
       <version>${spark.version}</version>
     </dependency>
 
-    <!-- Force to use 2.11.0 since hbase-server requires 2.7+ -->
     <dependency>
       <groupId>commons-io</groupId>
       <artifactId>commons-io</artifactId>
