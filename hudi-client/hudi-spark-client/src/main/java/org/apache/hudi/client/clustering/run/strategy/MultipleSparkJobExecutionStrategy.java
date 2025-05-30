@@ -309,7 +309,6 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
     TypedProperties readerProperties = getReaderProperties(maxMemoryPerCompaction);
     final boolean usePosition = getWriteConfig().getBooleanOrDefault(MERGE_USE_RECORD_POSITIONS);
     String internalSchemaStr = getWriteConfig().getInternalSchema();
-    boolean isInternalSchemaPresent = !StringUtils.isNullOrEmpty(internalSchemaStr);
     SerializableSchema serializableTableSchemaWithMetaFields = new SerializableSchema(tableSchemaWithMetaFields);
 
     // broadcast reader context.
@@ -323,13 +322,11 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
         FileSlice fileSlice = clusteringOperationToFileSlice(basePath, clusteringOperation);
         // instantiate other supporting cast
         Schema readerSchema = serializableTableSchemaWithMetaFields.get();
-        Option<InternalSchema> internalSchemaOption = Option.empty();
-        if (isInternalSchemaPresent) {
-          internalSchemaOption = SerDeHelper.fromJson(internalSchemaStr);
-        }
+        Option<InternalSchema> internalSchemaOption = SerDeHelper.fromJson(internalSchemaStr);
 
         // instantiate FG reader
-        HoodieFileGroupReader<InternalRow> fileGroupReader = getFileGroupReader(metaClient, fileSlice, readerSchema, internalSchemaOption, readerContextFactory, instantTime, readerProperties, usePosition);
+        HoodieFileGroupReader<InternalRow> fileGroupReader = getFileGroupReader(metaClient, fileSlice, readerSchema, internalSchemaOption,
+            readerContextFactory, instantTime, readerProperties, usePosition);
         // read records from the FG reader
         return CloseableIteratorListener.addListener(fileGroupReader.getClosableIterator());
       }
