@@ -19,6 +19,7 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.common.engine.EngineType;
+import org.apache.hudi.common.model.EventTimeBasedAvroRecordMerger;
 import org.apache.hudi.common.model.FirstValueAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -26,6 +27,7 @@ import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.OperationModeAwareness;
+import org.apache.hudi.common.model.OverwriteWithLatestMerger;
 import org.apache.hudi.common.model.PartialUpdateAvroMerger;
 import org.apache.hudi.common.model.PartialUpdateWithNonDefaultValueAvroMerger;
 import org.apache.hudi.exception.HoodieException;
@@ -79,8 +81,11 @@ public class HoodieRecordUtils {
    */
   public static HoodieRecordMerger createRecordMerger(String basePath, EngineType engineType,
                                                       List<String> mergerClassList, String recordMergerStrategy) {
-    if (mergerClassList.isEmpty() || HoodieTableMetadata.isMetadataTable(basePath)) {
+    if (HoodieTableMetadata.isMetadataTable(basePath)) {
       return HoodieAvroRecordMerger.INSTANCE;
+    } else if (mergerClassList.isEmpty()) {
+      // No merger class is given, we fall back to use Avro based mergers.
+      return createValidRecordMerger(engineType, "", recordMergerStrategy).get();
     } else {
       return createValidRecordMerger(engineType, mergerClassList, recordMergerStrategy)
           .orElse(HoodieAvroRecordMerger.INSTANCE);
@@ -100,6 +105,16 @@ public class HoodieRecordUtils {
       case HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID:
         return Option.of(HoodieAvroRecordMerger.INSTANCE);
       default:
+        // Without merger classes provided; We use default Avro merger.
+        if (mergerImpls.isEmpty()) {
+          if (recordMergerStrategy.equals(HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID)) {
+            return Option.of(EventTimeBasedAvroRecordMerger.INSTANCE);
+          } else if (recordMergerStrategy.equals(HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID)) {
+            return Option.of(OverwriteWithLatestMerger.INSTANCE);
+          } else {
+            return Option.of(HoodieAvroRecordMerger.INSTANCE);
+          }
+        }
         // General support.
         return createValidRecordMerger(engineType, ConfigUtils.split2List(mergerImpls), recordMergerStrategy);
     }

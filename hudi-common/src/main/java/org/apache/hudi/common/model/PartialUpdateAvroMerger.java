@@ -21,15 +21,15 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericData;
-import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.jute.Index;
 
 import java.io.IOException;
+import java.util.List;
 
 /**
  * This is the merger that replaces PartialUpdateAvroPayload class.
@@ -155,29 +155,56 @@ public class PartialUpdateAvroMerger extends EventTimeBasedAvroRecordMerger {
   HoodieRecord mergeRecord(HoodieRecord lowOrderRecord,
                            Schema lowOrderSchema,
                            HoodieRecord highOrderRecord,
-                           Schema highOrderSchema) {
-    // Currently assume there is no schema evolution, solve it in HUDI-9253
-    ValidationUtils.checkArgument(
-        lowOrderSchema.getFields().size() == highOrderSchema.getFields().size());
+                           Schema highOrderSchema,
+                           TypedProperties props) throws IOException {
     return new HoodieAvroIndexedRecord(mergeIndexedRecord(
-        (IndexedRecord) lowOrderRecord.data, (IndexedRecord) highOrderRecord.data, highOrderSchema));
+        lowOrderRecord.toIndexedRecord(lowOrderSchema, props).map(HoodieAvroIndexedRecord::getData).get(),
+        highOrderRecord.toIndexedRecord(lowOrderSchema, props).map(HoodieAvroIndexedRecord::getData).get(),
+        lowOrderSchema,
+        highOrderSchema));
   }
 
   protected IndexedRecord mergeIndexedRecord(IndexedRecord lowOrderRecord,
                                              IndexedRecord highOrderRecord,
-                                             Schema schema) {
-    GenericRecord result = new GenericData.Record(schema);
-    for (int i = 0; i < schema.getFields().size(); i++) {
-      Object lowVal = lowOrderRecord.get(i);
-      Object highVal = highOrderRecord.get(i);
-      // Start with lowOrderRecord value
+                                             Schema lowOrderSchema,
+                                             Schema highOrderSchema) {
+    int lowOrderSchemaFieldSize = lowOrderSchema.getFields().size();
+    int highOrderSchemaFieldSize = highOrderSchema.getFields().size();
+    final Schema finalSchema =
+        lowOrderSchemaFieldSize > highOrderSchemaFieldSize ? lowOrderSchema : highOrderSchema;
+    final GenericRecordBuilder builder = new GenericRecordBuilder(finalSchema);
+
+    // Assumptions:
+    // 1. Schema differences are ONLY due to meta fields.
+    // 2. Meta fields are consecutive and in the same order.
+    // 3. Meta fields start from index 0 if exist.
+    int indexForLow = 0;
+    int indexForHigh = 0;
+    if (lowOrderSchemaFieldSize > highOrderSchemaFieldSize) {
+      indexForHigh -= (lowOrderSchemaFieldSize - highOrderSchemaFieldSize);
+    } else {
+      indexForLow -= (highOrderSchemaFieldSize - lowOrderSchemaFieldSize);
+    }
+
+    // Merge.
+    int index = 0;
+    List<Schema.Field> fields = finalSchema.getFields();
+    while (indexForHigh < highOrderSchemaFieldSize && indexForLow < lowOrderSchemaFieldSize) {
+      Object lowVal = indexForLow >= 0 ? lowOrderRecord.get(indexForLow) : null;
+      Object highVal = indexForHigh >= 0 ? highOrderRecord.get(indexForHigh) : null;
+      // Start with lowOrderRecord value.
       Object value = lowVal;
-      // Override if highOrderRecord has a non-null value
+      // Override if highOrderRecord has a non-null value.
       if (highVal != null) {
         value = highVal;
       }
-      result.put(i, value);
+      // Set the field.
+      builder.set(fields.get(index), value);
+      // Move indexes.
+      index++;
+      indexForHigh++;
+      indexForLow++;
     }
-    return result;
+    return builder.build();
   }
 }

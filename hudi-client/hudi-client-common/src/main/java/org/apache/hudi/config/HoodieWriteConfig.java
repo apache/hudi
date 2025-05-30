@@ -40,12 +40,17 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FileSystemRetryConfig;
+import org.apache.hudi.common.model.EventTimeAvroPayload;
+import org.apache.hudi.common.model.FirstValueAvroPayload;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.model.PartialUpdateAvroPayload;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -1277,8 +1282,28 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public HoodieRecordMerger getRecordMerger() {
-    return HoodieRecordUtils.createRecordMerger(getString(BASE_PATH),
-        engineType, getSplitStrings(RECORD_MERGE_IMPL_CLASSES), getString(RECORD_MERGE_STRATEGY_ID));
+    String payloadClass = getPayloadClass();
+    String strategyId = getString(RECORD_MERGE_STRATEGY_ID);
+    List<String> mergerClasses = getSplitStrings(RECORD_MERGE_IMPL_CLASSES);
+
+    // When payload strategy is given, we assigned precise strategy id based on payload class.
+    if (payloadClass != null && strategyId.equals(HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID)) {
+      if (payloadClass.equals(OverwriteWithLatestAvroPayload.class.getName())) {
+        strategyId = HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID;
+      } else if (payloadClass.equals(FirstValueAvroPayload.class.getName())) {
+        strategyId = HoodieRecordMerger.FIRST_VALUE_MERGE_STRATEGY_UUID;
+      } else if (payloadClass.equals(PartialUpdateAvroPayload.class.getName())) {
+        strategyId = HoodieRecordMerger.PARTIAL_UPDATE_MERGE_STRATEGY_UUID;
+      } else if (payloadClass.equals(OverwriteNonDefaultsWithLatestAvroPayload.class.getName())) {
+        strategyId = HoodieRecordMerger.PARTIAL_UPDATE_WITH_NON_DEFAULT_VALUE_MERGE_STRATEGY_UUID;
+      } else if (payloadClass.equals(EventTimeAvroPayload.class.getName())) {
+        strategyId = HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID;
+      } else {
+        // no op.
+      }
+    }
+    return HoodieRecordUtils.createRecordMerger(
+        getString(BASE_PATH), engineType, mergerClasses, strategyId);
   }
 
   public String getSchema() {

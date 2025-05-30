@@ -33,7 +33,6 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -59,7 +58,7 @@ class TestPartialUpdateAvroMerger {
 
   @Test
   void testMergeWhenNewRecordIsDelete() throws IOException {
-    Schema schema = createTestSchema();
+    Schema schema = createHighSchema();
     when(oldRecord.getOrderingValue(schema, props)).thenReturn(100L);
     when(newRecord.getOrderingValue(schema, props)).thenReturn(200L);
     when(oldRecord.isDelete(schema, props)).thenReturn(false);
@@ -72,7 +71,7 @@ class TestPartialUpdateAvroMerger {
 
   @Test
   void testMergeWhenOldRecordIsDelete() throws IOException {
-    Schema schema = createTestSchema();
+    Schema schema = createHighSchema();
     when(oldRecord.getOrderingValue(schema, props)).thenReturn(200L);
     when(newRecord.getOrderingValue(schema, props)).thenReturn(100L);
     when(oldRecord.isDelete(schema, props)).thenReturn(true);
@@ -85,61 +84,56 @@ class TestPartialUpdateAvroMerger {
 
   @Test
   void testMergeIndexedRecordOverridesNullFields() {
-    Schema schema = createTestSchema();
-    GenericRecord low = new GenericData.Record(schema);
+    Schema lowSchema = createLowSchema();
+    GenericRecord low = new GenericData.Record(lowSchema);
+    low.put("ts", "1");
     low.put("id", "123");
     low.put("val", "old");
 
-    GenericRecord high = new GenericData.Record(schema);
+    Schema highSchema = createHighSchema();
+    GenericRecord high = new GenericData.Record(highSchema);
     high.put("id", "123");
     high.put("val", "new");
 
-    IndexedRecord result = merger.mergeIndexedRecord(low, high, schema);
-    assertEquals("123", result.get(0).toString());
-    assertEquals("new", result.get(1).toString());
+    IndexedRecord result = merger.mergeIndexedRecord(low, high, lowSchema, highSchema);
+    assertEquals("1", result.get(0).toString());
+    assertEquals("123", result.get(1).toString());
+    assertEquals("new", result.get(2).toString());
   }
 
   @Test
   void testMergeIndexedRecordRetainsLowValueWhenHighIsNull() {
-    Schema schema = createTestSchema();
-    GenericRecord low = new GenericData.Record(schema);
+    Schema lowSchema = createLowSchema();
+    GenericRecord low = new GenericData.Record(lowSchema);
+    low.put("ts", "1");
     low.put("id", "123");
     low.put("val", "old");
 
-    GenericRecord high = new GenericData.Record(schema);
+    Schema highSchema = createHighSchema();
+    GenericRecord high = new GenericData.Record(highSchema);
     high.put("id", "123");
     high.put("val", null);
 
-    IndexedRecord result = merger.mergeIndexedRecord(low, high, schema);
-    assertEquals("123", result.get(0).toString());
-    assertEquals("old", result.get(1).toString());
+    IndexedRecord result = merger.mergeIndexedRecord(low, high, lowSchema, highSchema);
+    assertEquals("1", result.get(0).toString());
+    assertEquals("123", result.get(1).toString());
+    assertEquals("old", result.get(2).toString());
   }
 
-  @Test
-  void testMergeRecordThrowsIfSchemaMismatch() {
-    Schema schema1 = createTestSchema();
-    Schema schema2 = createIncompatibleSchema();
-
-    HoodieRecord low = new HoodieAvroIndexedRecord(new GenericData.Record(schema1));
-    HoodieRecord high = new HoodieAvroIndexedRecord(new GenericData.Record(schema2));
-
-    assertThrows(
-        IllegalArgumentException.class,
-        () -> merger.mergeRecord(low, schema1, high, schema2)
-    );
-  }
-
-  private Schema createTestSchema() {
+  private Schema createLowSchema() {
     String schemaStr = "{\"type\":\"record\",\"name\":\"TestRecord\",\"fields\":["
+        + "{\"name\":\"ts\",\"type\":\"string\"},"
         + "{\"name\":\"id\",\"type\":\"string\"},"
         + "{\"name\":\"val\",\"type\":[\"null\", \"string\"],\"default\":null}"
         + "]}";
     return new Schema.Parser().parse(schemaStr);
   }
 
-  private Schema createIncompatibleSchema() {
+  private Schema createHighSchema() {
     String schemaStr = "{\"type\":\"record\",\"name\":\"TestRecord\",\"fields\":["
-        + "{\"name\":\"id\",\"type\":\"string\"}]}";
+        + "{\"name\":\"id\",\"type\":\"string\"},"
+        + "{\"name\":\"val\",\"type\":[\"null\", \"string\"],\"default\":null}"
+        + "]}";
     return new Schema.Parser().parse(schemaStr);
   }
 }

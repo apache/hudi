@@ -48,7 +48,7 @@ class TestPartialUpdateWithNonDefaultValueAvroMerger {
     high.put("id", "456"); // overrides default
     high.put("val", "high"); // overrides default
 
-    IndexedRecord result = merger.mergeIndexedRecord(low, high, schema);
+    IndexedRecord result = merger.mergeIndexedRecord(low, high, schema, schema);
     assertEquals("456", result.get(0).toString());
     assertEquals("high", result.get(1).toString());
   }
@@ -64,7 +64,7 @@ class TestPartialUpdateWithNonDefaultValueAvroMerger {
     high.put("id", ""); // default
     high.put("val", null); // default
 
-    IndexedRecord result = merger.mergeIndexedRecord(low, high, schema);
+    IndexedRecord result = merger.mergeIndexedRecord(low, high, schema, schema);
     assertEquals("123", result.get(0).toString()); // kept low
     assertEquals("low", result.get(1).toString()); // kept low
   }

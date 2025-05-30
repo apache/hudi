@@ -20,9 +20,10 @@
 package org.apache.hudi.common.model;
 
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericData;
-import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.generic.IndexedRecord;
+
+import java.util.List;
 
 /**
  * Description from original class: OverwriteNonDefaultsWithLatestAvroPayload
@@ -47,24 +48,46 @@ public class PartialUpdateWithNonDefaultValueAvroMerger extends PartialUpdateAvr
   @Override
   protected IndexedRecord mergeIndexedRecord(IndexedRecord lowOrderRecord,
                                              IndexedRecord highOrderRecord,
-                                             Schema schema) {
-    GenericRecord result = new GenericData.Record(schema);
-    for (int i = 0; i < schema.getFields().size(); i++) {
-      Object lowVal = lowOrderRecord.get(i);
-      Object highVal = highOrderRecord.get(i);
+                                             Schema lowOrderSchema,
+                                             Schema highOrderSchema) {
+    int lowOrderSchemaFieldSize = lowOrderSchema.getFields().size();
+    int highOrderSchemaFieldSize = highOrderSchema.getFields().size();
+    final Schema finalSchema =
+        lowOrderSchemaFieldSize > highOrderSchemaFieldSize ? lowOrderSchema : highOrderSchema;
+    final GenericRecordBuilder builder = new GenericRecordBuilder(finalSchema);
+
+    // Assumptions:
+    // 1. Schema differences are ONLY due to meta fields.
+    // 2. Meta fields are consecutive and in the same order.
+    // 3. Meta fields start from index 0 if exist.
+    int indexForLow = 0;
+    int indexForHigh = 0;
+    if (lowOrderSchemaFieldSize > highOrderSchemaFieldSize) {
+      indexForHigh -= (lowOrderSchemaFieldSize - highOrderSchemaFieldSize);
+    } else {
+      indexForLow -= (highOrderSchemaFieldSize - lowOrderSchemaFieldSize);
+    }
+
+    // Loop from both schemas.
+    int index = 0;
+    List<Schema.Field> fields = finalSchema.getFields();
+    while (indexForHigh < highOrderSchemaFieldSize && indexForLow < lowOrderSchemaFieldSize) {
+      Object lowVal = indexForLow >= 0 ? lowOrderRecord.get(indexForLow) : null;
+      Object highVal = indexForHigh >= 0 ? highOrderRecord.get(indexForHigh) : null;
       // Start with lowOrderRecord value
       Object value = lowVal;
-      // Override if highOrderRecord has a non-default value
-      Object defaultValue = null;
-      Schema.Field field = schema.getFields().get(i);
-      if (field.hasDefaultValue()) {
-        defaultValue = field.defaultVal();
-      }
-      if (highVal != null && highVal != defaultValue) {
+      // Override if highOrderRecord has a non-default value.
+      Schema.Field field = fields.get(index);
+      if (highVal != null && highVal != field.defaultVal()) {
         value = highVal;
       }
-      result.put(i, value);
+      // Set the field.
+      builder.set(fields.get(index), value);
+      // Move indexes.
+      index++;
+      indexForLow++;
+      indexForHigh++;
     }
-    return result;
+    return builder.build();
   }
 }

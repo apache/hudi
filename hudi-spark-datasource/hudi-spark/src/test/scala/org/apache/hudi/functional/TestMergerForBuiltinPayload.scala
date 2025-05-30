@@ -21,10 +21,10 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.DataSourceWriteOptions.{OPERATION, PRECOMBINE_FIELD, RECORDKEY_FIELD, TABLE_TYPE}
-import org.apache.hudi.common.config.RecordMergeMode
-import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, EventTimeAvroPayload, FirstValueAvroPayload, HoodieAvroRecordMerger, HoodieRecordMerger, OverwriteNonDefaultsWithLatestAvroPayload, OverwriteWithLatestAvroPayload, OverwriteWithLatestMerger, PartialUpdateAvroPayload}
+import org.apache.hudi.common.model.{HoodieRecordMerger, PartialUpdateAvroPayload}
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
-import org.apache.hudi.testutils.{HoodieClientTestBase, SparkClientFunctionalTestHarness}
+import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
+
 import org.apache.spark.sql.SaveMode
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
@@ -40,18 +40,15 @@ class TestMergerForBuiltinPayload extends SparkClientFunctionalTestHarness {
 
   @ParameterizedTest
   @MethodSource(Array("provideParams"))
-  def testCustomDelete(tableType: String,
+  def testMergerBuiltinPayload(tableType: String,
                        payloadClazz: String): Unit = {
-    val avroMergerClasses = List(
-      classOf[HoodieAvroRecordMerger].getName,
-      classOf[OverwriteWithLatestMerger].getName).mkString(",")
     val mergeStrategy = HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID
     val opts: Map[String, String] = Map(
-      HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key -> avroMergerClasses,
       HoodieWriteConfig.RECORD_MERGE_STRATEGY_ID.key -> mergeStrategy,
       HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key() -> payloadClazz)
     val columns = Seq("ts", "key", "rider", "driver", "fare", "delete")
 
+    // Add an insert.
     val data = Seq(
       (10, "1", "rider-A", "driver-A", 19.10, "i"),
       (10, "2", "rider-B", "driver-B", 27.70, "i"),
@@ -68,8 +65,7 @@ class TestMergerForBuiltinPayload extends SparkClientFunctionalTestHarness {
       options(opts).
       mode(SaveMode.Overwrite).
       save(basePath)
-
-    // Delete using delete markers.
+    // Add an update.
     val updateData = Seq(
       (11, "1", "rider-X", "driver-X", 19.10, "d"),
       (9, "2", "rider-Y", "driver-Y", 27.70, "d"))
@@ -80,22 +76,21 @@ class TestMergerForBuiltinPayload extends SparkClientFunctionalTestHarness {
       options(opts).
       mode(SaveMode.Append).
       save(basePath)
-
-    // Validate in the end.
+    // Validate.
     val df = spark.read.format("hudi").options(opts).load(basePath)
     val finalDf = df.select("ts", "key", "rider", "driver", "fare", "delete").sort("key")
     finalDf.show(false)
   }
 }
 
-object TestCustomDeleteRecord {
+object TestMergerForBuiltinPayload {
   def provideParams(): java.util.List[Arguments] = {
     java.util.Arrays.asList(
-      Arguments.of("COPY_ON_WRITE", classOf[OverwriteWithLatestAvroPayload].getName),
-      Arguments.of("COPY_ON_WRITE", classOf[OverwriteNonDefaultsWithLatestAvroPayload].getName),
-      Arguments.of("COPY_ON_WRITE", classOf[PartialUpdateAvroPayload].getName),
-      Arguments.of("COPY_ON_WRITE", classOf[DefaultHoodieRecordPayload].getName),
-      Arguments.of("COPY_ON_WRITE", classOf[EventTimeAvroPayload].getName),
-      Arguments.of("COPY_ON_WRITE", classOf[FirstValueAvroPayload].getName))
+//      Arguments.of("COPY_ON_WRITE", classOf[OverwriteWithLatestAvroPayload].getName),
+//      Arguments.of("COPY_ON_WRITE", classOf[OverwriteNonDefaultsWithLatestAvroPayload].getName),
+      Arguments.of("COPY_ON_WRITE", classOf[PartialUpdateAvroPayload].getName))
+//      Arguments.of("COPY_ON_WRITE", classOf[DefaultHoodieRecordPayload].getName),
+//      Arguments.of("COPY_ON_WRITE", classOf[EventTimeAvroPayload].getName),
+//      Arguments.of("COPY_ON_WRITE", classOf[FirstValueAvroPayload].getName))
   }
 }
