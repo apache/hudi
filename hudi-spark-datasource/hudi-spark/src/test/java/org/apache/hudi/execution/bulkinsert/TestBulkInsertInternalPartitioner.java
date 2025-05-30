@@ -18,6 +18,7 @@
 
 package org.apache.hudi.execution.bulkinsert;
 
+import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -33,6 +34,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.sql.HoodieUTF8StringFactory;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -55,6 +57,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase implements Serializable {
   private static final Comparator<HoodieRecord<? extends HoodieRecordPayload>> KEY_COMPARATOR =
       Comparator.comparing(o -> (o.getPartitionPath() + "+" + o.getRecordKey()));
+  private static final HoodieUTF8StringFactory HOODIE_UTF8STRING_FACTORY =
+      SparkAdapterSupport$.MODULE$.sparkAdapter().getHoodieUTF8StringFactory();
 
   public static JavaRDD<HoodieRecord> generateTestRecordsForBulkInsert(JavaSparkContext jsc) {
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
@@ -252,8 +256,8 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase impl
         throw new HoodieIOException("unable to read value for " + sortColumns);
       }
     }, (o1, o2) -> {
-      FlatLists.ComparableList values1 = FlatLists.ofComparableArray(hoodieUTF8StringFactory.wrapArrayOfObjects(o1.toArray()));
-      FlatLists.ComparableList values2 = FlatLists.ofComparableArray(hoodieUTF8StringFactory.wrapArrayOfObjects(o2.toArray()));
+      FlatLists.ComparableList values1 = FlatLists.ofComparableArray(HOODIE_UTF8STRING_FACTORY.wrapArrayOfObjects(o1.toArray()));
+      FlatLists.ComparableList values2 = FlatLists.ofComparableArray(HOODIE_UTF8STRING_FACTORY.wrapArrayOfObjects(o2.toArray()));
         return values1.compareTo(values2);
       }
     );
