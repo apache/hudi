@@ -27,8 +27,10 @@ import java.util.Properties;
 
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
+import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_DATAHUB_DATABASE_NAME;
 import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_DATAHUB_DATAPLATFORM_NAME;
 import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_DATAHUB_DATASET_ENV;
+import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_DATAHUB_TABLE_NAME;
 
 /**
  * Construct and provide the default {@link DatasetUrn} to identify the Dataset on DataHub.
@@ -51,7 +53,8 @@ public class HoodieDataHubDatasetIdentifier {
 
     return new DatasetUrn(
             createDataPlatformUrn(config.getStringOrDefault(META_SYNC_DATAHUB_DATAPLATFORM_NAME)),
-            createDatasetName(config.getString(META_SYNC_DATABASE_NAME), config.getString(META_SYNC_TABLE_NAME)),
+            createDatasetName(config.getStringOrDefault(META_SYNC_DATAHUB_DATABASE_NAME, config.getString(META_SYNC_DATABASE_NAME)),
+                config.getStringOrDefault(META_SYNC_DATAHUB_TABLE_NAME,config.getString(META_SYNC_TABLE_NAME))),
             FabricType.valueOf(config.getStringOrDefault(META_SYNC_DATAHUB_DATASET_ENV))
     );
   }

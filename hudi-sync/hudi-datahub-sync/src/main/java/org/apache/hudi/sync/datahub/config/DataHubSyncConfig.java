@@ -80,6 +80,18 @@ public class DataHubSyncConfig extends HoodieSyncConfig {
       .markAdvanced()
       .withDocumentation("Environment to use when pushing entities to Datahub");
 
+  public static final ConfigProperty<String> META_SYNC_DATAHUB_DATABASE_NAME = ConfigProperty
+      .key("hoodie.meta.sync.datahub.database.name")
+      .noDefaultValue()
+      .markAdvanced()
+      .withDocumentation("The name of the destination database that we should sync the hudi table to.");
+
+  public static final ConfigProperty<String> META_SYNC_DATAHUB_TABLE_NAME = ConfigProperty
+      .key("hoodie.meta.sync.datahub.table.name")
+      .noDefaultValue()
+      .markAdvanced()
+      .withDocumentation("The name of the destination table that we should sync the hudi table to.");
+
   public final HoodieDataHubDatasetIdentifier datasetIdentifier;
 
   public DataHubSyncConfig(Properties props) {
@@ -122,6 +134,12 @@ public class DataHubSyncConfig extends HoodieSyncConfig {
     @Parameter(names = {"--dataset-env"}, description = "Which Datahub Environment to use when pushing entities")
     public String datasetEnv;
 
+    @Parameter(names = {"--database-name"}, description = "Database name to use for datahub sync")
+    public String databaseName;
+
+    @Parameter(names = {"--table-name"}, description = "Table name to use for datahub sync")
+    public String tableName;
+
     public boolean isHelp() {
       return hoodieSyncConfigParams.isHelp();
     }
@@ -134,6 +152,8 @@ public class DataHubSyncConfig extends HoodieSyncConfig {
       props.setPropertyIfNonNull(META_SYNC_DATAHUB_EMITTER_SUPPLIER_CLASS.key(), emitterSupplierClass);
       props.setPropertyIfNonNull(META_SYNC_DATAHUB_DATAPLATFORM_NAME.key(), dataPlatformName);
       props.setPropertyIfNonNull(META_SYNC_DATAHUB_DATASET_ENV.key(), datasetEnv);
+      props.setPropertyIfNonNull(META_SYNC_DATAHUB_DATABASE_NAME.key(), databaseName);
+      props.setPropertyIfNonNull(META_SYNC_DATAHUB_TABLE_NAME.key(), tableName);
       return props;
     }
   }

@@ -31,6 +31,7 @@ import org.apache.hadoop.conf.Configuration;
 import java.util.Properties;
 
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
+import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_DATAHUB_TABLE_NAME;
 
 /**
  * To sync with DataHub via REST APIs.
@@ -62,8 +63,8 @@ public class DataHubSyncTool extends HoodieSyncTool {
   @Override
   public void syncHoodieTable() {
     try (DataHubSyncClient syncClient = new DataHubSyncClient(config, metaClient)) {
-      syncClient.updateTableSchema(config.getString(META_SYNC_TABLE_NAME), null);
-      syncClient.updateLastCommitTimeSynced(config.getString(META_SYNC_TABLE_NAME));
+      syncClient.updateTableSchema(config.getStringOrDefault(META_SYNC_DATAHUB_TABLE_NAME, config.getString(META_SYNC_TABLE_NAME)), null);
+      syncClient.updateLastCommitTimeSynced(config.getStringOrDefault(META_SYNC_DATAHUB_TABLE_NAME, config.getString(META_SYNC_TABLE_NAME)));
     }
   }
 
