@@ -1088,21 +1088,20 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
   @Deprecated
   public boolean rollback(final String commitInstantTime, Option<HoodiePendingRollbackInfo> pendingRollbackInfo,
                           boolean skipLocking, boolean skipVersionCheck) throws HoodieRollbackException {
-    final String rollbackInstantTime = pendingRollbackInfo.map(entry -> entry.getRollbackInstant().requestedTime())
-        .orElseGet(() -> createNewInstantTime(!skipLocking));
-    return rollback(commitInstantTime, pendingRollbackInfo, rollbackInstantTime, skipLocking, skipVersionCheck);
+    return rollback(commitInstantTime, pendingRollbackInfo, Option.empty(), skipLocking, skipVersionCheck);
   }
 
   /**
    * @param commitInstantTime   Instant time of the commit
    * @param pendingRollbackInfo pending rollback instant and plan if rollback failed from previous attempt.
+   * @param suppliedRollbackInstantTime the user provided instant to use for the rollback. This is only set for rolling back instants on the metadata table.
    * @param skipLocking         if this is triggered by another parent transaction, locking can be skipped.
    * @throws HoodieRollbackException if rollback cannot be performed successfully
    * @Deprecated Rollback the inflight record changes with the given commit time. This
    * will be removed in future in favor of {@link BaseHoodieWriteClient#restoreToInstant(String, boolean)
    */
   @Deprecated
-  public boolean rollback(final String commitInstantTime, Option<HoodiePendingRollbackInfo> pendingRollbackInfo, String rollbackInstantTime,
+  public boolean rollback(final String commitInstantTime, Option<HoodiePendingRollbackInfo> pendingRollbackInfo, Option<String> suppliedRollbackInstantTime,
                           boolean skipLocking, boolean skipVersionCheck) throws HoodieRollbackException {
     LOG.info("Begin rollback of instant {} for table {}", commitInstantTime, config.getBasePath());
     final Timer.Context timerContext = this.metrics.getRollbackCtx();
@@ -1111,36 +1110,48 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       Option<HoodieInstant> commitInstantOpt = Option.fromJavaOptional(table.getActiveTimeline().getCommitsTimeline().getInstantsAsStream()
           .filter(instant -> EQUALS.test(instant.requestedTime(), commitInstantTime))
           .findFirst());
-      if (commitInstantOpt.isPresent() || pendingRollbackInfo.isPresent()) {
-        LOG.info("Scheduling Rollback at instant time : {} "
-                + "(exists in active timeline: {}), with rollback plan: {} for table {}",
-            rollbackInstantTime, commitInstantOpt.isPresent(), pendingRollbackInfo.isPresent(), config.getBasePath());
-        Option<HoodieRollbackPlan> rollbackPlanOption = pendingRollbackInfo.map(entry -> Option.of(entry.getRollbackPlan()))
-            .orElseGet(() -> table.scheduleRollback(context, rollbackInstantTime, commitInstantOpt.get(), false, config.shouldRollbackUsingMarkers(),
-                false));
-        if (rollbackPlanOption.isPresent()) {
-          // There can be a case where the inflight rollback failed after the instant files
-          // are deleted for commitInstantTime, so that commitInstantOpt is empty as it is
-          // not present in the timeline.  In such a case, the hoodie instant instance
-          // is reconstructed to allow the rollback to be reattempted, and the deleteInstants
-          // is set to false since they are already deleted.
-          // Execute rollback
-          HoodieRollbackMetadata rollbackMetadata = commitInstantOpt.isPresent()
-              ? table.rollback(context, rollbackInstantTime, commitInstantOpt.get(), true, skipLocking)
-              : table.rollback(context, rollbackInstantTime, table.getMetaClient().createNewInstant(
-                  HoodieInstant.State.INFLIGHT, rollbackPlanOption.get().getInstantToRollback().getAction(), commitInstantTime),
-              false, skipLocking);
-          if (timerContext != null) {
-            long durationInMs = metrics.getDurationInMs(timerContext.stop());
-            metrics.updateRollbackMetrics(durationInMs, rollbackMetadata.getTotalFilesDeleted());
-          }
-          return true;
-        } else {
-          throw new HoodieRollbackException("Failed to rollback " + config.getBasePath() + " commits " + commitInstantTime);
-        }
+      Option<HoodieRollbackPlan> rollbackPlanOption;
+      String rollbackInstantTime;
+      if (pendingRollbackInfo.isPresent()) {
+        rollbackPlanOption = Option.of(pendingRollbackInfo.get().getRollbackPlan());
+        rollbackInstantTime = pendingRollbackInfo.get().getRollbackInstant().requestedTime();
       } else {
-        LOG.warn("Cannot find instant {} in the timeline of table {} for rollback", commitInstantTime, config.getBasePath());
-        return false;
+        if (commitInstantOpt.isEmpty()) {
+          LOG.warn("Cannot find instant {} in the timeline of table {} for rollback", commitInstantTime, config.getBasePath());
+          return false;
+        }
+        if (!skipLocking) {
+          txnManager.beginTransaction(Option.empty(), Option.empty());
+        }
+        try {
+          rollbackInstantTime = suppliedRollbackInstantTime.orElseGet(() -> createNewInstantTime(false));
+          rollbackPlanOption = table.scheduleRollback(context, rollbackInstantTime, commitInstantOpt.get(), false, config.shouldRollbackUsingMarkers(), false);
+        } finally {
+          if (!skipLocking) {
+            txnManager.endTransaction(Option.empty());
+          }
+        }
+      }
+
+      if (rollbackPlanOption.isPresent()) {
+        // There can be a case where the inflight rollback failed after the instant files
+        // are deleted for commitInstantTime, so that commitInstantOpt is empty as it is
+        // not present in the timeline.  In such a case, the hoodie instant instance
+        // is reconstructed to allow the rollback to be reattempted, and the deleteInstants
+        // is set to false since they are already deleted.
+        // Execute rollback
+        HoodieRollbackMetadata rollbackMetadata = commitInstantOpt.isPresent()
+            ? table.rollback(context, rollbackInstantTime, commitInstantOpt.get(), true, skipLocking)
+            : table.rollback(context, rollbackInstantTime, table.getMetaClient().createNewInstant(
+                HoodieInstant.State.INFLIGHT, rollbackPlanOption.get().getInstantToRollback().getAction(), commitInstantTime),
+            false, skipLocking);
+        if (timerContext != null) {
+          long durationInMs = metrics.getDurationInMs(timerContext.stop());
+          metrics.updateRollbackMetrics(durationInMs, rollbackMetadata.getTotalFilesDeleted());
+        }
+        return true;
+      } else {
+        throw new HoodieRollbackException("Failed to rollback " + config.getBasePath() + " commits " + commitInstantTime);
       }
     } catch (Exception e) {
       throw new HoodieRollbackException("Failed to rollback " + config.getBasePath() + " commits " + commitInstantTime, e);
