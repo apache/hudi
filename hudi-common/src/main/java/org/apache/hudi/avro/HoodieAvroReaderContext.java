@@ -25,12 +25,12 @@ import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
-import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.OverwriteWithLatestMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
@@ -38,7 +38,12 @@ import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.expression.Expression;
+import org.apache.hudi.expression.Predicate;
+import org.apache.hudi.expression.Predicates;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
+import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -68,8 +73,10 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
 
   public HoodieAvroReaderContext(
       StorageConfiguration<?> storageConfiguration,
-      HoodieTableConfig tableConfig) {
-    super(storageConfiguration, tableConfig);
+      HoodieTableConfig tableConfig,
+      Option<InstantRange> instantRangeOpt,
+      Option<Predicate> filterOpt) {
+    super(storageConfiguration, tableConfig, instantRangeOpt, filterOpt);
     this.payloadClass = tableConfig.getPayloadClass();
   }
 
@@ -80,12 +87,34 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       long length,
       Schema dataSchema,
       Schema requiredSchema,
-      HoodieStorage storage
-  ) throws IOException {
+      HoodieStorage storage) throws IOException {
     HoodieAvroFileReader reader = (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(storage)
         .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(new HoodieConfig(),
-            filePath, HoodieFileFormat.PARQUET, Option.empty());
-    return reader.getIndexedRecordIterator(dataSchema, requiredSchema);
+            filePath, baseFileFormat, Option.empty());
+    if (keyFilterOpt.isEmpty()) {
+      return reader.getIndexedRecordIterator(dataSchema, requiredSchema);
+    } else {
+      // Currently predicate is only supported for HFile reader.
+      if (!(reader instanceof HoodieAvroHFileReaderImplBase)) {
+        return reader.getIndexedRecordIterator(dataSchema, requiredSchema);
+      } else {
+        // Two predicates are supported currently: IN and StringStartsWithAny.
+        HoodieAvroHFileReaderImplBase hfileReader = (HoodieAvroHFileReaderImplBase) reader;
+        if (keyFilterOpt.get().getOperator().equals(Expression.Operator.IN)) {
+          List<Expression> children = ((Predicates.In) keyFilterOpt.get()).getRightChildren();
+          List<String> keysOrPrefixes = children.stream()
+              .map(e -> (String) e.eval(null)).collect(Collectors.toList());
+          return hfileReader.getIndexedRecordsByKeysIterator(keysOrPrefixes, requiredSchema);
+        } else if (keyFilterOpt.get().getOperator().equals(Expression.Operator.STARTS_WITH)) {
+          List<Expression> children = ((Predicates.StringStartsWithAny) keyFilterOpt.get()).getRightChildren();
+          List<String> keysOrPrefixes = children.stream()
+              .map(e -> (String) e.eval(null)).collect(Collectors.toList());
+          return hfileReader.getIndexedRecordsByKeyPrefixIterator(keysOrPrefixes, requiredSchema);
+        } else {
+          throw new HoodieNotSupportedException("Unrecognized predicate: " + keyFilterOpt.get());
+        }
+      }
+    }
   }
 
   @Override
