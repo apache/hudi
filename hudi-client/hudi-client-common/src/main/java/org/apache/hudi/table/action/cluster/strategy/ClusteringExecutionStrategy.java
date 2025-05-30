@@ -41,6 +41,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
@@ -51,7 +52,10 @@ import java.io.Serializable;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED;
+import static org.apache.hudi.common.config.HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE;
 import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE;
+import static org.apache.hudi.common.config.HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH;
 import static org.apache.hudi.common.config.HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS;
 
 /**
@@ -93,9 +97,7 @@ public abstract class ClusteringExecutionStrategy<T, I, K, O> implements Seriali
   }
 
   protected ClosableIterator<HoodieRecord<T>> getRecordIterator(ReaderContextFactory<T> readerContextFactory, ClusteringOperation operation, String instantTime, long maxMemory) {
-    HoodieWriteConfig config = getWriteConfig();
-    TypedProperties props = TypedProperties.copy(config.getProps());
-    props.setProperty(MAX_MEMORY_FOR_MERGE.key(), Long.toString(maxMemory));
+    TypedProperties props = getReaderProperties(maxMemory);
 
     HoodieTable table = getHoodieTable();
 
@@ -103,10 +105,20 @@ public abstract class ClusteringExecutionStrategy<T, I, K, O> implements Seriali
     final boolean usePosition = getWriteConfig().getBooleanOrDefault(MERGE_USE_RECORD_POSITIONS);
     Option<InternalSchema> internalSchema = SerDeHelper.fromJson(getWriteConfig().getInternalSchema());
     try {
-      return getFileGroupReader(table.getMetaClient(), fileSlice, readerSchemaWithMetaFields, internalSchema, readerContextFactory, instantTime, usePosition).getClosableHoodieRecordIterator();
+      return getFileGroupReader(table.getMetaClient(), fileSlice, readerSchemaWithMetaFields, internalSchema, readerContextFactory, instantTime, props, usePosition).getClosableHoodieRecordIterator();
     } catch (IOException e) {
       throw new HoodieClusteringException("Error reading file slices", e);
     }
+  }
+
+  protected TypedProperties getReaderProperties(long maxMemory) {
+    HoodieWriteConfig config = getWriteConfig();
+    TypedProperties props = new TypedProperties();
+    props.setProperty(SPILLABLE_MAP_BASE_PATH.key(), config.getSpillableMapBasePath());
+    props.setProperty(SPILLABLE_DISK_MAP_TYPE.key(), config.getCommonConfig().getSpillableDiskMapType().toString());
+    props.setProperty(DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), Boolean.toString(config.getCommonConfig().isBitCaskDiskMapCompressionEnabled()));
+    props.setProperty(MAX_MEMORY_FOR_MERGE.key(), Long.toString(maxMemory));
+    return props;
   }
 
   /**
@@ -116,12 +128,13 @@ public abstract class ClusteringExecutionStrategy<T, I, K, O> implements Seriali
     String partitionPath = clusteringOperation.getPartitionPath();
     Option<HoodieBaseFile> baseFile;
     if (!StringUtils.isNullOrEmpty(clusteringOperation.getDataFilePath())) {
-      BaseFile bootstrapFile = StringUtils.isNullOrEmpty(clusteringOperation.getBootstrapFilePath()) ? null : new BaseFile(clusteringOperation.getBootstrapFilePath());
-      baseFile = Option.of(new HoodieBaseFile(clusteringOperation.getDataFilePath(), bootstrapFile));
+      BaseFile bootstrapFile = StringUtils.isNullOrEmpty(clusteringOperation.getBootstrapFilePath()) ? null
+          : new BaseFile(new StoragePath(basePath, clusteringOperation.getBootstrapFilePath()).toString());
+      baseFile = Option.of(new HoodieBaseFile(new StoragePath(basePath, clusteringOperation.getDataFilePath()).toString(), bootstrapFile));
     } else {
       baseFile = Option.empty();
     }
-    List<HoodieLogFile> logFiles = clusteringOperation.getDeltaFilePaths().stream().map(HoodieLogFile::new).collect(Collectors.toList());
+    List<HoodieLogFile> logFiles = clusteringOperation.getDeltaFilePaths().stream().map(path -> new StoragePath(basePath, path)).map(HoodieLogFile::new).collect(Collectors.toList());
 
     ValidationUtils.checkState(!baseFile.isEmpty() || !logFiles.isEmpty(), () -> "Both base file and log files are missing from this clustering operation " + clusteringOperation);
     String baseInstantTime = baseFile.map(HoodieBaseFile::getCommitTime).orElseGet(() -> logFiles.get(0).getDeltaCommitTime());
@@ -132,11 +145,11 @@ public abstract class ClusteringExecutionStrategy<T, I, K, O> implements Seriali
   }
 
   protected static <R> HoodieFileGroupReader<R> getFileGroupReader(HoodieTableMetaClient metaClient, FileSlice fileSlice, Schema readerSchema, Option<InternalSchema> internalSchemaOption,
-                                                                   ReaderContextFactory<R> readerContextFactory, String instantTime, boolean usePosition) {
+                                                                   ReaderContextFactory<R> readerContextFactory, String instantTime, TypedProperties properties, boolean usePosition) {
     HoodieReaderContext<R> readerContext = readerContextFactory.getContext();
     return HoodieFileGroupReader.<R>newBuilder()
         .withReaderContext(readerContext).withHoodieTableMetaClient(metaClient).withLatestCommitTime(instantTime)
         .withFileSlice(fileSlice).withDataSchema(readerSchema).withRequestedSchema(readerSchema).withInternalSchema(internalSchemaOption)
-        .withShouldUseRecordPosition(usePosition).withProps(metaClient.getTableConfig().getProps()).build();
+        .withShouldUseRecordPosition(usePosition).withProps(properties).build();
   }
 }

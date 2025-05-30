@@ -19,7 +19,6 @@
 package org.apache.hudi.client.clustering.run.strategy;
 
 import org.apache.hudi.AvroConversionUtils;
-import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
@@ -27,9 +26,8 @@ import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.utils.LazyConcatenatingIterator;
-import org.apache.hudi.common.config.HoodieMemoryConfig;
-import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.SerializableSchema;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.ReaderContextFactory;
@@ -38,11 +36,9 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
-import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.CustomizedThreadFactory;
 import org.apache.hudi.common.util.FutureUtils;
 import org.apache.hudi.common.util.Option;
@@ -62,7 +58,6 @@ import org.apache.hudi.execution.bulkinsert.RowSpatialCurveSortPartitioner;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.io.IOUtils;
-import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -77,17 +72,12 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.HoodieDataTypeUtils;
 import org.apache.spark.sql.HoodieUnsafeUtils;
 import org.apache.spark.sql.Row;
-import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.catalyst.InternalRow;
-import org.apache.spark.sql.sources.BaseRelation;
 import org.apache.spark.sql.types.StructType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -313,84 +303,10 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
                                                 Schema tableSchemaWithMetaFields) {
     List<ClusteringOperation> clusteringOps = clusteringGroup.getSlices().stream()
         .map(ClusteringOperation::create).collect(Collectors.toList());
-    boolean canUseFileGroupReaderBasedClustering = getWriteConfig().getBooleanOrDefault(HoodieReaderConfig.FILE_GROUP_READER_ENABLED)
-        && getWriteConfig().getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS)
-        && clusteringOps.stream().allMatch(slice -> StringUtils.isNullOrEmpty(slice.getBootstrapFilePath()));
-
-    if (canUseFileGroupReaderBasedClustering) {
-      return readRecordsForGroupAsRowWithFileGroupReader(jsc, instantTime, tableSchemaWithMetaFields, clusteringOps);
-    } else {
-      return readRecordsForGroupAsRow(jsc, clusteringOps);
-    }
-  }
-
-  /**
-   * Get dataset of all records for the group. This includes all records from file slice (Apply updates from log files, if any).
-   */
-  private Dataset<Row> readRecordsForGroupAsRow(JavaSparkContext jsc, List<ClusteringOperation> clusteringOps) {
-    boolean hasLogFiles = clusteringOps.stream().anyMatch(op -> !op.getDeltaFilePaths().isEmpty());
-    SQLContext sqlContext = new SQLContext(jsc.sc());
-
-    StoragePath[] baseFilePaths = clusteringOps
-        .stream()
-        .map(op -> {
-          ArrayList<String> readPaths = new ArrayList<>();
-          // NOTE: for bootstrap tables, only need to handle data file path (which is the skeleton file) because
-          // HoodieBootstrapRelation takes care of stitching if there is bootstrap path for the skeleton file.
-          if (op.getDataFilePath() != null) {
-            readPaths.add(op.getDataFilePath());
-          }
-          return readPaths;
-        })
-        .flatMap(Collection::stream)
-        .filter(path -> !path.isEmpty())
-        .map(StoragePath::new)
-        .toArray(StoragePath[]::new);
-
-    HashMap<String, String> params = new HashMap<>();
-    if (hasLogFiles) {
-      params.put("hoodie.datasource.query.type", "snapshot");
-    } else {
-      params.put("hoodie.datasource.query.type", "read_optimized");
-    }
-
-    StoragePath[] paths;
-    if (hasLogFiles) {
-      String rawFractionConfig = getWriteConfig().getString(HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_COMPACTION);
-      String compactionFractor = rawFractionConfig != null
-          ? rawFractionConfig : HoodieMemoryConfig.DEFAULT_MR_COMPACTION_MEMORY_FRACTION;
-      params.put(HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_COMPACTION.key(), compactionFractor);
-
-      StoragePath[] deltaPaths = clusteringOps
-          .stream()
-          .filter(op -> !op.getDeltaFilePaths().isEmpty())
-          .flatMap(op -> op.getDeltaFilePaths().stream())
-          .map(StoragePath::new)
-          .toArray(StoragePath[]::new);
-      paths = CollectionUtils.combine(baseFilePaths, deltaPaths);
-    } else {
-      paths = baseFilePaths;
-    }
-
-    String readPathString =
-        String.join(",", Arrays.stream(paths).map(StoragePath::toString).toArray(String[]::new));
-    String globPathString = String.join(",", Arrays.stream(paths).map(StoragePath::getParent).map(StoragePath::toString).distinct().toArray(String[]::new));
-    params.put("hoodie.datasource.read.paths", readPathString);
-    // Building HoodieFileIndex needs this param to decide query path
-    params.put("glob.paths", globPathString);
-
-    // Let Hudi relations to fetch the schema from the table itself
-    BaseRelation relation = SparkAdapterSupport$.MODULE$.sparkAdapter()
-        .createRelation(sqlContext, getHoodieTable().getMetaClient(), null, paths, params);
-    return sqlContext.baseRelationToDataFrame(relation);
-  }
-
-  private Dataset<Row> readRecordsForGroupAsRowWithFileGroupReader(JavaSparkContext jsc,
-                                                                   String instantTime,
-                                                                   Schema tableSchemaWithMetaFields,
-                                                                   List<ClusteringOperation> clusteringOps) {
     String basePath = getWriteConfig().getBasePath();
     // construct supporting cast that executors might need
+    long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(getEngineContext().getTaskContextSupplier(), writeConfig);
+    TypedProperties readerProperties = getReaderProperties(maxMemoryPerCompaction);
     final boolean usePosition = getWriteConfig().getBooleanOrDefault(MERGE_USE_RECORD_POSITIONS);
     String internalSchemaStr = getWriteConfig().getInternalSchema();
     boolean isInternalSchemaPresent = !StringUtils.isNullOrEmpty(internalSchemaStr);
@@ -413,7 +329,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
         }
 
         // instantiate FG reader
-        HoodieFileGroupReader<InternalRow> fileGroupReader = getFileGroupReader(metaClient, fileSlice, readerSchema, internalSchemaOption, readerContextFactory, instantTime, usePosition);
+        HoodieFileGroupReader<InternalRow> fileGroupReader = getFileGroupReader(metaClient, fileSlice, readerSchema, internalSchemaOption, readerContextFactory, instantTime, readerProperties, usePosition);
         // read records from the FG reader
         return CloseableIteratorListener.addListener(fileGroupReader.getClosableIterator());
       }

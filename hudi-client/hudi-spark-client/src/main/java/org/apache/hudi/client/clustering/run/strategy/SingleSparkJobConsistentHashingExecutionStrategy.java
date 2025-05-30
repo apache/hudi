@@ -89,10 +89,10 @@ public class SingleSparkJobConsistentHashingExecutionStrategy<T> extends SingleS
     ValidationUtils.checkArgument(clusteringGroup.getNumOutputGroups() >= 1, "Number of output groups should be at least 1");
     if (clusteringGroup.getNumOutputGroups() == 1) {
       // means that there is a merge operation
-      return performBucketMergeForGroup(readerContextFactory, clusteringGroup, strategyParams, preserveHoodieMetadata, schema, taskContextSupplier, instantTime);
+      return performBucketMergeForGroup(readerContextFactory, clusteringGroup, strategyParams, taskContextSupplier, instantTime);
     }
     // more than one output groups means split operation
-    return performBucketSplitForGroup(readerContextFactory, clusteringGroup, strategyParams, preserveHoodieMetadata, schema, taskContextSupplier, instantTime);
+    return performBucketSplitForGroup(readerContextFactory, clusteringGroup, strategyParams, taskContextSupplier, instantTime);
   }
 
   private List<ConsistentHashingNode> decodeConsistentHashingNodes(ClusteringGroupInfo clusteringGroupInfo) {
@@ -108,9 +108,8 @@ public class SingleSparkJobConsistentHashingExecutionStrategy<T> extends SingleS
   }
 
   private List<WriteStatus> performBucketMergeForGroup(ReaderContextFactory<T> readerContextFactory, ClusteringGroupInfo clusteringGroup, Map<String, String> strategyParams,
-                                                       boolean preserveHoodieMetadata, SerializableSchema schema,
                                                        TaskContextSupplier taskContextSupplier, String instantTime) {
-    long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(new SparkTaskContextSupplier(), writeConfig);
+    long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(taskContextSupplier, writeConfig);
     LOG.info("MaxMemoryPerCompaction run as part of clustering => {}", maxMemoryPerCompaction);
     Option<Map<String, String>> extraMetadata = clusteringGroup.getExtraMetadata();
     ValidationUtils.checkArgument(extraMetadata.isPresent(), "Extra metadata should be present for consistent hashing operations");
@@ -196,7 +195,6 @@ public class SingleSparkJobConsistentHashingExecutionStrategy<T> extends SingleS
   }
 
   private List<WriteStatus> performBucketSplitForGroup(ReaderContextFactory<T> readerContextFactory, ClusteringGroupInfo clusteringGroup, Map<String, String> strategyParams,
-                                                       boolean preserveHoodieMetadata, SerializableSchema schema,
                                                        TaskContextSupplier taskContextSupplier, String instantTime) {
     ValidationUtils.checkArgument(clusteringGroup.getOperations().size() == 1, "Split operation should have only one operation");
     Option<Map<String, String>> extraMetadata = clusteringGroup.getExtraMetadata();
