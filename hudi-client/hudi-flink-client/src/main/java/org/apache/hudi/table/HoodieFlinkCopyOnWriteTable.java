@@ -43,11 +43,11 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.io.FileGroupReaderBasedMergeHandle;
 import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieMergeHandleFactory;
 import org.apache.hudi.io.HoodieWriteHandle;
-import org.apache.hudi.io.v2.FlinkFileGroupReaderBasedMergeHandle;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -415,8 +415,8 @@ public class HoodieFlinkCopyOnWriteTable<T>
       CompactionOperation operation,
       HoodieWriteConfig writeConfig,
       HoodieReaderContext readerContext) {
-    FlinkFileGroupReaderBasedMergeHandle mergeHandle = new FlinkFileGroupReaderBasedMergeHandle<>(
-        writeConfig, instantTime, this, operation, taskContextSupplier, Option.empty(), readerContext);
+    FileGroupReaderBasedMergeHandle<T, ?, ?, ?> mergeHandle = new FileGroupReaderBasedMergeHandle<>(
+        writeConfig, instantTime, this, operation, taskContextSupplier, readerContext, HoodieRecord.HoodieRecordType.FLINK);
     mergeHandle.write();
     return mergeHandle.close();
   }
