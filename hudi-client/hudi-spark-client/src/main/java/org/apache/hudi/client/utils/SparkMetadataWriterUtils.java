@@ -251,6 +251,7 @@ public class SparkMetadataWriterUtils {
 
   private static List<HoodieRecord> getUnmergedLogFileRecords(List<String> logFilePaths, HoodieTableMetaClient metaClient, Schema readerSchema) {
     List<HoodieRecord> records = new ArrayList<>();
+    // TODO
     HoodieUnMergedLogRecordScanner scanner = HoodieUnMergedLogRecordScanner.newBuilder()
         .withStorage(metaClient.getStorage())
         .withBasePath(metaClient.getBasePath())
