@@ -20,6 +20,7 @@ package org.apache.hudi.utils;
 
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.client.model.PartialUpdateFlinkRecordMerger;
+import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecordMerger;
@@ -905,6 +906,12 @@ public class TestData {
     // 1. init flink table
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
         .fromFile(hoodiePropertiesFile)
+        .withMemoryConfig(
+            HoodieMemoryConfig.newBuilder()
+                .withMaxMemoryMaxSize(
+                    FlinkOptions.WRITE_MERGE_MAX_MEMORY.defaultValue() * 1024 * 1024L,
+                    FlinkOptions.COMPACTION_MAX_MEMORY.defaultValue() * 1024 * 1024L)
+                .build())
         .withPath(basePath)
         .build();
     // deal with partial update merger

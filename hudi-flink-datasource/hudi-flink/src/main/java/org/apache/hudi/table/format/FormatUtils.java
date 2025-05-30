@@ -126,7 +126,7 @@ public class FormatUtils {
             predicates,
             metaClient.getTableConfig(),
             instantRangeOption);
-    final TypedProperties typedProps = FlinkClientUtil.getMergedTableAndWriteProps(metaClient.getTableConfig(), writeConfig);
+    final TypedProperties typedProps = FlinkClientUtil.getReadProps(metaClient.getTableConfig(), writeConfig);
     typedProps.put(HoodieReaderConfig.MERGE_TYPE.key(), mergeType);
 
     return HoodieFileGroupReader.<RowData>newBuilder()
