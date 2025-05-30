@@ -813,7 +813,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   public boolean rollback(final String commitInstantTime, String rollbackInstantTimestamp) throws HoodieRollbackException {
     HoodieTable<T, I, K, O> table = initTable(WriteOperationType.UNKNOWN, Option.empty());
     Option<HoodiePendingRollbackInfo> pendingRollbackInfo = tableServiceClient.getPendingRollbackInfo(table.getMetaClient(), commitInstantTime);
-    return tableServiceClient.rollback(commitInstantTime, pendingRollbackInfo, rollbackInstantTimestamp, false, false);
+    return tableServiceClient.rollback(commitInstantTime, pendingRollbackInfo, false, false);
   }
 
   /**
@@ -859,8 +859,13 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     if (failedRestore.isPresent() && savepointToRestoreTimestamp.equals(RestoreUtils.getSavepointToRestoreTimestamp(table, failedRestore.get()))) {
       return Pair.of(failedRestore.get().requestedTime(), Option.of(RestoreUtils.getRestorePlan(table.getMetaClient(), failedRestore.get())));
     }
-    final String restoreInstantTimestamp = createNewInstantTime();
-    return Pair.of(restoreInstantTimestamp, table.scheduleRestore(context, restoreInstantTimestamp, savepointToRestoreTimestamp));
+    txnManager.beginTransaction(Option.empty(), Option.empty());
+    try {
+      final String restoreInstantTimestamp = createNewInstantTime();
+      return Pair.of(restoreInstantTimestamp, table.scheduleRestore(context, restoreInstantTimestamp, savepointToRestoreTimestamp));
+    } finally {
+      txnManager.endTransaction(Option.empty());
+    }
   }
 
   /**
@@ -1019,10 +1024,15 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @return instant time for the requested INDEX action
    */
   public Option<String> scheduleIndexing(List<MetadataPartitionType> partitionTypes, List<String> partitionPaths) {
-    String instantTime = createNewInstantTime();
-    Option<HoodieIndexPlan> indexPlan = createTable(config)
-        .scheduleIndexing(context, instantTime, partitionTypes, partitionPaths);
-    return indexPlan.isPresent() ? Option.of(instantTime) : Option.empty();
+    txnManager.beginTransaction(Option.empty(), Option.empty());
+    try {
+      String instantTime = createNewInstantTime(false);
+      Option<HoodieIndexPlan> indexPlan = createTable(config)
+          .scheduleIndexing(context, instantTime, partitionTypes, partitionPaths);
+      return indexPlan.map(plan -> instantTime);
+    } finally {
+      txnManager.endTransaction(Option.empty());
+    }
   }
 
   /**
