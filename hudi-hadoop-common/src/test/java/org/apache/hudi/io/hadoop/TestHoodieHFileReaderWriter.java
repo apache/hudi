@@ -117,30 +117,6 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
     }
   }
 
-  @Test
-  public void testReaderGetRecordIteratorByKeysWithBackwardSeek() throws Exception {
-    writeFileWithSimpleSchema();
-    try (HoodieAvroHFileReaderImplBase hfileReader = (HoodieAvroHFileReaderImplBase)
-        createReader(HoodieTestUtils.getStorage(getFilePath()))) {
-      Schema avroSchema =
-          getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchema.avsc");
-      // Filter for "key00001, key05, key24, key16, key31, key61".
-      // Even though key16 exists, it's a backward seek not in order.
-      // Our native HFile reader does not allow backward seek, and throws an exception
-      // Note that backward seek is not expected to happen in production code
-      try (ClosableIterator<IndexedRecord> iterator =
-          hfileReader.getIndexedRecordsByKeysIterator(
-              Arrays.asList("key00001", "key05", "key24", "key16", "key31", "key61"),
-              avroSchema)) {
-        assertThrows(
-            IllegalStateException.class,
-            () -> StreamSupport.stream(
-                    Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
-                .collect(Collectors.toList()));
-      }
-    }
-  }
-
   @Override
   protected HoodieAvroHFileWriter createWriter(
       Schema avroSchema, boolean populateMetaFields) throws Exception {
@@ -497,6 +473,30 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
               || (entry.get("_row_key").toString()).contains("key010769")
               || (entry.get("_row_key").toString()).contains("key01988"))).collect(Collectors.toList());
       assertEquals(expected, actual);
+    }
+  }
+
+  @Test
+  public void testReaderGetRecordIteratorByKeysWithBackwardSeek() throws Exception {
+    writeFileWithSimpleSchema();
+    try (HoodieAvroHFileReaderImplBase hfileReader = (HoodieAvroHFileReaderImplBase)
+        createReader(HoodieTestUtils.getStorage(getFilePath()))) {
+      Schema avroSchema =
+          getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchema.avsc");
+      // Filter for "key00001, key05, key24, key16, key31, key61".
+      // Even though key16 exists, it's a backward seek not in order.
+      // Our native HFile reader does not allow backward seek, and throws an exception
+      // Note that backward seek is not expected to happen in production code
+      try (ClosableIterator<IndexedRecord> iterator =
+               hfileReader.getIndexedRecordsByKeysIterator(
+                   Arrays.asList("key00001", "key05", "key24", "key16", "key31", "key61"),
+                   avroSchema)) {
+        assertThrows(
+            IllegalStateException.class,
+            () -> StreamSupport.stream(
+                    Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
+                .collect(Collectors.toList()));
+      }
     }
   }
 

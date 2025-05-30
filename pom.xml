@@ -414,8 +414,7 @@
                     <exclude>org.sl4fj:slf4j-jcl</exclude>
                     <exclude>log4j:log4j</exclude>
                     <exclude>ch.qos.logback:logback-classic</exclude>
-                    <!-- NOTE: We're banning any HBase deps versions other than the approved ${hbase.version},
-                               which is aimed at preventing the classpath collisions w/ transitive deps usually) -->
+                    <!-- NOTE: We're banning any HBase deps -->
                     <exclude>org.apache.hbase:hbase-common:*</exclude>
                     <exclude>org.apache.hbase:hbase-client:*</exclude>
                     <exclude>org.apache.hbase:hbase-server:*</exclude>
