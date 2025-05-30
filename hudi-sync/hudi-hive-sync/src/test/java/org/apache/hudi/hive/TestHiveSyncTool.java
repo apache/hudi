@@ -46,9 +46,8 @@ import org.apache.hudi.hive.ddl.HMSDDLExecutor;
 import org.apache.hudi.hive.ddl.HiveSyncMode;
 import org.apache.hudi.hive.testutils.HiveTestUtil;
 import org.apache.hudi.hive.util.IMetaStoreClientUtil;
-import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.metrics.MetricsReporterType;
-import org.apache.hudi.sync.common.HoodieSyncConfig;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.sync.common.model.FieldSchema;
 import org.apache.hudi.sync.common.model.Partition;
 import org.apache.hudi.sync.common.model.PartitionEvent;
@@ -114,6 +113,7 @@ import static org.apache.hudi.hive.testutils.HiveTestUtil.hiveSyncProps;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_CONDITIONAL_SYNC;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_INCREMENTAL;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -275,7 +275,7 @@ public class TestHiveSyncTool {
     assertEquals(3, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size(),
         "Table partitions should match the number of partitions we wrote");
     // Use META_SYNC_PARTITION_FIXMODE, sync all partition metadata
-    hiveSyncProps.setProperty(HoodieSyncConfig.META_SYNC_INCREMENTAL.key(), "false");
+    hiveSyncProps.setProperty(META_SYNC_INCREMENTAL.key(), "false");
     reInitHiveSyncClient();
     reSyncHiveTable();
     assertEquals(4, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size(),
@@ -994,6 +994,7 @@ public class TestHiveSyncTool {
     assertEquals(0, commentCnt, "hive schema field comment numbers should match the avro schema field doc numbers");
 
     hiveSyncProps.setProperty(HIVE_SYNC_COMMENT.key(), "true");
+    hiveSyncProps.setProperty(META_SYNC_INCREMENTAL.key(), "false");
     reInitHiveSyncClient();
     reSyncHiveTable();
     fieldSchemas = hiveClient.getMetastoreFieldSchemas(HiveTestUtil.TABLE_NAME);

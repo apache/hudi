@@ -23,7 +23,6 @@ import org.apache.hudi.aws.sync.util.GluePartitionFilterGenerator;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -143,11 +142,12 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   private static final String ENABLE_MDT_LISTING = "hudi.metadata-listing-enabled";
   private final String databaseName;
 
-  private final Boolean skipTableArchive;
+  private final boolean skipTableArchive;
   private final String enableMetadataTable;
   private final int allPartitionsReadParallelism;
   private final int changedPartitionsReadParallelism;
   private final int changeParallelism;
+  private final Map<String, Table> initialTableByName = new HashMap<>();
 
   public AWSGlueCatalogSyncClient(HiveSyncConfig config, HoodieTableMetaClient metaClient) {
     this(buildAsyncClient(config), config, metaClient);
@@ -199,6 +199,10 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Failed to get all partitions for table " + tableId(databaseName, tableName), e);
     }
+  }
+
+  private Table getInitialTable(String tableName) {
+    return initialTableByName.computeIfAbsent(tableName, t -> getTable(awsGlue, databaseName, t));
   }
 
   @Override
@@ -447,7 +451,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
 
   private String getTableDoc() {
     try {
-      return new TableSchemaResolver(metaClient).getTableAvroSchema(true).getDoc();
+      return tableSchemaResolver.getTableAvroSchema(true).getDoc();
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Failed to get schema's doc from storage : ", e);
     }
@@ -456,7 +460,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   @Override
   public List<FieldSchema> getStorageFieldSchemas() {
     try {
-      return new TableSchemaResolver(metaClient).getTableAvroSchema(true)
+      return tableSchemaResolver.getTableAvroSchema(true)
           .getFields()
           .stream()
           .map(f -> new FieldSchema(f.name(), f.schema().getType().getName(), f.doc()))
@@ -790,7 +794,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     try {
       // GlueMetastoreClient returns partition keys separate from Columns, hence get both and merge to
       // get the Schema of the table.
-      Table table = getTable(awsGlue, databaseName, tableName);
+      Table table = getInitialTable(tableName);
       Map<String, String> partitionKeysMap =
           table.partitionKeys().stream().collect(Collectors.toMap(Column::name, f -> f.type().toUpperCase()));
 
@@ -813,7 +817,11 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
         .name(tableName)
         .build();
     try {
-      return Objects.nonNull(awsGlue.getTable(request).get().table());
+      Table table = awsGlue.getTable(request).get().table();
+      if (table != null) {
+        initialTableByName.put(tableName, table);
+      }
+      return Objects.nonNull(table);
     } catch (ExecutionException e) {
       if (e.getCause() instanceof EntityNotFoundException) {
         LOG.warn("Table not found: " + tableId(databaseName, tableName), e);
@@ -869,8 +877,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   @Override
   public Option<String> getLastCommitTimeSynced(String tableName) {
     try {
-      Table table = getTable(awsGlue, databaseName, tableName);
-      return Option.ofNullable(table.parameters().getOrDefault(HOODIE_LAST_COMMIT_TIME_SYNC, null));
+      return Option.ofNullable(getInitialTable(tableName).parameters().getOrDefault(HOODIE_LAST_COMMIT_TIME_SYNC, null));
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Fail to get last sync commit time for " + tableId(databaseName, tableName), e);
     }
@@ -880,8 +887,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   public Option<String> getLastCommitCompletionTimeSynced(String tableName) {
     // Get the last commit completion time from the TBLproperties
     try {
-      Table table = getTable(awsGlue, databaseName, tableName);
-      return Option.ofNullable(table.parameters().getOrDefault(HOODIE_LAST_COMMIT_COMPLETION_TIME_SYNC, null));
+      return Option.ofNullable(getInitialTable(tableName).parameters().getOrDefault(HOODIE_LAST_COMMIT_COMPLETION_TIME_SYNC, null));
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Failed to get the last commit completion time synced from the table " + tableName, e);
     }
@@ -1045,8 +1051,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   @Override
   public String getTableLocation(String tableName) {
     try {
-      Table table = getTable(awsGlue, databaseName, tableName);
-      return table.storageDescriptor().location();
+      return getInitialTable(tableName).storageDescriptor().location();
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Fail to get base path for the table " + tableId(databaseName, tableName), e);
     }
