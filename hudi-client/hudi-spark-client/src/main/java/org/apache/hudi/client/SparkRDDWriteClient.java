@@ -108,26 +108,30 @@ public class SparkRDDWriteClient<T> extends
                         WriteStatusHandlerCallback writeStatusHandlerCallback) {
     context.setJobStatus(this.getClass().getSimpleName(), "Committing stats: " + config.getTableName());
     // Triggering the dag for writes.
-    // If streaming writes are enabled, writes to both data table and metadata table gets triggers at this juncture.
+    // If streaming writes are enabled, writes to both data table and metadata table gets triggered at this juncture.
     // If not, writes to data table gets triggered here.
-    // When streaming writes are enabled, WriteStatus is expected to contain all stats required to generate metadata table records and so it could be fatter.
+    // When streaming writes are enabled, data table's WriteStatus is expected to contain all stats required to generate metadata table records and so it could be fatter.
     // So, here we are dropping all additional stats and only retains the information required to proceed from here on.
-    List<Pair<Boolean, WriteStatus>> leanWriteStatuses = writeStatuses.map(writeStatus -> Pair.of(writeStatus.isMetadataTable(), writeStatus.removeMetadataStatsAndErrorRecords())).collect();
+    // And we are also dropping error records so that we don't unintentionally collect the error records in the driver.
+    List<Pair<Boolean, WriteStatus>> isMetadataWriteStatusPairs = writeStatuses.map(writeStatus -> Pair.of(writeStatus.isMetadataTable(), writeStatus.removeMetadataStatsAndErrorRecords())).collect();
     // Compute stats for the writes and invoke callback
     AtomicLong totalRecords = new AtomicLong(0);
     AtomicLong totalErrorRecords = new AtomicLong(0);
-    leanWriteStatuses.forEach(pair -> {
+    isMetadataWriteStatusPairs.stream().filter(entry -> !entry.getKey()).forEach(pair -> {
       totalRecords.getAndAdd(pair.getValue().getTotalRecords());
       totalErrorRecords.getAndAdd(pair.getValue().getTotalErrorRecords());
     });
+    // reason why we are passing RDD<WriteStatus> to the writeStatusHandler callback: earlier we drop all index stats and error records before collecting in the driver.
+    // just incase if there are errors, caller might be interested to fetch error records. And so, we are passing the RDD<WriteStatus> as last argument to the write status
+    // handler callback.
     boolean canProceed = writeStatusHandlerCallback.processWriteStatuses(totalRecords.get(), totalErrorRecords.get(),
         HoodieJavaRDD.of(writeStatuses.filter(status -> !status.isMetadataTable()).map(WriteStatus::removeMetadataStats)));
 
     // only if callback returns true, lets proceed. If not, bail out.
     if (canProceed) {
       // when streaming writes are enabled, writeStatuses is a mix of data table write status and mdt write status
-      List<HoodieWriteStat> dataTableWriteStats = leanWriteStatuses.stream().filter(entry -> !entry.getKey()).map(leanWriteStatus -> leanWriteStatus.getValue().getStat()).collect(Collectors.toList());
-      List<HoodieWriteStat> metadataTableWriteStats = leanWriteStatuses.stream().filter(Pair::getKey).map(leanWriteStatus -> leanWriteStatus.getValue().getStat()).collect(Collectors.toList());
+      List<HoodieWriteStat> dataTableWriteStats = isMetadataWriteStatusPairs.stream().filter(entry -> !entry.getKey()).map(leanWriteStatus -> leanWriteStatus.getValue().getStat()).collect(Collectors.toList());
+      List<HoodieWriteStat> metadataTableWriteStats = isMetadataWriteStatusPairs.stream().filter(Pair::getKey).map(leanWriteStatus -> leanWriteStatus.getValue().getStat()).collect(Collectors.toList());
       if (isMetadataTable) {
         // incase the current table is metadata table, for new partition instantiation we end up calling this commit method. On which case,
         // we could only see metadataTableWriteStats and no dataTableWriteStats. So, we need to reverse the list here so that we can proceed onto commit in current table as a
