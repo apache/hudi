@@ -404,8 +404,7 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
     ValidationUtils.checkArgument(inflightInstant.isInflight());
     HoodieInstant commitInstant = instantGenerator.createNewInstant(HoodieInstant.State.COMPLETED, CLEAN_ACTION, inflightInstant.requestedTime());
     // Then write to timeline
-    transitionStateToComplete(shouldLock, inflightInstant, commitInstant, metadata);
-    return commitInstant;
+    return transitionStateToComplete(shouldLock, inflightInstant, commitInstant, metadata);
   }
 
   @Override
@@ -514,7 +513,7 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
         ValidationUtils.checkArgument(
             metaClient.getStorage().exists(getInstantFileNamePath(fromInstantFileName)),
             "File " + getInstantFileNamePath(fromInstantFileName) + " does not exist!");
-        String completionTime = HoodieInstantTimeGenerator.formatDate(new Date(createCompleteFileInMetaPath(shouldLock, toInstant, metadata)));
+        String completionTime = HoodieInstantTimeGenerator.formatDateUTC(new Date(createCompleteFileInMetaPath(shouldLock, toInstant, metadata)));
         return new HoodieInstant(toInstant.getState(), toInstant.getAction(), toInstant.requestedTime(), completionTime, instantComparator.requestedTimeOrderedComparator());
       }
     } catch (IOException e) {
@@ -699,7 +698,7 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
     TimeGenerator timeGenerator = TimeGenerators
         .getTimeGenerator(metaClient.getTimeGeneratorConfig(), metaClient.getStorageConf());
     return timeGenerator.consumeTime(!shouldLock, currentTimeMillis -> {
-      String completionTime = TimelineUtils.generateInstantTime(false, timeGenerator);
+      String completionTime = HoodieInstantTimeGenerator.formatDateUTC(new Date(currentTimeMillis));
       String fileName = instantFileNameGenerator.getFileName(completionTime, instant);
       StoragePath fullPath = getInstantFileNamePath(fileName);
       if (metaClient.getTimelineLayoutVersion().isNullVersion()) {
