@@ -80,7 +80,7 @@ public class FlinkFileGroupReaderBasedMergeHandle<T, I, K, O> extends BaseFileGr
     if (!StringUtils.isNullOrEmpty(config.getInternalSchema())) {
       internalSchemaOption = SerDeHelper.fromJson(config.getInternalSchema());
     }
-    TypedProperties props = FlinkClientUtil.getMergedTableAndWriteProps(hoodieTable.getMetaClient().getTableConfig(), config);
+    TypedProperties props = FlinkClientUtil.getReadProps(hoodieTable.getMetaClient().getTableConfig(), config);
     // Initializes file group reader
     try (HoodieFileGroupReader<T> fileGroupReader = HoodieFileGroupReader.<T>newBuilder()
         .withReaderContext(readerContext).withHoodieTableMetaClient(hoodieTable.getMetaClient())
