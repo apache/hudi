@@ -65,7 +65,6 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.TableNotFoundException;
-import org.apache.hudi.metadata.HoodieTableMetadataUtil.DirectoryInfo;
 import org.apache.hudi.metadata.index.ExpressionIndexRecordGenerator;
 import org.apache.hudi.metadata.index.Indexer;
 import org.apache.hudi.metadata.index.IndexerFactory;
@@ -116,6 +115,7 @@ import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
 import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
 import static org.apache.hudi.metadata.MetadataPartitionType.fromPartitionPath;
 import static org.apache.hudi.metadata.SecondaryIndexRecordGenerationUtils.convertWriteStatsToSecondaryIndexRecords;
+import org.apache.hudi.metadata.model.DirectoryInfo;
 
 /**
  * Writer implementation backed by an internal hudi table. Partition and file listing are saved within an internal MOR table
@@ -400,7 +400,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     Map<String, Map<String, Long>> partitionIdToAllFilesMap = partitionInfoList.stream()
         .map(p -> {
           String partitionName = HoodieTableMetadataUtil.getPartitionIdentifierForFilesPartition(p.getRelativePath());
-          return Pair.of(partitionName, p.getFileNameToSizeMap());
+          return Pair.of(partitionName, p.getFilenameToSizeMap());
         })
         .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
 
@@ -1424,13 +1424,13 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         }
       } else {
         // Some files need to be cleaned and some to be added in the partition
-        Map<String, Long> fsFiles = dirInfoMap.get(partition).getFileNameToSizeMap();
+        Map<String, Long> fsFiles = dirInfoMap.get(partition).getFilenameToSizeMap();
         List<String> mdtFiles = metadataFiles.stream().map(mdtFile -> mdtFile.getPath().getName()).collect(Collectors.toList());
         List<String> filesDeleted = metadataFiles.stream().map(f -> f.getPath().getName())
             .filter(n -> !fsFiles.containsKey(n)).collect(Collectors.toList());
         Map<String, Long> filesToAdd = new HashMap<>();
         // new files could be added to DT due to restore that just happened which may not be tracked in RestoreMetadata.
-        dirInfoMap.get(partition).getFileNameToSizeMap().forEach((k, v) -> {
+        dirInfoMap.get(partition).getFilenameToSizeMap().forEach((k, v) -> {
           if (!mdtFiles.contains(k)) {
             filesToAdd.put(k, v);
           }

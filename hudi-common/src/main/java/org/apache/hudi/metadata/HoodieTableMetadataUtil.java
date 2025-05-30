@@ -61,7 +61,6 @@ import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
@@ -104,7 +103,6 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.util.Lazy;
 
 import org.apache.avro.AvroTypeException;
@@ -119,7 +117,6 @@ import javax.annotation.Nonnull;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.Serializable;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.ByteBuffer;
@@ -164,7 +161,6 @@ import static org.apache.hudi.common.model.HoodieRecord.HOODIE_META_COLUMNS_WITH
 import static org.apache.hudi.common.model.HoodieRecord.PARTITION_PATH_METADATA_FIELD;
 import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
-import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.common.util.ConfigUtils.getReaderConfigs;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
@@ -2646,7 +2642,7 @@ public class HoodieTableMetadataUtil {
             //          - Then we merge records from base-files with the delta ones (coming as a result
             //          of the previous step)
             (oldFileInfo, newFileInfo) -> {
-              // NOTE: We can’t assume that MT update records will be ordered the same way as actual
+              // NOTE: We can't assume that MT update records will be ordered the same way as actual
               //       FS operations (since they are not atomic), therefore MT record merging should be a
               //       _commutative_ & _associative_ operation (ie one that would work even in case records
               //       will get re-ordered), which is
@@ -2654,12 +2650,12 @@ public class HoodieTableMetadataUtil {
               //          take max of the old and new records)
               //          - Not possible for is-deleted flags*
               //
-              //       *However, we’re assuming that the case of concurrent write and deletion of the same
+              //       *However, we're assuming that the case of concurrent write and deletion of the same
               //       file is _impossible_ -- it would only be possible with concurrent upsert and
               //       rollback operation (affecting the same log-file), which is implausible, b/c either
               //       of the following have to be true:
-              //          - We’re appending to failed log-file (then the other writer is trying to
-              //          rollback it concurrently, before it’s own write)
+              //          - We're appending to failed log-file (then the other writer is trying to
+              //          rollback it concurrently, before it's own write)
               //          - Rollback (of completed instant) is running concurrently with append (meaning
               //          that restore is running concurrently with a write, which is also nut supported
               //          currently)
@@ -2762,79 +2758,5 @@ public class HoodieTableMetadataUtil {
     Set<String> completedMetadataPartitions = dataMetaClient.getTableConfig().getMetadataPartitions();
     indexPartitions.removeAll(completedMetadataPartitions);
     return indexPartitions;
-  }
-
-  /**
-   * A class which represents a directory and the files and directories inside it.
-   * <p>
-   * A {@code PartitionFileInfo} object saves the name of the partition and various properties requires of each file
-   * required for initializing the metadata table. Saving limited properties reduces the total memory footprint when
-   * a very large number of files are present in the dataset being initialized.
-   */
-  public static class DirectoryInfo implements Serializable {
-    // Relative path of the directory (relative to the base directory)
-    private final String relativePath;
-    // Map of filenames within this partition to their respective sizes
-    private final HashMap<String, Long> filenameToSizeMap;
-    // List of directories within this partition
-    private final List<StoragePath> subDirectories = new ArrayList<>();
-    // Is this a hoodie partition
-    private boolean isHoodiePartition = false;
-
-    public DirectoryInfo(String relativePath, List<StoragePathInfo> pathInfos, String maxInstantTime, Set<String> pendingDataInstants) {
-      this(relativePath, pathInfos, maxInstantTime, pendingDataInstants, true);
-    }
-
-    /**
-     * When files are directly fetched from Metadata table we do not need to validate HoodiePartitions.
-     */
-    public DirectoryInfo(String relativePath, List<StoragePathInfo> pathInfos, String maxInstantTime, Set<String> pendingDataInstants,
-                         boolean validateHoodiePartitions) {
-      this.relativePath = relativePath;
-
-      // Pre-allocate with the maximum length possible
-      filenameToSizeMap = new HashMap<>(pathInfos.size());
-
-      // Presence of partition meta file implies this is a HUDI partition
-      // if input files are directly fetched from MDT, it may not contain the HoodiePartitionMetadata file. So, we can ignore the validation for isHoodiePartition.
-      isHoodiePartition = !validateHoodiePartitions || pathInfos.stream().anyMatch(status -> status.getPath().getName().startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX));
-      for (StoragePathInfo pathInfo : pathInfos) {
-        // Do not attempt to search for more subdirectories inside directories that are partitions
-        if (!isHoodiePartition && pathInfo.isDirectory()) {
-          // Ignore .hoodie directory as there cannot be any partitions inside it
-          if (!pathInfo.getPath().getName().equals(HoodieTableMetaClient.METAFOLDER_NAME)) {
-            this.subDirectories.add(pathInfo.getPath());
-          }
-        } else if (isHoodiePartition && FSUtils.isDataFile(pathInfo.getPath())) {
-          // Regular HUDI data file (base file or log file)
-          String dataFileCommitTime = FSUtils.getCommitTime(pathInfo.getPath().getName());
-          // Limit the file listings to files which were created by successful commits before the maxInstant time.
-          if (!pendingDataInstants.contains(dataFileCommitTime) && compareTimestamps(dataFileCommitTime, LESSER_THAN_OR_EQUALS, maxInstantTime)) {
-            filenameToSizeMap.put(pathInfo.getPath().getName(), pathInfo.getLength());
-          }
-        }
-      }
-    }
-
-    public String getRelativePath() {
-      return relativePath;
-    }
-
-    public int getTotalFiles() {
-      return filenameToSizeMap.size();
-    }
-
-    public boolean isHoodiePartition() {
-      return isHoodiePartition;
-    }
-
-    public List<StoragePath> getSubDirectories() {
-      return subDirectories;
-    }
-
-    // Returns a map of filenames mapped to their lengths
-    public Map<String, Long> getFileNameToSizeMap() {
-      return filenameToSizeMap;
-    }
   }
 }

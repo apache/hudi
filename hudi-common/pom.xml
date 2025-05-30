@@ -233,6 +233,13 @@
       <artifactId>jetty-servlet</artifactId>
     </dependency>
 
+    <!-- Lombok -->
+    <dependency>
+      <groupId>org.projectlombok</groupId>
+      <artifactId>lombok</artifactId>
+      <scope>provided</scope>
+    </dependency>
+
     <!-- HBase -->
     <dependency>
       <groupId>org.apache.hbase</groupId>
