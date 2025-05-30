@@ -20,18 +20,17 @@ package org.apache.spark.sql.adapter
 import org.apache.hudi.{AvroConversionUtils, DefaultSource, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, Spark4HoodiePartitionCDCFileGroupMapping, Spark4HoodiePartitionFileSliceMapping, SparkBaseRowSerDe}
 import org.apache.hudi.client.model.{HoodieInternalRow, Spark4HoodieInternalRow}
 import org.apache.hudi.client.utils.SparkRowSerDe
-import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
+import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit
 import org.apache.hudi.common.util.JsonUtils
-import org.apache.hudi.common.util.collection.{FlatLists, Spark4FlatLists}
 import org.apache.hudi.spark.internal.ReflectUtil
 import org.apache.hudi.storage.StoragePath
 
 import org.apache.avro.Schema
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.{AnalysisException, SparkSession, SQLContext}
+import org.apache.spark.sql.{AnalysisException, HoodieUTF8StringFactory, Spark4HoodieUTF8StringFactory, SparkSession, SQLContext}
 import org.apache.spark.sql.avro.{HoodieAvroSchemaConverters, HoodieSparkAvroSchemaConverters}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Expression, InterpretedPredicate, Predicate}
@@ -116,9 +115,7 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
 
   def stopSparkContext(jssc: JavaSparkContext, exitCode: Int): Unit
 
-  override def compareUTF8String(a: UTF8String, b: UTF8String): Int = a.binaryCompare(b)
-
-  override def createComparableList(t: Array[AnyRef]): FlatLists.ComparableList[Comparable[HoodieRecord[_]]] = Spark4FlatLists.ofComparableArray(t)
+  override def getHoodieUTF8StringFactory: HoodieUTF8StringFactory = Spark4HoodieUTF8StringFactory
 
   override def createInternalRow(metaFields: Array[UTF8String],
                                  sourceRow: InternalRow,

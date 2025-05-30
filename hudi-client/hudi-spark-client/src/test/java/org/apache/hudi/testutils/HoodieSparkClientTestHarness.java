@@ -18,6 +18,7 @@
 package org.apache.hudi.testutils;
 
 import org.apache.hudi.HoodieConversionUtils;
+import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.avro.model.HoodieActionInstant;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
@@ -79,6 +80,7 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.SparkContext;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.sql.HoodieUTF8StringFactory;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.SparkSessionExtensions;
@@ -140,6 +142,8 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
 
   protected TimelineService timelineService;
   protected final SparkTaskContextSupplier supplier = new SparkTaskContextSupplier();
+  protected final HoodieUTF8StringFactory hoodieUTF8StringFactory =
+      SparkAdapterSupport$.MODULE$.sparkAdapter().getHoodieUTF8StringFactory();
 
   private String testMethodName;
 

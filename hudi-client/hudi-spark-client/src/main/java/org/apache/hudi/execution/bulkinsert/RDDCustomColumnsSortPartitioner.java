@@ -18,14 +18,16 @@
 
 package org.apache.hudi.execution.bulkinsert;
 
+import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.SparkSortUtils;
+import org.apache.hudi.common.util.SortUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.sql.HoodieUTF8StringFactory;
 
 import java.util.Arrays;
 
@@ -44,6 +46,8 @@ public class RDDCustomColumnsSortPartitioner<T>
   private final SerializableSchema serializableSchema;
   private final boolean consistentLogicalTimestampEnabled;
   private final boolean suffixRecordKey;
+  private final HoodieUTF8StringFactory hoodieUTF8StringFactory =
+      SparkAdapterSupport$.MODULE$.sparkAdapter().getHoodieUTF8StringFactory();
 
   public RDDCustomColumnsSortPartitioner(HoodieWriteConfig config) {
     this.serializableSchema = new SerializableSchema(new Schema.Parser().parse(config.getSchema()));
@@ -62,11 +66,9 @@ public class RDDCustomColumnsSortPartitioner<T>
   @Override
   public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records,
                                                      int outputSparkPartitions) {
-    return records.sortBy(record ->
-            SparkSortUtils.getComparableSortColumns(
-                record, sortColumnNames, serializableSchema.get(),
-                suffixRecordKey, consistentLogicalTimestampEnabled),
-        true, outputSparkPartitions);
+    return records
+        .sortBy(record -> SortUtils.getComparableSortColumns(record, sortColumnNames, serializableSchema.get(), suffixRecordKey, consistentLogicalTimestampEnabled,
+                hoodieUTF8StringFactory::wrapArrayOfObjects),true, outputSparkPartitions);
   }
 
   @Override
