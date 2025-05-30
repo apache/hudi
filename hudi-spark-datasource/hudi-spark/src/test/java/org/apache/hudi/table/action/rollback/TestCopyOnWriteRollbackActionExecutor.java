@@ -468,9 +468,8 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
         ClusteringTestUtils.getClusteringConfig(basePath, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, properties));
 
     // Save an older instant for us to run clustering.
-    String clusteringInstant1 = clusteringClient.createNewInstantTime();
     // Now execute clustering on the saved instant and do not allow it to commit.
-    ClusteringTestUtils.runClusteringOnInstant(clusteringClient, false, false, clusteringInstant1);
+    String clusteringInstant1 = ClusteringTestUtils.runClustering(clusteringClient, false, false);
     clusteringClient.close();
 
     properties.put("hoodie.clustering.plan.strategy.partition.selected", DEFAULT_SECOND_PARTITION_PATH);

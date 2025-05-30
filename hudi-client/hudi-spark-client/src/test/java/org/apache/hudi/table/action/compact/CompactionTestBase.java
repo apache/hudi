@@ -31,6 +31,7 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -165,7 +166,7 @@ public class CompactionTestBase extends HoodieClientTestBase {
   }
 
   protected void scheduleCompaction(String compactionInstantTime, SparkRDDWriteClient client, HoodieWriteConfig cfg) {
-    client.scheduleCompactionAtInstant(compactionInstantTime, Option.empty());
+    WriteClientTestUtils.scheduleTableService(client, compactionInstantTime, Option.empty(), TableServiceType.COMPACT);
     HoodieTableMetaClient metaClient = createMetaClient(cfg.getBasePath());
     HoodieInstant instant = metaClient.getActiveTimeline().filterPendingCompactionTimeline().lastInstant().get();
     assertEquals(compactionInstantTime, instant.requestedTime(), "Last compaction instant must be the one set");
@@ -181,7 +182,7 @@ public class CompactionTestBase extends HoodieClientTestBase {
    * @return The latest pending instant time.
    */
   protected String tryScheduleCompaction(String compactionInstantTime, SparkRDDWriteClient client, HoodieWriteConfig cfg) {
-    client.scheduleCompactionAtInstant(compactionInstantTime, Option.empty());
+    WriteClientTestUtils.scheduleTableService(client, compactionInstantTime, Option.empty(), TableServiceType.COMPACT);
     HoodieTableMetaClient metaClient = createMetaClient(cfg.getBasePath());
     return metaClient.getActiveTimeline().filterPendingCompactionTimeline().lastInstant().map(HoodieInstant::requestedTime).orElse(null);
   }

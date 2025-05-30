@@ -20,7 +20,6 @@ package org.apache.hudi.hive;
 
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ConfigUtils;
@@ -78,6 +77,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieHiveSyncClient.class);
   protected final HiveSyncConfig config;
   private final String databaseName;
+  private final Map<String, Table> initialTableByName = new HashMap<>();
   DDLExecutor ddlExecutor;
   private IMetaStoreClient client;
 
@@ -111,6 +111,16 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed to create HiveMetaStoreClient", e);
     }
+  }
+
+  private Table getInitialTable(String table) {
+    return initialTableByName.computeIfAbsent(table, t -> {
+      try {
+        return client.getTable(databaseName, t);
+      } catch (Exception ex) {
+        throw new HoodieHiveSyncException("Failed to get table " + tableId(databaseName, table), ex);
+      }
+    });
   }
 
   @Override
@@ -324,8 +334,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
   public Option<String> getLastCommitTimeSynced(String tableName) {
     // Get the last commit time from the TBLproperties
     try {
-      Table table = client.getTable(databaseName, tableName);
-      return Option.ofNullable(table.getParameters().getOrDefault(HOODIE_LAST_COMMIT_TIME_SYNC, null));
+      return Option.ofNullable(getInitialTable(tableName).getParameters().getOrDefault(HOODIE_LAST_COMMIT_TIME_SYNC, null));
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed to get the last commit time synced from the table " + tableName, e);
     }
@@ -335,8 +344,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
   public Option<String> getLastCommitCompletionTimeSynced(String tableName) {
     // Get the last commit completion time from the TBLproperties
     try {
-      Table table = client.getTable(databaseName, tableName);
-      return Option.ofNullable(table.getParameters().getOrDefault(HOODIE_LAST_COMMIT_COMPLETION_TIME_SYNC, null));
+      return Option.ofNullable(getInitialTable(tableName).getParameters().getOrDefault(HOODIE_LAST_COMMIT_COMPLETION_TIME_SYNC, null));
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed to get the last commit completion time synced from the table " + tableName, e);
     }
@@ -439,7 +447,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
   @Override
   public List<FieldSchema> getStorageFieldSchemas() {
     try {
-      return new TableSchemaResolver(metaClient).getTableAvroSchema(false)
+      return tableSchemaResolver.getTableAvroSchema(false)
           .getFields()
           .stream()
           .map(f -> new FieldSchema(f.name(), f.schema().getType().getName(), f.doc()))
@@ -489,8 +497,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
   @Override
   public String getTableLocation(String tableName) {
     try {
-      Table table = client.getTable(databaseName, tableName);
-      return table.getSd().getLocation();
+      return getInitialTable(tableName).getSd().getLocation();
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed to get the basepath of the table " + tableId(databaseName, tableName), e);
     }
