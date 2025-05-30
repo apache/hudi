@@ -126,7 +126,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     // Compacting is very similar to applying updates to existing file
     List<CompactionOperation> operations = compactionPlan.getOperations().stream()
         .map(CompactionOperation::convertFromAvroRecordInstance).collect(toList());
-    LOG.info("Compactor compacting " + operations + " files");
+    LOG.info("Compactor compacting {} fileGroups", operations.size());
 
     String maxInstantTime = getMaxInstantTime(metaClient);
 

@@ -46,10 +46,10 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.io.FileGroupReaderBasedMergeHandle;
 import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieMergeHandleFactory;
-import org.apache.hudi.io.HoodieSparkFileGroupReaderBasedMergeHandle;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -273,9 +273,8 @@ public class HoodieSparkCopyOnWriteTable<T>
                                                        HoodieWriteConfig writeConfig,
                                                        HoodieReaderContext readerContext) {
     config.setDefault(writeConfig);
-    Option<BaseKeyGenerator> keyGeneratorOpt = HoodieSparkKeyGeneratorFactory.createBaseKeyGenerator(config);
-    HoodieSparkFileGroupReaderBasedMergeHandle mergeHandle = new HoodieSparkFileGroupReaderBasedMergeHandle(config,
-        instantTime, this, operation, taskContextSupplier, keyGeneratorOpt, readerContext);
+    FileGroupReaderBasedMergeHandle<T, ?, ?, ?> mergeHandle = new FileGroupReaderBasedMergeHandle<>(config,
+        instantTime, this, operation, taskContextSupplier, readerContext, HoodieRecord.HoodieRecordType.SPARK);
     mergeHandle.write();
     return mergeHandle.close();
   }

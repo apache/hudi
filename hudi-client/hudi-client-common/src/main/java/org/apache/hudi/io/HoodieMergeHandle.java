@@ -242,7 +242,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       long memoryForMerge = IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config);
       LOG.info("MaxMemoryPerPartitionMerge => " + memoryForMerge);
       this.keyToNewRecords = new ExternalSpillableMap<>(memoryForMerge, config.getSpillableMapBasePath(),
-          new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(writeSchema),
+          new DefaultSizeEstimator<>(), new HoodieRecordSizeEstimator<>(writeSchema),
           config.getCommonConfig().getSpillableDiskMapType(),
           new DefaultSerializer<>(),
           config.getCommonConfig().isBitCaskDiskMapCompressionEnabled(),
@@ -421,7 +421,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     if (shouldPreserveRecordMetadata) {
       // NOTE: `FILENAME_METADATA_FIELD` has to be rewritten to correctly point to the
       //       file holding this record even in cases when overall metadata is preserved
-      HoodieRecord populatedRecord = updateFileName(record, schema, writeSchemaWithMetaFields, newFilePath.getName(), prop);
+      HoodieRecord populatedRecord =  record.updateMetaField(schema, HoodieRecord.FILENAME_META_FIELD_ORD, newFilePath.getName());
       fileWriter.write(key.getRecordKey(), populatedRecord, writeSchemaWithMetaFields);
     } else {
       // rewrite the record to include metadata fields in schema, and the values will be set later.
