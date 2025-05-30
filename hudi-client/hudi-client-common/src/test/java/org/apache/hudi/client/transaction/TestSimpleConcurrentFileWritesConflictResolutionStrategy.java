@@ -20,6 +20,7 @@ package org.apache.hudi.client.transaction;
 
 import org.apache.hudi.client.utils.TransactionUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -31,10 +32,10 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieWriteConflictException;
 
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -60,13 +61,9 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR
 
 public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends HoodieCommonTestHarness {
 
-  @BeforeEach
-  public void init() throws IOException {
-    initMetaClient();
-  }
-
   @Test
   public void testNoConcurrentWrites() throws Exception {
+    initMetaClient();
     String newInstantTime = HoodieTestTable.makeNewCommitTime();
     createCommit(newInstantTime, metaClient);
     // consider commits before this are all successful
@@ -82,6 +79,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
 
   @Test
   public void testConcurrentWrites() throws Exception {
+    initMetaClient();
     String newInstantTime = HoodieTestTable.makeNewCommitTime();
     createCommit(newInstantTime, metaClient);
     // consider commits before this are all successful
@@ -99,6 +97,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
 
   @Test
   public void testConcurrentWritesWithInterleavingSuccessfulCommit() throws Exception {
+    initMetaClient();
     createCommit(metaClient.createNewInstantTime(), metaClient);
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     // consider commits before this are all successful
@@ -126,6 +125,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
 
   @Test
   public void testConcurrentWritesWithReplaceInflightCommit() throws Exception {
+    initMetaClient();
     String currentWriterInstant = metaClient.createNewInstantTime();
     createInflightCommit(currentWriterInstant, metaClient);
     Option<HoodieInstant> currentInstant = Option.of(INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
@@ -152,6 +152,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
 
   @Test
   public void testConcurrentWritesWithClusteringInflightCommit() throws Exception {
+    initMetaClient();
     // writer 1 starts
     String currentWriterInstant = metaClient.createNewInstantTime();
     createInflightCommit(currentWriterInstant, metaClient);
@@ -179,6 +180,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
 
   @Test
   public void testConcurrentWritesWithLegacyClusteringInflightCommit() throws Exception {
+    initMetaClient();
     String clusteringInstantTime = metaClient.createNewInstantTime();
     // create a replace commit with a clustering operation to mimic a commit written by a v6 writer
     HoodieTestTable.of(metaClient).addRequestedReplace(clusteringInstantTime, Option.of(buildRequestedReplaceMetadata("file-1", WriteOperationType.CLUSTER)));
@@ -205,8 +207,10 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     Assertions.assertThrows(HoodieWriteConflictException.class, () -> strategy.resolveConflict(null, thisCommitOperation, thatCommitOperation));
   }
 
-  @Test
-  public void testConcurrentWritesWithInterleavingScheduledCompaction() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void testConcurrentWritesWithInterleavingScheduledCompaction(boolean preTableVersion8) throws Exception {
+    initMetaClient(preTableVersion8, HoodieTableType.MERGE_ON_READ);
     createCommit(metaClient.createNewInstantTime(), metaClient);
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     // consider commits before this are all successful
@@ -224,16 +228,23 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     metaClient.reloadActiveTimeline();
     List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant.get(), lastSuccessfulInstant).collect(
         Collectors.toList());
-    // writer 1 conflicts with scheduled compaction plan 1
-    Assertions.assertEquals(1, candidateInstants.size());
-    ConcurrentOperation thatCommitOperation = new ConcurrentOperation(candidateInstants.get(0), metaClient);
-    ConcurrentOperation thisCommitOperation = new ConcurrentOperation(currentInstant.get(), currentMetadata);
-    Assertions.assertTrue(strategy.hasConflict(thisCommitOperation, thatCommitOperation));
-    Assertions.assertThrows(HoodieWriteConflictException.class, () -> strategy.resolveConflict(null, thisCommitOperation, thatCommitOperation));
+    if (preTableVersion8) {
+      // writer 1 conflicts with scheduled compaction plan 1
+      Assertions.assertEquals(1, candidateInstants.size());
+      ConcurrentOperation thatCommitOperation = new ConcurrentOperation(candidateInstants.get(0), metaClient);
+      ConcurrentOperation thisCommitOperation = new ConcurrentOperation(currentInstant.get(), currentMetadata);
+      Assertions.assertTrue(strategy.hasConflict(thisCommitOperation, thatCommitOperation));
+      Assertions.assertThrows(HoodieWriteConflictException.class, () -> strategy.resolveConflict(null, thisCommitOperation, thatCommitOperation));
+    } else {
+      // writer will not have conflicts with compaction since ordering is now based on completion time to avoid these conflicts
+      Assertions.assertTrue(candidateInstants.isEmpty());
+    }
   }
 
-  @Test
-  public void testConcurrentWritesWithInterleavingSuccessfulCompaction() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void testConcurrentWritesWithInterleavingSuccessfulCompaction(boolean preTableVersion8) throws Exception {
+    initMetaClient(preTableVersion8, HoodieTableType.MERGE_ON_READ);
     createCommit(metaClient.createNewInstantTime(), metaClient);
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     // consider commits before this are all successful
@@ -251,12 +262,60 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     metaClient.reloadActiveTimeline();
     List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant.get(), lastSuccessfulInstant).collect(
         Collectors.toList());
-    // writer 1 conflicts with compaction 1
-    Assertions.assertEquals(1, candidateInstants.size());
-    ConcurrentOperation thatCommitOperation = new ConcurrentOperation(candidateInstants.get(0), metaClient);
-    ConcurrentOperation thisCommitOperation = new ConcurrentOperation(currentInstant.get(), currentMetadata);
-    Assertions.assertTrue(strategy.hasConflict(thisCommitOperation, thatCommitOperation));
-    Assertions.assertThrows(HoodieWriteConflictException.class, () -> strategy.resolveConflict(null, thisCommitOperation, thatCommitOperation));
+    if (preTableVersion8) {
+      // writer 1 conflicts with compaction 1
+      Assertions.assertEquals(1, candidateInstants.size());
+      ConcurrentOperation thatCommitOperation = new ConcurrentOperation(candidateInstants.get(0), metaClient);
+      ConcurrentOperation thisCommitOperation = new ConcurrentOperation(currentInstant.get(), currentMetadata);
+      Assertions.assertTrue(strategy.hasConflict(thisCommitOperation, thatCommitOperation));
+      Assertions.assertThrows(HoodieWriteConflictException.class, () -> strategy.resolveConflict(null, thisCommitOperation, thatCommitOperation));
+    } else {
+      // writer will not have conflicts with compaction since ordering is now based on completion time to avoid these conflicts
+      Assertions.assertTrue(candidateInstants.isEmpty());
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void testConcurrentWritesWithInterleavingInflightCompaction(boolean preTableVersion8) throws Exception {
+    initMetaClient(preTableVersion8, HoodieTableType.MERGE_ON_READ);
+    createCommit(metaClient.createNewInstantTime(), metaClient);
+    HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
+    // Consider commits before this are all successful.
+    Option<HoodieInstant> lastSuccessfulInstant = timeline.getCommitsTimeline().filterCompletedInstants().lastInstant();
+
+    // Writer 1 starts.
+    String currentWriterInstant = metaClient.createNewInstantTime();
+    createInflightCommit(currentWriterInstant, metaClient);
+
+    // Compaction 1 gets scheduled and becomes inflight.
+    String newInstantTime = metaClient.createNewInstantTime();
+    createPendingCompaction(newInstantTime, metaClient);
+
+    // Writer 1 tries to commit.
+    Option<HoodieInstant> currentInstant = Option.of(
+        INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, currentWriterInstant));
+    HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant);
+    metaClient.reloadActiveTimeline();
+
+    // Do conflict resolution.
+    SimpleConcurrentFileWritesConflictResolutionStrategy strategy =
+        new SimpleConcurrentFileWritesConflictResolutionStrategy();
+    List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(
+        metaClient, currentInstant.get(), lastSuccessfulInstant).collect(Collectors.toList());
+
+    if (preTableVersion8) {
+      Assertions.assertEquals(1, candidateInstants.size());
+      ConcurrentOperation thatCommitOperation = new ConcurrentOperation(candidateInstants.get(0), metaClient);
+      ConcurrentOperation thisCommitOperation = new ConcurrentOperation(currentInstant.get(), currentMetadata);
+      Assertions.assertTrue(strategy.hasConflict(thisCommitOperation, thatCommitOperation));
+      Assertions.assertThrows(
+          HoodieWriteConflictException.class,
+          () -> strategy.resolveConflict(null, thisCommitOperation, thatCommitOperation));
+    } else {
+      // Writer will not have conflicts with compaction since ordering is now based on completion time to avoid these conflicts.
+      Assertions.assertTrue(candidateInstants.isEmpty());
+    }
   }
 
   /**
@@ -264,6 +323,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
    */
   @Test
   public void testConcurrentWriteAndCompactionScheduledEarlier() throws Exception {
+    initMetaClient(false, HoodieTableType.MERGE_ON_READ);
     createCommit(metaClient.createNewInstantTime(), metaClient);
     // compaction 1 gets scheduled
     String newInstantTime = metaClient.createNewInstantTime();
@@ -286,6 +346,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
 
   @Test
   public void testConcurrentWritesWithInterleavingScheduledCluster() throws Exception {
+    initMetaClient(false, HoodieTableType.MERGE_ON_READ);
     createCommit(metaClient.createNewInstantTime(), metaClient);
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     // consider commits before this are all successful
@@ -313,6 +374,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
 
   @Test
   public void testConcurrentWritesWithInterleavingSuccessfulCluster() throws Exception {
+    initMetaClient();
     createCommit(metaClient.createNewInstantTime(), metaClient);
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     // consider commits before this are all successful
@@ -340,6 +402,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
 
   @Test
   public void testConcurrentWritesWithInterleavingSuccessfulReplace() throws Exception {
+    initMetaClient();
     createCommit(metaClient.createNewInstantTime(), metaClient);
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     // consider commits before this are all successful
@@ -367,6 +430,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
 
   @Test
   public void testConcurrentWritesWithPendingInsertOverwriteReplace() throws Exception {
+    initMetaClient();
     createCommit(metaClient.createNewInstantTime(), metaClient);
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     // consider commits before this are all successful
@@ -396,6 +460,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
   // try to simulate HUDI-3355
   @Test
   public void testConcurrentWritesWithPendingInstants() throws Exception {
+    initMetaClient(false, HoodieTableType.MERGE_ON_READ);
     // step1: create a pending replace/commit/compact instant: C1,C11,C12
     String newInstantTimeC1 = metaClient.createNewInstantTime();
     createPendingCluster(newInstantTimeC1, WriteOperationType.CLUSTER, metaClient);
