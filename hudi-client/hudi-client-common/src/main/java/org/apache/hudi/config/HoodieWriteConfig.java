@@ -841,15 +841,6 @@ public class HoodieWriteConfig extends HoodieConfig {
       .sinceVersion("1.0.0")
       .withDocumentation("Whether to enable incremental table service. So far Clustering and Compaction support incremental processing.");
 
-  public static final ConfigProperty<Boolean> METADATA_STREAMING_WRITES = ConfigProperty
-      .key("hoodie.write.metadata.streaming.write.enabled")
-      .defaultValue(false)
-      .markAdvanced()
-      .sinceVersion("1.1.0")
-      .withDocumentation("Whether to enable streaming writes to metadata table or not. With streaming writes, we execute writes to both data table and metadata table "
-          + "in streaming manner rather than two disjoint writes. By default "
-          + "streaming writes to metadata table is enabled for SPARK engine for incremental operations and disabled for all other cases.");
-
   /**
    * Config key with boolean value that indicates whether record being written during MERGE INTO Spark SQL
    * operation are already prepped.
