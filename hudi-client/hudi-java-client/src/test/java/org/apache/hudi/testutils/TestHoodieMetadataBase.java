@@ -310,12 +310,12 @@ public class TestHoodieMetadataBase extends HoodieJavaClientTestHarness {
             .enableMetrics(enableMetrics)
             .ignoreSpuriousDeletes(validateMetadataPayloadConsistency)
             .withMetadataIndexColumnStats(false) // HUDI-8774
-            .withEngineType(EngineType.JAVA)
             .build())
         .withMetricsConfig(HoodieMetricsConfig.newBuilder().on(enableMetrics)
             .withExecutorMetrics(enableMetrics).withReporterType(MetricsReporterType.INMEMORY.name()).build())
         .withRollbackUsingMarkers(useRollbackUsingMarkers)
-        .withProperties(properties);
+        .withProperties(properties)
+        .withEngineType(EngineType.JAVA);
   }
 
   protected HoodieWriteConfig getMetadataWriteConfig(HoodieWriteConfig writeConfig) {

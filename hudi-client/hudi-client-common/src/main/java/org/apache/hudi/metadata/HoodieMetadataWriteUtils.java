@@ -136,7 +136,6 @@ public class HoodieMetadataWriteUtils {
             .build())
         .withWriteConcurrencyMode(WriteConcurrencyMode.SINGLE_WRITER)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false)
-            .withStreamingWriteEnabled(writeConfig.getMetadataConfig().isStreamingWriteEnabled())
             .withFileListingParallelism(writeConfig.getFileListingParallelism()).build())
         .withAvroSchemaValidate(false)
         .withEmbeddedTimelineServerEnabled(false)
