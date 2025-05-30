@@ -68,6 +68,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
+import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH;
@@ -157,10 +158,36 @@ public class TestHoodieFileSystemViews extends HoodieClientTestBase {
         upsertRecords(client, commitTime, 50);
       }
 
-      // mimic failed write for last completed operation and retry few more operations.
-      HoodieInstant lastInstant = metaClient.reloadActiveTimeline().getWriteTimeline().lastInstant().get();
-      HoodieCommitMetadata commitMetadata = metaClient.getActiveTimeline().readCommitMetadata(lastInstant);
-      client.rollback(lastInstant.requestedTime());
+
+      HoodieCommitMetadata commitMetadata = null;
+      boolean rollbackExecuted = false;
+      for (int i = 23; i < 26; i++) {
+        // We want to rollback deltacommit and commit instant here. With table version 6 and 8,
+        // the last instant can be compaction in MDT table at different instants due to change in how the
+        // MDT tables are initialised. Therefore we need to take a range of commits and see at what instant rollback
+        // is feasible
+        String commitTime = client.createNewInstantTime();
+        upsertRecords(client, commitTime, 50);
+        HoodieInstant lastInstant = metaClient.reloadActiveTimeline().getWriteTimeline().lastInstant().get();
+        if (!rollbackExecuted) {
+          // rollback needs to be performed for delta commit or commit instant
+          boolean shouldRollback = lastInstant.getAction().equals(DELTA_COMMIT_ACTION) || lastInstant.getAction().equals(COMMIT_ACTION);
+          if (shouldRollback && enableMdt) {
+            // commit lesser than the last compaction instant in MDT can not be rolled back
+            HoodieTableMetaClient mdtMetaClient = HoodieTableMetaClient.builder().setBasePath(metaClient.getMetaPath() + "/metadata").setConf(metaClient.getStorageConf()).build();
+            String mdtLastCompactionTime = mdtMetaClient.reloadActiveTimeline().filter(instant -> instant.getAction().equals(COMMIT_ACTION)).lastInstant().get().requestedTime();
+            shouldRollback = LESSER_THAN.test(mdtLastCompactionTime, lastInstant.requestedTime());
+          }
+          if (shouldRollback) {
+            // rollback last completed deltacommit or commit operation and retry few more operations.
+            commitMetadata = metaClient.getActiveTimeline().readCommitMetadata(lastInstant);
+            client.rollback(lastInstant.requestedTime());
+            rollbackExecuted = true;
+          }
+        }
+      }
+      // validate rollback was executed
+      assertTrue(rollbackExecuted);
 
       expectedFileSystemView.sync();
       actualFileSystemView.sync();
@@ -169,7 +196,7 @@ public class TestHoodieFileSystemViews extends HoodieClientTestBase {
           metaClient.getTableConfig().getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT) ? Option.empty() : Option.of(commitMetadata));
 
       // add few more updates
-      for (int i = 23; i < 28; i++) {
+      for (int i = 26; i < 28; i++) {
         String commitTime = client.createNewInstantTime();
         upsertRecords(client, commitTime, 50);
       }
