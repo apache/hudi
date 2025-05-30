@@ -114,12 +114,13 @@ import static org.apache.hudi.config.GlueCatalogSyncClientConfig.META_SYNC_PARTI
 import static org.apache.hudi.config.GlueCatalogSyncClientConfig.PARTITION_CHANGE_PARALLELISM;
 import static org.apache.hudi.config.HoodieAWSConfig.AWS_GLUE_ENDPOINT;
 import static org.apache.hudi.config.HoodieAWSConfig.AWS_GLUE_REGION;
+import static org.apache.hudi.config.GlueCatalogSyncClientConfig.GLUE_SYNC_DATABASE_NAME;
+import static org.apache.hudi.config.GlueCatalogSyncClientConfig.GLUE_SYNC_TABLE_NAME;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_CREATE_MANAGED_TABLE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE;
 import static org.apache.hudi.hive.util.HiveSchemaUtil.getPartitionKeyType;
 import static org.apache.hudi.hive.util.HiveSchemaUtil.parquetSchemaToMapSchema;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT;
-import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
 import static org.apache.hudi.sync.common.util.TableUtils.tableId;
 
@@ -160,7 +161,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   AWSGlueCatalogSyncClient(GlueAsyncClient awsGlue, StsClient stsClient, HiveSyncConfig config, HoodieTableMetaClient metaClient) {
     super(config, metaClient);
     this.awsGlue = awsGlue;
-    this.databaseName = config.getStringOrDefault(META_SYNC_DATABASE_NAME);
+    this.databaseName = config.getStringOrDefault(GLUE_SYNC_DATABASE_NAME, GLUE_SYNC_DATABASE_NAME.getInferFunction().get().apply(config).get());
     this.skipTableArchive = config.getBooleanOrDefault(GlueCatalogSyncClientConfig.GLUE_SKIP_TABLE_ARCHIVE);
     this.enableMetadataTable = Boolean.toString(config.getBoolean(GLUE_METADATA_FILE_LISTING)).toUpperCase();
     this.allPartitionsReadParallelism = config.getIntOrDefault(ALL_PARTITIONS_READ_PARALLELISM);
@@ -182,6 +183,16 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     } catch (URISyntaxException e) {
       throw new RuntimeException(e);
     }
+  }
+
+  @Override
+  public String getTableName() {
+    return config.getStringOrDefault(GLUE_SYNC_TABLE_NAME, GLUE_SYNC_TABLE_NAME.getInferFunction().get().apply(config).get());
+  }
+
+  @Override
+  public String getDatabaseName() {
+    return this.databaseName;
   }
 
   private List<Partition> getPartitionsSegment(Segment segment, String tableName) {

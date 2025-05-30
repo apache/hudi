@@ -83,8 +83,11 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 
 import static org.apache.hudi.aws.testutils.GlueTestUtil.glueSyncProps;
+import static org.apache.hudi.common.table.HoodieTableConfig.DATABASE_NAME;
+import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_TABLE_NAME_KEY;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -267,7 +270,7 @@ class TestAWSGlueSyncClient {
     // verify if table base path is correct
     assertEquals(glueSyncProps.get(META_SYNC_BASE_PATH.key()), basePath, "table base path should match");
   }
-  
+
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   void testGetTableLocationUsingCatalogId(boolean useConfiguredCatalogId) {
@@ -656,6 +659,50 @@ class TestAWSGlueSyncClient {
     assertFalse(client.tableExists(randomTable),
         "Expected tableExists(...) to be false for a non-existent table");
     client.close();
+  }
+
+  @Test
+  void testTableAndDatabaseName() {
+    assertEquals(GlueTestUtil.DB_NAME, awsGlueSyncClient.getDatabaseName());
+    assertEquals(GlueTestUtil.TABLE_NAME, awsGlueSyncClient.getTableName());
+
+    String dbName = "test_db1";
+    String tableName = "test_table1";
+    Properties properties = new Properties();
+    properties.setProperty(GlueCatalogSyncClientConfig.GLUE_SYNC_DATABASE_NAME.key(), dbName);
+    properties.setProperty(GlueCatalogSyncClientConfig.GLUE_SYNC_TABLE_NAME.key(), tableName);
+
+    HiveSyncConfig hiveSyncConfig = new HiveSyncConfig(properties);
+    awsGlueSyncClient = new AWSGlueCatalogSyncClient(mockAwsGlue, hiveSyncConfig, GlueTestUtil.getMetaClient());
+    assertEquals(dbName, awsGlueSyncClient.getDatabaseName());
+    assertEquals(tableName, awsGlueSyncClient.getTableName());
+
+    dbName = "test_db2";
+    tableName = "test_table2";
+    properties = new Properties();
+    properties.setProperty(META_SYNC_DATABASE_NAME.key(), dbName);
+    properties.setProperty(META_SYNC_TABLE_NAME.key(), tableName);
+
+    hiveSyncConfig = new HiveSyncConfig(properties);
+    awsGlueSyncClient = new AWSGlueCatalogSyncClient(mockAwsGlue, hiveSyncConfig, GlueTestUtil.getMetaClient());
+    assertEquals(dbName, awsGlueSyncClient.getDatabaseName());
+    assertEquals(tableName, awsGlueSyncClient.getTableName());
+
+    dbName = "test_db3";
+    tableName = "test_table3";
+    properties = new Properties();
+    properties.setProperty(DATABASE_NAME.key(), dbName);
+    properties.setProperty(HOODIE_TABLE_NAME_KEY, tableName);
+
+    hiveSyncConfig = new HiveSyncConfig(properties);
+    awsGlueSyncClient = new AWSGlueCatalogSyncClient(mockAwsGlue, hiveSyncConfig, GlueTestUtil.getMetaClient());
+    assertEquals(dbName, awsGlueSyncClient.getDatabaseName());
+    assertEquals(tableName, awsGlueSyncClient.getTableName());
+
+    hiveSyncConfig = new HiveSyncConfig(new Properties());
+    awsGlueSyncClient = new AWSGlueCatalogSyncClient(mockAwsGlue, hiveSyncConfig, GlueTestUtil.getMetaClient());
+    assertEquals(META_SYNC_DATABASE_NAME.defaultValue(), awsGlueSyncClient.getDatabaseName());
+    assertEquals(META_SYNC_TABLE_NAME.defaultValue(), awsGlueSyncClient.getTableName());
   }
 
   private CompletableFuture<GetTableResponse> getTableWithDefaultProps(String tableName, List<Column> columns, List<Column> partitionColumns) {

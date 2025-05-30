@@ -69,6 +69,9 @@ import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_DATAHUB_DATABASE_NAME;
+import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_DATAHUB_TABLE_NAME;
+
 public class DataHubSyncClient extends HoodieSyncClient {
 
   private static final Logger LOG = LoggerFactory.getLogger(DataHubSyncClient.class);
@@ -95,6 +98,16 @@ public class DataHubSyncClient extends HoodieSyncClient {
     this.databaseUrn = datasetIdentifier.getDatabaseUrn();
     this.tableName = datasetIdentifier.getTableName();
     this.databaseName = datasetIdentifier.getDatabaseName();
+  }
+
+  @Override
+  public String getDatabaseName() {
+    return config.getStringOrDefault(META_SYNC_DATAHUB_DATABASE_NAME, META_SYNC_DATAHUB_DATABASE_NAME.getInferFunction().get().apply(config).get());
+  }
+
+  @Override
+  public String getTableName() {
+    return config.getStringOrDefault(META_SYNC_DATAHUB_TABLE_NAME, META_SYNC_DATAHUB_TABLE_NAME.getInferFunction().get().apply(config).get());
   }
 
   @Override
