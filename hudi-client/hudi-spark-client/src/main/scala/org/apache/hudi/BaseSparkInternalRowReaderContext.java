@@ -172,4 +172,10 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
   public InternalRow getDeleteRow(InternalRow record, String recordKey) {
     throw new UnsupportedOperationException("Not supported for " + this.getClass().getSimpleName());
   }
+
+  @Override
+  public int compareValues(Comparable a, Comparable b) {
+    // [SPARK-46832] UTF8String doesn't support compareTo anymore
+    return SparkAdapterSupport$.MODULE$.sparkAdapter().compareValues(a, b, o -> (Comparable)o);
+  }
 }
