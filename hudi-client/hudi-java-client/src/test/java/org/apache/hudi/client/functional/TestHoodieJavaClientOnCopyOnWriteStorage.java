@@ -24,6 +24,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.clustering.plan.strategy.JavaSizeBasedClusteringPlanStrategy;
 import org.apache.hudi.client.clustering.run.strategy.JavaSortAndSizeExecutionStrategy;
 import org.apache.hudi.client.common.JavaTaskContextSupplier;
+import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -75,6 +76,10 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
         Arguments.of(true),
         Arguments.of(false)
     );
+  }
+
+  protected EngineType getEngineType() {
+    return EngineType.JAVA;
   }
 
   @BeforeEach

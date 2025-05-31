@@ -312,7 +312,7 @@ public class HoodieFlinkWriteClient<T>
    * should be called before the Driver starts a new transaction with a reloaded metaclient.
    */
   public void preTxn(WriteOperationType operationType, HoodieTableMetaClient metaClient) {
-    if (txnManager.isLockRequired() && config.needResolveWriteConflict(operationType)) {
+    if (txnManager.isLockRequired() && config.needResolveWriteConflict(operationType, metaClient.isMetadataTable(), config, metaClient.getTableConfig())) {
       this.lastCompletedTxnAndMetadata = TransactionUtils.getLastCompletedTxnInstantAndMetadata(metaClient);
       this.pendingInflightAndRequestedInstants = TransactionUtils.getInflightAndRequestedInstants(metaClient);
     }
