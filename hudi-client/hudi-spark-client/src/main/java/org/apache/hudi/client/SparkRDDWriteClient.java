@@ -18,6 +18,9 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hudi.callback.common.WriteStatusHandlerCallback;
+import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.index.HoodieSparkIndexClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
@@ -40,6 +43,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.SparkHoodieIndexFactory;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.SparkMetadataWriterFactory;
@@ -59,13 +63,18 @@ import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiConsumer;
+import java.util.stream.Collectors;
 
 @SuppressWarnings("checkstyle:LineLength")
 public class SparkRDDWriteClient<T> extends
     BaseHoodieWriteClient<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
 
   private static final Logger LOG = LoggerFactory.getLogger(SparkRDDWriteClient.class);
+
+  // true if current write client is representing metadata table.
+  private final boolean isMetadataTable;
 
   public SparkRDDWriteClient(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
     this(context, clientConfig, Option.empty());
@@ -75,11 +84,18 @@ public class SparkRDDWriteClient<T> extends
                              Option<EmbeddedTimelineService> timelineService) {
     super(context, writeConfig, timelineService, SparkUpgradeDowngradeHelper.getInstance());
     this.tableServiceClient = new SparkRDDTableServiceClient<T>(context, writeConfig, getTimelineServer());
+    isMetadataTable = HoodieTableMetadata.isMetadataTable(config.getBasePath());
   }
 
   @Override
   protected HoodieIndex createIndex(HoodieWriteConfig writeConfig) {
     return SparkHoodieIndexFactory.createIndex(config);
+  }
+
+  public boolean commit(String instantTime, JavaRDD<WriteStatus> writeStatuses, Option<Map<String, String>> extraMetadata,
+                        String commitActionType, Map<String, List<String>> partitionToReplacedFileIds,
+                        Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc) {
+    return commit(instantTime, writeStatuses, extraMetadata, commitActionType, partitionToReplacedFileIds, extraPreCommitFunc, new NoOpWriteStatusHandlerCallback());
   }
 
   /**
@@ -88,10 +104,51 @@ public class SparkRDDWriteClient<T> extends
   @Override
   public boolean commit(String instantTime, JavaRDD<WriteStatus> writeStatuses, Option<Map<String, String>> extraMetadata,
                         String commitActionType, Map<String, List<String>> partitionToReplacedFileIds,
-                        Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc) {
+                        Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc,
+                        WriteStatusHandlerCallback writeStatusHandlerCallback) {
     context.setJobStatus(this.getClass().getSimpleName(), "Committing stats: " + config.getTableName());
-    List<HoodieWriteStat> writeStats = writeStatuses.map(WriteStatus::getStat).collect();
-    return commitStats(instantTime, writeStats, extraMetadata, commitActionType, partitionToReplacedFileIds, extraPreCommitFunc);
+    // Triggering the dag for writes.
+    // If streaming writes are enabled, writes to both data table and metadata table gets triggered at this juncture.
+    // If not, writes to data table gets triggered here.
+    // When streaming writes are enabled, data table's WriteStatus is expected to contain all stats required to generate metadata table records and so it could be fatter.
+    // So, here we are dropping all additional stats and only retains the information required to proceed from here on.
+    // And we are also dropping error records so that we don't unintentionally collect the error records in the driver.
+    List<Pair<Boolean, WriteStatus>> isMetadataWriteStatusPairs = writeStatuses.map(writeStatus -> Pair.of(writeStatus.isMetadataTable(), writeStatus.removeMetadataStatsAndErrorRecords())).collect();
+    // Compute stats for the writes and invoke callback
+    AtomicLong totalRecords = new AtomicLong(0);
+    AtomicLong totalErrorRecords = new AtomicLong(0);
+    isMetadataWriteStatusPairs.stream().filter(entry -> !entry.getKey()).forEach(pair -> {
+      totalRecords.getAndAdd(pair.getValue().getTotalRecords());
+      totalErrorRecords.getAndAdd(pair.getValue().getTotalErrorRecords());
+    });
+    // reason why we are passing RDD<WriteStatus> to the writeStatusHandler callback: earlier we drop all index stats and error records before collecting in the driver.
+    // just incase if there are errors, caller might be interested to fetch error records. And so, we are passing the RDD<WriteStatus> as last argument to the write status
+    // handler callback.
+    boolean canProceed = writeStatusHandlerCallback.processWriteStatuses(totalRecords.get(), totalErrorRecords.get(),
+        HoodieJavaRDD.of(writeStatuses.filter(status -> !status.isMetadataTable()).map(WriteStatus::removeMetadataStats)));
+
+    // only if callback returns true, lets proceed. If not, bail out.
+    if (canProceed) {
+      // when streaming writes are enabled, writeStatuses is a mix of data table write status and mdt write status
+      List<HoodieWriteStat> dataTableWriteStats = isMetadataWriteStatusPairs.stream().filter(entry -> !entry.getKey()).map(leanWriteStatus -> leanWriteStatus.getValue().getStat()).collect(Collectors.toList());
+      List<HoodieWriteStat> metadataTableWriteStats = isMetadataWriteStatusPairs.stream().filter(Pair::getKey).map(leanWriteStatus -> leanWriteStatus.getValue().getStat()).collect(Collectors.toList());
+      if (isMetadataTable) {
+        // incase the current table is metadata table, for new partition instantiation we end up calling this commit method. On which case,
+        // we could only see metadataTableWriteStats and no dataTableWriteStats. So, we need to reverse the list here so that we can proceed onto commit in current table as a
+        // data table (where current is actually referring to a metadata table).
+        ValidationUtils.checkArgument(dataTableWriteStats.isEmpty(), "For new partition initialization in Metadata,"
+            + "we do not expect any writes having WriteStatus referring to data table. ");
+        dataTableWriteStats.clear();
+        dataTableWriteStats.addAll(metadataTableWriteStats);
+        metadataTableWriteStats.clear();
+      }
+
+      return commitStats(instantTime, dataTableWriteStats, extraMetadata, commitActionType,
+          partitionToReplacedFileIds, extraPreCommitFunc);
+    } else {
+      LOG.error("Exiting early due to errors with write operation ");
+      return false;
+    }
   }
 
   @Override
