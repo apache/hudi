@@ -89,7 +89,7 @@ public class RowDataUtils {
       case TIMESTAMP_WITHOUT_TIME_ZONE:
         int precision2 = precision(logicalType);
         if (precision2 <= 3) {
-          return fieldVal -> utcTimezone ? ((TimestampData) fieldVal).toInstant().toEpochMilli() : ((TimestampData) fieldVal).toTimestamp().getTime();
+          return fieldVal -> utcTimezone ? ((TimestampData) fieldVal).getMillisecond() : ((TimestampData) fieldVal).toTimestamp().getTime();
         } else if (precision2 <= 6) {
           return fieldVal -> {
             Instant instant = utcTimezone ? ((TimestampData) fieldVal).toInstant() : ((TimestampData) fieldVal).toTimestamp().toInstant();
