@@ -49,15 +49,6 @@ object HoodieWriterUtils {
    */
   def parametersWithWriteDefaults(parameters: Map[String, String]): Map[String, String] = {
     val globalProps = DFSPropertiesConfiguration.getGlobalProps.asScala
-    val freezeList: Set[String] = {
-      // look first in SQL/DF options, then in globalProps
-      val raw = parameters
-        .get(FREEZE_WRITE_CONFIGS.key)
-        .orElse(globalProps.get(FREEZE_WRITE_CONFIGS.key))
-        .getOrElse("")
-      raw.split(",").map(_.trim).filter(_.nonEmpty).toSet
-    }
-
     val props = TypedProperties.fromMap(parameters)
     val hoodieConfig: HoodieConfig = new HoodieConfig(props)
     hoodieConfig.setDefaultValue(OPERATION)
@@ -96,11 +87,36 @@ object HoodieWriterUtils {
     hoodieConfig.setDefaultValue(KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED)
 
     // Allow for freezing configs.
-    val filteredSpark  = DataSourceOptionsHelper.translateConfigurations(parameters).filterNot {
-      case (k, _) =>
-        log.warn(s"Config key: $k is frozen. Value: ${parameters.get(k)} will not take effect.")
-        freezeList(k)
+    // 99.9% of the time, this will be an empty set
+    val freezeList: Set[String] = {
+      // Attempt to read the raw comma‐list from SQL/DF options or globalProps
+      parameters
+        .get(FREEZE_WRITE_CONFIGS.key)
+        .orElse(globalProps.get(FREEZE_WRITE_CONFIGS.key))
+        .map(_.trim)
+        .filter(_.nonEmpty)
+        .map { raw =>
+          // Only split() if raw is non‐empty
+          raw.split(",").iterator.map(_.trim).filter(_.nonEmpty).toSet
+        }
+        .getOrElse(Set.empty)
     }
+
+    val translated = DataSourceOptionsHelper.translateConfigurations(parameters)
+    val filteredSpark =
+      if (freezeList.isEmpty) {
+        translated
+      } else {
+        translated.filterNot {
+          case (k, _) =>
+            if (freezeList.contains(k)) {
+              log.warn(s"Config key: $k is frozen. Value: ${parameters.get(k)} will not take effect.")
+              true
+            } else {
+              false
+            }
+        }
+      }
 
     // final merge order: code defaults -> global defaults -> spark.conf -> SQL OPTIONS
     val merged =
