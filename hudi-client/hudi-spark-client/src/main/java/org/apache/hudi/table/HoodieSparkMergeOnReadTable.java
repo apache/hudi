@@ -24,6 +24,7 @@ import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
@@ -89,8 +90,8 @@ public class HoodieSparkMergeOnReadTable<T> extends HoodieSparkCopyOnWriteTable<
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieSparkMergeOnReadTable.class);
 
-  HoodieSparkMergeOnReadTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
-    super(config, context, metaClient);
+  HoodieSparkMergeOnReadTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient, TransactionManager transactionManager) {
+    super(config, context, metaClient, transactionManager);
   }
 
   @Override
@@ -151,7 +152,7 @@ public class HoodieSparkMergeOnReadTable<T> extends HoodieSparkCopyOnWriteTable<
       HoodieEngineContext context, String compactionInstantTime) {
     RunCompactionActionExecutor<T> compactionExecutor = new RunCompactionActionExecutor<>(
         context, config, this, compactionInstantTime, new HoodieSparkMergeOnReadTableCompactor<>(),
-        new HoodieSparkCopyOnWriteTable<>(config, context, getMetaClient()), WriteOperationType.COMPACT);
+        this, WriteOperationType.COMPACT);
     return compactionExecutor.execute();
   }
 

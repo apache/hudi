@@ -110,7 +110,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.BiConsumer;
-import java.util.function.BiFunction;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.getAvroRecordQualifiedName;
 import static org.apache.hudi.common.model.HoodieCommitMetadata.SCHEMA_KEY;
@@ -343,8 +342,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   }
 
   protected HoodieTable createTableAndValidate(HoodieWriteConfig writeConfig,
-                                               BiFunction<HoodieWriteConfig, HoodieEngineContext, HoodieTable> createTableFn) {
-    HoodieTable table = createTableFn.apply(writeConfig, context);
+                                               TriFunction<HoodieWriteConfig, HoodieEngineContext, TransactionManager, HoodieTable> createTableFn) {
+    HoodieTable table = createTableFn.apply(writeConfig, context, txnManager);
     CommonClientUtils.validateTableVersion(table.getMetaClient().getTableConfig(), writeConfig);
     return table;
   }
@@ -354,11 +353,16 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     R apply(T t, U u, V v);
   }
 
+  @FunctionalInterface
+  protected interface QuadFunction<T, U, V, W, R> {
+    R apply(T t, U u, V v, W w);
+  }
+
   protected HoodieTable createTableAndValidate(HoodieWriteConfig writeConfig,
                                                HoodieTableMetaClient metaClient,
-                                               TriFunction<HoodieWriteConfig, HoodieEngineContext,
-                                                   HoodieTableMetaClient, HoodieTable> createTableFn) {
-    HoodieTable table = createTableFn.apply(writeConfig, context, metaClient);
+                                               QuadFunction<HoodieWriteConfig, HoodieEngineContext,
+                                                   HoodieTableMetaClient, TransactionManager, HoodieTable> createTableFn) {
+    HoodieTable table = createTableFn.apply(writeConfig, context, metaClient, txnManager);
     CommonClientUtils.validateTableVersion(table.getMetaClient().getTableConfig(), writeConfig);
     return table;
   }
@@ -815,7 +819,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   public boolean rollback(final String commitInstantTime, String rollbackInstantTimestamp) throws HoodieRollbackException {
     HoodieTable<T, I, K, O> table = initTable(WriteOperationType.UNKNOWN, Option.empty());
     Option<HoodiePendingRollbackInfo> pendingRollbackInfo = tableServiceClient.getPendingRollbackInfo(table.getMetaClient(), commitInstantTime);
-    return tableServiceClient.rollback(commitInstantTime, pendingRollbackInfo, false, false);
+    return tableServiceClient.rollback(commitInstantTime, pendingRollbackInfo, Option.of(rollbackInstantTimestamp), false, false);
   }
 
   /**
@@ -863,7 +867,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     }
     txnManager.beginStateChange(Option.empty(), Option.empty());
     try {
-      final String restoreInstantTimestamp = createNewInstantTime();
+      final String restoreInstantTimestamp = createNewInstantTime(false);
       return Pair.of(restoreInstantTimestamp, table.scheduleRestore(context, restoreInstantTimestamp, savepointToRestoreTimestamp));
     } finally {
       txnManager.endStateChange(Option.empty());
@@ -1053,11 +1057,11 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param metadataPartitions - list of metadata partitions which need to be dropped
    */
   public void dropIndex(List<String> metadataPartitions) {
+    this.txnManager.beginStateChange(Option.empty(), Option.empty());
     HoodieTable table = createTable(config);
-    String dropInstant = createNewInstantTime();
     HoodieInstant ownerInstant = table.getMetaClient().createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.INDEXING_ACTION, dropInstant);
-    this.txnManager.beginStateChange(Option.of(ownerInstant), Option.empty());
     try {
+      String dropInstant = createNewInstantTime(false);
       context.setJobStatus(this.getClass().getSimpleName(), "Dropping partitions from metadata table: " + config.getTableName());
       HoodieTableMetaClient metaClient = table.getMetaClient();
       // For secondary index and expression index with wrong parameters, index definition for the MDT partition is
@@ -1089,7 +1093,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         }
       }
     } finally {
-      this.txnManager.endStateChange(Option.of(ownerInstant));
+      this.txnManager.endStateChange(Option.empty());
     }
   }
 

@@ -24,6 +24,7 @@ import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -822,9 +823,8 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     }
     try (HoodieFlinkWriteClient<?> writeClient = HoodieCatalogUtil.createWriteClient(tablePath, table, hiveConf, this::inferTablePath)) {
       boolean hiveStylePartitioning = Boolean.parseBoolean(table.getOptions().get(FlinkOptions.HIVE_STYLE_PARTITIONING.key()));
-      writeClient.deletePartitions(
-              Collections.singletonList(HoodieCatalogUtil.inferPartitionPath(hiveStylePartitioning, partitionSpec)),
-              writeClient.createNewInstantTime())
+      String instantTime = writeClient.startCommit(HoodieTimeline.REPLACE_COMMIT_ACTION);
+      writeClient.deletePartitions(Collections.singletonList(HoodieCatalogUtil.inferPartitionPath(hiveStylePartitioning, partitionSpec)), instantTime)
           .forEach(writeStatus -> {
             if (writeStatus.hasErrors()) {
               throw new HoodieMetadataException(String.format("Failed to commit metadata table records at file id %s.", writeStatus.getFileId()));
