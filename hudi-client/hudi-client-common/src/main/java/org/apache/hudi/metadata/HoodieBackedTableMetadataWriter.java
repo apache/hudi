@@ -82,7 +82,6 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.table.BulkInsertPartitioner;
-import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.util.Lazy;
 
 import org.apache.avro.Schema;
@@ -205,8 +204,6 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   List<MetadataPartitionType> getEnabledPartitions(HoodieMetadataConfig metadataConfig, HoodieTableMetaClient metaClient) {
     return MetadataPartitionType.getEnabledPartitions(metadataConfig, metaClient);
   }
-
-  abstract HoodieTable getTable(HoodieWriteConfig writeConfig, HoodieTableMetaClient metaClient);
 
   private void mayBeReinitMetadataReader() {
     if (metadata == null || metadataMetaClient == null || metadata.getMetadataFileSystemView() == null) {

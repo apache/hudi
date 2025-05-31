@@ -20,6 +20,7 @@ package org.apache.hudi.table;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
@@ -36,6 +37,7 @@ import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.metadata.FlinkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
+import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import java.util.List;
@@ -47,33 +49,44 @@ public abstract class HoodieFlinkTable<T>
     extends HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>>
     implements ExplicitWriteHandleTable<T>, HoodieCompactionHandler<T> {
 
-  protected HoodieFlinkTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
-    super(config, context, metaClient);
+  protected HoodieFlinkTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient, TransactionManager transactionManager) {
+    super(config, context, metaClient, transactionManager);
   }
 
   public static <T> HoodieFlinkTable<T> create(HoodieWriteConfig config, HoodieEngineContext context) {
+    TransactionManager transactionManager = new TransactionManager(config, HoodieStorageUtils.getStorage(config.getBasePath(), context.getStorageConf()));
+    return create(config, context, transactionManager);
+  }
+
+  public static <T> HoodieFlinkTable<T> create(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
+    TransactionManager transactionManager = new TransactionManager(config, HoodieStorageUtils.getStorage(config.getBasePath(), context.getStorageConf()));
+    return create(config, context, metaClient, transactionManager);
+  }
+
+  public static <T> HoodieFlinkTable<T> create(HoodieWriteConfig config, HoodieEngineContext context, TransactionManager transactionManager) {
     HoodieTableMetaClient metaClient =
         HoodieTableMetaClient.builder()
             .setConf(context.getStorageConf().newInstance()).setBasePath(config.getBasePath())
             .setLoadActiveTimelineOnLoad(true).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
             .setTimeGeneratorConfig(config.getTimeGeneratorConfig())
             .setFileSystemRetryConfig(config.getFileSystemRetryConfig()).build();
-    return HoodieFlinkTable.create(config, context, metaClient);
+    return HoodieFlinkTable.create(config, context, metaClient, transactionManager);
   }
 
   public static <T> HoodieFlinkTable<T> create(HoodieWriteConfig config,
                                                HoodieEngineContext context,
-                                               HoodieTableMetaClient metaClient) {
+                                               HoodieTableMetaClient metaClient,
+                                               TransactionManager transactionManager) {
     if (config.getSchemaEvolutionEnable()) {
       setLatestInternalSchema(config, metaClient);
     }
     final HoodieFlinkTable<T> hoodieFlinkTable;
     switch (metaClient.getTableType()) {
       case COPY_ON_WRITE:
-        hoodieFlinkTable = new HoodieFlinkCopyOnWriteTable<>(config, context, metaClient);
+        hoodieFlinkTable = new HoodieFlinkCopyOnWriteTable<>(config, context, metaClient, transactionManager);
         break;
       case MERGE_ON_READ:
-        hoodieFlinkTable = new HoodieFlinkMergeOnReadTable<>(config, context, metaClient);
+        hoodieFlinkTable = new HoodieFlinkMergeOnReadTable<>(config, context, metaClient, transactionManager);
         break;
       default:
         throw new HoodieException("Unsupported table type :" + metaClient.getTableType());

@@ -19,6 +19,7 @@
 package org.apache.hudi.table;
 
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
@@ -45,6 +46,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class TestHoodieTable extends HoodieCommonTestHarness {
+  private final TransactionManager transactionManager = mock(TransactionManager.class);
+
   @Test
   void getIndexReturnsCachedInstance() throws IOException {
     initMetaClient();
@@ -52,7 +55,8 @@ class TestHoodieTable extends HoodieCommonTestHarness {
         .withPath(basePath)
         .build();
     HoodieEngineContext context = mock(HoodieEngineContext.class);
-    HoodieTable hoodieTable = new TestBaseHoodieTable(writeConfig, context, metaClient);
+
+    HoodieTable hoodieTable = new TestBaseHoodieTable(writeConfig, context, metaClient, transactionManager);
 
     HoodieIndex<?, ?> index = hoodieTable.getIndex();
     assertSame(index, hoodieTable.getIndex());
@@ -65,7 +69,7 @@ class TestHoodieTable extends HoodieCommonTestHarness {
         .withPath(basePath)
         .build();
     HoodieEngineContext context = mock(HoodieEngineContext.class);
-    HoodieTable hoodieTable = new TestBaseHoodieTable(writeConfig, context, metaClient);
+    HoodieTable hoodieTable = new TestBaseHoodieTable(writeConfig, context, metaClient, transactionManager);
 
     HoodieStorageLayout storageLayout = hoodieTable.getStorageLayout();
     assertSame(storageLayout, hoodieTable.getStorageLayout());
@@ -78,7 +82,7 @@ class TestHoodieTable extends HoodieCommonTestHarness {
         .withPath(basePath)
         .build();
     HoodieEngineContext context = mock(HoodieEngineContext.class);
-    HoodieTable hoodieTable = new TestBaseHoodieTable(writeConfig, context, metaClient);
+    HoodieTable hoodieTable = new TestBaseHoodieTable(writeConfig, context, metaClient, transactionManager);
 
     // before serialization, context is the same one that is passed in
     assertSame(context, hoodieTable.getContext());
@@ -96,7 +100,7 @@ class TestHoodieTable extends HoodieCommonTestHarness {
         .build();
     HoodieEngineContext context = mock(HoodieEngineContext.class);
     HoodieTable hoodieTable =
-        new TestBaseHoodieTable(writeConfig, context, metaClient);
+        new TestBaseHoodieTable(writeConfig, context, metaClient, transactionManager);
     // Prepare test inputs.
     HoodieInstant inflightInstant = new HoodieInstant(
         HoodieInstant.State.INFLIGHT,

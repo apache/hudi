@@ -23,6 +23,7 @@ import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -49,8 +50,8 @@ import java.util.List;
 import java.util.Map;
 
 public class HoodieJavaMergeOnReadTable<T> extends HoodieJavaCopyOnWriteTable<T> {
-  protected HoodieJavaMergeOnReadTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
-    super(config, context, metaClient);
+  protected HoodieJavaMergeOnReadTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient, TransactionManager transactionManager) {
+    super(config, context, metaClient, transactionManager);
   }
 
   @Override
@@ -110,7 +111,7 @@ public class HoodieJavaMergeOnReadTable<T> extends HoodieJavaCopyOnWriteTable<T>
       HoodieEngineContext context, String compactionInstantTime) {
     RunCompactionActionExecutor compactionExecutor = new RunCompactionActionExecutor(
         context, config, this, compactionInstantTime, new HoodieJavaMergeOnReadTableCompactor(),
-        new HoodieJavaCopyOnWriteTable(config, context, getMetaClient()), WriteOperationType.COMPACT);
+        this, WriteOperationType.COMPACT);
     return convertMetadata(compactionExecutor.execute());
   }
 

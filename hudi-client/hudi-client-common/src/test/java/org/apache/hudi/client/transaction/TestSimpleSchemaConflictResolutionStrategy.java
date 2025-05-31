@@ -73,6 +73,8 @@ public class TestSimpleSchemaConflictResolutionStrategy {
   public static HoodieEngineContext engineContext;
   @Mock
   public static TaskContextSupplier taskContextSupplier;
+  @Mock
+  private TransactionManager transactionManager;
   public Option<HoodieInstant> lastCompletedTxnOwnerInstant;
   public Option<HoodieInstant> tableCompactionOwnerInstant;
   public Option<HoodieInstant> tableClusteringOwnerInstant;
@@ -130,7 +132,7 @@ public class TestSimpleSchemaConflictResolutionStrategy {
         enableResolution ? ENABLE_SCHEMA_CONFLICT_RESOLUTION.defaultValue().toString() : "false");
     config = HoodieWriteConfig.newBuilder().withSchema(writerSchemaOfTxn).withPath(basePath.toString()).withProperties(typedProperties).build();
 
-    table = new TestBaseHoodieTable(config, engineContext, viewManager, metaClient, taskContextSupplier);
+    table = new TestBaseHoodieTable(config, engineContext, viewManager, metaClient, taskContextSupplier, transactionManager);
     strategy = new SimpleSchemaConflictResolutionStrategy();
   }
 

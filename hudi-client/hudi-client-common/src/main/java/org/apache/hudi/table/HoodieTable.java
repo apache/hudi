@@ -32,6 +32,7 @@ import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.HoodieColumnStatsIndexUtils;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -142,12 +143,13 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   private final InstantGenerator instantGenerator;
   private final InstantFileNameGenerator instantFileNameGenerator;
   private final InstantFileNameParser instantFileNameParser;
+  private transient TransactionManager transactionManager;
   private final boolean isMetadataTable;
 
   private transient FileSystemViewManager viewManager;
   protected final transient HoodieEngineContext context;
 
-  protected HoodieTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
+  protected HoodieTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient, TransactionManager transactionManager) {
     this.config = config;
     this.context = context;
     this.isMetadataTable = metaClient.isMetadataTable();
@@ -157,9 +159,12 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     this.viewManager = getViewManager();
     this.metaClient = metaClient;
     this.taskContextSupplier = context.getTaskContextSupplier();
+    this.transactionManager = transactionManager;
   }
 
-  protected HoodieTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient, FileSystemViewManager viewManager, TaskContextSupplier supplier) {
+  protected HoodieTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient, FileSystemViewManager viewManager, TaskContextSupplier supplier,
+                        TransactionManager transactionManager) {
+    // TODO clean up constructors
     this.config = config;
     this.context = context;
     this.isMetadataTable = HoodieTableMetadata.isMetadataTable(config.getBasePath());
@@ -169,6 +174,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     this.viewManager = viewManager;
     this.metaClient = metaClient;
     this.taskContextSupplier = supplier;
+    this.transactionManager = transactionManager;
   }
 
   public boolean isMetadataTable() {
@@ -703,15 +709,22 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   void rollbackInflightInstant(HoodieInstant inflightInstant,
                                Function<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInstantFunc) {
     // Retrieve the rollback information using the provided function.
-    final Pair<String, Boolean> rollbackInfo = getPendingRollbackInstantFunc.apply(inflightInstant.requestedTime())
-        .map(entry -> Pair.of(entry.getRollbackInstant().requestedTime(), false))
-        .orElseGet(() -> Pair.of(getMetaClient().createNewInstantTime(), true));
-    // If a rollback has not scheduled (rollbackInfo.getRight() is true), schedule it.
-    if (rollbackInfo.getRight()) {
-      scheduleRollback(context, rollbackInfo.getLeft(), inflightInstant, false, config.shouldRollbackUsingMarkers(), false);
+    final Option<HoodiePendingRollbackInfo> rollbackInfo = getPendingRollbackInstantFunc.apply(inflightInstant.requestedTime());
+    // If a rollback has not scheduled, schedule it.
+    String instantTime;
+    if (rollbackInfo.isEmpty()) {
+      transactionManager.beginTransaction(Option.empty(), Option.empty());
+      try {
+        instantTime = getMetaClient().createNewInstantTime(false);
+        scheduleRollback(context, instantTime, inflightInstant, false, config.shouldRollbackUsingMarkers(), false);
+      } finally {
+        transactionManager.endTransaction(Option.empty());
+      }
+    } else {
+      instantTime = rollbackInfo.get().getRollbackInstant().requestedTime();
     }
     // Perform the rollback.
-    rollback(context, rollbackInfo.getLeft(), inflightInstant, false, false);
+    rollback(context, instantTime, inflightInstant, false, false);
     // Revert the inflight instant to requested state in the timeline.
     getActiveTimeline().revertInstantFromInflightToRequested(inflightInstant);
   }
@@ -723,11 +736,17 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @param inflightInstant Inflight Compaction Instant
    */
   public void rollbackInflightLogCompaction(HoodieInstant inflightInstant, Function<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInstantFunc) {
-    final String commitTime = getPendingRollbackInstantFunc.apply(inflightInstant.requestedTime()).map(entry
-        -> entry.getRollbackInstant().requestedTime())
-        .orElseGet(() -> getMetaClient().createNewInstantTime());
-    scheduleRollback(context, commitTime, inflightInstant, false, config.shouldRollbackUsingMarkers(),
-        false);
+    transactionManager.beginTransaction(Option.empty(), Option.empty());
+    final String commitTime;
+    try {
+      commitTime = getPendingRollbackInstantFunc.apply(inflightInstant.requestedTime()).map(entry
+              -> entry.getRollbackInstant().requestedTime())
+          .orElseGet(() -> getMetaClient().createNewInstantTime(false));
+      scheduleRollback(context, commitTime, inflightInstant, false, config.shouldRollbackUsingMarkers(),
+          false);
+    } finally {
+      transactionManager.endTransaction(Option.empty());
+    }
     rollback(context, commitTime, inflightInstant, true, false);
   }
 
