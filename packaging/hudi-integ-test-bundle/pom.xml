@@ -292,7 +292,6 @@
                     <exclude>META-INF/NOTICE*</exclude>
                     <exclude>META-INF/LICENSE*</exclude>
                     <exclude>**/*.proto</exclude>
-                    <exclude>hbase-webapps/**</exclude>
                   </excludes>
                 </filter>
               </filters>

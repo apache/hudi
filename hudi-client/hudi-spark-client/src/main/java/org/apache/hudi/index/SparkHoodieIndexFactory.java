@@ -26,7 +26,6 @@ import org.apache.hudi.index.bloom.HoodieGlobalBloomIndex;
 import org.apache.hudi.index.bloom.SparkHoodieBloomIndexHelper;
 import org.apache.hudi.index.bucket.HoodieSimpleBucketIndex;
 import org.apache.hudi.index.bucket.HoodieSparkConsistentBucketIndex;
-import org.apache.hudi.index.hbase.SparkHoodieHBaseIndex;
 import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex;
 import org.apache.hudi.index.simple.HoodieGlobalSimpleIndex;
 import org.apache.hudi.index.simple.HoodieSimpleIndex;
@@ -47,8 +46,6 @@ public final class SparkHoodieIndexFactory {
     }
 
     switch (config.getIndexType()) {
-      case HBASE:
-        return new SparkHoodieHBaseIndex(config);
       case INMEMORY:
         return new HoodieInMemoryHashIndex(config);
       case BLOOM:
@@ -82,8 +79,6 @@ public final class SparkHoodieIndexFactory {
    */
   public static boolean isGlobalIndex(HoodieWriteConfig config) {
     switch (config.getIndexType()) {
-      case HBASE:
-        return true;
       case INMEMORY:
         return true;
       case BLOOM:

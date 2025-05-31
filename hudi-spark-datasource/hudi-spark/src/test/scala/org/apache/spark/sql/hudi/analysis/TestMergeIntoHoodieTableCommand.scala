@@ -21,7 +21,7 @@ package org.apache.spark.sql.hudi.analysis
 
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.common.config.RecordMergeMode
-import org.apache.hudi.config.{HoodieHBaseIndexConfig, HoodieIndexConfig}
+import org.apache.hudi.config.HoodieIndexConfig
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.index.HoodieIndex
 
@@ -34,8 +34,7 @@ class TestMergeIntoHoodieTableCommand extends AnyFlatSpec with Matchers {
     val globalIndices = Seq(
       HoodieIndex.IndexType.GLOBAL_SIMPLE -> HoodieIndexConfig.SIMPLE_INDEX_UPDATE_PARTITION_PATH_ENABLE,
       HoodieIndex.IndexType.GLOBAL_BLOOM -> HoodieIndexConfig.BLOOM_INDEX_UPDATE_PARTITION_PATH_ENABLE,
-      HoodieIndex.IndexType.RECORD_INDEX -> HoodieIndexConfig.RECORD_INDEX_UPDATE_PARTITION_PATH_ENABLE,
-      HoodieIndex.IndexType.HBASE -> HoodieHBaseIndexConfig.UPDATE_PARTITION_PATH_ENABLE
+      HoodieIndex.IndexType.RECORD_INDEX -> HoodieIndexConfig.RECORD_INDEX_UPDATE_PARTITION_PATH_ENABLE
     )
 
     globalIndices.foreach { case (indexType, config) =>
@@ -51,8 +50,7 @@ class TestMergeIntoHoodieTableCommand extends AnyFlatSpec with Matchers {
     val globalIndices = Seq(
       HoodieIndex.IndexType.GLOBAL_SIMPLE -> HoodieIndexConfig.SIMPLE_INDEX_UPDATE_PARTITION_PATH_ENABLE,
       HoodieIndex.IndexType.GLOBAL_BLOOM -> HoodieIndexConfig.BLOOM_INDEX_UPDATE_PARTITION_PATH_ENABLE,
-      HoodieIndex.IndexType.RECORD_INDEX -> HoodieIndexConfig.RECORD_INDEX_UPDATE_PARTITION_PATH_ENABLE,
-      HoodieIndex.IndexType.HBASE -> HoodieHBaseIndexConfig.UPDATE_PARTITION_PATH_ENABLE
+      HoodieIndex.IndexType.RECORD_INDEX -> HoodieIndexConfig.RECORD_INDEX_UPDATE_PARTITION_PATH_ENABLE
     )
 
     globalIndices.foreach { case (indexType, config) =>

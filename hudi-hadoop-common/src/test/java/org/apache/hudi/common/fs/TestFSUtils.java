@@ -651,13 +651,13 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   @Test
   void testGetPathWithoutScheme() {
     String path1 = "s3://test_bucket_one/table/base/path";
-    assertEquals(FSUtils.getPathWithoutScheme(new Path(path1)).toUri().toString(), "//test_bucket_one/table/base/path", "should return false since bucket names dont match");
+    assertEquals(FSUtils.getPathWithoutScheme(new StoragePath(path1)).toUri().toString(), "//test_bucket_one/table/base/path", "should return false since bucket names dont match");
 
     path1 = "s3a://test_bucket_one/table/base/path";
-    assertEquals(FSUtils.getPathWithoutScheme(new Path(path1)).toUri().toString(), "//test_bucket_one/table/base/path", "should return false since bucket names dont match");
+    assertEquals(FSUtils.getPathWithoutScheme(new StoragePath(path1)).toUri().toString(), "//test_bucket_one/table/base/path", "should return false since bucket names dont match");
 
     path1 = "gs://test_bucket_one/table/base/path";
-    assertEquals(FSUtils.getPathWithoutScheme(new Path(path1)).toUri().toString(), "//test_bucket_one/table/base/path", "should return false since bucket names dont match");
+    assertEquals(FSUtils.getPathWithoutScheme(new StoragePath(path1)).toUri().toString(), "//test_bucket_one/table/base/path", "should return false since bucket names dont match");
   }
 
   @Test

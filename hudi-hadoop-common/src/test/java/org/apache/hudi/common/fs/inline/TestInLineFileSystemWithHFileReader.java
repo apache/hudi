@@ -19,23 +19,43 @@
 
 package org.apache.hudi.common.fs.inline;
 
+import org.apache.hudi.common.testutils.FileSystemTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.fs.HadoopSeekableDataInputStream;
 import org.apache.hudi.hadoop.fs.inline.InLineFileSystem;
+import org.apache.hudi.hadoop.fs.inline.InMemoryFileSystem;
 import org.apache.hudi.io.SeekableDataInputStream;
+import org.apache.hudi.io.hfile.HFileContext;
 import org.apache.hudi.io.hfile.HFileReader;
 import org.apache.hudi.io.hfile.HFileReaderImpl;
+import org.apache.hudi.io.hfile.HFileWriter;
+import org.apache.hudi.io.hfile.HFileWriterImpl;
 import org.apache.hudi.io.hfile.Key;
 import org.apache.hudi.io.hfile.KeyValue;
 import org.apache.hudi.io.hfile.UTF8StringKey;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.Path;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 
+import java.io.DataOutputStream;
+import java.io.File;
 import java.io.IOException;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.testutils.FileSystemTestUtils.FILE_SCHEME;
+import static org.apache.hudi.common.testutils.FileSystemTestUtils.RANDOM;
+import static org.apache.hudi.common.testutils.FileSystemTestUtils.getPhantomFile;
+import static org.apache.hudi.common.testutils.FileSystemTestUtils.getRandomOuterInMemPath;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.io.hfile.HFileUtils.getValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -44,8 +64,75 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Tests {@link InLineFileSystem} with native HFile reader.
  */
-public class TestInLineFileSystemWithHFileReader extends TestInLineFileSystemHFileInLiningBase {
-  @Override
+class TestInLineFileSystemWithHFileReader {
+  protected static final String LOCAL_FORMATTER = "%010d";
+  protected static final String VALUE_PREFIX = "value";
+  private final Configuration inMemoryConf;
+  private final Configuration inlineConf;
+  private final int maxRows = 100 + RANDOM.nextInt(1000);
+  private Path generatedPath;
+
+  TestInLineFileSystemWithHFileReader() {
+    inMemoryConf = new Configuration();
+    inMemoryConf.set(
+        "fs." + InMemoryFileSystem.SCHEME + ".impl",
+        InMemoryFileSystem.class.getName());
+    inlineConf = new Configuration();
+    inlineConf.set(
+        "fs." + InLineFileSystem.SCHEME + ".impl",
+        InLineFileSystem.class.getName());
+  }
+
+  @AfterEach
+  public void teardown() throws IOException {
+    if (generatedPath != null) {
+      File filePath = new File(generatedPath.toString().substring(generatedPath.toString().indexOf(':') + 1));
+      if (filePath.exists()) {
+        FileSystemTestUtils.deleteFile(filePath);
+      }
+    }
+  }
+
+  @Test
+  void testSimpleInlineFileSystem() throws IOException {
+    Path outerInMemFSPath = getRandomOuterInMemPath();
+    Path outerPath = new Path(FILE_SCHEME + outerInMemFSPath.toString().substring(outerInMemFSPath.toString().indexOf(':')));
+    generatedPath = outerPath;
+    DataOutputStream out = createFSOutput(outerInMemFSPath, inMemoryConf);
+    HFileContext context = new HFileContext.Builder().build();
+    HFileWriter writer = new HFileWriterImpl(context, out);
+
+    writeRecords(writer);
+    out.close();
+
+    byte[] inlineBytes = getBytesToInline(outerInMemFSPath);
+    long startOffset = generateOuterFile(outerPath, inlineBytes);
+
+    long inlineLength = inlineBytes.length;
+
+    // Generate phantom inline file
+    Path inlinePath = new Path(getPhantomFile(new StoragePath(outerPath.toUri()), startOffset, inlineLength).toUri());
+
+    InLineFileSystem inlineFileSystem = (InLineFileSystem) inlinePath.getFileSystem(inlineConf);
+    FSDataInputStream fin = inlineFileSystem.open(inlinePath);
+
+    validateHFileReading(inlineFileSystem, inMemoryConf, inlineConf, inlinePath, maxRows);
+
+    fin.close();
+    outerPath.getFileSystem(inMemoryConf).delete(outerPath, true);
+  }
+
+  protected Set<Integer> getRandomValidRowIds(int count) {
+    Set<Integer> rowIds = new HashSet<>();
+    while (rowIds.size() < count) {
+      int index = RANDOM.nextInt(maxRows);
+      if (!rowIds.contains(index)) {
+        rowIds.add(index);
+      }
+    }
+    return rowIds;
+  }
+
   protected void validateHFileReading(InLineFileSystem inlineFileSystem,
                                       Configuration conf,
                                       Configuration inlineConf,
@@ -102,6 +189,51 @@ public class TestInLineFileSystemWithHFileReader extends TestInLineFileSystemHFi
       assertEquals(expectedKeyStr, key, "keys do not match " + expectedKeyStr + " " + key);
       assertEquals(expectedValStr, value, "values do not match " + expectedValStr + " " + value);
       assertEquals(i != maxRows - 1, reader.next());
+    }
+  }
+
+  private FSDataOutputStream createFSOutput(Path name, Configuration conf) throws IOException {
+    return name.getFileSystem(conf).create(name);
+  }
+
+  private void writeRecords(HFileWriter writer) throws IOException {
+    writeSomeRecords(writer);
+    writer.close();
+  }
+
+  private void writeSomeRecords(HFileWriter writer)
+      throws IOException {
+    for (int i = 0; i < (maxRows); i++) {
+      String key = String.format(LOCAL_FORMATTER, i);
+      writer.append(key, getUTF8Bytes(VALUE_PREFIX + key));
+    }
+  }
+
+  private long generateOuterFile(Path outerPath, byte[] inlineBytes) throws IOException {
+    FSDataOutputStream wrappedOut = outerPath.getFileSystem(inMemoryConf).create(outerPath, true);
+    // write random bytes
+    writeRandomBytes(wrappedOut, 10);
+
+    // save position for start offset
+    long startOffset = wrappedOut.getPos();
+    // embed inline file
+    wrappedOut.write(inlineBytes);
+
+    // write random bytes
+    writeRandomBytes(wrappedOut, 5);
+    wrappedOut.hsync();
+    wrappedOut.close();
+    return startOffset;
+  }
+
+  private byte[] getBytesToInline(Path outerInMemFSPath) throws IOException {
+    InMemoryFileSystem inMemoryFileSystem = (InMemoryFileSystem) outerInMemFSPath.getFileSystem(inMemoryConf);
+    return inMemoryFileSystem.getFileAsBytes();
+  }
+
+  private void writeRandomBytes(FSDataOutputStream writer, int count) throws IOException {
+    for (int i = 0; i < count; i++) {
+      writer.writeUTF(UUID.randomUUID().toString());
     }
   }
 }

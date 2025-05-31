@@ -19,7 +19,6 @@
 
 package org.apache.hudi.index;
 
-import org.apache.hudi.config.HoodieHBaseIndexConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -28,7 +27,6 @@ import org.apache.hudi.index.bloom.HoodieBloomIndex;
 import org.apache.hudi.index.bloom.HoodieGlobalBloomIndex;
 import org.apache.hudi.index.bucket.HoodieSimpleBucketIndex;
 import org.apache.hudi.index.bucket.HoodieSparkConsistentBucketIndex;
-import org.apache.hudi.index.hbase.SparkHoodieHBaseIndex;
 import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex;
 import org.apache.hudi.index.simple.HoodieSimpleIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -56,7 +54,7 @@ public class TestHoodieIndexConfigs {
   }
 
   @ParameterizedTest
-  @EnumSource(value = IndexType.class, names = {"BLOOM", "GLOBAL_BLOOM", "SIMPLE", "GLOBAL_SIMPLE", "HBASE", "BUCKET", "RECORD_INDEX"})
+  @EnumSource(value = IndexType.class, names = {"BLOOM", "GLOBAL_BLOOM", "SIMPLE", "GLOBAL_SIMPLE", "BUCKET", "RECORD_INDEX"})
   public void testCreateIndex(IndexType indexType) {
     HoodieWriteConfig config;
     HoodieWriteConfig.Builder clientConfigBuilder = HoodieWriteConfig.newBuilder();
@@ -81,13 +79,6 @@ public class TestHoodieIndexConfigs {
         config = clientConfigBuilder.withPath(basePath)
             .withIndexConfig(indexConfigBuilder.withIndexType(IndexType.SIMPLE).build()).build();
         assertTrue(SparkHoodieIndexFactory.createIndex(config) instanceof HoodieSimpleIndex);
-        break;
-      case HBASE:
-        config = clientConfigBuilder.withPath(basePath)
-            .withIndexConfig(indexConfigBuilder.withIndexType(HoodieIndex.IndexType.HBASE)
-                .withHBaseIndexConfig(new HoodieHBaseIndexConfig.Builder().build()).build())
-            .build();
-        assertTrue(SparkHoodieIndexFactory.createIndex(config) instanceof SparkHoodieHBaseIndex);
         break;
       case BUCKET:
         Properties props = new Properties();

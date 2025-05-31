@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.io.hadoop;
+package org.apache.hudi.io.storage;
 
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.io.compress.CompressionCodec;
@@ -72,5 +72,4 @@ public class HoodieHFileConfig {
   public String getKeyFieldName() {
     return keyFieldName;
   }
-
 }

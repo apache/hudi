@@ -61,7 +61,6 @@
                                     <include>*:*</include>
                                 </includes>
                                 <excludes>
-                                    <exclude>org.apache.hbase.thirdparty:*</exclude>
                                     <exclude>org.apache.flink:flink-shaded-force-shading</exclude>
                                     <exclude>com.google.code.findbugs:jsr305</exclude>
                                     <exclude>org.slf4j:*</exclude>

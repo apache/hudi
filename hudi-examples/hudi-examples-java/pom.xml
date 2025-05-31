@@ -106,6 +106,10 @@
             <artifactId>hudi-examples-common</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <dependency>
+            <groupId>org.apache.hadoop</groupId>
+            <artifactId>hadoop-common</artifactId>
+        </dependency>
 
         <!-- Kryo -->
         <dependency>
