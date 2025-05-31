@@ -21,24 +21,22 @@ package org.apache.hudi.metadata.index.files;
 
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.index.Indexer;
+import org.apache.hudi.metadata.model.FileSliceAndPartition;
 import org.apache.hudi.util.Lazy;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.ArrayList;
 
 import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
 
@@ -58,7 +56,7 @@ public class FilesIndexer implements Indexer {
   public List<InitialIndexPartitionData> initialize(
       String dataTableInstantTime,
       Map<String, Map<String, Long>> partitionIdToAllFilesMap,
-      Lazy<List<Pair<String, FileSlice>>> lazyLatestMergedPartitionFileSliceList) throws IOException {
+      Lazy<List<FileSliceAndPartition>> lazyLatestMergedPartitionFileSliceList) throws IOException {
     // FILES partition uses a single file group
     final int numFileGroup = 1;
 

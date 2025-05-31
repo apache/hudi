@@ -36,7 +36,6 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.storage.HoodieIOFactory;
@@ -45,6 +44,7 @@ import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.index.Indexer;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.Lazy;
+import org.apache.hudi.metadata.model.FileSliceAndPartition;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -106,10 +106,10 @@ public class SecondaryIndexer implements Indexer {
   }
 
   @Override
-  public List<InitialIndexPartitionData> initialize(
+  public List<Indexer.InitialIndexPartitionData> initialize(
       String dataTableInstantTime,
       Map<String, Map<String, Long>> partitionIdToAllFilesMap,
-      Lazy<List<Pair<String, FileSlice>>> lazyLatestMergedPartitionFileSliceList) throws IOException {
+      Lazy<List<FileSliceAndPartition>> lazyLatestMergedPartitionFileSliceList) throws IOException {
     if (secondaryIndexPartitionsToInit.get().size() != 1) {
       if (secondaryIndexPartitionsToInit.get().size() > 1) {
         LOG.warn("Skipping secondary index initialization as only one secondary index "
@@ -122,7 +122,7 @@ public class SecondaryIndexer implements Indexer {
 
     HoodieIndexDefinition indexDefinition = getIndexDefinition(dataTableMetaClient, indexName);
     ValidationUtils.checkState(indexDefinition != null, "Secondary Index definition is not present for index " + indexName);
-    List<Pair<String, FileSlice>> partitionFileSlicePairs = lazyLatestMergedPartitionFileSliceList.get();
+    List<FileSliceAndPartition> partitionFileSlicePairs = lazyLatestMergedPartitionFileSliceList.get();
 
     int parallelism = Math.min(partitionFileSlicePairs.size(),
         dataTableWriteConfig.getMetadataConfig().getSecondaryIndexParallelism());
@@ -149,7 +149,7 @@ public class SecondaryIndexer implements Indexer {
 
   public static HoodieData<HoodieRecord> readSecondaryKeysFromFileSlices(
       HoodieEngineContext engineContext,
-      List<Pair<String, FileSlice>> partitionFileSlicePairs,
+      List<FileSliceAndPartition> partitionFileSlicePairs,
       int secondaryIndexMaxParallelism,
       String activeModule, HoodieTableMetaClient metaClient, EngineType engineType,
       HoodieIndexDefinition indexDefinition) {
@@ -167,8 +167,8 @@ public class SecondaryIndexer implements Indexer {
 
     engineContext.setJobStatus(activeModule, "Secondary Index: reading secondary keys from " + partitionFileSlicePairs.size() + " file slices");
     return engineContext.parallelize(partitionFileSlicePairs, parallelism).flatMap(partitionAndBaseFile -> {
-      final String partition = partitionAndBaseFile.getKey();
-      final FileSlice fileSlice = partitionAndBaseFile.getValue();
+      final String partition = partitionAndBaseFile.getPartitionPath();
+      final FileSlice fileSlice = partitionAndBaseFile.getFileSlice();
       List<String> logFilePaths = fileSlice.getLogFiles().sorted(HoodieLogFile.getLogFileComparator()).map(l -> l.getPath().toString()).collect(Collectors.toList());
       Option<StoragePath> dataFilePath = Option.ofNullable(fileSlice.getBaseFile().map(baseFile -> filePath(basePath, partition, baseFile.getFileName())).orElseGet(null));
       Schema readerSchema;

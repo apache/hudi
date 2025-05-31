@@ -68,6 +68,8 @@ import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.metadata.index.ExpressionIndexRecordGenerator;
 import org.apache.hudi.metadata.index.Indexer;
 import org.apache.hudi.metadata.index.IndexerFactory;
+import org.apache.hudi.metadata.model.DirectoryInfo;
+import org.apache.hudi.metadata.model.FileSliceAndPartition;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
@@ -82,7 +84,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -115,7 +116,6 @@ import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
 import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
 import static org.apache.hudi.metadata.MetadataPartitionType.fromPartitionPath;
 import static org.apache.hudi.metadata.SecondaryIndexRecordGenerationUtils.convertWriteStatsToSecondaryIndexRecords;
-import org.apache.hudi.metadata.model.DirectoryInfo;
 
 /**
  * Writer implementation backed by an internal hudi table. Partition and file listing are saved within an internal MOR table
@@ -406,7 +406,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
     // TODO(yihua): check this wrt files partition, i.e., after files partition is ready in
     //  MDT, could it be leveraged afterward?
-    Lazy<List<Pair<String, FileSlice>>> lazyLatestMergedPartitionFileSliceList = getLazyLatestMergedPartitionFileSliceList();
+    Lazy<List<FileSliceAndPartition>> lazyLatestMergedPartitionFileSliceList = latestPartitionFileSliceList();
     if (!filesPartitionAvailable) {
       // FILES partition should always be initialized first if enabled
       initializeMetadataPartition(
@@ -425,32 +425,12 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     return true;
   }
 
-  private Lazy<List<Pair<String, FileSlice>>> getLazyPartitionFileSliceList() {
-    return Lazy.lazily(() -> {
-      String latestInstant = dataMetaClient.getActiveTimeline().filterCompletedAndCompactionInstants().lastInstant()
-          .map(HoodieInstant::requestedTime).orElse(SOLO_COMMIT_TIMESTAMP);
-      // now we need to rely on outside caller to pass fsView and close the fsView.
-      // also see if we can reuse fsView across indexes.
-      // Collect the list of latest file slices present in each partition
-      try (HoodieTableFileSystemView fsView = getMetadataView()) {
-        List<String> partitions = metadata.getAllPartitionPaths();
-        fsView.loadAllPartitions();
-        List<Pair<String, FileSlice>> partitionFileSlicePairs = new ArrayList<>();
-        partitions.forEach(partition -> fsView.getLatestMergedFileSlicesBeforeOrOn(partition, latestInstant)
-            .forEach(fs -> partitionFileSlicePairs.add(Pair.of(partition, fs))));
-        return partitionFileSlicePairs;
-      } catch (IOException e) {
-        throw new UncheckedIOException(e);
-      }
-    });
-  }
-
   private void initializeMetadataPartition(
       MetadataPartitionType partitionType,
       Indexer indexer,
       String dataTableInstantTime,
       Map<String, Map<String, Long>> partitionToAllFilesMap,
-      Lazy<List<Pair<String, FileSlice>>> lazyLatestMergedPartitionFileSliceList)
+      Lazy<List<FileSliceAndPartition>> lazyLatestMergedPartitionFileSliceList)
       throws IOException {
     // Find the commit timestamp to use for this partition. Each initialization should use its own unique commit time.
     String instantTimeForPartition = generateUniqueInstantTime(dataTableInstantTime);
@@ -531,7 +511,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
   protected abstract EngineType getEngineType();
 
-  private Lazy<List<Pair<String, FileSlice>>> getLazyLatestMergedPartitionFileSliceList() {
+  private Lazy<List<FileSliceAndPartition>> latestPartitionFileSliceList() {
     return Lazy.lazily(() -> {
       String latestInstant = dataMetaClient.getActiveTimeline().filterCompletedAndCompactionInstants().lastInstant()
           .map(HoodieInstant::requestedTime).orElse(SOLO_COMMIT_TIMESTAMP);
@@ -539,9 +519,9 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         // Collect the list of latest file slices present in each partition
         List<String> partitions = metadata.getAllPartitionPaths();
         fsView.loadAllPartitions();
-        List<Pair<String, FileSlice>> partitionFileSlicePairs = new ArrayList<>();
+        List<FileSliceAndPartition> partitionFileSlicePairs = new ArrayList<>();
         partitions.forEach(partition -> fsView.getLatestMergedFileSlicesBeforeOrOn(partition, latestInstant)
-            .forEach(fs -> partitionFileSlicePairs.add(Pair.of(partition, fs))));
+            .forEach(fs -> partitionFileSlicePairs.add(new FileSliceAndPartition(fs, partition))));
         return partitionFileSlicePairs;
       } catch (IOException e) {
         throw new HoodieIOException("Cannot get the latest merged file slices", e);

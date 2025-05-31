@@ -37,6 +37,7 @@ import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.index.Indexer;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.util.Lazy;
+import org.apache.hudi.metadata.model.FileSliceAndPartition;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -76,17 +77,17 @@ public class RecordIndexer implements Indexer {
   }
 
   @Override
-  public List<InitialIndexPartitionData> initialize(
+  public List<Indexer.InitialIndexPartitionData> initialize(
       String dataTableInstantTime,
       Map<String, Map<String, Long>> partitionIdToAllFilesMap,
-      Lazy<List<Pair<String, FileSlice>>> lazyPartitionFileSlicePairs) throws IOException {
+      Lazy<List<FileSliceAndPartition>> lazyPartitionFileSlicePairs) throws IOException {
     HoodieData<HoodieRecord> records = null;
     if (dataTableMetaClient.getTableConfig().getTableType() == HoodieTableType.COPY_ON_WRITE) {
       // for COW, we can only consider base files to initialize.
       final List<Pair<String, HoodieBaseFile>> partitionBaseFilePairs =
           lazyPartitionFileSlicePairs.get().stream()
-              .filter(e -> e.getRight().getBaseFile().isPresent())
-              .map(e -> Pair.of(e.getLeft(), e.getRight().getBaseFile().get()))
+              .filter(e -> e.getFileSlice().getBaseFile().isPresent())
+              .map(e -> Pair.of(e.getPartitionPath(), e.getFileSlice().getBaseFile().get()))
               .collect(Collectors.toList());
       LOG.info("Initializing record index from {} base files", partitionBaseFilePairs.size());
 
@@ -101,7 +102,7 @@ public class RecordIndexer implements Indexer {
           engineContext.getStorageConf(),
           this.getClass().getSimpleName());
     } else {
-      final List<Pair<String, FileSlice>> partitionFileSlicePairs = lazyPartitionFileSlicePairs.get();
+      final List<FileSliceAndPartition> partitionFileSlicePairs = lazyPartitionFileSlicePairs.get();
       LOG.info("Initializing record index from {} file slices", partitionFileSlicePairs.size());
       records = readRecordKeysFromFileSliceSnapshot(
           engineContext,
@@ -140,7 +141,7 @@ public class RecordIndexer implements Indexer {
    */
   private static HoodieData<HoodieRecord> readRecordKeysFromFileSliceSnapshot(
       HoodieEngineContext engineContext,
-      List<Pair<String, FileSlice>> partitionFileSlicePairs,
+      List<FileSliceAndPartition> partitionFileSlicePairs,
       int recordIndexMaxParallelism,
       String activeModule,
       HoodieTableMetaClient metaClient,
@@ -161,8 +162,8 @@ public class RecordIndexer implements Indexer {
 
     return engineContext.parallelize(partitionFileSlicePairs, parallelism)
         .flatMap(partitionAndFileSlice -> {
-          final String partition = partitionAndFileSlice.getKey();
-          final FileSlice fileSlice = partitionAndFileSlice.getValue();
+          final String partition = partitionAndFileSlice.getPartitionPath();
+          final FileSlice fileSlice = partitionAndFileSlice.getFileSlice();
           final String fileId = fileSlice.getFileId();
           return new HoodieMergedReadHandle(dataTableWriteConfig, instantTime, hoodieTable,
               Pair.of(partition, fileSlice.getFileId()),

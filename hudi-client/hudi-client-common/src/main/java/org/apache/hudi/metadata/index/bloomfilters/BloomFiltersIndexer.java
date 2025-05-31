@@ -24,10 +24,8 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.Tuple3;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.storage.HoodieFileReader;
@@ -35,6 +33,7 @@ import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.index.Indexer;
+import org.apache.hudi.metadata.model.FileSliceAndPartition;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.Lazy;
@@ -72,10 +71,10 @@ public class BloomFiltersIndexer implements Indexer {
   }
 
   @Override
-  public List<InitialIndexPartitionData> initialize(
+  public List<Indexer.InitialIndexPartitionData> initialize(
       String dataTableInstantTime,
       Map<String, Map<String, Long>> partitionIdToAllFilesMap,
-      Lazy<List<Pair<String, FileSlice>>> lazyLatestMergedPartitionFileSliceList) throws IOException {
+      Lazy<List<FileSliceAndPartition>> lazyLatestMergedPartitionFileSliceList) throws IOException {
     String bloomFilterType = dataTableWriteConfig.getBloomFilterType();
     // Create the tuple (partition, filename, isDeleted) to handle both deletes and appends
     final List<Tuple3<String, String, Boolean>> partitionFileFlagTupleList =

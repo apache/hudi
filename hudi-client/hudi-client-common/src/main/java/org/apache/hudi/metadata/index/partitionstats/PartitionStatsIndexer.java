@@ -34,6 +34,7 @@ import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.index.Indexer;
 import org.apache.hudi.util.Lazy;
+import org.apache.hudi.metadata.model.FileSliceAndPartition;
 
 import org.apache.avro.Schema;
 import org.slf4j.Logger;
@@ -73,10 +74,10 @@ public class PartitionStatsIndexer implements Indexer {
   }
 
   @Override
-  public List<InitialIndexPartitionData> initialize(
+  public List<Indexer.InitialIndexPartitionData> initialize(
       String dataTableInstantTime,
       Map<String, Map<String, Long>> partitionIdToAllFilesMap,
-      Lazy<List<Pair<String, FileSlice>>> lazyLatestMergedPartitionFileSliceList) throws IOException {
+      Lazy<List<FileSliceAndPartition>> lazyLatestMergedPartitionFileSliceList) throws IOException {
     // For PARTITION_STATS, COLUMN_STATS should also be enabled
     if (!dataTableWriteConfig.isMetadataColumnStatsIndexEnabled()) {
       LOG.warn("Skipping partition stats initialization as column stats index is not enabled. Please enable {}",
@@ -84,7 +85,7 @@ public class PartitionStatsIndexer implements Indexer {
       return Collections.emptyList();
     }
     final int numFileGroup = dataTableWriteConfig.getMetadataConfig().getPartitionStatsIndexFileGroupCount();
-    List<Pair<String, FileSlice>> partitionFileSliceList = lazyLatestMergedPartitionFileSliceList.get();
+    List<FileSliceAndPartition> partitionFileSliceList = lazyLatestMergedPartitionFileSliceList.get();
     if (partitionFileSliceList.isEmpty()) {
       return Collections.singletonList(InitialIndexPartitionData.of(
           numFileGroup, PARTITION_STATS.getPartitionPath(), engineContext.emptyHoodieData()));
@@ -104,11 +105,15 @@ public class PartitionStatsIndexer implements Indexer {
 
     // Group by partition path and collect file names (BaseFile and LogFiles)
     List<Pair<String, Set<String>>> partitionToFileNames = partitionFileSliceList.stream()
-        .collect(Collectors.groupingBy(Pair::getLeft,
-            Collectors.mapping(pair -> extractFileNames(pair.getRight()), Collectors.toList())))
+        .collect(Collectors.groupingBy(
+            FileSliceAndPartition::getPartitionPath,
+            Collectors.mapping(fsp -> extractFileNames(fsp.getFileSlice()), Collectors.toList())
+        ))
         .entrySet().stream()
-        .map(entry -> Pair.of(entry.getKey(),
-            entry.getValue().stream().flatMap(Set::stream).collect(Collectors.toSet())))
+        .map(entry -> Pair.of(
+            entry.getKey(),
+            entry.getValue().stream().flatMap(Set::stream).collect(Collectors.toSet())
+        ))
         .collect(Collectors.toList());
 
     // Create records for MDT

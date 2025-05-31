@@ -19,22 +19,20 @@
 
 package org.apache.hudi.metadata.index.expression;
 
+import org.apache.avro.Schema;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.expression.HoodieExpressionIndex;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.index.ExpressionIndexRecordGenerator;
 import org.apache.hudi.metadata.index.Indexer;
+import org.apache.hudi.metadata.model.FileSliceAndPartition;
 import org.apache.hudi.util.Lazy;
-
-import org.apache.avro.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,9 +44,9 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.apache.hudi.metadata.HoodieMetadataWriteUtils.getIndexDefinition;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_EXPRESSION_INDEX;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_EXPRESSION_INDEX_PREFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getIndexPartitionsToInit;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_EXPRESSION_INDEX_PREFIX;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_EXPRESSION_INDEX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getProjectedSchemaForExpressionIndex;
 import static org.apache.hudi.metadata.MetadataPartitionType.EXPRESSION_INDEX;
 import static org.apache.hudi.metadata.MetadataPartitionType.getIndexDefinitions;
@@ -91,7 +89,7 @@ public class ExpressionIndexer implements Indexer {
   public List<InitialIndexPartitionData> initialize(
       String dataTableInstantTime,
       Map<String, Map<String, Long>> partitionIdToAllFilesMap,
-      Lazy<List<Pair<String, FileSlice>>> lazyLatestMergedPartitionFileSliceList) throws IOException {
+      Lazy<List<FileSliceAndPartition>> lazyLatestMergedPartitionFileSliceList) throws IOException {
     if (expressionIndexPartitionsToInit.get().size() != 1) {
       if (expressionIndexPartitionsToInit.get().size() > 1) {
         LOG.warn(
@@ -106,19 +104,19 @@ public class ExpressionIndexer implements Indexer {
     HoodieIndexDefinition indexDefinition = getIndexDefinition(dataTableMetaClient, indexName);
     ValidationUtils.checkState(indexDefinition != null,
         "Expression Index definition is not present for index " + indexName);
-    List<Pair<String, FileSlice>> partitionFileSlicePairs = lazyLatestMergedPartitionFileSliceList.get();
+    List<FileSliceAndPartition> partitionFileSlicePairs = lazyLatestMergedPartitionFileSliceList.get();
     List<ExpressionIndexRecordGenerator.FileToIndex> filesToIndex = new ArrayList<>();
-    partitionFileSlicePairs.forEach(entry -> {
-      if (entry.getValue().getBaseFile().isPresent()) {
+    partitionFileSlicePairs.forEach(fsp -> {
+      if (fsp.getFileSlice().getBaseFile().isPresent()) {
         filesToIndex.add(ExpressionIndexRecordGenerator.FileToIndex.of(
-            entry.getKey(), entry.getValue().getBaseFile().get().getPath(),
-            entry.getValue().getBaseFile().get().getFileLen()));
+            fsp.getPartitionPath(), fsp.getFileSlice().getBaseFile().get().getPath(),
+            fsp.getFileSlice().getBaseFile().get().getFileLen()));
       }
-      entry.getValue().getLogFiles().forEach(hoodieLogFile -> {
-        if (entry.getValue().getLogFiles().count() > 0) {
-          entry.getValue().getLogFiles().forEach(logfile ->
+      fsp.getFileSlice().getLogFiles().forEach(hoodieLogFile -> {
+        if (fsp.getFileSlice().getLogFiles().count() > 0) {
+          fsp.getFileSlice().getLogFiles().forEach(logfile ->
               filesToIndex.add(ExpressionIndexRecordGenerator.FileToIndex.of(
-                  entry.getKey(), logfile.getPath().toString(), logfile.getFileSize())));
+                  fsp.getPartitionPath(), logfile.getPath().toString(), logfile.getFileSize())));
         }
       });
     });

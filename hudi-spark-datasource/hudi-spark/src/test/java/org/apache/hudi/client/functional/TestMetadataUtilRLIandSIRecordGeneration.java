@@ -27,7 +27,6 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
-import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
@@ -41,7 +40,6 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -49,6 +47,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metadata.BaseFileRecordParsingUtils;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metadata.model.FileSliceAndPartition;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.testutils.HoodieClientTestBase;
@@ -330,10 +329,10 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       HoodieTableMetadata metadata = HoodieTableMetadata.create(engineContext, storage, metadataConfig, metaClient.getBasePath().toString());
       HoodieTableFileSystemView metadataView = new HoodieTableFileSystemView(metadata, metaClient, metaClient.getActiveTimeline());
       metadataView.loadAllPartitions();
-      List<Pair<String, FileSlice>> partitionFileSlicePairs = new ArrayList<>();
+      List<FileSliceAndPartition> partitionFileSlicePairs = new ArrayList<>();
       HoodieTableFileSystemView finalMetadataView = metadataView;
       Arrays.asList(dataGen.getPartitionPaths()).forEach(partition -> finalMetadataView.getLatestMergedFileSlicesBeforeOrOn(partition, firstCommitTime)
-          .forEach(fs -> partitionFileSlicePairs.add(Pair.of(partition, fs))));
+          .forEach(fs -> partitionFileSlicePairs.add(new FileSliceAndPartition(fs, partition))));
       List<HoodieRecord> secondaryIndexRecords = readSecondaryKeysFromFileSlices(
           engineContext, partitionFileSlicePairs, metadataConfig.getSecondaryIndexParallelism(), this.getClass().getSimpleName(), metaClient, EngineType.SPARK, indexDefinition).collectAsList();
       assertListEquality(expectedSecondaryIndexKeys, secondaryIndexRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()));
