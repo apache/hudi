@@ -145,8 +145,13 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
   }
 
   @Override
-  public Object getColumnValueAsJava(Schema recordSchema, String column, Properties props) {
-    throw new UnsupportedOperationException("Unsupported yet for " + this.getClass().getSimpleName());
+  public Object getColumnValue(Schema recordSchema, String column, Properties props) {
+    return getValue(column);
+  }
+
+  @Override
+  public Comparable getColumnValueAsJava(Schema recordSchema, String column, Properties props) {
+    throw new UnsupportedOperationException();
   }
 
   @Override
