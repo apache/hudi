@@ -31,7 +31,7 @@ import java.io.Serializable;
 import java.util.Iterator;
 import java.util.Map;
 
-public interface HoodieFileGroupRecordBuffer<T> {
+public interface HoodieFileGroupRecordBuffer<T, O> {
   enum BufferType {
     // Merging based on record key.
     KEY_BASED_MERGE,
@@ -120,7 +120,7 @@ public interface HoodieFileGroupRecordBuffer<T> {
    *
    * @return output the next merged record.
    */
-  T next();
+  O next();
 
   void close();
 }

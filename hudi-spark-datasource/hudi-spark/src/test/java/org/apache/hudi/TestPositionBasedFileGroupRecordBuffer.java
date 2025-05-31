@@ -34,6 +34,8 @@ import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.read.HoodieReadStats;
+import org.apache.hudi.common.table.read.IteratorConverters;
+import org.apache.hudi.common.table.read.IteratorMode;
 import org.apache.hudi.common.table.read.PositionBasedFileGroupRecordBuffer;
 import org.apache.hudi.common.table.read.PositionBasedSchemaHandler;
 import org.apache.hudi.common.table.read.TestHoodieFileGroupReaderOnSpark;
@@ -72,7 +74,7 @@ public class TestPositionBasedFileGroupRecordBuffer extends TestHoodieFileGroupR
   private final HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEEF);
   private HoodieTableMetaClient metaClient;
   private Schema avroSchema;
-  private PositionBasedFileGroupRecordBuffer<InternalRow> buffer;
+  private PositionBasedFileGroupRecordBuffer<InternalRow, InternalRow> buffer;
   private String partitionPath;
   private HoodieReadStats readStats;
 
@@ -139,6 +141,7 @@ public class TestPositionBasedFileGroupRecordBuffer extends TestHoodieFileGroupR
         props,
         readStats,
         Option.of("timestamp"),
+        (IteratorConverters.IteratorConverter<InternalRow, InternalRow>) IteratorConverters.createIteratorConverter(ctx, IteratorMode.ENGINE_RECORD),
         false);
   }
 

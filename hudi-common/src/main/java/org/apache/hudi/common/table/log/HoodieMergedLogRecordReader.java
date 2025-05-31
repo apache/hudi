@@ -65,7 +65,7 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
   private HoodieMergedLogRecordReader(HoodieReaderContext<T> readerContext, HoodieStorage storage, List<String> logFilePaths, boolean reverseReader,
                                       int bufferSize, Option<InstantRange> instantRange, boolean withOperationField, boolean forceFullScan,
                                       Option<String> partitionName, Option<String> keyFieldOverride, boolean enableOptimizedLogBlocksScan,
-                                      FileGroupRecordBuffer<T> recordBuffer, boolean allowInflightInstants) {
+                                      FileGroupRecordBuffer<T, ?> recordBuffer, boolean allowInflightInstants) {
     super(readerContext, storage, logFilePaths, reverseReader, bufferSize, instantRange, withOperationField,
         forceFullScan, partitionName, keyFieldOverride, enableOptimizedLogBlocksScan, recordBuffer, allowInflightInstants);
 
@@ -173,7 +173,7 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
     private boolean forceFullScan = true;
     private boolean enableOptimizedLogBlocksScan = false;
 
-    private FileGroupRecordBuffer<T> recordBuffer;
+    private FileGroupRecordBuffer<T, ?> recordBuffer;
     private boolean allowInflightInstants = false;
 
     @Override
@@ -242,7 +242,7 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
       return this;
     }
 
-    public Builder<T> withRecordBuffer(FileGroupRecordBuffer<T> recordBuffer) {
+    public Builder<T> withRecordBuffer(FileGroupRecordBuffer<T, ?> recordBuffer) {
       this.recordBuffer = recordBuffer;
       return this;
     }

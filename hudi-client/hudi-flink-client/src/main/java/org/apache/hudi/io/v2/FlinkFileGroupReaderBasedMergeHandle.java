@@ -82,7 +82,7 @@ public class FlinkFileGroupReaderBasedMergeHandle<T, I, K, O> extends BaseFileGr
     }
     TypedProperties props = FlinkClientUtil.getReadProps(hoodieTable.getMetaClient().getTableConfig(), config);
     // Initializes file group reader
-    try (HoodieFileGroupReader<T> fileGroupReader = HoodieFileGroupReader.<T>newBuilder()
+    try (HoodieFileGroupReader<T, T> fileGroupReader = HoodieFileGroupReader.<T, T>newBuilder()
         .withReaderContext(readerContext).withHoodieTableMetaClient(hoodieTable.getMetaClient())
         .withLatestCommitTime(instantTime).withFileSlice(fileSlice).withDataSchema(writeSchemaWithMetaFields).withRequestedSchema(writeSchemaWithMetaFields)
         .withInternalSchema(internalSchemaOption).withProps(props).withShouldUseRecordPosition(false).build()) {

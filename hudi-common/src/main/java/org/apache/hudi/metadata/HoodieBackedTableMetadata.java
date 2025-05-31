@@ -243,7 +243,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         metadataMetaClient.getTableConfig(),
         Option.of(instantRange),
         Option.of(transformKeyPrefixesToPredicate(sortedKeyPrefixes)));
-    HoodieFileGroupReader<IndexedRecord> fileGroupReader = HoodieFileGroupReader.<IndexedRecord>newBuilder()
+    HoodieFileGroupReader<IndexedRecord, IndexedRecord> fileGroupReader = HoodieFileGroupReader.<IndexedRecord, IndexedRecord>newBuilder()
         .withReaderContext(readerContext)
         .withHoodieTableMetaClient(metadataMetaClient)
         .withLatestCommitTime(latestMetadataInstantTime)
@@ -348,7 +348,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         metadataMetaClient.getTableConfig(),
         Option.of(instantRange),
         Option.of(transformKeysToPredicate(sortedKeys)));
-    try (HoodieFileGroupReader<IndexedRecord> fileGroupReader = HoodieFileGroupReader.<IndexedRecord>newBuilder()
+    try (HoodieFileGroupReader<IndexedRecord, IndexedRecord> fileGroupReader = HoodieFileGroupReader.<IndexedRecord, IndexedRecord>newBuilder()
         .withReaderContext(readerContext)
         .withHoodieTableMetaClient(metadataMetaClient)
         .withLatestCommitTime(latestMetadataInstantTime)
