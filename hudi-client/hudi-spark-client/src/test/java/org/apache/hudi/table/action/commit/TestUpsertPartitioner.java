@@ -32,7 +32,6 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
-import org.apache.hudi.config.HoodieHBaseIndexConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
@@ -236,8 +235,7 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     HoodieWriteConfig config = makeHoodieClientConfigBuilder()
             .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024).build())
             .withIndexConfig(HoodieIndexConfig.newBuilder()
-                    .withIndexType(HoodieIndex.IndexType.HBASE)
-                    .withHBaseIndexConfig(HoodieHBaseIndexConfig.newBuilder().build())
+                    .withIndexType(HoodieIndex.IndexType.GLOBAL_SIMPLE)
                     .build())
             .build();
 
@@ -311,8 +309,7 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
             .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024).build())
             .withStorageConfig(HoodieStorageConfig.newBuilder().parquetMaxFileSize(1024).build())
             .withIndexConfig(HoodieIndexConfig.newBuilder()
-                    .withIndexType(HoodieIndex.IndexType.HBASE)
-                    .withHBaseIndexConfig(HoodieHBaseIndexConfig.newBuilder().build())
+                    .withIndexType(HoodieIndex.IndexType.INMEMORY)
                     .build())
             .build();
 

@@ -187,7 +187,6 @@
     <javalin.version>4.6.7</javalin.version>
     <jetty.version>9.4.57.v20241219</jetty.version>
     <htrace.version>3.1.0-incubating</htrace.version>
-    <hbase.version>2.4.13</hbase.version>
     <h2.version>1.4.199</h2.version>
     <awaitility.version>3.1.2</awaitility.version>
     <skipTests>false</skipTests>
@@ -415,8 +414,7 @@
                     <exclude>org.sl4fj:slf4j-jcl</exclude>
                     <exclude>log4j:log4j</exclude>
                     <exclude>ch.qos.logback:logback-classic</exclude>
-                    <!-- NOTE: We're banning any HBase deps versions other than the approved ${hbase.version},
-                               which is aimed at preventing the classpath collisions w/ transitive deps usually) -->
+                    <!-- NOTE: We're banning any HBase deps -->
                     <exclude>org.apache.hbase:hbase-common:*</exclude>
                     <exclude>org.apache.hbase:hbase-client:*</exclude>
                     <exclude>org.apache.hbase:hbase-server:*</exclude>
@@ -425,9 +423,6 @@
                   </excludes>
                   <includes>
                     <include>org.slf4j:slf4j-simple:*:*:test</include>
-                    <include>org.apache.hbase:hbase-common:${hbase.version}</include>
-                    <include>org.apache.hbase:hbase-client:${hbase.version}</include>
-                    <include>org.apache.hbase:hbase-server:${hbase.version}</include>
                     <!--To upgrade snappy because pre 1.1.8.2 does not work on m1 mac-->
                     <include>org.xerial.snappy:snappy-java:${snappy.version}</include>
                   </includes>
@@ -464,21 +459,6 @@
               <include>org.apache.httpcomponents:httpclient</include>
               <include>org.apache.httpcomponents:httpcore</include>
               <include>org.apache.httpcomponents:fluent-hc</include>
-              <!-- hbase -->
-              <include>org.apache.hbase:hbase-client</include>
-              <include>org.apache.hbase:hbase-common</include>
-              <include>org.apache.hbase:hbase-hadoop-compat</include>
-              <include>org.apache.hbase:hbase-hadoop2-compat</include>
-              <include>org.apache.hbase:hbase-metrics</include>
-              <include>org.apache.hbase:hbase-metrics-api</include>
-              <include>org.apache.hbase:hbase-protocol</include>
-              <include>org.apache.hbase:hbase-protocol-shaded</include>
-              <include>org.apache.hbase:hbase-server</include>
-              <include>org.apache.hbase.thirdparty:hbase-shaded-miscellaneous</include>
-              <include>org.apache.hbase.thirdparty:hbase-shaded-netty</include>
-              <include>org.apache.hbase.thirdparty:hbase-shaded-protobuf</include>
-              <include>org.apache.hbase.thirdparty:hbase-unsafe</include>
-              <include>org.apache.htrace:htrace-core4</include>
               <!-- roaring bitmap -->
               <include>org.roaringbitmap:RoaringBitmap</include>
               <!-- afterburner module for jackson performance -->
@@ -493,93 +473,6 @@
             <relocation>
               <pattern>org.apache.http.</pattern>
               <shadedPattern>org.apache.hudi.org.apache.http.</shadedPattern>
-            </relocation>
-            <!-- hbase -->
-            <relocation>
-              <pattern>org.apache.hadoop.hbase.</pattern>
-              <shadedPattern>org.apache.hudi.org.apache.hadoop.hbase.</shadedPattern>
-              <excludes>
-                <exclude>org.apache.hadoop.hbase.KeyValue$KeyComparator</exclude>
-              </excludes>
-            </relocation>
-            <relocation>
-              <pattern>org.apache.hbase.</pattern>
-              <shadedPattern>org.apache.hudi.org.apache.hbase.</shadedPattern>
-            </relocation>
-            <relocation>
-              <pattern>org.apache.htrace.</pattern>
-              <shadedPattern>org.apache.hudi.org.apache.htrace.</shadedPattern>
-            </relocation>
-            <!-- hbase
-                 The classes below in org.apache.hadoop.metrics2 package come from
-                 hbase-hadoop-compat and hbase-hadoop2-compat, which have to be shaded one by one,
-                 instead of shading all classes under org.apache.hadoop.metrics2 including ones
-                 from hadoop. -->
-            <relocation>
-              <pattern>org.apache.hadoop.metrics2.MetricHistogram</pattern>
-              <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.MetricHistogram
-              </shadedPattern>
-            </relocation>
-            <relocation>
-              <pattern>org.apache.hadoop.metrics2.MetricsExecutor</pattern>
-              <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.MetricsExecutor
-              </shadedPattern>
-            </relocation>
-            <relocation>
-              <pattern>org.apache.hadoop.metrics2.impl.JmxCacheBuster</pattern>
-              <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.impl.JmxCacheBuster
-              </shadedPattern>
-            </relocation>
-            <relocation>
-              <pattern>org.apache.hadoop.metrics2.lib.DefaultMetricsSystemHelper</pattern>
-              <shadedPattern>
-                org.apache.hudi.org.apache.hadoop.metrics2.lib.DefaultMetricsSystemHelper
-              </shadedPattern>
-            </relocation>
-            <relocation>
-              <pattern>org.apache.hadoop.metrics2.lib.DynamicMetricsRegistry</pattern>
-              <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.DynamicMetricsRegistry
-              </shadedPattern>
-            </relocation>
-            <relocation>
-              <pattern>org.apache.hadoop.metrics2.lib.MetricsExecutorImpl</pattern>
-              <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MetricsExecutorImpl
-              </shadedPattern>
-            </relocation>
-            <relocation>
-              <pattern>org.apache.hadoop.metrics2.lib.MutableFastCounter</pattern>
-              <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableFastCounter
-              </shadedPattern>
-            </relocation>
-            <relocation>
-              <pattern>org.apache.hadoop.metrics2.lib.MutableHistogram</pattern>
-              <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableHistogram
-              </shadedPattern>
-            </relocation>
-            <relocation>
-              <pattern>org.apache.hadoop.metrics2.lib.MutableRangeHistogram</pattern>
-              <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableRangeHistogram
-              </shadedPattern>
-            </relocation>
-            <relocation>
-              <pattern>org.apache.hadoop.metrics2.lib.MutableSizeHistogram</pattern>
-              <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableSizeHistogram
-              </shadedPattern>
-            </relocation>
-            <relocation>
-              <pattern>org.apache.hadoop.metrics2.lib.MutableTimeHistogram</pattern>
-              <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.lib.MutableTimeHistogram
-              </shadedPattern>
-            </relocation>
-            <relocation>
-              <pattern>org.apache.hadoop.metrics2.util.MetricQuantile</pattern>
-              <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.util.MetricQuantile
-              </shadedPattern>
-            </relocation>
-            <relocation>
-              <pattern>org.apache.hadoop.metrics2.util.MetricSampleQuantiles</pattern>
-              <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.util.MetricSampleQuantiles
-              </shadedPattern>
             </relocation>
             <relocation>
               <pattern>org.roaringbitmap.</pattern>
@@ -1791,6 +1684,11 @@
           </exclusion>
         </exclusions>
       </dependency>
+      <dependency>
+        <groupId>javax.xml.bind</groupId>
+        <artifactId>jaxb-api</artifactId>
+        <version>2.3.1</version>
+      </dependency>
 
       <!--  Spring Boot  -->
       <dependency>
@@ -2309,7 +2207,6 @@
                 <link>https://docs.spring.io/spring-shell/docs/1.2.0.RELEASE</link>
                 <link>https://fasterxml.github.io/jackson-databind/javadoc/2.6</link>
                 <link>https://hadoop.apache.org/docs/r${hadoop.version}/api</link>
-                <link>https://hbase.apache.org/2.4/apidocs</link>
                 <link>https://hive.apache.org/javadocs/r2.3.6/api</link>
                 <link>https://javadoc.io/static/io.javalin/javalin/2.3.0</link>
                 <link>https://javadoc.io/doc/org.apache.parquet/parquet-avro/${parquet.version}</link>

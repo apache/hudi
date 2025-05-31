@@ -1937,121 +1937,12 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getDouble(HoodieStorageConfig.BLOOM_FILTER_FPP_VALUE);
   }
 
-  public String getHbaseZkQuorum() {
-    return getString(HoodieHBaseIndexConfig.ZKQUORUM);
-  }
-
-  public int getHbaseZkPort() {
-    return getInt(HoodieHBaseIndexConfig.ZKPORT);
-  }
-
-  public String getHBaseZkZnodeParent() {
-    return getString(HoodieHBaseIndexConfig.ZK_NODE_PATH);
-  }
-
-  public String getHbaseTableName() {
-    return getString(HoodieHBaseIndexConfig.TABLENAME);
-  }
-
-  public int getHbaseIndexGetBatchSize() {
-    return getInt(HoodieHBaseIndexConfig.GET_BATCH_SIZE);
-  }
-
-  public Boolean getHBaseIndexRollbackSync() {
-    return getBoolean(HoodieHBaseIndexConfig.ROLLBACK_SYNC_ENABLE);
-  }
-
-  public int getHbaseIndexPutBatchSize() {
-    return getInt(HoodieHBaseIndexConfig.PUT_BATCH_SIZE);
-  }
-
-  public boolean getHbaseIndexPutBatchSizeAutoCompute() {
-    return getBooleanOrDefault(HoodieHBaseIndexConfig.PUT_BATCH_SIZE_AUTO_COMPUTE);
-  }
-
-  public String getHBaseQPSResourceAllocatorClass() {
-    return getString(HoodieHBaseIndexConfig.QPS_ALLOCATOR_CLASS_NAME);
-  }
-
-  public String getHBaseQPSZKnodePath() {
-    return getString(HoodieHBaseIndexConfig.ZKPATH_QPS_ROOT);
-  }
-
-  public String getHBaseZkZnodeSessionTimeout() {
-    return getString(HoodieHBaseIndexConfig.ZK_SESSION_TIMEOUT_MS);
-  }
-
-  public String getHBaseZkZnodeConnectionTimeout() {
-    return getString(HoodieHBaseIndexConfig.ZK_CONNECTION_TIMEOUT_MS);
-  }
-
-  public boolean getHBaseIndexShouldComputeQPSDynamically() {
-    return getBoolean(HoodieHBaseIndexConfig.COMPUTE_QPS_DYNAMICALLY);
-  }
-
-  public String getHBaseIndexSecurityAuthentication() {
-    return getString(HoodieHBaseIndexConfig.SECURITY_AUTHENTICATION);
-  }
-
-  public String getHBaseIndexKerberosUserKeytab() {
-    return getString(HoodieHBaseIndexConfig.KERBEROS_USER_KEYTAB);
-  }
-
-  public String getHBaseIndexKerberosUserPrincipal() {
-    return getString(HoodieHBaseIndexConfig.KERBEROS_USER_PRINCIPAL);
-  }
-
-  public String getHBaseIndexRegionserverPrincipal() {
-    return getString(HoodieHBaseIndexConfig.REGIONSERVER_PRINCIPAL);
-  }
-
-  public String getHBaseIndexMasterPrincipal() {
-    return getString(HoodieHBaseIndexConfig.MASTER_PRINCIPAL);
-  }
-
-  public int getHBaseIndexDesiredPutsTime() {
-    return getInt(HoodieHBaseIndexConfig.DESIRED_PUTS_TIME_IN_SECONDS);
-  }
-
   public String getBloomFilterType() {
     return getStorageConfig().getBloomFilterType();
   }
 
   public int getDynamicBloomFilterMaxNumEntries() {
     return getInt(HoodieStorageConfig.BLOOM_FILTER_DYNAMIC_MAX_ENTRIES);
-  }
-
-  /**
-   * Fraction of the global share of QPS that should be allocated to this job. Let's say there are 3 jobs which have
-   * input size in terms of number of rows required for HbaseIndexing as x, 2x, 3x respectively. Then this fraction for
-   * the jobs would be (0.17) 1/6, 0.33 (2/6) and 0.5 (3/6) respectively.
-   */
-  public float getHbaseIndexQPSFraction() {
-    return getFloat(HoodieHBaseIndexConfig.QPS_FRACTION);
-  }
-
-  public float getHBaseIndexMinQPSFraction() {
-    return getFloat(HoodieHBaseIndexConfig.MIN_QPS_FRACTION);
-  }
-
-  public float getHBaseIndexMaxQPSFraction() {
-    return getFloat(HoodieHBaseIndexConfig.MAX_QPS_FRACTION);
-  }
-
-  /**
-   * This should be same across various jobs. This is intended to limit the aggregate QPS generated across various
-   * Hoodie jobs to an Hbase Region Server
-   */
-  public int getHbaseIndexMaxQPSPerRegionServer() {
-    return getInt(HoodieHBaseIndexConfig.MAX_QPS_PER_REGION_SERVER);
-  }
-
-  public boolean getHbaseIndexUpdatePartitionPath() {
-    return getBooleanOrDefault(HoodieHBaseIndexConfig.UPDATE_PARTITION_PATH_ENABLE);
-  }
-
-  public int getHBaseIndexRegionCount() {
-    return getInt(HoodieHBaseIndexConfig.BUCKET_NUMBER);
   }
 
   public int getBloomIndexParallelism() {
@@ -3473,8 +3364,6 @@ public class HoodieWriteConfig extends HoodieConfig {
       writeConfig.setDefaultValue(MARKERS_TYPE, getDefaultMarkersType(engineType));
       // Check for mandatory properties
       writeConfig.setDefaults(HoodieWriteConfig.class.getName());
-      // Set default values of HoodieHBaseIndexConfig
-      writeConfig.setDefaults(HoodieHBaseIndexConfig.class.getName());
       // Make sure the props is propagated
       writeConfig.setDefaultOnCondition(
           !isIndexConfigSet, HoodieIndexConfig.newBuilder().withEngineType(engineType).fromProperties(

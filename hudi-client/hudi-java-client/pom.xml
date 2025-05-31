@@ -126,6 +126,13 @@
             <version>${hive.version}</version>
             <scope>test</scope>
         </dependency>
+
+        <!-- Hadoop - Test -->
+        <dependency>
+            <groupId>org.apache.hadoop</groupId>
+            <artifactId>hadoop-hdfs</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
