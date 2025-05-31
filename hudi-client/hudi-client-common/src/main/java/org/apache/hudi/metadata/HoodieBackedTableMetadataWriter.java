@@ -50,6 +50,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
@@ -610,6 +611,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
    * @param indexDefinition                 Hoodie Index Definition for the expression index for which records need to be generated
    * @param metaClient                      Hoodie Table Meta Client
    * @param parallelism                     Parallelism to use for engine operations
+   * @param tableSchema                     Schema of the table
    * @param readerSchema                    Schema of reader
    * @param storageConf                     Storage Config
    * @param instantTime                     Instant time
@@ -618,7 +620,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   protected abstract HoodieData<HoodieRecord> getExpressionIndexRecords(List<Pair<String, Pair<String, Long>>> partitionFilePathAndSizeTriplet,
                                                                         HoodieIndexDefinition indexDefinition,
                                                                         HoodieTableMetaClient metaClient,
-                                                                        int parallelism, Schema readerSchema,
+                                                                        int parallelism, Schema tableSchema, Schema readerSchema,
                                                                         StorageConfiguration<?> storageConf,
                                                                         String instantTime);
 
@@ -645,8 +647,9 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
 
     int fileGroupCount = dataWriteConfig.getMetadataConfig().getExpressionIndexFileGroupCount();
     int parallelism = Math.min(partitionFilePathSizeTriplet.size(), dataWriteConfig.getMetadataConfig().getExpressionIndexParallelism());
-    Schema readerSchema = getProjectedSchemaForExpressionIndex(indexDefinition, dataMetaClient);
-    return Pair.of(fileGroupCount, getExpressionIndexRecords(partitionFilePathSizeTriplet, indexDefinition, dataMetaClient, parallelism, readerSchema, storageConf, dataTableInstantTime));
+    Schema tableSchema = new TableSchemaResolver(dataMetaClient).getTableAvroSchema();
+    Schema readerSchema = getProjectedSchemaForExpressionIndex(indexDefinition, dataMetaClient, tableSchema);
+    return Pair.of(fileGroupCount, getExpressionIndexRecords(partitionFilePathSizeTriplet, indexDefinition, dataMetaClient, parallelism, tableSchema, readerSchema, storageConf, dataTableInstantTime));
   }
 
   HoodieIndexDefinition getIndexDefinition(String indexName) {

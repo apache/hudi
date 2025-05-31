@@ -37,6 +37,7 @@ import org.apache.avro.Schema;
 
 import java.io.Serializable;
 import java.util.ArrayDeque;
+import java.util.Arrays;
 import java.util.Deque;
 import java.util.Iterator;
 
@@ -44,6 +45,7 @@ public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
 
   private final Deque<HoodieLogBlock> currentInstantLogBlocks;
   private ClosableIterator<T> recordIterator;
+  private boolean isDeleteBlock;
 
   public UnmergedFileGroupRecordBuffer(
       HoodieReaderContext<T> readerContext,
@@ -69,19 +71,31 @@ public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
     while ((recordIterator == null || !recordIterator.hasNext()) && !currentInstantLogBlocks.isEmpty()) {
       HoodieLogBlock logBlock = currentInstantLogBlocks.pop();
       if (logBlock instanceof HoodieDataBlock) {
+        isDeleteBlock = false;
         HoodieDataBlock dataBlock = (HoodieDataBlock) logBlock;
         Pair<ClosableIterator<T>, Schema> iteratorSchemaPair = getRecordsIterator(dataBlock, Option.empty());
         if (recordIterator != null) {
           recordIterator.close();
         }
         recordIterator = iteratorSchemaPair.getLeft();
+      } else if (logBlock instanceof HoodieDeleteBlock) {
+        isDeleteBlock = true;
+        HoodieDeleteBlock deleteBlock = (HoodieDeleteBlock) logBlock;
+        recordIterator = ClosableIterator.wrap(Arrays.stream(deleteBlock.getRecordsToDelete())
+            .map(deleteRecord -> readerContext.getDeleteRow(null, deleteRecord.getRecordKey())).iterator());
+      } else {
+        throw new IllegalStateException("Unexpected log block type: " + logBlock.getClass().getName());
       }
     }
     if (recordIterator == null || !recordIterator.hasNext()) {
       return false;
     }
     nextRecord = readerContext.seal(recordIterator.next());
-    readStats.incrementNumInserts();
+    if (isDeleteBlock) {
+      readStats.incrementNumDeletes();
+    } else {
+      readStats.incrementNumInserts();
+    }
     return true;
   }
 
@@ -108,6 +122,9 @@ public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
   @Override
   public void processDeleteBlock(HoodieDeleteBlock deleteBlock) {
     // no-op
+    if (emitDelete) {
+      currentInstantLogBlocks.add(deleteBlock);
+    }
   }
 
   @Override
