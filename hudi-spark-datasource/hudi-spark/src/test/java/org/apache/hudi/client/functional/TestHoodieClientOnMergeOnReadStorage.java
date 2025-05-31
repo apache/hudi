@@ -36,6 +36,7 @@ import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
+import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -50,6 +51,8 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -105,6 +108,44 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
     metaClient.reloadActiveTimeline();
     Map<String, GenericRecord> recordMap = GenericRecordValidationTestUtils.getRecordsMap(config, storageConf, dataGen);
     assertEquals(75, recordMap.size());
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = HoodieIndex.IndexType.class, names = {"INMEMORY", "SIMPLE"})
+  public void testClusteringOnMORTable(HoodieIndex.IndexType indexType) throws Exception {
+    // INMEMORY index will only generate log files, SIMPLE will generate a base file and log files.
+    HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, indexType)
+        .withClusteringConfig(HoodieClusteringConfig.newBuilder().withInlineClusteringNumCommits(3).build())
+        .build();
+    SparkRDDWriteClient client = getHoodieWriteClient(config);
+
+    // Insert
+    String commitTime = client.createNewInstantTime();
+    insertBatch(config, client, commitTime, "000", 100, SparkRDDWriteClient::insert,
+        false, false, 100, 100, 1, Option.empty(), INSTANT_GENERATOR);
+
+    // Update
+    String commitTimeBetweenPrevAndNew = commitTime;
+    commitTime = client.createNewInstantTime();
+    updateBatch(config, client, commitTime, commitTimeBetweenPrevAndNew,
+        Option.of(Arrays.asList(commitTimeBetweenPrevAndNew)), "000", 50, SparkRDDWriteClient::upsert,
+        false, false, 5, 100, 2, config.populateMetaFields(), INSTANT_GENERATOR);
+
+    // Delete 5 records
+    String prevCommitTime = commitTime;
+    commitTime = client.createNewInstantTime();
+    deleteBatch(config, client, commitTime, prevCommitTime, "000", 25, false, false,
+        0, 100, TIMELINE_FACTORY, INSTANT_GENERATOR);
+
+    // Schedule and execute compaction.
+    Option<String> timeStamp = client.scheduleClustering(Option.empty());
+    assertTrue(timeStamp.isPresent());
+    client.cluster(timeStamp.get());
+    assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(timeStamp.get()));
+
+    // Verify all the records.
+    metaClient.reloadActiveTimeline();
+    assertDataInMORTable(config, commitTime, timeStamp.get(), storageConf, Arrays.asList(dataGen.getPartitionPaths()));
   }
 
   @Test
