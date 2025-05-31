@@ -802,7 +802,7 @@ public class StreamSync implements Serializable, Closeable {
       // write to error table
       JavaRDD<WriteStatus> dataTableWriteStatusRDD = writeClientWriteResult.getWriteStatusRDD();
       JavaRDD<WriteStatus> writeStatusRDD = dataTableWriteStatusRDD;
-      String errorTableInstantTime = writeClient.createNewInstantTime();
+      String errorTableInstantTime = instantTime;
       Option<JavaRDD<WriteStatus>> errorTableWriteStatusRDDOpt = Option.empty();
       if (errorTableWriter.isPresent() && isErrorTableWriteUnificationEnabled) {
         errorTableWriteStatusRDDOpt = errorTableWriter.map(w -> w.upsert(errorTableInstantTime, instantTime, getLatestCommittedInstant()));

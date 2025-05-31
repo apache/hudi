@@ -35,8 +35,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.BulkInsertPartitioner;
-import org.apache.hudi.table.HoodieJavaTable;
-import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
 
@@ -61,11 +59,6 @@ public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetada
                                                 HoodieEngineContext engineContext,
                                                 Option<String> inflightInstantTimestamp) {
     super(storageConf, writeConfig, failedWritesCleaningPolicy, engineContext, inflightInstantTimestamp);
-  }
-
-  @Override
-  HoodieTable getTable(HoodieWriteConfig writeConfig, HoodieTableMetaClient metaClient) {
-    return HoodieJavaTable.create(writeConfig, engineContext, metaClient);
   }
 
   public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf,

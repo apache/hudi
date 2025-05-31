@@ -130,7 +130,7 @@ class RunRollbackInflightTableServiceProcedure extends BaseProcedure
     if (isClustering) {
       table.rollbackInflightClustering(inflightInstant, getPendingRollbackInstantFunc)
     } else {
-      table.rollbackInflightCompaction(inflightInstant,getPendingRollbackInstantFunc)
+      table.rollbackInflightCompaction(inflightInstant, getPendingRollbackInstantFunc)
     }
   }
 }
