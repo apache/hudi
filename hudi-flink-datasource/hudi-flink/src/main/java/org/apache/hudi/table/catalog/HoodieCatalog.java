@@ -22,6 +22,7 @@ import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -480,8 +481,8 @@ public class HoodieCatalog extends AbstractCatalog {
     }
 
     try (HoodieFlinkWriteClient<?> writeClient = HoodieCatalogUtil.createWriteClient(options, tablePathStr, tablePath, hadoopConf)) {
-      writeClient.deletePartitions(Collections.singletonList(partitionPathStr),
-              writeClient.createNewInstantTime())
+      String instantTime = writeClient.startCommit(HoodieTimeline.REPLACE_COMMIT_ACTION);
+      writeClient.deletePartitions(Collections.singletonList(partitionPathStr), instantTime)
           .forEach(writeStatus -> {
             if (writeStatus.hasErrors()) {
               throw new HoodieMetadataException(String.format("Failed to commit metadata table records at file id %s.", writeStatus.getFileId()));

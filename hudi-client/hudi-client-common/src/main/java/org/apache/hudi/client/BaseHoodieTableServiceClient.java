@@ -30,6 +30,7 @@ import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.heartbeat.HeartbeatUtils;
 import org.apache.hudi.client.timeline.HoodieTimelineArchiver;
 import org.apache.hudi.client.timeline.TimelineArchivers;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.ActionType;
@@ -83,7 +84,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -621,7 +621,14 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
 
     //  Do an inline partition ttl management if enabled
     if (config.isInlinePartitionTTLEnable()) {
-      String instantTime = createNewInstantTime();
+      txnManager.beginTransaction(Option.empty(), Option.empty());
+      String instantTime;
+      try {
+        instantTime = createNewInstantTime(false);
+        table.getMetaClient().getActiveTimeline().createRequestedCommitWithReplaceMetadata(instantTime, HoodieTimeline.REPLACE_COMMIT_ACTION);
+      } finally {
+        txnManager.endTransaction(Option.empty());
+      }
       table.managePartitionTTL(table.getContext(), instantTime);
     }
   }
@@ -693,10 +700,10 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
   }
 
   protected HoodieTable createTableAndValidate(HoodieWriteConfig config,
-                                               BiFunction<HoodieWriteConfig,
-                                                   HoodieEngineContext, HoodieTable> createTableFn,
+                                               BaseHoodieWriteClient.TriFunction<HoodieWriteConfig,
+                                                   HoodieEngineContext, TransactionManager, HoodieTable> createTableFn,
                                                boolean skipValidation) {
-    HoodieTable table = createTableFn.apply(config, context);
+    HoodieTable table = createTableFn.apply(config, context, txnManager);
     if (!skipValidation) {
       CommonClientUtils.validateTableVersion(table.getMetaClient().getTableConfig(), config);
     }
@@ -1170,7 +1177,12 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     if (instant.isPresent() && compareTimestamps(instant.get(), LESSER_THAN_OR_EQUALS,
         HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS)) {
       LOG.info("Found pending bootstrap instants. Rolling them back");
-      table.rollbackBootstrap(context, createNewInstantTime());
+      txnManager.beginTransaction(Option.empty(), Option.empty());
+      try {
+        table.rollbackBootstrap(context, createNewInstantTime(false));
+      } finally {
+        txnManager.endTransaction(Option.empty());
+      }
       LOG.info("Finished rolling back pending bootstrap");
     }
 
