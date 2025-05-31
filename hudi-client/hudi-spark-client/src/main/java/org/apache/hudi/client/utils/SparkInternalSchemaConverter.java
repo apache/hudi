@@ -267,8 +267,10 @@ public class SparkInternalSchemaConverter {
       case DATE:
         return DateType$.MODULE$;
       case TIME:
+      case TIME_MILLIS:
         throw new UnsupportedOperationException(String.format("cannot convert %s type to Spark", type));
       case TIMESTAMP:
+      case TIMESTAMP_MILLIS:
         // todo support TimeStampNTZ
         return TimestampType$.MODULE$;
       case STRING:
