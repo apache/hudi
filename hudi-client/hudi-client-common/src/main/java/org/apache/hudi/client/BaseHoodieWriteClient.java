@@ -342,26 +342,25 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   }
 
   protected HoodieTable createTableAndValidate(HoodieWriteConfig writeConfig,
-                                               TriFunction<HoodieWriteConfig, HoodieEngineContext, TransactionManager, HoodieTable> createTableFn) {
+                                               TableCreator createTableFn) {
     HoodieTable table = createTableFn.apply(writeConfig, context, txnManager);
     CommonClientUtils.validateTableVersion(table.getMetaClient().getTableConfig(), writeConfig);
     return table;
   }
 
   @FunctionalInterface
-  protected interface TriFunction<T, U, V, R> {
-    R apply(T t, U u, V v);
+  protected interface TableCreator {
+    HoodieTable apply(HoodieWriteConfig writeConfig, HoodieEngineContext context, TransactionManager transactionManager);
   }
 
   @FunctionalInterface
-  protected interface QuadFunction<T, U, V, W, R> {
-    R apply(T t, U u, V v, W w);
+  protected interface TableCreatorWithMetaClient {
+    HoodieTable apply(HoodieWriteConfig writeConfig, HoodieEngineContext context, HoodieTableMetaClient metaClient, TransactionManager transactionManager);
   }
 
   protected HoodieTable createTableAndValidate(HoodieWriteConfig writeConfig,
                                                HoodieTableMetaClient metaClient,
-                                               QuadFunction<HoodieWriteConfig, HoodieEngineContext,
-                                                   HoodieTableMetaClient, TransactionManager, HoodieTable> createTableFn) {
+                                               TableCreatorWithMetaClient createTableFn) {
     HoodieTable table = createTableFn.apply(writeConfig, context, metaClient, txnManager);
     CommonClientUtils.validateTableVersion(table.getMetaClient().getTableConfig(), writeConfig);
     return table;

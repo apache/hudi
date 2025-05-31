@@ -30,7 +30,6 @@ import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.heartbeat.HeartbeatUtils;
 import org.apache.hudi.client.timeline.HoodieTimelineArchiver;
 import org.apache.hudi.client.timeline.TimelineArchivers;
-import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.ActionType;
@@ -700,8 +699,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
   }
 
   protected HoodieTable createTableAndValidate(HoodieWriteConfig config,
-                                               BaseHoodieWriteClient.TriFunction<HoodieWriteConfig,
-                                                   HoodieEngineContext, TransactionManager, HoodieTable> createTableFn,
+                                               BaseHoodieWriteClient.TableCreator createTableFn,
                                                boolean skipValidation) {
     HoodieTable table = createTableFn.apply(config, context, txnManager);
     if (!skipValidation) {
