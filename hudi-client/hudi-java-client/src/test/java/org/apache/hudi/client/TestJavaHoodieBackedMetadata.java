@@ -507,6 +507,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
             .withMetadataIndexColumnStats(true)
             .withMetadataIndexBloomFilterFileGroups(2)
             .withMaxNumDeltaCommitsBeforeCompaction(12) // cannot restore to before the oldest compaction on MDT as there are no base files before that time
+            .withEngineType(EngineType.JAVA)
             .build())
         .build();
     // module com.fasterxml.jackson.datatype:jackson-datatype-jsr310 is needed for proper column stats processing for Jackson >= 2.11

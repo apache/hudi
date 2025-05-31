@@ -20,6 +20,7 @@ package org.apache.hudi.metadata;
 
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.client.FailOnFirstErrorWriteStatus;
+import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
@@ -28,15 +29,18 @@ import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
@@ -84,8 +88,19 @@ public class HoodieMetadataWriteUtils {
    */
   @VisibleForTesting
   public static HoodieWriteConfig createMetadataWriteConfig(
-      HoodieWriteConfig writeConfig, HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy) {
+      HoodieWriteConfig writeConfig, HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
+      HoodieTableVersion datatableVersion) {
     String tableName = writeConfig.getTableName() + METADATA_TABLE_NAME_SUFFIX;
+    boolean isStreamingWritesToMetadataEnabled = writeConfig.isMetadataStreamingWritesEnabled(datatableVersion);
+    WriteConcurrencyMode concurrencyMode = isStreamingWritesToMetadataEnabled
+        ? WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL : WriteConcurrencyMode.SINGLE_WRITER;
+    HoodieLockConfig lockConfig = isStreamingWritesToMetadataEnabled
+        ? HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class).build() : HoodieLockConfig.newBuilder().build();
+    // HUDI-9407 tracks adding support for separate lock configuration for MDT. Until then, all writes to MDT will happen within data table lock.
+
+    if (isStreamingWritesToMetadataEnabled) {
+      failedWritesCleaningPolicy = HoodieFailedWritesCleaningPolicy.LAZY;
+    }
 
     final long maxLogFileSizeBytes = writeConfig.getMetadataConfig().getMaxLogFileSize();
     // Borrow the cleaner policy from the main table and adjust the cleaner policy based on the main table's cleaner policy
@@ -119,8 +134,8 @@ public class HoodieMetadataWriteUtils {
             .withMaxConsistencyCheckIntervalMs(writeConfig.getConsistencyGuardConfig().getMaxConsistencyCheckIntervalMs())
             .withMaxConsistencyChecks(writeConfig.getConsistencyGuardConfig().getMaxConsistencyChecks())
             .build())
-        .withWriteConcurrencyMode(WriteConcurrencyMode.SINGLE_WRITER)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).withFileListingParallelism(writeConfig.getFileListingParallelism()).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false)
+            .withFileListingParallelism(writeConfig.getFileListingParallelism()).build())
         .withAvroSchemaValidate(false)
         .withEmbeddedTimelineServerEnabled(false)
         .withMarkersType(MarkerType.DIRECT.name())
@@ -166,10 +181,13 @@ public class HoodieMetadataWriteUtils {
         .withPayloadConfig(HoodiePayloadConfig.newBuilder()
             .withPayloadClass(HoodieMetadataPayload.class.getCanonicalName()).build())
         .withRecordMergeImplClasses(HoodieAvroRecordMerger.class.getCanonicalName())
-        .withWriteRecordPositionsEnabled(false);
+        .withWriteRecordPositionsEnabled(false)
+        .withWriteConcurrencyMode(concurrencyMode)
+        .withLockConfig(lockConfig);
 
     // RecordKey properties are needed for the metadata table records
     final Properties properties = new Properties();
+    properties.put(HoodieTableConfig.TYPE.key(), HoodieTableType.MERGE_ON_READ.name());
     properties.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), RECORD_KEY_FIELD_NAME);
     properties.put("hoodie.datasource.write.recordkey.field", RECORD_KEY_FIELD_NAME);
     if (nonEmpty(writeConfig.getMetricReporterMetricsNamePrefix())) {
