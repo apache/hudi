@@ -666,8 +666,8 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
         parallelism,
         this.getClass().getSimpleName(),
         dataMetaClient,
-        getEngineType(),
-        indexDefinition);
+        indexDefinition,
+        dataWriteConfig.getProps());
 
     // Initialize the file groups - using the same estimation logic as that of record index
     final int fileGroupCount = HoodieTableMetadataUtil.estimateFileGroupCount(RECORD_INDEX, records.count(),
@@ -1197,7 +1197,8 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     // By loading on the driver one time, we avoid loading the same metadata multiple times on the executors.
     HoodieTableFileSystemView fsView = getMetadataView();
     fsView.loadPartitions(new ArrayList<>(commitMetadata.getWritePartitionPaths()));
-    return convertWriteStatsToSecondaryIndexRecords(allWriteStats, instantTime, indexDefinition, dataWriteConfig.getMetadataConfig(), fsView, dataMetaClient, engineContext, getEngineType());
+    return convertWriteStatsToSecondaryIndexRecords(allWriteStats, instantTime, indexDefinition, dataWriteConfig.getMetadataConfig(),
+        fsView, dataMetaClient, engineContext, dataWriteConfig.getProps());
   }
 
   /**

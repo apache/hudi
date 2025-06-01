@@ -32,15 +32,12 @@ import org.apache.hudi.common.model.ClusteringOperation;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.execution.bulkinsert.JavaBulkInsertInternalPartitionerFactory;
 import org.apache.hudi.execution.bulkinsert.JavaCustomColumnsSortPartitioner;
 import org.apache.hudi.io.IOUtils;
-import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -142,50 +139,13 @@ public abstract class JavaExecutionStrategy<T>
    */
   private List<HoodieRecord<T>> readRecordsForGroup(HoodieClusteringGroup clusteringGroup, String instantTime) {
     List<ClusteringOperation> clusteringOps = clusteringGroup.getSlices().stream().map(ClusteringOperation::create).collect(Collectors.toList());
-    boolean hasLogFiles = clusteringOps.stream().anyMatch(op -> op.getDeltaFilePaths().size() > 0);
-    if (hasLogFiles) {
-      // if there are log files, we read all records into memory for a file group and apply updates.
-      return readRecordsForGroupWithLogs(clusteringOps, instantTime);
-    } else {
-      // We want to optimize reading records for case there are no log files.
-      return readRecordsForGroupBaseFiles(clusteringOps);
-    }
-  }
-
-  /**
-   * Read records from baseFiles and apply updates.
-   */
-  private List<HoodieRecord<T>> readRecordsForGroupWithLogs(List<ClusteringOperation> clusteringOps,
-                                                            String instantTime) {
     HoodieWriteConfig config = getWriteConfig();
     List<HoodieRecord<T>> records = new ArrayList<>();
     long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(new JavaTaskContextSupplier(), config);
-    LOG.info("MaxMemoryPerCompaction run as part of clustering => " + maxMemoryPerCompaction);
+    LOG.info("MaxMemoryPerCompaction run as part of clustering => {}", maxMemoryPerCompaction);
 
     List<Supplier<ClosableIterator<HoodieRecord<T>>>> suppliers = new ArrayList<>(clusteringOps.size());
-    clusteringOps.forEach(op -> suppliers.add(() -> {
-      Option<HoodieFileReader> baseFileReader = ClusteringUtils.getBaseFileReader(getHoodieTable().getStorage(), recordType, getWriteConfig(), op.getDataFilePath());
-      return getRecordIteratorWithLogFiles(op, instantTime, maxMemoryPerCompaction, Option.empty(), baseFileReader);
-    }));
-    LazyConcatenatingIterator<HoodieRecord<T>> lazyIterator = new LazyConcatenatingIterator<>(suppliers);
-
-    lazyIterator.forEachRemaining(records::add);
-    lazyIterator.close();
-    return records;
-  }
-
-  /**
-   * Read records from baseFiles.
-   */
-  private List<HoodieRecord<T>> readRecordsForGroupBaseFiles(List<ClusteringOperation> clusteringOps) {
-    List<HoodieRecord<T>> records = new ArrayList<>();
-    List<Supplier<ClosableIterator<HoodieRecord<T>>>> suppliers = new ArrayList<>(clusteringOps.size());
-    clusteringOps.forEach(
-        op -> suppliers.add(() -> {
-          Option<HoodieFileReader> baseFileReaderOpt = ClusteringUtils.getBaseFileReader(getHoodieTable().getStorage(), recordType, getWriteConfig(), op.getDataFilePath());
-          ValidationUtils.checkArgument(baseFileReaderOpt.isPresent(), "Base file reader should be present for base file only read.");
-          return getRecordIteratorWithBaseFileOnly(Option.empty(), baseFileReaderOpt.get());
-        }));
+    clusteringOps.forEach(op -> suppliers.add(() -> getRecordIterator(getEngineContext().getReaderContextFactory(getHoodieTable().getMetaClient()), op, instantTime, maxMemoryPerCompaction)));
     LazyConcatenatingIterator<HoodieRecord<T>> lazyIterator = new LazyConcatenatingIterator<>(suppliers);
 
     lazyIterator.forEachRemaining(records::add);

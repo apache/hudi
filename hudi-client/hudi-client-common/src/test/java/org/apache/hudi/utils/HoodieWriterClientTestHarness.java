@@ -155,7 +155,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
   protected void addConfigsForPopulateMetaFields(HoodieWriteConfig.Builder configBuilder, boolean populateMetaFields,
                                                  boolean isMetadataTable) {
     if (!populateMetaFields) {
-      configBuilder.withProperties((isMetadataTable ? getPropertiesForMetadataTable() : getPropertiesForKeyGen()))
+      configBuilder.withProperties((isMetadataTable ? getPropertiesForMetadataTable() : getPropertiesForKeyGen(populateMetaFields)))
           .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.SIMPLE).build());
     }
   }
@@ -508,6 +508,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
                     .hfileMaxFileSize(dataGen.getEstimatedFileSizeInBytes(200))
                     .parquetMaxFileSize(dataGen.getEstimatedFileSizeInBytes(200)).build())
             .withMergeAllowDuplicateOnInserts(mergeAllowDuplicateInserts)
+            .withPopulateMetaFields(populateMetaFields)
             .withProps(props)
             .build();
   }
