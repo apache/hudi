@@ -180,9 +180,23 @@ After the second write:
 
 ### Can I change keygenerator for an existing table?
 
-No. There are small set of properties that cannot change once chosen. KeyGenerator is one among them. [Here](https://github.com/apache/hudi/blob/3f37d4fb08169c95930f9cc32389abf4e5cd5551/hudi-spark-datasource/hudi-spark-common/src/main/scala/org/apache/hudi/HoodieWriterUtils.scala#L128) is a code referecne where we
+No. There are small set of properties that cannot change once chosen. KeyGenerator is one among them. [Here](https://github.com/apache/hudi/blob/3f37d4fb08169c95930f9cc32389abf4e5cd5551/hudi-spark-datasource/hudi-spark-common/src/main/scala/org/apache/hudi/HoodieWriterUtils.scala#L128) is a code referecne where we validate the properties.
 
-validate the properties.
+### How can I resolve the NoSuchMethodError from HBase when using Hudi with metadata table on HDFS?
+
+In 0.15.0 release, we have upgraded the HBase version to 2.4.13, which is released based on Hadoop 2.x. Hudi's metadata table uses HFile as the base file format, relying on the HBase library. When enabling metadata table in a Hudi table on HDFS using Hadoop 3.x, NoSuchMethodError can be thrown due to compatibility issues between Hadoop 2.x and 3.x. To address this, here's the workaround:
+
+(1) Download HBase source code from `https://github.com/apache/hbase`;
+
+(2) Switch to the source code of 2.4.13 release with the tag `rel/2.4.13`;
+```scala
+git checkout rel/2.4.13
+```
+(3) Package a new version of HBase 2.4.13 with Hadoop 3 version:
+```scala
+mvn clean install -Denforcer.skip -DskipTests -Dhadoop.profile=3.0 -Psite-install-step
+```
+(4) Package Hudi again.
 
 ### Is Hudi JVM dependent? Does Hudi leverage Java specific serialization?
 
