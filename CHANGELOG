@@ -796,3 +796,7 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 --- [2025-05-30 16:04:14] [release-v1.129.0] ---
 [ENG-26567][INTERNAL] Support database and table name for Glue/ Datahub catalog (#1379)
 [AUDIT-1071]: Changelog for release-v1.128.0 (#1389)
+
+--- [2025-06-01 16:03:50] [release-v1.130.0] ---
+[ENG-27296][INTERNAL] Fix logging for config freeze (#1391)
+[AUDIT-1071]: Changelog for release-v1.129.0 (#1390)
