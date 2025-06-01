@@ -104,8 +104,6 @@ public class TestPartitionTTLManagement extends HoodieClientTestBase {
 
       String instantTime = client.startCommit(HoodieTimeline.REPLACE_COMMIT_ACTION);
       HoodieWriteResult result = client.managePartitionTTL(instantTime);
-      client.commit(instantTime, result.getWriteStatuses(), Option.empty(), HoodieTimeline.REPLACE_COMMIT_ACTION,
-          result.getPartitionToReplaceFileIds(), Option.empty());
 
       Assertions.assertEquals(Sets.newHashSet(partitionPath0, partitionPath1), result.getPartitionToReplaceFileIds().keySet());
       Assertions.assertEquals(10, readRecords(new String[] {partitionPath0, partitionPath1, partitionPath2}).size());
