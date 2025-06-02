@@ -233,20 +233,22 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
 
   public boolean commitStats(String instantTime, List<HoodieWriteStat> stats, Option<Map<String, String>> extraMetadata,
                              String commitActionType) {
-    return commitStats(instantTime, stats, extraMetadata, commitActionType, Collections.emptyMap(), Option.empty());
+    return commitStats(instantTime, stats, extraMetadata, commitActionType, Collections.emptyMap(), Option.empty(),
+        Option.empty());
   }
 
   public boolean commitStats(String instantTime, List<HoodieWriteStat> stats,
                              Option<Map<String, String>> extraMetadata,
                              String commitActionType, Map<String, List<String>> partitionToReplaceFileIds,
-                             Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc) {
+                             Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc,
+                             Option<HoodieTable> hoodieTableOpt) {
     // Skip the empty commit if not allowed
     if (!config.allowEmptyCommit() && stats.isEmpty()) {
       return true;
     }
     LOG.info("Committing {} action {}", instantTime, commitActionType);
     // Create a Hoodie table which encapsulated the commits and files visible
-    HoodieTable table = createTable(config);
+    HoodieTable table = hoodieTableOpt.orElseGet(() -> createTable(config));
     HoodieCommitMetadata metadata = CommitMetadataResolverFactory.get(
             table.getMetaClient().getTableConfig().getTableVersion(), config.getEngineType(),
             table.getMetaClient().getTableType(), commitActionType)
@@ -1659,7 +1661,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   public static class NoOpWriteStatusHandlerCallback implements WriteStatusHandlerCallback {
 
     @Override
-    public boolean processWriteStatuses(long totalRecords, long totalErroredRecords, HoodieData<WriteStatus> writeStatuses) {
+    public boolean processWriteStatuses(long totalRecords, long totalErroredRecords, Option<HoodieData<WriteStatus>> writeStatusesOpt) {
       return true;
     }
   }

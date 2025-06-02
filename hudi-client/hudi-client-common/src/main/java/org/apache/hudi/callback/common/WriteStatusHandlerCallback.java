@@ -20,6 +20,7 @@ package org.apache.hudi.callback.common;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.util.Option;
 
 /**
  * WriteStatus handler callback to assist caller to process errors if any. Caller can dictate if we wanted to proceed with the commit or not by means of the return
@@ -33,8 +34,8 @@ public interface WriteStatusHandlerCallback {
    *
    * @param totalRecords total records in this inflight commit.
    * @param totalErroredRecords total error records in this infight commit.
-   * @param writeStatuses List of {@link WriteStatus} for the data table writes for this inflight commit.
+   * @param writeStatusesOpt List of {@link WriteStatus} for the data table writes for this inflight commit.
    * @return True if the commit can proceed
    */
-  boolean processWriteStatuses(long totalRecords, long totalErroredRecords, HoodieData<WriteStatus> writeStatuses);
+  boolean processWriteStatuses(long totalRecords, long totalErroredRecords, Option<HoodieData<WriteStatus>> writeStatusesOpt);
 }

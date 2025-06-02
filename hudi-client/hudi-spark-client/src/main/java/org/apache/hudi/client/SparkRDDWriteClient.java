@@ -112,7 +112,18 @@ public class SparkRDDWriteClient<T> extends
     // When streaming writes are enabled, data table's WriteStatus is expected to contain all stats required to generate metadata table records and so it could be fatter.
     // So, here we are dropping all additional stats and only retains the information required to proceed from here on.
     // And we are also dropping error records so that we don't unintentionally collect the error records in the driver.
-    List<Pair<Boolean, WriteStatus>> isMetadataWriteStatusPairs = writeStatuses.map(writeStatus -> Pair.of(writeStatus.isMetadataTable(), writeStatus.removeMetadataStatsAndErrorRecords())).collect();
+    HoodieTable table = createTable(config);
+    boolean isMetadataStreamingWritesEnabled = config.isMetadataStreamingWritesEnabled(table.getMetaClient().getTableConfig().getTableVersion());
+    List<Pair<Boolean, WriteStatus>> isMetadataWriteStatusPairs = writeStatuses
+        .map(writeStatus -> {
+          if (isMetadataStreamingWritesEnabled) {
+            writeStatus.removeMetadataIndexStatsAndErrorRecordsTracking();
+          } else {
+            writeStatus.dropGranularErrorRecordsTracking();
+          }
+          return Pair.of(writeStatus.isMetadataTable(), writeStatus);
+        }
+    ).collect();
     // Compute stats for the writes and invoke callback
     AtomicLong totalRecords = new AtomicLong(0);
     AtomicLong totalErrorRecords = new AtomicLong(0);
@@ -124,7 +135,7 @@ public class SparkRDDWriteClient<T> extends
     // Just incase if there are errors, caller might be interested to fetch error records in the callback. And so, we are passing the RDD<WriteStatus> as last argument to the write status
     // handler callback.
     boolean canProceed = writeStatusHandlerCallback.processWriteStatuses(totalRecords.get(), totalErrorRecords.get(),
-        HoodieJavaRDD.of(writeStatuses.filter(status -> !status.isMetadataTable()).map(WriteStatus::removeMetadataStats)));
+        totalErrorRecords.get() > 0 ? Option.of(HoodieJavaRDD.of(writeStatuses.filter(status -> !status.isMetadataTable()).map(WriteStatus::removeMetadataStats))) : Option.empty());
 
     // only if callback returns true, lets proceed. If not, bail out.
     if (canProceed) {
@@ -133,7 +144,7 @@ public class SparkRDDWriteClient<T> extends
       List<HoodieWriteStat> partialMetadataHoodieWriteStatsSoFar = isMetadataWriteStatusPairs.stream().filter(Pair::getKey).map(leanWriteStatus -> leanWriteStatus.getValue().getStat()).collect(Collectors.toList());
       // partialMetadataHoodieWriteStatsSoFar will be wired in end to end in future patches.
       return commitStats(instantTime, dataTableHoodieWriteStats, extraMetadata, commitActionType,
-          partitionToReplacedFileIds, extraPreCommitFunc);
+          partitionToReplacedFileIds, extraPreCommitFunc, Option.of(table));
     } else {
       LOG.error("Exiting early due to errors with write operation ");
       return false;

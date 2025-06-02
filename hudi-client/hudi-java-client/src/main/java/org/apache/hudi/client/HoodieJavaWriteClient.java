@@ -95,7 +95,7 @@ public class HoodieJavaWriteClient<T> extends
                         WriteStatusHandlerCallback writeStatusHandlerCallback) {
     List<HoodieWriteStat> writeStats = writeStatuses.stream().map(WriteStatus::getStat).collect(Collectors.toList());
     return commitStats(instantTime, writeStats, extraMetadata, commitActionType, partitionToReplacedFileIds,
-        extraPreCommitFunc);
+        extraPreCommitFunc, Option.empty());
   }
 
   @Override

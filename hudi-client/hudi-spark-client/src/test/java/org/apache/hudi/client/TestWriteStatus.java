@@ -230,7 +230,7 @@ public class TestWriteStatus {
     assertEquals(1, status.getFailedRecords().size());
 
     // Drop error records
-    status.dropErrorRecords();
+    status.dropGranularErrorRecordsTracking();
     assertEquals(0, status.getFailedRecords().size());
   }
 }

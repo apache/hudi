@@ -189,19 +189,18 @@ public class WriteStatus implements Serializable {
     totalErrorRecords++;
   }
 
-  public WriteStatus removeMetadataStatsAndErrorRecords() {
+  public WriteStatus removeMetadataIndexStatsAndErrorRecordsTracking() {
     removeMetadataStats();
-    dropErrorRecords();
+    dropGranularErrorRecordsTracking();
     return this;
   }
 
   public WriteStatus removeMetadataStats() {
     this.writtenRecordDelegates.clear();
-    this.stat.removeRecordStats();
     return this;
   }
 
-  public void dropErrorRecords() {
+  public void dropGranularErrorRecordsTracking() {
     failedRecords.clear();
   }
 

@@ -1342,7 +1342,7 @@ public class StreamSync implements Serializable, Closeable {
     }
 
     @Override
-    public boolean processWriteStatuses(long tableTotalRecords, long tableTotalErroredRecords, HoodieData<WriteStatus> writeStatuses) {
+    public boolean processWriteStatuses(long tableTotalRecords, long tableTotalErroredRecords, Option<HoodieData<WriteStatus>> writeStatusesOpt) {
 
       long totalRecords = tableTotalRecords;
       long totalErroredRecords = tableTotalErroredRecords;
@@ -1393,8 +1393,8 @@ public class StreamSync implements Serializable, Closeable {
       } else {
         LOG.error("Delta Sync found errors when writing. Errors/Total=" + totalErroredRecords + "/" + totalRecords);
         LOG.error("Printing out the top 100 errors");
-
-        HoodieJavaRDD.getJavaRDD(writeStatuses).filter(WriteStatus::hasErrors).take(100).forEach(writeStatus ->  {
+        ValidationUtils.checkArgument(writeStatusesOpt.isPresent(), "RDD <WriteStatus> is expected to be present when there are errors ");
+        HoodieJavaRDD.getJavaRDD(writeStatusesOpt.get()).filter(WriteStatus::hasErrors).take(100).forEach(writeStatus ->  {
           LOG.error("Global error " + writeStatus.getGlobalError());
           if (!writeStatus.getErrors().isEmpty()) {
             writeStatus.getErrors().forEach((k,v) -> {

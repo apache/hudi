@@ -38,9 +38,11 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.TablePathUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieDuplicateKeyException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.TableNotFoundException;
@@ -365,23 +367,24 @@ public class DataSourceUtils {
     }
 
     @Override
-    public boolean processWriteStatuses(long totalRecords, long totalErroredRecords, HoodieData<WriteStatus> writeStatuses) {
+    public boolean processWriteStatuses(long totalRecords, long totalErroredRecords, Option<HoodieData<WriteStatus>> writeStatusesOpt) {
       if (totalErroredRecords > 0) {
+        hasErrored.set(true);
+        ValidationUtils.checkArgument(writeStatusesOpt.isPresent(), "RDD <WriteStatus> expected to be present when there are errors");
         LOG.error("%s failed with errors", writeOperationType);
         if (LOG.isTraceEnabled()) {
           LOG.trace("Printing out the top 100 errors");
-          List<WriteStatus> erroredWriteStatueses = writeStatuses.filter(WriteStatus::hasErrors).collectAsList();
-          if (!erroredWriteStatueses.isEmpty()) {
-            hasErrored.set(true);
-          }
-          erroredWriteStatueses.subList(0, Math.max(erroredWriteStatueses.size(), 100)).forEach(leanWriteStatus -> {
-            LOG.trace("Global error " + leanWriteStatus.getGlobalError());
-            if (!leanWriteStatus.getErrors().isEmpty()) {
-              leanWriteStatus.getErrors().forEach((k, v) -> {
-                LOG.trace("Error for key %s : %s ", k, v);
+
+          HoodieJavaRDD.getJavaRDD(writeStatusesOpt.get()).filter(writeStatus -> writeStatus.hasErrors())
+              .take(100)
+              .forEach(ws -> {
+                LOG.trace("Global error: {}", ws.getGlobalError());
+                if (ws.getErrors().size() > 0) {
+                  ws.getErrors().forEach((k, v) -> {
+                    LOG.trace("Error for key {}: {}", k, v);
+                  });
+                }
               });
-            }
-          });
         }
         return false;
       } else {
@@ -390,3 +393,4 @@ public class DataSourceUtils {
     }
   }
 }
+

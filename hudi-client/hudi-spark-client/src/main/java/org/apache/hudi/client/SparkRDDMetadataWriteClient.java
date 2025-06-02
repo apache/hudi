@@ -85,7 +85,7 @@ public class SparkRDDMetadataWriteClient<T> extends SparkRDDWriteClient<T> {
     // When streaming writes are enabled, writes to metadata may not call this method as the caller tightly controls the dag de-referencing.
     // Even then, to initialize a new partition in Metadata table and for non incremental operations like insert_overwrite, etc, writes to metadata table
     // will invoke this commit method.
-    List<WriteStatus> writeStatusesList = writeStatuses.map(writeStatus -> writeStatus.removeMetadataStatsAndErrorRecords()).collect();
+    List<WriteStatus> writeStatusesList = writeStatuses.map(writeStatus -> writeStatus.removeMetadataIndexStatsAndErrorRecordsTracking()).collect();
     // Compute stats for the writes and invoke callback
     AtomicLong totalRecords = new AtomicLong(0);
     AtomicLong totalErrorRecords = new AtomicLong(0);
@@ -98,13 +98,12 @@ public class SparkRDDMetadataWriteClient<T> extends SparkRDDWriteClient<T> {
     // every error record. So, just incase if there are errors, caller might be interested to fetch error records. And so, we are passing the RDD<WriteStatus> as last argument to the write status
     // handler callback.
     boolean canProceed = writeStatusHandlerCallback.processWriteStatuses(totalRecords.get(), totalErrorRecords.get(),
-        HoodieJavaRDD.of(writeStatuses.filter(status -> !status.isMetadataTable()).map(WriteStatus::removeMetadataStats)));
-
+        totalErrorRecords.get() > 0 ? Option.of(HoodieJavaRDD.of(writeStatuses.filter(status -> !status.isMetadataTable()).map(WriteStatus::removeMetadataStats))) : Option.empty());
     // only if callback returns true, lets proceed. If not, bail out.
     if (canProceed) {
       List<HoodieWriteStat> hoodieWriteStats = writeStatusesList.stream().map(writeStatus -> writeStatus.getStat()).collect(Collectors.toList());
       return commitStats(instantTime, hoodieWriteStats, extraMetadata, commitActionType,
-          partitionToReplacedFileIds, extraPreCommitFunc);
+          partitionToReplacedFileIds, extraPreCommitFunc, Option.of(createTable(config)));
     } else {
       LOG.error("Exiting early due to errors with write operation ");
       return false;
