@@ -311,7 +311,8 @@ public class TestDataSourceUtils extends HoodieClientTestBase {
   }
 
   @Test
-  void testDeduplicationAgainstRecordsAlreadyInTable() {
+  void testDeduplicationAgainstRecordsAlreadyInTable() throws IOException {
+    initResources();
     HoodieWriteConfig config = getConfig();
     config.getProps().setProperty("path", config.getBasePath());
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config)) {
