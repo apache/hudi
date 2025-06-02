@@ -239,7 +239,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       IndexedRecord record,
       Schema recordSchema,
       String fieldName) {
-    Schema currentSchema = recordSchema;
+    Schema currentSchema = record.getSchema();
     IndexedRecord currentRecord = record;
     String[] path = fieldName.split("\\.");
     for (int i = 0; i < path.length; i++) {

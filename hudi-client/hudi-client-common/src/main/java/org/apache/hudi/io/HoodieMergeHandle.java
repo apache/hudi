@@ -105,6 +105,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
   protected Set<String> writtenRecordKeys;
   protected HoodieFileWriter fileWriter;
   protected boolean preserveMetadata = false;
+  protected boolean populateMetaFields;
 
   protected StoragePath newFilePath;
   protected StoragePath oldFilePath;
@@ -129,6 +130,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
                            Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
                            TaskContextSupplier taskContextSupplier, HoodieBaseFile baseFile, Option<BaseKeyGenerator> keyGeneratorOpt) {
     super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier);
+    this.populateMetaFields = config.populateMetaFields();
     init(recordItr);
     init(fileId, partitionPath, baseFile);
     validateAndSetAndKeyGenProps(keyGeneratorOpt, config.populateMetaFields());
@@ -143,6 +145,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier);
     this.keyToNewRecords = keyToNewRecords;
     this.preserveMetadata = true;
+    this.populateMetaFields = config.populateMetaFields();
     init(fileId, this.partitionPath, dataFileToBeMerged);
     validateAndSetAndKeyGenProps(keyGeneratorOpt, config.populateMetaFields());
   }
@@ -421,7 +424,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     if (shouldPreserveRecordMetadata) {
       // NOTE: `FILENAME_METADATA_FIELD` has to be rewritten to correctly point to the
       //       file holding this record even in cases when overall metadata is preserved
-      HoodieRecord populatedRecord =  record.updateMetaField(schema, HoodieRecord.FILENAME_META_FIELD_ORD, newFilePath.getName());
+      HoodieRecord populatedRecord = record.updateMetaField(schema, HoodieRecord.FILENAME_META_FIELD_ORD, newFilePath.getName());
       fileWriter.write(key.getRecordKey(), populatedRecord, writeSchemaWithMetaFields);
     } else {
       // rewrite the record to include metadata fields in schema, and the values will be set later.

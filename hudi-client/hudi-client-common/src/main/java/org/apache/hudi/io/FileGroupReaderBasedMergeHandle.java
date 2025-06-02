@@ -78,7 +78,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieMergeHand
   public FileGroupReaderBasedMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                          CompactionOperation operation, TaskContextSupplier taskContextSupplier,
                                          HoodieReaderContext<T> readerContext,
-                                         HoodieRecord.HoodieRecordType recordType) {
+                                         HoodieRecord.HoodieRecordType enginRecordType) {
     super(config, instantTime, operation.getPartitionPath(), operation.getFileId(), hoodieTable, taskContextSupplier);
     this.keyToNewRecords = Collections.emptyMap();
     this.readerContext = readerContext;
@@ -94,12 +94,13 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieMergeHand
         baseFileOpt.isPresent() ? baseFileOpt.get() : null,
         logFiles);
     this.preserveMetadata = true;
-    this.recordType = recordType;
+    // If the table is a metadata table, we use AVRO record type, otherwise we use the engine record type.
+    this.recordType = hoodieTable.isMetadataTable() ? HoodieRecord.HoodieRecordType.AVRO : enginRecordType;
     init(operation, this.partitionPath, baseFileOpt);
   }
 
   private void init(CompactionOperation operation, String partitionPath, Option<HoodieBaseFile> baseFileToMerge) {
-    LOG.info("partitionPath:" + partitionPath + ", fileId to be merged:" + fileId);
+    LOG.info("partitionPath:{}, fileId to be merged:{}", partitionPath, fileId);
     this.baseFileToMerge = baseFileToMerge.orElse(null);
     this.writtenRecordKeys = new HashSet<>();
     writeStatus.setStat(new HoodieWriteStat());
@@ -186,7 +187,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieMergeHand
                 config.getPayloadConfig().getProps(), preserveMetadata);
             writeStatus.markSuccess(record, recordMetadata);
           } catch (Exception e) {
-            LOG.error("Error writing record  " + record, e);
+            LOG.error("Error writing record {}", record, e);
             writeStatus.markFailure(record, e, recordMetadata);
           }
         }

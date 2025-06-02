@@ -36,6 +36,7 @@ import org.apache.hudi.common.util.SizeEstimator;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableFilterIterator;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.expression.Predicate;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -346,7 +347,11 @@ public abstract class HoodieReaderContext<T> {
         Object result = getValue(record, schema, recordKeyField);
         return result != null ? result.toString() : null;
       };
-      return KeyGenerator.constructRecordKey(recordKeyFields, valueFunction);
+      try {
+        return KeyGenerator.constructRecordKey(recordKeyFields, valueFunction);
+      } catch (Exception e) {
+        throw new HoodieException("Failed to extract record key from record: " + record, e);
+      }
     };
   }
 

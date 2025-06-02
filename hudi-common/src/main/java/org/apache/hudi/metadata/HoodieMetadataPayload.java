@@ -64,6 +64,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.avro.HoodieAvroUtils.rewriteRecord;
 import static org.apache.hudi.avro.HoodieAvroUtils.wrapValueIntoAvro;
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
@@ -376,14 +377,19 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   }
 
   @Override
-  public Option<IndexedRecord> getInsertValue(Schema schemaIgnored, Properties propertiesIgnored) throws IOException {
+  public Option<IndexedRecord> getInsertValue(Schema schema, Properties propertiesIgnored) throws IOException {
     if (key == null || this.isDeletedRecord) {
       return Option.empty();
     }
 
     HoodieMetadataRecord record = new HoodieMetadataRecord(key, type, filesystemMetadata, bloomFilterMetadata,
         columnStatMetadata, recordIndexMetadata, secondaryIndexMetadata);
-    return Option.of(record);
+    if (HoodieMetadataRecord.getClassSchema().hashCode() == schema.hashCode()) {
+      // If the schema is same, we can return the record directly
+      return Option.of(record);
+    } else {
+      return Option.of(rewriteRecord(record, schema));
+    }
   }
 
   @Override
