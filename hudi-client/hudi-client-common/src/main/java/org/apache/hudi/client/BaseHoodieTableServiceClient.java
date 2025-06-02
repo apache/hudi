@@ -349,7 +349,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     InstantGenerator instantGenerator = table.getMetaClient().getInstantGenerator();
     final HoodieInstant compactionInstant = instantGenerator.getCompactionInflightInstant(compactionCommitTime);
     try {
-      this.txnManager.beginTransaction(Option.of(compactionInstant), Option.empty());
+      this.txnManager.beginStateChange(Option.of(compactionInstant), Option.empty());
       finalizeWrite(table, compactionCommitTime, writeStats);
       // commit to data table after committing to metadata table.
       writeTableMetadata(table, compactionCommitTime, metadata);
@@ -357,7 +357,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       CompactHelpers.getInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
       LOG.debug("Compaction {} finished with result: {}", compactionCommitTime, metadata);
     } finally {
-      this.txnManager.endTransaction(Option.of(compactionInstant));
+      this.txnManager.endStateChange(Option.of(compactionInstant));
       releaseResources(compactionCommitTime);
     }
     WriteMarkersFactory.get(config.getMarkersType(), table, compactionCommitTime)
@@ -410,7 +410,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     final HoodieInstant logCompactionInstant = table.getMetaClient().createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.LOG_COMPACTION_ACTION,
         logCompactionCommitTime);
     try {
-      this.txnManager.beginTransaction(Option.of(logCompactionInstant), Option.empty());
+      this.txnManager.beginStateChange(Option.of(logCompactionInstant), Option.empty());
       preCommit(metadata);
       finalizeWrite(table, logCompactionCommitTime, writeStats);
       // commit to data table after committing to metadata table.
@@ -419,7 +419,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       CompactHelpers.getInstance().completeInflightLogCompaction(table, logCompactionCommitTime, metadata);
       LOG.debug("Log Compaction {} finished with result {}", logCompactionCommitTime, metadata);
     } finally {
-      this.txnManager.endTransaction(Option.of(logCompactionInstant));
+      this.txnManager.endStateChange(Option.of(logCompactionInstant));
       releaseResources(logCompactionCommitTime);
     }
     WriteMarkersFactory.get(config.getMarkersType(), table, logCompactionCommitTime)
@@ -537,7 +537,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     final HoodieInstant clusteringInstant = ClusteringUtils.getInflightClusteringInstant(clusteringCommitTime,
         table.getActiveTimeline(), table.getMetaClient().getInstantGenerator()).get();
     try {
-      this.txnManager.beginTransaction(Option.of(clusteringInstant), Option.empty());
+      this.txnManager.beginStateChange(Option.of(clusteringInstant), Option.empty());
 
       finalizeWrite(table, clusteringCommitTime, writeStats);
       // Only in some cases conflict resolution needs to be performed.
@@ -555,7 +555,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     } catch (Exception e) {
       throw new HoodieClusteringException("unable to transition clustering inflight to complete: " + clusteringCommitTime, e);
     } finally {
-      this.txnManager.endTransaction(Option.of(clusteringInstant));
+      this.txnManager.endStateChange(Option.of(clusteringInstant));
       releaseResources(clusteringCommitTime);
     }
     WriteMarkersFactory.get(config.getMarkersType(), table, clusteringCommitTime)
@@ -652,7 +652,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       // so it is handled differently to avoid locking for planning.
       return scheduleCleaning(createTable(config, storageConf), providedInstantTime);
     }
-    txnManager.beginTransaction(Option.empty(), Option.empty());
+    txnManager.beginStateChange(Option.empty(), Option.empty());
     try {
       Option<String> option;
       HoodieTable<?, ?, ?, ?> table = createTable(config, storageConf);
@@ -688,7 +688,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
 
       return option;
     } finally {
-      txnManager.endTransaction(Option.empty());
+      txnManager.endStateChange(Option.empty());
     }
   }
 
@@ -817,7 +817,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
   private Option<String> scheduleCleaning(HoodieTable<?, ?, ?, ?> table, Option<String> suppliedCleanInstant) {
     Option<HoodieCleanerPlan> cleanerPlan = table.createCleanerPlan(context, Option.empty());
     if (cleanerPlan.isPresent()) {
-      txnManager.beginTransaction(Option.empty(), Option.empty());
+      txnManager.beginStateChange(Option.empty(), Option.empty());
       try {
         String cleanInstantTime = suppliedCleanInstant.orElseGet(() -> createNewInstantTime(false));
         final HoodieInstant cleanInstant = table.getMetaClient().createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, cleanInstantTime);
@@ -833,7 +833,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
         LOG.error("Got exception when saving cleaner requested file", e);
         throw e;
       } finally {
-        txnManager.endTransaction(Option.empty());
+        txnManager.endStateChange(Option.empty());
       }
     }
     return Option.empty();
@@ -1121,14 +1121,14 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
           return false;
         }
         if (!skipLocking) {
-          txnManager.beginTransaction(Option.empty(), Option.empty());
+          txnManager.beginStateChange(Option.empty(), Option.empty());
         }
         try {
           rollbackInstantTime = suppliedRollbackInstantTime.orElseGet(() -> createNewInstantTime(false));
           rollbackPlanOption = table.scheduleRollback(context, rollbackInstantTime, commitInstantOpt.get(), false, config.shouldRollbackUsingMarkers(), false);
         } finally {
           if (!skipLocking) {
-            txnManager.endTransaction(Option.empty());
+            txnManager.endStateChange(Option.empty());
           }
         }
       }

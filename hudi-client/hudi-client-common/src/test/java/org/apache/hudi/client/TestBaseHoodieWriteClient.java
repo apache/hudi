@@ -143,9 +143,9 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
     HoodieInstant expectedInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieActiveTimeline.COMMIT_ACTION, instantTime, InstantComparatorV2.COMPLETION_TIME_BASED_COMPARATOR);
 
     InOrder inOrder = Mockito.inOrder(transactionManager, timeGenerator);
-    inOrder.verify(transactionManager).beginTransaction(Option.empty(), Option.empty());
+    inOrder.verify(transactionManager).beginStateChange(Option.empty(), Option.empty());
     inOrder.verify(timeGenerator).generateTime(true);
-    inOrder.verify(transactionManager).endTransaction(Option.of(expectedInstant));
+    inOrder.verify(transactionManager).endStateChange(Option.of(expectedInstant));
   }
 
   private static class TestWriteClient extends BaseHoodieWriteClient<String, String, String, String> {

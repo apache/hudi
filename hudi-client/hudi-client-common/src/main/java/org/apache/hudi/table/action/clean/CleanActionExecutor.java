@@ -220,13 +220,13 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
           cleanStats,
           cleanerPlan.getExtraMetadata()
       );
-      this.txnManager.beginTransaction(Option.of(inflightInstant), Option.empty());
+      this.txnManager.beginStateChange(Option.of(inflightInstant), Option.empty());
       writeTableMetadata(metadata, inflightInstant.requestedTime());
       table.getActiveTimeline().transitionCleanInflightToComplete(false, inflightInstant, Option.of(metadata));
       LOG.info("Marked clean started on {} as complete", inflightInstant.requestedTime());
       return metadata;
     } finally {
-      this.txnManager.endTransaction(Option.ofNullable(inflightInstant));
+      this.txnManager.endStateChange(Option.ofNullable(inflightInstant));
     }
   }
 
