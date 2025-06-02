@@ -19,7 +19,6 @@
 package org.apache.hudi.client;
 
 import org.apache.hudi.callback.common.WriteStatusHandlerCallback;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.index.HoodieSparkIndexClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
@@ -130,20 +129,10 @@ public class SparkRDDWriteClient<T> extends
     // only if callback returns true, lets proceed. If not, bail out.
     if (canProceed) {
       // when streaming writes are enabled, writeStatuses is a mix of data table write status and mdt write status
-      List<HoodieWriteStat> dataTableWriteStats = isMetadataWriteStatusPairs.stream().filter(entry -> !entry.getKey()).map(leanWriteStatus -> leanWriteStatus.getValue().getStat()).collect(Collectors.toList());
-      List<HoodieWriteStat> metadataTableWriteStats = isMetadataWriteStatusPairs.stream().filter(Pair::getKey).map(leanWriteStatus -> leanWriteStatus.getValue().getStat()).collect(Collectors.toList());
-      if (isMetadataTable) {
-        // incase the current table is metadata table, for new partition instantiation we end up calling this commit method. On which case,
-        // we could only see metadataTableWriteStats and no dataTableWriteStats. So, we need to reverse the list here so that we can proceed onto commit in current table as a
-        // data table (where current is actually referring to a metadata table).
-        ValidationUtils.checkArgument(dataTableWriteStats.isEmpty(), "For new partition initialization in Metadata,"
-            + "we do not expect any writes having WriteStatus referring to data table. ");
-        dataTableWriteStats.clear();
-        dataTableWriteStats.addAll(metadataTableWriteStats);
-        metadataTableWriteStats.clear();
-      }
-
-      return commitStats(instantTime, dataTableWriteStats, extraMetadata, commitActionType,
+      List<HoodieWriteStat> dataTableHoodieWriteStats = isMetadataWriteStatusPairs.stream().filter(entry -> !entry.getKey()).map(leanWriteStatus -> leanWriteStatus.getValue().getStat()).collect(Collectors.toList());
+      List<HoodieWriteStat> partialMetadataHoodieWriteStatsSoFar = isMetadataWriteStatusPairs.stream().filter(Pair::getKey).map(leanWriteStatus -> leanWriteStatus.getValue().getStat()).collect(Collectors.toList());
+      // partialMetadataHoodieWriteStatsSoFar will be wired in end to end in future patches.
+      return commitStats(instantTime, dataTableHoodieWriteStats, extraMetadata, commitActionType,
           partitionToReplacedFileIds, extraPreCommitFunc);
     } else {
       LOG.error("Exiting early due to errors with write operation ");
