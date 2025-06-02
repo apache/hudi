@@ -120,8 +120,8 @@ public class SparkRDDWriteClient<T> extends
       totalRecords.getAndAdd(pair.getValue().getTotalRecords());
       totalErrorRecords.getAndAdd(pair.getValue().getTotalErrorRecords());
     });
-    // reason why we are passing RDD<WriteStatus> to the writeStatusHandler callback: earlier we drop all index stats and error records before collecting in the driver.
-    // just incase if there are errors, caller might be interested to fetch error records. And so, we are passing the RDD<WriteStatus> as last argument to the write status
+    // reason why we are passing RDD<WriteStatus> to the writeStatusHandler callback: At the beginning of this method, we drop all index stats and error records before collecting in the driver.
+    // Just incase if there are errors, caller might be interested to fetch error records in the callback. And so, we are passing the RDD<WriteStatus> as last argument to the write status
     // handler callback.
     boolean canProceed = writeStatusHandlerCallback.processWriteStatuses(totalRecords.get(), totalErrorRecords.get(),
         HoodieJavaRDD.of(writeStatuses.filter(status -> !status.isMetadataTable()).map(WriteStatus::removeMetadataStats)));

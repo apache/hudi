@@ -82,6 +82,9 @@ public class SparkRDDMetadataWriteClient<T> extends SparkRDDWriteClient<T> {
                         WriteStatusHandlerCallback writeStatusHandlerCallback) {
     context.setJobStatus(this.getClass().getSimpleName(), "Committing stats: " + config.getTableName());
     // Triggering the dag for writes to metadata table.
+    // When streaming writes are enabled, writes to metadata may not call this method as the caller tightly controls the dag de-referencing.
+    // Even then, to initialize a new partition in Metadata table and for non incremental operations like insert_overwrite, etc, writes to metadata table
+    // will invoke this commit method.
     List<WriteStatus> writeStatusesList = writeStatuses.map(writeStatus -> writeStatus.removeMetadataStatsAndErrorRecords()).collect();
     // Compute stats for the writes and invoke callback
     AtomicLong totalRecords = new AtomicLong(0);
@@ -91,8 +94,8 @@ public class SparkRDDMetadataWriteClient<T> extends SparkRDDWriteClient<T> {
       totalErrorRecords.getAndAdd(entry.getTotalErrorRecords());
     });
 
-    // reason why we are passing RDD<WriteStatus> to the writeStatusHandler callback: earlier we drop all index stats and error records before collecting in the driver.
-    // just incase if there are errors, caller might be interested to fetch error records. And so, we are passing the RDD<WriteStatus> as last argument to the write status
+    // reason why we are passing RDD<WriteStatus> to the writeStatusHandler callback: We can't afford to collect all write status to dirver if there are errors, since write status will hold
+    // every error record. So, just incase if there are errors, caller might be interested to fetch error records. And so, we are passing the RDD<WriteStatus> as last argument to the write status
     // handler callback.
     boolean canProceed = writeStatusHandlerCallback.processWriteStatuses(totalRecords.get(), totalErrorRecords.get(),
         HoodieJavaRDD.of(writeStatuses.filter(status -> !status.isMetadataTable()).map(WriteStatus::removeMetadataStats)));

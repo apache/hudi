@@ -67,6 +67,7 @@ import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
+import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieMetaSyncException;
@@ -802,7 +803,6 @@ public class StreamSync implements Serializable, Closeable {
       // write to hudi and fetch result
       WriteClientWriteResult writeClientWriteResult = writeToSink(inputBatch, instantTime, useRowWriter);
       Map<String, List<String>> partitionToReplacedFileIds = writeClientWriteResult.getPartitionToReplacedFileIds();
-      // write to error table
       JavaRDD<WriteStatus> writeStatusRDD = writeClientWriteResult.getWriteStatusRDD();
       String errorTableInstantTime = writeClient.createNewInstantTime();
       Option<JavaRDD<WriteStatus>> errorTableWriteStatusRDDOpt = Option.empty();
@@ -1299,6 +1299,10 @@ public class StreamSync implements Serializable, Closeable {
     }
   }
 
+  /**
+   * Callback for WriteStatus Handler for commits to data table.
+   * Here we do manage the writes to error table as well.
+   */
   static class HoodieStreamerWriteStatusHandlerCallback implements WriteStatusHandlerCallback {
 
     private final boolean commitOnErrors;
@@ -1338,7 +1342,7 @@ public class StreamSync implements Serializable, Closeable {
     }
 
     @Override
-    public boolean processWriteStatuses(long tableTotalRecords, long tableTotalErroredRecords, HoodieData<WriteStatus> leanWriteStatuses) {
+    public boolean processWriteStatuses(long tableTotalRecords, long tableTotalErroredRecords, HoodieData<WriteStatus> writeStatuses) {
 
       long totalRecords = tableTotalRecords;
       long totalErroredRecords = tableTotalErroredRecords;
@@ -1390,11 +1394,10 @@ public class StreamSync implements Serializable, Closeable {
         LOG.error("Delta Sync found errors when writing. Errors/Total=" + totalErroredRecords + "/" + totalRecords);
         LOG.error("Printing out the top 100 errors");
 
-        List<WriteStatus> erroredWriteStatueses = leanWriteStatuses.filter(WriteStatus::hasErrors).collectAsList();
-        erroredWriteStatueses.subList(0, Math.max(erroredWriteStatueses.size(), 100)).forEach(leanWriteStatus ->  {
-          LOG.error("Global error " + leanWriteStatus.getGlobalError());
-          if (!leanWriteStatus.getErrors().isEmpty()) {
-            leanWriteStatus.getErrors().forEach((k,v) -> {
+        HoodieJavaRDD.getJavaRDD(writeStatuses).filter(WriteStatus::hasErrors).take(100).forEach(writeStatus ->  {
+          LOG.error("Global error " + writeStatus.getGlobalError());
+          if (!writeStatus.getErrors().isEmpty()) {
+            writeStatus.getErrors().forEach((k,v) -> {
               LOG.trace("Error for key %s : %s ", k, v);
             });
           }

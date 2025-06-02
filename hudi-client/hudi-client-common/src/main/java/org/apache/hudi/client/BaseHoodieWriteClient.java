@@ -1659,7 +1659,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   public static class NoOpWriteStatusHandlerCallback implements WriteStatusHandlerCallback {
 
     @Override
-    public boolean processWriteStatuses(long totalRecords, long totalErroredRecords, HoodieData<WriteStatus> leanWriteStatuses) {
+    public boolean processWriteStatuses(long totalRecords, long totalErroredRecords, HoodieData<WriteStatus> writeStatuses) {
       return true;
     }
   }

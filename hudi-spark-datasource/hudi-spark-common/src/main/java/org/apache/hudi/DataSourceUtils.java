@@ -349,6 +349,11 @@ public class DataSourceUtils {
         new HoodieSparkEngineContext(jssc), incomingHoodieRecords, writeConfig, failOnDuplicates);
   }
 
+  /**
+   * Callback for WriteStatus Handler.
+   * If there are error records, we print few of them and exit.
+   * If not, we proceed with the commit.
+   */
   static class SparkDataSourceWriteStatusHandlerCallback implements WriteStatusHandlerCallback {
 
     private final WriteOperationType writeOperationType;
@@ -360,12 +365,12 @@ public class DataSourceUtils {
     }
 
     @Override
-    public boolean processWriteStatuses(long totalRecords, long totalErroredRecords, HoodieData<WriteStatus> leanWriteStatuses) {
+    public boolean processWriteStatuses(long totalRecords, long totalErroredRecords, HoodieData<WriteStatus> writeStatuses) {
       if (totalErroredRecords > 0) {
         LOG.error("%s failed with errors", writeOperationType);
         if (LOG.isTraceEnabled()) {
           LOG.trace("Printing out the top 100 errors");
-          List<WriteStatus> erroredWriteStatueses = leanWriteStatuses.filter(WriteStatus::hasErrors).collectAsList();
+          List<WriteStatus> erroredWriteStatueses = writeStatuses.filter(WriteStatus::hasErrors).collectAsList();
           if (!erroredWriteStatueses.isEmpty()) {
             hasErrored.set(true);
           }

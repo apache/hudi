@@ -33,8 +33,8 @@ public interface WriteStatusHandlerCallback {
    *
    * @param totalRecords total records in this inflight commit.
    * @param totalErroredRecords total error records in this infight commit.
-   * @param leanWriteStatuses List of {@link WriteStatus} for the data table writes for this inflight commit.
+   * @param writeStatuses List of {@link WriteStatus} for the data table writes for this inflight commit.
    * @return True if the commit can proceed
    */
-  boolean processWriteStatuses(long totalRecords, long totalErroredRecords, HoodieData<WriteStatus> leanWriteStatuses);
+  boolean processWriteStatuses(long totalRecords, long totalErroredRecords, HoodieData<WriteStatus> writeStatuses);
 }
