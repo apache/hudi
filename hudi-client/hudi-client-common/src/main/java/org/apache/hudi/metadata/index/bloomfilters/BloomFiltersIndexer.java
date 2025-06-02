@@ -26,14 +26,15 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.collection.Tuple3;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.index.Indexer;
-import org.apache.hudi.metadata.model.FileSliceAndPartition;
+import org.apache.hudi.common.model.FileSliceAndPartition;
+import org.apache.hudi.metadata.model.IndexPartitionInitialization;
+import org.apache.hudi.common.model.FileAndPartitionFlag;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.Lazy;
@@ -71,24 +72,24 @@ public class BloomFiltersIndexer implements Indexer {
   }
 
   @Override
-  public List<Indexer.InitialIndexPartitionData> initialize(
+  public List<IndexPartitionInitialization> initialize(
       String dataTableInstantTime,
       Map<String, Map<String, Long>> partitionIdToAllFilesMap,
       Lazy<List<FileSliceAndPartition>> lazyLatestMergedPartitionFileSliceList) throws IOException {
     String bloomFilterType = dataTableWriteConfig.getBloomFilterType();
-    // Create the tuple (partition, filename, isDeleted) to handle both deletes and appends
-    final List<Tuple3<String, String, Boolean>> partitionFileFlagTupleList =
+    // Create the list of file and partition flags to handle both deletes and appends
+    final List<FileAndPartitionFlag> partitionFileFlagList =
         Indexer.fetchPartitionFileInfoTriplets(partitionIdToAllFilesMap);
-    int parallelism = Math.max(Math.min(partitionFileFlagTupleList.size(),
+    int parallelism = Math.max(Math.min(partitionFileFlagList.size(),
         dataTableWriteConfig.getBloomIndexParallelism()), 1);
     // This meta client object has to be local to allow Spark to serialize the object
     // instead of the whole indexer object
     HoodieTableMetaClient metaClient = dataTableMetaClient;
-    HoodieData<HoodieRecord> records = engineContext.parallelize(partitionFileFlagTupleList, parallelism)
-        .flatMap(partitionFileFlagTuple -> {
-          final String partitionName = partitionFileFlagTuple.f0;
-          final String filename = partitionFileFlagTuple.f1;
-          final boolean isDeleted = partitionFileFlagTuple.f2;
+    HoodieData<HoodieRecord> records = engineContext.parallelize(partitionFileFlagList, parallelism)
+        .flatMap(partitionFileFlag -> {
+          final String partitionName = partitionFileFlag.fileAndPartition().partitionPath();
+          final String filename = partitionFileFlag.fileAndPartition().fileName();
+          final boolean isDeleted = partitionFileFlag.flag();
           if (!FSUtils.isBaseFile(new StoragePath(filename))) {
             LOG.warn("Ignoring file {} as it is not a base file", filename);
             return Stream.<HoodieRecord>empty().iterator();
@@ -110,10 +111,10 @@ public class BloomFiltersIndexer implements Indexer {
           }
 
           return Stream.<HoodieRecord>of(HoodieMetadataPayload.createBloomFilterMetadataRecord(
-                  partitionName, filename, dataTableInstantTime, bloomFilterType, bloomFilterBuffer, partitionFileFlagTuple.f2))
+                  partitionName, filename, dataTableInstantTime, bloomFilterType, bloomFilterBuffer, isDeleted))
               .iterator();
         });
-    return Collections.singletonList(InitialIndexPartitionData.of(
+    return Collections.singletonList(IndexPartitionInitialization.of(
         dataTableWriteConfig.getMetadataConfig().getBloomFilterIndexFileGroupCount(),
         BLOOM_FILTERS.getPartitionPath(), records));
   }

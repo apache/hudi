@@ -21,16 +21,17 @@ package org.apache.hudi.metadata.index.columnstats;
 
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.FileAndPartitionFlag;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Tuple3;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.index.Indexer;
-import org.apache.hudi.metadata.model.FileSliceAndPartition;
+import org.apache.hudi.common.model.FileSliceAndPartition;
+import org.apache.hudi.metadata.model.IndexPartitionInitialization;
 import org.apache.hudi.util.Lazy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -72,20 +73,20 @@ public class ColumnStatsIndexer implements Indexer {
   }
 
   @Override
-  public List<Indexer.InitialIndexPartitionData> initialize(
+  public List<IndexPartitionInitialization> initialize(
       String dataTableInstantTime,
       Map<String, Map<String, Long>> partitionIdToAllFilesMap,
       Lazy<List<FileSliceAndPartition>> lazyLatestMergedPartitionFileSliceList) throws IOException {
 
     final int numFileGroup = dataTableWriteConfig.getMetadataConfig().getColumnStatsIndexFileGroupCount();
     if (partitionIdToAllFilesMap.isEmpty()) {
-      return Collections.singletonList(InitialIndexPartitionData.of(
+      return Collections.singletonList(IndexPartitionInitialization.of(
           numFileGroup, COLUMN_STATS.getPartitionPath(), engineContext.emptyHoodieData()));
     }
 
     if (columnsToIndex.get().isEmpty()) {
       // this can only happen if meta fields are disabled and cols to index is not explicitly overridden.
-      return Collections.singletonList(InitialIndexPartitionData.of(
+      return Collections.singletonList(IndexPartitionInitialization.of(
           numFileGroup, COLUMN_STATS.getPartitionPath(), engineContext.emptyHoodieData()));
     }
 
@@ -94,7 +95,7 @@ public class ColumnStatsIndexer implements Indexer {
     // during initialization, we need stats for base and log files.
     int maxReaderBufferSize = dataTableWriteConfig.getMetadataConfig().getMaxReaderBufferSize();
     // Create the tuple (partition, filename, isDeleted) to handle both deletes and appends
-    final List<Tuple3<String, String, Boolean>> partitionFileFlagTupleList =
+    final List<FileAndPartitionFlag> partitionFileFlagTupleList =
         Indexer.fetchPartitionFileInfoTriplets(partitionIdToAllFilesMap);
 
     // Create records MDT
@@ -106,13 +107,13 @@ public class ColumnStatsIndexer implements Indexer {
     HoodieTableMetaClient metaClient = dataTableMetaClient;
     HoodieData<HoodieRecord> records = engineContext.parallelize(partitionFileFlagTupleList, parallelism)
         .flatMap(partitionFileFlagTuple -> {
-          final String partitionPath = partitionFileFlagTuple.f0;
-          final String filename = partitionFileFlagTuple.f1;
-          final boolean isDeleted = partitionFileFlagTuple.f2;
+          final String partitionPath = partitionFileFlagTuple.fileAndPartition().partitionPath();
+          final String filename = partitionFileFlagTuple.fileAndPartition().fileName();
+          final boolean isDeleted = partitionFileFlagTuple.flag();
           return getColumnStatsRecords(partitionPath, filename, metaClient, columnListToIndex,
               isDeleted, maxReaderBufferSize).iterator();
         });
-    return Collections.singletonList(InitialIndexPartitionData.of(
+    return Collections.singletonList(IndexPartitionInitialization.of(
         numFileGroup, COLUMN_STATS.getPartitionPath(), records));
   }
 

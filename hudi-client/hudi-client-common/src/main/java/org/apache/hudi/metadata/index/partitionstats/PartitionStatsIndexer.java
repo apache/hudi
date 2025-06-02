@@ -34,7 +34,8 @@ import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.index.Indexer;
 import org.apache.hudi.util.Lazy;
-import org.apache.hudi.metadata.model.FileSliceAndPartition;
+import org.apache.hudi.common.model.FileSliceAndPartition;
+import org.apache.hudi.metadata.model.IndexPartitionInitialization;
 
 import org.apache.avro.Schema;
 import org.slf4j.Logger;
@@ -74,7 +75,7 @@ public class PartitionStatsIndexer implements Indexer {
   }
 
   @Override
-  public List<Indexer.InitialIndexPartitionData> initialize(
+  public List<IndexPartitionInitialization> initialize(
       String dataTableInstantTime,
       Map<String, Map<String, Long>> partitionIdToAllFilesMap,
       Lazy<List<FileSliceAndPartition>> lazyLatestMergedPartitionFileSliceList) throws IOException {
@@ -87,7 +88,7 @@ public class PartitionStatsIndexer implements Indexer {
     final int numFileGroup = dataTableWriteConfig.getMetadataConfig().getPartitionStatsIndexFileGroupCount();
     List<FileSliceAndPartition> partitionFileSliceList = lazyLatestMergedPartitionFileSliceList.get();
     if (partitionFileSliceList.isEmpty()) {
-      return Collections.singletonList(InitialIndexPartitionData.of(
+      return Collections.singletonList(IndexPartitionInitialization.of(
           numFileGroup, PARTITION_STATS.getPartitionPath(), engineContext.emptyHoodieData()));
     }
     HoodieMetadataConfig metadataConfig = dataTableWriteConfig.getMetadataConfig();
@@ -98,7 +99,7 @@ public class PartitionStatsIndexer implements Indexer {
         Option.of(dataTableWriteConfig.getRecordMerger().getRecordType()));
     if (columnsToIndexSchemaMap.isEmpty()) {
       LOG.warn("No columns to index for partition stats index");
-      return Collections.singletonList(InitialIndexPartitionData.of(
+      return Collections.singletonList(IndexPartitionInitialization.of(
           numFileGroup, PARTITION_STATS.getPartitionPath(), engineContext.emptyHoodieData()));
     }
     LOG.debug("Indexing following columns for partition stats index: {}", columnsToIndexSchemaMap);
@@ -106,8 +107,8 @@ public class PartitionStatsIndexer implements Indexer {
     // Group by partition path and collect file names (BaseFile and LogFiles)
     List<Pair<String, Set<String>>> partitionToFileNames = partitionFileSliceList.stream()
         .collect(Collectors.groupingBy(
-            FileSliceAndPartition::getPartitionPath,
-            Collectors.mapping(fsp -> extractFileNames(fsp.getFileSlice()), Collectors.toList())
+            FileSliceAndPartition::partitionPath,
+            Collectors.mapping(fsp -> extractFileNames(fsp.fileSlice()), Collectors.toList())
         ))
         .entrySet().stream()
         .map(entry -> Pair.of(
@@ -136,7 +137,7 @@ public class PartitionStatsIndexer implements Indexer {
           return collectAndProcessColumnMetadata(
               fileColumnMetadata, partitionPath, true, columnsToIndexSchemaMap).iterator();
         });
-    return Collections.singletonList(InitialIndexPartitionData.of(
+    return Collections.singletonList(IndexPartitionInitialization.of(
         numFileGroup, PARTITION_STATS.getPartitionPath(), records));
   }
 

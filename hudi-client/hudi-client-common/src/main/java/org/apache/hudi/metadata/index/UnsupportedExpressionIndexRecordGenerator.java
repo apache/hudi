@@ -32,10 +32,10 @@ import org.apache.avro.Schema;
 
 import java.util.List;
 
-public class NotSupportedExpressionIndexRecordGenerator implements ExpressionIndexRecordGenerator {
+public class UnsupportedExpressionIndexRecordGenerator implements ExpressionIndexRecordGenerator {
   private final EngineType engineType;
 
-  public NotSupportedExpressionIndexRecordGenerator(EngineType engineType) {
+  public UnsupportedExpressionIndexRecordGenerator(EngineType engineType) {
     this.engineType = engineType;
   }
 

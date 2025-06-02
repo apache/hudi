@@ -19,12 +19,10 @@
 
 package org.apache.hudi.metadata.index;
 
-import org.apache.hudi.common.data.HoodieData;
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.common.util.collection.Tuple3;
-import org.apache.hudi.metadata.model.FileSliceAndPartition;
+import org.apache.hudi.common.model.FileSliceAndPartition;
+import org.apache.hudi.metadata.model.IndexPartitionInitialization;
 import org.apache.hudi.util.Lazy;
+import org.apache.hudi.common.model.FileAndPartitionFlag;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -49,14 +47,14 @@ public interface Indexer {
    * @param partitionIdToAllFilesMap               map of partition to files
    * @param lazyLatestMergedPartitionFileSliceList lazily-evaluated list of file slices for the indexer
    *                                               that needs it
-   * @return a list of {@link InitialIndexPartitionData}, which each data item
+   * @return a list of {@link IndexPartitionInitialization}, which each data item
    * representing the records to initialize a particular partition (note that
    * one index type can correspond to one or multiple partitions in the metadata
    * table). An empty list returned indicates that the metadata partition does
    * not need to be initialized.
    * @throws IOException upon IO error
    */
-  List<InitialIndexPartitionData> initialize(
+  List<IndexPartitionInitialization> initialize(
       String dataTableInstantTime,
       Map<String, Map<String, Long>> partitionIdToAllFilesMap,
       Lazy<List<FileSliceAndPartition>> lazyLatestMergedPartitionFileSliceList) throws IOException;
@@ -68,69 +66,16 @@ public interface Indexer {
     // No index-specific table config update by default
   }
 
-  static List<Tuple3<String, String, Boolean>> fetchPartitionFileInfoTriplets(
+  static List<FileAndPartitionFlag> fetchPartitionFileInfoTriplets(
       Map<String, Map<String, Long>> partitionToAppendedFiles) {
     // Total number of files which are added or deleted
     final int totalFiles = partitionToAppendedFiles.values().stream().mapToInt(Map::size).sum();
-    final List<Tuple3<String, String, Boolean>> partitionFileFlagTupleList = new ArrayList<>(totalFiles);
+    final List<FileAndPartitionFlag> partitionFileFlagList = new ArrayList<>(totalFiles);
     partitionToAppendedFiles.entrySet().stream()
         .flatMap(
-            entry -> entry.getValue().keySet().stream().map(addedFile -> Tuple3.of(entry.getKey(), addedFile, false)))
-        .collect(Collectors.toCollection(() -> partitionFileFlagTupleList));
-    return partitionFileFlagTupleList;
-  }
-
-  class IndexPartitionData {
-    private final String partitionName;
-    private final HoodieData<HoodieRecord> records;
-
-    private IndexPartitionData(String partitionName, HoodieData<HoodieRecord> records) {
-      this.partitionName = partitionName;
-      this.records = records;
-    }
-
-    public static IndexPartitionData of(String partitionName, HoodieData<HoodieRecord> records) {
-      return new IndexPartitionData(partitionName, records);
-    }
-
-    public String partitionName() {
-      return partitionName;
-    }
-
-    public HoodieData<HoodieRecord> records() {
-      return records;
-    }
-  }
-
-  class InitialIndexPartitionData {
-    private final int numFileGroup;
-    private final IndexPartitionData partitionedRecords;
-
-    private InitialIndexPartitionData(int numFileGroup,
-                                      String partitionName,
-                                      HoodieData<HoodieRecord> records) {
-      this.numFileGroup = numFileGroup;
-      this.partitionedRecords = IndexPartitionData.of(partitionName, records);
-    }
-
-    public static InitialIndexPartitionData of(int numFileGroup,
-                                               String partitionName,
-                                               HoodieData<HoodieRecord> records) {
-      ValidationUtils.checkArgument(numFileGroup > 0,
-          "The number of file groups of the index data should be positive");
-      return new InitialIndexPartitionData(numFileGroup, partitionName, records);
-    }
-
-    public int numFileGroup() {
-      return numFileGroup;
-    }
-
-    public String partitionName() {
-      return partitionedRecords.partitionName();
-    }
-
-    public HoodieData<HoodieRecord> records() {
-      return partitionedRecords.records();
-    }
+            entry -> entry.getValue().keySet().stream().map(addedFile -> 
+                FileAndPartitionFlag.of(entry.getKey(), addedFile, false)))
+        .collect(Collectors.toCollection(() -> partitionFileFlagList));
+    return partitionFileFlagList;
   }
 }

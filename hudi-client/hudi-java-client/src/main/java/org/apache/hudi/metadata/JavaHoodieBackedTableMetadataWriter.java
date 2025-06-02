@@ -30,7 +30,7 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieNotSupportedException;
-import org.apache.hudi.metadata.index.NotSupportedExpressionIndexRecordGenerator;
+import org.apache.hudi.metadata.index.UnsupportedExpressionIndexRecordGenerator;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.HoodieJavaTable;
 import org.apache.hudi.table.HoodieTable;
@@ -56,7 +56,7 @@ public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetada
                                                 HoodieEngineContext engineContext,
                                                 Option<String> inflightInstantTimestamp) {
     super(storageConf, writeConfig, failedWritesCleaningPolicy, engineContext,
-        new NotSupportedExpressionIndexRecordGenerator(EngineType.JAVA),
+        new UnsupportedExpressionIndexRecordGenerator(EngineType.JAVA),
         inflightInstantTimestamp);
   }
 

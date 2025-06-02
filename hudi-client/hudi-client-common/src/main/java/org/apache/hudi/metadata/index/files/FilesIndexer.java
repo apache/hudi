@@ -26,10 +26,11 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.index.Indexer;
-import org.apache.hudi.metadata.model.FileSliceAndPartition;
+import org.apache.hudi.common.model.FileSliceAndPartition;
 import org.apache.hudi.util.Lazy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.apache.hudi.metadata.model.IndexPartitionInitialization;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -53,7 +54,7 @@ public class FilesIndexer implements Indexer {
   }
 
   @Override
-  public List<InitialIndexPartitionData> initialize(
+  public List<IndexPartitionInitialization> initialize(
       String dataTableInstantTime,
       Map<String, Map<String, Long>> partitionIdToAllFilesMap,
       Lazy<List<FileSliceAndPartition>> lazyLatestMergedPartitionFileSliceList) throws IOException {
@@ -68,7 +69,7 @@ public class FilesIndexer implements Indexer {
     HoodieRecord record = HoodieMetadataPayload.createPartitionListRecord(partitions);
     HoodieData<HoodieRecord> allPartitionsRecord = engineContext.parallelize(Collections.singletonList(record), 1);
     if (partitionIdToAllFilesMap.isEmpty()) {
-      return Collections.singletonList(InitialIndexPartitionData.of(
+      return Collections.singletonList(IndexPartitionInitialization.of(
           numFileGroup, FILES.getPartitionPath(), allPartitionsRecord));
     }
 
@@ -83,7 +84,7 @@ public class FilesIndexer implements Indexer {
             });
     ValidationUtils.checkState(fileListRecords.count() == partitions.size());
 
-    return Collections.singletonList(InitialIndexPartitionData.of(
+    return Collections.singletonList(IndexPartitionInitialization.of(
         numFileGroup, FILES.getPartitionPath(), allPartitionsRecord.union(fileListRecords)));
   }
 }

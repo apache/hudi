@@ -44,7 +44,8 @@ import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.index.Indexer;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.Lazy;
-import org.apache.hudi.metadata.model.FileSliceAndPartition;
+import org.apache.hudi.common.model.FileSliceAndPartition;
+import org.apache.hudi.metadata.model.IndexPartitionInitialization;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -106,7 +107,7 @@ public class SecondaryIndexer implements Indexer {
   }
 
   @Override
-  public List<Indexer.InitialIndexPartitionData> initialize(
+  public List<IndexPartitionInitialization> initialize(
       String dataTableInstantTime,
       Map<String, Map<String, Long>> partitionIdToAllFilesMap,
       Lazy<List<FileSliceAndPartition>> lazyLatestMergedPartitionFileSliceList) throws IOException {
@@ -143,7 +144,7 @@ public class SecondaryIndexer implements Indexer {
         dataTableWriteConfig.getRecordIndexGrowthFactor(),
         dataTableWriteConfig.getRecordIndexMaxFileGroupSizeBytes());
 
-    return Collections.singletonList(InitialIndexPartitionData.of(
+    return Collections.singletonList(IndexPartitionInitialization.of(
         numFileGroup, secondaryIndexPartitionsToInit.get().iterator().next(), records));
   }
 
@@ -167,8 +168,8 @@ public class SecondaryIndexer implements Indexer {
 
     engineContext.setJobStatus(activeModule, "Secondary Index: reading secondary keys from " + partitionFileSlicePairs.size() + " file slices");
     return engineContext.parallelize(partitionFileSlicePairs, parallelism).flatMap(partitionAndBaseFile -> {
-      final String partition = partitionAndBaseFile.getPartitionPath();
-      final FileSlice fileSlice = partitionAndBaseFile.getFileSlice();
+      final String partition = partitionAndBaseFile.partitionPath();
+      final FileSlice fileSlice = partitionAndBaseFile.fileSlice();
       List<String> logFilePaths = fileSlice.getLogFiles().sorted(HoodieLogFile.getLogFileComparator()).map(l -> l.getPath().toString()).collect(Collectors.toList());
       Option<StoragePath> dataFilePath = Option.ofNullable(fileSlice.getBaseFile().map(baseFile -> filePath(basePath, partition, baseFile.getFileName())).orElseGet(null));
       Schema readerSchema;

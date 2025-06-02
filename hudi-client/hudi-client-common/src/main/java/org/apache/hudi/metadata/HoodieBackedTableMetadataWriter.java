@@ -69,7 +69,8 @@ import org.apache.hudi.metadata.index.ExpressionIndexRecordGenerator;
 import org.apache.hudi.metadata.index.Indexer;
 import org.apache.hudi.metadata.index.IndexerFactory;
 import org.apache.hudi.metadata.model.DirectoryInfo;
-import org.apache.hudi.metadata.model.FileSliceAndPartition;
+import org.apache.hudi.common.model.FileSliceAndPartition;
+import org.apache.hudi.metadata.model.IndexPartitionInitialization;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
@@ -436,7 +437,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     String instantTimeForPartition = generateUniqueInstantTime(dataTableInstantTime);
     String partitionTypeName = partitionType.name();
     LOG.info("Initializing MDT partition {} at instant {}", partitionTypeName, instantTimeForPartition);
-    List<Indexer.InitialIndexPartitionData> initialIndexPartitionDataList;
+    List<IndexPartitionInitialization> initialIndexPartitionDataList;
     try {
       initialIndexPartitionDataList = indexer.initialize(
           dataTableInstantTime, partitionToAllFilesMap, lazyLatestMergedPartitionFileSliceList);
@@ -458,17 +459,17 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         "Only support the initialization of one partition per index type "
             + "(HUDI-9358 for the feature support)");
 
-    Indexer.InitialIndexPartitionData initialIndexPartitionData =
+    IndexPartitionInitialization initialIndexPartitionData =
         initialIndexPartitionDataList.get(0);
-    final int numFileGroup = initialIndexPartitionData.numFileGroup();
+    final int numFileGroup = initialIndexPartitionData.numFileGroups();
     LOG.info("Initializing {} index with {} file groups", partitionTypeName, numFileGroup);
     HoodieTimer partitionInitTimer = HoodieTimer.start();
 
-    String partitionName = initialIndexPartitionData.partitionName();
+    String partitionName = initialIndexPartitionData.indexData().indexPartitionName();
     initializeFileGroups(dataMetaClient, partitionType, instantTimeForPartition, numFileGroup, partitionName);
 
     // Perform the commit using bulkCommit
-    bulkCommit(instantTimeForPartition, partitionName, initialIndexPartitionData.records(), numFileGroup);
+    bulkCommit(instantTimeForPartition, partitionName, initialIndexPartitionData.indexData().indexRecords(), numFileGroup);
     indexer.updateTableConfig();
     dataMetaClient.getTableConfig().setMetadataPartitionState(dataMetaClient, partitionName, true);
     // initialize the metadata reader again so the MDT partition can be read after initialization

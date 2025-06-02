@@ -31,7 +31,8 @@ import org.apache.hudi.index.expression.HoodieExpressionIndex;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.index.ExpressionIndexRecordGenerator;
 import org.apache.hudi.metadata.index.Indexer;
-import org.apache.hudi.metadata.model.FileSliceAndPartition;
+import org.apache.hudi.common.model.FileSliceAndPartition;
+import org.apache.hudi.metadata.model.IndexPartitionInitialization;
 import org.apache.hudi.util.Lazy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -86,7 +87,7 @@ public class ExpressionIndexer implements Indexer {
   }
 
   @Override
-  public List<InitialIndexPartitionData> initialize(
+  public List<IndexPartitionInitialization> initialize(
       String dataTableInstantTime,
       Map<String, Map<String, Long>> partitionIdToAllFilesMap,
       Lazy<List<FileSliceAndPartition>> lazyLatestMergedPartitionFileSliceList) throws IOException {
@@ -107,16 +108,16 @@ public class ExpressionIndexer implements Indexer {
     List<FileSliceAndPartition> partitionFileSlicePairs = lazyLatestMergedPartitionFileSliceList.get();
     List<ExpressionIndexRecordGenerator.FileToIndex> filesToIndex = new ArrayList<>();
     partitionFileSlicePairs.forEach(fsp -> {
-      if (fsp.getFileSlice().getBaseFile().isPresent()) {
+      if (fsp.fileSlice().getBaseFile().isPresent()) {
         filesToIndex.add(ExpressionIndexRecordGenerator.FileToIndex.of(
-            fsp.getPartitionPath(), fsp.getFileSlice().getBaseFile().get().getPath(),
-            fsp.getFileSlice().getBaseFile().get().getFileLen()));
+            fsp.partitionPath(), fsp.fileSlice().getBaseFile().get().getPath(),
+            fsp.fileSlice().getBaseFile().get().getFileLen()));
       }
-      fsp.getFileSlice().getLogFiles().forEach(hoodieLogFile -> {
-        if (fsp.getFileSlice().getLogFiles().count() > 0) {
-          fsp.getFileSlice().getLogFiles().forEach(logfile ->
+      fsp.fileSlice().getLogFiles().forEach(hoodieLogFile -> {
+        if (fsp.fileSlice().getLogFiles().count() > 0) {
+          fsp.fileSlice().getLogFiles().forEach(logfile ->
               filesToIndex.add(ExpressionIndexRecordGenerator.FileToIndex.of(
-                  fsp.getPartitionPath(), logfile.getPath().toString(), logfile.getFileSize())));
+                  fsp.partitionPath(), logfile.getPath().toString(), logfile.getFileSize())));
         }
       });
     });
@@ -125,7 +126,7 @@ public class ExpressionIndexer implements Indexer {
     int parallelism = Math.min(filesToIndex.size(),
         dataTableWriteConfig.getMetadataConfig().getExpressionIndexParallelism());
     Schema readerSchema = getProjectedSchemaForExpressionIndex(indexDefinition, dataTableMetaClient);
-    return Collections.singletonList(InitialIndexPartitionData.of(numFileGroup,
+    return Collections.singletonList(IndexPartitionInitialization.of(numFileGroup,
         expressionIndexPartitionsToInit.get().iterator().next(),
         expressionIndexRecordGenerator.generate(
             filesToIndex, indexDefinition, dataTableMetaClient,
