@@ -252,7 +252,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
                 extraMetadata, operationType, config.getWriteSchema(), commitActionType));
     HoodieInstant inflightInstant = table.getMetaClient().createNewInstant(State.INFLIGHT, commitActionType, instantTime);
     HeartbeatUtils.abortIfHeartbeatExpired(instantTime, table, heartbeatClient, config);
-    this.txnManager.beginTransaction(Option.of(inflightInstant),
+    this.txnManager.beginStateChange(Option.of(inflightInstant),
         lastCompletedTxnAndMetadata.isPresent() ? Option.of(lastCompletedTxnAndMetadata.get().getLeft()) : Option.empty());
     try {
       preCommit(metadata);
@@ -265,7 +265,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     } catch (IOException e) {
       throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime, e);
     } finally {
-      this.txnManager.endTransaction(Option.of(inflightInstant));
+      this.txnManager.endStateChange(Option.of(inflightInstant));
       releaseResources(instantTime);
     }
 
@@ -859,12 +859,12 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     if (failedRestore.isPresent() && savepointToRestoreTimestamp.equals(RestoreUtils.getSavepointToRestoreTimestamp(table, failedRestore.get()))) {
       return Pair.of(failedRestore.get().requestedTime(), Option.of(RestoreUtils.getRestorePlan(table.getMetaClient(), failedRestore.get())));
     }
-    txnManager.beginTransaction(Option.empty(), Option.empty());
+    txnManager.beginStateChange(Option.empty(), Option.empty());
     try {
       final String restoreInstantTimestamp = createNewInstantTime();
       return Pair.of(restoreInstantTimestamp, table.scheduleRestore(context, restoreInstantTimestamp, savepointToRestoreTimestamp));
     } finally {
-      txnManager.endTransaction(Option.empty());
+      txnManager.endStateChange(Option.empty());
     }
   }
 
@@ -969,7 +969,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     CleanerUtils.rollbackFailedWrites(config.getFailedWritesCleanPolicy(),
         HoodieTimeline.COMMIT_ACTION, () -> tableServiceClient.rollbackFailedWrites(metaClient));
 
-    txnManager.beginTransaction(Option.empty(), lastCompletedTxnAndMetadata.map(Pair::getLeft));
+    txnManager.beginStateChange(Option.empty(), lastCompletedTxnAndMetadata.map(Pair::getLeft));
     String instantTime;
     HoodieInstant instant = null;
     try {
@@ -992,7 +992,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         metaClient.getActiveTimeline().createNewInstant(instant);
       }
     } finally {
-      txnManager.endTransaction(Option.ofNullable(instant));
+      txnManager.endStateChange(Option.ofNullable(instant));
     }
     return instantTime;
   }
@@ -1024,14 +1024,14 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @return instant time for the requested INDEX action
    */
   public Option<String> scheduleIndexing(List<MetadataPartitionType> partitionTypes, List<String> partitionPaths) {
-    txnManager.beginTransaction(Option.empty(), Option.empty());
+    txnManager.beginStateChange(Option.empty(), Option.empty());
     try {
       String instantTime = createNewInstantTime(false);
       Option<HoodieIndexPlan> indexPlan = createTable(config)
           .scheduleIndexing(context, instantTime, partitionTypes, partitionPaths);
       return indexPlan.map(plan -> instantTime);
     } finally {
-      txnManager.endTransaction(Option.empty());
+      txnManager.endStateChange(Option.empty());
     }
   }
 
@@ -1054,7 +1054,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     HoodieTable table = createTable(config);
     String dropInstant = createNewInstantTime();
     HoodieInstant ownerInstant = table.getMetaClient().createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.INDEXING_ACTION, dropInstant);
-    this.txnManager.beginTransaction(Option.of(ownerInstant), Option.empty());
+    this.txnManager.beginStateChange(Option.of(ownerInstant), Option.empty());
     try {
       context.setJobStatus(this.getClass().getSimpleName(), "Dropping partitions from metadata table: " + config.getTableName());
       HoodieTableMetaClient metaClient = table.getMetaClient();
@@ -1087,7 +1087,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         }
       }
     } finally {
-      this.txnManager.endTransaction(Option.of(ownerInstant));
+      this.txnManager.endStateChange(Option.of(ownerInstant));
     }
   }
 
@@ -1298,11 +1298,11 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   }
 
   private void executeUsingTxnManager(Option<HoodieInstant> ownerInstant, Runnable r) {
-    this.txnManager.beginTransaction(ownerInstant, Option.empty());
+    this.txnManager.beginStateChange(ownerInstant, Option.empty());
     try {
       r.run();
     } finally {
-      this.txnManager.endTransaction(ownerInstant);
+      this.txnManager.endStateChange(ownerInstant);
     }
   }
 
