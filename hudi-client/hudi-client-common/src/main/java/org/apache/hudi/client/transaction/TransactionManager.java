@@ -53,21 +53,21 @@ public class TransactionManager implements Serializable {
   public void beginStateChange(Option<HoodieInstant> changeActionInstant,
                                Option<HoodieInstant> lastCompletedActionInstant) {
     if (isLockRequired) {
-      LOG.info("State change starting for {} with latest completed transaction instant {}",
+      LOG.info("State change starting for {} with latest completed action instant {}",
           changeActionInstant, lastCompletedActionInstant);
       lockManager.lock();
       reset(this.changeActionInstant, changeActionInstant, lastCompletedActionInstant);
-      LOG.info("State change started for {} with latest completed transaction instant {}",
+      LOG.info("State change started for {} with latest completed action instant {}",
           changeActionInstant, lastCompletedActionInstant);
     }
   }
 
   public void endStateChange(Option<HoodieInstant> changeActionInstant) {
     if (isLockRequired) {
-      LOG.info("State change ending with transaction owner {}", changeActionInstant);
+      LOG.info("State change ending for action instant {}", changeActionInstant);
       if (reset(changeActionInstant, Option.empty(), Option.empty())) {
         lockManager.unlock();
-        LOG.info("State change ended with transaction owner {}", changeActionInstant);
+        LOG.info("State change ended for action instant {}", changeActionInstant);
       }
     }
   }
