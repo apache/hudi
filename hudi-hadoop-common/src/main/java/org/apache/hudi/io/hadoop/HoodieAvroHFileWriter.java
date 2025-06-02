@@ -32,6 +32,7 @@ import org.apache.hudi.io.hfile.HFileWriter;
 import org.apache.hudi.io.hfile.HFileWriterImpl;
 import org.apache.hudi.io.storage.HoodieAvroFileWriter;
 import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
+import org.apache.hudi.io.storage.HoodieHFileConfig;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
@@ -103,7 +104,6 @@ public class HoodieAvroHFileWriter
     StoragePath filePath = new StoragePath(this.file.toUri());
     OutputStream outputStream =  HoodieStorageUtils.getStorage(filePath, storageConf).create(filePath);
     this.writer = new HFileWriterImpl(context, outputStream);
-
     this.prevRecordKey = "";
     writer.appendFileInfo(
         HoodieAvroHFileReaderImplBase.SCHEMA_KEY, getUTF8Bytes(schema.toString()));
@@ -147,10 +147,9 @@ public class HoodieAvroHFileWriter
       }
     }
     if (!isRecordSerialized) {
-      value = HoodieAvroUtils.avroToBytes((GenericRecord) record);
+      value = HoodieAvroUtils.avroToBytes(record);
     }
     writer.append(recordKey, value);
-
     if (hfileConfig.useBloomFilter()) {
       hfileConfig.getBloomFilter().add(recordKey);
       if (minRecordKey == null) {

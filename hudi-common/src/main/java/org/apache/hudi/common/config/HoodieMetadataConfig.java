@@ -71,6 +71,15 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("0.7.0")
       .withDocumentation("Enable the internal metadata table which serves table metadata like level file listings");
 
+  public static final ConfigProperty<Boolean> STREAMING_WRITE_ENABLED = ConfigProperty
+      .key(METADATA_PREFIX + ".streaming.write.enabled")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Whether to enable streaming writes to metadata table or not. With streaming writes, we execute writes to both data table and metadata table "
+          + "in streaming manner rather than two disjoint writes. By default "
+          + "streaming writes to metadata table is enabled for SPARK engine for incremental operations and disabled for all other cases.");
+
   public static final boolean DEFAULT_METADATA_ENABLE_FOR_READERS = true;
 
   // Enable metrics for internal Metadata Table
@@ -466,6 +475,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getBoolean(ENABLE);
   }
 
+  public boolean isStreamingWriteEnabled() {
+    return getBoolean(STREAMING_WRITE_ENABLED);
+  }
+
   public boolean isBloomFilterIndexEnabled() {
     return getBooleanOrDefault(ENABLE_METADATA_INDEX_BLOOM_FILTER);
   }
@@ -701,6 +714,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder enable(boolean enable) {
       metadataConfig.setValue(ENABLE, String.valueOf(enable));
+      return this;
+    }
+
+    public Builder withStreamingWriteEnabled(boolean enabled) {
+      metadataConfig.setValue(STREAMING_WRITE_ENABLED, String.valueOf(enabled));
       return this;
     }
 
@@ -942,6 +960,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       metadataConfig.setDefaultValue(ENABLE_METADATA_INDEX_COLUMN_STATS, getDefaultColStatsEnable(engineType));
       metadataConfig.setDefaultValue(ENABLE_METADATA_INDEX_PARTITION_STATS, metadataConfig.isColumnStatsIndexEnabled());
       metadataConfig.setDefaultValue(SECONDARY_INDEX_ENABLE_PROP, getDefaultSecondaryIndexEnable(engineType));
+      metadataConfig.setDefaultValue(STREAMING_WRITE_ENABLED, getDefaultForStreamingWriteEnabled(engineType));
       // fix me: disable when schema on read is enabled.
       metadataConfig.setDefaults(HoodieMetadataConfig.class.getName());
       return metadataConfig;
@@ -952,6 +971,18 @@ public final class HoodieMetadataConfig extends HoodieConfig {
         case FLINK:
         case SPARK:
           return ENABLE.defaultValue();
+        case JAVA:
+          return false;
+        default:
+          throw new HoodieNotSupportedException("Unsupported engine " + engineType);
+      }
+    }
+
+    private boolean getDefaultForStreamingWriteEnabled(EngineType engineType) {
+      switch (engineType) {
+        case SPARK:
+          return true;
+        case FLINK:
         case JAVA:
           return false;
         default:

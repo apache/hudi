@@ -16,7 +16,7 @@
  */
 package org.apache.spark.hudi.benchmark
 
-import org.apache.hbase.thirdparty.com.google.common.reflect.ClassPath
+import org.apache.hadoop.shaded.com.google.common.reflect.ClassPath
 
 import java.io.File
 import java.lang.reflect.Modifier

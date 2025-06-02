@@ -226,10 +226,6 @@
                     <exclude>META-INF/*.RSA</exclude>
                     <exclude>META-INF/services/javax.*</exclude>
                     <exclude>**/*.proto</exclude>
-                    <exclude>hbase-webapps/**</exclude>
-                    <!-- hbase-default.xml comes from hbase-common, hbase related classes used in hudi are in shaded
-                    pattern, the default classes in hbase-default.xml can cause ClassNotFoundException. -->
-                    <exclude>hbase-default.xml</exclude>
                   </excludes>
                 </filter>
               </filters>
