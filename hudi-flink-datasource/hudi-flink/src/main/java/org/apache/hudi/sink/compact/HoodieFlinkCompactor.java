@@ -247,7 +247,7 @@ public class HoodieFlinkCompactor {
         HoodieInstant inflightInstant = HoodieTimeline.getCompactionInflightInstant(timestamp);
         if (pendingCompactionTimeline.containsInstant(inflightInstant)) {
           LOG.info("Rollback inflight compaction instant: [" + timestamp + "]");
-          table.rollbackInflightCompaction(inflightInstant);
+          table.rollbackInflightCompaction(inflightInstant, null);
           table.getMetaClient().reloadActiveTimeline();
         }
       });

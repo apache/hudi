@@ -19,6 +19,7 @@
 package org.apache.hudi.client.functional;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -401,7 +402,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
 
       // Rollback the log compaction commit.
       HoodieInstant instant = new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.LOG_COMPACTION_ACTION, logCompactionTimeStamp.get());
-      getHoodieTable(metaClient, config).rollbackInflightLogCompaction(instant);
+      getHoodieTable(metaClient, config).rollbackInflightLogCompaction(instant, Option.of(new TransactionManager(config, metaClient.getStorage())));
 
       // Validate timeline.
       HoodieTimeline activeTimeline = metaClient.reloadActiveTimeline();

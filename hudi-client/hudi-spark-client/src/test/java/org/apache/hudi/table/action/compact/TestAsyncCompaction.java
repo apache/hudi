@@ -94,7 +94,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
       HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context, metaClient);
 
       hoodieTable.rollbackInflightCompaction(
-          new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, compactionInstantTime));
+          new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, compactionInstantTime), Option.empty());
       metaClient = HoodieTableMetaClient.builder().setConf(storageConf).setBasePath(cfg.getBasePath()).build();
       pendingCompactionInstant = metaClient.getCommitsAndCompactionTimeline().filterPendingCompactionTimeline()
           .getInstantsAsStream().findFirst().get();

@@ -136,7 +136,6 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   private final HoodieTableMetadata metadata;
   private final HoodieStorageLayout storageLayout;
   private final boolean isMetadataTable;
-  private final TransactionManager txnManager;
 
   private transient FileSystemViewManager viewManager;
   protected final transient HoodieEngineContext context;
@@ -156,7 +155,6 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     this.index = getIndex(config, context);
     this.storageLayout = getStorageLayout(config);
     this.taskContextSupplier = context.getTaskContextSupplier();
-    this.txnManager = new TransactionManager(config, metaClient.getStorage());
   }
 
   public boolean isMetadataTable() {
@@ -612,12 +610,12 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
                                                     String restoreInstantTimestamp,
                                                     String savepointToRestoreTimestamp);
 
-  public void rollbackInflightCompaction(HoodieInstant inflightInstant) {
-    rollbackInflightCompaction(inflightInstant, s -> Option.empty());
+  public void rollbackInflightCompaction(HoodieInstant inflightInstant, Option<TransactionManager> txnManagerOpt) {
+    rollbackInflightCompaction(inflightInstant, s -> Option.empty(), txnManagerOpt);
   }
 
-  public void rollbackInflightLogCompaction(HoodieInstant inflightInstant) {
-    rollbackInflightLogCompaction(inflightInstant, s -> Option.empty());
+  public void rollbackInflightLogCompaction(HoodieInstant inflightInstant, Option<TransactionManager> txnManagerOpt) {
+    rollbackInflightLogCompaction(inflightInstant, s -> Option.empty(), txnManagerOpt);
   }
 
   /**
@@ -627,9 +625,10 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @param inflightInstant Inflight Compaction Instant
    */
   public void rollbackInflightCompaction(HoodieInstant inflightInstant,
-                                         Function<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInstantFunc) {
+                                         Function<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInstantFunc,
+                                         Option<TransactionManager> txnManagerOpt) {
     ValidationUtils.checkArgument(inflightInstant.getAction().equals(HoodieTimeline.COMPACTION_ACTION));
-    rollbackInflightInstant(inflightInstant, getPendingRollbackInstantFunc);
+    rollbackInflightInstant(inflightInstant, getPendingRollbackInstantFunc, txnManagerOpt);
   }
 
   /**
@@ -639,8 +638,9 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @param getPendingRollbackInstantFunc Function to get rollback instant
    */
   public void rollbackInflightClustering(HoodieInstant inflightInstant,
-                                         Function<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInstantFunc) {
-    rollbackInflightClustering(inflightInstant, getPendingRollbackInstantFunc, false);
+                                         Function<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInstantFunc,
+                                         Option<TransactionManager> txnManagerOpt) {
+    rollbackInflightClustering(inflightInstant, getPendingRollbackInstantFunc, false, txnManagerOpt);
   }
 
   /**
@@ -650,9 +650,10 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @param getPendingRollbackInstantFunc Function to get rollback instant
    */
   public void rollbackInflightClustering(HoodieInstant inflightInstant,
-                                         Function<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInstantFunc, boolean deleteInstants) {
+                                         Function<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInstantFunc, boolean deleteInstants,
+                                         Option<TransactionManager> txnManagerOpt) {
     ValidationUtils.checkArgument(inflightInstant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION));
-    rollbackInflightInstant(inflightInstant, getPendingRollbackInstantFunc);
+    rollbackInflightInstant(inflightInstant, getPendingRollbackInstantFunc, txnManagerOpt);
     if (deleteInstants) {
       // above rollback would still keep requested in the timeline. so, lets delete it if if are looking to purge the pending clustering fully.
       getActiveTimeline().deletePending(new HoodieInstant(HoodieInstant.State.REQUESTED, inflightInstant.getAction(), inflightInstant.getTimestamp()));
@@ -666,15 +667,14 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @param getPendingRollbackInstantFunc Function to get rollback instant
    */
   private void rollbackInflightInstant(HoodieInstant inflightInstant,
-                                       Function<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInstantFunc) {
+                                       Function<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInstantFunc,
+                                       Option<TransactionManager> txnManagerOpt) {
     final String commitTime = getPendingRollbackInstantFunc.apply(inflightInstant.getTimestamp()).map(entry
         -> entry.getRollbackInstant().getTimestamp())
         .orElseGet(HoodieActiveTimeline::createNewInstantTime);
-    // if txn manager is non empty, begin txn. remove txn manager from HoodieTable L 159.
-    scheduleRollback(commitTime, inflightInstant);
+    scheduleRollback(commitTime, inflightInstant, txnManagerOpt);
     rollback(context, commitTime, inflightInstant, false, false);
     getActiveTimeline().revertInstantFromInflightToRequested(inflightInstant);
-     // end txn.
   }
 
   /**
@@ -683,22 +683,23 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    *
    * @param inflightInstant Inflight Compaction Instant
    */
-  public void rollbackInflightLogCompaction(HoodieInstant inflightInstant, Function<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInstantFunc) {
+  public void rollbackInflightLogCompaction(HoodieInstant inflightInstant, Function<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInstantFunc,
+                                            Option<TransactionManager> txnManagerOpt) {
     final String commitTime = getPendingRollbackInstantFunc.apply(inflightInstant.getTimestamp()).map(entry
         -> entry.getRollbackInstant().getTimestamp())
         .orElseGet(HoodieActiveTimeline::createNewInstantTime);
-    scheduleRollback(commitTime, inflightInstant);
+    scheduleRollback(commitTime, inflightInstant, txnManagerOpt);
     rollback(context, commitTime, inflightInstant, true, false);
   }
 
-  private void scheduleRollback(String commitTime, HoodieInstant inflightInstant) {
+  private void scheduleRollback(String commitTime, HoodieInstant inflightInstant, Option<TransactionManager> txnManagerOpt) {
     HoodieInstant rollbackInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, commitTime, HoodieTimeline.ROLLBACK_ACTION);
     try {
-      txnManager.beginTransaction(Option.of(rollbackInstant), Option.empty());
+      txnManagerOpt.ifPresent(txnManager -> txnManager.beginTransaction(Option.of(rollbackInstant), Option.empty()));
       scheduleRollback(context, commitTime, inflightInstant, false, config.shouldRollbackUsingMarkers(),
           false);
     } finally {
-      txnManager.endTransaction(Option.of(rollbackInstant));
+      txnManagerOpt.ifPresent(txnManager -> txnManager.endTransaction(Option.of(rollbackInstant)));
     }
   }
 
