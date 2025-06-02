@@ -84,7 +84,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
     List<HoodieWriteStat> writeStats = metadata.getWriteStats();
     final HoodieInstant compactionInstant = table.getInstantGenerator().getCompactionInflightInstant(compactionCommitTime);
     try {
-      this.txnManager.beginTransaction(Option.of(compactionInstant), Option.empty());
+      this.txnManager.beginStateChange(Option.of(compactionInstant), Option.empty());
       finalizeWrite(table, compactionCommitTime, writeStats);
       // commit to data table after committing to metadata table.
       // Do not do any conflict resolution here as we do with regular writes. We take the lock here to ensure all writes to metadata table happens within a
@@ -93,7 +93,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
       LOG.info("Committing Compaction {} finished with result {}.", compactionCommitTime, metadata);
       CompactHelpers.getInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
     } finally {
-      this.txnManager.endTransaction(Option.of(compactionInstant));
+      this.txnManager.endStateChange(Option.of(compactionInstant));
     }
     WriteMarkersFactory
         .get(config.getMarkersType(), table, compactionCommitTime)
@@ -125,7 +125,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
     }
 
     try {
-      this.txnManager.beginTransaction(Option.of(clusteringInstant), Option.empty());
+      this.txnManager.beginStateChange(Option.of(clusteringInstant), Option.empty());
       finalizeWrite(table, clusteringCommitTime, writeStats);
       // Only in some cases conflict resolution needs to be performed.
       // So, check if preCommit method that does conflict resolution needs to be triggered.
@@ -147,7 +147,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
       throw new HoodieClusteringException(
           "Failed to commit " + table.getMetaClient().getBasePath() + " at time " + clusteringCommitTime, e);
     } finally {
-      this.txnManager.endTransaction(Option.of(clusteringInstant));
+      this.txnManager.endStateChange(Option.of(clusteringInstant));
     }
 
     WriteMarkersFactory.get(config.getMarkersType(), table, clusteringCommitTime)
