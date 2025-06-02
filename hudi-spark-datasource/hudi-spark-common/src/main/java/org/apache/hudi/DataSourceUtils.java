@@ -23,6 +23,7 @@ import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
@@ -258,20 +259,21 @@ public class DataSourceUtils {
     return client.deletePartitions(partitionsToDelete, instantTime);
   }
 
-  public static HoodieRecord createHoodieRecord(GenericRecord gr, Comparable orderingVal, HoodieKey hKey,
-      String payloadClass, scala.Option<HoodieRecordLocation> recordLocation) throws IOException {
-    HoodieRecordPayload payload = DataSourceUtils.createPayload(payloadClass, gr, orderingVal);
-    HoodieAvroRecord record = new HoodieAvroRecord<>(hKey, payload);
+  public static HoodieRecord createHoodieRecord(GenericRecord gr,
+                                                Comparable<?> orderingVal,
+                                                HoodieKey hKey,
+                                                scala.Option<HoodieRecordLocation> recordLocation) {
+    HoodieRecord record = new HoodieAvroIndexedRecord(hKey, gr, orderingVal);
     if (recordLocation.isDefined()) {
       record.setCurrentLocation(recordLocation.get());
     }
     return record;
   }
 
-  public static HoodieRecord createHoodieRecord(GenericRecord gr, HoodieKey hKey,
-                                                String payloadClass, scala.Option<HoodieRecordLocation> recordLocation) throws IOException {
-    HoodieRecordPayload payload = DataSourceUtils.createPayload(payloadClass, gr);
-    HoodieAvroRecord record = new HoodieAvroRecord<>(hKey, payload);
+  public static HoodieRecord createHoodieRecord(GenericRecord gr,
+                                                HoodieKey hKey,
+                                                scala.Option<HoodieRecordLocation> recordLocation) {
+    HoodieRecord record = new HoodieAvroIndexedRecord(hKey, gr);
     if (recordLocation.isDefined()) {
       record.setCurrentLocation(recordLocation.get());
     }

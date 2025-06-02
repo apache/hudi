@@ -26,7 +26,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.jute.Index;
 
 import java.io.IOException;
 import java.util.List;
@@ -147,7 +146,7 @@ public class PartialUpdateAvroMerger extends EventTimeBasedAvroRecordMerger {
       return Option.of(Pair.of(highOrderRecord, highOrderSchema));
     } else {
       return Option.of(Pair.of(
-          mergeRecord(lowOrderRecord, lowOrderSchema, highOrderRecord, highOrderSchema),
+          mergeRecord(lowOrderRecord, lowOrderSchema, highOrderRecord, highOrderSchema, props),
           highOrderSchema));
     }
   }
@@ -159,7 +158,7 @@ public class PartialUpdateAvroMerger extends EventTimeBasedAvroRecordMerger {
                            TypedProperties props) throws IOException {
     return new HoodieAvroIndexedRecord(mergeIndexedRecord(
         lowOrderRecord.toIndexedRecord(lowOrderSchema, props).map(HoodieAvroIndexedRecord::getData).get(),
-        highOrderRecord.toIndexedRecord(lowOrderSchema, props).map(HoodieAvroIndexedRecord::getData).get(),
+        highOrderRecord.toIndexedRecord(highOrderSchema, props).map(HoodieAvroIndexedRecord::getData).get(),
         lowOrderSchema,
         highOrderSchema));
   }

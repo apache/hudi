@@ -55,6 +55,11 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
     super(key, data);
   }
 
+  public HoodieAvroIndexedRecord(HoodieKey key, IndexedRecord data, Comparable<?> orderingValue) {
+    super(key, data);
+    this.orderingValue = orderingValue;
+  }
+
   public HoodieAvroIndexedRecord(HoodieKey key, IndexedRecord data, HoodieRecordLocation currentLocation) {
     super(key, data, null, currentLocation, null);
   }
