@@ -217,7 +217,6 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       }
     }
     ValidationUtils.checkArgument(!initialized || this.metadata != null, "MDT Reader should have been opened post initialization");
-
     this.metadataIndexGenerator = streamingWrites ? Option.of(initializeMetadataIndexGenerator()) : Option.empty();
     this.streamingWritesEnabled = streamingWrites;
   }
@@ -1233,7 +1232,6 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       mdtRecord.seal();
       return mdtRecord;
     });
-
     return Pair.of(updatedFileGroupIds, taggedRecords);
   }
 
@@ -1539,6 +1537,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     Pair<HoodieData<HoodieRecord>, List<HoodieFileGroupId>> result = tagRecordsWithLocation(partitionRecordsMap, isInitializing);
     HoodieData<HoodieRecord> preppedRecords = result.getKey();
     I preppedRecordInputs = convertHoodieDataToEngineSpecificData(preppedRecords);
+    List<HoodieFileGroupId> updatedMDTFileGroupIds = result.getValue();
 
     BaseHoodieWriteClient<?, I, ?, O> writeClient = getWriteClient();
     // rollback partially failed writes if any.
