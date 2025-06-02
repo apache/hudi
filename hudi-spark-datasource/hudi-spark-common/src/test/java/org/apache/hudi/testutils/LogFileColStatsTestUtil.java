@@ -18,8 +18,6 @@
 
 package org.apache.hudi.testutils;
 
-import org.apache.hudi.avro.HoodieAvroReaderContext;
-import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -30,7 +28,6 @@ import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.expressions.GenericRow;
 
@@ -47,10 +44,9 @@ public class LogFileColStatsTestUtil {
                                                           List<String> columnsToIndex, Option<Schema> writerSchemaOpt,
                                                           int maxBufferSize) throws IOException {
     if (writerSchemaOpt.isPresent()) {
-      HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(datasetMetaClient.getStorageConf(), datasetMetaClient.getTableConfig(), Option.empty(), Option.empty());
       String partitionPath = FSUtils.getRelativePartitionPath(datasetMetaClient.getBasePath(), new StoragePath(filePath).getParent());
       List<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList =
-          HoodieTableMetadataUtil.getLogFileColumnRangeMetadata(readerContext, filePath, partitionPath, datasetMetaClient, columnsToIndex, writerSchemaOpt, maxBufferSize);
+          HoodieTableMetadataUtil.getLogFileColumnRangeMetadata(filePath, partitionPath, datasetMetaClient, columnsToIndex, writerSchemaOpt, maxBufferSize);
       return Option.of(getColStatsEntry(filePath, columnRangeMetadataList));
     } else {
       throw new HoodieException("Writer schema needs to be set");
