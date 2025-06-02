@@ -39,6 +39,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.ActionType;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -82,6 +83,7 @@ import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils;
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -143,6 +145,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   protected Set<String> pendingInflightAndRequestedInstants = Collections.emptySet();
 
   protected BaseHoodieTableServiceClient<?, ?, O> tableServiceClient;
+  protected boolean isMetadataTable;
 
   /**
    * Create a write client, with new hudi index.
@@ -173,6 +176,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     this.index = createIndex(writeConfig);
     this.upgradeDowngradeHelper = upgradeDowngradeHelper;
     this.metrics.emitIndexTypeMetrics(config.getIndexType().ordinal());
+    this.isMetadataTable = HoodieTableMetadata.isMetadataTable(config.getBasePath());
   }
 
   @VisibleForTesting
@@ -429,6 +433,20 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @return Collection of WriteStatus to inspect errors and counts
    */
   public abstract O upsertPreppedRecords(I preppedRecords, final String instantTime);
+
+  /**
+   * Upserts the given prepared records into the Hoodie table, at the supplied instantTime.
+   * <p>
+   * This implementation requires that the input records are already tagged, and de-duped if needed.
+   *
+   * @param preppedRecords  Prepared HoodieRecords to upsert
+   * @param instantTime     Instant time of the commit
+   * @param fileGroupIdsOpt Optional list of HoodieFileGroupIds impacted by the commit
+   * @return Collection of WriteStatus to inspect errors and counts
+   */
+  public O upsertPreppedRecords(I preppedRecords, final String instantTime, Option<List<HoodieFileGroupId>> fileGroupIdsOpt) {
+    return upsertPreppedRecords(preppedRecords, instantTime);
+  }
 
   /**
    * Inserts the given HoodieRecords, into the table. This API is intended to be used for normal writes.
