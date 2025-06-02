@@ -71,10 +71,6 @@ public abstract class HoodieEngineContext {
 
   public abstract <K, V> HoodiePairData<K, V> emptyHoodiePairData();
 
-  public boolean supportsFileGroupReader() {
-    return false;
-  }
-
   public <T> HoodieData<T> parallelize(List<T> data) {
     if (data.isEmpty()) {
       return emptyHoodieData();
