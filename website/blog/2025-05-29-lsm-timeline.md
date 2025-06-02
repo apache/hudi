@@ -124,6 +124,12 @@ The LSM timeline unlocks significant advancements in how Apache Hudi handles met
 
 * **Maintenance-Free Scalability**: The universal compaction and smart cleaning strategies keep the timeline healthy over time, requiring minimal manual tuning, while ensuring that old data is cleaned up safely only after valid snapshots are no longer in use.
 
+### Performance
+
+Micro-benchmarks show that the LSM Timeline scales efficiently even as the number of timeline actions grows by orders of magnitude. Reading just the instant times for `10,000` actions takes around `32ms`, while fetching full metadata takes `150ms`. At larger scales, such as `10 million` actions, metadata reads completes in about `162 seconds`.
+
+These results demonstrate that Hudi's LSM timeline can handle decades of high-frequency commits (e.g., one every 30 seconds for 10+ years) while keeping metadata access performant.
+
 The LSM timeline represents a natural progression in Apache Hudi’s timeline architecture, designed to address the growing demands of large-scale and long-lived tables. Hudi’s timeline has been foundational for transactional integrity, time travel, and incremental processing capabilities. The new LSM-based design enhances scalability and operational efficiency by introducing a layered, compacted structure with manifest-driven snapshot isolation. This improvement allows Hudi to manage extensive metadata histories more efficiently, maintain predictable performance, and better support advanced use cases such as non-blocking concurrency control. 
 
 ---
