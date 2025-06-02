@@ -83,13 +83,6 @@ public abstract class HoodieAvroHFileReaderImplBase extends HoodieAvroFileReader
     }
   }
 
-  public abstract ClosableIterator<IndexedRecord> getIndexedRecordsByKeysIterator(List<String> keys,
-                                                                                  Schema readerSchema)
-      throws IOException;
-
-  public abstract ClosableIterator<IndexedRecord> getIndexedRecordsByKeyPrefixIterator(
-      List<String> sortedKeyPrefixes, Schema readerSchema) throws IOException;
-
   protected static GenericRecord deserialize(final byte[] keyBytes,
                                              final byte[] valueBytes,
                                              Schema writerSchema,
