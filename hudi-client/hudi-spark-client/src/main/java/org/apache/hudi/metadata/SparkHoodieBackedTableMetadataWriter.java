@@ -167,7 +167,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     JavaRDD<HoodieRecord> mdtRecords = HoodieJavaRDD.getJavaRDD(mdtRecordsHoodieData.getValue());
     engineContext.setJobStatus(this.getClass().getSimpleName(), String.format("Upserting at %s into metadata table %s", instantTime, metadataWriteConfig.getTableName()));
     // TODO: Introduce prepped upsert call after client APIs are added
-    JavaRDD<WriteStatus> metadataWriteStatusesSoFar = getWriteClient().upsertPreppedRecords(mdtRecords, instantTime, Option.of(mdtRecordsHoodieData.getKey()));
+    JavaRDD<WriteStatus> metadataWriteStatusesSoFar = ((SparkRDDMetadataWriteClient)getWriteClient()).upsertPreppedRecords(mdtRecords, instantTime, Option.of(mdtRecordsHoodieData.getKey()));
     return metadataWriteStatusesSoFar;
   }
 
@@ -181,7 +181,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   @Override
   protected void upsertAndCommit(BaseHoodieWriteClient<?, JavaRDD<HoodieRecord>, ?, JavaRDD<WriteStatus>> writeClient, String instantTime, JavaRDD<HoodieRecord> preppedRecordInputs,
                                  List<HoodieFileGroupId> updatedMDTFileGroupIds) {
-    JavaRDD<WriteStatus> writeStatusJavaRDD = writeClient.upsertPreppedRecords(preppedRecordInputs, instantTime, Option.of(updatedMDTFileGroupIds));
+    JavaRDD<WriteStatus> writeStatusJavaRDD = ((SparkRDDMetadataWriteClient)writeClient).upsertPreppedRecords(preppedRecordInputs, instantTime, Option.of(updatedMDTFileGroupIds));
     writeClient.commit(instantTime, writeStatusJavaRDD, Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap());
   }
 
