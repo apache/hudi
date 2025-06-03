@@ -24,7 +24,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -52,7 +51,7 @@ public class MetadataIndexGenerator implements Serializable {
    * one WriteStatus as input and the output contains prepared Metadata table records for all eligible partitions that can operate on one
    * WriteStatus instance only.
    */
-  static class WriteStatusBasedMetadataIndexGenerator implements SerializableFunction<WriteStatus, Iterator<Pair<String, HoodieRecord>>> {
+  static class WriteStatusBasedMetadataIndexGenerator implements SerializableFunction<WriteStatus, Iterator<HoodieRecord>> {
     List<MetadataPartitionType> enabledPartitionTypes;
     HoodieWriteConfig dataWriteConfig;
     StorageConfiguration<?> storageConf;
@@ -66,8 +65,8 @@ public class MetadataIndexGenerator implements Serializable {
     }
 
     @Override
-    public Iterator<Pair<String, HoodieRecord>> apply(WriteStatus writeStatus) throws Exception {
-      List<Pair<String, HoodieRecord>> allRecords = new ArrayList<>();
+    public Iterator<HoodieRecord> apply(WriteStatus writeStatus) throws Exception {
+      List<HoodieRecord> allRecords = new ArrayList<>();
       if (enabledPartitionTypes.contains(RECORD_INDEX)) {
         allRecords.addAll(processWriteStatusForRLI(writeStatus, dataWriteConfig));
       }
@@ -79,8 +78,8 @@ public class MetadataIndexGenerator implements Serializable {
     }
   }
 
-  protected static List<Pair<String, HoodieRecord>> processWriteStatusForRLI(WriteStatus writeStatus, HoodieWriteConfig dataWriteConfig) {
-    List<Pair<String, HoodieRecord>> allRecords = new ArrayList<>();
+  protected static List<HoodieRecord> processWriteStatusForRLI(WriteStatus writeStatus, HoodieWriteConfig dataWriteConfig) {
+    List<HoodieRecord> allRecords = new ArrayList<>();
     for (HoodieRecordDelegate recordDelegate : writeStatus.getWrittenRecordDelegates()) {
       if (!writeStatus.isErrored(recordDelegate.getHoodieKey())) {
         if (recordDelegate.getIgnoreIndexUpdate()) {
@@ -105,12 +104,12 @@ public class MetadataIndexGenerator implements Serializable {
             hoodieRecord = HoodieMetadataPayload.createRecordIndexUpdate(
                 recordDelegate.getRecordKey(), recordDelegate.getPartitionPath(),
                 newLocation.get().getFileId(), newLocation.get().getInstantTime(), dataWriteConfig.getWritesFileIdEncoding());
-            allRecords.add(Pair.of(RECORD_INDEX.getPartitionPath(), hoodieRecord));
+            allRecords.add(hoodieRecord);
           }
         } else {
           // Delete existing index for a deleted record
           hoodieRecord = HoodieMetadataPayload.createRecordIndexDelete(recordDelegate.getRecordKey());
-          allRecords.add(Pair.of(RECORD_INDEX.getPartitionPath(), hoodieRecord));
+          allRecords.add(hoodieRecord);
         }
       }
     }

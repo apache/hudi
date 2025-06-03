@@ -28,7 +28,6 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import org.junit.jupiter.api.Test;
@@ -69,14 +68,13 @@ public class TestMetadataIndexGenerator extends HoodieCommonTestHarness {
         .build();
     MetadataIndexGenerator.WriteStatusBasedMetadataIndexGenerator writeStatusBasedMetadataIndexGenerator = new MetadataIndexGenerator.WriteStatusBasedMetadataIndexGenerator(
         Collections.singletonList(MetadataPartitionType.RECORD_INDEX), writeConfig, storageConf, "001");
-    Iterator<Pair<String, HoodieRecord>> rliRecordsPair = writeStatusBasedMetadataIndexGenerator.apply(writeStatus);
+    Iterator<HoodieRecord> rliRecords = writeStatusBasedMetadataIndexGenerator.apply(writeStatus);
     AtomicInteger totalRLIRecords = new AtomicInteger();
-    rliRecordsPair.forEachRemaining(pair -> {
+    rliRecords.forEachRemaining(rliRecord -> {
       totalRLIRecords.getAndIncrement();
-      assertEquals(MetadataPartitionType.RECORD_INDEX.getPartitionPath(), pair.getLeft());
 
       // verify RLI metadata
-      HoodieRecord<HoodieMetadataPayload> record = pair.getRight();
+      HoodieRecord<HoodieMetadataPayload> record = rliRecord;
       assertEquals(MetadataPartitionType.RECORD_INDEX.getPartitionPath(), record.getKey().getPartitionPath());
       HoodieRecordIndexInfo recordIndexInfo = record.getData().recordIndexMetadata;
       assertNotNull(recordIndexInfo);
@@ -107,14 +105,13 @@ public class TestMetadataIndexGenerator extends HoodieCommonTestHarness {
         .build();
     MetadataIndexGenerator.WriteStatusBasedMetadataIndexGenerator writeStatusBasedMetadataIndexGenerator = new MetadataIndexGenerator.WriteStatusBasedMetadataIndexGenerator(
         Collections.singletonList(MetadataPartitionType.RECORD_INDEX), writeConfig, storageConf, "001");
-    Iterator<Pair<String, HoodieRecord>> rliRecordsPair = writeStatusBasedMetadataIndexGenerator.apply(writeStatus);
+    Iterator<HoodieRecord> rliRecords = writeStatusBasedMetadataIndexGenerator.apply(writeStatus);
     AtomicInteger totalRLIRecords = new AtomicInteger();
-    rliRecordsPair.forEachRemaining(pair -> {
+    rliRecords.forEachRemaining(rliRecord -> {
       totalRLIRecords.getAndIncrement();
-      assertEquals(MetadataPartitionType.RECORD_INDEX.getPartitionPath(), pair.getLeft());
 
       // verify RLI record payload is EmptyHoodieRecordPayload
-      HoodieRecord<EmptyHoodieRecordPayload> record = pair.getRight();
+      HoodieRecord<EmptyHoodieRecordPayload> record = rliRecord;
       assertEquals(MetadataPartitionType.RECORD_INDEX.getPartitionPath(), record.getKey().getPartitionPath());
       assertTrue(record.getData() instanceof EmptyHoodieRecordPayload);
     });

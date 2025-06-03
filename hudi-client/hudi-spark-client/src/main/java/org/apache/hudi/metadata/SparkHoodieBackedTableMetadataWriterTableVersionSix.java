@@ -129,7 +129,7 @@ public class SparkHoodieBackedTableMetadataWriterTableVersionSix extends HoodieB
 
   @Override
   protected HoodieData<WriteStatus> convertEngineSpecificDataToHoodieData(JavaRDD<WriteStatus> records) {
-    return null;
+    throw new HoodieNotSupportedException("Unsupported flow for table version 6");
   }
 
   @Override
@@ -141,7 +141,7 @@ public class SparkHoodieBackedTableMetadataWriterTableVersionSix extends HoodieB
 
   @Override
   protected void upsertAndCommit(BaseHoodieWriteClient<?, JavaRDD<HoodieRecord>, ?, JavaRDD<WriteStatus>> writeClient, String instantTime, JavaRDD<HoodieRecord> preppedRecordInputs,
-                                 List<HoodieFileGroupId> updatedMDTFileGroupIds) {
+                                 List<HoodieFileGroupId> mdtFileGroupsIdsToUpdate) {
     JavaRDD<WriteStatus> writeStatusJavaRDD = writeClient.upsertPreppedRecords(preppedRecordInputs, instantTime);
     writeClient.commit(instantTime, writeStatusJavaRDD, Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap());
   }

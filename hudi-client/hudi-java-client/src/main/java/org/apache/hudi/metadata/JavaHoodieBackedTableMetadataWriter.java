@@ -135,7 +135,7 @@ public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetada
 
   @Override
   protected void upsertAndCommit(BaseHoodieWriteClient<?, List<HoodieRecord>, ?, List<WriteStatus>> writeClient, String instantTime, List<HoodieRecord> preppedRecordInputs,
-                                 List<HoodieFileGroupId> updatedMDTFileGroupIds) {
+                                 List<HoodieFileGroupId> mdtFileGroupsIdsToUpdate) {
     List<WriteStatus> writeStatusJavaRDD = writeClient.upsertPreppedRecords(preppedRecordInputs, instantTime);
     writeClient.commit(instantTime, writeStatusJavaRDD);
   }

@@ -163,11 +163,11 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   @Override
-  public JavaRDD<WriteStatus> streamWriteToMetadataTable(Pair<List<HoodieFileGroupId>, HoodieData<HoodieRecord>> mdtRecordsHoodieData, String instantTime) {
-    JavaRDD<HoodieRecord> mdtRecords = HoodieJavaRDD.getJavaRDD(mdtRecordsHoodieData.getValue());
+  public JavaRDD<WriteStatus> streamWriteToMetadataTable(Pair<List<HoodieFileGroupId>, HoodieData<HoodieRecord>> hoodieFileGroupsToUpdateAndTaggedMdtRecords, String instantTime) {
+    JavaRDD<HoodieRecord> mdtRecords = HoodieJavaRDD.getJavaRDD(hoodieFileGroupsToUpdateAndTaggedMdtRecords.getValue());
     engineContext.setJobStatus(this.getClass().getSimpleName(), String.format("Upserting at %s into metadata table %s", instantTime, metadataWriteConfig.getTableName()));
-    // TODO: Introduce prepped upsert call after client APIs are added
-    JavaRDD<WriteStatus> metadataWriteStatusesSoFar = ((SparkRDDMetadataWriteClient)getWriteClient()).upsertPreppedRecords(mdtRecords, instantTime, Option.of(mdtRecordsHoodieData.getKey()));
+    JavaRDD<WriteStatus> metadataWriteStatusesSoFar = ((SparkRDDMetadataWriteClient)getWriteClient()).upsertPreppedRecords(mdtRecords, instantTime, Option.of(
+        hoodieFileGroupsToUpdateAndTaggedMdtRecords.getKey()));
     return metadataWriteStatusesSoFar;
   }
 
@@ -180,8 +180,8 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
   @Override
   protected void upsertAndCommit(BaseHoodieWriteClient<?, JavaRDD<HoodieRecord>, ?, JavaRDD<WriteStatus>> writeClient, String instantTime, JavaRDD<HoodieRecord> preppedRecordInputs,
-                                 List<HoodieFileGroupId> updatedMDTFileGroupIds) {
-    JavaRDD<WriteStatus> writeStatusJavaRDD = ((SparkRDDMetadataWriteClient)writeClient).upsertPreppedRecords(preppedRecordInputs, instantTime, Option.of(updatedMDTFileGroupIds));
+                                 List<HoodieFileGroupId> mdtFileGroupsIdsToUpdate) {
+    JavaRDD<WriteStatus> writeStatusJavaRDD = ((SparkRDDMetadataWriteClient)writeClient).upsertPreppedRecords(preppedRecordInputs, instantTime, Option.of(mdtFileGroupsIdsToUpdate));
     writeClient.commit(instantTime, writeStatusJavaRDD, Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap());
   }
 

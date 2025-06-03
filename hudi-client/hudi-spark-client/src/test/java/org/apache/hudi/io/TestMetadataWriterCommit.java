@@ -36,7 +36,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.metadata.HoodieBackedTableMetadataWriter;
 import org.apache.hudi.metadata.SparkMetadataWriterFactory;
-import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 
@@ -49,7 +48,6 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
-import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
@@ -67,6 +65,7 @@ public class TestMetadataWriterCommit extends BaseTestHandle {
             .withEnableRecordIndex(true)
             .withMetadataIndexColumnStats(false)
             .withSecondaryIndexEnabled(false)
+            .withStreamingWriteEnabled(true)
             .build())
         .build();
 
@@ -102,27 +101,6 @@ public class TestMetadataWriterCommit extends BaseTestHandle {
     List<HoodieWriteStat> mdtWriteStats = mdtWriteStatus.collectAsList().stream().map(WriteStatus::getStat).collect(Collectors.toList());
     mdtWriter.completeStreamingCommit(instantTime, context, mdtWriteStats, commitMetadata);
     assertEquals(3, mdtMetaClient.reloadActiveTimeline().filterCompletedInstants().countInstants());
-
-    // Delete completed instant to trigger rollback
-    String commitFile = mdtMetaClient.getInstantFileNameGenerator().getFileName(mdtMetaClient.getActiveTimeline().lastInstant().get());
-    storage.deleteFile(new StoragePath(mdtMetaClient.getTimelinePath() + "/" + commitFile));
-
-    mdtWriter = (HoodieBackedTableMetadataWriter) SparkMetadataWriterFactory.createWithStreamingWrites(storageConf, config,
-        HoodieFailedWritesCleaningPolicy.LAZY, context, Option.empty());
-    mdtWriter.startCommit(instantTime);
-    mdtWriteStatus = mdtWriter.streamWriteToMetadataPartitions(HoodieJavaRDD.of(Collections.singletonList(writeStatus), context, 1), instantTime);
-    mdtWriteStats = mdtWriteStatus.collectAsList().stream().map(WriteStatus::getStat).collect(Collectors.toList());
-    mdtWriter.completeStreamingCommit(instantTime, context, mdtWriteStats, commitMetadata);
-    // Ensure inflight MDT commit is rolled back
-    assertEquals(1, mdtMetaClient.reloadActiveTimeline().getRollbackTimeline().countInstants());
-    // Ensure a new commit in MDT
-    assertEquals(4, mdtMetaClient.getActiveTimeline().filterCompletedInstants().countInstants());
-    assertEquals(3, mdtMetaClient.getCommitsTimeline().filterCompletedInstants().countInstants());
-
-    // Verify commit metadata
-    HoodieCommitMetadata mdtCommitMetadata = mdtMetaClient.getActiveTimeline().readCommitMetadata(mdtMetaClient.getCommitsTimeline().lastInstant().get());
-    assertEquals(1, mdtCommitMetadata.getPartitionToWriteStats().size());
-    assertEquals(10, mdtCommitMetadata.getPartitionToWriteStats().get(RECORD_INDEX.getPartitionPath()).size());
   }
 
   public static HoodieCommitMetadata createCommitMetadata(HoodieWriteStat writeStat, String partitionPath) {

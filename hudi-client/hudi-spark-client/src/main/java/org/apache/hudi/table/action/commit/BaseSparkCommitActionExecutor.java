@@ -174,6 +174,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     }
     // partition using the insert partitioner
     final Partitioner partitioner = getPartitioner(workloadProfile);
+
     saveWorkloadProfileMetadataToInflight(workloadProfile, instantTime);
 
     context.setJobStatus(this.getClass().getSimpleName(), "Doing partition and writing data: " + config.getTableName());
