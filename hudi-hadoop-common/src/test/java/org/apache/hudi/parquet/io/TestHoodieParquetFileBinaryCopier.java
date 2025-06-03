@@ -18,7 +18,7 @@
 
 package org.apache.hudi.parquet.io;
 
-import org.apache.hudi.io.storage.rewrite.HoodieFileMetadataMerger;
+import org.apache.hudi.io.storage.HoodieFileMetadataMerger;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.hadoop.conf.Configuration;
@@ -26,6 +26,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.parquet.HadoopReadOptions;
 import org.apache.parquet.Version;
 import org.apache.parquet.column.ParquetProperties;
+import org.apache.parquet.crypto.ParquetCipher;
 import org.apache.parquet.example.data.Group;
 import org.apache.parquet.example.data.simple.SimpleGroup;
 import org.apache.parquet.format.DataPageHeader;
@@ -34,7 +35,10 @@ import org.apache.parquet.format.PageHeader;
 import org.apache.parquet.format.converter.ParquetMetadataConverter;
 import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.ParquetReader;
+import org.apache.parquet.hadoop.ParquetWriter;
+import org.apache.parquet.hadoop.example.ExampleParquetWriter;
 import org.apache.parquet.hadoop.example.GroupReadSupport;
+import org.apache.parquet.hadoop.example.GroupWriteSupport;
 import org.apache.parquet.hadoop.metadata.BlockMetaData;
 import org.apache.parquet.hadoop.metadata.ColumnChunkMetaData;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
@@ -53,16 +57,22 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.model.HoodieRecord.FILENAME_METADATA_FIELD;
 import static org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.BINARY;
+import static org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.INT32;
 import static org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.INT64;
 import static org.apache.parquet.schema.Type.Repetition.OPTIONAL;
 import static org.apache.parquet.schema.Type.Repetition.REPEATED;
@@ -73,13 +83,13 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
-public class TestHoodieParquetFileRewriter {
+public class TestHoodieParquetFileBinaryCopier {
 
   private final int numRecord = 1;
   private Configuration conf = new Configuration();
   private List<TestFile> inputFiles = null;
   private String outputFile = null;
-  private HoodieParquetFileRewriter rewriter = null;
+  private HoodieParquetFileBinaryCopier writer = null;
 
   @BeforeEach
   public void setUp() {
@@ -103,14 +113,14 @@ public class TestHoodieParquetFileRewriter {
     inputFiles.add(makeTestFile(schema, "GZIP"));
     inputFiles.add(makeTestFile(schema, "GZIP"));
 
-    rewriter = parquetFileRewriter(schema, "GZIP");
+    writer = parquetFileBinaryCopier(schema, "GZIP");
     List<StoragePath> inputPaths = inputFiles.stream()
         .map(TestFile::getFileName)
         .map(StoragePath::new)
         .collect(Collectors.toList());
     StoragePath outputPath = new StoragePath(outputFile);
-    rewriter.binaryCopy(inputPaths, Collections.singletonList(outputPath), schema, new Properties());
-    rewriter.close();
+    writer.binaryCopy(inputPaths, Collections.singletonList(outputPath), schema, new Properties());
+    writer.close();
 
     // Verify the schema are not changed
     ParquetMetadata pmd = ParquetFileReader.readFooter(conf, new Path(outputFile), ParquetMetadataConverter.NO_FILTER);
@@ -138,14 +148,14 @@ public class TestHoodieParquetFileRewriter {
     inputFiles.add(makeTestFile(schema, "GZIP"));
     inputFiles.add(makeTestFile(schema, "UNCOMPRESSED"));
 
-    rewriter = parquetFileRewriter(schema, "ZSTD");
+    writer = parquetFileBinaryCopier(schema, "ZSTD");
     List<StoragePath> inputPaths = inputFiles.stream()
         .map(TestFile::getFileName)
         .map(StoragePath::new)
         .collect(Collectors.toList());
     StoragePath outputPath = new StoragePath(outputFile);
-    rewriter.binaryCopy(inputPaths, Collections.singletonList(outputPath), schema, new Properties());
-    rewriter.close();
+    writer.binaryCopy(inputPaths, Collections.singletonList(outputPath), schema, new Properties());
+    writer.close();
 
     // Verify the schema are not changed for the columns not pruned
     ParquetMetadata pmd = ParquetFileReader.readFooter(conf, new Path(outputFile), ParquetMetadataConverter.NO_FILTER);
@@ -183,14 +193,14 @@ public class TestHoodieParquetFileRewriter {
     inputFiles.add(makeTestFile(schema1, "UNCOMPRESSED"));
     inputFiles.add(makeTestFile(schema2, "UNCOMPRESSED"));
 
-    rewriter = parquetFileRewriter(schema1, "UNCOMPRESSED");
+    writer = parquetFileBinaryCopier(schema1, "UNCOMPRESSED");
     List<StoragePath> inputPaths = inputFiles.stream()
         .map(TestFile::getFileName)
         .map(StoragePath::new)
         .collect(Collectors.toList());
     StoragePath outputPath = new StoragePath(outputFile);
-    rewriter.binaryCopy(inputPaths, Collections.singletonList(outputPath), schema1, new Properties());
-    rewriter.close();
+    writer.binaryCopy(inputPaths, Collections.singletonList(outputPath), schema1, new Properties());
+    writer.close();
 
     // Verify the schema are not changed for the columns not pruned
     ParquetMetadata pmd = ParquetFileReader.readFooter(conf, new Path(outputFile), ParquetMetadataConverter.NO_FILTER);
@@ -224,14 +234,14 @@ public class TestHoodieParquetFileRewriter {
     inputFiles.add(makeTestFile(schema, "GZIP"));
     inputFiles.add(makeTestFile(schema, "GZIP"));
 
-    rewriter = parquetFileRewriter(schema, "GZIP");
+    writer = parquetFileBinaryCopier(schema, "GZIP");
     List<StoragePath> inputPaths = inputFiles.stream()
         .map(TestFile::getFileName)
         .map(StoragePath::new)
         .collect(Collectors.toList());
     StoragePath outputPath = new StoragePath(outputFile);
-    rewriter.binaryCopy(inputPaths, Collections.singletonList(outputPath), schema, new Properties());
-    rewriter.close();
+    writer.binaryCopy(inputPaths, Collections.singletonList(outputPath), schema, new Properties());
+    writer.close();
 
     // Verify the schema are not changed for the columns not pruned
     ParquetMetadata pmd = ParquetFileReader.readFooter(conf, new Path(outputFile), ParquetMetadataConverter.NO_FILTER);
@@ -259,10 +269,10 @@ public class TestHoodieParquetFileRewriter {
         .build();
   }
 
-  private HoodieParquetFileRewriter parquetFileRewriter(MessageType schema, String codec) {
+  private HoodieParquetFileBinaryCopier parquetFileBinaryCopier(MessageType schema, String codec) {
     CompressionCodecName codecName = CompressionCodecName.fromConf(codec);
     HoodieFileMetadataMerger metadataMerger = new HoodieFileMetadataMerger();
-    return new HoodieParquetFileRewriter(conf, codecName, metadataMerger);
+    return new HoodieParquetFileBinaryCopier(conf, codecName, metadataMerger);
   }
 
   private MessageType createSchema() {
@@ -424,23 +434,23 @@ public class TestHoodieParquetFileRewriter {
       PageHeader pageHeader = reader.readPageHeader();
       switch (pageHeader.type) {
         case DICTIONARY_PAGE:
-          rewriter.readBlock(pageHeader.getCompressed_page_size(), reader);
+          writer.readBlock(pageHeader.getCompressed_page_size(), reader);
           break;
         case DATA_PAGE:
           DataPageHeader headerV1 = pageHeader.data_page_header;
           offsets.add(curOffset);
-          rewriter.readBlock(pageHeader.getCompressed_page_size(), reader);
+          writer.readBlock(pageHeader.getCompressed_page_size(), reader);
           readValues += headerV1.getNum_values();
           break;
         case DATA_PAGE_V2:
           DataPageHeaderV2 headerV2 = pageHeader.data_page_header_v2;
           offsets.add(curOffset);
           int rlLength = headerV2.getRepetition_levels_byte_length();
-          rewriter.readBlock(rlLength, reader);
+          writer.readBlock(rlLength, reader);
           int dlLength = headerV2.getDefinition_levels_byte_length();
-          rewriter.readBlock(dlLength, reader);
+          writer.readBlock(dlLength, reader);
           int payLoadLength = pageHeader.getCompressed_page_size() - rlLength - dlLength;
-          rewriter.readBlock(payLoadLength, reader);
+          writer.readBlock(payLoadLength, reader);
           readValues += headerV2.getNum_values();
           break;
         default:
@@ -455,7 +465,7 @@ public class TestHoodieParquetFileRewriter {
     for (TestFile inputFile : inputFiles) {
       ParquetMetadata pmd = getFileMetaData(inputFile.getFileName());
       createdBySet.add(pmd.getFileMetaData().getCreatedBy());
-      assertNull(pmd.getFileMetaData().getKeyValueMetaData().get(HoodieParquetFileRewriter.ORIGINAL_CREATED_BY_KEY));
+      assertNull(pmd.getFileMetaData().getKeyValueMetaData().get(HoodieParquetFileBinaryCopier.ORIGINAL_CREATED_BY_KEY));
     }
 
     // Verify created_by from input files have been deduplicated
@@ -470,7 +480,168 @@ public class TestHoodieParquetFileRewriter {
 
     // Verify original.created.by has been set
     String inputCreatedBy = (String) inputCreatedBys[0];
-    String originalCreatedBy = outFMD.getKeyValueMetaData().get(HoodieParquetFileRewriter.ORIGINAL_CREATED_BY_KEY);
+    String originalCreatedBy = outFMD.getKeyValueMetaData().get(HoodieParquetFileBinaryCopier.ORIGINAL_CREATED_BY_KEY);
     assertEquals(inputCreatedBy, originalCreatedBy);
+  }
+
+  public static class TestFileBuilder {
+    private MessageType schema;
+    private Configuration conf;
+    private Map<String, String> extraMeta = new HashMap<>();
+    private int numRecord = 100000;
+    private ParquetProperties.WriterVersion writerVersion = ParquetProperties.WriterVersion.PARQUET_1_0;
+    private int pageSize = ParquetProperties.DEFAULT_PAGE_SIZE;
+    private String codec = "ZSTD";
+    private String[] encryptColumns = {};
+    private ParquetCipher cipher = ParquetCipher.AES_GCM_V1;
+    private Boolean footerEncryption = false;
+
+    public TestFileBuilder(Configuration conf, MessageType schema) {
+      this.conf = conf;
+      this.schema = schema;
+      conf.set(GroupWriteSupport.PARQUET_EXAMPLE_SCHEMA, schema.toString());
+    }
+
+    public TestFileBuilder withNumRecord(int numRecord) {
+      this.numRecord = numRecord;
+      return this;
+    }
+
+    public TestFileBuilder withEncrytionAlgorithm(ParquetCipher cipher) {
+      this.cipher = cipher;
+      return this;
+    }
+
+    public TestFileBuilder withExtraMeta(Map<String, String> extraMeta) {
+      this.extraMeta = extraMeta;
+      return this;
+    }
+
+    public TestFileBuilder withWriterVersion(ParquetProperties.WriterVersion writerVersion) {
+      this.writerVersion = writerVersion;
+      return this;
+    }
+
+    public TestFileBuilder withPageSize(int pageSize) {
+      this.pageSize = pageSize;
+      return this;
+    }
+
+    public TestFileBuilder withCodec(String codec) {
+      this.codec = codec;
+      return this;
+    }
+
+    public TestFileBuilder withEncryptColumns(String[] encryptColumns) {
+      this.encryptColumns = encryptColumns;
+      return this;
+    }
+
+    public TestFileBuilder withFooterEncryption() {
+      this.footerEncryption = true;
+      return this;
+    }
+
+    public TestFile build()
+        throws IOException {
+      String fileName = createTempFile("test");
+      SimpleGroup[] fileContent = createFileContent(schema);
+      ExampleParquetWriter.Builder builder = ExampleParquetWriter.builder(new Path(fileName))
+          .withConf(conf)
+          .withWriterVersion(writerVersion)
+          .withExtraMetaData(extraMeta)
+          .withValidation(true)
+          .withPageSize(pageSize)
+          .withCompressionCodec(CompressionCodecName.valueOf(codec));
+      try (ParquetWriter writer = builder.build()) {
+        for (int i = 0; i < fileContent.length; i++) {
+          writer.write(fileContent[i]);
+        }
+      }
+      return new TestFile(fileName, fileContent);
+    }
+
+    private SimpleGroup[] createFileContent(MessageType schema) {
+      SimpleGroup[] simpleGroups = new SimpleGroup[numRecord];
+      for (int i = 0; i < simpleGroups.length; i++) {
+        SimpleGroup g = new SimpleGroup(schema);
+        for (Type type : schema.getFields()) {
+          addValueToSimpleGroup(g, type);
+        }
+        simpleGroups[i] = g;
+      }
+      return simpleGroups;
+    }
+
+    private void addValueToSimpleGroup(Group g, Type type) {
+      if (type.isPrimitive()) {
+        PrimitiveType primitiveType = (PrimitiveType) type;
+        if (primitiveType.getPrimitiveTypeName().equals(INT32)) {
+          g.add(type.getName(), getInt());
+        } else if (primitiveType.getPrimitiveTypeName().equals(INT64)) {
+          g.add(type.getName(), getLong());
+        } else if (primitiveType.getPrimitiveTypeName().equals(BINARY)) {
+          g.add(type.getName(), getString());
+        }
+        // Only support 3 types now, more can be added later
+      } else {
+        GroupType groupType = (GroupType) type;
+        Group parentGroup = g.addGroup(groupType.getName());
+        for (Type field : groupType.getFields()) {
+          addValueToSimpleGroup(parentGroup, field);
+        }
+      }
+    }
+
+    private static long getInt() {
+      return ThreadLocalRandom.current().nextInt(10000);
+    }
+
+    private static long getLong() {
+      return ThreadLocalRandom.current().nextLong(100000);
+    }
+
+    private static String getString() {
+      char[] chars = {'a', 'b', 'c', 'd', 'e', 'f', 'g', 'x', 'z', 'y'};
+      StringBuilder sb = new StringBuilder();
+      for (int i = 0; i < 100; i++) {
+        sb.append(chars[ThreadLocalRandom.current().nextInt(10)]);
+      }
+      return sb.toString();
+    }
+
+    public static String createTempFile(String prefix) {
+      try {
+        return Files.createTempDirectory(prefix).toAbsolutePath().toString() + "/test.parquet";
+      } catch (IOException e) {
+        throw new AssertionError("Unable to create temporary file", e);
+      }
+    }
+
+    public static void deleteTempFile(String file) {
+      try {
+        Files.delete(Paths.get(file));
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
+    }
+  }
+
+  public static class TestFile {
+    private final String fileName;
+    private final SimpleGroup[] fileContent;
+
+    public TestFile(String fileName, SimpleGroup[] fileContent) {
+      this.fileName = fileName;
+      this.fileContent = fileContent;
+    }
+
+    public String getFileName() {
+      return this.fileName;
+    }
+
+    public SimpleGroup[] getFileContent() {
+      return this.fileContent;
+    }
   }
 }

@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.io.storage.rewrite;
+package org.apache.hudi.io.storage;
 
 import org.apache.hudi.storage.StoragePath;
 
@@ -27,12 +27,12 @@ import java.util.List;
 import java.util.Properties;
 
 /**
- * HoodieFileRewriter is a high-performance utility designed for efficient merging of data files at the binary level.
+ * HoodieFileBinaryCopier is a high-performance utility designed for efficient merging of data files at the binary level.
  * Unlike conventional hoodie writers, it bypasses costly data processing operations through a block-based approach, like:
  * 1. Merge multi-parquet files at rowgroup level
  * 2. Merge multi-orc files at stripe level
  */
-public interface HoodieFileRewriter {
+public interface HoodieFileBinaryCopier {
 
   long binaryCopy(List<StoragePath> inputFilePaths, List<StoragePath> outputFilePath, MessageType writeSchema, Properties props) throws IOException;
 

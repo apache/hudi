@@ -18,8 +18,8 @@
 
 package org.apache.hudi.parquet.io;
 
-import org.apache.hudi.io.storage.rewrite.HoodieFileMetadataMerger;
-import org.apache.hudi.io.storage.rewrite.HoodieFileRewriter;
+import org.apache.hudi.io.storage.HoodieFileMetadataMerger;
+import org.apache.hudi.io.storage.HoodieFileBinaryCopier;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.hadoop.conf.Configuration;
@@ -46,7 +46,7 @@ import java.util.Queue;
 import java.util.Set;
 
 /**
- * HoodieParquetFileRewriter is a high-performance utility designed for efficient merging of Parquet files at the binary level.
+ * HoodieParquetFileBinaryCopier is a high-performance utility designed for efficient merging of Parquet files at the binary level.
  * Unlike conventional Parquet writers, it bypasses costly data processing operations through a block-based approach:
  *
  * Core Capabilities:
@@ -63,9 +63,9 @@ import java.util.Set;
  *    2) Updated row group offsets
  *    3) Validated schema consistency
  */
-public class HoodieParquetFileRewriter extends HoodieParquetRewriterBase implements HoodieFileRewriter {
+public class HoodieParquetFileBinaryCopier extends HoodieParquetBinaryCopyBase implements HoodieFileBinaryCopier {
   
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieParquetFileRewriter.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieParquetFileBinaryCopier.class);
   private final CompressionCodecName codecName;
 
   // Reader and relevant states of the in-processing input file
@@ -78,7 +78,7 @@ public class HoodieParquetFileRewriter extends HoodieParquetRewriterBase impleme
 
   private HoodieFileMetadataMerger metadataMerger;
 
-  public HoodieParquetFileRewriter(
+  public HoodieParquetFileBinaryCopier(
       Configuration conf,
       CompressionCodecName codecName,
       HoodieFileMetadataMerger metadataMerger) {
@@ -142,7 +142,7 @@ public class HoodieParquetFileRewriter extends HoodieParquetRewriterBase impleme
   // Routines to get reader of next input file and set up relevant states
   private void initNextReader() {
     if (reader != null) {
-      LOG.info("Finish rewriting input file: {}", reader.getFile());
+      LOG.info("Finish binary copy input file: {}", reader.getFile());
     }
 
     if (inputFiles.isEmpty()) {
@@ -151,6 +151,6 @@ public class HoodieParquetFileRewriter extends HoodieParquetRewriterBase impleme
     }
 
     reader = inputFiles.poll();
-    LOG.info("Rewriting input file: {}, remaining files: {}", reader.getFile(), inputFiles.size());
+    LOG.info("Merging input file: {}, remaining files: {}", reader.getFile(), inputFiles.size());
   }
 }

@@ -29,7 +29,7 @@ import org.apache.hudi.common.model.ClusteringGroupInfo;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.HoodieBinaryCopyHandle;
-import org.apache.hudi.io.SingleFileHandleRewriteFactory;
+import org.apache.hudi.io.BinaryCopyHandleFactory;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -93,8 +93,8 @@ public class SparkBinaryCopyClusteringExecutionStrategy<T> extends SingleSparkJo
         .map(op -> new StoragePath(op.getDataFilePath()))
         .collect(Collectors.toList());
 
-    SingleFileHandleRewriteFactory rewriteFactory = new SingleFileHandleRewriteFactory(inputFilePaths);
-    HoodieBinaryCopyHandle hoodieRewriteHandle = rewriteFactory.create(
+    BinaryCopyHandleFactory factory = new BinaryCopyHandleFactory(inputFilePaths);
+    HoodieBinaryCopyHandle handler = factory.create(
         getWriteConfig(),
         instantTime,
         getHoodieTable(),
@@ -102,8 +102,8 @@ public class SparkBinaryCopyClusteringExecutionStrategy<T> extends SingleSparkJo
         FSUtils.createNewFileIdPfx(),
         taskContextSupplier);
 
-    hoodieRewriteHandle.binaryCopy();
-    return new ArrayList<>(hoodieRewriteHandle.close());
+    handler.write();
+    return new ArrayList<>(handler.close());
   }
 
   private boolean supportBinaryStreamCopy() {

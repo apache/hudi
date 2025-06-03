@@ -30,12 +30,12 @@ import java.util.List;
  * Combine all input file paths quickly into a single large file at block level.
  * Without performing extra operations like data serialization/deserialization or compression/decompression.
  */
-public class SingleFileHandleRewriteFactory<T, I, K, O>
+public class BinaryCopyHandleFactory<T, I, K, O>
     extends WriteHandleFactory<T, I, K, O> implements Serializable {
 
   private final List<StoragePath> inputFilePaths;
 
-  public SingleFileHandleRewriteFactory(List<StoragePath> inputFilePaths) {
+  public BinaryCopyHandleFactory(List<StoragePath> inputFilePaths) {
     this.inputFilePaths = inputFilePaths;
   }
 

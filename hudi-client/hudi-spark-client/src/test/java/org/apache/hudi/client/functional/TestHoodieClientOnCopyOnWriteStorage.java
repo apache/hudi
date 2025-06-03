@@ -1018,7 +1018,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
   @Test
   public void testBinaryCopyClustering() throws Exception {
-    String strategy = "org.apache.hudi.client.clustering.run.strategy.SparkStreamCopyClusteringExecutionStrategy";
+    String strategy = "org.apache.hudi.client.clustering.run.strategy.SparkBinaryCopyClusteringExecutionStrategy";
     HoodieClusteringConfig config = createClusteringBuilder(true, 1).withClusteringExecutionStrategyClass(strategy).build();
     testInsertAndClustering(config, true, true,
         false, SqlQueryEqualityPreCommitValidator.class.getName(), COUNT_SQL_QUERY_FOR_VALIDATION, "");

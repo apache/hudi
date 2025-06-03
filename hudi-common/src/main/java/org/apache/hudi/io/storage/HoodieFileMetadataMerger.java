@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.io.storage.rewrite;
+package org.apache.hudi.io.storage;
 
 import org.apache.hudi.avro.HoodieBloomFilterWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;

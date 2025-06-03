@@ -19,22 +19,23 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.io.storage.rewrite.HoodieFileMetadataMerger;
-import org.apache.hudi.io.storage.rewrite.HoodieFileRewriter;
-import org.apache.hudi.io.storage.rewrite.HoodieFileRewriterFactory;
+import org.apache.hudi.io.storage.HoodieFileMetadataMerger;
+import org.apache.hudi.io.storage.HoodieFileBinaryCopier;
+import org.apache.hudi.parquet.io.HoodieParquetFileBinaryCopier;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.avro.AvroSchemaConverter;
+import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.parquet.schema.MessageType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,17 +45,17 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * Compared to other Write Handles, HoodieBinaryCopyHandle rewrites multiple inputFiles into a single outputFile without performing
+ * Compared to other Write Handles, HoodieBinaryCopyHandle merge multiple inputFiles into a single outputFile without performing
  * extra operations like data serialization/deserialization or compression/decompression.
  *
- * Instead, it directly merges file blocks (e.g., Parquet row groups) at the binary stream level and rewrites the metadata,
+ * Instead, it directly merges file blocks (e.g., Parquet row groups) at the binary stream level and merge the metadata,
  * enabling highly efficient data consolidation.
  *
  */
 public class HoodieBinaryCopyHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O> {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieBinaryCopyHandle.class);
-  protected final HoodieFileRewriter rewriter;
+  protected final HoodieFileBinaryCopier writer;
   private final List<StoragePath> inputFiles;
   private final StoragePath path;
   private final Configuration conf;
@@ -71,34 +72,27 @@ public class HoodieBinaryCopyHandle<T, I, K, O> extends HoodieWriteHandle<T, I, 
       TaskContextSupplier taskContextSupplier,
       List<StoragePath> inputFilePaths) {
     super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier);
-    try {
-      this.inputFiles = inputFilePaths;
-      this.conf = hoodieTable.getStorageConf().unwrapAs(Configuration.class);
-      this.writeScheMessageType = new AvroSchemaConverter(conf).convert(writeSchemaWithMetaFields);
-      HoodieFileMetadataMerger fileMetadataMerger = new HoodieFileMetadataMerger();
-      this.path = makeNewPath(partitionPath);
-      writeStatus.setFileId(fileId);
-      writeStatus.setPartitionPath(partitionPath);
-      writeStatus.setStat(new HoodieWriteStat());
-      this.rewriter = HoodieFileRewriterFactory.getFileRewriter(
-          path,
-          conf,
-          hoodieTable.getConfig(),
-          fileMetadataMerger,
-          config.getRecordMerger().getRecordType());
-    } catch (IOException e) {
-      LOG.error("Fail to create file rewriter, cause: ", e);
-      throw new HoodieException(e);
-    }
+    this.inputFiles = inputFilePaths;
+    this.conf = hoodieTable.getStorageConf().unwrapAs(Configuration.class);
+    this.writeScheMessageType = new AvroSchemaConverter(conf).convert(writeSchemaWithMetaFields);
+    HoodieFileMetadataMerger fileMetadataMerger = new HoodieFileMetadataMerger();
+    this.path = makeNewPath(partitionPath);
+    writeStatus.setFileId(fileId);
+    writeStatus.setPartitionPath(partitionPath);
+    writeStatus.setStat(new HoodieWriteStat());
+    this.writer = new HoodieParquetFileBinaryCopier(
+        conf,
+        CompressionCodecName.fromConf(config.getStringOrDefault(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME)),
+        fileMetadataMerger);
   }
 
-  public void binaryCopy() {
+  public void write() {
     LOG.info("Start to merge source files " + this.inputFiles + " into target file: " + this.path
         + ". Please pay attention that we will not rolling files based on max-file-size config during binary copy.");
     HoodieTimer timer = HoodieTimer.start();
     long records = 0;
     try {
-      records = this.rewriter.binaryCopy(inputFiles, Collections.singletonList(path), writeScheMessageType, config.getProps());
+      records = this.writer.binaryCopy(inputFiles, Collections.singletonList(path), writeScheMessageType, config.getProps());
     } catch (IOException e) {
       throw new HoodieIOException(e.getMessage(), e);
     } finally {
@@ -112,7 +106,7 @@ public class HoodieBinaryCopyHandle<T, I, K, O> extends HoodieWriteHandle<T, I, 
   public List<WriteStatus> close() {
     LOG.info("Closing the file " + writeStatus.getFileId() + " as we are done with all the records " + recordsWritten);
     try {
-      this.rewriter.close();
+      this.writer.close();
 
       HoodieWriteStat stat = writeStatus.getStat();
       stat.setPartitionPath(writeStatus.getPartitionPath());

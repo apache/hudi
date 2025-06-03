@@ -91,9 +91,9 @@ import static org.apache.parquet.hadoop.ParquetWriter.MAX_PADDING_SIZE_DEFAULT;
  *    3. We need to combine file metas added by hudi, such as 'hoodie_min_record_key'/'hoodie_max_record_key'/'org.apache.hudi.bloomfilter'
  *    4. We need to overwrite column '_hoodie_file_name' with the output file name
  */
-public abstract class HoodieParquetRewriterBase implements Closeable {
+public abstract class HoodieParquetBinaryCopyBase implements Closeable {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieParquetRewriterBase.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieParquetBinaryCopyBase.class);
 
   // Key to store original writer version in the file key-value metadata
   public static final String ORIGINAL_CREATED_BY_KEY = "original.created.by";
@@ -119,7 +119,7 @@ public abstract class HoodieParquetRewriterBase implements Closeable {
 
   protected Configuration conf;
 
-  public HoodieParquetRewriterBase(Configuration conf) {
+  public HoodieParquetBinaryCopyBase(Configuration conf) {
     this.conf = conf;
   }
 
@@ -142,9 +142,9 @@ public abstract class HoodieParquetRewriterBase implements Closeable {
           ParquetProperties.DEFAULT_PAGE_WRITE_CHECKSUM_ENABLED,
           (FileEncryptionProperties) null);
       writer.start();
-      LOG.info("init rewriter ");
+      LOG.info("init writer ");
     } catch (Exception e) {
-      LOG.error("failed to init parquetRewriter", e);
+      LOG.error("failed to init parquet writer", e);
       throw new HoodieException(e);
     }
   }
