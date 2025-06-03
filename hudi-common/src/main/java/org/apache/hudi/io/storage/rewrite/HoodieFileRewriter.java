@@ -18,11 +18,23 @@
 
 package org.apache.hudi.io.storage.rewrite;
 
-import java.io.IOException;
+import org.apache.hudi.storage.StoragePath;
 
+import org.apache.parquet.schema.MessageType;
+
+import java.io.IOException;
+import java.util.List;
+import java.util.Properties;
+
+/**
+ * HoodieFileRewriter is a high-performance utility designed for efficient merging of data files at the binary level.
+ * Unlike conventional hoodie writers, it bypasses costly data processing operations through a block-based approach, like:
+ * 1. Merge multi-parquet files at rowgroup level
+ * 2. Merge multi-orc files at stripe level
+ */
 public interface HoodieFileRewriter {
 
-  long rewrite() throws IOException;
+  long binaryCopy(List<StoragePath> inputFilePaths, List<StoragePath> outputFilePath, MessageType writeSchema, Properties props) throws IOException;
 
   void close() throws IOException;
 }

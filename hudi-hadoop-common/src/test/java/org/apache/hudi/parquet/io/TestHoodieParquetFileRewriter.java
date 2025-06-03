@@ -54,8 +54,10 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -102,7 +104,12 @@ public class TestHoodieParquetFileRewriter {
     inputFiles.add(makeTestFile(schema, "GZIP"));
 
     rewriter = parquetFileRewriter(schema, "GZIP");
-    rewriter.rewrite();
+    List<StoragePath> inputPaths = inputFiles.stream()
+        .map(TestFile::getFileName)
+        .map(StoragePath::new)
+        .collect(Collectors.toList());
+    StoragePath outputPath = new StoragePath(outputFile);
+    rewriter.binaryCopy(inputPaths, Collections.singletonList(outputPath), schema, new Properties());
     rewriter.close();
 
     // Verify the schema are not changed
@@ -132,7 +139,12 @@ public class TestHoodieParquetFileRewriter {
     inputFiles.add(makeTestFile(schema, "UNCOMPRESSED"));
 
     rewriter = parquetFileRewriter(schema, "ZSTD");
-    rewriter.rewrite();
+    List<StoragePath> inputPaths = inputFiles.stream()
+        .map(TestFile::getFileName)
+        .map(StoragePath::new)
+        .collect(Collectors.toList());
+    StoragePath outputPath = new StoragePath(outputFile);
+    rewriter.binaryCopy(inputPaths, Collections.singletonList(outputPath), schema, new Properties());
     rewriter.close();
 
     // Verify the schema are not changed for the columns not pruned
@@ -172,7 +184,12 @@ public class TestHoodieParquetFileRewriter {
     inputFiles.add(makeTestFile(schema2, "UNCOMPRESSED"));
 
     rewriter = parquetFileRewriter(schema1, "UNCOMPRESSED");
-    rewriter.rewrite();
+    List<StoragePath> inputPaths = inputFiles.stream()
+        .map(TestFile::getFileName)
+        .map(StoragePath::new)
+        .collect(Collectors.toList());
+    StoragePath outputPath = new StoragePath(outputFile);
+    rewriter.binaryCopy(inputPaths, Collections.singletonList(outputPath), schema1, new Properties());
     rewriter.close();
 
     // Verify the schema are not changed for the columns not pruned
@@ -208,7 +225,12 @@ public class TestHoodieParquetFileRewriter {
     inputFiles.add(makeTestFile(schema, "GZIP"));
 
     rewriter = parquetFileRewriter(schema, "GZIP");
-    rewriter.rewrite();
+    List<StoragePath> inputPaths = inputFiles.stream()
+        .map(TestFile::getFileName)
+        .map(StoragePath::new)
+        .collect(Collectors.toList());
+    StoragePath outputPath = new StoragePath(outputFile);
+    rewriter.binaryCopy(inputPaths, Collections.singletonList(outputPath), schema, new Properties());
     rewriter.close();
 
     // Verify the schema are not changed for the columns not pruned
@@ -238,14 +260,9 @@ public class TestHoodieParquetFileRewriter {
   }
 
   private HoodieParquetFileRewriter parquetFileRewriter(MessageType schema, String codec) {
-    List<StoragePath> inputPaths = inputFiles.stream()
-        .map(TestFile::getFileName)
-        .map(StoragePath::new)
-        .collect(Collectors.toList());
-    StoragePath outputPath = new StoragePath(outputFile);
     CompressionCodecName codecName = CompressionCodecName.fromConf(codec);
     HoodieFileMetadataMerger metadataMerger = new HoodieFileMetadataMerger();
-    return new HoodieParquetFileRewriter(inputPaths, outputPath, conf, codecName, metadataMerger, schema);
+    return new HoodieParquetFileRewriter(conf, codecName, metadataMerger);
   }
 
   private MessageType createSchema() {

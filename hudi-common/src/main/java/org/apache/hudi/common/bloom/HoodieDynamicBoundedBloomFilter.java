@@ -152,11 +152,7 @@ public class HoodieDynamicBoundedBloomFilter implements BloomFilter {
   private HoodieDynamicBoundedBloomFilter rescaleFromTarget(int targetMatrixLength) {
     int initMatrixLength = this.internalDynamicBloomFilter.getMatrixLength();
     int needAddRowNum = targetMatrixLength - initMatrixLength;
-    if (needAddRowNum > 0) {
-      for (int i = 0; i < needAddRowNum; i++) {
-        this.internalDynamicBloomFilter.addRow();
-      }
-    }
+    this.internalDynamicBloomFilter.addRows(needAddRowNum);
     return this;
   }
 

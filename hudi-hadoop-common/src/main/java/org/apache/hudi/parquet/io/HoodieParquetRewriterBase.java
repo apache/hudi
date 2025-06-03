@@ -71,6 +71,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -116,21 +117,17 @@ public abstract class HoodieParquetRewriterBase implements Closeable {
   // Schema of input files (should be the same) and to write to the output file
   protected MessageType requiredSchema = null;
 
-  private Path outPutFile;
-
   protected Configuration conf;
 
-  public HoodieParquetRewriterBase(Path outPutFile, Configuration conf) {
-    this.outPutFile = outPutFile;
+  public HoodieParquetRewriterBase(Configuration conf) {
     this.conf = conf;
-
-    // For meta column '_hoodie_file_name', rewriter will mask value with output file name
-    Binary maskValue = Binary.fromString(outPutFile.getName());
-    maskColumns.put(ColumnPath.fromDotString(HoodieRecord.FILENAME_METADATA_FIELD), maskValue);
   }
 
-  protected void initFileWriter(CompressionCodecName newCodecName, MessageType schema) {
+  protected void initFileWriter(Path outPutFile, CompressionCodecName newCodecName, MessageType schema) {
     try {
+      // For meta column '_hoodie_file_name', rewriter will mask value with output file name
+      Binary maskValue = Binary.fromString(outPutFile.getName());
+      maskColumns.put(ColumnPath.fromDotString(HoodieRecord.FILENAME_METADATA_FIELD), maskValue);
       this.requiredSchema = schema;
       this.newCodecName = newCodecName;
       ParquetFileWriter.Mode writerMode = ParquetFileWriter.Mode.CREATE;
@@ -155,7 +152,10 @@ public abstract class HoodieParquetRewriterBase implements Closeable {
   @Override
   public void close() throws IOException {
     Map<String, String> extraMetaData = finalizeMetadata();
-    writer.end(extraMetaData == null ? new HashMap<>() : extraMetaData);
+    extraMetaData = extraMetaData == null ? new HashMap<>() : extraMetaData;
+    extraMetaData.remove("parquet.avro.schema");
+    extraMetaData.remove("org.apache.spark.sql.parquet.row.metadata");
+    writer.end(extraMetaData);
   }
 
   protected abstract Map<String, String> finalizeMetadata();
@@ -182,14 +182,33 @@ public abstract class HoodieParquetRewriterBase implements Closeable {
 
     writer.startBlock(store.getRowCount());
     List<ColumnChunkMetaData> columnsInOrder = block.getColumns();
+    List<ColumnDescriptor> converted = new ArrayList<>();
 
     for (int i = 0, columnId = 0; i < columnsInOrder.size(); i++) {
       ColumnChunkMetaData chunk = columnsInOrder.get(i);
       ColumnDescriptor descriptor = descriptorsMap.get(chunk.getPath());
 
+      // resolve the conflict schema between avro parquet write support and spark native parquet write support
+      if (descriptor == null) {
+        String[] path = chunk.getPath().toArray();
+        if (path.length == 3 && path[1] == "bag") {
+          // Convert from xxx.bag.array to xxx.list.element
+          path[1] = "list";
+          path[2] = "element";
+          descriptor = descriptorsMap.get(chunk.getPath());
+          converted.add(descriptor);
+        }
+      }
+
       // This column has been pruned.
       if (descriptor == null) {
         continue;
+      }
+
+      // If a column is encrypted, we simply throw exception.
+      // Later we can add a feature to trans-encrypt it with different keys
+      if (chunk.isEncrypted()) {
+        throw new IOException("Column " + chunk.getPath().toDotString() + " is already encrypted");
       }
       reader.setStreamPosition(chunk.getStartingPos());
       CompressionCodecName newCodecName = this.newCodecName == null ? chunk.getCodec() : this.newCodecName;
@@ -227,7 +246,10 @@ public abstract class HoodieParquetRewriterBase implements Closeable {
     ParquetMetadata meta = reader.getFooter();
     ColumnChunkMetaData columnChunkMetaData = columnsInOrder.get(0);
     EncodingStats encodingStats = columnChunkMetaData.getEncodingStats();
-    List<ColumnDescriptor> missedColumns = missedColumns(requiredSchema, meta.getFileMetaData().getSchema());
+    List<ColumnDescriptor> missedColumns = missedColumns(requiredSchema, meta.getFileMetaData().getSchema())
+        .stream()
+        .filter(c -> !converted.contains(c))
+        .collect(Collectors.toList());
     for (ColumnDescriptor descriptor : missedColumns) {
       addNullColumn(
           descriptor,
@@ -577,7 +599,8 @@ public abstract class HoodieParquetRewriterBase implements Closeable {
       if (!field.isPrimitive() && path[0].equals(field.getName())) {
         Type newType = extractField(field.asGroupType(), type);
         if (newType != null) {
-          if (LogicalTypeAnnotation.mapType().equals(field.getLogicalTypeAnnotation())) {
+          if (LogicalTypeAnnotation.mapType().equals(field.getLogicalTypeAnnotation())
+              || LogicalTypeAnnotation.listType().equals(field.getLogicalTypeAnnotation())) {
             return new MessageType(schema.getName(), new MessageType(field.getName(), newType));
           } else {
             return new MessageType(schema.getName(), newType);

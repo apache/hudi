@@ -67,25 +67,25 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                             String partitionPath, String fileId, TaskContextSupplier taskContextSupplier) {
     this(config, instantTime, hoodieTable, partitionPath, fileId, Option.empty(),
-        taskContextSupplier, false, true);
+        taskContextSupplier, false);
   }
 
   public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                             String partitionPath, String fileId, TaskContextSupplier taskContextSupplier,
                             boolean preserveMetadata) {
     this(config, instantTime, hoodieTable, partitionPath, fileId, Option.empty(),
-        taskContextSupplier, preserveMetadata, true);
+        taskContextSupplier, preserveMetadata);
   }
 
   public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                             String partitionPath, String fileId, Option<Schema> overriddenSchema,
                             TaskContextSupplier taskContextSupplier) {
-    this(config, instantTime, hoodieTable, partitionPath, fileId, overriddenSchema, taskContextSupplier, false, true);
+    this(config, instantTime, hoodieTable, partitionPath, fileId, overriddenSchema, taskContextSupplier, false);
   }
 
   public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                             String partitionPath, String fileId, Option<Schema> overriddenSchema,
-                            TaskContextSupplier taskContextSupplier, boolean preserveMetadata, boolean initWriter) {
+                            TaskContextSupplier taskContextSupplier, boolean preserveMetadata) {
     super(config, instantTime, partitionPath, fileId, hoodieTable, overriddenSchema,
         taskContextSupplier);
     this.preserveMetadata = preserveMetadata;
@@ -103,9 +103,9 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       partitionMetadata.trySave();
       createMarkerFile(partitionPath,
           FSUtils.makeBaseFileName(this.instantTime, this.writeToken, this.fileId, hoodieTable.getBaseFileExtension()));
-      this.fileWriter = initWriter
-          ? HoodieFileWriterFactory.getFileWriter(instantTime, path, hoodieTable.getStorage(), config,
-              writeSchemaWithMetaFields, this.taskContextSupplier, config.getRecordMerger().getRecordType()) : null;
+      this.fileWriter =
+          HoodieFileWriterFactory.getFileWriter(instantTime, path, hoodieTable.getStorage(), config,
+              writeSchemaWithMetaFields, this.taskContextSupplier, config.getRecordMerger().getRecordType());
     } catch (IOException e) {
       throw new HoodieInsertException("Failed to initialize HoodieStorageWriter for path " + path, e);
     }

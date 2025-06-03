@@ -217,6 +217,22 @@ class InternalDynamicBloomFilter extends InternalFilter {
     matrix = tmp;
   }
 
+  protected void addRows(int size) {
+    if (size <= 0) {
+      return;
+    } else if (size == 1) {
+      addRow();
+      return;
+    }
+
+    InternalBloomFilter[] tmp = new InternalBloomFilter[matrix.length + size];
+    System.arraycopy(matrix, 0, tmp, 0, matrix.length);
+    for (int i = matrix.length; i < tmp.length; i++) {
+      tmp[i] = new InternalBloomFilter(vectorSize, nbHash, hashType);
+    }
+    matrix = tmp;
+  }
+
   /**
    * Returns the active standard Bloom filter in <i>this</i> dynamic Bloom filter.
    *

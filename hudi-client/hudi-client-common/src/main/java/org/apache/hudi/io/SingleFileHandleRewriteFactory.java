@@ -27,36 +27,33 @@ import java.io.Serializable;
 import java.util.List;
 
 /**
- * Rewrite all inputFilePaths related files into one huge file.
+ * Combine all input file paths quickly into a single large file at block level.
+ * Without performing extra operations like data serialization/deserialization or compression/decompression.
  */
 public class SingleFileHandleRewriteFactory<T, I, K, O>
     extends WriteHandleFactory<T, I, K, O> implements Serializable {
 
-  private final boolean preserveMetadata;
-
   private final List<StoragePath> inputFilePaths;
 
-  public SingleFileHandleRewriteFactory(List<StoragePath> inputFilePaths, boolean preserveMetadata) {
+  public SingleFileHandleRewriteFactory(List<StoragePath> inputFilePaths) {
     this.inputFilePaths = inputFilePaths;
-    this.preserveMetadata = preserveMetadata;
   }
 
   @Override
-  public HoodieCreateRewriteHandle<T, I, K, O> create(
+  public HoodieBinaryCopyHandle<T, I, K, O> create(
       HoodieWriteConfig config,
       String commitTime,
       HoodieTable<T, I, K, O> hoodieTable,
       String partitionPath,
       String fileIdPrefix,
       TaskContextSupplier taskContextSupplier) {
-    return new HoodieCreateRewriteHandle(
+    return new HoodieBinaryCopyHandle(
         config,
         commitTime,
         partitionPath,
         getNextFileId(fileIdPrefix),
         hoodieTable,
         taskContextSupplier,
-        inputFilePaths,
-        preserveMetadata);
+        inputFilePaths);
   }
 }

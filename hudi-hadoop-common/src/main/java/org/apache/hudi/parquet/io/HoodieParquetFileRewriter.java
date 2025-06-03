@@ -41,12 +41,32 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Queue;
 import java.util.Set;
 
+/**
+ * HoodieParquetFileRewriter is a high-performance utility designed for efficient merging of Parquet files at the binary level.
+ * Unlike conventional Parquet writers, it bypasses costly data processing operations through a block-based approach:
+ *
+ * Core Capabilities:
+ * 1. Zero-Processing Merge
+ *    Directly concatenates raw Parquet data blocks (row groups) from input files
+ *    Avoids:
+ *      1) Data serialization/deserialization
+ *      2) Compression/decompression cycles
+ *      3) Record-level reprocessing
+ *
+ * 2. Metadata Reconstruction
+ *    Dynamically rebuilds file metadata:
+ *    1) New footer with merged statistics
+ *    2) Updated row group offsets
+ *    3) Validated schema consistency
+ */
 public class HoodieParquetFileRewriter extends HoodieParquetRewriterBase implements HoodieFileRewriter {
   
   private static final Logger LOG = LoggerFactory.getLogger(HoodieParquetFileRewriter.class);
+  private final CompressionCodecName codecName;
 
   // Reader and relevant states of the in-processing input file
   private Queue<CompressionConverter.TransParquetFileReader> inputFiles = new LinkedList<>();
@@ -59,17 +79,12 @@ public class HoodieParquetFileRewriter extends HoodieParquetRewriterBase impleme
   private HoodieFileMetadataMerger metadataMerger;
 
   public HoodieParquetFileRewriter(
-      List<StoragePath> inputFilesPath,
-      StoragePath outPutFile,
       Configuration conf,
       CompressionCodecName codecName,
-      HoodieFileMetadataMerger metadataMerger,
-      MessageType writeSchema) {
-    super(new Path(outPutFile.toUri()), conf);
+      HoodieFileMetadataMerger metadataMerger) {
+    super(conf);
     this.metadataMerger = metadataMerger;
-    openInputFiles(inputFilesPath, conf);
-    initFileWriter(codecName, writeSchema);
-    initNextReader();
+    this.codecName = codecName;
   }
 
   @Override
@@ -77,8 +92,18 @@ public class HoodieParquetFileRewriter extends HoodieParquetRewriterBase impleme
     return this.extraMetaData;
   }
 
+  /**
+   * Merge all inputFilePaths to outputFilePath at block level
+   */
   @Override
-  public long rewrite() throws IOException {
+  public long binaryCopy(List<StoragePath> inputFilePaths,
+                         List<StoragePath> outputFilePath,
+                         MessageType writeSchema,
+                         Properties props) throws IOException {
+    openInputFiles(inputFilePaths, conf);
+    initFileWriter(new Path(outputFilePath.get(0).toUri()), codecName, writeSchema);
+    initNextReader();
+
     Set<String> allOriginalCreatedBys = new HashSet<>();
     while (reader != null) {
       List<BlockMetaData> rowGroups = reader.getRowGroups();

@@ -19,17 +19,16 @@
 package org.apache.hudi.io.storage.rewrite;
 
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.StoragePath;
 
-import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 
 import java.io.IOException;
-import java.util.List;
 
 import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 
@@ -48,25 +47,22 @@ public class HoodieFileRewriterFactory {
   }
 
   public static <T, I, K, O> HoodieFileRewriter getFileRewriter(
-      List<StoragePath> inputFilePaths,
       StoragePath targetFilePath,
       Configuration conf,
       HoodieConfig config,
       HoodieFileMetadataMerger metadataMerger,
-      HoodieRecordType recordType,
-      Schema writeSchemaWithMetaFields) throws IOException {
+      HoodieRecordType recordType) throws IOException {
     String extension = FSUtils.getFileExtension(targetFilePath.getName());
     HoodieFileRewriterFactory factory = getWriterFactory(recordType, extension);
-    return factory.newFileRewriter(inputFilePaths, targetFilePath, conf, config, metadataMerger, writeSchemaWithMetaFields);
+    String compressionCodecName = config.getStringOrDefault(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME);
+    return factory.newFileRewriter(conf, compressionCodecName, metadataMerger);
   }
 
   protected <T> HoodieFileRewriter newFileRewriter(
-      List<StoragePath> inputFilePaths,
-      StoragePath targetFilePath,
       Configuration conf,
-      HoodieConfig config,
-      HoodieFileMetadataMerger metadataMerger,
-      Schema writeSchemaWithMetaFields) throws IOException {
+      String compressionCodecName,
+      HoodieFileMetadataMerger metadataMerger) {
+
     throw new UnsupportedOperationException();
   }
 }

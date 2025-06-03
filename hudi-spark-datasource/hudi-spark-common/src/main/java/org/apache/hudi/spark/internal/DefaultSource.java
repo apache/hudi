@@ -62,7 +62,7 @@ public class DefaultSource extends BaseDefaultSource implements TableProvider {
     HoodieDataTypeUtils.tryOverrideParquetWriteLegacyFormatProperty(newProps, schema);
     // 1st arg to createHoodieConfig is not really required to be set. but passing it anyways.
     HoodieWriteConfig config = DataSourceUtils.createHoodieConfig(newProps.get(HoodieWriteConfig.AVRO_SCHEMA_STRING.key()), path, tblName, newProps);
-    return new HoodieDataSourceInternalTable(instantTime, config, schema, getSparkSession(),
+    return new HoodieDataSourceInternalTable(instantTime, config, schema.asNullable(), getSparkSession(),
         getConfiguration(), newProps, populateMetaFields, arePartitionRecordsSorted);
   }
 }
