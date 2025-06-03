@@ -531,7 +531,7 @@ public class HoodieClientTestBase extends HoodieSparkClientTestHarness {
     JavaRDD<WriteStatus> result = jsc.parallelize(statusList, 1);
     assertNoWriteErrors(statusList);
     // validate isMetadata() in write status
-    statusList.forEach(writeStatus -> assertFalse(writeStatus.isMetadataTable()));
+    statusList.forEach(writeStatus -> assertFalse(writeStatus.isUpdatesMetadataTable()));
 
     if (!skipCommit) {
       client.commit(newCommitTime, result);

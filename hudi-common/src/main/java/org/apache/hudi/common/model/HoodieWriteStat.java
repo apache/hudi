@@ -382,10 +382,8 @@ public class HoodieWriteStat extends HoodieReadStats {
     Map<String, HoodieColumnRangeMetadata<Comparable>> mergedStats = new HashMap<>(stats1);
     for (Map.Entry<String, HoodieColumnRangeMetadata<Comparable>> entry : stats2.entrySet()) {
       final String colName = entry.getKey();
-      final HoodieColumnRangeMetadata<Comparable> metadata = mergedStats.containsKey(colName)
-          ? HoodieColumnRangeMetadata.merge(mergedStats.get(colName), entry.getValue())
-          : entry.getValue();
-      mergedStats.put(colName, metadata);
+      mergedStats.merge(colName, entry.getValue(),
+          (oldValue, newValue) -> HoodieColumnRangeMetadata.merge(oldValue, newValue));
     }
     return mergedStats;
   }
