@@ -169,7 +169,8 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
         compactionOperation,
         instantTime,
         flinkTable.getTaskContextSupplier(),
-        readerContextOpt);
+        readerContextOpt,
+        flinkTable);
     compactionMetrics.endCompaction();
     collector.collect(new CompactionCommitEvent(instantTime, compactionOperation.getFileId(), writeStatuses, taskID));
   }
