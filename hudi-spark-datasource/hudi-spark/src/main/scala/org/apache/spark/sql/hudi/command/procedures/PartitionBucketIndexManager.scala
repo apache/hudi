@@ -21,7 +21,7 @@ import org.apache.hudi.{AvroConversionUtils, HoodieCLIUtils, HoodieSparkSqlWrite
 import org.apache.hudi.DataSourceWriteOptions.{BULK_INSERT_OPERATION_OPT_VAL, ENABLE_ROW_WRITER, OPERATION}
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.client.SparkRDDWriteClient
-import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieReaderConfig, SerializableSchema}
+import org.apache.hudi.common.config.{HoodieMetadataConfig, SerializableSchema}
 import org.apache.hudi.common.engine.{HoodieEngineContext, ReaderContextFactory}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{PartitionBucketIndexHashingConfig, WriteOperationType}

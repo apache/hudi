@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,23 +16,27 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.index.hbase;
+package org.apache.hudi.client.utils;
 
-import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.common.util.collection.ClosableIterator;
+
+import java.util.Iterator;
+import java.util.List;
 
 /**
- * Extends {@link SparkHoodieHBaseIndex}, add random prefix to key for avoiding data skew issue in hbase regions.
+ * Provides closeable iterator interface over list of iterators. Consumes all records from first iterator element
+ * before moving to next iterator in the list. That is concatenating elements across multiple iterators.
  */
-public class RebalancedSparkHoodieHBaseIndex extends SparkHoodieHBaseIndex  {
+public class CloseableConcatenatingIterator<T> extends ConcatenatingIterator<T> {
 
-  public RebalancedSparkHoodieHBaseIndex(HoodieWriteConfig config) {
-    super(config);
+  public CloseableConcatenatingIterator(List<ClosableIterator<T>> iterators) {
+    super(iterators);
   }
 
   @Override
-  protected String getHBaseKey(String originalKey) {
-    int bucket = Math.abs(originalKey.hashCode()) % config.getHBaseIndexRegionCount();
-    String bucketStr = String.format("%0" + String.valueOf(config.getHBaseIndexRegionCount() - 1).length() + "d", bucket);
-    return bucketStr + originalKey;
+  protected Iterator<T> advanceIterator() {
+    ClosableIterator<T> previous = (ClosableIterator<T>) super.advanceIterator();
+    previous.close();
+    return previous;
   }
 }

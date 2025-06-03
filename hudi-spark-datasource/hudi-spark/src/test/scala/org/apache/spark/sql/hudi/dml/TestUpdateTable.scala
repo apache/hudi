@@ -355,8 +355,7 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
 
         val client = HoodieCLIUtils.createHoodieWriteClient(spark, basePath, Map.empty, Option(tableName))
         // Generate the first clustering plan
-        val firstScheduleInstant = client.createNewInstantTime()
-        client.scheduleClusteringAtInstant(firstScheduleInstant, HOption.empty())
+        val firstScheduleInstant = client.scheduleClustering(HOption.empty()).get()
         checkAnswer(s"call show_clustering(path => '$basePath', show_involved_partition => true)")(
           Seq(firstScheduleInstant, 3, HoodieInstant.State.REQUESTED.name(), "partition=1000,partition=1001,partition=1002")
         )

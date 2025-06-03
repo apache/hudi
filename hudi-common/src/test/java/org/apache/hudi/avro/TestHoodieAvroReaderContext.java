@@ -159,7 +159,8 @@ class TestHoodieAvroReaderContext {
   @Test
   void getNestedField() {
     when(tableConfig.populateMetaFields()).thenReturn(true);
-    HoodieAvroReaderContext avroReaderContext = new HoodieAvroReaderContext(storageConfig, tableConfig);
+    HoodieAvroReaderContext avroReaderContext =
+        new HoodieAvroReaderContext(storageConfig, tableConfig, Option.empty(), Option.empty());
     IndexedRecord indexedRecord = createBaseRecord("compound", "field2", 3.2);
     assertEquals(3.2, avroReaderContext.getValue(indexedRecord, BASE_SCHEMA, "base_field_3.nested_field"));
   }
@@ -168,7 +169,8 @@ class TestHoodieAvroReaderContext {
   void getRecordKeyWithSingleKey() {
     when(tableConfig.populateMetaFields()).thenReturn(false);
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[]{"skeleton_field_1"}));
-    HoodieAvroReaderContext avroReaderContext = new HoodieAvroReaderContext(storageConfig, tableConfig);
+    HoodieAvroReaderContext avroReaderContext =
+        new HoodieAvroReaderContext(storageConfig, tableConfig, Option.empty(), Option.empty());
     String recordKey = "record_key";
     IndexedRecord indexedRecord = createSkeletonRecord(recordKey, "field2", 3);
     assertEquals(recordKey, avroReaderContext.getRecordKey(indexedRecord, SKELETON_SCHEMA));
@@ -178,7 +180,8 @@ class TestHoodieAvroReaderContext {
   void getRecordKeyWithMultipleKeys() {
     when(tableConfig.populateMetaFields()).thenReturn(false);
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[]{"base_field_1", "base_field_3.nested_field"}));
-    HoodieAvroReaderContext avroReaderContext = new HoodieAvroReaderContext(storageConfig, tableConfig);
+    HoodieAvroReaderContext avroReaderContext =
+        new HoodieAvroReaderContext(storageConfig, tableConfig, Option.empty(), Option.empty());
     String recordKey = "base_field_1:compound,base_field_3.nested_field:3.2";
     IndexedRecord indexedRecord = createBaseRecord("compound", "field2", 3.2);
     assertEquals(recordKey, avroReaderContext.getRecordKey(indexedRecord, BASE_SCHEMA));
@@ -201,7 +204,7 @@ class TestHoodieAvroReaderContext {
 
   private HoodieAvroReaderContext getReaderContextWithMetaFields() {
     when(tableConfig.populateMetaFields()).thenReturn(true);
-    return new HoodieAvroReaderContext(storageConfig, tableConfig);
+    return new HoodieAvroReaderContext(storageConfig, tableConfig, Option.empty(), Option.empty());
   }
 
   private static Schema getSkeletonSchema() {

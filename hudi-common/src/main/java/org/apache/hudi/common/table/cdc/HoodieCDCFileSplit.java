@@ -97,7 +97,8 @@ public class HoodieCDCFileSplit implements Serializable, Comparable<HoodieCDCFil
     this.instant = instant;
     this.cdcInferCase = cdcInferCase;
     this.cdcFiles = cdcFiles.stream()
-        .sorted(Comparator.comparingInt(FSUtils::getFileVersionFromLog)).collect(Collectors.toList());
+        .sorted(Comparator.comparingInt(path -> FSUtils.getFileVersionFromLog(FSUtils.getFileNameFromPath(path))))
+        .collect(Collectors.toList());
     this.beforeFileSlice = beforeFileSlice;
     this.afterFileSlice = afterFileSlice;
   }

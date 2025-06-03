@@ -18,14 +18,9 @@
 
 package org.apache.hudi.examples.quickstart;
 
-import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieAvroRecord;
-import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.examples.quickstart.utils.QuickstartConfigurations;
-import org.apache.hudi.storage.HoodieStorage;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
@@ -53,8 +48,6 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
-import java.util.Properties;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -286,82 +279,6 @@ public class TestQuickstartData {
       readBuffer.sort(Comparator.naturalOrder());
       assertThat(readBuffer.toString(), is(expected.get(partitionDir.getName())));
     }
-  }
-
-  /**
-   * Checks the MERGE_ON_READ source data are written as expected.
-   *
-   * <p>Note: Replace it with the Flink reader when it is supported.
-   *
-   * @param storage       {@link HoodieStorage} instance.
-   * @param latestInstant The latest committed instant of current table
-   * @param baseFile      The file base to check, should be a directory
-   * @param expected      The expected results mapping, the key should be the partition path
-   * @param partitions    The expected partition number
-   * @param schema        The read schema
-   */
-  public static void checkWrittenDataMOR(
-      HoodieStorage storage,
-      String latestInstant,
-      File baseFile,
-      Map<String, String> expected,
-      int partitions,
-      Schema schema) {
-    assert baseFile.isDirectory() : "Base path should be a directory";
-    FileFilter partitionFilter = file -> !file.getName().startsWith(".");
-    File[] partitionDirs = baseFile.listFiles(partitionFilter);
-    assertNotNull(partitionDirs);
-    assertThat(partitionDirs.length, is(partitions));
-    for (File partitionDir : partitionDirs) {
-      File[] dataFiles = partitionDir.listFiles(file ->
-          file.getName().contains(".log.") && !file.getName().startsWith(".."));
-      assertNotNull(dataFiles);
-      HoodieMergedLogRecordScanner scanner = getScanner(
-          storage, baseFile.getPath(), Arrays.stream(dataFiles).map(File::getAbsolutePath)
-              .sorted(Comparator.naturalOrder()).collect(Collectors.toList()),
-          schema, latestInstant);
-      List<String> readBuffer = scanner.getRecords().values().stream()
-          .map(hoodieRecord -> {
-            try {
-              // in case it is a delete
-              GenericRecord record = (GenericRecord) ((HoodieAvroRecord)hoodieRecord).getData()
-                  .getInsertValue(schema, new Properties())
-                  .orElse(null);
-              return record == null ? (String) null : filterOutVariables(record);
-            } catch (IOException e) {
-              throw new RuntimeException(e);
-            }
-          })
-          .filter(Objects::nonNull)
-          .sorted(Comparator.naturalOrder())
-          .collect(Collectors.toList());
-      assertThat(readBuffer.toString(), is(expected.get(partitionDir.getName())));
-    }
-  }
-
-  /**
-   * Returns the scanner to read avro log files.
-   */
-  @Deprecated
-  private static HoodieMergedLogRecordScanner getScanner(
-      HoodieStorage storage,
-      String basePath,
-      List<String> logPaths,
-      Schema readSchema,
-      String instant) {
-    return HoodieMergedLogRecordScanner.newBuilder()
-        .withStorage(storage)
-        .withBasePath(basePath)
-        .withLogFilePaths(logPaths)
-        .withReaderSchema(readSchema)
-        .withLatestInstantTime(instant)
-        .withReverseReader(false)
-        .withBufferSize(16 * 1024 * 1024)
-        .withMaxMemorySizeInBytes(1024 * 1024L)
-        .withSpillableMapBasePath("/tmp/")
-        .withDiskMapType(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.defaultValue())
-        .withBitCaskDiskMapCompressionEnabled(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue())
-        .build();
   }
 
   /**

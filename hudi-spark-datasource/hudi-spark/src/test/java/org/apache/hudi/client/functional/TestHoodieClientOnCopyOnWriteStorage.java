@@ -1012,6 +1012,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   @ParameterizedTest
   @MethodSource("populateMetaFieldsParams")
   public void testSimpleClustering(boolean populateMetaFields) throws Exception {
+    initMetaClient(getPropertiesForKeyGen(populateMetaFields));
     testInsertAndClustering(createClusteringBuilder(true, 1).build(), populateMetaFields, true,
             false, SqlQueryEqualityPreCommitValidator.class.getName(), COUNT_SQL_QUERY_FOR_VALIDATION, "");
   }
@@ -1064,6 +1065,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   @ParameterizedTest
   @MethodSource("populateMetaFieldsParams")
   public void testClusteringWithSortColumns(boolean populateMetaFields) throws Exception {
+    initMetaClient(getPropertiesForKeyGen(populateMetaFields));
     // setup clustering config.
     HoodieClusteringConfig clusteringConfig = createClusteringBuilder(true, 1)
         .withClusteringSortColumns(populateMetaFields ? "_hoodie_record_key" : "_row_key").build();
@@ -1073,6 +1075,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   @ParameterizedTest
   @MethodSource("populateMetaFieldsParams")
   public void testClusteringWithSortOneFilePerGroup(boolean populateMetaFields) throws Exception {
+    initMetaClient(getPropertiesForKeyGen(populateMetaFields));
     // setup clustering config.
     HoodieClusteringConfig clusteringConfig = createClusteringBuilder(true, 1)
         .withClusteringSortColumns("begin_lat,begin_lon")
@@ -1154,7 +1157,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(EAGER);
     addConfigsForPopulateMetaFields(cfgBuilder, true);
     cfgBuilder.withClusteringConfig(clusteringConfig);
-    cfgBuilder.withProperties(getPropertiesForKeyGen());
+    cfgBuilder.withProperties(getPropertiesForKeyGen(true));
     HoodieWriteConfig config = cfgBuilder.build();
     SparkRDDWriteClient client = getHoodieWriteClient(config);
     String commitTime = client.createNewInstantTime();
@@ -1187,7 +1190,9 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   @Test
   public void testClusteringInvalidConfigForSqlQueryValidator() throws Exception {
     try {
-      testInsertAndClustering(createClusteringBuilder(true, 1).build(), false, true,
+      boolean populateMetaFields = false;
+      initMetaClient(getPropertiesForKeyGen(populateMetaFields));
+      testInsertAndClustering(createClusteringBuilder(true, 1).build(), populateMetaFields, true,
               false, SqlQueryEqualityPreCommitValidator.class.getName(), "", "");
       fail("expected pre-commit clustering validation to fail because sql query is not configured");
     } catch (HoodieValidationException e) {
@@ -1197,7 +1202,9 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
   @Test
   public void testClusteringInvalidConfigForSqlQuerySingleResultValidator() throws Exception {
-    testInsertAndClustering(createClusteringBuilder(true, 1).build(), false, true,
+    boolean populateMetaFields = false;
+    initMetaClient(getPropertiesForKeyGen(populateMetaFields));
+    testInsertAndClustering(createClusteringBuilder(true, 1).build(), populateMetaFields, true,
             false, SqlQuerySingleResultPreCommitValidator.class.getName(),
         "", COUNT_SQL_QUERY_FOR_VALIDATION + "#400");
   }
@@ -1205,7 +1212,9 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   @Test
   public void testClusteringInvalidConfigForSqlQuerySingleResultValidatorFailure() throws Exception {
     try {
-      testInsertAndClustering(createClusteringBuilder(true, 1).build(), false,
+      boolean populateMetaFields = false;
+      initMetaClient(getPropertiesForKeyGen(populateMetaFields));
+      testInsertAndClustering(createClusteringBuilder(true, 1).build(), populateMetaFields,
               true, false, SqlQuerySingleResultPreCommitValidator.class.getName(),
           "", COUNT_SQL_QUERY_FOR_VALIDATION + "#802");
       fail("expected pre-commit clustering validation to fail because of count mismatch. expect 400 rows, not 802");
@@ -1252,6 +1261,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   @ParameterizedTest
   @MethodSource("populateMetaFieldsParams")
   public void testInsertOverwritePartitionHandlingWithMoreRecords(boolean populateMetaFields) throws Exception {
+    initMetaClient(getPropertiesForKeyGen(populateMetaFields));
     verifyInsertOverwritePartitionHandling(1000, 3000, populateMetaFields);
   }
 
@@ -1315,6 +1325,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   @ParameterizedTest
   @MethodSource("populateMetaFieldsParams")
   public void verifyDeletePartitionsHandlingWithFewerRecordsFirstPartition(boolean populateMetaFields) throws Exception {
+    initMetaClient(getPropertiesForKeyGen(populateMetaFields));
     verifyDeletePartitionsHandling(1000, 3000, 3000, populateMetaFields);
   }
 
@@ -1481,7 +1492,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
    */
   @ParameterizedTest
   @MethodSource("populateMetaFieldsParams")
-  public void testDeletesWithoutInserts(boolean populateMetaFields) {
+  public void testDeletesWithoutInserts(boolean populateMetaFields) throws Exception {
+    initMetaClient(getPropertiesForKeyGen(populateMetaFields));
     testDeletesWithoutInserts(populateMetaFields, list2Rdd, rdd2List);
   }
 
@@ -1499,6 +1511,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   @ParameterizedTest
   @MethodSource("populateMetaFieldsParams")
   public void testMetadataStatsOnCommit(boolean populateMetaFields) throws Exception {
+    initMetaClient(getPropertiesForKeyGen(populateMetaFields));
     testMetadataStatsOnCommit(populateMetaFields, list2Rdd);
   }
 
@@ -1526,6 +1539,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   @ParameterizedTest
   @MethodSource("rollbackAfterConsistencyCheckFailureParams")
   public void testRollbackAfterConsistencyCheckFailureUsingMarkers(boolean enableOptimisticConsistencyGuard, boolean populateMetCols) throws Exception {
+    initMetaClient(getPropertiesForKeyGen(populateMetCols));
     testRollbackAfterConsistencyCheckFailureUsingFileList(true, enableOptimisticConsistencyGuard, populateMetCols);
   }
 
@@ -1614,11 +1628,10 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         .build();
 
     // create client with new config.
-    String clusteringCommitTime = client.createNewInstantTime();
-    SparkRDDWriteClient clusteringWriteClient = getHoodieWriteClient(clusteringWriteConfig);
+    SparkRDDWriteClient<?> clusteringWriteClient = getHoodieWriteClient(clusteringWriteConfig);
 
     // Schedule and execute clustering, this should fail since there is a conflict between ingestion inflight commit.
-    clusteringWriteClient.scheduleClusteringAtInstant(clusteringCommitTime, Option.empty());
+    String clusteringCommitTime = clusteringWriteClient.scheduleClustering(Option.empty()).get();
     assertThrows(HoodieClusteringException.class, () -> clusteringWriteClient.cluster(clusteringCommitTime, true));
 
     // Do a rollback on the replacecommit that is failed
@@ -1673,12 +1686,10 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         .build();
 
     // create client with new config.
-    SparkRDDWriteClient clusteringWriteClient = getHoodieWriteClient(clusteringWriteConfig);
-
-    String clusteringCommitTime = clusteringWriteClient.createNewInstantTime();
+    SparkRDDWriteClient<?> clusteringWriteClient = getHoodieWriteClient(clusteringWriteConfig);
 
     // Schedule and execute clustering, this complete successfully.
-    clusteringWriteClient.scheduleClusteringAtInstant(clusteringCommitTime, Option.empty());
+    String clusteringCommitTime = clusteringWriteClient.scheduleClustering(Option.empty()).get();
     clusteringWriteClient.cluster(clusteringCommitTime, true);
 
     // When ingestion writer is committing it should throw an exception.

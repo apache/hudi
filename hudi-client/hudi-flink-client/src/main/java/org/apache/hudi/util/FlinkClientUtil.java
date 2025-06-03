@@ -18,6 +18,7 @@
 
 package org.apache.hudi.util;
 
+import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -94,17 +95,19 @@ public class FlinkClientUtil {
   }
 
   /**
-   * Get merged {@link TypedProperties} from {@link HoodieTableConfig} and {@link HoodieWriteConfig}.
+   * Get merged {@link TypedProperties} from {@link HoodieTableConfig} and {@link HoodieWriteConfig}, which is used by FileGroup reader.
    *
    * @param tableConfig The hoodie table configuration
    * @param writeConfig the hoodie write configuration
    *
    * @return Merged {@link TypedProperties} from {@link HoodieTableConfig} and {@link HoodieWriteConfig}
    */
-  public static TypedProperties getMergedTableAndWriteProps(HoodieTableConfig tableConfig, HoodieWriteConfig writeConfig) {
+  public static TypedProperties getReadProps(HoodieTableConfig tableConfig, HoodieWriteConfig writeConfig) {
     TypedProperties props = new TypedProperties();
     props.putAll(tableConfig.getProps());
     writeConfig.getProps().forEach(props::putIfAbsent);
+    // For compatibility, log scanner uses MAX_MEMORY_FOR_COMPACTION for merging and FileGroup reader uses MAX_MEMORY_FOR_MERGE for merging.
+    props.put(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(), writeConfig.getString(HoodieMemoryConfig.MAX_MEMORY_FOR_COMPACTION));
     return props;
   }
 }

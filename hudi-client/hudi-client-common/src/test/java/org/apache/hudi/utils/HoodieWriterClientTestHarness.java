@@ -29,6 +29,7 @@ import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieListData;
+import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
@@ -154,7 +155,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
   protected void addConfigsForPopulateMetaFields(HoodieWriteConfig.Builder configBuilder, boolean populateMetaFields,
                                                  boolean isMetadataTable) {
     if (!populateMetaFields) {
-      configBuilder.withProperties((isMetadataTable ? getPropertiesForMetadataTable() : getPropertiesForKeyGen()))
+      configBuilder.withProperties((isMetadataTable ? getPropertiesForMetadataTable() : getPropertiesForKeyGen(populateMetaFields)))
           .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.SIMPLE).build());
     }
   }
@@ -207,6 +208,10 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     return getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA);
   }
 
+  protected EngineType getEngineType() {
+    return EngineType.SPARK;
+  }
+
   /**
    * Get Config builder with default configs set.
    *
@@ -256,6 +261,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     if (StringUtils.nonEmpty(schemaStr)) {
       builder.withSchema(schemaStr);
     }
+    builder.withEngineType(getEngineType());
     return builder;
   }
 
@@ -502,6 +508,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
                     .hfileMaxFileSize(dataGen.getEstimatedFileSizeInBytes(200))
                     .parquetMaxFileSize(dataGen.getEstimatedFileSizeInBytes(200)).build())
             .withMergeAllowDuplicateOnInserts(mergeAllowDuplicateInserts)
+            .withPopulateMetaFields(populateMetaFields)
             .withProps(props)
             .build();
   }
@@ -1062,7 +1069,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
    * @throws Exception in case of failure
    */
   protected void testAutoCommit(Function3<Object, BaseHoodieWriteClient, Object, String> writeFn,
-                              boolean isPrepped, boolean populateMetaFields, InstantGenerator instantGenerator) throws Exception {
+                                boolean isPrepped, boolean populateMetaFields, InstantGenerator instantGenerator) throws Exception {
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder();
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     try (BaseHoodieWriteClient client = getHoodieWriteClient(cfgBuilder.build())) {
@@ -1191,7 +1198,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
 
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY).withRollbackUsingMarkers(true)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).withMetadataIndexColumnStats(true).withColumnStatsIndexForColumns("driver,rider")
-            .withMetadataIndexColumnStatsFileGroupCount(1).build())
+            .withMetadataIndexColumnStatsFileGroupCount(1).withEngineType(getEngineType()).build())
         .withWriteTableVersion(6);
 
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);

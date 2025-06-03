@@ -75,7 +75,11 @@ public abstract class HoodieSparkTable<T>
         hoodieSparkTable = new HoodieSparkCopyOnWriteTable<>(config, context, metaClient);
         break;
       case MERGE_ON_READ:
-        hoodieSparkTable = new HoodieSparkMergeOnReadTable<>(config, context, metaClient);
+        if (metaClient.isMetadataTable()) {
+          hoodieSparkTable = new HoodieSparkMergeOnReadMetadataTable<>(config, context, metaClient);
+        } else {
+          hoodieSparkTable = new HoodieSparkMergeOnReadTable<>(config, context, metaClient);
+        }
         break;
       default:
         throw new HoodieException("Unsupported table type :" + metaClient.getTableType());
@@ -97,6 +101,9 @@ public abstract class HoodieSparkTable<T>
   protected Option<HoodieTableMetadataWriter> getMetadataWriter(
       String triggeringInstantTimestamp,
       HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy) {
+    if (isMetadataTable()) {
+      return Option.empty();
+    }
     if (config.isMetadataTableEnabled()) {
       // if any partition is deleted, we need to reload the metadata table writer so that new table configs are picked up
       // to reflect the delete mdt partitions.

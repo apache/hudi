@@ -27,6 +27,7 @@ import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -328,7 +329,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
     } else {
       // since there is a pending delta commit, compaction schedule should not generate any plan
       client = getHoodieWriteClient(cfg);
-      client.scheduleCompactionAtInstant(compactionInstantTime, Option.empty());
+      WriteClientTestUtils.scheduleTableService(client, compactionInstantTime, Option.empty(), TableServiceType.COMPACT);
       metaClient = HoodieTableMetaClient.builder().setConf(context.getStorageConf()).setBasePath(cfg.getBasePath()).build();
       assertFalse(metaClient.getActiveTimeline().filterPendingCompactionTimeline().lastInstant().isPresent());
     }
