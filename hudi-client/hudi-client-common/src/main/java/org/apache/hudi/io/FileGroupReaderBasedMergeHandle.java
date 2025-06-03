@@ -28,7 +28,6 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -55,7 +54,6 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS;
 
@@ -72,31 +70,23 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieMergeHand
 
   private final HoodieReaderContext<T> readerContext;
   private final FileSlice fileSlice;
+  private final CompactionOperation operation;
   private HoodieReadStats readStats;
   private final HoodieRecord.HoodieRecordType recordType;
 
   public FileGroupReaderBasedMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                                         CompactionOperation operation, TaskContextSupplier taskContextSupplier,
+                                         FileSlice fileSlice, CompactionOperation operation, TaskContextSupplier taskContextSupplier,
                                          HoodieReaderContext<T> readerContext,
                                          HoodieRecord.HoodieRecordType enginRecordType) {
     super(config, instantTime, operation.getPartitionPath(), operation.getFileId(), hoodieTable, taskContextSupplier);
     this.keyToNewRecords = Collections.emptyMap();
     this.readerContext = readerContext;
-    Option<HoodieBaseFile> baseFileOpt =
-        operation.getBaseFile(config.getBasePath(), operation.getPartitionPath());
-    List<HoodieLogFile> logFiles = operation.getDeltaFileNames().stream().map(p ->
-            new HoodieLogFile(new StoragePath(FSUtils.constructAbsolutePath(
-                config.getBasePath(), operation.getPartitionPath()), p)))
-        .collect(Collectors.toList());
-    this.fileSlice = new FileSlice(
-        operation.getFileGroupId(),
-        operation.getBaseInstantTime(),
-        baseFileOpt.isPresent() ? baseFileOpt.get() : null,
-        logFiles);
+    this.fileSlice = fileSlice;
+    this.operation = operation;
     this.preserveMetadata = true;
     // If the table is a metadata table, we use AVRO record type, otherwise we use the engine record type.
     this.recordType = hoodieTable.isMetadataTable() ? HoodieRecord.HoodieRecordType.AVRO : enginRecordType;
-    init(operation, this.partitionPath, baseFileOpt);
+    init(operation, this.partitionPath, fileSlice.getBaseFile());
   }
 
   private void init(CompactionOperation operation, String partitionPath, Option<HoodieBaseFile> baseFileToMerge) {
@@ -221,6 +211,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieMergeHand
       writeStatus.getStat().setTotalLogBlocks(readStats.getTotalLogBlocks());
       writeStatus.getStat().setTotalCorruptLogBlock(readStats.getTotalCorruptLogBlock());
       writeStatus.getStat().setTotalRollbackBlocks(readStats.getTotalRollbackBlocks());
+      writeStatus.getStat().setTotalLogSizeCompacted(operation.getMetrics().get(CompactionStrategy.TOTAL_LOG_FILE_SIZE).longValue());
 
       if (writeStatus.getStat().getRuntimeStats() != null) {
         writeStatus.getStat().getRuntimeStats().setTotalScanTime(readStats.getTotalLogReadTimeMs());

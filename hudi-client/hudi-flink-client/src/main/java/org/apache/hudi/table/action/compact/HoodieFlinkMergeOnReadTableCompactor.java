@@ -73,7 +73,8 @@ public class HoodieFlinkMergeOnReadTableCompactor<T>
                                    CompactionOperation operation,
                                    String instantTime,
                                    TaskContextSupplier taskContextSupplier,
-                                   Option<HoodieReaderContext<?>> readerContextOpt) throws IOException {
+                                   Option<HoodieReaderContext<?>> readerContextOpt,
+                                   HoodieTable table) throws IOException {
     if (readerContextOpt.isEmpty()) {
       LOG.info("Compact using legacy compaction, operation: {}.", operation);
       String maxInstantTime = getMaxInstantTime(metaClient);
@@ -88,16 +89,22 @@ public class HoodieFlinkMergeOnReadTableCompactor<T>
     } else {
       LOG.info("Compact using file group reader based compaction, operation: {}.", operation);
       return compact(
-          compactionHandler,
           writeConfig,
           operation,
           instantTime,
-          readerContextOpt.get());
+          readerContextOpt.get(),
+          table,
+          taskContextSupplier);
     }
   }
 
   @Override
   public void maybePersist(HoodieData<WriteStatus> writeStatus, HoodieEngineContext context, HoodieWriteConfig config, String instantTime) {
     // No OP
+  }
+
+  @Override
+  protected HoodieRecord.HoodieRecordType getEngineRecordType() {
+    return HoodieRecord.HoodieRecordType.FLINK;
   }
 }

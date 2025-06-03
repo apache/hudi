@@ -31,8 +31,6 @@ import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
@@ -43,7 +41,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
-import org.apache.hudi.io.FileGroupReaderBasedMergeHandle;
 import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieMergeHandleFactory;
@@ -408,18 +405,6 @@ public class HoodieFlinkCopyOnWriteTable<T>
   // -------------------------------------------------------------------------
   //  Used for compaction
   // -------------------------------------------------------------------------
-
-  @Override
-  public List<WriteStatus> compactUsingFileGroupReader(
-      String instantTime,
-      CompactionOperation operation,
-      HoodieWriteConfig writeConfig,
-      HoodieReaderContext readerContext) {
-    FileGroupReaderBasedMergeHandle<T, ?, ?, ?> mergeHandle = new FileGroupReaderBasedMergeHandle<>(
-        writeConfig, instantTime, this, operation, taskContextSupplier, readerContext, HoodieRecord.HoodieRecordType.FLINK);
-    mergeHandle.write();
-    return mergeHandle.close();
-  }
 
   @Override
   public Iterator<List<WriteStatus>> handleUpdate(

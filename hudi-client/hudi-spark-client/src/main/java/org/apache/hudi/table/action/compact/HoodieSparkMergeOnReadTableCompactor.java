@@ -57,4 +57,9 @@ public class HoodieSparkMergeOnReadTableCompactor<T>
   public void maybePersist(HoodieData<WriteStatus> writeStatus, HoodieEngineContext context, HoodieWriteConfig config, String instantTime) {
     writeStatus.persist(config.getString(WRITE_STATUS_STORAGE_LEVEL_VALUE), context, HoodieDataCacheKey.of(config.getBasePath(), instantTime));
   }
+
+  @Override
+  protected HoodieRecord.HoodieRecordType getEngineRecordType() {
+    return HoodieRecord.HoodieRecordType.SPARK;
+  }
 }
