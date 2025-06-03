@@ -48,6 +48,9 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
+import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
+import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
@@ -96,11 +99,23 @@ public class TestMetadataWriterCommit extends BaseTestHandle {
     assertEquals(2, mdtMetaClient.getActiveTimeline().filterCompletedInstants().countInstants());
 
     // Create commit in MDT
+    config.getMetadataConfig().setValue(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS, "true");
+    mdtWriter = (HoodieBackedTableMetadataWriter) SparkMetadataWriterFactory.createWithStreamingWrites(storageConf, config,
+        HoodieFailedWritesCleaningPolicy.LAZY, context, Option.empty());
     mdtWriter.startCommit(instantTime);
     HoodieData<WriteStatus> mdtWriteStatus = mdtWriter.streamWriteToMetadataPartitions(HoodieJavaRDD.of(Collections.singletonList(writeStatus), context, 1), instantTime);
     List<HoodieWriteStat> mdtWriteStats = mdtWriteStatus.collectAsList().stream().map(WriteStatus::getStat).collect(Collectors.toList());
     mdtWriter.completeStreamingCommit(instantTime, context, mdtWriteStats, commitMetadata);
-    assertEquals(3, mdtMetaClient.reloadActiveTimeline().filterCompletedInstants().countInstants());
+    // 3 bootstrap commits for 3 enabled partitions, 1 commit due to update
+    assertEquals(4, mdtMetaClient.reloadActiveTimeline().filterCompletedInstants().countInstants());
+
+    // Verify commit metadata
+    HoodieCommitMetadata mdtCommitMetadata = mdtMetaClient.getActiveTimeline().readCommitMetadata(mdtMetaClient.getActiveTimeline().lastInstant().get());
+    // 3 partitions should be seen in the commit metadata - FILES, Record index and Column stats
+    assertEquals(3, mdtCommitMetadata.getPartitionToWriteStats().size());
+    assertEquals(1, mdtCommitMetadata.getPartitionToWriteStats().get(FILES.getPartitionPath()).size());
+    assertEquals(10, mdtCommitMetadata.getPartitionToWriteStats().get(RECORD_INDEX.getPartitionPath()).size());
+    assertEquals(2, mdtCommitMetadata.getPartitionToWriteStats().get(COLUMN_STATS.getPartitionPath()).size());
   }
 
   public static HoodieCommitMetadata createCommitMetadata(HoodieWriteStat writeStat, String partitionPath) {
