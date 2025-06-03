@@ -23,6 +23,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.ClusteringGroupInfo;
@@ -81,7 +82,8 @@ public class SparkBinaryCopyClusteringExecutionStrategy<T> extends SingleSparkJo
   /**
    * Submit job to execute clustering for the group.
    */
-  protected List<WriteStatus> performClusteringForGroup(ClusteringGroupInfo clusteringOps, Map<String, String> strategyParams,
+  @Override
+  protected List<WriteStatus> performClusteringForGroup(ReaderContextFactory<T> readerContextFactory, ClusteringGroupInfo clusteringOps, Map<String, String> strategyParams,
                                                     boolean preserveHoodieMetadata, SerializableSchema schema,
                                                     TaskContextSupplier taskContextSupplier, String instantTime) {
     List<HoodieFileGroupId> inputFileIds = clusteringOps.getOperations()
