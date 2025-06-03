@@ -997,7 +997,7 @@ class HoodieSparkSqlWriterInternal {
         tableInstantInfo.commitActionType,
         writeResult.getPartitionToReplaceFileIds,
         common.util.Option.ofNullable(extraPreCommitFn.orNull),
-        new SparkDataSourceWriteStatusHandlerCallback(tableInstantInfo.operation, hasErrors))
+        org.apache.hudi.common.util.Option.of(new SparkDataSourceWriteStatusHandlerCallback(tableInstantInfo.operation, hasErrors)))
 
     if (!hasErrors.get()) {
       if (commitSuccess) {

@@ -103,7 +103,7 @@ public class HoodieFlinkWriteClient<T>
   public boolean commit(String instantTime, List<WriteStatus> writeStatuses, Option<Map<String, String>> extraMetadata,
                         String commitActionType, Map<String, List<String>> partitionToReplacedFileIds,
                         Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc,
-                        WriteStatusHandlerCallback writeStatusHandlerCallback) {
+                        Option<WriteStatusHandlerCallback> writeStatusHandlerCallbackOpt) {
     List<HoodieWriteStat> writeStats = writeStatuses.parallelStream().map(WriteStatus::getStat).collect(Collectors.toList());
     // for eager flush, multiple write stat may share one file path.
     List<HoodieWriteStat> merged = writeStats.stream()

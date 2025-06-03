@@ -92,7 +92,7 @@ public class HoodieJavaWriteClient<T> extends
                         String commitActionType,
                         Map<String, List<String>> partitionToReplacedFileIds,
                         Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc,
-                        WriteStatusHandlerCallback writeStatusHandlerCallback) {
+                        Option<WriteStatusHandlerCallback> writeStatusHandlerCallbackOpt) {
     List<HoodieWriteStat> writeStats = writeStatuses.stream().map(WriteStatus::getStat).collect(Collectors.toList());
     return commitStats(instantTime, writeStats, extraMetadata, commitActionType, partitionToReplacedFileIds,
         extraPreCommitFunc, Option.empty());

@@ -94,7 +94,7 @@ public class SparkRDDWriteClient<T> extends
   public boolean commit(String instantTime, JavaRDD<WriteStatus> writeStatuses, Option<Map<String, String>> extraMetadata,
                         String commitActionType, Map<String, List<String>> partitionToReplacedFileIds,
                         Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc) {
-    return commit(instantTime, writeStatuses, extraMetadata, commitActionType, partitionToReplacedFileIds, extraPreCommitFunc, new NoOpWriteStatusHandlerCallback());
+    return commit(instantTime, writeStatuses, extraMetadata, commitActionType, partitionToReplacedFileIds, extraPreCommitFunc, Option.empty());
   }
 
   /**
@@ -104,7 +104,7 @@ public class SparkRDDWriteClient<T> extends
   public boolean commit(String instantTime, JavaRDD<WriteStatus> writeStatuses, Option<Map<String, String>> extraMetadata,
                         String commitActionType, Map<String, List<String>> partitionToReplacedFileIds,
                         Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc,
-                        WriteStatusHandlerCallback writeStatusHandlerCallback) {
+                        Option<WriteStatusHandlerCallback> writeStatusHandlerCallbackOpt) {
     context.setJobStatus(this.getClass().getSimpleName(), "Committing stats: " + config.getTableName());
     // Triggering the dag for writes.
     // If streaming writes are enabled, writes to both data table and metadata table gets triggered at this juncture.
@@ -134,7 +134,7 @@ public class SparkRDDWriteClient<T> extends
     // reason why we are passing RDD<WriteStatus> to the writeStatusHandler callback: At the beginning of this method, we drop all index stats and error records before collecting in the driver.
     // Just incase if there are errors, caller might be interested to fetch error records in the callback. And so, we are passing the RDD<WriteStatus> as last argument to the write status
     // handler callback.
-    boolean canProceed = writeStatusHandlerCallback.processWriteStatuses(totalRecords.get(), totalErrorRecords.get(),
+    boolean canProceed = writeStatusHandlerCallbackOpt.isPresent() && writeStatusHandlerCallbackOpt.get().processWriteStatuses(totalRecords.get(), totalErrorRecords.get(),
         totalErrorRecords.get() > 0 ? Option.of(HoodieJavaRDD.of(writeStatuses.filter(status -> !status.isMetadataTable()).map(WriteStatus::removeMetadataStats))) : Option.empty());
 
     // only if callback returns true, lets proceed. If not, bail out.

@@ -819,7 +819,7 @@ public class StreamSync implements Serializable, Closeable {
       String commitActionType = CommitUtils.getCommitActionType(cfg.operation, HoodieTableType.valueOf(cfg.tableType));
 
       boolean success = writeClient.commit(instantTime, writeStatusRDD, Option.of(checkpointCommitMetadata), commitActionType, partitionToReplacedFileIds, Option.empty(),
-          writeStatusHandlerCallback);
+          Option.of(writeStatusHandlerCallback));
       releaseResourcesInvoked = true;
       if (success) {
         LOG.info("Commit " + instantTime + " successful!");
