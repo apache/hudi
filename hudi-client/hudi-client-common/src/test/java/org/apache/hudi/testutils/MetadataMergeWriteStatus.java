@@ -41,8 +41,8 @@ public class MetadataMergeWriteStatus extends WriteStatus {
   }
 
   public MetadataMergeWriteStatus(Boolean trackSuccessRecords, Double failureFraction,
-                                  Boolean isMetadata) {
-    super(trackSuccessRecords, failureFraction, isMetadata);
+                                  Boolean updatesMetadataTable) {
+    super(trackSuccessRecords, failureFraction, updatesMetadataTable);
   }
 
   public static Map<String, String> mergeMetadataForWriteStatuses(List<WriteStatus> writeStatuses) {

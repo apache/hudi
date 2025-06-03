@@ -281,7 +281,7 @@ public class WriteStatus implements Serializable {
   @Override
   public String toString() {
     return "WriteStatus {"
-        + "isMetadata=" + updatesMetadataTable
+        + "isUpdatesMetadataTable=" + updatesMetadataTable
         + ", fileId=" + fileId
         + ", writeStat=" + stat
         + ", globalError='" + globalError + '\''

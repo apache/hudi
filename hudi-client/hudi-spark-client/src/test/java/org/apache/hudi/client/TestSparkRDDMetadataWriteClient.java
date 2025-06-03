@@ -130,7 +130,7 @@ public class TestSparkRDDMetadataWriteClient extends HoodieClientTestBase {
       client.startCommitForMetadataTable(metadataMetaClient, commitTimeOfInterest, DELTA_COMMIT_ACTION);
       JavaRDD<WriteStatus> partialWriteStatusesRDD = client.upsertPreppedRecords(jsc.parallelize(rliRecords), commitTimeOfInterest, Option.of(nonFilesPartitionFileGroupIdList));
       List<WriteStatus> partialWriteStatuses = partialWriteStatusesRDD.collect();
-      // assert that isMetadata is rightly set
+      // assert that isUpdatesMetadataTable is rightly set
       partialWriteStatuses.forEach(writeStatus -> assertTrue(writeStatus.isUpdatesMetadataTable()));
 
       // validate that the commit is still pending since we are streaming write to metadata table.
@@ -142,7 +142,7 @@ public class TestSparkRDDMetadataWriteClient extends HoodieClientTestBase {
       // write to FILES partition
       JavaRDD<WriteStatus> filePartitionWriteStatusesRDD = client.upsertPreppedRecords(jsc.parallelize(filesPartitionExpectedRecords), commitTimeOfInterest, Option.of(filesPartitionFileGroupIdList));
       List<WriteStatus> filesPartitionWriteStatus = filePartitionWriteStatusesRDD.collect();
-      // assert that isMetadata is rightly set
+      // assert that isUpdatesMetadataTable is rightly set
       filesPartitionWriteStatus.forEach(writeStatus -> assertTrue(writeStatus.isUpdatesMetadataTable()));
       List<HoodieWriteStat> allWriteStats = new ArrayList<>();
       allWriteStats.addAll(partialWriteStatuses.stream().map(writeStatus -> writeStatus.getStat()).collect(Collectors.toList()));

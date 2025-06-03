@@ -38,8 +38,8 @@ public class FailOnFirstErrorWriteStatus extends WriteStatus {
     super(trackSuccessRecords, failureFraction);
   }
 
-  public FailOnFirstErrorWriteStatus(Boolean trackSuccessRecords, Double failureFraction, Boolean isMetadataTable) {
-    super(trackSuccessRecords, failureFraction, isMetadataTable);
+  public FailOnFirstErrorWriteStatus(Boolean trackSuccessRecords, Double failureFraction, Boolean updatesMetadataTable) {
+    super(trackSuccessRecords, failureFraction, updatesMetadataTable);
   }
 
   @Override
