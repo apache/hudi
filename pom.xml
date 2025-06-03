@@ -140,7 +140,7 @@
     <httpclient.version>4.5.14</httpclient.version>
     <spark.version>${spark3.version}</spark.version>
     <spark3.version>3.5.1</spark3.version>
-    <spark4.version>4.0.0-preview1</spark4.version>
+    <spark4.version>4.0.0</spark4.version>
     <sparkbundle.version></sparkbundle.version>
     <flink1.20.version>1.20.1</flink1.20.version>
     <flink1.19.version>1.19.2</flink1.19.version>
@@ -2533,7 +2533,7 @@
       <properties>
         <spark4.version>${spark40.version}</spark4.version>
         <spark.version>${spark4.version}</spark.version>
-        <sparkbundle.version>4</sparkbundle.version>
+        <sparkbundle.version>4.0</sparkbundle.version>
         <scala13.version>2.13.14</scala13.version>
         <scala.version>${scala13.version}</scala.version>
         <scala.binary.version>2.13</scala.binary.version>
