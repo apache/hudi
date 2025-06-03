@@ -205,11 +205,6 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
         continue;
       }
 
-      // If a column is encrypted, we simply throw exception.
-      // Later we can add a feature to trans-encrypt it with different keys
-      if (chunk.isEncrypted()) {
-        throw new IOException("Column " + chunk.getPath().toDotString() + " is already encrypted");
-      }
       reader.setStreamPosition(chunk.getStartingPos());
       CompressionCodecName newCodecName = this.newCodecName == null ? chunk.getCodec() : this.newCodecName;
 
