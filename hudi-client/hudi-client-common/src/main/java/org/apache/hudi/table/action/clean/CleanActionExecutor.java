@@ -230,10 +230,9 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
         this.txnManager.beginTransaction(Option.of(inflightInstant), Option.empty());
       }
       writeTableMetadata(metadata, inflightInstant.requestedTime());
-      HoodieInstant cleanCompletedInstant = table.getActiveTimeline().transitionCleanInflightToComplete(false, inflightInstant, Option.of(metadata));
+      table.getActiveTimeline().transitionCleanInflightToComplete(false, inflightInstant, Option.of(metadata),
+          completedInstant -> table.getMetaClient().getTableFormat().clean(metadata, completedInstant, table.getContext(), table.getMetaClient(), table.getViewManager()));
       LOG.info("Marked clean started on " + inflightInstant.requestedTime() + " as complete");
-      // Call Table Format clean to allow updating supplementary table format.
-      table.getMetaClient().getTableFormat().clean(metadata, cleanCompletedInstant, table.getContext(), table.getMetaClient(), table.getViewManager());
       return metadata;
     } finally {
       if (!skipLocking) {

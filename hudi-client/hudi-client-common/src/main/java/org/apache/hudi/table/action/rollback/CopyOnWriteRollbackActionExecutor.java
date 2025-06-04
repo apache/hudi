@@ -67,11 +67,12 @@ public class CopyOnWriteRollbackActionExecutor<T, I, K, O> extends BaseRollbackA
 
     if (instantToRollback.isCompleted()) {
       LOG.info("Unpublishing instant " + instantToRollback);
+      // rollback instant in supplementary table format first.
+      table.getMetaClient().getTableFormat().rollback(instantToRollback, table.getContext(), table.getMetaClient(), table.getViewManager());
+      // Revert the completed instant to inflight in native format.
       resolvedInstant = activeTimeline.revertToInflight(instantToRollback);
       // reload meta-client to reflect latest timeline status
       table.getMetaClient().reloadActiveTimeline();
-      // rollback instant in supplementary table format as well.
-      table.getMetaClient().getTableFormat().rollback(instantToRollback, table.getContext(), table.getMetaClient(), table.getViewManager());
     }
 
     // If instant is inflight but marked as completed in native format, delete the completed instant from storage.

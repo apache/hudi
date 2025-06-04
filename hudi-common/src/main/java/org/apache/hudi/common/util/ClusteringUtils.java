@@ -60,6 +60,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -122,12 +123,13 @@ public class ClusteringUtils {
    * Transitions the provided clustering instant fron inflight to complete based on the clustering
    * action type. After HUDI-7905, the new clustering commits are written with clustering action.
    */
-  public static <T> HoodieInstant transitionClusteringOrReplaceInflightToComplete(boolean shouldLock, HoodieInstant clusteringInstant,
-                                                                         HoodieReplaceCommitMetadata metadata, HoodieActiveTimeline activeTimeline) {
+  public static <T> void transitionClusteringOrReplaceInflightToComplete(boolean shouldLock, HoodieInstant clusteringInstant,
+                                                                         HoodieReplaceCommitMetadata metadata, HoodieActiveTimeline activeTimeline,
+                                                                         Consumer<HoodieInstant> tableFormatCompletionAction) {
     if (clusteringInstant.getAction().equals(HoodieTimeline.CLUSTERING_ACTION)) {
-      return activeTimeline.transitionClusterInflightToComplete(shouldLock, clusteringInstant, metadata);
+      activeTimeline.transitionClusterInflightToComplete(shouldLock, clusteringInstant, metadata, tableFormatCompletionAction);
     } else {
-      return activeTimeline.transitionReplaceInflightToComplete(shouldLock, clusteringInstant, metadata);
+      activeTimeline.transitionReplaceInflightToComplete(shouldLock, clusteringInstant, metadata, tableFormatCompletionAction);
     }
   }
 

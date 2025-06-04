@@ -61,6 +61,7 @@ import java.util.Date;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.TimelineUtils.getHoodieInstantWriterOption;
@@ -162,6 +163,13 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
     HoodieInstant commitInstant = instantGenerator.createNewInstant(HoodieInstant.State.COMPLETED, instant.getAction(), instant.requestedTime());
     HoodieInstant completedInstant = transitionStateToComplete(shouldLock, instant, commitInstant, metadata);
     LOG.info("Completed " + instant);
+    return completedInstant;
+  }
+
+  @Override
+  public <T> HoodieInstant saveAsComplete(boolean shouldLock, HoodieInstant instant, Option<T> metadata, Consumer<HoodieInstant> tableFormatCompletionAction) {
+    HoodieInstant completedInstant = saveAsComplete(shouldLock, instant, metadata);
+    tableFormatCompletionAction.accept(completedInstant);
     return completedInstant;
   }
 
@@ -408,6 +416,14 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
   }
 
   @Override
+  public HoodieInstant transitionCleanInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, Option<HoodieCleanMetadata> metadata,
+                                                         Consumer<HoodieInstant> tableFormatCompletionAction) {
+    HoodieInstant completedInstant = transitionCleanInflightToComplete(shouldLock, inflightInstant, metadata);
+    tableFormatCompletionAction.accept(completedInstant);
+    return completedInstant;
+  }
+
+  @Override
   public HoodieInstant transitionCleanRequestedToInflight(HoodieInstant requestedInstant, Option<HoodieCleanerPlan> metadata) {
     ValidationUtils.checkArgument(requestedInstant.getAction().equals(HoodieTimeline.CLEAN_ACTION));
     ValidationUtils.checkArgument(requestedInstant.isRequested());
@@ -422,8 +438,15 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
     ValidationUtils.checkArgument(inflightInstant.isInflight());
     HoodieInstant commitInstant = instantGenerator.createNewInstant(HoodieInstant.State.COMPLETED, ROLLBACK_ACTION, inflightInstant.requestedTime());
     // Then write to timeline
-    transitionStateToComplete(shouldLock, inflightInstant, commitInstant, Option.of(metadata));
-    return commitInstant;
+    return transitionStateToComplete(shouldLock, inflightInstant, commitInstant, Option.of(metadata));
+  }
+
+  @Override
+  public HoodieInstant transitionRollbackInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieRollbackMetadata metadata,
+                                                            Consumer<HoodieInstant> tableFormatCompletionAction) {
+    HoodieInstant completedInstant = transitionRollbackInflightToComplete(shouldLock, inflightInstant, metadata);
+    tableFormatCompletionAction.accept(completedInstant);
+    return completedInstant;
   }
 
   @Override
@@ -476,6 +499,14 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
   }
 
   @Override
+  public HoodieInstant transitionReplaceInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieReplaceCommitMetadata metadata,
+                                                           Consumer<HoodieInstant> tableFormatCompletionAction) {
+    HoodieInstant completedInstant = transitionReplaceInflightToComplete(shouldLock, inflightInstant, metadata);
+    tableFormatCompletionAction.accept(completedInstant);
+    return completedInstant;
+  }
+
+  @Override
   public HoodieInstant transitionClusterInflightToComplete(
       boolean shouldLock, HoodieInstant inflightInstant, HoodieReplaceCommitMetadata metadata) {
     ValidationUtils.checkArgument(inflightInstant.getAction().equals(HoodieTimeline.CLUSTERING_ACTION));
@@ -483,6 +514,14 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
     HoodieInstant commitInstant = instantGenerator.createNewInstant(HoodieInstant.State.COMPLETED, REPLACE_COMMIT_ACTION, inflightInstant.requestedTime());
     // Then write to timeline
     return transitionStateToComplete(shouldLock, inflightInstant, commitInstant, Option.of(metadata));
+  }
+
+  @Override
+  public HoodieInstant transitionClusterInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieReplaceCommitMetadata metadata,
+                                                           Consumer<HoodieInstant> tableFormatCompletionAction) {
+    HoodieInstant completedInstant = transitionClusterInflightToComplete(shouldLock, inflightInstant, metadata);
+    tableFormatCompletionAction.accept(completedInstant);
+    return completedInstant;
   }
 
   private <T> void transitionPendingState(HoodieInstant fromInstant, HoodieInstant toInstant, Option<T> metadata) {

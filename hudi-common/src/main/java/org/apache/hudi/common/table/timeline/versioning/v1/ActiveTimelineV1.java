@@ -57,6 +57,7 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.TimelineUtils.getHoodieInstantWriterOption;
@@ -158,6 +159,13 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
   @Override
   public <T> HoodieInstant saveAsComplete(boolean shouldLock, HoodieInstant instant, Option<T> metadata) {
     return saveAsComplete(instant, metadata);
+  }
+
+  @Override
+  public <T> HoodieInstant saveAsComplete(boolean shouldLock, HoodieInstant instant, Option<T> metadata, Consumer<HoodieInstant> tableFormatCompletionAction) {
+    HoodieInstant completedInstant = saveAsComplete(shouldLock, instant, metadata);
+    tableFormatCompletionAction.accept(completedInstant);
+    return completedInstant;
   }
 
   @Override
@@ -393,6 +401,14 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
   }
 
   @Override
+  public HoodieInstant transitionCleanInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, Option<HoodieCleanMetadata> metadata,
+                                                         Consumer<HoodieInstant> tableFormatCompletionAction) {
+    HoodieInstant completedInstant = transitionCleanInflightToComplete(shouldLock, inflightInstant, metadata);
+    tableFormatCompletionAction.accept(completedInstant);
+    return completedInstant;
+  }
+
+  @Override
   public HoodieInstant transitionCleanRequestedToInflight(HoodieInstant requestedInstant, Option<HoodieCleanerPlan> metadata) {
     ValidationUtils.checkArgument(requestedInstant.getAction().equals(HoodieTimeline.CLEAN_ACTION));
     ValidationUtils.checkArgument(requestedInstant.isRequested());
@@ -409,6 +425,14 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
     // Then write to timeline
     transitionState(inflightInstant, commitInstant, Option.of(metadata));
     return commitInstant;
+  }
+
+  @Override
+  public HoodieInstant transitionRollbackInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieRollbackMetadata metadata,
+                                                            Consumer<HoodieInstant> tableFormatCompletionAction) {
+    HoodieInstant completedInstant = transitionRollbackInflightToComplete(shouldLock, inflightInstant, metadata);
+    tableFormatCompletionAction.accept(completedInstant);
+    return completedInstant;
   }
 
   @Override
@@ -458,9 +482,25 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
   }
 
   @Override
+  public HoodieInstant transitionReplaceInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieReplaceCommitMetadata metadata,
+                                                           Consumer<HoodieInstant> tableFormatCompletionAction) {
+    HoodieInstant completedInstant = transitionReplaceInflightToComplete(shouldLock, inflightInstant, metadata);
+    tableFormatCompletionAction.accept(completedInstant);
+    return completedInstant;
+  }
+
+  @Override
   public HoodieInstant transitionClusterInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieReplaceCommitMetadata metadata) {
     // In 0.x, no separate clustering action, reuse replace action.
     return transitionReplaceInflightToComplete(shouldLock, inflightInstant, metadata);
+  }
+
+  @Override
+  public HoodieInstant transitionClusterInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieReplaceCommitMetadata metadata,
+                                                           Consumer<HoodieInstant> tableFormatCompletionAction) {
+    HoodieInstant completedInstant = transitionClusterInflightToComplete(shouldLock, inflightInstant, metadata);
+    tableFormatCompletionAction.accept(completedInstant);
+    return completedInstant;
   }
 
   private <T> void transitionState(HoodieInstant fromInstant, HoodieInstant toInstant, Option<T> metadata) {
