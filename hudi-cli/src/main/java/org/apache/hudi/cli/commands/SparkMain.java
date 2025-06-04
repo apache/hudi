@@ -180,7 +180,7 @@ public class SparkMain {
               Integer.parseInt(args[7]), HoodieCompactor.SCHEDULE_AND_EXECUTE, propsFilePath, configs);
           break;
         case COMPACT_SCHEDULE:
-          returnCode = compact(jsc, args[3], args[4], args[5], 1, "", 0, HoodieCompactor.SCHEDULE, propsFilePath, configs);
+          returnCode = compact(jsc, args[3], args[4], null, 1, "", 0, HoodieCompactor.SCHEDULE, propsFilePath, configs);
           break;
         case COMPACT_VALIDATE:
           cmd.assertEq(args.length);
@@ -213,7 +213,7 @@ public class SparkMain {
               Integer.parseInt(args[6]), SCHEDULE_AND_EXECUTE, propsFilePath, configs);
           break;
         case CLUSTERING_SCHEDULE:
-          returnCode = cluster(jsc, args[3], args[4], args[5], 1, args[2], 0, SCHEDULE, propsFilePath, configs);
+          returnCode = cluster(jsc, args[3], args[4], null, 1, args[2], 0, SCHEDULE, propsFilePath, configs);
           break;
         case CLEAN:
           clean(jsc, args[3], propsFilePath, configs);
