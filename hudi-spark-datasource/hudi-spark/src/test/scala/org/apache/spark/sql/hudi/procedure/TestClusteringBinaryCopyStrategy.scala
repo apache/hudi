@@ -32,7 +32,9 @@ import java.time.LocalDate
 class TestClusteringBinaryCopyStrategy extends HoodieSparkProcedureTestBase {
 
   override def sparkConf(): SparkConf = {
-    super.sparkConf().set("spark.hadoop.parquet.avro.write-old-list-structure", "false")
+    super.sparkConf()
+      .set("spark.hadoop.parquet.avro.write-old-list-structure", "false")
+      .set("spark.sql.defaultColumn.enabled", "false")
   }
 
   Seq("bulk_insert", "insert").foreach { operation =>

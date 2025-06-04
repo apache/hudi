@@ -140,8 +140,9 @@ public class HoodieParquetFileBinaryCopier extends HoodieParquetBinaryCopyBase i
   }
 
   // Routines to get reader of next input file and set up relevant states
-  private void initNextReader() {
+  private void initNextReader() throws IOException {
     if (reader != null) {
+      reader.close();
       LOG.info("Finish binary copy input file: {}", reader.getFile());
     }
 
