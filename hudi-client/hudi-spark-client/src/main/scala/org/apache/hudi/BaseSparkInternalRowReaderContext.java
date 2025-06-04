@@ -174,6 +174,6 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
     if (record != null) {
       return record;
     }
-    return new HoodieInternalRow(null, null, UTF8String.fromString(recordKey), null, null, null, false);
+    return new HoodieInternalRow(null, null, UTF8String.fromString(recordKey), UTF8String.fromString(partitionPath), null, null, false);
   }
 }

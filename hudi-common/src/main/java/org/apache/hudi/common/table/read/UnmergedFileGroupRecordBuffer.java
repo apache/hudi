@@ -45,7 +45,7 @@ public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
 
   private final Deque<HoodieLogBlock> currentInstantLogBlocks;
   private ClosableIterator<T> recordIterator;
-  private boolean isDeleteBlock;
+  private boolean currentBlockIsDeleteBlock;
 
   public UnmergedFileGroupRecordBuffer(
       HoodieReaderContext<T> readerContext,
@@ -71,7 +71,7 @@ public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
     while ((recordIterator == null || !recordIterator.hasNext()) && !currentInstantLogBlocks.isEmpty()) {
       HoodieLogBlock logBlock = currentInstantLogBlocks.pop();
       if (logBlock instanceof HoodieDataBlock) {
-        isDeleteBlock = false;
+        currentBlockIsDeleteBlock = false;
         HoodieDataBlock dataBlock = (HoodieDataBlock) logBlock;
         Pair<ClosableIterator<T>, Schema> iteratorSchemaPair = getRecordsIterator(dataBlock, Option.empty());
         if (recordIterator != null) {
@@ -79,7 +79,7 @@ public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
         }
         recordIterator = iteratorSchemaPair.getLeft();
       } else if (logBlock instanceof HoodieDeleteBlock) {
-        isDeleteBlock = true;
+        currentBlockIsDeleteBlock = true;
         HoodieDeleteBlock deleteBlock = (HoodieDeleteBlock) logBlock;
         recordIterator = ClosableIterator.wrap(Arrays.stream(deleteBlock.getRecordsToDelete())
             .map(deleteRecord -> readerContext.getDeleteRow(null, deleteRecord.getRecordKey())).iterator());
@@ -91,7 +91,7 @@ public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
       return false;
     }
     nextRecord = readerContext.seal(recordIterator.next());
-    if (isDeleteBlock) {
+    if (currentBlockIsDeleteBlock) {
       readStats.incrementNumDeletes();
     } else {
       readStats.incrementNumInserts();
