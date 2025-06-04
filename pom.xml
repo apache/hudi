@@ -2520,6 +2520,7 @@
         <orc.flink.version>1.5.6</orc.flink.version>
         <flink.avro.version>1.11.4</flink.avro.version>
         <flink.format.parquet.version>1.13.1</flink.format.parquet.version>
+        <parquet.version>${flink.format.parquet.version}</parquet.version>
       </properties>
       <activation>
         <property>
@@ -2536,6 +2537,7 @@
         <orc.flink.version>1.5.6</orc.flink.version>
         <flink.avro.version>1.11.4</flink.avro.version>
         <flink.format.parquet.version>1.13.1</flink.format.parquet.version>
+        <parquet.version>${flink.format.parquet.version}</parquet.version>
         <flink.connector.kafka.version>3.2.0-1.19</flink.connector.kafka.version>
       </properties>
       <activation>
@@ -2553,6 +2555,7 @@
         <orc.flink.version>1.5.6</orc.flink.version>
         <flink.avro.version>1.11.4</flink.avro.version>
         <flink.format.parquet.version>1.13.1</flink.format.parquet.version>
+        <parquet.version>${flink.format.parquet.version}</parquet.version>
         <flink.connector.kafka.version>3.2.0-1.18</flink.connector.kafka.version>
       </properties>
       <activation>
@@ -2570,6 +2573,7 @@
         <orc.flink.version>1.5.6</orc.flink.version>
         <flink.avro.version>1.11.4</flink.avro.version>
         <flink.format.parquet.version>1.12.3</flink.format.parquet.version>
+        <parquet.version>${flink.format.parquet.version}</parquet.version>
         <flink.connector.kafka.version>${flink1.17.version}</flink.connector.kafka.version>
       </properties>
       <activation>
@@ -2587,6 +2591,7 @@
         <orc.flink.version>1.5.6</orc.flink.version>
         <flink.avro.version>1.11.4</flink.avro.version>
         <flink.format.parquet.version>1.12.2</flink.format.parquet.version>
+        <parquet.version>${flink.format.parquet.version}</parquet.version>
         <flink.connector.kafka.version>${flink1.16.version}</flink.connector.kafka.version>
       </properties>
       <activation>
@@ -2596,7 +2601,7 @@
       </activation>
     </profile>
     <profile>
-    <id>flink1.15</id>
+      <id>flink1.15</id>
       <properties>
         <flink.version>${flink1.15.version}</flink.version>
         <hudi.flink.module>hudi-flink1.15.x</hudi.flink.module>
@@ -2604,6 +2609,7 @@
         <orc.flink.version>1.5.6</orc.flink.version>
         <flink.avro.version>1.11.4</flink.avro.version>
         <flink.format.parquet.version>1.12.2</flink.format.parquet.version>
+        <parquet.version>${flink.format.parquet.version}</parquet.version>
         <flink.connector.kafka.version>${flink1.15.version}</flink.connector.kafka.version>
       </properties>
       <activation>
