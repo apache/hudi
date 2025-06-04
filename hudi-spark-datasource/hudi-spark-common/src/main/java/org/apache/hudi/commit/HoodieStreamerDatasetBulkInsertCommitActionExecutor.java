@@ -18,17 +18,15 @@
 
 package org.apache.hudi.commit;
 
-import org.apache.hudi.HoodieDatasetBulkInsertHelper;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 
-import org.apache.spark.sql.Dataset;
-import org.apache.spark.sql.Row;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Executor to be used by stream sync. Directly invokes HoodieDatasetBulkInsertHelper.bulkInsert so that WriteStatus is
@@ -41,15 +39,11 @@ public class HoodieStreamerDatasetBulkInsertCommitActionExecutor extends BaseDat
   }
 
   @Override
-  protected Option<HoodieData<WriteStatus>> doExecute(Dataset<Row> records, boolean arePartitionRecordsSorted) {
-    table.getActiveTimeline().transitionRequestedToInflight(table.getMetaClient().createNewInstant(HoodieInstant.State.REQUESTED,
-            getCommitActionType(), instantTime), Option.empty());
-    return Option.of(HoodieDatasetBulkInsertHelper
-        .bulkInsert(records, instantTime, table, writeConfig, arePartitionRecordsSorted, false, getWriteOperationType()));
-  }
-
-  @Override
   public WriteOperationType getWriteOperationType() {
     return WriteOperationType.BULK_INSERT;
+  }
+
+  protected Map<String, List<String>> getPartitionToReplacedFileIds(HoodieData<WriteStatus> writeStatuses) {
+    return Collections.emptyMap();
   }
 }
