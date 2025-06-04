@@ -23,6 +23,7 @@ import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.exception.HoodieException;
 
 import java.text.ParseException;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -153,6 +154,10 @@ public class HoodieInstantTimeGenerator {
 
   public static String getInstantFromTemporalAccessor(TemporalAccessor temporalAccessor) {
     return MILLIS_INSTANT_TIME_FORMATTER.format(temporalAccessor);
+  }
+
+  public static String getCurrentTimeAsString() {
+    return Instant.now().atZone(HoodieTimelineTimeZone.UTC.getZoneId()).toLocalDateTime().format(MILLIS_INSTANT_TIME_FORMATTER);
   }
 
   @VisibleForTesting
