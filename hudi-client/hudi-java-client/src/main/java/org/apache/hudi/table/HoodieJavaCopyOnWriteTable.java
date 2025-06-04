@@ -31,7 +31,6 @@ import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
-import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
@@ -88,9 +87,8 @@ public class HoodieJavaCopyOnWriteTable<T>
 
   protected HoodieJavaCopyOnWriteTable(HoodieWriteConfig config,
                                        HoodieEngineContext context,
-                                       HoodieTableMetaClient metaClient,
-                                       TransactionManager transactionManager) {
-    super(config, context, metaClient, transactionManager);
+                                       HoodieTableMetaClient metaClient) {
+    super(config, context, metaClient);
   }
 
   @Override

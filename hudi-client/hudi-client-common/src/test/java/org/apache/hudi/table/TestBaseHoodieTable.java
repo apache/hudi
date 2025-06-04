@@ -30,7 +30,6 @@ import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.transaction.TestSimpleSchemaConflictResolutionStrategy;
-import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -45,14 +44,13 @@ import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
 import java.util.List;
 
 public class TestBaseHoodieTable extends HoodieTable {
-  public TestBaseHoodieTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient, TransactionManager transactionManager) {
-    super(config, context, metaClient, transactionManager);
+  public TestBaseHoodieTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
+    super(config, context, metaClient);
   }
 
   public TestBaseHoodieTable(
-      HoodieWriteConfig config, HoodieEngineContext engineContext, FileSystemViewManager viewManager, HoodieTableMetaClient metaClient, TaskContextSupplier taskContextSupplier,
-      TransactionManager transactionManager) {
-    super(config, engineContext, metaClient, viewManager, TestSimpleSchemaConflictResolutionStrategy.taskContextSupplier, transactionManager);
+      HoodieWriteConfig config, HoodieEngineContext engineContext, FileSystemViewManager viewManager, HoodieTableMetaClient metaClient, TaskContextSupplier taskContextSupplier) {
+    super(config, engineContext, metaClient, viewManager, TestSimpleSchemaConflictResolutionStrategy.taskContextSupplier);
   }
 
   private int countOfScheduleRollbackFunctionCalls = 0;
