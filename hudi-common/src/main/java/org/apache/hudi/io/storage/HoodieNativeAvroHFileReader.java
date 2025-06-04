@@ -256,7 +256,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
       keys = children.stream().map(e -> (String) e.eval(null)).collect(Collectors.toList());
     }
 
-    if (keys.isEmpty()) {
+    if (keys.isEmpty() && keyFilterOpt.isPresent()) {
       LOG.warn("Cannot extract valid keys from predicate: {}", keyFilterOpt.get());
     }
     return keys;
@@ -271,7 +271,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
       keys = children.stream()
           .map(e -> (String) e.eval(null)).collect(Collectors.toList());
     }
-    if (keys.isEmpty()) {
+    if (keys.isEmpty() && keyFilterOpt.isPresent()) {
       LOG.warn("Cannot extract valid key prefixes from predicate: {}", keyFilterOpt.get());
     }
     return keys;
