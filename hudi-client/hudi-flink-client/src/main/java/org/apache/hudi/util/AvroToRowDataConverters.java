@@ -21,6 +21,7 @@ package org.apache.hudi.util;
 import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.avro.util.Utf8;
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.data.DecimalData;
@@ -138,7 +139,7 @@ public class AvroToRowDataConverters {
         return createTimestampConverter(((TimestampType) type).getPrecision(), utcTimezone);
       case CHAR:
       case VARCHAR:
-        return avroObject -> StringData.fromString(avroObject.toString());
+        return avroObject -> avroObject instanceof Utf8 ? StringData.fromBytes(((Utf8) avroObject).getBytes()) : StringData.fromString(avroObject.toString());
       case BINARY:
       case VARBINARY:
         return AvroToRowDataConverters::convertToBytes;

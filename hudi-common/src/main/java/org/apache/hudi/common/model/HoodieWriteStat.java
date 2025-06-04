@@ -20,11 +20,16 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.util.JsonUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.StoragePath;
+
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import org.apache.avro.reflect.AvroIgnore;
 
 import javax.annotation.Nullable;
 
 import java.io.Serializable;
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -113,6 +118,10 @@ public class HoodieWriteStat extends HoodieReadStats {
 
   @Nullable
   private RuntimeStats runtimeStats;
+
+  @JsonIgnore
+  @AvroIgnore
+  private Option<Map<String, HoodieColumnRangeMetadata<Comparable>>> recordsStats = Option.empty();
 
   public HoodieWriteStat() {
     // called by jackson json lib
@@ -263,6 +272,28 @@ public class HoodieWriteStat extends HoodieReadStats {
     this.path = path.toString().replace(basePath + "/", "");
   }
 
+  public void putRecordsStats(Map<String, HoodieColumnRangeMetadata<Comparable>> stats) {
+    if (!recordsStats.isPresent()) {
+      recordsStats = Option.of(stats);
+    } else {
+      // in case there are multiple log blocks for one write process.
+      recordsStats = Option.of(mergeRecordsStats(recordsStats.get(), stats));
+    }
+  }
+
+  // keep for serialization efficiency
+  public void setRecordsStats(Map<String, HoodieColumnRangeMetadata<Comparable>> stats) {
+    recordsStats = Option.of(stats);
+  }
+
+  public void removeRecordStats() {
+    this.recordsStats = Option.empty();
+  }
+
+  public Option<Map<String, HoodieColumnRangeMetadata<Comparable>>> getColumnStats() {
+    return recordsStats;
+  }
+
   @Override
   public String toString() {
     return "HoodieWriteStat{fileId='" + fileId + '\'' + ", path='" + path + '\'' + ", prevCommit='" + prevCommit
@@ -343,5 +374,17 @@ public class HoodieWriteStat extends HoodieReadStats {
     public void setTotalCreateTime(long totalCreateTime) {
       this.totalCreateTime = totalCreateTime;
     }
+  }
+
+  private static Map<String, HoodieColumnRangeMetadata<Comparable>> mergeRecordsStats(
+      Map<String, HoodieColumnRangeMetadata<Comparable>> stats1,
+      Map<String, HoodieColumnRangeMetadata<Comparable>> stats2) {
+    Map<String, HoodieColumnRangeMetadata<Comparable>> mergedStats = new HashMap<>(stats1);
+    for (Map.Entry<String, HoodieColumnRangeMetadata<Comparable>> entry : stats2.entrySet()) {
+      final String colName = entry.getKey();
+      mergedStats.merge(colName, entry.getValue(),
+          (oldValue, newValue) -> HoodieColumnRangeMetadata.merge(oldValue, newValue));
+    }
+    return mergedStats;
   }
 }

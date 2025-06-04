@@ -132,7 +132,6 @@
                     <exclude>META-INF/*.RSA</exclude>
                     <exclude>META-INF/services/javax.*</exclude>
                     <exclude>**/*.proto</exclude>
-                    <exclude>hbase-webapps/**</exclude>
                   </excludes>
                 </filter>
               </filters>

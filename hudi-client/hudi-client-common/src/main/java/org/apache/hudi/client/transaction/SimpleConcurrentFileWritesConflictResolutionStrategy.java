@@ -19,8 +19,10 @@
 package org.apache.hudi.client.transaction;
 
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -36,6 +38,7 @@ import org.slf4j.LoggerFactory;
 import java.util.ConcurrentModificationException;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.function.Predicate;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
@@ -53,24 +56,78 @@ public class SimpleConcurrentFileWritesConflictResolutionStrategy
   @Override
   public Stream<HoodieInstant> getCandidateInstants(HoodieTableMetaClient metaClient, HoodieInstant currentInstant,
                                                     Option<HoodieInstant> lastSuccessfulInstant) {
+    if (metaClient.getTableConfig().getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
+      return getCandidateInstantsV8AndAbove(metaClient, currentInstant, lastSuccessfulInstant);
+    } else {
+      return getCandidateInstantsPreV8(metaClient, currentInstant, lastSuccessfulInstant);
+    }
+  }
+
+  /**
+   * To find which instants are conflicting for table versions 8 and above, we apply the following logic:
+   * <ul>
+   *   <li>Get completed instants timeline only for commits that have happened since the last successful write.</li>
+   *   <li>Get any completed replace commit that happened since the last successful write and any pending replace commit.</li>
+   * </ul>
+   * @param metaClient table meta client
+   * @param currentInstant the instant for the write this client is attempting to commit
+   * @param lastSuccessfulInstant the last successful write before this commit started
+   * @return a stream of instants that are candidates for conflict resolution
+   */
+  private Stream<HoodieInstant> getCandidateInstantsV8AndAbove(HoodieTableMetaClient metaClient, HoodieInstant currentInstant,
+                                                               Option<HoodieInstant> lastSuccessfulInstant) {
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
-    // To find which instants are conflicting, we apply the following logic
-    // 1. Get completed instants timeline only for commits that have happened since the last successful write.
-    // 2. Get any scheduled or completed compaction that have started and/or finished after the current instant.
-    // 3. Get any completed replace commit that happened since the last successful write and any pending replace commit.
-    // We need to check for write conflicts since they may have mutated the same files that are being newly created by the current write.
+    boolean isMoRTable = metaClient.getTableType() == HoodieTableType.MERGE_ON_READ;
     Stream<HoodieInstant> completedCommitsInstantStream = activeTimeline
         .getCommitsTimeline()
         .filterCompletedInstants()
+        .filter(instant -> !isMoRTable || !instant.getAction().equals(HoodieTimeline.COMMIT_ACTION))
         .findInstantsAfter(lastSuccessfulInstant.isPresent() ? lastSuccessfulInstant.get().requestedTime() : HoodieTimeline.INIT_INSTANT_TS)
         .getInstantsAsStream();
 
+    Stream<HoodieInstant> clusteringAndReplaceCommitInstants = activeTimeline
+        .filterPendingReplaceOrClusteringTimeline()
+        .filter(instant -> isClusteringOrRecentlyRequestedInstant(activeTimeline, metaClient, currentInstant).test(instant))
+        .getInstantsAsStream();
+
+    return Stream.concat(completedCommitsInstantStream, clusteringAndReplaceCommitInstants);
+  }
+
+  /**
+   * To find which instants are conflicting for table versions below 8, we apply the following logic:
+   * <ul>
+   *   <li>Get completed instants timeline only for commits that have happened since the last successful write.</li>
+   *   <li>Get any scheduled or completed compaction that have started and/or finished after the current instant.</li>
+   *   <li>Get any completed replace commit that happened since the last successful write and any pending replace commit.</li>
+   * </ul>
+   * @param metaClient table meta client
+   * @param currentInstant the instant for the write this client is attempting to commit
+   * @param lastSuccessfulInstant the last successful write before this commit started
+   * @return a stream of instants that are candidates for conflict resolution
+   */
+  private Stream<HoodieInstant> getCandidateInstantsPreV8(HoodieTableMetaClient metaClient, HoodieInstant currentInstant,
+                                                          Option<HoodieInstant> lastSuccessfulInstant) {
+    HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
+    Stream<HoodieInstant> completedCommitsInstantStream = getCommitsCompletedSinceLastCommit(lastSuccessfulInstant, activeTimeline);
+
     Stream<HoodieInstant> compactionAndClusteringPendingTimeline = activeTimeline
         .filterPendingReplaceClusteringAndCompactionTimeline()
-        .filter(instant -> ClusteringUtils.isClusteringInstant(activeTimeline, instant, metaClient.getInstantGenerator())
-            || (!HoodieTimeline.CLUSTERING_ACTION.equals(instant.getAction()) && compareTimestamps(instant.requestedTime(), GREATER_THAN, currentInstant.requestedTime())))
+        .filter(instant -> isClusteringOrRecentlyRequestedInstant(activeTimeline, metaClient, currentInstant).test(instant))
         .getInstantsAsStream();
     return Stream.concat(completedCommitsInstantStream, compactionAndClusteringPendingTimeline);
+  }
+
+  private static Stream<HoodieInstant> getCommitsCompletedSinceLastCommit(Option<HoodieInstant> lastSuccessfulInstant, HoodieActiveTimeline activeTimeline) {
+    return activeTimeline
+        .getCommitsTimeline()
+        .filterCompletedInstants()
+        .findInstantsAfter(lastSuccessfulInstant.map(HoodieInstant::requestedTime).orElse(HoodieTimeline.INIT_INSTANT_TS))
+        .getInstantsAsStream();
+  }
+
+  private Predicate<HoodieInstant> isClusteringOrRecentlyRequestedInstant(HoodieActiveTimeline activeTimeline, HoodieTableMetaClient metaClient, HoodieInstant currentInstant) {
+    return instant -> ClusteringUtils.isClusteringInstant(activeTimeline, instant, metaClient.getInstantGenerator())
+        || (!HoodieTimeline.CLUSTERING_ACTION.equals(instant.getAction()) && compareTimestamps(instant.requestedTime(), GREATER_THAN, currentInstant.requestedTime()));
   }
 
   @Override

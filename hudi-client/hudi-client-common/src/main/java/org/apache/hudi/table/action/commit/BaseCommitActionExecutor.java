@@ -128,7 +128,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
    * are unknown across batches Inserts (which are new parquet files) are rolled back based on commit time. // TODO :
    * Create a new WorkloadProfile metadata file instead of using HoodieCommitMetadata
    */
-  void saveWorkloadProfileMetadataToInflight(WorkloadProfile profile, String instantTime)
+  protected void saveWorkloadProfileMetadataToInflight(WorkloadProfile profile, String instantTime)
       throws HoodieCommitException {
     try {
       HoodieCommitMetadata metadata = new HoodieCommitMetadata();
@@ -199,7 +199,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
         getCommitActionType(), instantTime));
     ValidationUtils.checkState(this.txnManagerOption.isPresent(), "The transaction manager has not been initialized");
     TransactionManager txnManager = this.txnManagerOption.get();
-    txnManager.beginTransaction(inflightInstant,
+    txnManager.beginStateChange(inflightInstant,
         lastCompletedTxn.isPresent() ? Option.of(lastCompletedTxn.get().getLeft()) : Option.empty());
     try {
       setCommitMetadata(result);
@@ -208,7 +208,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
           result.getCommitMetadata(), config, txnManager.getLastCompletedTransactionOwner(), false, pendingInflightAndRequestedInstants);
       commit(result);
     } finally {
-      txnManager.endTransaction(inflightInstant);
+      txnManager.endStateChange(inflightInstant);
     }
   }
 

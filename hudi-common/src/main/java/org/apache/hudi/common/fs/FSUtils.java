@@ -23,6 +23,7 @@ import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.avro.model.HoodiePath;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -45,7 +46,6 @@ import org.apache.hudi.storage.StoragePathFilter;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.inline.InLineFSUtils;
 
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -69,6 +69,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
 
 /**
  * Utility functions related to accessing the file storage.
@@ -733,14 +735,14 @@ public class FSUtils {
   }
 
   public static boolean comparePathsWithoutScheme(String pathStr1, String pathStr2) {
-    Path pathWithoutScheme1 = getPathWithoutScheme(new Path(pathStr1));
-    Path pathWithoutScheme2 = getPathWithoutScheme(new Path(pathStr2));
+    StoragePath pathWithoutScheme1 = getPathWithoutScheme(new StoragePath(pathStr1));
+    StoragePath pathWithoutScheme2 = getPathWithoutScheme(new StoragePath(pathStr2));
     return pathWithoutScheme1.equals(pathWithoutScheme2);
   }
 
-  public static Path getPathWithoutScheme(Path path) {
-    return path.isUriPathAbsolute()
-        ? new Path(null, path.toUri().getAuthority(), path.toUri().getPath()) : path;
+  public static StoragePath getPathWithoutScheme(StoragePath path) {
+    return path.isAbsolute()
+        ? new StoragePath(path.toUri().getRawSchemeSpecificPart()) : path;
   }
 
   // Converts s3a to s3a
@@ -759,5 +761,12 @@ public class FSUtils {
 
   private static Option<HoodieLogFile> getLatestLogFile(Stream<HoodieLogFile> logFiles) {
     return Option.fromJavaOptional(logFiles.min(HoodieLogFile.getReverseLogFileComparator()));
+  }
+
+  public static boolean isMdtBaseFile(HoodieBaseFile baseFile) {
+    StoragePathInfo baseFileStoragePathInfo = baseFile.getPathInfo();
+    return (baseFileStoragePathInfo != null
+        && baseFileStoragePathInfo.getPath().toString().contains(METAFOLDER_NAME))
+        || baseFile.getStoragePath().toString().contains(METAFOLDER_NAME);
   }
 }

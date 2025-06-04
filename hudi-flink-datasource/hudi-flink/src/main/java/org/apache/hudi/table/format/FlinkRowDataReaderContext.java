@@ -98,12 +98,13 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
       List<ExpressionPredicates.Predicate> predicates,
       HoodieTableConfig tableConfig,
       Option<InstantRange> instantRangeOpt) {
-    super(storageConfiguration, tableConfig);
+    super(storageConfiguration, tableConfig, instantRangeOpt, Option.empty());
     this.tableConfig = tableConfig;
     this.internalSchemaManager = internalSchemaManager;
     this.predicates = predicates;
-    this.utcTimezone = getStorageConfiguration().getBoolean(FlinkOptions.READ_UTC_TIMEZONE.key(), FlinkOptions.READ_UTC_TIMEZONE.defaultValue());
-    this.instantRangeOpt = instantRangeOpt;
+    this.utcTimezone = getStorageConfiguration().getBoolean(
+        FlinkOptions.READ_UTC_TIMEZONE.key(),
+        FlinkOptions.READ_UTC_TIMEZONE.defaultValue());
   }
 
   @Override

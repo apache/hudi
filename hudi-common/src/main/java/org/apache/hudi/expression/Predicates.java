@@ -89,6 +89,10 @@ public class Predicates {
     return new Not(expr);
   }
 
+  public static StringStartsWithAny startsWithAny(Expression left, List<Expression> right) {
+    return new StringStartsWithAny(left, right);
+  }
+
   public static class TrueExpression extends LeafExpression implements Predicate {
 
     private static final TrueExpression INSTANCE = new TrueExpression();
@@ -289,6 +293,10 @@ public class Predicates {
       return value.toString() + " " + getOperator().symbol + " "
           + validValues.stream().map(Expression::toString).collect(Collectors.joining(",", "(", ")"));
     }
+
+    public List<Expression> getRightChildren() {
+      return validValues;
+    }
   }
 
   public static class IsNull implements Predicate {
@@ -404,6 +412,46 @@ public class Predicates {
         default:
           throw new IllegalArgumentException("The operation " + getOperator() + " doesn't support binary comparison");
       }
+    }
+  }
+
+  public static class StringStartsWithAny implements Predicate {
+    private final Operator operator;
+    private final Expression left;
+    private final List<Expression> right;
+
+    public StringStartsWithAny(Expression left, List<Expression> right) {
+      this.left = left;
+      this.operator = Operator.STARTS_WITH;
+      this.right = right;
+    }
+
+    @Override
+    public List<Expression> getChildren() {
+      List<Expression> children = new ArrayList<>();
+      children.add(left);
+      children.addAll(right);
+      return children;
+    }
+
+    @Override
+    public Operator getOperator() {
+      return operator;
+    }
+
+    @Override
+    public Object eval(StructLike data) {
+      for (Expression e : right) {
+        Expression exp = new StringStartsWith(left, e);
+        if ((boolean) exp.eval(data)) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    public List<Expression> getRightChildren() {
+      return right;
     }
   }
 }
