@@ -52,7 +52,7 @@ public class TestCreateHandle extends BaseTestHandle {
     HoodieWriteConfig config = getConfigBuilder(basePath)
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder().withRemoteServerPort(timelineServicePort).build())
         .withPopulateMetaFields(populateMetaFields)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).withEnableRecordIndex(true).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).withEnableRecordIndex(true).withStreamingWriteEnabled(true).build())
         .build();
 
     HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
