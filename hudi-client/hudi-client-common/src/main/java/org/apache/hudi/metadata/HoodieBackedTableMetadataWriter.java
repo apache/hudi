@@ -1572,7 +1572,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       bulkInsertAndCommit(writeClient, instantTime, preppedRecordInputs, bulkInsertPartitioner);
     } else {
       engineContext.setJobStatus(this.getClass().getSimpleName(), String.format("Upserting at %s into metadata table %s", instantTime, metadataWriteConfig.getTableName()));
-      upsertAndCommit(writeClient, instantTime, preppedRecordInputs, updatedMDTFileGroupIds);
+      upsertAndCommit(writeClient, instantTime, preppedRecordInputs);
     }
 
     metadataMetaClient.reloadActiveTimeline();
@@ -1582,6 +1582,8 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   }
 
   protected abstract void bulkInsertAndCommit(BaseHoodieWriteClient<?, I, ?, O> writeClient, String instantTime, I preppedRecordInputs, Option<BulkInsertPartitioner> bulkInsertPartitioner);
+
+  protected abstract void upsertAndCommit(BaseHoodieWriteClient<?, I, ?, O> writeClient, String instantTime, I preppedRecordInputs);
 
   protected abstract void upsertAndCommit(BaseHoodieWriteClient<?, I, ?, O> writeClient, String instantTime, I preppedRecordInputs, List<HoodieFileGroupId> mdtFileGroupsIdsToUpdate);
 
