@@ -289,9 +289,11 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
                 if (combinedRecordData != existingRecord.getRecord()) {
                   Pair<HoodieRecord, Schema> combinedRecordAndSchema = combinedRecordAndSchemaOpt.get();
                   return Option.of(BufferedRecord.forRecordWithContext(combinedRecordData, combinedRecordAndSchema.getRight(), readerContext, orderingFieldName, false));
+                } else {
+                  return Option.empty();
                 }
               }
-              return Option.empty();
+              return Option.of(BufferedRecord.forDeleteRecord(newRecord.getRecordKey(), newRecord.getOrderingValue()));
             } else {
               Option<Pair<HoodieRecord, Schema>> combinedRecordAndSchemaOpt = recordMerger.get().merge(
                   readerContext.constructHoodieRecord(existingRecord),
@@ -301,7 +303,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
                   props);
 
               if (!combinedRecordAndSchemaOpt.isPresent()) {
-                return Option.empty();
+                return Option.of(BufferedRecord.forRecordWithContext(existingRecord.getRecord(), readerSchema, readerContext, orderingFieldName, false));
               }
 
               Pair<HoodieRecord, Schema> combinedRecordAndSchema = combinedRecordAndSchemaOpt.get();
@@ -309,7 +311,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
 
               // If pre-combine returns existing record, no need to update it
               if (combinedRecord.getData() != existingRecord.getRecord()) {
-                return Option.of(BufferedRecord.forRecordWithContext(combinedRecord, combinedRecordAndSchema.getRight(), readerContext, props));
+                return Option.of(BufferedRecord.forDeleteRecord(newRecord.getRecordKey(), newRecord.getOrderingValue()));
               }
               return Option.empty();
             }
