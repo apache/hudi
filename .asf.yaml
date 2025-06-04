@@ -44,6 +44,7 @@ github:
         required_approving_review_count: 1
   collaborators:
     - ad1happy2go
+    - rangareddy
 notifications:
   commits:      commits@hudi.apache.org
   issues:       commits@hudi.apache.org
