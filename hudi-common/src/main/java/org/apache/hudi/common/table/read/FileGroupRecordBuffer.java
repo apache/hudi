@@ -303,7 +303,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
                   props);
 
               if (!combinedRecordAndSchemaOpt.isPresent()) {
-                return Option.of(BufferedRecord.forRecordWithContext(existingRecord.getRecord(), readerSchema, readerContext, orderingFieldName, false));
+                return Option.of(BufferedRecord.forDeleteRecord(newRecord.getRecordKey(), newRecord.getOrderingValue()));
               }
 
               Pair<HoodieRecord, Schema> combinedRecordAndSchema = combinedRecordAndSchemaOpt.get();
@@ -311,7 +311,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
 
               // If pre-combine returns existing record, no need to update it
               if (combinedRecord.getData() != existingRecord.getRecord()) {
-                return Option.of(BufferedRecord.forDeleteRecord(newRecord.getRecordKey(), newRecord.getOrderingValue()));
+                return Option.of(BufferedRecord.forRecordWithContext(combinedRecord, combinedRecordAndSchema.getRight(), readerContext, props));
               }
               return Option.empty();
             }
