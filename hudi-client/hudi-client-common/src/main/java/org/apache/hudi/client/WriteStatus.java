@@ -62,7 +62,7 @@ public class WriteStatus implements Serializable {
   private final List<Pair<HoodieRecordDelegate, Throwable>> failedRecords = new ArrayList<>();
 
   // true if this WriteStatus refers to a write happening in metadata table.
-  private final boolean updatesMetadataTable;
+  private final boolean isForMetadataTable;
   private Throwable globalError = null;
 
   private String fileId = null;
@@ -78,11 +78,11 @@ public class WriteStatus implements Serializable {
   private final boolean trackSuccessRecords;
   private final transient Random random;
 
-  public WriteStatus(Boolean trackSuccessRecords, Double failureFraction, Boolean updatesMetadataTable) {
+  public WriteStatus(Boolean trackSuccessRecords, Double failureFraction, Boolean isForMetadataTable) {
     this.trackSuccessRecords = trackSuccessRecords;
     this.failureFraction = failureFraction;
     this.random = new Random(RANDOM_SEED);
-    this.updatesMetadataTable = updatesMetadataTable;
+    this.isForMetadataTable = isForMetadataTable;
   }
 
   public WriteStatus(Boolean trackSuccessRecords, Double failureFraction) {
@@ -93,7 +93,7 @@ public class WriteStatus implements Serializable {
     this.failureFraction = 0.0d;
     this.trackSuccessRecords = false;
     this.random = null;
-    this.updatesMetadataTable = false;
+    this.isForMetadataTable = false;
   }
 
   /**
@@ -274,14 +274,14 @@ public class WriteStatus implements Serializable {
     return trackSuccessRecords;
   }
 
-  public boolean isUpdatesMetadataTable() {
-    return updatesMetadataTable;
+  public boolean isForMetadataTable() {
+    return isForMetadataTable;
   }
 
   @Override
   public String toString() {
     return "WriteStatus {"
-        + "isUpdatesMetadataTable=" + updatesMetadataTable
+        + "isForMetadataTable=" + isForMetadataTable
         + ", fileId=" + fileId
         + ", writeStat=" + stat
         + ", globalError='" + globalError + '\''
