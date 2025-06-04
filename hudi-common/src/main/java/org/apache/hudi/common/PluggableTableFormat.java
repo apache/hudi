@@ -114,6 +114,21 @@ public interface TableFormat extends Serializable {
   }
 
   /**
+   * Called after marking a rollback action as complete in hoodie timeline.
+   *
+   * @param rollbackInstant The completed rollback instant in hoodie timeline.
+   * @param engineContext engine context used for execution - local,spark or flink etc.
+   * @param metaClient  metaClient from HoodieTable.
+   * @param viewManager viewManager from HoodieTable.
+   */
+  default void completedRollback(
+      HoodieInstant rollbackInstant,
+      HoodieEngineContext engineContext,
+      HoodieTableMetaClient metaClient,
+      FileSystemViewManager viewManager) {
+  }
+
+  /**
    * Called after marking a complete write action as "savepoint" in the hoodie timeline.
    *
    * @param instant The completed instant to be marked as savepoint.
@@ -123,21 +138,6 @@ public interface TableFormat extends Serializable {
    */
   default void savepoint(
       HoodieInstant instant,
-      HoodieEngineContext engineContext,
-      HoodieTableMetaClient metaClient,
-      FileSystemViewManager viewManager) {
-  }
-
-  /**
-   * Called before restoring to the instant
-   *
-   * @param savepoint The savepoint instant to be restored back.
-   * @param engineContext engine context used for execution - local,spark or flink etc.
-   * @param metaClient  metaClient from HoodieTable.
-   * @param viewManager viewManager from HoodieTable.
-   */
-  default void restore(
-      HoodieInstant savepoint,
       HoodieEngineContext engineContext,
       HoodieTableMetaClient metaClient,
       FileSystemViewManager viewManager) {

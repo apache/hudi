@@ -400,7 +400,7 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
       completedInstants.stream()
           .forEach(instant -> activeTimeline.deleteInstantFileIfExists(instant));
     }
-    // Call Table Format archive to allow archiving in supplementary table format.
+    // Call Table Format archive to allow archiving in table format.
     table.getMetaClient().getTableFormat().archive(archivedInstants, table.getContext(), table.getMetaClient(), table.getViewManager());
     return true;
   }

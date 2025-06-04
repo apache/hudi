@@ -142,9 +142,10 @@ public class SavepointActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
       // Nothing to save in the savepoint
       table.getActiveTimeline().createNewInstant(
           instantGenerator.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.SAVEPOINT_ACTION, instantTime));
-      table.getActiveTimeline()
+      HoodieInstant savepointCompletedInstant = table.getActiveTimeline()
           .saveAsComplete(instantGenerator.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.SAVEPOINT_ACTION, instantTime),
               Option.of(metadata));
+      table.getMetaClient().getTableFormat().savepoint(savepointCompletedInstant, table.getContext(), table.getMetaClient(), table.getViewManager());
       LOG.info("Savepoint " + instantTime + " created");
       return metadata;
     } catch (HoodieIOException e) {
