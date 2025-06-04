@@ -45,7 +45,6 @@ import org.slf4j.LoggerFactory;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
-import java.util.stream.Collectors;
 
 /**
  * Write client to assist with writing to metadata table.
@@ -80,17 +79,14 @@ public class SparkRDDMetadataWriteClient<T> extends SparkRDDWriteClient<T> {
                         Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc,
                         Option<WriteStatusValidator> writeStatusValidatorOpt) {
     context.setJobStatus(this.getClass().getSimpleName(), "Committing stats: " + config.getTableName());
+    // for metadata table, we don't have any write status validator, since we use FailOnFirstErrorWriteStatus as the write status class.
+    ValidationUtils.checkArgument(!writeStatusValidatorOpt.isPresent(), "Metadata table is not expected to contain write status validator");
     // Triggering the dag for writes to metadata table.
     // When streaming writes are enabled, writes to metadata may not call this method as the caller tightly controls the dag de-referencing.
     // Even then, to initialize a new partition in Metadata table and for non-incremental operations like insert_overwrite, etc., writes to metadata table
     // will invoke this commit method.
-    List<WriteStatus> writeStatusesList = writeStatuses.map(WriteStatus::removeMetadataIndexStatsAndErrorRecordsTracking).collect();
-
-    // for metadata table, we don't have any write status validator, since we use FailOnFirstErrorWriteStatus as the write status class.
-    ValidationUtils.checkArgument(!writeStatusValidatorOpt.isPresent(), "Metadata table is not expected to contain write status validator");
-
-    List<HoodieWriteStat> hoodieWriteStats = writeStatusesList.stream().map(WriteStatus::getStat).collect(Collectors.toList());
-    return commitStats(instantTime, hoodieWriteStats, extraMetadata, commitActionType, partitionToReplacedFileIds, extraPreCommitFunc, Option.of(createTable(config)));
+    List<HoodieWriteStat> hoodieWriteStats = writeStatuses.map(writeStatus -> writeStatus.getStat()).collect();
+    return commitStats(instantTime, hoodieWriteStats, extraMetadata, commitActionType, partitionToReplacedFileIds, extraPreCommitFunc);
   }
 
   /**

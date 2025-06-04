@@ -281,11 +281,6 @@ public class HoodieWriteStat extends HoodieReadStats {
     }
   }
 
-  // keep for serialization efficiency
-  public void setRecordsStats(Map<String, HoodieColumnRangeMetadata<Comparable>> stats) {
-    recordsStats = Option.of(stats);
-  }
-
   public void removeRecordStats() {
     this.recordsStats = Option.empty();
   }

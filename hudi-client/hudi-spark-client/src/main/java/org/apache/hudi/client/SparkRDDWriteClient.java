@@ -19,7 +19,6 @@
 package org.apache.hudi.client;
 
 import org.apache.hudi.callback.common.WriteStatusValidator;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.index.HoodieSparkIndexClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
@@ -59,6 +58,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.Serializable;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
@@ -104,29 +104,20 @@ public class SparkRDDWriteClient<T> extends
     // Triggering the dag for writes.
     // If streaming writes are enabled, writes to both data table and metadata table gets triggered at this juncture.
     // If not, writes to data table gets triggered here.
-    // When streaming writes are enabled, data table's WriteStatus is expected to contain all stats required to generate metadata table records and so it could be fatter.
-    // So, here we are dropping all additional stats and only retains the information required to proceed from here on.
-    // And we are also dropping error records so that we don't unintentionally collect the error records in the driver.
-    HoodieTable table = createTable(config);
-    boolean isMetadataStreamingWritesEnabled = config.isMetadataStreamingWritesEnabled(table.getMetaClient().getTableConfig().getTableVersion());
-    List<Pair<Boolean, WriteStatus>> isMetadataWriteStatusPairs = writeStatuses
-        .map(writeStatus -> {
-          if (isMetadataStreamingWritesEnabled) {
-            writeStatus.removeMetadataIndexStatsAndErrorRecordsTracking();
-          } else {
-            writeStatus.dropGranularErrorRecordsTracking();
-          }
-          return Pair.of(writeStatus.isMetadataTable(), writeStatus);
-        }
-    ).collect();
+    // When streaming writes are enabled, data table's WriteStatus is expected to contain all stats required to generate metadata table records and so each object will be larger.
+    // So, here we are dropping all additional stats and error records to retain only the required information and prevent collecting large objects on the driver.
+    List<WriteStatusMetadataTracker> writeStatusMetadataTrackerList = writeStatuses
+        .map(writeStatus -> new WriteStatusMetadataTracker(writeStatus.isMetadataTable(), writeStatus.getTotalRecords(), writeStatus.getTotalErrorRecords(),
+            writeStatus.getStat())).collect();
     // Compute stats for the data table writes and invoke callback
     AtomicLong totalRecords = new AtomicLong(0);
     AtomicLong totalErrorRecords = new AtomicLong(0);
     // collect record stats for data table
-    isMetadataWriteStatusPairs.stream().filter(pair -> !pair.getKey()).forEach(pair -> {
-      totalRecords.getAndAdd(pair.getValue().getTotalRecords());
-      totalErrorRecords.getAndAdd(pair.getValue().getTotalErrorRecords());
-    });
+    writeStatusMetadataTrackerList.stream().filter(writeStatusMetadataTracker -> !writeStatusMetadataTracker.isMetadataTable())
+        .forEach(writeStatusMetadataTracker -> {
+          totalRecords.getAndAdd(writeStatusMetadataTracker.getTotalErrorRecords());
+          totalErrorRecords.getAndAdd(writeStatusMetadataTracker.getTotalErrorRecords());
+        });
     // reason why we are passing RDD<WriteStatus> to the writeStatusHandler callback: At the beginning of this method, we drop all index stats and error records before collecting in the driver.
     // Just incase if there are errors, caller might be interested to fetch error records in the callback. And so, we are passing the RDD<WriteStatus> as last argument to the write status
     // handler callback.
@@ -137,10 +128,10 @@ public class SparkRDDWriteClient<T> extends
     // only if callback returns true, lets proceed. If not, bail out.
     if (canProceed) {
       // when streaming writes are enabled, writeStatuses is a mix of data table write status and mdt write status
-      List<HoodieWriteStat> dataTableHoodieWriteStats = isMetadataWriteStatusPairs.stream().filter(entry -> !entry.getKey()).map(leanWriteStatus -> leanWriteStatus.getValue().getStat()).collect(Collectors.toList());
-      List<HoodieWriteStat> partialMetadataHoodieWriteStatsSoFar = isMetadataWriteStatusPairs.stream().filter(Pair::getKey).map(leanWriteStatus -> leanWriteStatus.getValue().getStat()).collect(Collectors.toList());
+      List<HoodieWriteStat> dataTableHoodieWriteStats = writeStatusMetadataTrackerList.stream().filter(entry -> !entry.isMetadataTable()).map(writeStatusMetadataTracker -> writeStatusMetadataTracker.getWriteStat()).collect(Collectors.toList());
+      List<HoodieWriteStat> partialMetadataHoodieWriteStatsSoFar = writeStatusMetadataTrackerList.stream().filter(entry -> entry.isMetadataTable).map(writeStatusMetadataTracker -> writeStatusMetadataTracker.getWriteStat()).collect(Collectors.toList());
       return commitStats(instantTime, dataTableHoodieWriteStats, extraMetadata, commitActionType,
-          partitionToReplacedFileIds, extraPreCommitFunc, Option.of(table));
+          partitionToReplacedFileIds, extraPreCommitFunc);
     } else {
       LOG.error("Exiting early due to errors with write operation ");
       return false;
@@ -397,4 +388,39 @@ public class SparkRDDWriteClient<T> extends
     super.releaseResources(instantTime);
     SparkReleaseResources.releaseCachedData(context, config, basePath, instantTime);
   }
+
+  /**
+   * WriteStatus metadata tracker to hold info like total records, total record records,
+   * HoodieWriteStat and whether the writeStatus is referring to metadata table or not.
+   */
+  static class WriteStatusMetadataTracker implements Serializable {
+    private final boolean isMetadataTable;
+    private final long totalRecords;
+    private final long totalErrorRecords;
+    private final HoodieWriteStat writeStat;
+
+    public WriteStatusMetadataTracker(boolean isMetadataTable, long totalRecords, long totalErrorRecords, HoodieWriteStat writeStat) {
+      this.isMetadataTable = isMetadataTable;
+      this.totalRecords = totalRecords;
+      this.totalErrorRecords = totalErrorRecords;
+      this.writeStat = writeStat;
+    }
+
+    public boolean isMetadataTable() {
+      return isMetadataTable;
+    }
+
+    public long getTotalRecords() {
+      return totalRecords;
+    }
+
+    public long getTotalErrorRecords() {
+      return totalErrorRecords;
+    }
+
+    public HoodieWriteStat getWriteStat() {
+      return writeStat;
+    }
+  }
+
 }
