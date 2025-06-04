@@ -79,13 +79,13 @@ public class SparkRDDMetadataWriteClient<T> extends SparkRDDWriteClient<T> {
   public boolean commit(String instantTime, JavaRDD<WriteStatus> writeStatuses, Option<Map<String, String>> extraMetadata,
                         String commitActionType, Map<String, List<String>> partitionToReplacedFileIds,
                         Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc,
-                        Option<WriteStatusValidator> writeStatusHandlerCallbackOpt) {
+                        Option<WriteStatusValidator> writeStatusValidatorOpt) {
     context.setJobStatus(this.getClass().getSimpleName(), "Committing stats: " + config.getTableName());
     // Triggering the dag for writes to metadata table.
     // When streaming writes are enabled, writes to metadata may not call this method as the caller tightly controls the dag de-referencing.
-    // Even then, to initialize a new partition in Metadata table and for non incremental operations like insert_overwrite, etc, writes to metadata table
+    // Even then, to initialize a new partition in Metadata table and for non-incremental operations like insert_overwrite, etc., writes to metadata table
     // will invoke this commit method.
-    List<WriteStatus> writeStatusesList = writeStatuses.map(writeStatus -> writeStatus.removeMetadataIndexStatsAndErrorRecordsTracking()).collect();
+    List<WriteStatus> writeStatusesList = writeStatuses.map(WriteStatus::removeMetadataIndexStatsAndErrorRecordsTracking).collect();
     // Compute stats for the writes and invoke callback
     AtomicLong totalRecords = new AtomicLong(0);
     AtomicLong totalErrorRecords = new AtomicLong(0);
@@ -94,15 +94,15 @@ public class SparkRDDMetadataWriteClient<T> extends SparkRDDWriteClient<T> {
       totalErrorRecords.getAndAdd(entry.getTotalErrorRecords());
     });
 
-    // reason why we are passing RDD<WriteStatus> to the writeStatusHandler callback: We can't afford to collect all write status to dirver if there are errors, since write status will hold
-    // every error record. So, just incase if there are errors, caller might be interested to fetch error records. And so, we are passing the RDD<WriteStatus> as last argument to the write status
+    // reason why we are passing RDD<WriteStatus> to the writeStatusHandler callback: We can't afford to collect all write status to driver if there are errors, since write status will hold
+    // every error record. So, just in case if there are errors, caller might be interested to fetch error records. And so, we are passing the RDD<WriteStatus> as last argument to the write status
     // handler callback.
-    boolean canProceed = writeStatusHandlerCallbackOpt.map(callback -> callback.validate(totalRecords.get(), totalErrorRecords.get(),
+    boolean canProceed = writeStatusValidatorOpt.map(callback -> callback.validate(totalRecords.get(), totalErrorRecords.get(),
             totalErrorRecords.get() > 0 ? Option.of(HoodieJavaRDD.of(writeStatuses.filter(status -> !status.isMetadataTable()).map(WriteStatus::removeMetadataStats))) : Option.empty()))
         .orElse(true);
     // only if callback returns true, lets proceed. If not, bail out.
     if (canProceed) {
-      List<HoodieWriteStat> hoodieWriteStats = writeStatusesList.stream().map(writeStatus -> writeStatus.getStat()).collect(Collectors.toList());
+      List<HoodieWriteStat> hoodieWriteStats = writeStatusesList.stream().map(WriteStatus::getStat).collect(Collectors.toList());
       return commitStats(instantTime, hoodieWriteStats, extraMetadata, commitActionType,
           partitionToReplacedFileIds, extraPreCommitFunc, Option.of(createTable(config)));
     } else {
@@ -113,8 +113,8 @@ public class SparkRDDMetadataWriteClient<T> extends SparkRDDWriteClient<T> {
 
   /**
    * Upserts the given prepared records into the Hoodie table, at the supplied instantTime.
-   * <p>
-   * This implementation requires that the input records are already tagged, and de-duped if needed.
+   *
+   * <p>This implementation requires that the input records are already tagged, and de-duped if needed.
    *
    * @param preppedRecords Prepared HoodieRecords to upsert
    * @param instantTime    Instant time of the commit

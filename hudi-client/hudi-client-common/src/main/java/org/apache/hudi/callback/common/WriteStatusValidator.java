@@ -23,7 +23,7 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.util.Option;
 
 /**
- * WriteStatus validator to assist caller to process errors if any. Caller can dictate if we wanted to proceed with the commit or not by means of the return
+ * WriteStatus validator to assist caller to process errors if any. Caller can dictate if to proceed with the commit or not by means of the return
  * value of the method {@link WriteStatusValidator#validate}.
  *
  * <p>Sometimes callers invoke the dag just to process if there are any errors before proceeding with the commit.
@@ -32,7 +32,7 @@ import org.apache.hudi.common.util.Option;
 public interface WriteStatusValidator {
 
   /**
-   * Validates the given write status
+   * Validates the given write status.
    *
    * @param totalRecords        Total records in this inflight commit.
    * @param totalErroredRecords Total error records in this inflight commit.

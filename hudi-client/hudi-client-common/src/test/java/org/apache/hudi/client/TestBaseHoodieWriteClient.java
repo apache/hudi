@@ -173,7 +173,7 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
 
     @Override
     public boolean commit(String instantTime, String writeStatuses, Option<Map<String, String>> extraMetadata, String commitActionType, Map<String, List<String>> partitionToReplacedFileIds,
-                          Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc, Option<WriteStatusValidator> writeStatusHandlerCallbackOpt) {
+                          Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc, Option<WriteStatusValidator> writeStatusValidatorOpt) {
       return false;
     }
 
