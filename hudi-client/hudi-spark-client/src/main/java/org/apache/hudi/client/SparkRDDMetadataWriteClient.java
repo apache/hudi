@@ -44,7 +44,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
@@ -86,29 +85,12 @@ public class SparkRDDMetadataWriteClient<T> extends SparkRDDWriteClient<T> {
     // Even then, to initialize a new partition in Metadata table and for non-incremental operations like insert_overwrite, etc., writes to metadata table
     // will invoke this commit method.
     List<WriteStatus> writeStatusesList = writeStatuses.map(WriteStatus::removeMetadataIndexStatsAndErrorRecordsTracking).collect();
-    // Compute stats for the writes and invoke callback
-    AtomicLong totalRecords = new AtomicLong(0);
-    AtomicLong totalErrorRecords = new AtomicLong(0);
-    writeStatusesList.forEach(entry -> {
-      totalRecords.getAndAdd(entry.getTotalRecords());
-      totalErrorRecords.getAndAdd(entry.getTotalErrorRecords());
-    });
 
-    // reason why we are passing RDD<WriteStatus> to the writeStatusHandler callback: We can't afford to collect all write status to driver if there are errors, since write status will hold
-    // every error record. So, just in case if there are errors, caller might be interested to fetch error records. And so, we are passing the RDD<WriteStatus> as last argument to the write status
-    // handler callback.
-    boolean canProceed = writeStatusValidatorOpt.map(callback -> callback.validate(totalRecords.get(), totalErrorRecords.get(),
-            totalErrorRecords.get() > 0 ? Option.of(HoodieJavaRDD.of(writeStatuses.filter(status -> !status.isMetadataTable()).map(WriteStatus::removeMetadataStats))) : Option.empty()))
-        .orElse(true);
-    // only if callback returns true, lets proceed. If not, bail out.
-    if (canProceed) {
-      List<HoodieWriteStat> hoodieWriteStats = writeStatusesList.stream().map(WriteStatus::getStat).collect(Collectors.toList());
-      return commitStats(instantTime, hoodieWriteStats, extraMetadata, commitActionType,
-          partitionToReplacedFileIds, extraPreCommitFunc, Option.of(createTable(config)));
-    } else {
-      LOG.error("Exiting early due to errors with write operation ");
-      return false;
-    }
+    // for metadata table, we don't have any write status validator, since we use FailOnFirstErrorWriteStatus as the write status class.
+    ValidationUtils.checkArgument(!writeStatusValidatorOpt.isPresent(), "Metadata table is not expected to contain write status validator");
+
+    List<HoodieWriteStat> hoodieWriteStats = writeStatusesList.stream().map(WriteStatus::getStat).collect(Collectors.toList());
+    return commitStats(instantTime, hoodieWriteStats, extraMetadata, commitActionType, partitionToReplacedFileIds, extraPreCommitFunc, Option.of(createTable(config)));
   }
 
   /**
