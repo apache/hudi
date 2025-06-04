@@ -97,8 +97,9 @@ public class SparkRDDMetadataWriteClient<T> extends SparkRDDWriteClient<T> {
     // reason why we are passing RDD<WriteStatus> to the writeStatusHandler callback: We can't afford to collect all write status to dirver if there are errors, since write status will hold
     // every error record. So, just incase if there are errors, caller might be interested to fetch error records. And so, we are passing the RDD<WriteStatus> as last argument to the write status
     // handler callback.
-    boolean canProceed = writeStatusHandlerCallbackOpt.isEmpty() || writeStatusHandlerCallbackOpt.get().validate(totalRecords.get(), totalErrorRecords.get(),
-        totalErrorRecords.get() > 0 ? Option.of(HoodieJavaRDD.of(writeStatuses.filter(status -> !status.isMetadataTable()).map(WriteStatus::removeMetadataStats))) : Option.empty());
+    boolean canProceed = writeStatusHandlerCallbackOpt.map(callback -> callback.validate(totalRecords.get(), totalErrorRecords.get(),
+            totalErrorRecords.get() > 0 ? Option.of(HoodieJavaRDD.of(writeStatuses.filter(status -> !status.isForMetadataTable()).map(WriteStatus::removeMetadataStats))) : Option.empty()))
+        .orElse(true);
     // only if callback returns true, lets proceed. If not, bail out.
     if (canProceed) {
       List<HoodieWriteStat> hoodieWriteStats = writeStatusesList.stream().map(writeStatus -> writeStatus.getStat()).collect(Collectors.toList());
