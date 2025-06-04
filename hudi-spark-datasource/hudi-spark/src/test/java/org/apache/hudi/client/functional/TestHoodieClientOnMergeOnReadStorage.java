@@ -27,7 +27,6 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.log.HoodieLogBlockMetadataScanner;
-import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -493,11 +492,8 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
                 .map(file -> file.getPath().toString())
                 .collect(Collectors.toList()),
             config.getMaxDFSStreamBufferSize(),
-            Option.of(InstantRange.builder()
-                .startInstant(metaClient.getActiveTimeline().firstInstant().get().requestedTime())
-                .endInstant(instant)
-                .rangeType(InstantRange.RangeType.CLOSED_CLOSED)
-                .build()));
+            instant,
+            Option.empty());
         List<String> prevInstants = scanner.getValidBlockInstants();
         HoodieLogBlockMetadataScanner scanner2 = new HoodieLogBlockMetadataScanner(
             table.getMetaClient(),
@@ -506,11 +502,8 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
                 .map(file -> file.getPath().toString())
                 .collect(Collectors.toList()),
             config.getMaxDFSStreamBufferSize(),
-            Option.of(InstantRange.builder()
-                .startInstant(metaClient.getActiveTimeline().firstInstant().get().requestedTime())
-                .endInstant(currentInstant)
-                .rangeType(InstantRange.RangeType.CLOSED_CLOSED)
-                .build()));
+            currentInstant,
+            Option.empty());
         List<String> currentInstants = scanner2.getValidBlockInstants();
         assertEquals(prevInstants, currentInstants);
       });
