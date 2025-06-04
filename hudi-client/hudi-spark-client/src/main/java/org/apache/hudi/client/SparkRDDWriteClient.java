@@ -42,7 +42,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.SparkHoodieIndexFactory;
-import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.SparkMetadataWriterFactory;
@@ -72,9 +71,6 @@ public class SparkRDDWriteClient<T> extends
 
   private static final Logger LOG = LoggerFactory.getLogger(SparkRDDWriteClient.class);
 
-  // true if current write client is representing metadata table.
-  private final boolean isMetadataTable;
-
   public SparkRDDWriteClient(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
     this(context, clientConfig, Option.empty());
   }
@@ -83,7 +79,6 @@ public class SparkRDDWriteClient<T> extends
                              Option<EmbeddedTimelineService> timelineService) {
     super(context, writeConfig, timelineService, SparkUpgradeDowngradeHelper.getInstance());
     this.tableServiceClient = new SparkRDDTableServiceClient<T>(context, writeConfig, getTimelineServer());
-    isMetadataTable = HoodieTableMetadata.isMetadataTable(config.getBasePath());
   }
 
   @Override
@@ -121,7 +116,7 @@ public class SparkRDDWriteClient<T> extends
           } else {
             writeStatus.dropGranularErrorRecordsTracking();
           }
-          return Pair.of(writeStatus.isMetadataTable(), writeStatus);
+          return Pair.of(writeStatus.isUpdatesMetadataTable(), writeStatus);
         }
     ).collect();
     // Compute stats for the writes and invoke callback
@@ -135,7 +130,7 @@ public class SparkRDDWriteClient<T> extends
     // Just incase if there are errors, caller might be interested to fetch error records in the callback. And so, we are passing the RDD<WriteStatus> as last argument to the write status
     // handler callback.
     boolean canProceed = writeStatusHandlerCallbackOpt.isEmpty() || writeStatusHandlerCallbackOpt.get().processWriteStatuses(totalRecords.get(), totalErrorRecords.get(),
-        totalErrorRecords.get() > 0 ? Option.of(HoodieJavaRDD.of(writeStatuses.filter(status -> !status.isMetadataTable()).map(WriteStatus::removeMetadataStats))) : Option.empty());
+        totalErrorRecords.get() > 0 ? Option.of(HoodieJavaRDD.of(writeStatuses.filter(status -> !status.isUpdatesMetadataTable()).map(WriteStatus::removeMetadataStats))) : Option.empty());
 
     // only if callback returns true, lets proceed. If not, bail out.
     if (canProceed) {

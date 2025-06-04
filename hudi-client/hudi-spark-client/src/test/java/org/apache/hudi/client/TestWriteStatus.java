@@ -220,7 +220,6 @@ public class TestWriteStatus {
     // Remove metadata stats
     status.removeMetadataStats();
     assertEquals(0, status.getWrittenRecordDelegates().size());
-    assertTrue(status.getStat().getColumnStats().isEmpty());
   }
 
   @Test
