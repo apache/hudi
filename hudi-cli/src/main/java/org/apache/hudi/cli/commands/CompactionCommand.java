@@ -199,22 +199,20 @@ public class CompactionCommand {
     boolean initialized = HoodieCLI.initConf();
     HoodieCLI.initFS(initialized);
 
-    // First get a compaction instant time and pass it to spark launcher for scheduling compaction
-    String compactionInstantTime = client.createNewInstantTime();
-
     String sparkPropertiesPath =
         Utils.getDefaultPropertiesFile(convertJavaPropertiesToScalaMap(System.getProperties()));
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
+    String tableName = client.getTableConfig().getTableName();
     SparkMain.addAppArgs(sparkLauncher, SparkCommand.COMPACT_SCHEDULE, master, sparkMemory, HoodieCLI.basePath,
-        client.getTableConfig().getTableName(), compactionInstantTime, propsFilePath);
+        tableName, propsFilePath);
     UtilHelpers.validateAndAddProperties(configs, sparkLauncher);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
     int exitCode = process.waitFor();
     if (exitCode != 0) {
-      return "Failed to run compaction for " + compactionInstantTime;
+      return "Failed to run compaction for " + tableName;
     }
-    return COMPACTION_SCH_SUCCESSFUL + compactionInstantTime;
+    return COMPACTION_SCH_SUCCESSFUL + tableName;
   }
 
   @ShellMethod(key = "compaction run", value = "Run Compaction for given instant time")
