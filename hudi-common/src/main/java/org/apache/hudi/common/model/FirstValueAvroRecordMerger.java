@@ -90,6 +90,6 @@ public class FirstValueAvroRecordMerger extends EventTimeBasedAvroRecordMerger {
 
   @Override
   public String getMergingStrategy() {
-    return HoodieRecordMerger.FIRST_VALUE_MERGE_STRATEGY_UUID;
+    return HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
   }
 }

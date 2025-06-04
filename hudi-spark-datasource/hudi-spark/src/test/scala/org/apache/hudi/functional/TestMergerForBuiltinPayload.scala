@@ -31,14 +31,6 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
 class TestMergerForBuiltinPayload extends SparkClientFunctionalTestHarness {
-  val expectedEventTimeBased: Seq[(Int, String, String, String, Double, String)] = Seq(
-    (10, "5", "rider-E", "driver-E", 17.85, "i"),
-    (10, "3", "rider-C", "driver-C", 33.9, "i"),
-    (10, "2", "rider-B", "driver-B", 27.7, "i"))
-  val expectedCommitTimeBased: Seq[(Int, String, String, String, Double, String)] = Seq(
-    (10, "5", "rider-E", "driver-E", 17.85, "i"),
-    (10, "3", "rider-C", "driver-C", 33.9, "i"))
-
   @ParameterizedTest
   @MethodSource(Array("provideParams"))
   def testMergerBuiltinPayload(tableType: String,
@@ -80,6 +72,8 @@ class TestMergerForBuiltinPayload extends SparkClientFunctionalTestHarness {
     // 3. Validate.
     val df = spark.read.format("hudi").options(opts).load(basePath)
     val finalDf = df.select("ts", "key", "rider", "driver", "fare", "delete").sort("key")
+    // Trigger execution.
+    finalDf.count()
 
     val initialized = Class.forName("org.apache.hudi.common.model.OverwriteWithLatestAvroPayload")
       .getDeclaredField("initialized")

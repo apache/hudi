@@ -91,6 +91,6 @@ class TestFirstValueAvroRecordMerger {
 
   @Test
   void testGetMergingStrategy() {
-    assertEquals(HoodieRecordMerger.FIRST_VALUE_MERGE_STRATEGY_UUID, merger.getMergingStrategy());
+    assertEquals(HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID, merger.getMergingStrategy());
   }
 }

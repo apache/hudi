@@ -42,7 +42,7 @@ public class PartialUpdateWithNonDefaultValueAvroMerger extends PartialUpdateAvr
 
   @Override
   public String getMergingStrategy() {
-    return HoodieRecordMerger.PARTIAL_UPDATE_WITH_NON_DEFAULT_VALUE_MERGE_STRATEGY_UUID;
+    return HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
   }
 
   @Override

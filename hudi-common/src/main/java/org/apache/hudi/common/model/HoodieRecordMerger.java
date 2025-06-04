@@ -58,9 +58,6 @@ public interface HoodieRecordMerger extends Serializable {
 
   // Use avro payload to merge records
   String PAYLOAD_BASED_MERGE_STRATEGY_UUID = "00000000-0000-0000-0000-000000000000";
-  String FIRST_VALUE_MERGE_STRATEGY_UUID = "00000000-0000-0000-0000-000000000001";
-  String PARTIAL_UPDATE_MERGE_STRATEGY_UUID = "00000000-0000-0000-0000-000000000002";
-  String PARTIAL_UPDATE_WITH_NON_DEFAULT_VALUE_MERGE_STRATEGY_UUID = "00000000-0000-0000-0000-000000000003";
 
   /**
    * This method converges combineAndGetUpdateValue and precombine from HoodiePayload.

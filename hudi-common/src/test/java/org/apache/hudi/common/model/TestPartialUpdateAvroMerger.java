@@ -53,7 +53,7 @@ class TestPartialUpdateAvroMerger {
 
   @Test
   void testMergingStrategy() {
-    assertEquals(HoodieRecordMerger.PARTIAL_UPDATE_MERGE_STRATEGY_UUID, merger.getMergingStrategy());
+    assertEquals(HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID, merger.getMergingStrategy());
   }
 
   @Test

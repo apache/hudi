@@ -33,7 +33,7 @@ class TestPartialUpdateWithNonDefaultValueAvroMerger {
 
   @Test
   void testMergingStrategy() {
-    assertEquals(HoodieRecordMerger.PARTIAL_UPDATE_WITH_NON_DEFAULT_VALUE_MERGE_STRATEGY_UUID,
+    assertEquals(HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID,
         merger.getMergingStrategy());
   }
 

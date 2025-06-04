@@ -268,8 +268,11 @@ public class SparkMetadataWriterUtils {
   private static List<HoodieRecord> getBaseFileRecords(HoodieBaseFile baseFile, HoodieTableMetaClient metaClient, Schema readerSchema) {
     List<HoodieRecord> records = new ArrayList<>();
     HoodieRecordMerger recordMerger =
-        HoodieRecordUtils.createRecordMerger(metaClient.getBasePath().toString(), EngineType.SPARK, Collections.emptyList(),
-            metaClient.getTableConfig().getRecordMergeStrategyId());
+        HoodieRecordUtils.createRecordMerger(
+            metaClient.getBasePath().toString(),
+            EngineType.SPARK,
+            Collections.emptyList(),
+            metaClient.getTableConfig().getRecordMergeStrategyId(), Option.empty());
     try (HoodieFileReader baseFileReader = HoodieIOFactory.getIOFactory(metaClient.getStorage()).getReaderFactory(recordMerger.getRecordType())
         .getFileReader(getReaderConfigs(metaClient.getStorageConf()), baseFile.getStoragePath())) {
       baseFileReader.getRecordIterator(readerSchema).forEachRemaining((record) -> records.add((HoodieRecord) record));

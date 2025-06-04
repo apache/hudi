@@ -118,7 +118,7 @@ public class PartialUpdateAvroMerger extends EventTimeBasedAvroRecordMerger {
 
   @Override
   public String getMergingStrategy() {
-    return HoodieRecordMerger.PARTIAL_UPDATE_MERGE_STRATEGY_UUID;
+    return HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
   }
 
   @Override
