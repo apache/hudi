@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.hudi.procedure;
+package org.apache.hudi.table.action.cluster;
 
 import org.apache.hudi.avro.HoodieBloomFilterWriteSupport;
 import org.apache.hudi.client.SparkRDDWriteClient;
@@ -63,7 +63,7 @@ import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_NEST
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TestSparkStreamCopyClusteringAndValidationMeta extends HoodieClientTestBase {
+public class TestSparkBinaryCopyClusteringAndValidationMeta extends HoodieClientTestBase {
 
   private FileSystem fs;
 
