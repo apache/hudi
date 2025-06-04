@@ -718,7 +718,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
         instantTime = getMetaClient().createNewInstantTime(false);
         scheduleRollback(context, instantTime, inflightInstant, false, config.shouldRollbackUsingMarkers(), false);
       } finally {
-        transactionManager.equals(Option.empty());
+        transactionManager.endStateChange(Option.empty());
       }
     } else {
       instantTime = rollbackInfo.get().getRollbackInstant().requestedTime();
