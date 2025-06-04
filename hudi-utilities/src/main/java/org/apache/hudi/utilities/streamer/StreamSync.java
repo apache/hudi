@@ -27,7 +27,7 @@ import org.apache.hudi.HoodieSchemaUtils;
 import org.apache.hudi.HoodieSparkSqlWriter;
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.callback.common.WriteStatusHandlerCallback;
+import org.apache.hudi.callback.common.WriteStatusValidator;
 import org.apache.hudi.client.HoodieWriteResult;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
@@ -813,13 +813,13 @@ public class StreamSync implements Serializable, Closeable {
       Map<String, String> checkpointCommitMetadata = extractCheckpointMetadata(inputBatch, props, writeClient.getConfig().getWriteVersion().versionCode(), cfg);
       AtomicLong totalSuccessfulRecords = new AtomicLong(0);
       Option<String> latestCommittedInstant = getLatestCommittedInstant();
-      WriteStatusHandlerCallback writeStatusHandlerCallback = new HoodieStreamerWriteStatusHandlerCallback(cfg.commitOnErrors, instantTime,
+      WriteStatusValidator writeStatusValidator = new HoodieStreamerWriteStatusValidator(cfg.commitOnErrors, instantTime,
           cfg, errorTableWriter, errorTableWriteStatusRDDOpt, errorWriteFailureStrategy, isErrorTableWriteUnificationEnabled, errorTableInstantTime, writeClient, latestCommittedInstant,
           totalSuccessfulRecords);
       String commitActionType = CommitUtils.getCommitActionType(cfg.operation, HoodieTableType.valueOf(cfg.tableType));
 
       boolean success = writeClient.commit(instantTime, writeStatusRDD, Option.of(checkpointCommitMetadata), commitActionType, partitionToReplacedFileIds, Option.empty(),
-          Option.of(writeStatusHandlerCallback));
+          Option.of(writeStatusValidator));
       releaseResourcesInvoked = true;
       if (success) {
         LOG.info("Commit " + instantTime + " successful!");
@@ -1300,10 +1300,10 @@ public class StreamSync implements Serializable, Closeable {
   }
 
   /**
-   * Callback for WriteStatus Handler for commits to data table.
-   * Here we do manage the writes to error table as well.
+   * WriteStatus Validator for commits to hoodie streamer data table.
+   * The writes to error table is taken care as well.
    */
-  static class HoodieStreamerWriteStatusHandlerCallback implements WriteStatusHandlerCallback {
+  static class HoodieStreamerWriteStatusValidator implements WriteStatusValidator {
 
     private final boolean commitOnErrors;
     private final String instantTime;
@@ -1317,17 +1317,17 @@ public class StreamSync implements Serializable, Closeable {
     private final Option<String> latestCommittedInstant;
     private final AtomicLong totalSuccessfulRecords;
 
-    HoodieStreamerWriteStatusHandlerCallback(boolean commitOnErrors,
-                                             String instantTime,
-                                             HoodieStreamer.Config cfg,
-                                             Option<BaseErrorTableWriter> errorTableWriter,
-                                             Option<JavaRDD<WriteStatus>> errorTableWriteStatusRDDOpt,
-                                             HoodieErrorTableConfig.ErrorWriteFailureStrategy errorWriteFailureStrategy,
-                                             boolean isErrorTableWriteUnificationEnabled,
-                                             String errorTableInstantTime,
-                                             SparkRDDWriteClient writeClient,
-                                             Option<String> latestCommittedInstant,
-                                             AtomicLong totalSuccessfulRecords) {
+    HoodieStreamerWriteStatusValidator(boolean commitOnErrors,
+                                       String instantTime,
+                                       HoodieStreamer.Config cfg,
+                                       Option<BaseErrorTableWriter> errorTableWriter,
+                                       Option<JavaRDD<WriteStatus>> errorTableWriteStatusRDDOpt,
+                                       HoodieErrorTableConfig.ErrorWriteFailureStrategy errorWriteFailureStrategy,
+                                       boolean isErrorTableWriteUnificationEnabled,
+                                       String errorTableInstantTime,
+                                       SparkRDDWriteClient writeClient,
+                                       Option<String> latestCommittedInstant,
+                                       AtomicLong totalSuccessfulRecords) {
       this.commitOnErrors = commitOnErrors;
       this.instantTime = instantTime;
       this.cfg = cfg;
@@ -1342,7 +1342,7 @@ public class StreamSync implements Serializable, Closeable {
     }
 
     @Override
-    public boolean processWriteStatuses(long tableTotalRecords, long tableTotalErroredRecords, Option<HoodieData<WriteStatus>> writeStatusesOpt) {
+    public boolean validate(long tableTotalRecords, long tableTotalErroredRecords, Option<HoodieData<WriteStatus>> writeStatusesOpt) {
 
       long totalRecords = tableTotalRecords;
       long totalErroredRecords = tableTotalErroredRecords;

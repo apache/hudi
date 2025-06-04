@@ -18,7 +18,7 @@
 
 package org.apache.hudi;
 
-import org.apache.hudi.callback.common.WriteStatusHandlerCallback;
+import org.apache.hudi.callback.common.WriteStatusValidator;
 import org.apache.hudi.client.HoodieWriteResult;
 import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
@@ -352,37 +352,38 @@ public class DataSourceUtils {
   }
 
   /**
-   * Callback for WriteStatus Handler.
-   * If there are error records, we print few of them and exit.
-   * If not, we proceed with the commit.
+   * Spark data source WriteStatus validator.
+   *
+   * <ul>
+   *   <li>If there are error records, prints few of them and exit;</li>
+   *   <li>If not, proceeds with the commit.</li>
+   * </ul>
    */
-  static class SparkDataSourceWriteStatusHandlerCallback implements WriteStatusHandlerCallback {
+  static class SparkDataSourceWriteStatusValidator implements WriteStatusValidator {
 
     private final WriteOperationType writeOperationType;
     private final AtomicBoolean hasErrored;
 
-    public SparkDataSourceWriteStatusHandlerCallback(WriteOperationType writeOperationType, AtomicBoolean hasErrored) {
+    public SparkDataSourceWriteStatusValidator(WriteOperationType writeOperationType, AtomicBoolean hasErrored) {
       this.writeOperationType = writeOperationType;
       this.hasErrored = hasErrored;
     }
 
     @Override
-    public boolean processWriteStatuses(long totalRecords, long totalErroredRecords, Option<HoodieData<WriteStatus>> writeStatusesOpt) {
+    public boolean validate(long totalRecords, long totalErroredRecords, Option<HoodieData<WriteStatus>> writeStatusesOpt) {
       if (totalErroredRecords > 0) {
         hasErrored.set(true);
         ValidationUtils.checkArgument(writeStatusesOpt.isPresent(), "RDD <WriteStatus> expected to be present when there are errors");
-        LOG.error("%s failed with errors", writeOperationType);
+        LOG.error("{} failed with errors", writeOperationType);
         if (LOG.isTraceEnabled()) {
           LOG.trace("Printing out the top 100 errors");
 
-          HoodieJavaRDD.getJavaRDD(writeStatusesOpt.get()).filter(writeStatus -> writeStatus.hasErrors())
+          HoodieJavaRDD.getJavaRDD(writeStatusesOpt.get()).filter(WriteStatus::hasErrors)
               .take(100)
               .forEach(ws -> {
-                LOG.trace("Global error: {}", ws.getGlobalError());
-                if (ws.getErrors().size() > 0) {
-                  ws.getErrors().forEach((k, v) -> {
-                    LOG.trace("Error for key {}: {}", k, v);
-                  });
+                LOG.trace("Global error:", ws.getGlobalError());
+                if (!ws.getErrors().isEmpty()) {
+                  ws.getErrors().forEach((k, v) -> LOG.trace("Error for key {}: {}", k, v));
                 }
               });
         }

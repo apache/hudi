@@ -20,7 +20,7 @@ package org.apache.hudi
 import org.apache.hudi.AutoRecordKeyGenerationUtils.mayBeValidateParamsForAutoGenerationOfRecordKeys
 import org.apache.hudi.AvroConversionUtils.{convertAvroSchemaToStructType, convertStructTypeToAvroSchema, getAvroRecordNameAndNamespace}
 import org.apache.hudi.DataSourceOptionsHelper.fetchMissingWriteConfigsFromTableConfig
-import org.apache.hudi.DataSourceUtils.SparkDataSourceWriteStatusHandlerCallback
+import org.apache.hudi.DataSourceUtils.SparkDataSourceWriteStatusValidator
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.{toProperties, toScalaOption}
 import org.apache.hudi.HoodieSparkSqlWriter.StreamingWriteParams
@@ -997,7 +997,7 @@ class HoodieSparkSqlWriterInternal {
         tableInstantInfo.commitActionType,
         writeResult.getPartitionToReplaceFileIds,
         common.util.Option.ofNullable(extraPreCommitFn.orNull),
-        org.apache.hudi.common.util.Option.of(new SparkDataSourceWriteStatusHandlerCallback(tableInstantInfo.operation, hasErrors)))
+        org.apache.hudi.common.util.Option.of(new SparkDataSourceWriteStatusValidator(tableInstantInfo.operation, hasErrors)))
 
     if (!hasErrors.get()) {
       if (commitSuccess) {

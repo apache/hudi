@@ -23,19 +23,22 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.util.Option;
 
 /**
- * WriteStatus handler callback to assist caller to process errors if any. Caller can dictate if we wanted to proceed with the commit or not by means of the return
- * value of the call back (processWriteStatuses). We noticed that sometimes callers invoke the dag just to process it there are any errors before proceeding with the commit.
- * With this callback, we are avoiding additional dag triggers from the callers side.
+ * WriteStatus validator to assist caller to process errors if any. Caller can dictate if we wanted to proceed with the commit or not by means of the return
+ * value of the method {@link WriteStatusValidator#validate}.
+ *
+ * <p>Sometimes callers invoke the dag just to process if there are any errors before proceeding with the commit.
+ * This hook function is introduced for avoiding additional dag triggers from the callers side.
  */
-public interface WriteStatusHandlerCallback {
+public interface WriteStatusValidator {
 
   /**
-   * Callback for processing the write status
+   * Validates the given write status
    *
-   * @param totalRecords total records in this inflight commit.
-   * @param totalErroredRecords total error records in this infight commit.
-   * @param writeStatusesOpt List of {@link WriteStatus} for the data table writes for this inflight commit.
+   * @param totalRecords        Total records in this inflight commit.
+   * @param totalErroredRecords Total error records in this inflight commit.
+   * @param writeStatusesOpt    List of {@link WriteStatus} for the data table writes for this inflight commit.
+   *
    * @return True if the commit can proceed
    */
-  boolean processWriteStatuses(long totalRecords, long totalErroredRecords, Option<HoodieData<WriteStatus>> writeStatusesOpt);
+  boolean validate(long totalRecords, long totalErroredRecords, Option<HoodieData<WriteStatus>> writeStatusesOpt);
 }
