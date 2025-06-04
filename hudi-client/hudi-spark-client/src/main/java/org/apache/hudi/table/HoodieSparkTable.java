@@ -19,7 +19,6 @@
 package org.apache.hudi.table;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.client.utils.SparkPartitionUtils;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -38,7 +37,6 @@ import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkMetadataWriterFactory;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.table.action.commit.HoodieMergeHelper;
 
 import org.apache.hadoop.conf.Configuration;
@@ -52,21 +50,11 @@ public abstract class HoodieSparkTable<T>
 
   private volatile boolean isMetadataTableExists = false;
 
-  protected HoodieSparkTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient, TransactionManager transactionManager) {
-    super(config, context, metaClient, transactionManager);
-  }
-
-  public static <T> HoodieSparkTable<T> create(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
-    TransactionManager transactionManager = new TransactionManager(config, HoodieStorageUtils.getStorage(config.getBasePath(), context.getStorageConf()));
-    return create(config, context, metaClient, transactionManager);
+  protected HoodieSparkTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
+    super(config, context, metaClient);
   }
 
   public static <T> HoodieSparkTable<T> create(HoodieWriteConfig config, HoodieEngineContext context) {
-    TransactionManager transactionManager = new TransactionManager(config, HoodieStorageUtils.getStorage(config.getBasePath(), context.getStorageConf()));
-    return create(config, context, transactionManager);
-  }
-
-  public static <T> HoodieSparkTable<T> create(HoodieWriteConfig config, HoodieEngineContext context, TransactionManager transactionManager) {
     HoodieTableMetaClient metaClient =
         HoodieTableMetaClient.builder()
             .setConf(context.getStorageConf().newInstance())
@@ -75,23 +63,22 @@ public abstract class HoodieSparkTable<T>
             .setTimeGeneratorConfig(config.getTimeGeneratorConfig())
             .setFileSystemRetryConfig(config.getFileSystemRetryConfig())
             .setMetaserverConfig(config.getProps()).build();
-    return HoodieSparkTable.create(config, context, metaClient, transactionManager);
+    return HoodieSparkTable.create(config, context, metaClient);
   }
 
   public static <T> HoodieSparkTable<T> create(HoodieWriteConfig config,
                                                HoodieEngineContext context,
-                                               HoodieTableMetaClient metaClient,
-                                               TransactionManager transactionManager) {
+                                               HoodieTableMetaClient metaClient) {
     HoodieSparkTable<T> hoodieSparkTable;
     switch (metaClient.getTableType()) {
       case COPY_ON_WRITE:
-        hoodieSparkTable = new HoodieSparkCopyOnWriteTable<>(config, context, metaClient, transactionManager);
+        hoodieSparkTable = new HoodieSparkCopyOnWriteTable<>(config, context, metaClient);
         break;
       case MERGE_ON_READ:
         if (metaClient.isMetadataTable()) {
-          hoodieSparkTable = new HoodieSparkMergeOnReadMetadataTable<>(config, context, metaClient, transactionManager);
+          hoodieSparkTable = new HoodieSparkMergeOnReadMetadataTable<>(config, context, metaClient);
         } else {
-          hoodieSparkTable = new HoodieSparkMergeOnReadTable<>(config, context, metaClient, transactionManager);
+          hoodieSparkTable = new HoodieSparkMergeOnReadTable<>(config, context, metaClient);
         }
         break;
       default:

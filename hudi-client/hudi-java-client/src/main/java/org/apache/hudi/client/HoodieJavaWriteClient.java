@@ -73,7 +73,7 @@ public class HoodieJavaWriteClient<T> extends
   @Override
   public List<HoodieRecord<T>> filterExists(List<HoodieRecord<T>> hoodieRecords) {
     // Create a Hoodie table which encapsulated the commits and files visible
-    HoodieJavaTable<T> table = HoodieJavaTable.create(config, context, txnManager);
+    HoodieJavaTable<T> table = HoodieJavaTable.create(config, context);
     Timer.Context indexTimer = metrics.getIndexCtx();
     List<HoodieRecord<T>> recordsWithLocation = getIndex().tagLocation(HoodieListData.eager(hoodieRecords), context, table).collectAsList();
     metrics.updateIndexMetrics(LOOKUP_STR, metrics.getDurationInMs(indexTimer == null ? 0L : indexTimer.stop()));

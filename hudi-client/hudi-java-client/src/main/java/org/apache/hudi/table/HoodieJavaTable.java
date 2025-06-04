@@ -19,7 +19,6 @@
 package org.apache.hudi.table;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
@@ -35,7 +34,6 @@ import org.apache.hudi.index.JavaHoodieIndexFactory;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.JavaHoodieBackedTableMetadataWriter;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import java.io.IOException;
@@ -45,37 +43,26 @@ public abstract class HoodieJavaTable<T>
     extends HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> {
   private volatile boolean isMetadataTableExists = false;
 
-  protected HoodieJavaTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient, TransactionManager transactionManager) {
-    super(config, context, metaClient, transactionManager);
+  protected HoodieJavaTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
+    super(config, context, metaClient);
   }
 
   public static <T> HoodieJavaTable<T> create(HoodieWriteConfig config, HoodieEngineContext context) {
-    TransactionManager transactionManager = new TransactionManager(config, HoodieStorageUtils.getStorage(config.getBasePath(), context.getStorageConf()));
-    return HoodieJavaTable.create(config, context, transactionManager);
-  }
-
-  public static <T> HoodieJavaTable<T> create(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
-    TransactionManager transactionManager = new TransactionManager(config, HoodieStorageUtils.getStorage(config.getBasePath(), context.getStorageConf()));
-    return HoodieJavaTable.create(config, context, metaClient, transactionManager);
-  }
-
-  public static <T> HoodieJavaTable<T> create(HoodieWriteConfig config, HoodieEngineContext context, TransactionManager transactionManager) {
     HoodieTableMetaClient metaClient =
         HoodieTableMetaClient.builder().setConf(context.getStorageConf().newInstance()).setBasePath(config.getBasePath())
             .setLoadActiveTimelineOnLoad(true).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
             .setTimeGeneratorConfig(config.getTimeGeneratorConfig()).build();
-    return HoodieJavaTable.create(config, context, metaClient, transactionManager);
+    return HoodieJavaTable.create(config, context, metaClient);
   }
 
   public static <T> HoodieJavaTable<T> create(HoodieWriteConfig config,
                                               HoodieEngineContext context,
-                                              HoodieTableMetaClient metaClient,
-                                              TransactionManager transactionManager) {
+                                              HoodieTableMetaClient metaClient) {
     switch (metaClient.getTableType()) {
       case COPY_ON_WRITE:
-        return new HoodieJavaCopyOnWriteTable<>(config, context, metaClient, transactionManager);
+        return new HoodieJavaCopyOnWriteTable<>(config, context, metaClient);
       case MERGE_ON_READ:
-        return new HoodieJavaMergeOnReadTable<>(config, context, metaClient, transactionManager);
+        return new HoodieJavaMergeOnReadTable<>(config, context, metaClient);
       default:
         throw new HoodieException("Unsupported table type :" + metaClient.getTableType());
     }

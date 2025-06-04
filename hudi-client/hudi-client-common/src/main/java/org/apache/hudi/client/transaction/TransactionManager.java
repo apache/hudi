@@ -33,7 +33,7 @@ import java.io.Serializable;
  * This class allows clients to start and end transactions. Anything done between a start and end transaction is
  * guaranteed to be atomic.
  */
-public class TransactionManager implements Serializable {
+public class TransactionManager implements Serializable, AutoCloseable {
 
   protected static final Logger LOG = LoggerFactory.getLogger(TransactionManager.class);
   protected final LockManager lockManager;
@@ -83,6 +83,7 @@ public class TransactionManager implements Serializable {
     return false;
   }
 
+  @Override
   public void close() {
     if (isLockRequired) {
       lockManager.close();

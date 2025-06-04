@@ -22,7 +22,6 @@ import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -37,8 +36,8 @@ import org.apache.hudi.io.HoodieAppendHandle;
 import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.commit.BucketInfo;
-import org.apache.hudi.table.action.commit.delta.FlinkUpsertPreppedDeltaCommitActionExecutor;
 import org.apache.hudi.table.action.commit.delta.FlinkUpsertDeltaCommitActionExecutor;
+import org.apache.hudi.table.action.commit.delta.FlinkUpsertPreppedDeltaCommitActionExecutor;
 import org.apache.hudi.table.action.compact.HoodieFlinkMergeOnReadTableCompactor;
 import org.apache.hudi.table.action.compact.RunCompactionActionExecutor;
 import org.apache.hudi.table.action.compact.ScheduleCompactionActionExecutor;
@@ -59,9 +58,8 @@ public class HoodieFlinkMergeOnReadTable<T>
   HoodieFlinkMergeOnReadTable(
       HoodieWriteConfig config,
       HoodieEngineContext context,
-      HoodieTableMetaClient metaClient,
-      TransactionManager transactionManager) {
-    super(config, context, metaClient, transactionManager);
+      HoodieTableMetaClient metaClient) {
+    super(config, context, metaClient);
   }
 
   @Override

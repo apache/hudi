@@ -306,4 +306,8 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
    * @param columnsToIndex list of columns to index.
    */
   protected abstract void updateColumnsToIndexWithColStats(HoodieTableMetaClient metaClient, List<String> columnsToIndex);
+
+  public TransactionManager getTransactionManager() {
+    return txnManager;
+  }
 }

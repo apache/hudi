@@ -20,6 +20,7 @@ package org.apache.hudi.table;
 
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.client.transaction.TransactionManager;
+import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
@@ -29,6 +30,7 @@ import org.apache.hudi.common.table.timeline.versioning.v1.InstantComparatorV1;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SerializationUtils;
+import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
@@ -46,8 +48,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class TestHoodieTable extends HoodieCommonTestHarness {
-  private final TransactionManager transactionManager = mock(TransactionManager.class);
-
   @Test
   void getIndexReturnsCachedInstance() throws IOException {
     initMetaClient();
@@ -55,8 +55,7 @@ class TestHoodieTable extends HoodieCommonTestHarness {
         .withPath(basePath)
         .build();
     HoodieEngineContext context = mock(HoodieEngineContext.class);
-
-    HoodieTable hoodieTable = new TestBaseHoodieTable(writeConfig, context, metaClient, transactionManager);
+    HoodieTable hoodieTable = new TestBaseHoodieTable(writeConfig, context, metaClient);
 
     HoodieIndex<?, ?> index = hoodieTable.getIndex();
     assertSame(index, hoodieTable.getIndex());
@@ -69,7 +68,7 @@ class TestHoodieTable extends HoodieCommonTestHarness {
         .withPath(basePath)
         .build();
     HoodieEngineContext context = mock(HoodieEngineContext.class);
-    HoodieTable hoodieTable = new TestBaseHoodieTable(writeConfig, context, metaClient, transactionManager);
+    HoodieTable hoodieTable = new TestBaseHoodieTable(writeConfig, context, metaClient);
 
     HoodieStorageLayout storageLayout = hoodieTable.getStorageLayout();
     assertSame(storageLayout, hoodieTable.getStorageLayout());
@@ -82,7 +81,7 @@ class TestHoodieTable extends HoodieCommonTestHarness {
         .withPath(basePath)
         .build();
     HoodieEngineContext context = mock(HoodieEngineContext.class);
-    HoodieTable hoodieTable = new TestBaseHoodieTable(writeConfig, context, metaClient, transactionManager);
+    HoodieTable hoodieTable = new TestBaseHoodieTable(writeConfig, context, metaClient);
 
     // before serialization, context is the same one that is passed in
     assertSame(context, hoodieTable.getContext());
@@ -97,10 +96,14 @@ class TestHoodieTable extends HoodieCommonTestHarness {
     initMetaClient();
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
         .withPath(basePath)
+        .withLockConfig(HoodieLockConfig.newBuilder()
+            .withLockProvider(InProcessLockProvider.class)
+            .build())
         .build();
+    TransactionManager transactionManager = new TransactionManager(writeConfig, storage);
     HoodieEngineContext context = mock(HoodieEngineContext.class);
     HoodieTable hoodieTable =
-        new TestBaseHoodieTable(writeConfig, context, metaClient, transactionManager);
+        new TestBaseHoodieTable(writeConfig, context, metaClient);
     // Prepare test inputs.
     HoodieInstant inflightInstant = new HoodieInstant(
         HoodieInstant.State.INFLIGHT,
@@ -119,7 +122,7 @@ class TestHoodieTable extends HoodieCommonTestHarness {
     timeline.createNewInstant(inflightInstant);
     // Case 1: Execute the method with pending rollback instant.
     hoodieTable.rollbackInflightInstant(
-        inflightInstant, getPendingRollbackInstantFunc);
+        inflightInstant, getPendingRollbackInstantFunc, transactionManager);
     // Validate that function scheduleRollback is not called.
     assertEquals(0, ((TestBaseHoodieTable) hoodieTable).getCountOfScheduleRollbackFunctionCalls());
 
@@ -129,7 +132,7 @@ class TestHoodieTable extends HoodieCommonTestHarness {
     timeline.createNewInstant(inflightInstant);
     // Case 2: Execute the method without pending rollback instant.
     hoodieTable.rollbackInflightInstant(
-        inflightInstant, getPendingRollbackInstantFunc);
+        inflightInstant, getPendingRollbackInstantFunc, transactionManager);
     // Validate that function scheduleRollback is called.
     assertEquals(1, ((TestBaseHoodieTable) hoodieTable).getCountOfScheduleRollbackFunctionCalls());
   }

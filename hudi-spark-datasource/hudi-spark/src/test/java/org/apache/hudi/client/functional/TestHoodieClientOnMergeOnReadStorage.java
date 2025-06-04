@@ -448,7 +448,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
 
       // Rollback the log compaction commit.
       HoodieInstant instant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.LOG_COMPACTION_ACTION, logCompactionTimeStamp.get());
-      getHoodieTable(metaClient, config).rollbackInflightLogCompaction(instant);
+      getHoodieTable(metaClient, config).rollbackInflightLogCompaction(instant, client.getTransactionManager());
 
       // Validate timeline.
       HoodieTimeline activeTimeline = metaClient.reloadActiveTimeline();
