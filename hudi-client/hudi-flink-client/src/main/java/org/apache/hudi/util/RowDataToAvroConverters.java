@@ -29,6 +29,7 @@ import org.apache.flink.table.data.DecimalData;
 import org.apache.flink.table.data.MapData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.TimestampData;
+import org.apache.flink.table.data.binary.BinaryStringData;
 import org.apache.flink.table.types.logical.ArrayType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
@@ -143,7 +144,7 @@ public class RowDataToAvroConverters {
 
               @Override
               public Object convert(Schema schema, Object object) {
-                return new Utf8(object.toString());
+                return new Utf8(((BinaryStringData) object).toBytes());
               }
             };
         break;
