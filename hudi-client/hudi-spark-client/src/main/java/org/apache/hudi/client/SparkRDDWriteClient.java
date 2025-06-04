@@ -108,6 +108,7 @@ public class SparkRDDWriteClient<T> extends
     // So, here we are dropping all additional stats and only retains the information required to proceed from here on.
     // And we are also dropping error records so that we don't unintentionally collect the error records in the driver.
     HoodieTable table = createTable(config);
+    boolean isMetadataTable = table.isMetadataTable();
     boolean isMetadataStreamingWritesEnabled = config.isMetadataStreamingWritesEnabled(table.getMetaClient().getTableConfig().getTableVersion());
     List<Pair<Boolean, WriteStatus>> isMetadataWriteStatusPairs = writeStatuses
         .map(writeStatus -> {
@@ -116,13 +117,13 @@ public class SparkRDDWriteClient<T> extends
           } else {
             writeStatus.dropGranularErrorRecordsTracking();
           }
-          return Pair.of(writeStatus.isForMetadataTable(), writeStatus);
+          return Pair.of(writeStatus.isMetadataTable(), writeStatus);
         }
     ).collect();
     // Compute stats for the writes and invoke callback
     AtomicLong totalRecords = new AtomicLong(0);
     AtomicLong totalErrorRecords = new AtomicLong(0);
-    isMetadataWriteStatusPairs.stream().filter(entry -> table.isMetadataTable() && entry.getKey()).forEach(pair -> {
+    isMetadataWriteStatusPairs.stream().filter(entry -> isMetadataTable && entry.getKey()).forEach(pair -> {
       totalRecords.getAndAdd(pair.getValue().getTotalRecords());
       totalErrorRecords.getAndAdd(pair.getValue().getTotalErrorRecords());
     });
@@ -130,7 +131,7 @@ public class SparkRDDWriteClient<T> extends
     // Just incase if there are errors, caller might be interested to fetch error records in the callback. And so, we are passing the RDD<WriteStatus> as last argument to the write status
     // handler callback.
     boolean canProceed = writeStatusHandlerCallbackOpt.map(callback -> callback.validate(totalRecords.get(), totalErrorRecords.get(),
-            totalErrorRecords.get() > 0 ? Option.of(HoodieJavaRDD.of(writeStatuses.filter(status -> table.isMetadataTable() && status.isForMetadataTable()).map(WriteStatus::removeMetadataStats))) : Option.empty()))
+            totalErrorRecords.get() > 0 ? Option.of(HoodieJavaRDD.of(writeStatuses.filter(status -> isMetadataTable && status.isMetadataTable()).map(WriteStatus::removeMetadataStats))) : Option.empty()))
         .orElse(true);
 
     // only if callback returns true, lets proceed. If not, bail out.
