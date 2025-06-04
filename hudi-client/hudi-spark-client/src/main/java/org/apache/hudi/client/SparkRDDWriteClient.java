@@ -122,7 +122,7 @@ public class SparkRDDWriteClient<T> extends
     // Compute stats for the writes and invoke callback
     AtomicLong totalRecords = new AtomicLong(0);
     AtomicLong totalErrorRecords = new AtomicLong(0);
-    isMetadataWriteStatusPairs.stream().filter(entry -> isMetadataTable && entry.getKey()).forEach(pair -> {
+    isMetadataWriteStatusPairs.stream().filter(entry -> table.isMetadataTable() && entry.getKey()).forEach(pair -> {
       totalRecords.getAndAdd(pair.getValue().getTotalRecords());
       totalErrorRecords.getAndAdd(pair.getValue().getTotalErrorRecords());
     });
@@ -130,7 +130,7 @@ public class SparkRDDWriteClient<T> extends
     // Just incase if there are errors, caller might be interested to fetch error records in the callback. And so, we are passing the RDD<WriteStatus> as last argument to the write status
     // handler callback.
     boolean canProceed = writeStatusHandlerCallbackOpt.map(callback -> callback.validate(totalRecords.get(), totalErrorRecords.get(),
-            totalErrorRecords.get() > 0 ? Option.of(HoodieJavaRDD.of(writeStatuses.filter(status -> isMetadataTable && status.isForMetadataTable()).map(WriteStatus::removeMetadataStats))) : Option.empty()))
+            totalErrorRecords.get() > 0 ? Option.of(HoodieJavaRDD.of(writeStatuses.filter(status -> table.isMetadataTable() && status.isForMetadataTable()).map(WriteStatus::removeMetadataStats))) : Option.empty()))
         .orElse(true);
 
     // only if callback returns true, lets proceed. If not, bail out.
@@ -138,7 +138,7 @@ public class SparkRDDWriteClient<T> extends
       // when streaming writes are enabled, writeStatuses is a mix of data table write status and mdt write status
       List<HoodieWriteStat> dataTableHoodieWriteStats = isMetadataWriteStatusPairs.stream().filter(entry -> !entry.getKey()).map(leanWriteStatus -> leanWriteStatus.getValue().getStat()).collect(Collectors.toList());
       List<HoodieWriteStat> partialMetadataHoodieWriteStatsSoFar = isMetadataWriteStatusPairs.stream().filter(Pair::getKey).map(leanWriteStatus -> leanWriteStatus.getValue().getStat()).collect(Collectors.toList());
-      List<HoodieWriteStat> commitWriteStats = isMetadataTable ? partialMetadataHoodieWriteStatsSoFar : dataTableHoodieWriteStats;
+      List<HoodieWriteStat> commitWriteStats = table.isMetadataTable() ? partialMetadataHoodieWriteStatsSoFar : dataTableHoodieWriteStats;
       return commitStats(instantTime, commitWriteStats, extraMetadata, commitActionType,
           partitionToReplacedFileIds, extraPreCommitFunc, Option.of(table));
     } else {
