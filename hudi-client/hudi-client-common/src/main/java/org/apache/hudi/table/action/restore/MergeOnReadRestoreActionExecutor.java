@@ -67,7 +67,7 @@ public class MergeOnReadRestoreActionExecutor<T, I, K, O>
         context,
         config,
         table,
-        instantTime,
+        newInstantTime,
         instantToRollback,
         true,
         true,
