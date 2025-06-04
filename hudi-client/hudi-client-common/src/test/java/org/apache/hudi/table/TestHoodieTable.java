@@ -100,7 +100,7 @@ class TestHoodieTable extends HoodieCommonTestHarness {
             .withLockProvider(InProcessLockProvider.class)
             .build())
         .build();
-    TransactionManager transactionManager = new TransactionManager(writeConfig, storage);
+    TransactionManager transactionManager = new TransactionManager(writeConfig, metaClient.getStorage());
     HoodieEngineContext context = mock(HoodieEngineContext.class);
     HoodieTable hoodieTable =
         new TestBaseHoodieTable(writeConfig, context, metaClient);
