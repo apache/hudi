@@ -21,16 +21,12 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.debezium.DebeziumConstants;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.exception.HoodieDebeziumAvroPayloadException;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-
-import static org.apache.hudi.common.model.AWSDmsAvroPayload.OP_FIELD;
 
 public abstract class HoodieCDCMerger implements HoodieRecordMerger {
 
@@ -39,14 +35,20 @@ public abstract class HoodieCDCMerger implements HoodieRecordMerger {
                                                   Schema oldSchema,
                                                   HoodieRecord newer,
                                                   Schema newSchema,
-                                                  TypedProperties props) throws Exception {
-    IndexedRecord oldRecord = older.toIndexedRecord(oldSchema, props).map(HoodieAvroIndexedRecord::getData).get();
-    IndexedRecord newRecord = newer.toIndexedRecord(newSchema, props).map(HoodieAvroIndexedRecord::getData).get();
-
-    // Main comparison logic.
-    if (shouldPickOldRecord(oldRecord, newRecord, oldSchema, newSchema)) {
-      return Option.of(Pair.of(older, oldSchema));
+                                                  TypedProperties props) {
+    IndexedRecord oldRecord;
+    IndexedRecord newRecord;
+    try {
+      oldRecord = older.toIndexedRecord(oldSchema, props).map(HoodieAvroIndexedRecord::getData).get();
+      newRecord = newer.toIndexedRecord(newSchema, props).map(HoodieAvroIndexedRecord::getData).get();
+      // Main comparison logic.
+      if (shouldPickOldRecord(oldRecord, newRecord, oldSchema, newSchema)) {
+        return Option.of(Pair.of(older, oldSchema));
+      }
+    } catch (Exception e) {
+      throw new RuntimeException(e);
     }
+
     // Handle delete logic.
     if (isDeleteRecord((GenericRecord) newRecord)) {
       return Option.empty();
