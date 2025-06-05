@@ -106,30 +106,29 @@ public class SparkRDDWriteClient<T> extends
     // If not, writes to data table gets triggered here.
     // When streaming writes are enabled, data table's WriteStatus is expected to contain all stats required to generate metadata table records and so each object will be larger.
     // So, here we are dropping all additional stats and error records to retain only the required information and prevent collecting large objects on the driver.
-    List<WriteStatusMetadataTracker> writeStatusMetadataTrackerList = writeStatuses
-        .map(writeStatus -> new WriteStatusMetadataTracker(writeStatus.isMetadataTable(), writeStatus.getTotalRecords(), writeStatus.getTotalErrorRecords(),
+    List<SlimWriteStats> slimWriteStatsList = writeStatuses
+        .map(writeStatus -> new SlimWriteStats(writeStatus.isMetadataTable(), writeStatus.getTotalRecords(), writeStatus.getTotalErrorRecords(),
             writeStatus.getStat())).collect();
     // Compute stats for the data table writes and invoke callback
     AtomicLong totalRecords = new AtomicLong(0);
     AtomicLong totalErrorRecords = new AtomicLong(0);
     // collect record stats for data table
-    writeStatusMetadataTrackerList.stream().filter(writeStatusMetadataTracker -> !writeStatusMetadataTracker.isMetadataTable())
-        .forEach(writeStatusMetadataTracker -> {
-          totalRecords.getAndAdd(writeStatusMetadataTracker.getTotalErrorRecords());
-          totalErrorRecords.getAndAdd(writeStatusMetadataTracker.getTotalErrorRecords());
+    slimWriteStatsList.stream().filter(slimWriteStats -> !slimWriteStats.isMetadataTable())
+        .forEach(slimWriteStats -> {
+          totalRecords.getAndAdd(slimWriteStats.getTotalErrorRecords());
+          totalErrorRecords.getAndAdd(slimWriteStats.getTotalErrorRecords());
         });
     // reason why we are passing RDD<WriteStatus> to the writeStatusHandler callback: At the beginning of this method, we drop all index stats and error records before collecting in the driver.
     // Just incase if there are errors, caller might be interested to fetch error records in the callback. And so, we are passing the RDD<WriteStatus> as last argument to the write status
     // handler callback.
     boolean canProceed = writeStatusValidatorOpt.map(callback -> callback.validate(totalRecords.get(), totalErrorRecords.get(),
-            totalErrorRecords.get() > 0 ? Option.of(HoodieJavaRDD.of(writeStatuses.filter(pair -> !pair.isMetadataTable()).map(WriteStatus::removeMetadataStats))) : Option.empty()))
+            totalErrorRecords.get() > 0 ? Option.of(HoodieJavaRDD.of(writeStatuses.filter(status -> !status.isMetadataTable()).map(WriteStatus::removeMetadataStats))) : Option.empty()))
         .orElse(true);
 
     // only if callback returns true, lets proceed. If not, bail out.
     if (canProceed) {
       // when streaming writes are enabled, writeStatuses is a mix of data table write status and mdt write status
-      List<HoodieWriteStat> dataTableHoodieWriteStats = writeStatusMetadataTrackerList.stream().filter(entry -> !entry.isMetadataTable()).map(writeStatusMetadataTracker -> writeStatusMetadataTracker.getWriteStat()).collect(Collectors.toList());
-      List<HoodieWriteStat> partialMetadataHoodieWriteStatsSoFar = writeStatusMetadataTrackerList.stream().filter(entry -> entry.isMetadataTable).map(writeStatusMetadataTracker -> writeStatusMetadataTracker.getWriteStat()).collect(Collectors.toList());
+      List<HoodieWriteStat> dataTableHoodieWriteStats = slimWriteStatsList.stream().filter(entry -> !entry.isMetadataTable()).map(SlimWriteStats::getWriteStat).collect(Collectors.toList());
       return commitStats(instantTime, dataTableHoodieWriteStats, extraMetadata, commitActionType,
           partitionToReplacedFileIds, extraPreCommitFunc);
     } else {
@@ -393,13 +392,15 @@ public class SparkRDDWriteClient<T> extends
    * WriteStatus metadata tracker to hold info like total records, total record records,
    * HoodieWriteStat and whether the writeStatus is referring to metadata table or not.
    */
-  static class WriteStatusMetadataTracker implements Serializable {
-    private final boolean isMetadataTable;
-    private final long totalRecords;
-    private final long totalErrorRecords;
-    private final HoodieWriteStat writeStat;
+  static class SlimWriteStats implements Serializable {
+    private static final long serialVersionUID = 1L;
 
-    public WriteStatusMetadataTracker(boolean isMetadataTable, long totalRecords, long totalErrorRecords, HoodieWriteStat writeStat) {
+    private boolean isMetadataTable;
+    private long totalRecords;
+    private long totalErrorRecords;
+    private HoodieWriteStat writeStat;
+
+    public SlimWriteStats(boolean isMetadataTable, long totalRecords, long totalErrorRecords, HoodieWriteStat writeStat) {
       this.isMetadataTable = isMetadataTable;
       this.totalRecords = totalRecords;
       this.totalErrorRecords = totalErrorRecords;
@@ -421,6 +422,29 @@ public class SparkRDDWriteClient<T> extends
     public HoodieWriteStat getWriteStat() {
       return writeStat;
     }
-  }
 
+    // setter for efficient serialization,
+    // please do not remove it even if it is not used.
+    public void setMetadataTable(boolean metadataTable) {
+      isMetadataTable = metadataTable;
+    }
+
+    // setter for efficient serialization,
+    // please do not remove it even if it is not used.
+    public void setTotalRecords(long totalRecords) {
+      this.totalRecords = totalRecords;
+    }
+
+    // setter for efficient serialization,
+    // please do not remove it even if it is not used.
+    public void setTotalErrorRecords(long totalErrorRecords) {
+      this.totalErrorRecords = totalErrorRecords;
+    }
+
+    // setter for efficient serialization,
+    // please do not remove it even if it is not used.
+    public void setWriteStat(HoodieWriteStat writeStat) {
+      this.writeStat = writeStat;
+    }
+  }
 }
