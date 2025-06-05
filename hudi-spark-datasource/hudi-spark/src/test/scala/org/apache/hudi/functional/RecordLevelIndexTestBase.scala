@@ -20,13 +20,14 @@ package org.apache.hudi.functional
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.data.HoodieListData
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
 
 import org.apache.spark.sql._
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 
 import scala.collection.{mutable, JavaConverters}
 import scala.collection.JavaConverters._
@@ -123,7 +124,8 @@ class RecordLevelIndexTestBase extends HoodieStatsIndexTestBase {
     val readDf = spark.read.format("hudi").load(basePath)
     val rowArr = readDf.collect()
     val recordIndexMap = metadata.readRecordIndex(
-      JavaConverters.seqAsJavaListConverter(rowArr.map(row => row.getAs("_hoodie_record_key").toString).toList).asJava)
+      HoodieListData.eager(JavaConverters.seqAsJavaListConverter(
+        rowArr.map(row => row.getAs("_hoodie_record_key").toString).toList).asJava))
 
     assertTrue(rowArr.length > 0)
     for (row <- rowArr) {
@@ -137,7 +139,8 @@ class RecordLevelIndexTestBase extends HoodieStatsIndexTestBase {
 
     val deletedRows = deletedDf.collect()
     val recordIndexMapForDeletedRows = metadata.readRecordIndex(
-      JavaConverters.seqAsJavaListConverter(deletedRows.map(row => row.getAs("_row_key").toString).toList).asJava)
+      HoodieListData.eager(JavaConverters.seqAsJavaListConverter(
+        deletedRows.map(row => row.getAs("_row_key").toString).toList).asJava))
     assertEquals(0, recordIndexMapForDeletedRows.size(), "deleted records should not present in RLI")
 
     assertEquals(rowArr.length, recordIndexMap.keySet.size)

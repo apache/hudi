@@ -20,6 +20,7 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
+import org.apache.hudi.common.data.HoodieListData
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.timeline.HoodieInstant
@@ -31,7 +32,7 @@ import org.apache.hudi.testutils.HoodieSparkClientTestBase
 
 import org.apache.spark.sql._
 import org.junit.jupiter.api._
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
 
@@ -179,7 +180,7 @@ class TestMetadataRecordIndex extends HoodieSparkClientTestBase {
     val readDf = spark.read.format("hudi").load(basePath)
     val rowArr = readDf.collect()
     val recordIndexMap = metadata.readRecordIndex(
-      rowArr.map(row => row.getAs("_hoodie_record_key").toString).toList.asJava)
+      HoodieListData.eager(rowArr.map(row => row.getAs("_hoodie_record_key").toString).toList.asJava))
 
     assertTrue(rowArr.length > 0)
     for (row <- rowArr) {
