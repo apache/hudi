@@ -102,10 +102,12 @@ public class SparkRDDWriteClient<T> extends
                         Option<WriteStatusValidator> writeStatusValidatorOpt) {
     context.setJobStatus(this.getClass().getSimpleName(), "Committing stats: " + config.getTableName());
     // Triggering the dag for writes.
-    // If streaming writes are enabled, writes to both data table and metadata table gets triggered at this juncture.
-    // If not, writes to data table gets triggered here.
+    //
+    // 1. If streaming writes are enabled, writes to both data table and metadata table gets triggered at this juncture;
+    // 2. If not, writes to data table gets triggered here.
+    //
     // When streaming writes are enabled, data table's WriteStatus is expected to contain all stats required to generate metadata table records and so each object will be larger.
-    // So, here we are dropping all additional stats and error records to retain only the required information and prevent collecting large objects on the driver.
+    // Here all additional stats and error records are dropped to retain only the required information and prevent collecting large objects on the driver.
     List<SlimWriteStats> slimWriteStatsList = writeStatuses
         .map(writeStatus -> new SlimWriteStats(writeStatus.isMetadataTable(), writeStatus.getTotalRecords(), writeStatus.getTotalErrorRecords(),
             writeStatus.getStat())).collect();
@@ -118,14 +120,15 @@ public class SparkRDDWriteClient<T> extends
           totalRecords.getAndAdd(slimWriteStats.getTotalErrorRecords());
           totalErrorRecords.getAndAdd(slimWriteStats.getTotalErrorRecords());
         });
-    // reason why we are passing RDD<WriteStatus> to the writeStatusHandler callback: At the beginning of this method, we drop all index stats and error records before collecting in the driver.
-    // Just incase if there are errors, caller might be interested to fetch error records in the callback. And so, we are passing the RDD<WriteStatus> as last argument to the write status
-    // handler callback.
+    // Why passing RDD<WriteStatus> to the WriteStatus validator:
+    // At the beginning of this method, we drop all index stats and error records before collecting in the driver.
+    // Just in case if there are errors, caller might be interested to fetch error records in the validator where
+    // a complete collection of RDD<WriteStatus> is required.
     boolean canProceed = writeStatusValidatorOpt.map(callback -> callback.validate(totalRecords.get(), totalErrorRecords.get(),
             totalErrorRecords.get() > 0 ? Option.of(HoodieJavaRDD.of(writeStatuses.filter(status -> !status.isMetadataTable()).map(WriteStatus::removeMetadataStats))) : Option.empty()))
         .orElse(true);
 
-    // only if callback returns true, lets proceed. If not, bail out.
+    // Proceeds only if validator returns true, otherwise bails out.
     if (canProceed) {
       // when streaming writes are enabled, writeStatuses is a mix of data table write status and mdt write status
       List<HoodieWriteStat> dataTableHoodieWriteStats = slimWriteStatsList.stream().filter(entry -> !entry.isMetadataTable()).map(SlimWriteStats::getWriteStat).collect(Collectors.toList());
@@ -389,7 +392,7 @@ public class SparkRDDWriteClient<T> extends
   }
 
   /**
-   * WriteStatus metadata tracker to hold info like total records, total record records,
+   * Slim WriteStatus to hold info like total records, total record records,
    * HoodieWriteStat and whether the writeStatus is referring to metadata table or not.
    */
   static class SlimWriteStats implements Serializable {
