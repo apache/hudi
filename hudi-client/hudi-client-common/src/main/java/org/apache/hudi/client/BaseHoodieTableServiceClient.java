@@ -83,6 +83,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -1177,12 +1178,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     if (instant.isPresent() && compareTimestamps(instant.get(), LESSER_THAN_OR_EQUALS,
         HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS)) {
       LOG.info("Found pending bootstrap instants. Rolling them back");
-      txnManager.beginStateChange(Option.empty(), Option.empty());
-      try {
-        table.rollbackBootstrap(context, createNewInstantTime(false));
-      } finally {
-        txnManager.endStateChange(Option.empty());
-      }
+      executeUsingTxnManager(Option.empty(), () -> table.rollbackBootstrap(context, createNewInstantTime(false)));
       LOG.info("Finished rolling back pending bootstrap");
     }
 

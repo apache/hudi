@@ -1299,15 +1299,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     });
   }
 
-  private void executeUsingTxnManager(Option<HoodieInstant> ownerInstant, Runnable r) {
-    this.txnManager.beginStateChange(ownerInstant, Option.empty());
-    try {
-      r.run();
-    } finally {
-      this.txnManager.endStateChange(ownerInstant);
-    }
-  }
-
   /**
    * Bootstrap the metadata table.
    *
