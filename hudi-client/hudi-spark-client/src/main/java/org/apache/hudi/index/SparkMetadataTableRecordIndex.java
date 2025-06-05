@@ -20,6 +20,7 @@ package org.apache.hudi.index;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -166,7 +167,8 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
       recordKeyIterator.forEachRemaining(keysToLookup::add);
 
       // recordIndexInfo object only contains records that are present in record_index.
-      Map<String, HoodieRecordGlobalLocation> recordIndexInfo = hoodieTable.getMetadataTable().readRecordIndex(keysToLookup);
+      Map<String, HoodieRecordGlobalLocation> recordIndexInfo = hoodieTable.getMetadataTable().readRecordIndex(
+          HoodieListData.eager(keysToLookup));
       return recordIndexInfo.entrySet().stream()
           .map(e -> new Tuple2<>(e.getKey(), e.getValue())).iterator();
     }

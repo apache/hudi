@@ -46,6 +46,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieAccumulator;
 import org.apache.hudi.common.data.HoodieAtomicLongAccumulator;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -2721,7 +2722,8 @@ public class HoodieTableMetadataUtil {
               .collect(Collectors.toSet());
           // Fetch metadata table COLUMN_STATS partition records for above files
           List<HoodieColumnRangeMetadata<Comparable>> partitionColumnMetadata = tableMetadata
-              .getRecordsByKeyPrefixes(generateKeyPrefixes(colsToIndex, partitionName), MetadataPartitionType.COLUMN_STATS.getPartitionPath(), false)
+              .getRecordsByKeyPrefixes(
+                  HoodieListData.eager(generateKeyPrefixes(colsToIndex, partitionName)), MetadataPartitionType.COLUMN_STATS.getPartitionPath(), false)
               // schema and properties are ignored in getInsertValue, so simply pass as null
               .map(record -> ((HoodieMetadataPayload)record.getData()).getColumnStatMetadata())
               .filter(Option::isPresent)

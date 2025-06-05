@@ -22,7 +22,7 @@ import org.apache.hudi.HoodieCatalystUtils.{withPersistedData, withPersistedData
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.avro.model._
 import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.data.HoodieData
+import org.apache.hudi.common.data.{HoodieData, HoodieListData}
 import org.apache.hudi.common.function.SerializableFunction
 import org.apache.hudi.common.model.{FileSlice, HoodieIndexDefinition, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
@@ -357,7 +357,8 @@ class ColumnStatsIndexSupport(spark: SparkSession,
     }
 
     val metadataRecords: HoodieData[HoodieRecord[HoodieMetadataPayload]] =
-      metadataTable.getRecordsByKeyPrefixes(keyPrefixes.toSeq.asJava, HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS, shouldReadInMemory)
+      metadataTable.getRecordsByKeyPrefixes(
+        HoodieListData.eager(keyPrefixes.toSeq.asJava), HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS, shouldReadInMemory)
 
     val columnStatsRecords: HoodieData[HoodieMetadataColumnStats] =
       //TODO: [HUDI-8303] Explicit conversion might not be required for Scala 2.12+
