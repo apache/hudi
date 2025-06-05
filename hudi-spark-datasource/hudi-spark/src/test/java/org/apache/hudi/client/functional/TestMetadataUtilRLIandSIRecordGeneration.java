@@ -24,7 +24,6 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
@@ -78,7 +77,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.config.HoodieReaderConfig.REALTIME_SKIP_MERGE;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.convertMetadataToRecordIndexRecords;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getRevivedAndDeletedKeysFromMergedLogs;
@@ -721,7 +719,6 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       });
       TypedProperties properties = new TypedProperties();
       // configure un-merged log file reader
-      properties.setProperty(HoodieReaderConfig.MERGE_TYPE.key(), REALTIME_SKIP_MERGE);
       HoodieReaderContext<InternalRow> readerContext = context.getReaderContextFactory(metaClient).getContext();
       HoodieFileGroupReader<InternalRow> reader = HoodieFileGroupReader.<InternalRow>newBuilder()
           .withReaderContext(readerContext)
@@ -732,6 +729,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
           .withLatestCommitTime(latestCommitTimestamp)
           .withHoodieTableMetaClient(datasetMetaClient)
           .withProps(properties)
+          .withEmitDelete(true)
           .build();
       Set<String> allRecordKeys = new HashSet<>();
       try (ClosableIterator<String> keysIterator = reader.getClosableKeyIterator()) {

@@ -28,7 +28,6 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.HoodieLogBlockMetadataScanner;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.util.CompactionUtils;
@@ -101,9 +100,6 @@ public class HoodieLogCompactionPlanGenerator<T extends HoodieRecordPayload, I, 
     if (numLogFiles >= writeConfig.getLogCompactionBlocksThreshold()) {
       LOG.info("Total logs files ({}) is greater than log blocks threshold is {}", numLogFiles, writeConfig.getLogCompactionBlocksThreshold());
       return true;
-    } else if (hoodieTable.getMetaClient().getTableConfig().getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
-      // for table version 8 and above, we assume a single log block per log file
-      return false;
     }
     HoodieLogBlockMetadataScanner scanner = new HoodieLogBlockMetadataScanner(metaClient, fileSlice.getLogFiles()
         .sorted(HoodieLogFile.getLogFileComparator())
