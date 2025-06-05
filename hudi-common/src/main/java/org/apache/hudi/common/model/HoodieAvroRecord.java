@@ -122,8 +122,20 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   }
 
   @Override
-  public Object getColumnValueAsJava(Schema recordSchema, String column, Properties props) {
-    throw new UnsupportedOperationException("Unsupported yet for " + this.getClass().getSimpleName());
+  public Object getColumnValue(Schema recordSchema, String column, Properties props) {
+    try {
+      Option<IndexedRecord> avroRecordOpt = getData().getInsertValue(recordSchema, props);
+      return HoodieAvroUtils.getNestedFieldVal(
+          (GenericRecord) avroRecordOpt.get(), column, true, false);
+    } catch (IOException e) {
+      throw new HoodieIOException("Unable to get column value: " + column, e);
+    }
+  }
+
+  @Override
+  public Comparable getColumnValueAsJava(Schema recordSchema, String column, Properties props) {
+    // TODO(yihua): add conversion for column stats value
+    return (Comparable) getColumnValue(recordSchema, column, props);
   }
 
   @Override

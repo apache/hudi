@@ -99,7 +99,12 @@ public class HoodieEmptyRecord<T> extends HoodieRecord<T> {
   }
 
   @Override
-  public Object getColumnValueAsJava(Schema recordSchema, String column, Properties props) {
+  public Object getColumnValue(Schema recordSchema, String column, Properties props) {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public Comparable getColumnValueAsJava(Schema recordSchema, String column, Properties props) {
     throw new UnsupportedOperationException("Unsupported yet for " + this.getClass().getSimpleName());
   }
 

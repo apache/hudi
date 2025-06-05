@@ -18,7 +18,6 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.hudi.avro.ConvertingGenericData;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.BooleanWrapper;
 import org.apache.hudi.avro.model.DateWrapper;
@@ -124,7 +123,6 @@ import java.io.Serializable;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.ByteBuffer;
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -250,6 +248,8 @@ public class HoodieTableMetadataUtil {
       StorageConfiguration<?> storageConfig) {
     // Helper class to calculate column stats
     class ColumnStats {
+      HoodieRecord minValueRecord;
+      HoodieRecord maxValueRecord;
       Object minValue;
       Object maxValue;
       long nullCount;
@@ -270,33 +270,20 @@ public class HoodieTableMetadataUtil {
         String fieldName = fieldNameFieldPair.getKey();
         Schema fieldSchema = resolveNullableSchema(fieldNameFieldPair.getValue().schema());
         ColumnStats colStats = allColumnStats.computeIfAbsent(fieldName, ignored -> new ColumnStats());
-        Object fieldValue;
-        if (record.getRecordType() == HoodieRecordType.AVRO) {
-          fieldValue = HoodieAvroUtils.getRecordColumnValues(record, new String[]{fieldName}, recordSchema, false)[0];
-          if (fieldValue != null && fieldSchema.getType() == Schema.Type.INT && fieldSchema.getLogicalType() != null && fieldSchema.getLogicalType() == LogicalTypes.date()) {
-            fieldValue = java.sql.Date.valueOf(fieldValue.toString());
-          }
-
-        } else if (record.getRecordType() == HoodieRecordType.SPARK) {
-          fieldValue = record.getColumnValues(recordSchema, new String[]{fieldName}, false)[0];
-          if (fieldValue != null && fieldSchema.getType() == Schema.Type.INT && fieldSchema.getLogicalType() != null && fieldSchema.getLogicalType() == LogicalTypes.date()) {
-            fieldValue = java.sql.Date.valueOf(LocalDate.ofEpochDay((Integer) fieldValue).toString());
-          }
-        } else if (record.getRecordType() == HoodieRecordType.FLINK) {
-          fieldValue = record.getColumnValueAsJava(recordSchema, fieldName, properties);
-        } else {
-          throw new HoodieException(String.format("Unknown record type: %s", record.getRecordType()));
-        }
+        Object fieldValue = record.getColumnValue(recordSchema, fieldName, properties);
 
         colStats.valueCount++;
         if (fieldValue != null && isColumnTypeSupported(fieldSchema, Option.of(record.getRecordType()))) {
           // Set the min value of the field
           if (colStats.minValue == null
-              || ConvertingGenericData.INSTANCE.compare(fieldValue, colStats.minValue, fieldSchema) < 0) {
+              || ((Comparable) fieldValue).compareTo(colStats.minValue) < 0) {
+            colStats.minValueRecord = record;
             colStats.minValue = fieldValue;
           }
           // Set the max value of the field
-          if (colStats.maxValue == null || ConvertingGenericData.INSTANCE.compare(fieldValue, colStats.maxValue, fieldSchema) > 0) {
+          if (colStats.maxValue == null
+              || ((Comparable) fieldValue).compareTo(colStats.maxValue) < 0) {
+            colStats.maxValueRecord = record;
             colStats.maxValue = fieldValue;
           }
         } else {
@@ -313,8 +300,10 @@ public class HoodieTableMetadataUtil {
           HoodieColumnRangeMetadata<Comparable> hcrm = HoodieColumnRangeMetadata.<Comparable>create(
               filePath,
               fieldName,
-              colStats == null ? null : coerceToComparable(fieldSchema, colStats.minValue),
-              colStats == null ? null : coerceToComparable(fieldSchema, colStats.maxValue),
+              colStats == null ? null : coerceToComparable(
+                  fieldSchema, colStats.minValueRecord.getColumnValueAsJava(recordSchema, fieldName, properties)),
+              colStats == null ? null : coerceToComparable(
+                  fieldSchema, colStats.maxValueRecord.getColumnValueAsJava(recordSchema, fieldName, properties)),
               colStats == null ? 0L : colStats.nullCount,
               colStats == null ? 0L : colStats.valueCount,
               // NOTE: Size and compressed size statistics are set to 0 to make sure we're not
@@ -1924,6 +1913,7 @@ public class HoodieTableMetadataUtil {
   }
 
   public static boolean isColumnTypeSupported(Schema schema, Option<HoodieRecordType> recordType) {
+    // TODO(yihua): relax this support matrix
     Schema schemaToCheck = resolveNullableSchema(schema);
     // Check for precision and scale if the schema has a logical decimal type.
     LogicalType logicalType = schemaToCheck.getLogicalType();
