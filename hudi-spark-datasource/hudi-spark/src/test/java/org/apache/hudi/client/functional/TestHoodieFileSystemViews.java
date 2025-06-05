@@ -157,8 +157,7 @@ public class TestHoodieFileSystemViews extends HoodieClientTestBase {
         String commitTime = client.createNewInstantTime();
         upsertRecords(client, commitTime, 50);
       }
-
-
+      
       HoodieCommitMetadata commitMetadata = null;
       boolean rollbackExecuted = false;
       for (int i = 23; i < 26; i++) {
@@ -171,14 +170,7 @@ public class TestHoodieFileSystemViews extends HoodieClientTestBase {
         HoodieInstant lastInstant = metaClient.reloadActiveTimeline().getWriteTimeline().lastInstant().get();
         if (!rollbackExecuted) {
           // rollback needs to be performed for delta commit or commit instant
-          boolean shouldRollback = lastInstant.getAction().equals(DELTA_COMMIT_ACTION) || lastInstant.getAction().equals(COMMIT_ACTION);
-          if (shouldRollback && enableMdt) {
-            // commit lesser than the last compaction instant in MDT can not be rolled back
-            HoodieTableMetaClient mdtMetaClient = HoodieTableMetaClient.builder().setBasePath(metaClient.getMetaPath() + "/metadata").setConf(metaClient.getStorageConf()).build();
-            String mdtLastCompactionTime = mdtMetaClient.reloadActiveTimeline().filter(instant -> instant.getAction().equals(COMMIT_ACTION)).lastInstant().get().requestedTime();
-            shouldRollback = LESSER_THAN.test(mdtLastCompactionTime, lastInstant.requestedTime());
-          }
-          if (shouldRollback) {
+          if (isRollbackPossible(enableMdt, lastInstant)) {
             // rollback last completed deltacommit or commit operation and retry few more operations.
             commitMetadata = metaClient.getActiveTimeline().readCommitMetadata(lastInstant);
             client.rollback(lastInstant.requestedTime());
@@ -204,6 +196,17 @@ public class TestHoodieFileSystemViews extends HoodieClientTestBase {
       expectedFileSystemView.close();
     }
     assertFileSystemViews(config, enableMdt, storageType);
+  }
+
+  private boolean isRollbackPossible(boolean enableMdt, HoodieInstant lastInstant) {
+    boolean shouldRollback = lastInstant.getAction().equals(DELTA_COMMIT_ACTION) || lastInstant.getAction().equals(COMMIT_ACTION);
+    if (shouldRollback && enableMdt) {
+      // commit lesser than the last compaction instant in MDT can not be rolled back
+      HoodieTableMetaClient mdtMetaClient = HoodieTableMetaClient.builder().setBasePath(metaClient.getMetaPath() + "/metadata").setConf(metaClient.getStorageConf()).build();
+      String mdtLastCompactionTime = mdtMetaClient.reloadActiveTimeline().filter(instant -> instant.getAction().equals(COMMIT_ACTION)).lastInstant().get().requestedTime();
+      shouldRollback = LESSER_THAN.test(mdtLastCompactionTime, lastInstant.requestedTime());
+    }
+    return shouldRollback;
   }
 
   private void assertFileSystemViews(HoodieWriteConfig writeConfig, boolean enableMdt, FileSystemViewStorageType baseStorageType) {
