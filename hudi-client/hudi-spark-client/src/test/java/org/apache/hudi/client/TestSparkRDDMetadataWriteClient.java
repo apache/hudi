@@ -22,6 +22,10 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodieListData;
+import org.apache.hudi.common.data.HoodieListPairData;
+import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -213,7 +217,13 @@ public class TestSparkRDDMetadataWriteClient extends HoodieClientTestBase {
       List<String> sortedKeysForFilesPartition = new ArrayList<>(expectedRecordsMap.keySet());
       Collections.sort(sortedKeysForFilesPartition);
 
-      Map<String, HoodieRecord<HoodieMetadataPayload>> logRecords = readLogRecords(readers.getRight(), sortedKeysForFilesPartition);
+      Map<String, HoodieRecord<HoodieMetadataPayload>> logRecords = readLogRecords(readers.getRight(),
+          HoodieListData.eager(sortedKeysForFilesPartition)).collectAsList()
+          .stream()
+          .collect(Collectors.toMap(
+              Pair::getKey,
+              Pair::getValue
+          ));
 
       Map<String, HoodieRecord<HoodieMetadataPayload>> actualMdtRecordMap =
           readFromBaseAndMergeWithLogRecords(readers.getKey(), sortedKeysForFilesPartition, logRecords, fileSlice.getPartitionPath());
@@ -235,10 +245,10 @@ public class TestSparkRDDMetadataWriteClient extends HoodieClientTestBase {
     }
   }
 
-  private Map<String, HoodieRecord<HoodieMetadataPayload>> readLogRecords(HoodieMetadataLogRecordReader logRecordReader,
-                                                                          List<String> sortedKeys) {
+  private HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> readLogRecords(HoodieMetadataLogRecordReader logRecordReader,
+                                                                                     HoodieData<String> sortedKeys) {
     if (logRecordReader == null) {
-      return Collections.emptyMap();
+      return HoodieListPairData.eager(Collections.emptyList());
     }
 
     return logRecordReader.getRecordsByKeys(sortedKeys);

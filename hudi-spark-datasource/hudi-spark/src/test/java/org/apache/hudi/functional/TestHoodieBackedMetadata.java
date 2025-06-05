@@ -35,6 +35,7 @@ import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
@@ -1187,10 +1188,12 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieTableMetadata metadataReader = HoodieTableMetadata.create(
         context, storage, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
     Map<String, HoodieRecordGlobalLocation> result = metadataReader
-        .readRecordIndex(records1.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()));
+        .readRecordIndex(
+            HoodieListData.eager(records1.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList())));
     assertEquals(0, result.size(), "RI should not return entries that are rolled back.");
     result = metadataReader
-        .readRecordIndex(records2.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()));
+        .readRecordIndex(
+            HoodieListData.eager(records2.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList())));
     assertEquals(records2.size(), result.size(), "RI should return entries in the commit.");
   }
 
@@ -1998,7 +2001,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       HoodieTableMetadata tableMetadata = metadata(client, storage);
       // prefix search for column (_hoodie_record_key)
       ColumnIndexID columnIndexID = new ColumnIndexID(HoodieRecord.RECORD_KEY_METADATA_FIELD);
-      List<HoodieRecord<HoodieMetadataPayload>> result = tableMetadata.getRecordsByKeyPrefixes(Collections.singletonList(columnIndexID.asBase64EncodedString()),
+      List<HoodieRecord<HoodieMetadataPayload>> result = tableMetadata.getRecordsByKeyPrefixes(
+          HoodieListData.eager(Collections.singletonList(columnIndexID.asBase64EncodedString())),
           MetadataPartitionType.COLUMN_STATS.getPartitionPath(), true).collectAsList();
 
       // there are 3 partitions in total and 2 commits. total entries should be 6.
@@ -2006,7 +2010,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
       // prefix search for col(_hoodie_record_key) and first partition. only 2 files should be matched
       PartitionIndexID partitionIndexID = new PartitionIndexID(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH);
-      result = tableMetadata.getRecordsByKeyPrefixes(Collections.singletonList(columnIndexID.asBase64EncodedString().concat(partitionIndexID.asBase64EncodedString())),
+      result = tableMetadata.getRecordsByKeyPrefixes(
+          HoodieListData.eager(Collections.singletonList(columnIndexID.asBase64EncodedString().concat(partitionIndexID.asBase64EncodedString()))),
           MetadataPartitionType.COLUMN_STATS.getPartitionPath(), true).collectAsList();
       // 1 partition and 2 commits. total entries should be 2.
       assertEquals(result.size(), 2);
@@ -2024,7 +2029,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
       // prefix search for column {commit time} and first partition
       columnIndexID = new ColumnIndexID(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
-      result = tableMetadata.getRecordsByKeyPrefixes(Collections.singletonList(columnIndexID.asBase64EncodedString().concat(partitionIndexID.asBase64EncodedString())),
+      result = tableMetadata.getRecordsByKeyPrefixes(
+          HoodieListData.eager(Collections.singletonList(columnIndexID.asBase64EncodedString().concat(partitionIndexID.asBase64EncodedString()))),
           MetadataPartitionType.COLUMN_STATS.getPartitionPath(), true).collectAsList();
 
       // 1 partition and 2 commits. total entries should be 2.
@@ -3631,7 +3637,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       HoodieTableMetadata metadataReader = HoodieTableMetadata.create(
           context, storage, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
       Map<String, HoodieRecordGlobalLocation> result = metadataReader
-          .readRecordIndex(allRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()));
+          .readRecordIndex(
+              HoodieListData.eager(allRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList())));
       assertEquals(allRecords.size(), result.size(), "RI should have mapping for all the records in firstCommit");
 
       // Delete some records from each commit. This should also remove the RI mapping.
@@ -3647,7 +3654,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       // RI should not return mappings for deleted records
       metadataReader = HoodieTableMetadata.create(
           context, storage, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
-      result = metadataReader.readRecordIndex(allRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()));
+      result = metadataReader.readRecordIndex(
+          HoodieListData.eager(allRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList())));
       assertEquals(allRecords.size() - recordsToDelete.size(), result.size(), "RI should not have mapping for deleted records");
       result.keySet().forEach(mappingKey -> assertFalse(keysToDelete.contains(mappingKey), "RI should not have mapping for deleted records"));
     }
@@ -3666,7 +3674,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
       // RI should not return mappings for deleted records
       metadataReader = HoodieTableMetadata.create(context, storage, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
-      Map<String, HoodieRecordGlobalLocation> result = metadataReader.readRecordIndex(allRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()));
+      Map<String, HoodieRecordGlobalLocation> result = metadataReader.readRecordIndex(
+          HoodieListData.eager(allRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList())));
       assertEquals(allRecords.size() - keysToDelete.size(), result.size(), "RI should not have mapping for deleted records");
       result.keySet().forEach(mappingKey -> assertFalse(keysToDelete.contains(mappingKey), "RI should not have mapping for deleted records"));
 
@@ -3677,7 +3686,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
       // New mappings should have been created for re-inserted records and should map to the new commit time
       metadataReader = HoodieTableMetadata.create(context, storage, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
-      result = metadataReader.readRecordIndex(allRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()));
+      result = metadataReader.readRecordIndex(
+          HoodieListData.eager(allRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList())));
       assertEquals(allRecords.size(), result.size(), "RI should have mappings for re-inserted records");
       for (String reInsertedKey : keysToDelete) {
         assertEquals(reinsertTime, result.get(reInsertedKey).getInstantTime(), "RI mapping for re-inserted keys should have new commit time");
