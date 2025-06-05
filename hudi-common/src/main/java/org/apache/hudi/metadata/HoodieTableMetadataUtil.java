@@ -1686,7 +1686,7 @@ public class HoodieTableMetadataUtil {
     if (writerSchemaOpt.isPresent()) {
       List<Pair<String, Schema.Field>> fieldsToIndex = columnsToIndex.stream().map(fieldName -> HoodieAvroUtils.getSchemaForField(writerSchemaOpt.get(), fieldName))
           .collect(Collectors.toList());
-      // read log file records without merging
+      // read log files without merging for lower overhead, log files may contain multiple records for the same key resulting in a wider range of values than the merged result
       HoodieLogFile logFile = new HoodieLogFile(filePath);
       FileSlice fileSlice = new FileSlice(partitionPath, logFile.getDeltaCommitTime(), logFile.getFileId());
       fileSlice.addLogFile(logFile);
