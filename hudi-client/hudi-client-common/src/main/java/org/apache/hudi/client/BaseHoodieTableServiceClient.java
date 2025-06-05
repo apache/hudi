@@ -80,6 +80,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLEAN_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN;
@@ -216,7 +217,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     HoodieInstant inflightInstant = HoodieTimeline.getLogCompactionInflightInstant(logCompactionInstantTime);
     if (pendingLogCompactionTimeline.containsInstant(inflightInstant)) {
       LOG.info("Found Log compaction inflight file. Rolling back the commit and exiting.");
-      table.rollbackInflightLogCompaction(inflightInstant, commitToRollback -> getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false));
+      table.rollbackInflightLogCompaction(inflightInstant, commitToRollback -> getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false),
+          Option.of(txnManager));
       table.getMetaClient().reloadActiveTimeline();
       throw new HoodieException("Execution is aborted since it found an Inflight logcompaction,"
           + "log compaction plans are mutable plans, so reschedule another logcompaction.");
@@ -290,7 +292,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     HoodieTimeline pendingCompactionTimeline = table.getActiveTimeline().filterPendingCompactionTimeline();
     HoodieInstant inflightInstant = HoodieTimeline.getCompactionInflightInstant(compactionInstantTime);
     if (pendingCompactionTimeline.containsInstant(inflightInstant)) {
-      table.rollbackInflightCompaction(inflightInstant, commitToRollback -> getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false));
+      table.rollbackInflightCompaction(inflightInstant, commitToRollback -> getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false),
+          Option.of(txnManager));
       table.getMetaClient().reloadActiveTimeline();
     }
     compactionTimer = metrics.getCompactionCtx();
@@ -449,7 +452,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     HoodieInstant inflightInstant = HoodieTimeline.getReplaceCommitInflightInstant(clusteringInstant);
     if (pendingClusteringTimeline.containsInstant(inflightInstant)) {
       if (pendingClusteringTimeline.isPendingClusterInstant(inflightInstant.getTimestamp())) {
-        table.rollbackInflightClustering(inflightInstant, commitToRollback -> getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false));
+        table.rollbackInflightClustering(inflightInstant, commitToRollback -> getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false),
+            Option.of(txnManager));
         table.getMetaClient().reloadActiveTimeline();
       } else {
         throw new HoodieClusteringException("Non clustering replace-commit inflight at timestamp " + clusteringInstant);
@@ -483,7 +487,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     HoodieTimeline pendingClusteringTimeline = table.getActiveTimeline().filterPendingReplaceTimeline();
     HoodieInstant inflightInstant = HoodieTimeline.getReplaceCommitInflightInstant(clusteringInstant);
     if (pendingClusteringTimeline.containsInstant(inflightInstant)) {
-      table.rollbackInflightClustering(inflightInstant, commitToRollback -> getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false), true);
+      table.rollbackInflightClustering(inflightInstant, commitToRollback -> getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false), true,
+          Option.of(txnManager));
       table.getMetaClient().reloadActiveTimeline();
       return true;
     }
@@ -746,7 +751,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       LOG.info("Cleaner started");
       // proceed only if multiple clean schedules are enabled or if there are no pending cleans.
       if (scheduleInline) {
-        scheduleTableServiceInternal(cleanInstantTime, Option.empty(), TableServiceType.CLEAN);
+        scheduleClean(cleanInstantTime);
         table.getMetaClient().reloadActiveTimeline();
       }
 
@@ -767,6 +772,16 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     }
     releaseResources(cleanInstantTime);
     return metadata;
+  }
+
+  private void scheduleClean(String cleanInstantTime) {
+    HoodieInstant cleanInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, CLEAN_ACTION, cleanInstantTime);
+    try {
+      txnManager.beginTransaction(Option.of(cleanInstant), Option.empty());
+      scheduleTableServiceInternal(cleanInstantTime, Option.empty(), TableServiceType.CLEAN);
+    } finally {
+      txnManager.endTransaction(Option.of(cleanInstant));
+    }
   }
 
   /**
@@ -1034,8 +1049,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
                 + "(exists in active timeline: %s), with rollback plan: %s",
             rollbackInstantTime, commitInstantOpt.isPresent(), pendingRollbackInfo.isPresent()));
         Option<HoodieRollbackPlan> rollbackPlanOption = pendingRollbackInfo.map(entry -> Option.of(entry.getRollbackPlan()))
-            .orElseGet(() -> table.scheduleRollback(context, rollbackInstantTime, commitInstantOpt.get(), false, config.shouldRollbackUsingMarkers(),
-                false));
+            .orElseGet(() -> scheduleRollback(table, rollbackInstantTime, commitInstantOpt, skipLocking));
         if (rollbackPlanOption.isPresent()) {
           // There can be a case where the inflight rollback failed after the instant files
           // are deleted for commitInstantTime, so that commitInstantOpt is empty as it is
@@ -1062,6 +1076,22 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       }
     } catch (Exception e) {
       throw new HoodieRollbackException("Failed to rollback " + config.getBasePath() + " commits " + commitInstantTime, e);
+    }
+  }
+
+  private Option<HoodieRollbackPlan> scheduleRollback(HoodieTable table, String rollbackInstantTime, Option<HoodieInstant> commitInstantOpt,
+                                                      boolean skipLocking) {
+    HoodieInstant rollbackInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, rollbackInstantTime, HoodieTimeline.ROLLBACK_ACTION);
+    try {
+      if (!skipLocking) {
+        txnManager.beginTransaction(Option.of(rollbackInstant), Option.empty());
+      }
+      return table.scheduleRollback(context, rollbackInstantTime, commitInstantOpt.get(), false, config.shouldRollbackUsingMarkers(),
+          false);
+    } finally {
+      if (!skipLocking) {
+        txnManager.endTransaction(Option.of(rollbackInstant));
+      }
     }
   }
 

@@ -1899,7 +1899,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
                 new SparkRDDWriteClient(context, writeConfig).getTableServiceClient
                   .getPendingRollbackInfo(table.getMetaClient, commitToRollback, false)
               }
-            })
+            }, org.apache.hudi.common.util.Option.empty())
           val requestedClustering = metaClient.reloadActiveTimeline.getCommitsTimeline.lastInstant.get
           assertTrue(requestedClustering.isRequested)
           assertEquals(

@@ -168,7 +168,7 @@ public class CompactionUtil {
     HoodieInstant inflightInstant = HoodieTimeline.getCompactionInflightInstant(instantTime);
     if (table.getMetaClient().reloadActiveTimeline().filterPendingCompactionTimeline().containsInstant(inflightInstant)) {
       LOG.warn("Rollback failed compaction instant: [" + instantTime + "]");
-      table.rollbackInflightCompaction(inflightInstant);
+      table.rollbackInflightCompaction(inflightInstant, Option.empty());
     }
   }
 
@@ -184,7 +184,7 @@ public class CompactionUtil {
             instant.getState() == HoodieInstant.State.INFLIGHT);
     inflightCompactionTimeline.getInstants().forEach(inflightInstant -> {
       LOG.info("Rollback the inflight compaction instant: " + inflightInstant + " for failover");
-      table.rollbackInflightCompaction(inflightInstant);
+      table.rollbackInflightCompaction(inflightInstant, Option.empty());
       table.getMetaClient().reloadActiveTimeline();
     });
   }
@@ -207,7 +207,7 @@ public class CompactionUtil {
       int timeout = conf.getInteger(FlinkOptions.COMPACTION_TIMEOUT_SECONDS);
       if (StreamerUtil.instantTimeDiffSeconds(currentTime, instant.getTimestamp()) >= timeout) {
         LOG.info("Rollback the inflight compaction instant: " + instant + " for timeout(" + timeout + "s)");
-        table.rollbackInflightCompaction(instant);
+        table.rollbackInflightCompaction(instant, Option.empty());
         table.getMetaClient().reloadActiveTimeline();
       }
     }

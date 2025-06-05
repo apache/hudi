@@ -331,7 +331,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
         assertTrue(listAllBaseFilesInPath(hoodieTable).stream()
             .anyMatch(file -> compactedCommitTime.equals(new HoodieBaseFile(file).getCommitTime())));
         hoodieTable.rollbackInflightCompaction(new HoodieInstant(
-            HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, compactedCommitTime));
+            HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, compactedCommitTime), Option.empty());
         allFiles = listAllBaseFilesInPath(hoodieTable);
         metaClient = HoodieTableMetaClient.reload(metaClient);
         tableView = getHoodieTableFileSystemView(metaClient, metaClient.getCommitsTimeline(), allFiles);
@@ -1005,8 +1005,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
       //writeClient.commitCompaction(newCommitTime, statuses, Option.empty());
       // Trigger a rollback of compaction
       table.getActiveTimeline().reload();
-      table.rollbackInflightCompaction(new HoodieInstant(
-          HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, newCommitTime));
+      table.rollbackInflightCompaction(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, newCommitTime), Option.empty());
 
       metaClient = HoodieTableMetaClient.reload(metaClient);
       table = HoodieSparkTable.create(config, context(), metaClient);
