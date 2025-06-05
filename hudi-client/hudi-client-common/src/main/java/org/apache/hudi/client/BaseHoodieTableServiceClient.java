@@ -24,6 +24,7 @@ import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
@@ -621,14 +622,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
 
     //  Do an inline partition ttl management if enabled
     if (config.isInlinePartitionTTLEnable()) {
-      txnManager.beginStateChange(Option.empty(), Option.empty());
-      String instantTime;
-      try {
-        instantTime = createNewInstantTime(false);
-        table.getMetaClient().getActiveTimeline().createRequestedCommitWithReplaceMetadata(instantTime, HoodieTimeline.REPLACE_COMMIT_ACTION);
-      } finally {
-        txnManager.endStateChange(Option.empty());
-      }
+      String instantTime = startDeletePartitionCommit(table.getMetaClient()).requestedTime();
       table.managePartitionTTL(table.getContext(), instantTime);
     }
   }
@@ -694,6 +688,20 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       }
 
       return option;
+    } finally {
+      txnManager.endStateChange(Option.empty());
+    }
+  }
+
+  HoodieInstant startDeletePartitionCommit(HoodieTableMetaClient metaClient) {
+    txnManager.beginStateChange(Option.empty(), Option.empty());
+    try {
+      String instantTime = createNewInstantTime(false);
+      HoodieInstant dropPartitionsInstant = metaClient.getInstantGenerator().createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime);
+      HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
+          .setOperationType(WriteOperationType.DELETE_PARTITION.name()).setExtraMetadata(Collections.emptyMap()).build();
+      metaClient.getActiveTimeline().saveToPendingReplaceCommit(dropPartitionsInstant, requestedReplaceMetadata);
+      return dropPartitionsInstant;
     } finally {
       txnManager.endStateChange(Option.empty());
     }
