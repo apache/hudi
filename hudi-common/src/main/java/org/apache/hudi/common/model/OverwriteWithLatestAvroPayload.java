@@ -39,13 +39,21 @@ import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
  */
 public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
     implements HoodieRecordPayload<OverwriteWithLatestAvroPayload> {
+  // This variable is used to check if this class has been initialized.
+  public static boolean initialized = false;
 
   public OverwriteWithLatestAvroPayload(GenericRecord record, Comparable orderingVal) {
     super(record, orderingVal);
+    initialized = true;
   }
 
   public OverwriteWithLatestAvroPayload(Option<GenericRecord> record) {
     this(record.isPresent() ? record.get() : null, DEFAULT_ORDERING_VALUE); // natural order
+    initialized = true;
+  }
+
+  public static boolean isInitialized() {
+    return initialized;
   }
 
   @Override

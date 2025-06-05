@@ -1013,7 +1013,8 @@ public class HoodieTableMetadataUtil {
           datasetMetaClient.getBasePath().toString(),
           engineType,
           Collections.emptyList(),
-          datasetMetaClient.getTableConfig().getRecordMergeStrategyId());
+          datasetMetaClient.getTableConfig().getRecordMergeStrategyId(),
+          Option.empty());
 
       // CRITICAL: Ensure allowInflightInstants is set to true while replacing the scanner with *LogRecordReader or HoodieFileGroupReader
       HoodieMergedLogRecordScanner mergedLogRecordScanner = HoodieMergedLogRecordScanner.newBuilder()
@@ -2415,7 +2416,8 @@ public class HoodieTableMetadataUtil {
                 metaClient.getBasePath().toString(),
                 engineType,
                 Collections.emptyList(), // TODO: support different merger classes, which is currently only known to write config
-                metaClient.getTableConfig().getRecordMergeStrategyId()))
+                metaClient.getTableConfig().getRecordMergeStrategyId(),
+                Option.empty()))
             .withTableMetaClient(metaClient)
             .build();
         ClosableIterator<String> recordKeyIterator = ClosableIterator.wrap(mergedLogRecordScanner.getRecords().keySet().iterator());

@@ -1277,8 +1277,15 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public HoodieRecordMerger getRecordMerger() {
-    return HoodieRecordUtils.createRecordMerger(getString(BASE_PATH),
-        engineType, getSplitStrings(RECORD_MERGE_IMPL_CLASSES), getString(RECORD_MERGE_STRATEGY_ID));
+    String payloadClass = getPayloadClass();
+    String strategyId = getString(RECORD_MERGE_STRATEGY_ID);
+    List<String> mergerClasses = getSplitStrings(RECORD_MERGE_IMPL_CLASSES);
+    return HoodieRecordUtils.createRecordMerger(
+        getString(BASE_PATH),
+        engineType,
+        mergerClasses,
+        strategyId,
+        payloadClass != null ? Option.of(payloadClass) : Option.empty());
   }
 
   public String getSchema() {

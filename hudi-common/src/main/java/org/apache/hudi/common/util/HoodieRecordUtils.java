@@ -19,12 +19,22 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.common.engine.EngineType;
+import org.apache.hudi.common.model.EventTimeAvroPayload;
+import org.apache.hudi.common.model.EventTimeBasedAvroRecordMerger;
+import org.apache.hudi.common.model.FirstValueAvroPayload;
+import org.apache.hudi.common.model.FirstValueAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.OperationModeAwareness;
+import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.model.OverwriteWithLatestMerger;
+import org.apache.hudi.common.model.PartialUpdateAvroMerger;
+import org.apache.hudi.common.model.PartialUpdateAvroPayload;
+import org.apache.hudi.common.model.PartialUpdateWithNonDefaultValueAvroMerger;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 
@@ -75,9 +85,15 @@ public class HoodieRecordUtils {
    * Instantiate a given class with a record merge.
    */
   public static HoodieRecordMerger createRecordMerger(String basePath, EngineType engineType,
-                                                      List<String> mergerClassList, String recordMergerStrategy) {
-    if (mergerClassList.isEmpty() || HoodieTableMetadata.isMetadataTable(basePath)) {
+                                                      List<String> mergerClassList,
+                                                      String recordMergerStrategy,
+                                                      Option<String> payloadClassOpt) {
+    if (HoodieTableMetadata.isMetadataTable(basePath)) {
       return HoodieAvroRecordMerger.INSTANCE;
+    } else if (mergerClassList.isEmpty()) {
+      // No merger class is given, we fall back to use Avro based mergers.
+      return createValidRecordMerger(engineType, "", recordMergerStrategy, payloadClassOpt)
+          .orElse(HoodieAvroRecordMerger.INSTANCE);
     } else {
       return createValidRecordMerger(engineType, mergerClassList, recordMergerStrategy)
           .orElse(HoodieAvroRecordMerger.INSTANCE);
@@ -85,11 +101,42 @@ public class HoodieRecordUtils {
   }
 
   public static Option<HoodieRecordMerger> createValidRecordMerger(EngineType engineType,
-                                                                   String mergerImpls, String recordMergerStrategy) {
-    if (recordMergerStrategy.equals(HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID)) {
-      return Option.of(HoodieAvroRecordMerger.INSTANCE);
+                                                                   String mergerImpls,
+                                                                   String recordMergerStrategy,
+                                                                   Option<String> payloadClassOpt) {
+    // Payload based strategy and payload class is given.
+    if (null != recordMergerStrategy
+        && recordMergerStrategy.equals(HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID)
+        && payloadClassOpt.isPresent()) {
+      String payloadClass = payloadClassOpt.get();
+      if (payloadClass.equals(FirstValueAvroPayload.class.getName())) {
+        return Option.of(FirstValueAvroRecordMerger.INSTANCE);
+      } else if (payloadClass.equals(PartialUpdateAvroPayload.class.getName())) {
+        return Option.of(PartialUpdateAvroMerger.INSTANCE);
+      } else if (payloadClass.equals(OverwriteNonDefaultsWithLatestAvroPayload.class.getName())) {
+        return Option.of(PartialUpdateWithNonDefaultValueAvroMerger.INSTANCE);
+      } else if (payloadClass.equals(OverwriteWithLatestAvroPayload.class.getName())) {
+        return Option.of(OverwriteWithLatestMerger.INSTANCE);
+      } else if (payloadClass.equals(EventTimeAvroPayload.class.getName())) {
+        return Option.of(EventTimeBasedAvroRecordMerger.INSTANCE);
+      } else {
+        return Option.of(HoodieAvroRecordMerger.INSTANCE);
+      }
+    } else {
+      // Based solely on strategy id.
+      if (mergerImpls.isEmpty() && null != recordMergerStrategy) {
+        if (recordMergerStrategy.equals(HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID)) {
+          return Option.of(EventTimeBasedAvroRecordMerger.INSTANCE);
+        } else if (recordMergerStrategy.equals(HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID)) {
+          return Option.of(OverwriteWithLatestMerger.INSTANCE);
+        } else {
+          return Option.of(HoodieAvroRecordMerger.INSTANCE);
+        }
+      }
+      // Based on both merger classes and strategy id.
+      return createValidRecordMerger(
+          engineType, ConfigUtils.split2List(mergerImpls), recordMergerStrategy);
     }
-    return createValidRecordMerger(engineType,ConfigUtils.split2List(mergerImpls), recordMergerStrategy);
   }
 
   public static Option<HoodieRecordMerger> createValidRecordMerger(EngineType engineType,

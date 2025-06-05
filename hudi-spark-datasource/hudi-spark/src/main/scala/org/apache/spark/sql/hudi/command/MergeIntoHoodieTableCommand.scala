@@ -17,13 +17,13 @@
 
 package org.apache.spark.sql.hudi.command
 
-import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceWriteOptions, HoodieSparkSqlWriter, SparkAdapterSupport}
+import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceWriteOptions, HoodieSparkSqlWriter, SparkAdapterSupport, SparkExpressionMerger}
 import org.apache.hudi.AvroConversionUtils.convertStructTypeToAvroSchema
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieSparkSqlWriter.CANONICALIZE_SCHEMA
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.RecordMergeMode
-import org.apache.hudi.common.model.{HoodieAvroRecordMerger, HoodieRecordMerger}
+import org.apache.hudi.common.model.HoodieRecordMerger
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableVersion}
 import org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys
 import org.apache.hudi.common.util.StringUtils
@@ -34,7 +34,6 @@ import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.index.HoodieIndex
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.util.JFunction.scalaFunction1Noop
-
 import org.apache.avro.Schema
 import org.apache.spark.sql._
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.{attributeEquals, MatchCast}
@@ -804,8 +803,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
       HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key -> tableConfig.getPartitionFieldProp,
       HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key -> hiveSyncConfig.getString(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS),
       SqlKeyGenerator.PARTITION_SCHEMA -> partitionSchema.toDDL,
-      PAYLOAD_CLASS_NAME.key -> classOf[ExpressionPayload].getCanonicalName,
-      RECORD_MERGE_IMPL_CLASSES.key -> classOf[HoodieAvroRecordMerger].getName,
+      RECORD_MERGE_IMPL_CLASSES.key -> classOf[SparkExpressionMerger].getName,
       HoodieWriteConfig.RECORD_MERGE_MODE.key() -> mergeMode,
       RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID,
 
