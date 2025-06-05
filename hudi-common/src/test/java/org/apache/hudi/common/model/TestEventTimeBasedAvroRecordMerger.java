@@ -30,6 +30,7 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -79,8 +80,7 @@ class TestEventTimeBasedAvroRecordMerger {
     when(newRecord.isDelete(newSchema, props)).thenReturn(true);
 
     Option<Pair<HoodieRecord, Schema>> result = merger.merge(oldRecord, oldSchema, newRecord, newSchema, props);
-    assertTrue(result.isPresent());
-    assertEquals(newRecord, result.get().getLeft());
+    assertFalse(result.isPresent());
   }
 
   @Test

@@ -104,11 +104,11 @@ public class HoodieRecordUtils {
                                                                    String mergerImpls,
                                                                    String recordMergerStrategy,
                                                                    Option<String> payloadClassOpt) {
-    String payloadClass = payloadClassOpt.get();
     // Payload based strategy and payload class is given.
     if (null != recordMergerStrategy
         && recordMergerStrategy.equals(HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID)
         && payloadClassOpt.isPresent()) {
+      String payloadClass = payloadClassOpt.get();
       if (payloadClass.equals(FirstValueAvroPayload.class.getName())) {
         return Option.of(FirstValueAvroRecordMerger.INSTANCE);
       } else if (payloadClass.equals(PartialUpdateAvroPayload.class.getName())) {

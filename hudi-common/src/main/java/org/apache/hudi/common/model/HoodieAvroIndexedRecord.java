@@ -156,7 +156,24 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
 
   @Override
   public boolean isDelete(Schema recordSchema, Properties props) {
-    return false;
+    if (null == data) {
+      return true;
+    }
+
+    // Use metadata filed to decide.
+    Schema.Field operationField = recordSchema.getField(OPERATION_METADATA_FIELD);
+    if (null != operationField
+        && HoodieOperation.isDeleteRecord((String) data.get(operationField.pos()))) {
+      return true;
+    }
+
+    // Use data field to decide.
+    if (recordSchema.getField(HOODIE_IS_DELETED_FIELD) == null) {
+      return false;
+    }
+
+    Object deleteMarker = data.get(recordSchema.getField(HOODIE_IS_DELETED_FIELD).pos());
+    return deleteMarker instanceof Boolean && (boolean) deleteMarker;
   }
 
   @Override

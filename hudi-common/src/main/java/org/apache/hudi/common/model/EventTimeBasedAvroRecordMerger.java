@@ -44,6 +44,10 @@ public class EventTimeBasedAvroRecordMerger implements HoodieRecordMerger {
                                                   HoodieRecord newRecord,
                                                   Schema newSchema,
                                                   TypedProperties props) throws IOException {
+    if (newRecord.isDelete(newSchema, props)) {
+      return Option.empty();
+    }
+
     if (shouldKeepNewerRecord(oldRecord, newRecord, oldSchema, newSchema, props)) {
       return Option.of(Pair.of(newRecord, newSchema));
     }
@@ -64,7 +68,7 @@ public class EventTimeBasedAvroRecordMerger implements HoodieRecordMerger {
                                                Schema schema,
                                                TypedProperties props) throws IOException {
     Comparable orderingValue = record.getOrderingValue(schema, props);
-    return record.isDelete(schema, props) && orderingValue.equals(DEFAULT_ORDERING_VALUE);
+    return record.isDelete(schema, props) && (0 == orderingValue.compareTo((Comparable) DEFAULT_ORDERING_VALUE));
   }
 
   protected boolean shouldKeepNewerRecord(HoodieRecord oldRecord,
