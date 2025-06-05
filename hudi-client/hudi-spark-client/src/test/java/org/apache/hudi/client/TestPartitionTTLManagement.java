@@ -135,7 +135,7 @@ public class TestPartitionTTLManagement extends HoodieClientTestBase {
       String partitionPath2 = dataGen.getPartitionPaths()[2];
       writeRecordsForPartition(client, dataGen, partitionPath2, currentInstant);
 
-      String instantTime = client.startCommit(HoodieTimeline.REPLACE_COMMIT_ACTION);
+      String instantTime = client.startDeletePartitionCommit();
       HoodieWriteResult result = client.managePartitionTTL(instantTime);
       client.commit(instantTime, result.getWriteStatuses(), Option.empty(), HoodieTimeline.REPLACE_COMMIT_ACTION,
           result.getPartitionToReplaceFileIds(), Option.empty());
