@@ -117,7 +117,7 @@ public class SparkRDDWriteClient<T> extends
     // collect record stats for data table
     slimWriteStatsList.stream().filter(slimWriteStats -> !slimWriteStats.isMetadataTable())
         .forEach(slimWriteStats -> {
-          totalRecords.getAndAdd(slimWriteStats.getTotalErrorRecords());
+          totalRecords.getAndAdd(slimWriteStats.getTotalRecords());
           totalErrorRecords.getAndAdd(slimWriteStats.getTotalErrorRecords());
         });
     // Why passing RDD<WriteStatus> to the WriteStatus validator:
