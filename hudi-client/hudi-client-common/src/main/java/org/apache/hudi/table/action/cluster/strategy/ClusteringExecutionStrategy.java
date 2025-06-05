@@ -33,6 +33,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
+import org.apache.hudi.common.table.read.IteratorMode;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -105,7 +106,9 @@ public abstract class ClusteringExecutionStrategy<T, I, K, O> implements Seriali
     final boolean usePosition = getWriteConfig().getBooleanOrDefault(MERGE_USE_RECORD_POSITIONS);
     Option<InternalSchema> internalSchema = SerDeHelper.fromJson(getWriteConfig().getInternalSchema());
     try {
-      return getFileGroupReader(table.getMetaClient(), fileSlice, readerSchemaWithMetaFields, internalSchema, readerContextFactory, instantTime, props, usePosition).getClosableHoodieRecordIterator();
+      HoodieFileGroupReader<T, HoodieRecord<T>> fileGroupReader = getFileGroupReader(
+          table.getMetaClient(), fileSlice, readerSchemaWithMetaFields, internalSchema, readerContextFactory, instantTime, props, usePosition, IteratorMode.HOODIE_RECORD);
+      return fileGroupReader.getClosableIterator();
     } catch (IOException e) {
       throw new HoodieClusteringException("Error reading file slices", e);
     }
@@ -144,12 +147,21 @@ public abstract class ClusteringExecutionStrategy<T, I, K, O> implements Seriali
     return fileSlice;
   }
 
-  protected static <R> HoodieFileGroupReader<R> getFileGroupReader(HoodieTableMetaClient metaClient, FileSlice fileSlice, Schema readerSchema, Option<InternalSchema> internalSchemaOption,
-                                                                   ReaderContextFactory<R> readerContextFactory, String instantTime, TypedProperties properties, boolean usePosition) {
+  protected static <R, E> HoodieFileGroupReader<R, E> getFileGroupReader(
+      HoodieTableMetaClient metaClient, FileSlice fileSlice, Schema readerSchema, Option<InternalSchema> internalSchemaOption,
+      ReaderContextFactory<R> readerContextFactory, String instantTime, TypedProperties properties, boolean usePosition, IteratorMode iteratorMode) {
     HoodieReaderContext<R> readerContext = readerContextFactory.getContext();
-    return HoodieFileGroupReader.<R>newBuilder()
-        .withReaderContext(readerContext).withHoodieTableMetaClient(metaClient).withLatestCommitTime(instantTime)
-        .withFileSlice(fileSlice).withDataSchema(readerSchema).withRequestedSchema(readerSchema).withInternalSchema(internalSchemaOption)
-        .withShouldUseRecordPosition(usePosition).withProps(properties).build();
+    return HoodieFileGroupReader.<R, E>newBuilder()
+        .withReaderContext(readerContext)
+        .withHoodieTableMetaClient(metaClient)
+        .withLatestCommitTime(instantTime)
+        .withFileSlice(fileSlice)
+        .withDataSchema(readerSchema)
+        .withRequestedSchema(readerSchema)
+        .withInternalSchema(internalSchemaOption)
+        .withShouldUseRecordPosition(usePosition)
+        .withIteratorMode(iteratorMode)
+        .withProps(properties)
+        .build();
   }
 }

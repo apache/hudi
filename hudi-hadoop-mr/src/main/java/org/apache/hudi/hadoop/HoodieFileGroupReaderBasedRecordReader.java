@@ -142,7 +142,7 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
       }
     }
     LOG.debug("Creating HoodieFileGroupReaderRecordReader with tableBasePath={}, latestCommitTime={}, fileSplit={}", tableBasePath, latestCommitTime, fileSplit.getPath());
-    this.recordIterator = HoodieFileGroupReader.<ArrayWritable>newBuilder()
+    this.recordIterator = HoodieFileGroupReader.<ArrayWritable, ArrayWritable>newBuilder()
         .withReaderContext(readerContext)
         .withHoodieTableMetaClient(metaClient)
         .withLatestCommitTime(latestCommitTime)

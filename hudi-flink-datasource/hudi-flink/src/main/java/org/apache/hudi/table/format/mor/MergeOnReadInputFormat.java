@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
+import org.apache.hudi.common.table.read.IteratorMode;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -305,7 +306,8 @@ public class MergeOnReadInputFormat
       Schema requiredSchema,
       String mergeType,
       boolean emitDelete) throws IOException {
-    HoodieFileGroupReader<RowData> fileGroupReader = createFileGroupReader(split, tableSchema, requiredSchema, mergeType, emitDelete);
+    HoodieFileGroupReader<RowData, RowData> fileGroupReader =
+        createFileGroupReader(split, tableSchema, requiredSchema, mergeType, IteratorMode.ENGINE_RECORD, emitDelete);
     return fileGroupReader.getClosableIterator();
   }
 
@@ -316,15 +318,17 @@ public class MergeOnReadInputFormat
    * @param tableSchema    schema of the table
    * @param requiredSchema required query schema
    * @param mergeType      merge type for FileGroup reader
+   * @param iteratorMode   the mode of FileGroup reader iterator
    * @param emitDelete     flag saying whether DELETE record should be emitted
    *
    * @return A {@link HoodieFileGroupReader}.
    */
-  protected HoodieFileGroupReader<RowData> createFileGroupReader(
+  protected <O> HoodieFileGroupReader<RowData, O> createFileGroupReader(
       MergeOnReadInputSplit split,
       Schema tableSchema,
       Schema requiredSchema,
       String mergeType,
+      IteratorMode iteratorMode,
       boolean emitDelete) {
     FileSlice fileSlice = new FileSlice(
         // partitionPath is not needed for FG reader on Flink
@@ -333,8 +337,8 @@ public class MergeOnReadInputFormat
         "",
         split.getBasePath().map(HoodieBaseFile::new).orElse(null),
         split.getLogPaths().map(logFiles -> logFiles.stream().map(HoodieLogFile::new).collect(Collectors.toList())).orElse(Collections.emptyList()));
-    return FormatUtils.createFileGroupReader(metaClient, writeConfig, internalSchemaManager, fileSlice,
-        tableSchema, requiredSchema, split.getLatestCommit(), mergeType, emitDelete, predicates, split.getInstantRange());
+    return FormatUtils.createFileGroupReader(metaClient, writeConfig, internalSchemaManager, fileSlice, tableSchema, requiredSchema,
+        split.getLatestCommit(), mergeType, emitDelete, predicates, split.getInstantRange(), iteratorMode);
   }
 
   // -------------------------------------------------------------------------

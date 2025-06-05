@@ -40,7 +40,7 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.Iterator;
 
-public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
+public class UnmergedFileGroupRecordBuffer<T, O> extends FileGroupRecordBuffer<T, O> {
 
   private final Deque<HoodieLogBlock> currentInstantLogBlocks;
   private ClosableIterator<T> recordIterator;
@@ -51,8 +51,9 @@ public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
       RecordMergeMode recordMergeMode,
       TypedProperties props,
       HoodieReadStats readStats,
+      IteratorConverters.IteratorConverter<T, O> iteratorConverter,
       boolean emitDelete) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, Option.empty(), emitDelete);
+    super(readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, Option.empty(), iteratorConverter, emitDelete);
     this.currentInstantLogBlocks = new ArrayDeque<>();
   }
 
@@ -62,7 +63,8 @@ public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
 
     // Output from base file first.
     if (baseFileIterator.hasNext()) {
-      nextRecord = readerContext.seal(baseFileIterator.next());
+      T baseRecord = baseFileIterator.next();
+      nextRecord = iteratorConverter.convert(baseRecord, orderingFieldName, FALSE_SUPPLIER);
       return true;
     }
 
@@ -80,7 +82,8 @@ public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
     if (recordIterator == null || !recordIterator.hasNext()) {
       return false;
     }
-    nextRecord = readerContext.seal(recordIterator.next());
+    T logRecord = recordIterator.next();
+    nextRecord = iteratorConverter.convert(logRecord, orderingFieldName, () -> isDeleteRecord(logRecord));
     readStats.incrementNumInserts();
     return true;
   }

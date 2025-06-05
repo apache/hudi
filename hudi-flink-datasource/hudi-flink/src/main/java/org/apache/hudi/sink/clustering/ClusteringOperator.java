@@ -33,6 +33,7 @@ import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
+import org.apache.hudi.common.table.read.IteratorMode;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -284,8 +285,10 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
         Option.ofNullable(clusterOperation.getDataFilePath()).map(HoodieBaseFile::new).orElse(null),
         clusterOperation.getDeltaFilePaths().stream().map(HoodieLogFile::new).collect(Collectors.toList()));
 
-    HoodieFileGroupReader<RowData> fileGroupReader = FormatUtils.createFileGroupReader(table.getMetaClient(), writeConfig, InternalSchemaManager.DISABLED,
-        fileSlice, schema, readerSchema, instantTime, FlinkOptions.REALTIME_PAYLOAD_COMBINE, false, Collections.emptyList(), Option.empty());
+    HoodieFileGroupReader<RowData, RowData> fileGroupReader =
+        FormatUtils.createFileGroupReader(table.getMetaClient(), writeConfig, InternalSchemaManager.DISABLED,
+            fileSlice, schema, readerSchema, instantTime, FlinkOptions.REALTIME_PAYLOAD_COMBINE, false,
+            Collections.emptyList(), Option.empty(), IteratorMode.ENGINE_RECORD);
     return fileGroupReader.getClosableIterator();
   }
 

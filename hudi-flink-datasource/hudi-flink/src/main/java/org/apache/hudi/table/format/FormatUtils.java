@@ -26,6 +26,7 @@ import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
+import org.apache.hudi.common.table.read.IteratorMode;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
@@ -103,10 +104,11 @@ public class FormatUtils {
    * @param emitDelete            Flag to emit DELETE record
    * @param predicates            The expression predicates
    * @param instantRangeOption    The instant range used to filter files
+   * @param iteratorMode          The mode of the FileGroup reader iterator
    *
    * @return A {@link HoodieFileGroupReader}.
    */
-  public static HoodieFileGroupReader<RowData> createFileGroupReader(
+  public static <O> HoodieFileGroupReader<RowData, O> createFileGroupReader(
       HoodieTableMetaClient metaClient,
       HoodieWriteConfig writeConfig,
       InternalSchemaManager internalSchemaManager,
@@ -117,7 +119,8 @@ public class FormatUtils {
       String mergeType,
       boolean emitDelete,
       List<ExpressionPredicates.Predicate> predicates,
-      Option<InstantRange> instantRangeOption) {
+      Option<InstantRange> instantRangeOption,
+      IteratorMode iteratorMode) {
 
     final FlinkRowDataReaderContext readerContext =
         new FlinkRowDataReaderContext(
@@ -129,7 +132,7 @@ public class FormatUtils {
     final TypedProperties typedProps = FlinkClientUtil.getReadProps(metaClient.getTableConfig(), writeConfig);
     typedProps.put(HoodieReaderConfig.MERGE_TYPE.key(), mergeType);
 
-    return HoodieFileGroupReader.<RowData>newBuilder()
+    return HoodieFileGroupReader.<RowData, O>newBuilder()
         .withReaderContext(readerContext)
         .withHoodieTableMetaClient(metaClient)
         .withLatestCommitTime(latestInstant)
@@ -139,6 +142,7 @@ public class FormatUtils {
         .withInternalSchema(Option.ofNullable(internalSchemaManager.getQuerySchema()))
         .withProps(typedProps)
         .withShouldUseRecordPosition(false)
+        .withIteratorMode(iteratorMode)
         .withEmitDelete(emitDelete)
         .build();
   }
