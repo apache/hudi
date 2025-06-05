@@ -800,3 +800,7 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 --- [2025-06-01 16:03:50] [release-v1.130.0] ---
 [ENG-27296][INTERNAL] Fix logging for config freeze (#1391)
 [AUDIT-1071]: Changelog for release-v1.129.0 (#1390)
+
+--- [2025-06-05 16:04:24] [release-v1.131.0] ---
+[ENG-22091][INTERNAL] Fix shutdown hook race condition in StorageBasedLockProvider (#1397)
+[AUDIT-1071]: Changelog for release-v1.130.0 (#1396)
