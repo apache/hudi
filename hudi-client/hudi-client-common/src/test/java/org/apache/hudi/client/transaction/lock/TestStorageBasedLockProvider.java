@@ -564,6 +564,15 @@ class TestStorageBasedLockProvider {
     verify(mockHeartbeatManager, never()).close();
   }
 
+  @Test
+  public void testShutdownHookFailsToBeRemoved() throws Exception {
+    doThrow(new IllegalStateException("Shutdown already in progress")).when(lockProvider).tryRemoveShutdownHook();
+    lockProvider.close();
+    verify(mockLockService, atLeastOnce()).close();
+    verify(mockHeartbeatManager, atLeastOnce()).close();
+    assertNull(lockProvider.getLock());
+  }
+
   public static class StubStorageLockClient implements StorageLockClient {
     public StubStorageLockClient(String ownerId, String lockFileUri, Properties props) {
       assertTrue(lockFileUri.endsWith("table_lock.json"));

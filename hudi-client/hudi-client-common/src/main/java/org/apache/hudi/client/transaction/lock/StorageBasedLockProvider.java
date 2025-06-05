@@ -220,7 +220,11 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
       // Do not execute any further actions
       return;
     } else {
-      Runtime.getRuntime().removeShutdownHook(shutdownThread);
+      try {
+        tryRemoveShutdownHook();
+      } catch (IllegalStateException e) {
+        logger.warn("Owner {}: Failed to remove shutdown hook, JVM is already shutting down.", ownerId, e);
+      }
     }
     try {
       this.unlock();
@@ -239,6 +243,11 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
     }
 
     this.isClosed = true;
+  }
+
+  @VisibleForTesting
+  void tryRemoveShutdownHook() {
+    Runtime.getRuntime().removeShutdownHook(shutdownThread);
   }
 
   private synchronized boolean isLockStillValid(StorageLockFile lock) {
