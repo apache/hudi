@@ -145,7 +145,7 @@ public class TestHoodieFileSystemViews extends HoodieClientTestBase {
                   HoodieTableMetadata.create(context, metaClient.getStorage(), config.getMetadataConfig(), config.getBasePath()))
           .getFileSystemView(basePath);
 
-      assertFileSystemViews(config, enableMdt, storageType, Option.empty());
+      assertFileSystemViews(config, enableMdt, storageType);
       for (int i = 3; i < 10; i++) {
         String commitTime = client.createNewInstantTime();
         upsertRecords(client, commitTime, 50);
@@ -203,10 +203,10 @@ public class TestHoodieFileSystemViews extends HoodieClientTestBase {
       actualFileSystemView.close();
       expectedFileSystemView.close();
     }
-    assertFileSystemViews(config, enableMdt, storageType, Option.empty());
+    assertFileSystemViews(config, enableMdt, storageType);
   }
 
-  private void assertFileSystemViews(HoodieWriteConfig writeConfig, boolean enableMdt, FileSystemViewStorageType baseStorageType, Option<HoodieCommitMetadata> commitMetadataOpt) {
+  private void assertFileSystemViews(HoodieWriteConfig writeConfig, boolean enableMdt, FileSystemViewStorageType baseStorageType) {
     metaClient = HoodieTableMetaClient.reload(metaClient);
     // base line file system view is in-memory for any combination.
     HoodieTableFileSystemView expectedFileSystemView = FileSystemViewManager.createInMemoryFileSystemView(context, metaClient,
