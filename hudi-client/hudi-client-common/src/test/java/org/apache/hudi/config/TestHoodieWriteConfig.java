@@ -732,6 +732,7 @@ public class TestHoodieWriteConfig {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
         .withPath("/tmp")
         .withProperties(props)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withStreamingWriteEnabled(true).build())
         .withEngineType(EngineType.SPARK).build();
 
     assertTrue(config.isMetadataStreamingWritesEnabled(HoodieTableVersion.EIGHT));

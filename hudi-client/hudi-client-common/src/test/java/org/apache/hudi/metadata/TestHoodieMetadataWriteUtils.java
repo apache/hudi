@@ -73,10 +73,11 @@ public class TestHoodieMetadataWriteUtils {
   @Test
   public void testCreateMetadataWriteConfigForNBCC() {
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
-        .withPath("/tmp/base_path/.hoodie/metadata/")
+        .withPath("/tmp/base_path/")
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
             .retainCommits(5).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withStreamingWriteEnabled(true).build())
         .build();
 
     HoodieWriteConfig metadataWriteConfig = HoodieMetadataWriteUtils.createMetadataWriteConfig(writeConfig, HoodieFailedWritesCleaningPolicy.EAGER,
