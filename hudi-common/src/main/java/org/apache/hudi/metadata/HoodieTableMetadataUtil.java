@@ -76,6 +76,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
@@ -184,6 +185,7 @@ import static org.apache.hudi.index.expression.HoodieExpressionIndex.EXPRESSION_
 import static org.apache.hudi.index.expression.HoodieExpressionIndex.IDENTITY_TRANSFORM;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_IS_TIGHT_BOUND;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.RECORD_INDEX_MISSING_FILEINDEX_FALLBACK;
+import static org.apache.hudi.metadata.HoodieMetadataPayload.SECONDARY_INDEX_RECORD_KEY_SEPARATOR;
 import static org.apache.hudi.metadata.HoodieTableMetadata.EMPTY_PARTITION_NAME;
 import static org.apache.hudi.metadata.HoodieTableMetadata.NON_PARTITIONED_NAME;
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
@@ -1334,7 +1336,15 @@ public class HoodieTableMetadataUtil {
    * @param recordKey record key for which the file group index is looked up for.
    * @return An integer hash of the given string
    */
-  public static int mapRecordKeyToFileGroupIndex(String recordKey, int numFileGroups) {
+  public static int mapRecordKeyToFileGroupIndex(String recordKey, int numFileGroups, String partitionName, HoodieTableVersion version) {
+    if (version.greaterThanOrEquals(HoodieTableVersion.EIGHT) && MetadataPartitionType.SECONDARY_INDEX.isPartitionType(partitionName) && recordKey.contains(SECONDARY_INDEX_RECORD_KEY_SEPARATOR)) {
+      return mapRecordKeyToFileGroupIndex(SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey(recordKey), numFileGroups);
+    }
+    return mapRecordKeyToFileGroupIndex(recordKey, numFileGroups);
+  }
+
+  // change to configurable larger group
+  private static int mapRecordKeyToFileGroupIndex(String recordKey, int numFileGroups) {
     int h = 0;
     for (int i = 0; i < recordKey.length(); ++i) {
       h = 31 * h + recordKey.charAt(i);
