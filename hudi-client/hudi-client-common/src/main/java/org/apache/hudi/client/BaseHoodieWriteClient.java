@@ -240,21 +240,22 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
                              String commitActionType, Map<String, List<String>> partitionToReplaceFileIds,
                              Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc) {
     return commitStats(instantTime, stats, Collections.emptyList(), extraMetadata, commitActionType, partitionToReplaceFileIds, extraPreCommitFunc,
-        false);
+        false, Option.empty());
   }
 
   public boolean commitStats(String instantTime, List<HoodieWriteStat> stats, List<HoodieWriteStat> partialMetadataHoodieWriteStatsSoFar,
                              Option<Map<String, String>> extraMetadata,
                              String commitActionType, Map<String, List<String>> partitionToReplaceFileIds,
                              Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc,
-                             boolean skipStreamingWritesToMetadataTable) {
+                             boolean skipStreamingWritesToMetadataTable,
+                             Option<HoodieTable> hoodieTableOpt) {
     // Skip the empty commit if not allowed
     if (!config.allowEmptyCommit() && stats.isEmpty()) {
       return true;
     }
     LOG.info("Committing {} action {}", instantTime, commitActionType);
     // Create a Hoodie table which encapsulated the commits and files visible
-    HoodieTable table = createTable(config);
+    HoodieTable table = hoodieTableOpt.orElse(createTable(config));
     HoodieCommitMetadata metadata = CommitMetadataResolverFactory.get(
             table.getMetaClient().getTableConfig().getTableVersion(), config.getEngineType(),
             table.getMetaClient().getTableType(), commitActionType)
@@ -1188,7 +1189,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     tableServiceClient.completeLogCompaction(metadata, table, logCompactionCommitTime, Collections.emptyList());
   }
 
-  public void completeLogCompaction(String compactionInstantTime, HoodieWriteMetadata<O> compactionWriteMetadata, Option<HoodieTable> tableOpt) {
+  public void commitLogCompaction(String compactionInstantTime, HoodieWriteMetadata<O> compactionWriteMetadata, Option<HoodieTable> tableOpt) {
     tableServiceClient.commitLogCompaction(compactionInstantTime, compactionWriteMetadata, tableOpt);
   }
 

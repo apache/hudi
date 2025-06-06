@@ -1164,6 +1164,10 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     throw new UnsupportedOperationException("Not yet implemented");
   }
 
+  public O writeToMetadataTableForBatchPartitions(I preppedRecords, String instantTime) {
+    throw new UnsupportedOperationException("Not yet implemented");
+  }
+
   @Override
   public void completeStreamingCommit(String instantTime, HoodieEngineContext context, List<HoodieWriteStat> metadataWriteStatsSoFar, HoodieCommitMetadata metadata) {
     List<HoodieWriteStat> allWriteStats = new ArrayList<>(metadataWriteStatsSoFar);
@@ -1178,14 +1182,10 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     Map<String, HoodieData<HoodieRecord>> mdtPartitionsAndUnTaggedRecords = new MdtPartitionRecordGeneratorBatchMode(instantTime, commitMetadata, mdtPartitionsToUpdate)
         .convertMetadata();
 
-    HoodieData<HoodieRecord> untaggedMdtRecords = context.emptyHoodieData();
-    for (Map.Entry<String, HoodieData<HoodieRecord>> entry: mdtPartitionsAndUnTaggedRecords.entrySet()) {
-      untaggedMdtRecords = untaggedMdtRecords.union(entry.getValue());
-    }
-
     // write to mdt table for non streaming mdt partitions
-    Pair<List<HoodieFileGroupId>, HoodieData<HoodieRecord>> taggedRecords = tagRecordsWithLocationWithStreamingWrites(untaggedMdtRecords, mdtPartitionsToUpdate);
-    HoodieData<WriteStatus> mdtWriteStatusHoodieData = convertEngineSpecificDataToHoodieData(streamWriteToMetadataTable(taggedRecords, instantTime));
+    Pair<HoodieData<HoodieRecord>, List<HoodieFileGroupId>> taggedRecords = tagRecordsWithLocation(mdtPartitionsAndUnTaggedRecords);
+    I preppedRecords = convertHoodieDataToEngineSpecificData(taggedRecords.getKey());
+    HoodieData<WriteStatus> mdtWriteStatusHoodieData = convertEngineSpecificDataToHoodieData(writeToMetadataTableForBatchPartitions(preppedRecords, instantTime));
     return mdtWriteStatusHoodieData;
   }
 

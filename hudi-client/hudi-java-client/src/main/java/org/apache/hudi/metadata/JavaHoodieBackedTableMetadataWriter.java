@@ -26,7 +26,6 @@ import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
-import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -137,12 +136,6 @@ public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetada
   protected void upsertAndCommit(BaseHoodieWriteClient<?, List<HoodieRecord>, ?, List<WriteStatus>> writeClient, String instantTime, List<HoodieRecord> preppedRecordInputs) {
     List<WriteStatus> writeStatusJavaRDD = writeClient.upsertPreppedRecords(preppedRecordInputs, instantTime);
     writeClient.commit(instantTime, writeStatusJavaRDD);
-  }
-
-  @Override
-  protected void upsertAndCommit(BaseHoodieWriteClient<?, List<HoodieRecord>, ?, List<WriteStatus>> writeClient, String instantTime, List<HoodieRecord> preppedRecordInputs,
-                                 List<HoodieFileGroupId> mdtFileGroupsIdsToUpdate) {
-    throw new UnsupportedOperationException("Not implemented for Java engine yet");
   }
 
   @Override

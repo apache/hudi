@@ -27,7 +27,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,7 +46,7 @@ public class HoodieMetadataWriterWrapper {
     Option<HoodieTableMetadataWriter> metadataWriterOpt = getMetadataWriter(instantTime, table);
     if (metadataWriterOpt.isPresent()) {
       try {
-        metadataWriterOpt.get().wrapUpStreamingWriteToMetadataTableAndCompleteCommit(instantTime, table.getContext(), metadataWriteStatsSoFar, metadata);
+        metadataWriterOpt.get().completeStreamingCommit(instantTime, table.getContext(), metadataWriteStatsSoFar, metadata);
         metadataWriterOpt.get().close();
       } catch (Exception e) {
         throw new HoodieException("Failed to close metadata writer ", e);
@@ -60,25 +59,24 @@ public class HoodieMetadataWriterWrapper {
   }
 
   // to be called from WriteClient and TableServiceClient.
-  public HoodieWriteMetadata<HoodieData<WriteStatus>> mayBeStreamWriteToMetadataTable(HoodieTable table, HoodieWriteConfig config, Boolean isMetadataTable,
-                                                                                         HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata, String instantTime) {
-    if (!isMetadataTable && config.isMetadataTableEnabled() && config.isStreamingWritesToMetadataEnabled(table.getMetaClient().getTableConfig().getTableVersion())) {
-      return streamWriteToMetadataTable(table, writeMetadata, instantTime);
+  public HoodieData<WriteStatus> mayBeStreamWriteToMetadataTable(HoodieTable table, HoodieWriteConfig config, Boolean isMetadataTable,
+                                                                                         HoodieData<WriteStatus> writeStatuses, String instantTime) {
+    if (!isMetadataTable && config.isMetadataTableEnabled() && config.isMetadataStreamingWritesEnabled(table.getMetaClient().getTableConfig().getTableVersion())) {
+      return streamWriteToMetadataTable(table, writeStatuses, instantTime);
     } else {
-      return writeMetadata;
+      return writeStatuses;
     }
   }
 
-  private HoodieWriteMetadata<HoodieData<WriteStatus>> streamWriteToMetadataTable(HoodieTable table, HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata, String instantTime) {
+  private HoodieData<WriteStatus> streamWriteToMetadataTable(HoodieTable table, HoodieData<WriteStatus> dataTableWriteStatuses, String instantTime) {
     Option<HoodieTableMetadataWriter> metadataWriterOpt = getMetadataWriter(instantTime, table);
     if (metadataWriterOpt.isPresent()) {
-      metadataWriterOpt.get().startCommit(instantTime);
-      HoodieData<WriteStatus> writeStatuses = maybeStreamWriteToMetadataTable(writeMetadata.getWriteStatuses(), metadataWriterOpt, table, instantTime);
-      writeMetadata.setWriteStatuses(writeStatuses);
+      //metadataWriterOpt.get().startCommit(instantTime);
+      return maybeStreamWriteToMetadataTable(dataTableWriteStatuses, metadataWriterOpt, table, instantTime);
     } else {
       // should we throw exception if we can't get a metadata writer?
+      return dataTableWriteStatuses;
     }
-    return writeMetadata;
   }
 
   // to be invoked by write client or table service client.
@@ -86,7 +84,7 @@ public class HoodieMetadataWriterWrapper {
                                       HoodieCommitMetadata metadata, List<HoodieWriteStat> metadataWriteStatsSoFar,
                                     BaseHoodieClient baseHoodieClient) {
     boolean streamingWritesToMetadataTableEnabled = !isMetadataTable && config.isMetadataTableEnabled()
-        && config.isStreamingWritesToMetadataEnabled(table.getMetaClient().getTableConfig().getTableVersion());
+        && config.isMetadataStreamingWritesEnabled(table.getMetaClient().getTableConfig().getTableVersion());
     if (streamingWritesToMetadataTableEnabled) {
       writeToMetadataTable(table, instantTime, metadataWriteStatsSoFar, metadata);
     } else {
@@ -95,7 +93,13 @@ public class HoodieMetadataWriterWrapper {
     }
   }
 
-  protected Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstantTimestamp, HoodieTable table) {
+  /**
+   * For new instant time,
+   * @param triggeringInstantTimestamp
+   * @param table
+   * @return
+   */
+  private synchronized Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstantTimestamp, HoodieTable table) {
 
     if (!table.getMetaClient().getTableConfig().getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT) || this.metadataWriterMap == null) {
       return Option.empty();
@@ -109,6 +113,10 @@ public class HoodieMetadataWriterWrapper {
     metadataWriterMap.put(triggeringInstantTimestamp, metadataWriterOpt); // populate this for every new instant time.
     // if metadata table does not exist, the map will contain an entry, with value Option.empty.
     // if not, it will contain the metadata writer instance.
+
+    // start the commit in metadata table.
+    metadataWriterOpt.ifPresent(metadataWriter -> metadataWriter.startCommit(triggeringInstantTimestamp));
+
     return metadataWriterMap.get(triggeringInstantTimestamp);
   }
 
