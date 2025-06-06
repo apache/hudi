@@ -65,13 +65,13 @@ class TestMarkerUtils extends HoodieCommonTestHarness {
 
       // marker type is DIRECT
       MarkerUtils.deleteMarkerTypeFile(storage, markerDir);
-      MarkerUtils.writeMarkerTypeToFile(MarkerType.DIRECT, storage, markerDir);
+      MarkerUtils.writeMarkerTypeToFile(MarkerType.DIRECT, storage, new StoragePath(markerDir));
       assertEquals(Option.of(MarkerType.DIRECT), MarkerUtils.readMarkerType(storage, markerDir),
           "File exists and contains DIRECT, should be DIRECT");
 
       // marker type is TIMELINE_SERVER_BASED
       MarkerUtils.deleteMarkerTypeFile(storage, markerDir);
-      MarkerUtils.writeMarkerTypeToFile(MarkerType.TIMELINE_SERVER_BASED, storage, markerDir);
+      MarkerUtils.writeMarkerTypeToFile(MarkerType.TIMELINE_SERVER_BASED, storage, new StoragePath(markerDir));
       assertEquals(Option.of(MarkerType.TIMELINE_SERVER_BASED), MarkerUtils.readMarkerType(storage, markerDir),
           "File exists and contains TIMELINE_SERVER_BASED, should be TIMELINE_SERVER_BASED");
     } finally {

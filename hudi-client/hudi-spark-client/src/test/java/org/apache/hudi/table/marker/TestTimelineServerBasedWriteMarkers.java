@@ -61,7 +61,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class TestTimelineServerBasedWriteMarkers extends TestWriteMarkersBase {
 
   private static final Logger LOG = LoggerFactory.getLogger(TestTimelineServerBasedWriteMarkers.class);
-  protected static int DEFAULT_READ_TIMEOUT_SECS = 60;
+  protected static final int DEFAULT_READ_TIMEOUT_SECS = 60;
 
   TimelineService timelineService = null;
 

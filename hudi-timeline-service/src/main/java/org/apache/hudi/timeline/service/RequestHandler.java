@@ -208,14 +208,14 @@ public class RequestHandler {
   }
 
   private void writeValueAsStringSync(Context ctx, Object obj) throws JsonProcessingException {
-    String result = jsonifyResult(ctx, obj, metricsRegistry, OBJECT_MAPPER, LOG);
+    String result = jsonifyResult(ctx, obj, metricsRegistry, LOG);
     ctx.result(result);
   }
 
   private void writeValueAsStringAsync(Context ctx, Object obj) {
     ctx.future(CompletableFuture.supplyAsync(() -> {
       try {
-        return jsonifyResult(ctx, obj, metricsRegistry, OBJECT_MAPPER, LOG);
+        return jsonifyResult(ctx, obj, metricsRegistry, LOG);
       } catch (JsonProcessingException e) {
         throw new HoodieException("Failed to JSON encode the value", e);
       }
