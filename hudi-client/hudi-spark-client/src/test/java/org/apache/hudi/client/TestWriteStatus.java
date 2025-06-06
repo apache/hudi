@@ -220,7 +220,6 @@ public class TestWriteStatus {
     // Remove metadata stats
     status.removeMetadataStats();
     assertEquals(0, status.getWrittenRecordDelegates().size());
-    assertTrue(status.getStat().getColumnStats().isEmpty());
   }
 
   @Test
@@ -230,7 +229,7 @@ public class TestWriteStatus {
     assertEquals(1, status.getFailedRecords().size());
 
     // Drop error records
-    status.dropErrorRecords();
+    status.dropGranularErrorRecordsTracking();
     assertEquals(0, status.getFailedRecords().size());
   }
 }

@@ -148,7 +148,7 @@ public class TestHoodieWriteStat {
     clonedInput.putAll(columnRangeMetadataMap);
 
     HoodieWriteStat writeStat = new HoodieWriteStat();
-    writeStat.setRecordsStats(clonedInput);
+    writeStat.putRecordsStats(clonedInput);
 
     Map<String, HoodieColumnRangeMetadata<Comparable>> actualRecordStats = writeStat.getColumnStats().get();
 

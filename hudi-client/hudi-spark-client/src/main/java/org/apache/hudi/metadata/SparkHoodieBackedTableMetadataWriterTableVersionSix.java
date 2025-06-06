@@ -19,6 +19,7 @@
 package org.apache.hudi.metadata;
 
 import org.apache.hudi.client.BaseHoodieWriteClient;
+import org.apache.hudi.client.SparkRDDMetadataWriteClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
@@ -159,7 +160,7 @@ public class SparkHoodieBackedTableMetadataWriterTableVersionSix extends HoodieB
 
   @Override
   public BaseHoodieWriteClient<?, JavaRDD<HoodieRecord>, ?, JavaRDD<WriteStatus>> initializeWriteClient() {
-    return new SparkRDDWriteClient(engineContext, metadataWriteConfig, Option.empty());
+    return new SparkRDDMetadataWriteClient(engineContext, metadataWriteConfig, Option.empty());
   }
 
   @Override

@@ -786,7 +786,6 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
                                                                        Function2<HoodieTable, HoodieTableMetaClient, HoodieWriteConfig> getHoodieTableFn,
                                                                        Function transformInputFn, Function transformOutputFn) throws Exception {
     String instantTime = "00000000000010";
-    HoodieTableMetaClient metaClient = createMetaClient();
     HoodieWriteConfig cfg = getRollbackMarkersAndConsistencyGuardWriteConfig(rollbackUsingMarkers, enableOptimisticConsistencyGuard, populateMetaFields);
     BaseHoodieWriteClient client = getHoodieWriteClient(cfg);
     testConsistencyCheck(context, metaClient, instantTime, enableOptimisticConsistencyGuard, getHoodieTableFn, transformInputFn, transformOutputFn);
