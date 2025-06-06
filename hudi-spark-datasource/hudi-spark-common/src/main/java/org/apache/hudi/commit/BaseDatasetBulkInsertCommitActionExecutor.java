@@ -67,6 +67,7 @@ public abstract class BaseDatasetBulkInsertCommitActionExecutor implements Seria
   }
 
   protected void preExecute() {
+
     instantTime = writeClient.startCommit(getCommitActionType());
     table = writeClient.initTable(getWriteOperationType(), Option.ofNullable(instantTime));
     table.validateInsertSchema();
@@ -108,6 +109,7 @@ public abstract class BaseDatasetBulkInsertCommitActionExecutor implements Seria
     Dataset<Row> hoodieDF = HoodieDatasetBulkInsertHelper.prepareForBulkInsert(records, writeConfig, bulkInsertPartitionerRows, instantTime);
 
     HoodieWriteMetadata<JavaRDD<WriteStatus>> result = buildHoodieWriteMetadata(doExecute(hoodieDF, bulkInsertPartitionerRows.arePartitionRecordsSorted()));
+
     afterExecute(result);
 
     return new HoodieWriteResult(result.getWriteStatuses(), result.getPartitionToReplaceFileIds());
