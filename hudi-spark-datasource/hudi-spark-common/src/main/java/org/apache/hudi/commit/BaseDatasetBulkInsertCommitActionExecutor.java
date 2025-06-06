@@ -77,7 +77,7 @@ public abstract class BaseDatasetBulkInsertCommitActionExecutor implements Seria
     table.getActiveTimeline().transitionRequestedToInflight(table.getMetaClient().createNewInstant(HoodieInstant.State.REQUESTED,
         getCommitActionType(), instantTime), Option.empty());
     return Option.of(HoodieDatasetBulkInsertHelper
-        .bulkInsert(records, instantTime, table, writeConfig, arePartitionRecordsSorted, false, getWriteOperationType()));
+        .bulkInsert(records, instantTime, table, writeConfig, arePartitionRecordsSorted, false));
   }
 
   protected void afterExecute(HoodieWriteMetadata<JavaRDD<WriteStatus>> result) {

@@ -81,7 +81,7 @@ public class SparkConsistentBucketClusteringExecutionStrategy<T extends HoodieRe
     Dataset<Row> repartitionedRecords = partitioner.repartitionRecords(inputRecords, numOutputGroups);
 
     return HoodieDatasetBulkInsertHelper.bulkInsert(repartitionedRecords, instantTime, getHoodieTable(), newConfig,
-        partitioner.arePartitionRecordsSorted(), shouldPreserveHoodieMetadata, WriteOperationType.CLUSTER);
+        partitioner.arePartitionRecordsSorted(), shouldPreserveHoodieMetadata);
   }
 
   @Override
