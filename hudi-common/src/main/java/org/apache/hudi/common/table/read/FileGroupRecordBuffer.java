@@ -293,7 +293,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
                   return Option.empty();
                 }
               }
-              return Option.of(BufferedRecord.forDeleteRecord(newRecord.getRecordKey(), newRecord.getOrderingValue()));
+              return Option.of(BufferedRecord.forDeleteRecord(newRecord.getRecordKey(), DEFAULT_ORDERING_VALUE));
             } else {
               Option<Pair<HoodieRecord, Schema>> combinedRecordAndSchemaOpt = recordMerger.get().merge(
                   readerContext.constructHoodieRecord(existingRecord),
@@ -303,7 +303,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
                   props);
 
               if (!combinedRecordAndSchemaOpt.isPresent()) {
-                return Option.of(BufferedRecord.forDeleteRecord(newRecord.getRecordKey(), newRecord.getOrderingValue()));
+                return Option.of(BufferedRecord.forDeleteRecord(newRecord.getRecordKey(), DEFAULT_ORDERING_VALUE));
               }
 
               Pair<HoodieRecord, Schema> combinedRecordAndSchema = combinedRecordAndSchemaOpt.get();
