@@ -101,15 +101,13 @@ public class PartialUpdateFlinkRecordMerger extends HoodieFlinkRecordMerger {
       if (older.isDelete(oldSchema, props) || newer.isDelete(newSchema, props)) {
         return Option.of(Pair.of(older, oldSchema));
       } else {
-        HoodieRecord mergedRecord = mergeRecord(newer, newSchema, older, oldSchema, props);
-        return Option.of(Pair.of(mergedRecord, oldSchema));
+        return Option.of(Pair.of(mergeRecord(newer, newSchema, older, oldSchema, newSchema, props), newSchema));
       }
     } else {
       if (newer.isDelete(newSchema, props) || older.isDelete(oldSchema, props)) {
         return Option.of(Pair.of(newer, newSchema));
       } else {
-        HoodieRecord mergedRecord = mergeRecord(older, oldSchema, newer, newSchema, props);
-        return Option.of(Pair.of(mergedRecord, oldSchema));
+        return Option.of(Pair.of(mergeRecord(older, oldSchema, newer, newSchema, newSchema, props), newSchema));
       }
     }
   }
@@ -119,28 +117,48 @@ public class PartialUpdateFlinkRecordMerger extends HoodieFlinkRecordMerger {
       Schema lowOrderSchema,
       HoodieRecord highOrderRecord,
       Schema highOrderSchema,
+      Schema newSchema,
       TypedProperties props) {
-    // merge older and newer, currently assume there is no schema evolution, solve it in HUDI-9253
-    ValidationUtils.checkArgument(lowOrderSchema.getFields().size() == highOrderSchema.getFields().size());
-    RowData mergedRow = mergeRowData((RowData) lowOrderRecord.getData(), (RowData) highOrderRecord.getData(), highOrderSchema, props);
+    // Assumptions: is no schema evolution, solve it in HUDI-9253
+    // 1. Schema differences are ONLY due to meta fields.
+    // 2. Meta fields are consecutive and in the same order.
+    // 3. Meta fields start from index 0 if exists.
+    int lowOrderArity = lowOrderSchema.getFields().size();
+    int highOrderArity = highOrderSchema.getFields().size();
+    // Merged record is always created with new schema, which may not contain metadata fields.
+    // The merged record has no metadata fields for this case, and metadata fields will be prepended
+    // later in the file writer.
+    int mergedArity = newSchema.getFields().size();
+    boolean utcTimezone = Boolean.parseBoolean(props.getProperty("read.utc-timezone", "true"));
+    RowData.FieldGetter[] fieldGetters = RowDataAvroQueryContexts.fromAvroSchema(newSchema, utcTimezone).fieldGetters();
+
+    int lowOrderStartIndex = 0;
+    int highOrderStartIndex = 0;
+    RowData.FieldGetter[] lowOrderFieldGetters = fieldGetters;
+    RowData.FieldGetter[] highOrderFieldGetters = fieldGetters;
+    // shift start index for merging if there is schema discrepancy
+    if (lowOrderArity != mergedArity) {
+      lowOrderStartIndex += lowOrderArity - mergedArity;
+      lowOrderFieldGetters = RowDataAvroQueryContexts.fromAvroSchema(lowOrderSchema, utcTimezone).fieldGetters();
+    } else if (highOrderArity != mergedArity) {
+      highOrderStartIndex += highOrderArity - mergedArity;
+      highOrderFieldGetters = RowDataAvroQueryContexts.fromAvroSchema(highOrderSchema, utcTimezone).fieldGetters();
+    }
+
+    RowData lowOrderRow = (RowData) lowOrderRecord.getData();
+    RowData highOrderRow = (RowData) highOrderRecord.getData();
+    GenericRowData mergedRow = new GenericRowData(mergedArity);
+    for (int i = 0; i < mergedArity; i++) {
+      mergedRow.setField(i, lowOrderFieldGetters[lowOrderStartIndex + i].getFieldOrNull(lowOrderRow));
+      Object fieldValWithHighOrder = highOrderFieldGetters[highOrderStartIndex + i].getFieldOrNull(highOrderRow);
+      if (fieldValWithHighOrder != null) {
+        mergedRow.setField(i, fieldValWithHighOrder);
+      }
+    }
     return new HoodieFlinkRecord(
         highOrderRecord.getKey(),
         highOrderRecord.getOperation(),
         highOrderRecord.getOrderingValue(highOrderSchema, props),
         mergedRow);
-  }
-
-  private RowData mergeRowData(RowData lowOrderRow, RowData highOrderRow, Schema schema, TypedProperties props) {
-    boolean utcTimezone = Boolean.parseBoolean(props.getProperty("read.utc-timezone", "true"));
-    GenericRowData result = new GenericRowData(schema.getFields().size());
-    RowData.FieldGetter[] fieldGetters = RowDataAvroQueryContexts.fromAvroSchema(schema, utcTimezone).fieldGetters();
-    for (int i = 0; i < fieldGetters.length; i++) {
-      result.setField(i, fieldGetters[i].getFieldOrNull(lowOrderRow));
-      Object fieldValWithHighOrder = fieldGetters[i].getFieldOrNull(highOrderRow);
-      if (fieldValWithHighOrder != null) {
-        result.setField(i, fieldValWithHighOrder);
-      }
-    }
-    return result;
   }
 }
