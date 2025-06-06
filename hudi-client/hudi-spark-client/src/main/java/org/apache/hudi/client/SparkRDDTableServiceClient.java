@@ -57,8 +57,8 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
     // If not, writes to data table gets triggered here.
     // When streaming writes are enabled, data table's WriteStatus is expected to contain all stats required to generate metadata table records and so each object will be larger.
     // So, here we are dropping all additional stats and error records to retain only the required information and prevent collecting large objects on the driver.
-    List<SparkRDDWriteClient.WriteStatusMetadataTracker> writeStatusMetadataTrackerList = tableServiceWriteMetadata.getWriteStatuses()
-        .map(writeStatus -> new SparkRDDWriteClient.WriteStatusMetadataTracker(writeStatus.isMetadataTable(), writeStatus.getTotalRecords(), writeStatus.getTotalErrorRecords(),
+    List<SparkRDDWriteClient.SlimWriteStats> writeStatusMetadataTrackerList = tableServiceWriteMetadata.getWriteStatuses()
+        .map(writeStatus -> new SparkRDDWriteClient.SlimWriteStats(writeStatus.isMetadataTable(), writeStatus.getTotalRecords(), writeStatus.getTotalErrorRecords(),
             writeStatus.getStat())).collect();
 
     List<HoodieWriteStat> dataTableWriteStats = writeStatusMetadataTrackerList.stream().filter(entry -> !entry.isMetadataTable()).map(entry -> entry.getWriteStat()).collect(Collectors.toList());

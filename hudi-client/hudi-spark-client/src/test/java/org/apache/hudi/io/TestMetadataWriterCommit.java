@@ -131,13 +131,6 @@ public class TestMetadataWriterCommit extends BaseTestHandle {
 
     // Verify commit metadata
     mdtCommitMetadata = mdtMetaClient.getActiveTimeline().readCommitMetadata(mdtMetaClient.getActiveTimeline().lastInstant().get());
-=======
-    // 3 bootstrap commits for 3 enabled partitions, 1 commit due to update
-    assertEquals(4, mdtMetaClient.reloadActiveTimeline().filterCompletedInstants().countInstants());
-
-    // Verify commit metadata
-    HoodieCommitMetadata mdtCommitMetadata = mdtMetaClient.getActiveTimeline().readCommitMetadata(mdtMetaClient.getActiveTimeline().lastInstant().get());
->>>>>>> 18154808c97 ([HUDI-9405] Support streaming writes with MDT metadata writer)
     // 3 partitions should be seen in the commit metadata - FILES, Record index and Column stats
     assertEquals(3, mdtCommitMetadata.getPartitionToWriteStats().size());
     assertEquals(1, mdtCommitMetadata.getPartitionToWriteStats().get(FILES.getPartitionPath()).size());
