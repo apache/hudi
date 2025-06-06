@@ -962,6 +962,15 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   }
 
   /**
+   * Starts a new commit for deleting partitions from the table.
+   * @param metaClient a meta client for the table
+   * @return the instant generated for the delete partition commit
+   */
+  public String startDeletePartitionCommit(HoodieTableMetaClient metaClient) {
+    return tableServiceClient.startDeletePartitionCommit(metaClient).requestedTime();
+  }
+
+  /**
    * Starts a new commit time for a write operation (insert/update/delete) with specified action.
    *
    * @param providedInstantTime an optional argument that should only be provided for writes to the metadata table or for testing purposes.
