@@ -127,18 +127,4 @@ object SecondaryIndexSupport {
 
     Tuple2.apply(secondaryKeyQueries, secondaryKeys)
   }
-
-  /**
-   * Returns the configured secondary key for the table
-   * TODO: [HUDI-8302] Handle multiple secondary indexes (similar to expression index)
-   */
-  def getSecondaryKeyConfig(queryReferencedColumns: Seq[String],
-                            metaClient: HoodieTableMetaClient): Option[(String, String)] = {
-    val indexDefinitions = metaClient.getIndexMetadata.get.getIndexDefinitions.asScala
-    indexDefinitions.values
-      .find(indexDef => indexDef.getIndexType.equals(PARTITION_NAME_SECONDARY_INDEX) &&
-        queryReferencedColumns.contains(indexDef.getSourceFields.get(0)))
-      .map(indexDef => (indexDef.getIndexName, indexDef.getSourceFields.get(0)))
-  }
-
 }

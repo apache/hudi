@@ -1328,16 +1328,24 @@ public class HoodieTableMetadataUtil {
   }
 
   /**
-   * Map a record key to a file group in partition of interest.
+   * Maps a record key to a file group index in the specified partition.
    * <p>
-   * Note: For hashing, the algorithm is same as String.hashCode() but is being defined here as hashCode()
-   * implementation is not guaranteed by the JVM to be consistent across JVM versions and implementations.
+   * For secondary index partitions (version >= 8), if the record key contains the secondary index separator,
+   * the secondary key portion is used for hashing. Otherwise, the full record key is used.
+   * <p>
+   * Note: The hashing algorithm is same as String.hashCode() but is defined here explicitly since
+   * hashCode() implementation is not guaranteed by the JVM to be consistent across versions.
    *
-   * @param recordKey record key for which the file group index is looked up for.
-   * @return An integer hash of the given string
+   * @param recordKey record key for which the file group index is looked up
+   * @param numFileGroups number of file groups to map the key to
+   * @param partitionName name of the partition
+   * @param version table version to determine hashing behavior
+   * @return file group index for the given record key
    */
   public static int mapRecordKeyToFileGroupIndex(String recordKey, int numFileGroups, String partitionName, HoodieTableVersion version) {
-    if (version.greaterThanOrEquals(HoodieTableVersion.EIGHT) && MetadataPartitionType.SECONDARY_INDEX.isPartitionType(partitionName) && recordKey.contains(SECONDARY_INDEX_RECORD_KEY_SEPARATOR)) {
+    if (version.greaterThanOrEquals(HoodieTableVersion.NINE)
+        && MetadataPartitionType.SECONDARY_INDEX.isPartitionType(partitionName)
+        && recordKey.contains(SECONDARY_INDEX_RECORD_KEY_SEPARATOR)) {
       return mapRecordKeyToFileGroupIndex(SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey(recordKey), numFileGroups);
     }
     return mapRecordKeyToFileGroupIndex(recordKey, numFileGroups);
