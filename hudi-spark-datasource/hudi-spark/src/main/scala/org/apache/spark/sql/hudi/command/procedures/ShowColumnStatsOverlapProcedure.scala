@@ -261,16 +261,8 @@ class ShowColumnStatsOverlapProcedure extends BaseProcedure with ProcedureBuilde
     val globPath = s"$basePath/**"
     val statuses = FSUtils.getGlobStatusExcludingMetaFolder(storage, new StoragePath(globPath))
 
-    val timeline = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants()
-
-    val maxInstant = HoodieInstantTimeGenerator.getCurrentInstantTimeStr
-    val instants = timeline.getInstants.iterator().asScala.filter(_.requestedTime < maxInstant)
-
-    val filteredTimeline = metaClient.getTimelineLayout.getTimelineFactory.createDefaultTimeline(
-      new java.util.ArrayList[HoodieInstant](instants.toList.asJava).stream(),
-      metaClient.getActiveTimeline.getInstantReader)
-
-    new HoodieTableFileSystemView(metaClient, filteredTimeline, statuses)
+    val timeline = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants
+    new HoodieTableFileSystemView(metaClient, timeline, statuses)
   }
 
   override def build: Procedure = new ShowColumnStatsOverlapProcedure()
