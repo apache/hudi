@@ -69,8 +69,6 @@ case class BaseFileOnlyRelation(override val sqlContext: SQLContext,
   override protected val shouldExtractPartitionValuesFromPartitionPath: Boolean =
   internalSchemaOpt.isEmpty
 
-  override lazy val mandatoryFields: Seq[String] = Seq.empty
-
   // Before Spark 3.4.0: PartitioningAwareFileIndex.BASE_PATH_PARAM
   // Since Spark 3.4.0: FileIndexOptions.BASE_PATH_PARAM
   val BASE_PATH_PARAM = "basePath"
@@ -81,7 +79,7 @@ case class BaseFileOnlyRelation(override val sqlContext: SQLContext,
   protected override def composeRDD(fileSplits: Seq[HoodieBaseFileSplit],
                                     tableSchema: HoodieTableSchema,
                                     requiredSchema: HoodieTableSchema,
-                                    requestedColumns: Array[String],
+                                    optionalSchema: HoodieTableSchema,
                                     filters: Array[Filter]): RDD[InternalRow] = {
     val (partitionSchema, dataSchema, requiredDataSchema) = tryPrunePartitionColumns(tableSchema, requiredSchema)
     val baseFileReader = createBaseFileReader(
