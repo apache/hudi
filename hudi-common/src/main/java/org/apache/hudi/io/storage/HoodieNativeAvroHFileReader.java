@@ -264,17 +264,17 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
 
   @Override
   public List<String> extractKeyPrefixes(Option<Predicate> keyFilterOpt) {
-    List<String> keys = new ArrayList<>();
+    List<String> keyPrefixes = new ArrayList<>();
     if (keyFilterOpt.isPresent()
         && keyFilterOpt.get().getOperator().equals(Expression.Operator.STARTS_WITH)) {
       List<Expression> children = ((Predicates.StringStartsWithAny) keyFilterOpt.get()).getRightChildren();
-      keys = children.stream()
+      keyPrefixes = children.stream()
           .map(e -> (String) e.eval(null)).collect(Collectors.toList());
     }
-    if (keys.isEmpty() && keyFilterOpt.isPresent()) {
+    if (keyPrefixes.isEmpty() && keyFilterOpt.isPresent()) {
       LOG.warn("Cannot extract valid key prefixes from predicate: {}", keyFilterOpt.get());
     }
-    return keys;
+    return keyPrefixes;
   }
 
   private Schema fetchSchema() {

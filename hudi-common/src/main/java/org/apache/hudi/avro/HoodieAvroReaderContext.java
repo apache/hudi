@@ -89,17 +89,20 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
             filePath, baseFileFormat, Option.empty());
     if (keyFilterOpt.isEmpty()) {
       return reader.getIndexedRecordIterator(dataSchema, requiredSchema);
-    } else {
-      if (reader.supportKeyPredicate() && !reader.extractKeys(keyFilterOpt).isEmpty()) {
-        List<String> keys = reader.extractKeys(keyFilterOpt);
+    }
+    if (reader.supportKeyPredicate()) {
+      List<String> keys = reader.extractKeys(keyFilterOpt);
+      if (!keys.isEmpty()) {
         return reader.getIndexedRecordsByKeysIterator(keys, requiredSchema);
-      } else if (reader.supportKeyPrefixPredicate() && !reader.extractKeyPrefixes(keyFilterOpt).isEmpty()) {
-        List<String> keyPrefixes = reader.extractKeyPrefixes(keyFilterOpt);
-        return reader.getIndexedRecordsByKeyPrefixIterator(keyPrefixes, requiredSchema);
-      } else {
-        return reader.getIndexedRecordIterator(dataSchema, requiredSchema);
       }
     }
+    if (reader.supportKeyPrefixPredicate()) {
+      List<String> keyPrefixes = reader.extractKeyPrefixes(keyFilterOpt);
+      if (!keyPrefixes.isEmpty()) {
+        return reader.getIndexedRecordsByKeyPrefixIterator(keyPrefixes, requiredSchema);
+      }
+    }
+    return reader.getIndexedRecordIterator(dataSchema, requiredSchema);
   }
 
   @Override
