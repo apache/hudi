@@ -24,23 +24,28 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
+import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -55,6 +60,7 @@ import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.sql.catalyst.InternalRow;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -73,7 +79,6 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.convertMetadataToRecordIndexRecords;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getRecordKeys;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getRevivedAndDeletedKeysFromMergedLogs;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.reduceByKeys;
 import static org.apache.hudi.metadata.SecondaryIndexKeyUtils.constructSecondaryIndexKey;
@@ -524,14 +529,15 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
     writeStatuses3.stream().filter(writeStatus -> FSUtils.isLogFile(FSUtils.getFileName(writeStatus.getStat().getPath(), writeStatus.getPartitionPath())))
         .forEach(writeStatus -> {
           try {
-            StoragePath fullFilePath = new StoragePath(basePath, writeStatus.getStat().getPath());
+            HoodieWriteStat writeStat = writeStatus.getStat();
+            StoragePath fullFilePath = new StoragePath(basePath, writeStat.getPath());
             // used for RLI
             finalActualDeletes.addAll(getRevivedAndDeletedKeysFromMergedLogs(metaClient, latestCommitTimestamp, EngineType.SPARK, Collections.singletonList(fullFilePath.toString()), writerSchemaOpt,
                 Collections.singletonList(fullFilePath.toString())).getValue());
 
             // used in SI flow
-            actualUpdatesAndDeletes.addAll(getRecordKeys(Collections.singletonList(fullFilePath.toString()), metaClient, writerSchemaOpt,
-                writeConfig.getMetadataConfig().getMaxReaderBufferSize(), latestCommitTimestamp, true, true));
+            actualUpdatesAndDeletes.addAll(getRecordKeys(writeStat.getPartitionPath(), writeStat.getPrevCommit(), writeStat.getFileId(),
+                Collections.singletonList(fullFilePath), metaClient, writerSchemaOpt, latestCommitTimestamp));
           } catch (IOException e) {
             throw new HoodieIOException("Failed w/ IOException ", e);
           }
@@ -700,5 +706,37 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
         }
       }
     });
+  }
+
+  Set<String> getRecordKeys(String partition, String baseInstantTime, String fileId, List<StoragePath> logFilePaths, HoodieTableMetaClient datasetMetaClient,
+                                   Option<Schema> writerSchemaOpt, String latestCommitTimestamp) throws IOException {
+    if (writerSchemaOpt.isPresent()) {
+      // read log file records without merging
+      FileSlice fileSlice = new FileSlice(partition, baseInstantTime, fileId);
+      logFilePaths.forEach(logFilePath -> {
+        HoodieLogFile logFile = new HoodieLogFile(logFilePath);
+        fileSlice.addLogFile(logFile);
+      });
+      TypedProperties properties = new TypedProperties();
+      // configure un-merged log file reader
+      HoodieReaderContext<InternalRow> readerContext = context.getReaderContextFactory(metaClient).getContext();
+      HoodieFileGroupReader<InternalRow> reader = HoodieFileGroupReader.<InternalRow>newBuilder()
+          .withReaderContext(readerContext)
+          .withDataSchema(writerSchemaOpt.get())
+          .withRequestedSchema(writerSchemaOpt.get())
+          .withEmitDelete(true)
+          .withFileSlice(fileSlice)
+          .withLatestCommitTime(latestCommitTimestamp)
+          .withHoodieTableMetaClient(datasetMetaClient)
+          .withProps(properties)
+          .withEmitDelete(true)
+          .build();
+      Set<String> allRecordKeys = new HashSet<>();
+      try (ClosableIterator<String> keysIterator = reader.getClosableKeyIterator()) {
+        keysIterator.forEachRemaining(allRecordKeys::add);
+      }
+      return allRecordKeys;
+    }
+    return Collections.emptySet();
   }
 }

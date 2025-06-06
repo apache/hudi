@@ -19,6 +19,7 @@
 package org.apache.hudi.metadata;
 
 import org.apache.hudi.avro.ConvertingGenericData;
+import org.apache.hudi.avro.HoodieAvroReaderContext;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.BooleanWrapper;
 import org.apache.hudi.avro.model.DateWrapper;
@@ -39,7 +40,9 @@ import org.apache.hudi.avro.model.TimestampMicrosWrapper;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieAccumulator;
 import org.apache.hudi.common.data.HoodieAtomicLongAccumulator;
 import org.apache.hudi.common.data.HoodieData;
@@ -47,6 +50,7 @@ import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
+import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
@@ -73,7 +77,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
-import org.apache.hudi.common.table.log.HoodieUnMergedLogRecordScanner;
+import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
@@ -132,6 +136,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -158,7 +163,9 @@ import static org.apache.hudi.common.config.HoodieCommonConfig.DEFAULT_MAX_MEMOR
 import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED;
 import static org.apache.hudi.common.config.HoodieCommonConfig.MAX_MEMORY_FOR_COMPACTION;
 import static org.apache.hudi.common.config.HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE;
+import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE;
 import static org.apache.hudi.common.config.HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN;
+import static org.apache.hudi.common.config.HoodieReaderConfig.REALTIME_SKIP_MERGE;
 import static org.apache.hudi.common.fs.FSUtils.getFileNameFromPath;
 import static org.apache.hudi.common.model.HoodieRecord.COMMIT_TIME_METADATA_FIELD;
 import static org.apache.hudi.common.model.HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION;
@@ -243,7 +250,7 @@ public class HoodieTableMetadataUtil {
    *         the collection of provided records
    */
   public static Map<String, HoodieColumnRangeMetadata<Comparable>> collectColumnRangeMetadata(
-      List<HoodieRecord> records,
+      Iterator<HoodieRecord> records,
       List<Pair<String, Schema.Field>> targetFields,
       String filePath,
       Schema recordSchema,
@@ -263,7 +270,7 @@ public class HoodieTableMetadataUtil {
         storageConfig.getString(HoodieStorageConfig.WRITE_UTC_TIMEZONE.key(), HoodieStorageConfig.WRITE_UTC_TIMEZONE.defaultValue().toString()));
     // Collect stats for all columns by iterating through records while accounting
     // corresponding stats
-    records.forEach((record) -> {
+    records.forEachRemaining((record) -> {
       // For each column (field) we have to index update corresponding column stats
       // with the values from this record
       targetFields.forEach(fieldNameFieldPair -> {
@@ -1082,35 +1089,6 @@ public class HoodieTableMetadataUtil {
         }, parallelism).values();
   }
 
-  @VisibleForTesting
-  public static Set<String> getRecordKeys(List<String> logFilePaths, HoodieTableMetaClient datasetMetaClient,
-                                          Option<Schema> writerSchemaOpt, int maxBufferSize,
-                                          String latestCommitTimestamp, boolean includeValidKeys,
-                                          boolean includeDeletedKeys) throws IOException {
-    if (writerSchemaOpt.isPresent()) {
-      // read log file records without merging
-      Set<String> allRecordKeys = new HashSet<>();
-      HoodieUnMergedLogRecordScanner.Builder builder = HoodieUnMergedLogRecordScanner.newBuilder()
-          .withStorage(datasetMetaClient.getStorage())
-          .withBasePath(datasetMetaClient.getBasePath())
-          .withLogFilePaths(logFilePaths)
-          .withBufferSize(maxBufferSize)
-          .withLatestInstantTime(latestCommitTimestamp)
-          .withReaderSchema(writerSchemaOpt.get())
-          .withTableMetaClient(datasetMetaClient);
-      if (includeValidKeys) {
-        builder.withLogRecordScannerCallback(record -> allRecordKeys.add(record.getRecordKey()));
-      }
-      if (includeDeletedKeys) {
-        builder.withRecordDeletionCallback(deletedKey -> allRecordKeys.add(deletedKey.getRecordKey()));
-      }
-      HoodieUnMergedLogRecordScanner scanner = builder.build();
-      scanner.scan();
-      return allRecordKeys;
-    }
-    return Collections.emptySet();
-  }
-
   /**
    * Convert rollback action metadata to metadata table records.
    * <p>
@@ -1685,7 +1663,7 @@ public class HoodieTableMetadataUtil {
       } else if (FSUtils.isLogFile(fileName)) {
         Option<Schema> writerSchemaOpt = tryResolveSchemaForTable(datasetMetaClient);
         LOG.warn("Reading log file: {}, to build column range metadata.", partitionPathFileName);
-        return getLogFileColumnRangeMetadata(fullFilePath.toString(), datasetMetaClient, columnsToIndex, writerSchemaOpt, maxBufferSize);
+        return getLogFileColumnRangeMetadata(fullFilePath.toString(), partitionPath, datasetMetaClient, columnsToIndex, writerSchemaOpt, maxBufferSize);
       }
       LOG.warn("Column range index not supported for: {}", partitionPathFileName);
       return Collections.emptyList();
@@ -1701,31 +1679,39 @@ public class HoodieTableMetadataUtil {
    * Read column range metadata from log file.
    */
   @VisibleForTesting
-  public static List<HoodieColumnRangeMetadata<Comparable>> getLogFileColumnRangeMetadata(String filePath, HoodieTableMetaClient datasetMetaClient,
+  public static List<HoodieColumnRangeMetadata<Comparable>> getLogFileColumnRangeMetadata(String filePath, String partitionPath,
+                                                                                          HoodieTableMetaClient datasetMetaClient,
                                                                                           List<String> columnsToIndex, Option<Schema> writerSchemaOpt,
                                                                                           int maxBufferSize) throws IOException {
     if (writerSchemaOpt.isPresent()) {
       List<Pair<String, Schema.Field>> fieldsToIndex = columnsToIndex.stream().map(fieldName -> HoodieAvroUtils.getSchemaForField(writerSchemaOpt.get(), fieldName))
           .collect(Collectors.toList());
-      // read log file records without merging
-      List<HoodieRecord> records = new ArrayList<>();
-      HoodieUnMergedLogRecordScanner scanner = HoodieUnMergedLogRecordScanner.newBuilder()
-          .withStorage(datasetMetaClient.getStorage())
-          .withBasePath(datasetMetaClient.getBasePath())
-          .withLogFilePaths(Collections.singletonList(filePath))
-          .withBufferSize(maxBufferSize)
-          .withLatestInstantTime(datasetMetaClient.getActiveTimeline().getCommitsTimeline().lastInstant().get().requestedTime())
-          .withReaderSchema(writerSchemaOpt.get())
-          .withTableMetaClient(datasetMetaClient)
-          .withLogRecordScannerCallback(records::add)
+      // read log files without merging for lower overhead, log files may contain multiple records for the same key resulting in a wider range of values than the merged result
+      HoodieLogFile logFile = new HoodieLogFile(filePath);
+      FileSlice fileSlice = new FileSlice(partitionPath, logFile.getDeltaCommitTime(), logFile.getFileId());
+      fileSlice.addLogFile(logFile);
+      TypedProperties properties = new TypedProperties();
+      properties.setProperty(MAX_MEMORY_FOR_MERGE.key(), Long.toString(maxBufferSize));
+      properties.setProperty(HoodieReaderConfig.MERGE_TYPE.key(), REALTIME_SKIP_MERGE);
+      // Currently only avro is fully supported for extracting column ranges (see HUDI-8585)
+      HoodieReaderContext readerContext = new HoodieAvroReaderContext(datasetMetaClient.getStorageConf(), datasetMetaClient.getTableConfig(), Option.empty(), Option.empty());
+      HoodieFileGroupReader fileGroupReader = HoodieFileGroupReader.newBuilder()
+          .withReaderContext(readerContext)
+          .withHoodieTableMetaClient(datasetMetaClient)
+          .withFileSlice(fileSlice)
+          .withDataSchema(writerSchemaOpt.get())
+          .withRequestedSchema(writerSchemaOpt.get())
+          .withLatestCommitTime(datasetMetaClient.getActiveTimeline().getCommitsTimeline().lastInstant().get().requestedTime())
+          .withProps(properties)
           .build();
-      scanner.scan();
-      if (records.isEmpty()) {
-        return Collections.emptyList();
+      try (ClosableIterator<HoodieRecord> recordIterator = (ClosableIterator<HoodieRecord>) fileGroupReader.getClosableHoodieRecordIterator()) {
+        if (!recordIterator.hasNext()) {
+          return Collections.emptyList();
+        }
+        Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataMap =
+            collectColumnRangeMetadata(recordIterator, fieldsToIndex, getFileNameFromPath(filePath), writerSchemaOpt.get(), datasetMetaClient.getStorage().getConf());
+        return new ArrayList<>(columnRangeMetadataMap.values());
       }
-      Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataMap =
-          collectColumnRangeMetadata(records, fieldsToIndex, getFileNameFromPath(filePath), writerSchemaOpt.get(), datasetMetaClient.getStorage().getConf());
-      return new ArrayList<>(columnRangeMetadataMap.values());
     }
     return Collections.emptyList();
   }
@@ -2435,8 +2421,7 @@ public class HoodieTableMetadataUtil {
     });
   }
 
-  public static Schema getProjectedSchemaForExpressionIndex(HoodieIndexDefinition indexDefinition, HoodieTableMetaClient metaClient) throws Exception {
-    Schema tableSchema = new TableSchemaResolver(metaClient).getTableAvroSchema();
+  public static Schema getProjectedSchemaForExpressionIndex(HoodieIndexDefinition indexDefinition, HoodieTableMetaClient metaClient, Schema tableSchema) {
     List<String> partitionFields = metaClient.getTableConfig().getPartitionFields()
         .map(Arrays::asList)
         .orElse(Collections.emptyList());
@@ -2554,12 +2539,11 @@ public class HoodieTableMetadataUtil {
                                                                              List<Pair<String, FileSlice>> partitionInfoList,
                                                                              HoodieMetadataConfig metadataConfig,
                                                                              HoodieTableMetaClient dataTableMetaClient,
-                                                                             Option<Schema> writerSchemaOpt,
+                                                                             Lazy<Option<Schema>> lazyWriterSchemaOpt,
                                                                              Option<HoodieRecordType> recordTypeOpt) {
     if (partitionInfoList.isEmpty()) {
       return engineContext.emptyHoodieData();
     }
-    Lazy<Option<Schema>> lazyWriterSchemaOpt = writerSchemaOpt.isPresent() ? Lazy.eagerly(writerSchemaOpt) : Lazy.lazily(() -> tryResolveSchemaForTable(dataTableMetaClient));
     final Map<String, Schema> columnsToIndexSchemaMap = getColumnsToIndex(dataTableMetaClient.getTableConfig(), metadataConfig, lazyWriterSchemaOpt,
         dataTableMetaClient.getActiveTimeline().getWriteTimeline().filterCompletedInstants().empty(), recordTypeOpt);
     if (columnsToIndexSchemaMap.isEmpty()) {
@@ -2766,7 +2750,7 @@ public class HoodieTableMetadataUtil {
                                                                                            Option<Schema> writerSchemaOpt) {
     if (writeStat instanceof HoodieDeltaWriteStat && ((HoodieDeltaWriteStat) writeStat).getColumnStats().isPresent()) {
       Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMap = ((HoodieDeltaWriteStat) writeStat).getColumnStats().get();
-      return columnRangeMap.values().stream().collect(Collectors.toList());
+      return new ArrayList<>(columnRangeMap.values());
     }
 
     String filePath = writeStat.getPath();

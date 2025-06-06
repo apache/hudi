@@ -174,7 +174,8 @@ public class SparkHoodieBackedTableMetadataWriterTableVersionSix extends HoodieB
 
   @Override
   protected HoodieData<HoodieRecord> getExpressionIndexRecords(List<Pair<String, Pair<String, Long>>> partitionFilePathAndSizeTriplet, HoodieIndexDefinition indexDefinition,
-                                                               HoodieTableMetaClient metaClient, int parallelism, Schema readerSchema, StorageConfiguration<?> storageConf, String instantTime) {
+                                                               HoodieTableMetaClient metaClient, int parallelism, Schema tableSchema, Schema readerSchema, StorageConfiguration<?> storageConf,
+                                                               String instantTime) {
     throw new HoodieNotSupportedException("Expression index not supported for Java metadata table writer yet.");
   }
 }

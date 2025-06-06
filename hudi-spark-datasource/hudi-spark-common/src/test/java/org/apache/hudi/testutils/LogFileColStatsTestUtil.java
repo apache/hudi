@@ -18,28 +18,22 @@
 
 package org.apache.hudi.testutils;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
-import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
-import org.apache.hudi.common.table.log.HoodieUnMergedLogRecordScanner;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.expressions.GenericRow;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
-
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.collectColumnRangeMetadata;
 
 /**
  * Util methods used in tests to fetch col stats records for a log file.
@@ -47,29 +41,12 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.collectColumnRang
 public class LogFileColStatsTestUtil {
 
   public static Option<Row> getLogFileColumnRangeMetadata(String filePath, HoodieTableMetaClient datasetMetaClient, String latestCommitTime,
-                                                  List<String> columnsToIndex, Option<Schema> writerSchemaOpt,
-                                                  int maxBufferSize) throws IOException {
+                                                          List<String> columnsToIndex, Option<Schema> writerSchemaOpt,
+                                                          int maxBufferSize) throws IOException {
     if (writerSchemaOpt.isPresent()) {
-      List<Pair<String, Schema.Field>> fieldsToIndex = columnsToIndex.stream()
-          .map(fieldName -> HoodieAvroUtils.getSchemaForField(writerSchemaOpt.get(), fieldName, ""))
-          .collect(Collectors.toList());
-      List<HoodieRecord> records = new ArrayList<>();
-      HoodieUnMergedLogRecordScanner scanner = HoodieUnMergedLogRecordScanner.newBuilder()
-          .withStorage(datasetMetaClient.getStorage())
-          .withBasePath(datasetMetaClient.getBasePath())
-          .withLogFilePaths(Collections.singletonList(filePath))
-          .withBufferSize(maxBufferSize)
-          .withLatestInstantTime(latestCommitTime)
-          .withReaderSchema(writerSchemaOpt.get())
-          .withLogRecordScannerCallback(records::add)
-          .build();
-      scanner.scan();
-      if (records.isEmpty()) {
-        return Option.empty();
-      }
-      Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataMap =
-          collectColumnRangeMetadata(records, fieldsToIndex, filePath, writerSchemaOpt.get(), datasetMetaClient.getStorageConf());
-      List<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList = new ArrayList<>(columnRangeMetadataMap.values());
+      String partitionPath = FSUtils.getRelativePartitionPath(datasetMetaClient.getBasePath(), new StoragePath(filePath).getParent());
+      List<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList =
+          HoodieTableMetadataUtil.getLogFileColumnRangeMetadata(filePath, partitionPath, datasetMetaClient, columnsToIndex, writerSchemaOpt, maxBufferSize);
       return Option.of(getColStatsEntry(filePath, columnRangeMetadataList));
     } else {
       throw new HoodieException("Writer schema needs to be set");

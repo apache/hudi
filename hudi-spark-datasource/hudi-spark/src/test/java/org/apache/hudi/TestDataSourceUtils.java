@@ -20,6 +20,7 @@ package org.apache.hudi;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
@@ -35,6 +36,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.table.BulkInsertPartitioner;
+import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import org.apache.avro.Conversions;
 import org.apache.avro.LogicalTypes;
@@ -60,7 +62,14 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
+import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.instanceOf;
@@ -75,7 +84,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-public class TestDataSourceUtils {
+public class TestDataSourceUtils extends HoodieClientTestBase {
 
   @Mock
   private SparkRDDWriteClient hoodieWriteClient;
@@ -299,5 +308,27 @@ public class TestDataSourceUtils {
     HoodieMetadataPayload deserGenericRecordHoodieMetadataPayload = SerializationUtils.deserialize(bytes);
 
     assertEquals(genericRecordHoodieMetadataPayload, deserGenericRecordHoodieMetadataPayload);
+  }
+
+  @Test
+  void testDeduplicationAgainstRecordsAlreadyInTable() throws IOException {
+    initResources();
+    HoodieWriteConfig config = getConfig();
+    config.getProps().setProperty("path", config.getBasePath());
+    try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config)) {
+      String newCommitTime = writeClient.startCommit();
+      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
+      JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 2);
+      List<WriteStatus> statusList = writeClient.bulkInsert(recordsRDD, newCommitTime).collect();
+      writeClient.commit(newCommitTime, jsc.parallelize(statusList), Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+      assertNoWriteErrors(statusList);
+
+      Map<String, String> parameters = config.getProps().entrySet().stream().collect(Collectors.toMap(entry -> entry.getKey().toString(), entry -> entry.getValue().toString()));
+      List<HoodieRecord> newRecords = dataGen.generateInserts(newCommitTime, 10);
+      List<HoodieRecord> inputRecords = Stream.concat(records.subList(0, 10).stream(), newRecords.stream()).collect(Collectors.toList());
+      List<HoodieRecord> output = DataSourceUtils.resolveDuplicates(jsc, jsc.parallelize(inputRecords, 1), parameters, false).collect();
+      Set<String> expectedRecordKeys = newRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toSet());
+      assertEquals(expectedRecordKeys, output.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toSet()));
+    }
   }
 }

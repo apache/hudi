@@ -1844,7 +1844,7 @@ public class HoodieMetadataTableValidator implements Serializable {
             StoragePath storagePartitionPath = new StoragePath(metaClient.getBasePath(), partitionPath);
             String filePath = new StoragePath(storagePartitionPath, filename).toString();
             try {
-              return getLogFileColumnRangeMetadata(filePath, metaClient, allColumnNameList, Option.of(readerSchema),
+              return getLogFileColumnRangeMetadata(filePath, partitionPath, metaClient, allColumnNameList, Option.of(readerSchema),
                   metadataConfig.getMaxReaderBufferSize())
                   .stream()
                   // We need to convert file path and use only the file name instead of the complete file path

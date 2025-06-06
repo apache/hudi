@@ -168,7 +168,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
             .withPartitionStatsIndexParallelism(1)
             .build(),
         metaClient,
-        Option.of(HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS),
+        Lazy.eagerly(Option.of(HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS)),
         Option.empty());
     // Validate the result.
     validatePartitionStats(result, instant1, instant2);
@@ -262,6 +262,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
         metaClient.getTableConfig().setValue(HoodieTableConfig.PARTITION_FIELDS.key(), "partition_path");
         List<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataLogFile = HoodieTableMetadataUtil.getLogFileColumnRangeMetadata(
             storagePath2.toString(),
+            p,
             metaClient,
             columnsToIndex,
             Option.of(HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS),
@@ -283,7 +284,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
             .withPartitionStatsIndexParallelism(1)
             .build(),
         metaClient,
-        Option.of(HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS),
+        Lazy.eagerly(Option.of(HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS)),
         Option.empty());
     // Validate the result.
     validatePartitionStats(result, instant1, instant2, 6);
