@@ -33,7 +33,9 @@ import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.SchemaBuilder;
 import org.apache.hudi.utils.TestConfigurations;
 
+import org.apache.flink.api.common.RuntimeExecutionMode;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.configuration.ExecutionOptions;
 import org.apache.flink.configuration.ReadableConfig;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.Schema;
@@ -494,6 +496,13 @@ public class TestHoodieTableFactory {
     final HoodieTableSource tableSource2 = (HoodieTableSource) new HoodieTableFactory().createDynamicTableSource(sourceContext2);
     final Configuration conf2 = tableSource2.getConf();
     assertThat(conf2.getString(FlinkOptions.QUERY_TYPE), is(FlinkOptions.QUERY_TYPE_INCREMENTAL));
+
+    this.conf.removeConfig(FlinkOptions.READ_START_COMMIT);
+    this.conf.set(ExecutionOptions.RUNTIME_MODE, RuntimeExecutionMode.STREAMING);
+    final MockContext sourceContext3 = MockContext.getInstance(this.conf, schema1, "f2");
+    final HoodieTableSource tableSource3 = (HoodieTableSource) new HoodieTableFactory().createDynamicTableSource(sourceContext3);
+    final Configuration conf3 = tableSource3.getConf();
+    assertThat(conf3.getBoolean(FlinkOptions.READ_AS_STREAMING), is(true));
   }
 
   @Test
