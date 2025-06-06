@@ -119,10 +119,10 @@ public class PartialUpdateFlinkRecordMerger extends HoodieFlinkRecordMerger {
       Schema highOrderSchema,
       Schema newSchema,
       TypedProperties props) {
-    // Assumptions: is no schema evolution, solve it in HUDI-9253
-    // 1. Schema differences are ONLY due to meta fields.
-    // 2. Meta fields are consecutive and in the same order.
-    // 3. Meta fields start from index 0 if exists.
+    // Assumptions: there is no schema evolution, will solve it in HUDI-9253
+    // 1. schema differences are ONLY due to meta fields;
+    // 2. meta fields are consecutive and in the same order;
+    // 3. meta fields start from index 0 if exists.
     int lowOrderArity = lowOrderSchema.getFields().size();
     int highOrderArity = highOrderSchema.getFields().size();
     // Merged record is always created with new schema, which may not contain metadata fields.
@@ -132,16 +132,16 @@ public class PartialUpdateFlinkRecordMerger extends HoodieFlinkRecordMerger {
     boolean utcTimezone = Boolean.parseBoolean(props.getProperty("read.utc-timezone", "true"));
     RowData.FieldGetter[] fieldGetters = RowDataAvroQueryContexts.fromAvroSchema(newSchema, utcTimezone).fieldGetters();
 
-    int lowOrderStartIndex = 0;
-    int highOrderStartIndex = 0;
+    int lowOrderIdx = 0;
+    int highOrderIdx = 0;
     RowData.FieldGetter[] lowOrderFieldGetters = fieldGetters;
     RowData.FieldGetter[] highOrderFieldGetters = fieldGetters;
     // shift start index for merging if there is schema discrepancy
     if (lowOrderArity != mergedArity) {
-      lowOrderStartIndex += lowOrderArity - mergedArity;
+      lowOrderIdx += lowOrderArity - mergedArity;
       lowOrderFieldGetters = RowDataAvroQueryContexts.fromAvroSchema(lowOrderSchema, utcTimezone).fieldGetters();
     } else if (highOrderArity != mergedArity) {
-      highOrderStartIndex += highOrderArity - mergedArity;
+      highOrderIdx += highOrderArity - mergedArity;
       highOrderFieldGetters = RowDataAvroQueryContexts.fromAvroSchema(highOrderSchema, utcTimezone).fieldGetters();
     }
 
@@ -149,11 +149,14 @@ public class PartialUpdateFlinkRecordMerger extends HoodieFlinkRecordMerger {
     RowData highOrderRow = (RowData) highOrderRecord.getData();
     GenericRowData mergedRow = new GenericRowData(mergedArity);
     for (int i = 0; i < mergedArity; i++) {
-      mergedRow.setField(i, lowOrderFieldGetters[lowOrderStartIndex + i].getFieldOrNull(lowOrderRow));
-      Object fieldValWithHighOrder = highOrderFieldGetters[highOrderStartIndex + i].getFieldOrNull(highOrderRow);
+      Object fieldValWithHighOrder = highOrderFieldGetters[highOrderIdx].getFieldOrNull(highOrderRow);
       if (fieldValWithHighOrder != null) {
         mergedRow.setField(i, fieldValWithHighOrder);
+      } else {
+        mergedRow.setField(i, lowOrderFieldGetters[lowOrderIdx].getFieldOrNull(lowOrderRow));
       }
+      lowOrderIdx++;
+      highOrderIdx++;
     }
     return new HoodieFlinkRecord(
         highOrderRecord.getKey(),
