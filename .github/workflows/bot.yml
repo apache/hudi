@@ -705,17 +705,23 @@ jobs:
       matrix:
         include:
           - flinkProfile: "flink1.15"
-            flinkAvroVersion: "1.10.0"
+            flinkAvroVersion: "1.11.4"
+            flinkParquetVersion: '1.12.2'
           - flinkProfile: "flink1.16"
-            flinkAvroVersion: "1.11.1"
+            flinkAvroVersion: "1.11.4"
+            flinkParquetVersion: '1.12.2'
           - flinkProfile: "flink1.17"
-            flinkAvroVersion: "1.11.1"
+            flinkAvroVersion: "1.11.4"
+            flinkParquetVersion: '1.12.3'
           - flinkProfile: "flink1.18"
-            flinkAvroVersion: "1.11.1"
+            flinkAvroVersion: "1.11.4"
+            flinkParquetVersion: '1.13.1'
           - flinkProfile: "flink1.19"
-            flinkAvroVersion: "1.11.1"
+            flinkAvroVersion: "1.11.4"
+            flinkParquetVersion: '1.13.1'
           - flinkProfile: "flink1.20"
-            flinkAvroVersion: "1.11.3"
+            flinkAvroVersion: "1.11.4"
+            flinkParquetVersion: '1.13.1'
     steps:
       - uses: actions/checkout@v3
       - name: Set up JDK 8
@@ -729,24 +735,27 @@ jobs:
           SCALA_PROFILE: 'scala-2.12'
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
           FLINK_AVRO_VERSION: ${{ matrix.flinkAvroVersion }}
+          FLINK_PARQUET_VERSION: ${{ matrix.flinkParquetVersion }}
         run:
-          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink -am -Davro.version="$FLINK_AVRO_VERSION" -DskipTests=true $MVN_ARGS
+          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink -am -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION" -DskipTests=true $MVN_ARGS
       - name: Quickstart Test
         env:
           SCALA_PROFILE: 'scala-2.12'
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
           FLINK_AVRO_VERSION: ${{ matrix.flinkAvroVersion }}
+          FLINK_PARQUET_VERSION: ${{ matrix.flinkParquetVersion }}
         run:
-          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -Davro.version="$FLINK_AVRO_VERSION" -pl hudi-examples/hudi-examples-flink $MVN_ARGS
+          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION" -pl hudi-examples/hudi-examples-flink $MVN_ARGS
       - name: Integration Test 1
         env:
           SCALA_PROFILE: 'scala-2.12'
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
           FLINK_AVRO_VERSION: ${{ matrix.flinkAvroVersion }}
+          FLINK_PARQUET_VERSION: ${{ matrix.flinkParquetVersion }}
         if: ${{ endsWith(env.FLINK_PROFILE, '1.20') }}
         run: |
-          mvn clean install -T 2 -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-flink-datasource/hudi-flink -am -Davro.version="$FLINK_AVRO_VERSION" -DskipTests=true $MVN_ARGS
-          mvn verify -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -Davro.version="$FLINK_AVRO_VERSION" $FLINK_IT_FILTER1 -pl hudi-flink-datasource/hudi-flink $MVN_ARGS
+          mvn clean install -T 2 -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-flink-datasource/hudi-flink -am -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION" -DskipTests=true $MVN_ARGS
+          mvn verify -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION" $FLINK_IT_FILTER1 -pl hudi-flink-datasource/hudi-flink $MVN_ARGS
 
   test-flink-2:
     runs-on: ubuntu-latest
@@ -754,7 +763,8 @@ jobs:
       matrix:
         include:
           - flinkProfile: "flink1.20"
-            flinkAvroVersion: "1.11.3"
+            flinkAvroVersion: "1.11.4"
+            flinkParquetVersion: '1.13.1'
     steps:
       - uses: actions/checkout@v3
       - name: Set up JDK 8
@@ -768,17 +778,19 @@ jobs:
           SCALA_PROFILE: 'scala-2.12'
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
           FLINK_AVRO_VERSION: ${{ matrix.flinkAvroVersion }}
+          FLINK_PARQUET_VERSION: ${{ matrix.flinkParquetVersion }}
         run:
-          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink -am -Davro.version="$FLINK_AVRO_VERSION" -DskipTests=true $MVN_ARGS
+          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink -am -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION" -DskipTests=true $MVN_ARGS
       - name: Integration Test 2
         env:
           SCALA_PROFILE: 'scala-2.12'
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
           FLINK_AVRO_VERSION: ${{ matrix.flinkAvroVersion }}
+          FLINK_PARQUET_VERSION: ${{ matrix.flinkParquetVersion }}
         if: ${{ endsWith(env.FLINK_PROFILE, '1.20') }}
         run: |
-          mvn clean install -T 2 -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-flink-datasource/hudi-flink -am -Davro.version="$FLINK_AVRO_VERSION" -DskipTests=true $MVN_ARGS
-          mvn verify -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -Davro.version="$FLINK_AVRO_VERSION" $FLINK_IT_FILTER2 -pl hudi-flink-datasource/hudi-flink $MVN_ARGS
+          mvn clean install -T 2 -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-flink-datasource/hudi-flink -am -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION" -DskipTests=true $MVN_ARGS
+          mvn verify -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION" $FLINK_IT_FILTER2 -pl hudi-flink-datasource/hudi-flink $MVN_ARGS
 
   docker-java17-test:
     runs-on: ubuntu-latest
@@ -824,32 +836,38 @@ jobs:
         include:
           - scalaProfile: 'scala-2.13'
             flinkProfile: 'flink1.20'
-            flinkAvroVersion: '1.11.3'
+            flinkAvroVersion: '1.11.4'
+            flinkParquetVersion: '1.13.1'
             sparkProfile: 'spark3.5'
             sparkRuntime: 'spark3.5.1'
           - scalaProfile: 'scala-2.13'
             flinkProfile: 'flink1.19'
-            flinkAvroVersion: '1.11.1'
+            flinkAvroVersion: '1.11.4'
+            flinkParquetVersion: '1.13.1'
             sparkProfile: 'spark3.5'
             sparkRuntime: 'spark3.5.1'
           - scalaProfile: 'scala-2.12'
             flinkProfile: 'flink1.18'
-            flinkAvroVersion: '1.11.1'
+            flinkAvroVersion: '1.11.4'
+            flinkParquetVersion: '1.13.1'
             sparkProfile: 'spark3.5'
             sparkRuntime: 'spark3.5.1'
           - scalaProfile: 'scala-2.12'
             flinkProfile: 'flink1.17'
-            flinkAvroVersion: '1.11.1'
+            flinkAvroVersion: '1.11.4'
+            flinkParquetVersion: '1.12.3'
             sparkProfile: 'spark3.5'
             sparkRuntime: 'spark3.5.1'
           - scalaProfile: 'scala-2.12'
             flinkProfile: 'flink1.16'
-            flinkAvroVersion: '1.11.1'
+            flinkAvroVersion: '1.11.4'
+            flinkParquetVersion: '1.12.2'
             sparkProfile: 'spark3.4'
             sparkRuntime: 'spark3.4.3'
           - scalaProfile: 'scala-2.12'
             flinkProfile: 'flink1.15'
-            flinkAvroVersion: '1.10.0'
+            flinkAvroVersion: '1.11.4'
+            flinkParquetVersion: '1.12.2'
             sparkProfile: 'spark3.3'
             sparkRuntime: 'spark3.3.4'
     steps:
@@ -866,6 +884,7 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           FLINK_AVRO_VERSION: ${{ matrix.flinkAvroVersion }}
+          FLINK_PARQUET_VERSION: ${{ matrix.flinkParquetVersion }}
         run: |
           if [ "$SCALA_PROFILE" == "scala-2.13" ]; then
             mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -pl packaging/hudi-hadoop-mr-bundle,packaging/hudi-spark-bundle,packaging/hudi-utilities-bundle,packaging/hudi-utilities-slim-bundle,packaging/hudi-cli-bundle -am
@@ -873,7 +892,7 @@ jobs:
             mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS
             # TODO remove the sudo below. It's a needed workaround as detailed in HUDI-5708.
             sudo chown -R "$USER:$(id -g -n)" hudi-platform-service/hudi-metaserver/target/generated-sources
-            mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -pl packaging/hudi-flink-bundle -am -Davro.version="$FLINK_AVRO_VERSION"
+            mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -pl packaging/hudi-flink-bundle -am -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION"
           fi
       - name: IT - Bundle Validation - OpenJDK 8
         env:
@@ -1052,7 +1071,8 @@ jobs:
         include:
           - scalaProfile: "scala-2.12"
             flinkProfile: "flink1.20"
-            flinkAvroVersion: '1.11.3'
+            flinkAvroVersion: '1.11.4'
+            flinkParquetVersion: '1.13.1'
     steps:
       - uses: actions/checkout@v3
       - name: Set up JDK 17
@@ -1066,8 +1086,9 @@ jobs:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
           FLINK_AVRO_VERSION: ${{ matrix.flinkAvroVersion }}
+          FLINK_PARQUET_VERSION: ${{ matrix.flinkParquetVersion }}
         run:
-          mvn clean install -T 2 -Djava17 -Djava.version=17 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink -am -Davro.version="$FLINK_AVRO_VERSION" -DskipTests=true $MVN_ARGS
+          mvn clean install -T 2 -Djava17 -Djava.version=17 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink -am -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION" -DskipTests=true $MVN_ARGS
       - name: Quickstart Test
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}

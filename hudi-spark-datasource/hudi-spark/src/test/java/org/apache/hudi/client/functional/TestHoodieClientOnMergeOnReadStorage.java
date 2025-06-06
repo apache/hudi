@@ -26,7 +26,7 @@ import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
-import org.apache.hudi.common.table.log.HoodieUnMergedLogRecordScanner;
+import org.apache.hudi.common.table.log.HoodieLogBlockMetadataScanner;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -61,9 +61,9 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.TIMELINE_FACTORY;
 import static org.apache.hudi.testutils.GenericRecordValidationTestUtils.assertDataInMORTable;
-import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -485,33 +485,25 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
     List<String> partitionPaths = Stream.of(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS).collect(Collectors.toList());
     for (String partitionPath: partitionPaths) {
       fileSystemView.getLatestFileSlices(partitionPath).forEach(slice -> {
-        HoodieUnMergedLogRecordScanner scanner = HoodieUnMergedLogRecordScanner.newBuilder()
-            .withStorage(metaClient.getStorage())
-            .withBasePath(table.getMetaClient().getBasePath())
-            .withLogFilePaths(slice.getLogFiles()
+        HoodieLogBlockMetadataScanner scanner = new HoodieLogBlockMetadataScanner(
+            table.getMetaClient(),
+            slice.getLogFiles()
                 .sorted(HoodieLogFile.getLogFileComparator())
                 .map(file -> file.getPath().toString())
-                .collect(Collectors.toList()))
-            .withLatestInstantTime(instant)
-            .withBufferSize(config.getMaxDFSStreamBufferSize())
-            .withOptimizedLogBlocksScan(true)
-            .withTableMetaClient(metaClient)
-            .build();
-        scanner.scan(true);
+                .collect(Collectors.toList()),
+            config.getMaxDFSStreamBufferSize(),
+            instant,
+            Option.empty());
         List<String> prevInstants = scanner.getValidBlockInstants();
-        HoodieUnMergedLogRecordScanner scanner2 = HoodieUnMergedLogRecordScanner.newBuilder()
-            .withStorage(metaClient.getStorage())
-            .withBasePath(table.getMetaClient().getBasePath())
-            .withLogFilePaths(slice.getLogFiles()
+        HoodieLogBlockMetadataScanner scanner2 = new HoodieLogBlockMetadataScanner(
+            table.getMetaClient(),
+            slice.getLogFiles()
                 .sorted(HoodieLogFile.getLogFileComparator())
                 .map(file -> file.getPath().toString())
-                .collect(Collectors.toList()))
-            .withLatestInstantTime(currentInstant)
-            .withBufferSize(config.getMaxDFSStreamBufferSize())
-            .withOptimizedLogBlocksScan(true)
-            .withTableMetaClient(table.getMetaClient())
-            .build();
-        scanner2.scan(true);
+                .collect(Collectors.toList()),
+            config.getMaxDFSStreamBufferSize(),
+            currentInstant,
+            Option.empty());
         List<String> currentInstants = scanner2.getValidBlockInstants();
         assertEquals(prevInstants, currentInstants);
       });

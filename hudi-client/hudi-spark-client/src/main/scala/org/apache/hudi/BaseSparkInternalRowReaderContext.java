@@ -19,6 +19,7 @@
 
 package org.apache.hudi;
 
+import org.apache.hudi.client.model.HoodieInternalRow;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
@@ -170,6 +171,9 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
 
   @Override
   public InternalRow getDeleteRow(InternalRow record, String recordKey) {
-    throw new UnsupportedOperationException("Not supported for " + this.getClass().getSimpleName());
+    if (record != null) {
+      return record;
+    }
+    return new HoodieInternalRow(null, null, UTF8String.fromString(recordKey), UTF8String.fromString(partitionPath), null, null, false);
   }
 }
