@@ -33,6 +33,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -51,6 +52,9 @@ import org.apache.avro.SchemaBuilder;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.net.URI;
@@ -63,6 +67,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
 import static org.apache.hudi.avro.TestHoodieAvroUtils.SCHEMA_WITH_AVRO_TYPES_STR;
@@ -743,5 +748,94 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     assertNotNull(result);
     assertTrue(result.isEmpty());
     verify(metaClient, atLeastOnce()).buildIndexDefinition(any());
+  }
+
+  @ParameterizedTest(name = "{0}")
+  @MethodSource("mapRecordKeyToFileGroupIndexTestCases")
+  public void testMapRecordKeyToFileGroupIndex(String testName, String recordKey, int numFileGroups, String partitionName, 
+      HoodieTableVersion version, int expectedIndex) {
+    int index = HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(recordKey, numFileGroups, partitionName, version);
+    if (numFileGroups == 1) {
+      assertEquals(expectedIndex, index, "For single file group, index should be 0");
+    } else {
+      assertTrue(index >= 0 && index < numFileGroups, "Index should be between 0 and " + (numFileGroups - 1));
+    }
+  }
+
+  private static Stream<Arguments> mapRecordKeyToFileGroupIndexTestCases() {
+    return Stream.of(
+        // Test case 1: Regular record key (no secondary index)
+        Arguments.of(
+            "Regular record key",
+            "test_key",
+            10,
+            "files",
+            HoodieTableVersion.SEVEN,
+            0
+        ),
+        // Test case 2: Secondary index record key with version >= 9
+        Arguments.of(
+            "Secondary index record key with version >= 9",
+            "primary_key$secondary_key",
+            10,
+            "secondary_index_idx_ts",
+            HoodieTableVersion.NINE,
+            0
+        ),
+        // Test case 3: Secondary index record key but version < 9
+        Arguments.of(
+            "Secondary index record key but version < 9",
+            "primary_key$secondary_key",
+            10,
+            "secondary_index_idx_ts",
+            HoodieTableVersion.EIGHT,
+            0
+        ),
+        // Test case 4: Secondary index record key but not in secondary index partition
+        Arguments.of(
+            "Secondary index record key but not in secondary index partition",
+            "primary_key$secondary_key",
+            10,
+            "files",
+            HoodieTableVersion.NINE,
+            0
+        ),
+        // Test case 5: Secondary index record key but no separator
+        Arguments.of(
+            "Secondary index record key but no separator",
+            "primary_key_secondary_key",
+            10,
+            "secondary_index_idx_ts",
+            HoodieTableVersion.NINE,
+            0
+        ),
+        // Test case 6: Empty record key
+        Arguments.of(
+            "Empty record key",
+            "",
+            10,
+            "secondary_index_idx_ts",
+            HoodieTableVersion.NINE,
+            0
+        ),
+        // Test case 7: Single file group
+        Arguments.of(
+            "Single file group",
+            "test_key",
+            1,
+            "secondary_index_idx_ts",
+            HoodieTableVersion.NINE,
+            0
+        ),
+        // Test case 9: Secondary index record key with version = 9
+        Arguments.of(
+            "Secondary index record key with version = 9",
+            "primary_key$secondary_key",
+            10,
+            "secondary_index_idx_ts",
+            HoodieTableVersion.NINE,
+            0
+        )
+    );
   }
 }
