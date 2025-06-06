@@ -613,7 +613,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     assertEquals(deltaFile1, logFiles.get(1).getFileName(), "Log File Order check");
 
     // schedules a compaction
-    String compactionInstantTime1 = metaClient.createNewInstantTime(); // 60 -> 80
+    String compactionInstantTime1 = WriteClientTestUtils.createNewInstantTime(); // 60 -> 80
     String compactionFile1 = FSUtils.makeBaseFileName(compactionInstantTime1, TEST_WRITE_TOKEN, fileId, BASE_FILE_EXTENSION);
     List<Pair<String, FileSlice>> partitionFileSlicesPairs = new ArrayList<>();
     partitionFileSlicesPairs.add(Pair.of(partitionPath, fileSlices.get(0)));

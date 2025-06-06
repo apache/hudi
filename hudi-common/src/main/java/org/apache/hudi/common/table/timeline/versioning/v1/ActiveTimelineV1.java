@@ -150,10 +150,6 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
     return instant;
   }
 
-  public String createCompletionTime() {
-    return this.metaClient.createNewInstantTime(false);
-  }
-
   @Override
   public <T> void saveAsComplete(HoodieInstant instant, Option<T> metadata) {
     LOG.info("Marking instant complete {}", instant);

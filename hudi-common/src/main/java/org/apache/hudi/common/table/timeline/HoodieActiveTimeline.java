@@ -65,12 +65,6 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
   HoodieInstant createRequestedCommitWithReplaceMetadata(String instantTime, String actionType);
 
   /**
-   * Create completion time to assist with wrapping up a commit.
-   * @return newly generated completion time.
-   */
-  String createCompletionTime();
-
-  /**
    * Save Completed instant in active timeline.
    * @param instant Instant to be saved.
    * @param metadata metadata to write into the instant file

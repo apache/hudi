@@ -20,6 +20,7 @@ package org.apache.hudi.client;
 
 import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.util.Option;
 
 import java.util.Map;
@@ -39,5 +40,12 @@ public class WriteClientTestUtils {
 
   public static Option<String> scheduleTableService(BaseHoodieWriteClient<?, ?, ?, ?> writeClient, String instantTime, Option<Map<String, String>> extraMetadata, TableServiceType tableServiceType) {
     return writeClient.scheduleTableService(Option.of(instantTime), extraMetadata, tableServiceType);
+  }
+
+  /**
+   * Returns next instant time in the correct format. Lock is enabled by default.
+   */
+  public static String createNewInstantTime() {
+    return HoodieInstantTimeGenerator.getCurrentTimeAsString();
   }
 }

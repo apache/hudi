@@ -25,11 +25,10 @@ import org.apache.hudi.common.data.HoodieData
 import org.apache.hudi.common.engine.HoodieEngineContext
 import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.TableSchemaResolver
-import org.apache.hudi.common.table.timeline.HoodieInstant
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieInstantTimeGenerator}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.metadata.HoodieTableMetadata
-
 import org.apache.avro.generic.IndexedRecord
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
@@ -37,7 +36,6 @@ import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util
 import java.util.function.Supplier
-
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 
@@ -137,7 +135,7 @@ class ShowMetadataTableColumnStatsProcedure extends BaseProcedure with Procedure
 
     val timeline = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants()
 
-    val maxInstant = metaClient.createNewInstantTime()
+    val maxInstant = HoodieInstantTimeGenerator.getCurrentTimeAsString
     val instants = timeline.getInstants.iterator().asScala.filter(_.requestedTime < maxInstant)
 
     val filteredTimeline = metaClient.getTimelineLayout.getTimelineFactory.createDefaultTimeline(

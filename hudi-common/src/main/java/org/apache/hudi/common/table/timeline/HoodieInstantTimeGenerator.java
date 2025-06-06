@@ -156,7 +156,7 @@ public class HoodieInstantTimeGenerator {
     return MILLIS_INSTANT_TIME_FORMATTER.format(temporalAccessor);
   }
 
-  public static String getCurrentInstantTimeStr() {
+  public static String getCurrentTimeAsString() {
     return Instant.now().atZone(commitTimeZone.getZoneId()).toLocalDateTime().format(MILLIS_INSTANT_TIME_FORMATTER);
   }
 

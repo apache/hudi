@@ -23,6 +23,7 @@ import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieClusteringStrategy;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -132,7 +133,7 @@ public class TestClusteringUtil {
         HoodieClusteringStrategy.newBuilder().build(), Collections.emptyMap(), 1, false, null);
     HoodieRequestedReplaceMetadata metadata = new HoodieRequestedReplaceMetadata(WriteOperationType.CLUSTER.name(),
         plan, Collections.emptyMap(), 1);
-    String instantTime = table.getMetaClient().createNewInstantTime();
+    String instantTime = WriteClientTestUtils.createNewInstantTime();
     HoodieInstant clusteringInstant =
         INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLUSTERING_ACTION, instantTime);
     metaClient.getActiveTimeline().saveToPendingClusterCommit(clusteringInstant, metadata);
