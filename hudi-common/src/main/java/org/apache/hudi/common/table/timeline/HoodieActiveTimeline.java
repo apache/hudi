@@ -33,7 +33,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.storage.StoragePath;
 
 import java.util.Set;
-import java.util.function.Consumer;
 
 /**
  * Represents the Active Timeline for the Hoodie table.
@@ -86,7 +85,7 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    */
   <T> HoodieInstant saveAsComplete(boolean shouldLock, HoodieInstant instant, Option<T> metadata);
 
-  <T> HoodieInstant saveAsComplete(boolean shouldLock, HoodieInstant instant, Option<T> metadata, Consumer<HoodieInstant> tableFormatCompletionAction);
+  <T> HoodieInstant saveAsComplete(boolean shouldLock, HoodieInstant instant, Option<T> metadata, TableFormatAction tableFormatCompletionAction);
 
   /**
    * Save Completed instant in active timeline with an optional completion time. For version 8 tables, completion times are generated just before wrapping up the commit and serialized as part of
@@ -236,7 +235,7 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    */
   HoodieInstant transitionCleanInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, Option<HoodieCleanMetadata> metadata);
 
-  HoodieInstant transitionCleanInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, Option<HoodieCleanMetadata> metadata, Consumer<HoodieInstant> tableFormatCompletionAction);
+  HoodieInstant transitionCleanInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, Option<HoodieCleanMetadata> metadata, TableFormatAction tableFormatCompletionAction);
 
   /**
    * Transition Clean State from requested to inflight.
@@ -256,7 +255,7 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    */
   HoodieInstant transitionRollbackInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieRollbackMetadata metadata);
 
-  HoodieInstant transitionRollbackInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieRollbackMetadata metadata, Consumer<HoodieInstant> tableFormatCompletionAction);
+  HoodieInstant transitionRollbackInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieRollbackMetadata metadata, TableFormatAction tableFormatCompletionAction);
 
   /**
    * Transition Rollback State from requested to inflight.
@@ -302,7 +301,7 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    */
   HoodieInstant transitionReplaceInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieReplaceCommitMetadata metadata);
 
-  HoodieInstant transitionReplaceInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieReplaceCommitMetadata metadata, Consumer<HoodieInstant>  tableFormatCompletionAction);
+  HoodieInstant transitionReplaceInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieReplaceCommitMetadata metadata, TableFormatAction tableFormatCompletionAction);
 
   /**
    * Transition cluster inflight to replace committed.
@@ -314,7 +313,7 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    */
   HoodieInstant transitionClusterInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieReplaceCommitMetadata metadata);
 
-  HoodieInstant transitionClusterInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieReplaceCommitMetadata metadata, Consumer<HoodieInstant> tableFormatCompletionAction);
+  HoodieInstant transitionClusterInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieReplaceCommitMetadata metadata, TableFormatAction tableFormatCompletionAction);
 
   /**
    * Save Restore requested instant with metadata.
