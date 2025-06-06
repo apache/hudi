@@ -234,7 +234,7 @@ public class HoodieInternalRow extends InternalRow {
     for (int i = 0; i < metaFields.length; i++) {
       copyMetaFields[i] = metaFields[i] != null ? metaFields[i].copy() : null;
     }
-    return new HoodieInternalRow(copyMetaFields, sourceRow.copy(), sourceContainsMetaFields);
+    return new HoodieInternalRow(copyMetaFields, sourceRow == null ? null : sourceRow.copy(), sourceContainsMetaFields);
   }
 
   private int rebaseOrdinal(int ordinal) {

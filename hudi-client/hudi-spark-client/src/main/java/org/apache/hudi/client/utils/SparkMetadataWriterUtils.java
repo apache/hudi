@@ -28,25 +28,27 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
-import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.function.SerializableFunction;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordMerger;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.log.HoodieUnMergedLogRecordScanner;
+import org.apache.hudi.common.table.read.HoodieFileGroupReader;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
-import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
@@ -55,23 +57,22 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.expression.HoodieExpressionIndex;
 import org.apache.hudi.index.expression.HoodieSparkExpressionIndex;
 import org.apache.hudi.index.expression.HoodieSparkExpressionIndex.ExpressionIndexComputationMetadata;
-import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
-import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.JavaScalaConverters;
 
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.function.FlatMapGroupsFunction;
 import org.apache.spark.api.java.function.MapFunction;
 import org.apache.spark.sql.Column;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Encoders;
+import org.apache.spark.sql.HoodieCatalystExpressionUtils;
+import org.apache.spark.sql.HoodieInternalRowUtils;
 import org.apache.spark.sql.Row;
-import org.apache.spark.sql.SQLContext;
+import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.functions;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.Metadata;
@@ -94,11 +95,9 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import scala.Function1;
+import scala.collection.immutable.Seq;
 
 import static org.apache.hudi.avro.HoodieAvroUtils.addMetadataFields;
-import static org.apache.hudi.common.config.HoodieCommonConfig.MAX_DFS_STREAM_BUFFER_SIZE;
-import static org.apache.hudi.common.util.ConfigUtils.getReaderConfigs;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
@@ -137,16 +136,16 @@ public class SparkMetadataWriterUtils {
     };
   }
 
-  public static List<Row> getRowsWithExpressionIndexMetadata(List<Row> rowsForFilePath, String partition, String filePath, long fileSize) {
-    return rowsForFilePath.stream().map(row -> {
-      scala.collection.immutable.Seq<Object> indexMetadata = JavaScalaConverters.convertJavaListToScalaList(Arrays.asList(partition, filePath, fileSize));
+  public static ClosableIterator<Row> getRowsWithExpressionIndexMetadata(ClosableIterator<InternalRow> rowsForFilePath, SparkRowSerDe sparkRowSerDe, String partition, String filePath, long fileSize) {
+    return new CloseableMappingIterator<>(rowsForFilePath, row -> {
+      Seq<Object> indexMetadata = JavaScalaConverters.convertJavaListToScalaList(Arrays.asList(partition, filePath, fileSize));
       Row expressionIndexRow = Row.fromSeq(indexMetadata);
       List<Row> rows = new ArrayList<>(2);
-      rows.add(row);
+      rows.add(sparkRowSerDe.deserializeRow(row));
       rows.add(expressionIndexRow);
-      scala.collection.immutable.Seq<Row> rowSeq = JavaScalaConverters.convertJavaListToScalaList(rows);
+      Seq<Row> rowSeq = JavaScalaConverters.convertJavaListToScalaList(rows);
       return Row.merge(rowSeq);
-    }).collect(Collectors.toList());
+    });
   }
 
   @SuppressWarnings("checkstyle:LineLength")
@@ -241,61 +240,6 @@ public class SparkMetadataWriterUtils {
     });
   }
 
-  public static List<Row> readRecordsAsRows(StoragePath[] paths, SQLContext sqlContext,
-                                            HoodieTableMetaClient metaClient, Schema schema,
-                                            HoodieWriteConfig dataWriteConfig, boolean isBaseFile) {
-    List<HoodieRecord> records = isBaseFile ? getBaseFileRecords(new HoodieBaseFile(paths[0].toString()), metaClient, schema)
-        : getUnmergedLogFileRecords(Arrays.stream(paths).map(StoragePath::toString).collect(Collectors.toList()), metaClient, schema);
-    return toRows(records, schema, dataWriteConfig, sqlContext, paths[0].toString());
-  }
-
-  private static List<HoodieRecord> getUnmergedLogFileRecords(List<String> logFilePaths, HoodieTableMetaClient metaClient, Schema readerSchema) {
-    List<HoodieRecord> records = new ArrayList<>();
-    HoodieUnMergedLogRecordScanner scanner = HoodieUnMergedLogRecordScanner.newBuilder()
-        .withStorage(metaClient.getStorage())
-        .withBasePath(metaClient.getBasePath())
-        .withLogFilePaths(logFilePaths)
-        .withBufferSize(MAX_DFS_STREAM_BUFFER_SIZE.defaultValue())
-        .withLatestInstantTime(metaClient.getActiveTimeline().getCommitsTimeline().lastInstant().get().requestedTime())
-        .withReaderSchema(readerSchema)
-        .withTableMetaClient(metaClient)
-        .withLogRecordScannerCallback(records::add)
-        .build();
-    scanner.scan(false);
-    return records;
-  }
-
-  private static List<HoodieRecord> getBaseFileRecords(HoodieBaseFile baseFile, HoodieTableMetaClient metaClient, Schema readerSchema) {
-    List<HoodieRecord> records = new ArrayList<>();
-    HoodieRecordMerger recordMerger =
-        HoodieRecordUtils.createRecordMerger(metaClient.getBasePath().toString(), EngineType.SPARK, Collections.emptyList(),
-            metaClient.getTableConfig().getRecordMergeStrategyId());
-    try (HoodieFileReader baseFileReader = HoodieIOFactory.getIOFactory(metaClient.getStorage()).getReaderFactory(recordMerger.getRecordType())
-        .getFileReader(getReaderConfigs(metaClient.getStorageConf()), baseFile.getStoragePath())) {
-      baseFileReader.getRecordIterator(readerSchema).forEachRemaining((record) -> records.add((HoodieRecord) record));
-      return records;
-    } catch (IOException e) {
-      throw new HoodieIOException("Error reading base file " + baseFile.getFileName(), e);
-    }
-  }
-
-  private static List<Row> toRows(List<HoodieRecord> records, Schema schema, HoodieWriteConfig dataWriteConfig, SQLContext sqlContext, String path) {
-    StructType structType = AvroConversionUtils.convertAvroSchemaToStructType(schema);
-    Function1<GenericRecord, Row> converterToRow = AvroConversionUtils.createConverterToRow(schema, structType);
-    List<Row> avroRecords = records.stream()
-        .map(r -> {
-          try {
-            return (GenericRecord) (r.getData() instanceof GenericRecord ? r.getData()
-                : ((HoodieRecordPayload) r.getData()).getInsertValue(schema, dataWriteConfig.getProps()).get());
-          } catch (IOException e) {
-            throw new HoodieIOException("Could not fetch record payload");
-          }
-        })
-        .map(converterToRow::apply)
-        .collect(Collectors.toList());
-    return avroRecords;
-  }
-
   /**
    * Generates expression index records
    *
@@ -313,7 +257,7 @@ public class SparkMetadataWriterUtils {
    */
   public static ExpressionIndexComputationMetadata getExprIndexRecords(
       List<Pair<String, Pair<String, Long>>> partitionFilePathAndSizeTriplet, HoodieIndexDefinition indexDefinition,
-      HoodieTableMetaClient metaClient, int parallelism, Schema readerSchema, String instantTime,
+      HoodieTableMetaClient metaClient, int parallelism, Schema tableSchema, Schema readerSchema, String instantTime,
       HoodieEngineContext engineContext, HoodieWriteConfig dataWriteConfig,
       Option<Function<HoodiePairData<String, HoodieColumnRangeMetadata<Comparable>>, HoodieData<HoodieRecord>>> partitionRecordsFunctionOpt) {
     HoodieSparkEngineContext sparkEngineContext = (HoodieSparkEngineContext) engineContext;
@@ -326,12 +270,12 @@ public class SparkMetadataWriterUtils {
     //       HUDI-6994 will address this.
     ValidationUtils.checkArgument(indexDefinition.getSourceFields().size() == 1, "Only one source field is supported for expression index");
     String columnToIndex = indexDefinition.getSourceFields().get(0);
-    SQLContext sqlContext = sparkEngineContext.getSqlContext();
 
+    ReaderContextFactory<InternalRow> readerContextFactory = engineContext.getReaderContextFactory(metaClient);
     // Read records and append expression index metadata to every row
     HoodieData<Row> rowData = sparkEngineContext.parallelize(partitionFilePathAndSizeTriplet, parallelism)
         .flatMap((SerializableFunction<Pair<String, Pair<String, Long>>, Iterator<Row>>) entry ->
-            getExpressionIndexRecordsIterator(metaClient, readerSchema, dataWriteConfig, entry, sqlContext));
+            getExpressionIndexRecordsIterator(readerContextFactory.getContext(), metaClient, tableSchema, readerSchema, dataWriteConfig, entry));
 
     // Generate dataset with expression index metadata
     StructType structType = AvroConversionUtils.convertAvroSchemaToStructType(readerSchema)
@@ -356,17 +300,41 @@ public class SparkMetadataWriterUtils {
     }
   }
 
-  private static Iterator<Row> getExpressionIndexRecordsIterator(HoodieTableMetaClient metaClient, Schema readerSchema, HoodieWriteConfig dataWriteConfig,
-                                                                 Pair<String, Pair<String, Long>> entry, SQLContext sqlContext) {
+  private static Iterator<Row> getExpressionIndexRecordsIterator(HoodieReaderContext<InternalRow> readerContext, HoodieTableMetaClient metaClient,
+                                                                 Schema tableSchema, Schema readerSchema, HoodieWriteConfig dataWriteConfig, Pair<String, Pair<String, Long>> entry) {
     String partition = entry.getKey();
     Pair<String, Long> filePathSizePair = entry.getValue();
     String filePath = filePathSizePair.getKey();
     String relativeFilePath = FSUtils.getRelativePartitionPath(metaClient.getBasePath(), new StoragePath(filePath));
     long fileSize = filePathSizePair.getValue();
-    List<Row> rowsForFilePath = readRecordsAsRows(new StoragePath[] {new StoragePath(filePath)}, sqlContext, metaClient, readerSchema, dataWriteConfig,
-        FSUtils.isBaseFile(new StoragePath(filePath.substring(filePath.lastIndexOf("/") + 1))));
-    List<Row> rowsWithIndexMetadata = getRowsWithExpressionIndexMetadata(rowsForFilePath, partition, relativeFilePath, fileSize);
-    return rowsWithIndexMetadata.iterator();
+    boolean isBaseFile = FSUtils.isBaseFile(new StoragePath(filePath.substring(filePath.lastIndexOf("/") + 1)));
+    FileSlice fileSlice;
+    if (isBaseFile) {
+      HoodieBaseFile baseFile = new HoodieBaseFile(filePath);
+      fileSlice = new FileSlice(partition, baseFile.getCommitTime(), baseFile.getFileId());
+      fileSlice.setBaseFile(baseFile);
+    } else {
+      HoodieLogFile logFile = new HoodieLogFile(filePath);
+      fileSlice = new FileSlice(partition, logFile.getDeltaCommitTime(), logFile.getFileId());
+      fileSlice.addLogFile(logFile);
+    }
+    HoodieFileGroupReader<InternalRow> fileGroupReader = HoodieFileGroupReader.<InternalRow>newBuilder()
+        .withReaderContext(readerContext)
+        .withHoodieTableMetaClient(metaClient)
+        .withDataSchema(tableSchema)
+        .withRequestedSchema(readerSchema)
+        .withProps(dataWriteConfig.getProps())
+        .withLatestCommitTime(metaClient.getActiveTimeline().lastInstant().map(HoodieInstant::requestedTime).orElse(""))
+        .withAllowInflightInstants(true)
+        .withFileSlice(fileSlice)
+        .build();
+    try {
+      ClosableIterator<InternalRow> rowsForFilePath = fileGroupReader.getClosableIterator();
+      SparkRowSerDe sparkRowSerDe = HoodieCatalystExpressionUtils.sparkAdapter().createSparkRowSerDe(HoodieInternalRowUtils.getCachedSchema(readerSchema));
+      return getRowsWithExpressionIndexMetadata(rowsForFilePath, sparkRowSerDe, partition, relativeFilePath, fileSize);
+    } catch (IOException ex) {
+      throw new HoodieIOException("Error reading file slice " + fileSlice, ex);
+    }
   }
 
   /**
