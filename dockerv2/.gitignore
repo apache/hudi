@@ -1,0 +1,8 @@
+spark/cache/
+spark/jars/*.jar
+kafka/connect/thirdparty/
+jars/*.jar
+lakeview/*.jar
+hudicli/auxlib/*
+hudicli/spring-shell.log
+presto/node.properties
