@@ -149,7 +149,6 @@ public class TestTimelineServerBasedWriteMarkers extends TestWriteMarkersBase {
       TimelineServiceTestHarness.Builder builder = TimelineServiceTestHarness.newBuilder();
       builder.withNumberOfSimulatedConnectionFailures(numberOfSimulatedConnectionFailures);
       timelineService = builder.build(
-          hoodieEngineContext,
           (Configuration) storage.getConf().unwrap(),
           TimelineService.Config.builder().serverPort(0).enableMarkerRequests(true).build(),
           FileSystemViewManager.createViewManager(

@@ -18,11 +18,8 @@
 
 package org.apache.hudi.timeline.service;
 
-import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
-import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import com.sun.net.httpserver.HttpExchange;
@@ -47,14 +44,13 @@ class TestTimelineService {
     TimelineService secondTimelineService = null;
     try {
       StorageConfiguration<Configuration> conf = HoodieTestUtils.getDefaultStorageConf();
-      HoodieEngineContext engineContext = new HoodieLocalEngineContext(HoodieTestUtils.getDefaultStorageConf());
       int originalServerPort = 8888;
       TimelineService.Config config = TimelineService.Config.builder().enableMarkerRequests(true).serverPort(originalServerPort).build();
       FileSystemViewManager viewManager = mock(FileSystemViewManager.class);
-      timelineService = new TimelineService(engineContext, conf, config, viewManager);
+      timelineService = new TimelineService(conf, config, viewManager);
       assertEquals(originalServerPort, timelineService.startService());
       // Create second service with the same configs
-      secondTimelineService = new TimelineService(engineContext, conf, config, viewManager);
+      secondTimelineService = new TimelineService(conf, config, viewManager);
       assertNotEquals(originalServerPort, secondTimelineService.startService());
     } finally {
       if (timelineService != null) {
@@ -78,11 +74,9 @@ class TestTimelineService {
       server.start();
 
       TimelineService.Config config = TimelineService.Config.builder().enableMarkerRequests(true).serverPort(originalServerPort).build();
-      HoodieStorage storage = HoodieTestUtils.getDefaultStorage();
       FileSystemViewManager viewManager = mock(FileSystemViewManager.class);
       StorageConfiguration<Configuration> conf = HoodieTestUtils.getDefaultStorageConf();
-      HoodieEngineContext engineContext = new HoodieLocalEngineContext(HoodieTestUtils.getDefaultStorageConf());
-      timelineService = new TimelineService(engineContext, conf, config, viewManager);
+      timelineService = new TimelineService(conf, config, viewManager);
       assertNotEquals(originalServerPort, timelineService.startService());
     } finally {
       if (timelineService != null) {

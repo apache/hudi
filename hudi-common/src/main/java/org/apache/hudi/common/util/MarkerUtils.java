@@ -42,7 +42,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -104,6 +104,15 @@ public class MarkerUtils {
   }
 
   /**
+   * @param storage   {@link HoodieStorage} to use.
+   * @param markerDir marker directory.
+   * @return {@code true} if the MARKERS.type file exists; {@code false} otherwise.
+   */
+  public static boolean doesMarkerTypeFileExist(HoodieStorage storage, StoragePath markerDir) throws IOException {
+    return storage.exists(new StoragePath(markerDir, MARKER_TYPE_FILENAME));
+  }
+
+  /**
    * Reads the marker type from `MARKERS.type` file.
    *
    * @param storage   {@link HoodieStorage} to use.
@@ -140,7 +149,7 @@ public class MarkerUtils {
    * @param storage    {@link HoodieStorage} to use.
    * @param markerDir  marker directory.
    */
-  public static void writeMarkerTypeToFile(MarkerType markerType, HoodieStorage storage, String markerDir) {
+  public static void writeMarkerTypeToFile(MarkerType markerType, HoodieStorage storage, StoragePath markerDir) {
     StoragePath markerTypeFilePath = new StoragePath(markerDir, MARKER_TYPE_FILENAME);
     OutputStream outputStream = null;
     BufferedWriter bufferedWriter = null;
@@ -199,7 +208,7 @@ public class MarkerUtils {
               return readMarkersFromFile(new StoragePath(markersFilePathStr), conf);
             });
       }
-      return new HashMap<>();
+      return Collections.emptyMap();
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
     }
