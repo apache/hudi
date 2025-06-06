@@ -150,14 +150,8 @@ object HoodieDatasetBulkInsertHelper
                  table: HoodieTable[_, _, _, _],
                  writeConfig: HoodieWriteConfig,
                  arePartitionRecordsSorted: Boolean,
-                 shouldPreserveHoodieMetadata: Boolean,
-                 operation: WriteOperationType): HoodieData[WriteStatus] = {
-    val schema = operation match {
-      case WriteOperationType.CLUSTER =>
-        alignNotNullFields(dataset.schema, new Schema.Parser().parse(writeConfig.getSchema))
-      case _ =>
-        dataset.schema
-    }
+                 shouldPreserveHoodieMetadata: Boolean): HoodieData[WriteStatus] = {
+    val schema = alignNotNullFields(dataset.schema, new Schema.Parser().parse(writeConfig.getSchema))
     HoodieJavaRDD.of(
       injectSQLConf(dataset.queryExecution.toRdd.mapPartitions(iter => {
         val taskContextSupplier: TaskContextSupplier = table.getTaskContextSupplier
@@ -225,17 +219,17 @@ object HoodieDatasetBulkInsertHelper
       .filter(f => !f.schema.isNullable)
       .map(f => f.name)
     if (notNullFieldNames.isEmpty) {
-      return sourceSchema
+      sourceSchema
+    } else {
+      val copiedFields = sourceSchema.fields.map(field => {
+        if (notNullFieldNames.contains(field.name)) {
+          field.copy(nullable = false)
+        } else {
+          field.copy()
+        }
+      }).toSeq
+      StructType(copiedFields)
     }
-
-    val copiedFields = sourceSchema.fields.map(field => {
-      if (notNullFieldNames.contains(field.name)) {
-        field.copy(nullable = false)
-      } else {
-        field.copy()
-      }
-    }).toSeq
-    StructType(copiedFields)
   }
 
   private def dedupeRows(rdd: RDD[InternalRow], schema: StructType, preCombineFieldRef: String, isGlobalIndex: Boolean, targetParallelism: Int): RDD[InternalRow] = {
