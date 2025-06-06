@@ -185,6 +185,7 @@
     <surefire-log4j.file>log4j2-surefire.properties</surefire-log4j.file>
     <thrift.version>0.13.0</thrift.version>
     <javalin.version>4.6.7</javalin.version>
+    <thymeleaf.version>3.0.15.RELEASE</thymeleaf.version>
     <jetty.version>9.4.57.v20241219</jetty.version>
     <htrace.version>3.1.0-incubating</htrace.version>
     <h2.version>1.4.199</h2.version>
