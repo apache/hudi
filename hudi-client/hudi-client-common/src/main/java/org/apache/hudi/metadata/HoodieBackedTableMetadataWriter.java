@@ -1164,6 +1164,10 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     throw new UnsupportedOperationException("Not yet implemented");
   }
 
+  public O writeToMetadataTableForBatchPartitions(I preppedRecords, String instantTime) {
+    throw new UnsupportedOperationException("Not yet implemented");
+  }
+
   @Override
   public void completeStreamingCommit(String instantTime, HoodieEngineContext context, List<HoodieWriteStat> partialWriteStats, HoodieCommitMetadata metadata) {
     List<HoodieWriteStat> allWriteStats = new ArrayList<>(partialWriteStats);
@@ -1178,15 +1182,10 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     Map<String, HoodieData<HoodieRecord>> mdtPartitionsAndUnTaggedRecords = new BatchMetadataConversionFunction(instantTime, commitMetadata, partitionsToUpdate)
         .convertMetadata();
 
-    HoodieData<HoodieRecord> untaggedMdtRecords = context.emptyHoodieData();
-    for (Map.Entry<String, HoodieData<HoodieRecord>> entry: mdtPartitionsAndUnTaggedRecords.entrySet()) {
-      untaggedMdtRecords = untaggedMdtRecords.union(entry.getValue());
-    }
-
-    // write to mdt table for non-streaming mdt partitions
-    Pair<List<HoodieFileGroupId>, HoodieData<HoodieRecord>> taggedRecords = tagRecordsWithLocationForStreamingWrites(untaggedMdtRecords, partitionsToUpdate);
-    HoodieData<WriteStatus> writeStatusHoodieData = convertEngineSpecificDataToHoodieData(streamWriteToMetadataTable(taggedRecords, instantTime));
-    return writeStatusHoodieData;
+    // write to mdt table for non streaming mdt partitions
+    Pair<HoodieData<HoodieRecord>, List<HoodieFileGroupId>> taggedRecords = tagRecordsWithLocation(mdtPartitionsAndUnTaggedRecords, false);
+    I preppedRecords = convertHoodieDataToEngineSpecificData(taggedRecords.getKey());
+    return convertEngineSpecificDataToHoodieData(writeToMetadataTableForBatchPartitions(preppedRecords, instantTime));
   }
 
   private Set<String> getNonStreamingMetadataPartitionsToUpdate() {

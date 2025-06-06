@@ -52,15 +52,20 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
 
   @Override
   protected Pair<List<HoodieWriteStat>, List<HoodieWriteStat>> triggerWritesAndFetchWriteStats(HoodieWriteMetadata<JavaRDD<WriteStatus>> tableServiceWriteMetadata) {
-    List<Pair<Boolean, HoodieWriteStat>> writeStats = tableServiceWriteMetadata.getWriteStatuses().map(writeStatus ->
-        Pair.of(writeStatus.isMetadataTable(), writeStatus.getStat())).collect();
-    List<HoodieWriteStat> dataTableWriteStats = writeStats.stream().filter(entry -> !entry.getKey()).map(Pair::getValue).collect(Collectors.toList());
-    List<HoodieWriteStat> mdtWriteStats = writeStats.stream().filter(Pair::getKey).map(Pair::getValue).collect(Collectors.toList());
+    // Triggering the dag for writes.
+    // If streaming writes are enabled, writes to both data table and metadata table gets triggered at this juncture.
+    // If not, writes to data table gets triggered here.
+    // When streaming writes are enabled, data table's WriteStatus is expected to contain all stats required to generate metadata table records and so each object will be larger.
+    // So, here we are dropping all additional stats and error records to retain only the required information and prevent collecting large objects on the driver.
+    List<SparkRDDWriteClient.WriteStatusMetadataTracker> writeStatusMetadataTrackerList = tableServiceWriteMetadata.getWriteStatuses()
+        .map(writeStatus -> new SparkRDDWriteClient.WriteStatusMetadataTracker(writeStatus.isMetadataTable(), writeStatus.getTotalRecords(), writeStatus.getTotalErrorRecords(),
+            writeStatus.getStat())).collect();
+
+    List<HoodieWriteStat> dataTableWriteStats = writeStatusMetadataTrackerList.stream().filter(entry -> !entry.isMetadataTable()).map(entry -> entry.getWriteStat()).collect(Collectors.toList());
+    List<HoodieWriteStat> mdtWriteStats = writeStatusMetadataTrackerList.stream().filter(entry -> entry.isMetadataTable()).map(entry -> entry.getWriteStat()).collect(Collectors.toList());
+
     if (isMetadataTable) {
-      // incase the current table is metadata table, for new partition instantiation we end up calling this commit method. On which case,
-      // we could only see metadataTableWriteStats and no dataTableWriteStats. So, we need to reverse the list here so that we can proceed onto commit in current table as a
-      // data table (where current is actually referring to a metadata table).
-      ValidationUtils.checkArgument(dataTableWriteStats.isEmpty(), "For new partition initialization in Metadata,"
+      ValidationUtils.checkArgument(dataTableWriteStats.isEmpty(), "For Metadata table,"
           + "we do not expect any writes having WriteStatus referring to data table. ");
       dataTableWriteStats.clear();
       dataTableWriteStats.addAll(mdtWriteStats);
@@ -70,8 +75,9 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
   }
 
   @Override
-  protected HoodieWriteMetadata<HoodieData<WriteStatus>> mayBeStreamWriteToMetadataTable(HoodieTable table, HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata, String instantTime) {
-    return metadataWriterWrapper.mayBeStreamWriteToMetadataTable(table, config, isMetadataTable, writeMetadata, instantTime);
+  protected HoodieWriteMetadata<HoodieData<WriteStatus>> processWriteMetadata(HoodieTable table, HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata, String instantTime) {
+    writeMetadata.setWriteStatuses(metadataWriterWrapper.mayBeStreamWriteToMetadataTable(table, config, isMetadataTable, writeMetadata.getWriteStatuses(), instantTime));
+    return writeMetadata;
   }
 
   @Override

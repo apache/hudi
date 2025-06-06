@@ -235,7 +235,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     logCompactionTimer = metrics.getLogCompactionCtx();
     WriteMarkersFactory.get(config.getMarkersType(), table, logCompactionInstantTime);
     HoodieWriteMetadata<T> writeMetadata = table.logCompact(context, logCompactionInstantTime);
-    HoodieWriteMetadata<T> processedWriteMetadata = mayBeStreamWriteToMetadataTable(table, writeMetadata, logCompactionInstantTime);
+    HoodieWriteMetadata<T> processedWriteMetadata = processWriteMetadata(table, writeMetadata, logCompactionInstantTime);
     HoodieWriteMetadata<O> logCompactionMetadata = convertToOutputMetadata(processedWriteMetadata);
     if (shouldComplete) {
       commitLogCompaction(logCompactionInstantTime, logCompactionMetadata, Option.of(table));
@@ -318,7 +318,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     }
     compactionTimer = metrics.getCompactionCtx();
     HoodieWriteMetadata<T> writeMetadata = table.compact(context, compactionInstantTime);
-    HoodieWriteMetadata<T> processedWriteMetadata = mayBeStreamWriteToMetadataTable(table, writeMetadata, compactionInstantTime);
+    HoodieWriteMetadata<T> processedWriteMetadata = processWriteMetadata(table, writeMetadata, compactionInstantTime);
     HoodieWriteMetadata<O> compactionWriteMetadata = convertToOutputMetadata(processedWriteMetadata);
     if (shouldComplete) {
       commitCompaction(compactionInstantTime, compactionWriteMetadata, Option.of(table));
@@ -326,7 +326,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     return compactionWriteMetadata;
   }
 
-  protected HoodieWriteMetadata<T> mayBeStreamWriteToMetadataTable(HoodieTable table, HoodieWriteMetadata<T> writeMetadata, String instantTime) {
+  protected HoodieWriteMetadata<T> processWriteMetadata(HoodieTable table, HoodieWriteMetadata<T> writeMetadata, String instantTime) {
     return writeMetadata;
   }
 
@@ -477,7 +477,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     clusteringTimer = metrics.getClusteringCtx();
     LOG.info("Starting clustering at {} for table {}", clusteringInstant, table.getConfig().getBasePath());
     HoodieWriteMetadata<T> writeMetadata = table.cluster(context, clusteringInstant);
-    HoodieWriteMetadata<T> processedWriteMetadata = mayBeStreamWriteToMetadataTable(table, writeMetadata, clusteringInstant);
+    HoodieWriteMetadata<T> processedWriteMetadata = processWriteMetadata(table, writeMetadata, clusteringInstant);
     HoodieWriteMetadata<O> clusteringMetadata = convertToOutputMetadata(processedWriteMetadata);
 
     // TODO : Where is shouldComplete used ?

@@ -134,6 +134,9 @@ class RecordLevelIndexTestBase extends HoodieStatsIndexTestBase {
       val partitionPath: String = row.getAs("_hoodie_partition_path")
       val fileName: String = row.getAs("_hoodie_file_name")
       val recordLocation = recordIndexMap.get(recordKey)
+      if (recordLocation == null) {
+        println("afsdf")
+      }
       assertEquals(partitionPath, recordLocation.getPartitionPath)
       assertTrue(fileName.startsWith(recordLocation.getFileId), fileName + " should start with " + recordLocation.getFileId)
     }
