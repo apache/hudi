@@ -36,6 +36,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstantReader;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
+import org.apache.hudi.common.table.timeline.TableFormatAction;
 import org.apache.hudi.common.table.timeline.TimeGenerator;
 import org.apache.hudi.common.table.timeline.TimeGenerators;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
@@ -61,7 +62,6 @@ import java.util.Date;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
-import java.util.function.Consumer;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.TimelineUtils.getHoodieInstantWriterOption;
@@ -167,9 +167,9 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
   }
 
   @Override
-  public <T> HoodieInstant saveAsComplete(boolean shouldLock, HoodieInstant instant, Option<T> metadata, Consumer<HoodieInstant> tableFormatCompletionAction) {
+  public <T> HoodieInstant saveAsComplete(boolean shouldLock, HoodieInstant instant, Option<T> metadata, TableFormatAction tableFormatCompletionAction) {
     HoodieInstant completedInstant = saveAsComplete(shouldLock, instant, metadata);
-    tableFormatCompletionAction.accept(completedInstant);
+    tableFormatCompletionAction.execute(completedInstant);
     return completedInstant;
   }
 
@@ -417,9 +417,9 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
 
   @Override
   public HoodieInstant transitionCleanInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, Option<HoodieCleanMetadata> metadata,
-                                                         Consumer<HoodieInstant> tableFormatCompletionAction) {
+                                                         TableFormatAction tableFormatCompletionAction) {
     HoodieInstant completedInstant = transitionCleanInflightToComplete(shouldLock, inflightInstant, metadata);
-    tableFormatCompletionAction.accept(completedInstant);
+    tableFormatCompletionAction.execute(completedInstant);
     return completedInstant;
   }
 
@@ -443,9 +443,9 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
 
   @Override
   public HoodieInstant transitionRollbackInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieRollbackMetadata metadata,
-                                                            Consumer<HoodieInstant> tableFormatCompletionAction) {
+                                                            TableFormatAction tableFormatCompletionAction) {
     HoodieInstant completedInstant = transitionRollbackInflightToComplete(shouldLock, inflightInstant, metadata);
-    tableFormatCompletionAction.accept(completedInstant);
+    tableFormatCompletionAction.execute(completedInstant);
     return completedInstant;
   }
 
@@ -500,9 +500,9 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
 
   @Override
   public HoodieInstant transitionReplaceInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieReplaceCommitMetadata metadata,
-                                                           Consumer<HoodieInstant> tableFormatCompletionAction) {
+                                                           TableFormatAction tableFormatCompletionAction) {
     HoodieInstant completedInstant = transitionReplaceInflightToComplete(shouldLock, inflightInstant, metadata);
-    tableFormatCompletionAction.accept(completedInstant);
+    tableFormatCompletionAction.execute(completedInstant);
     return completedInstant;
   }
 
@@ -518,9 +518,9 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
 
   @Override
   public HoodieInstant transitionClusterInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieReplaceCommitMetadata metadata,
-                                                           Consumer<HoodieInstant> tableFormatCompletionAction) {
+                                                           TableFormatAction tableFormatCompletionAction) {
     HoodieInstant completedInstant = transitionClusterInflightToComplete(shouldLock, inflightInstant, metadata);
-    tableFormatCompletionAction.accept(completedInstant);
+    tableFormatCompletionAction.execute(completedInstant);
     return completedInstant;
   }
 

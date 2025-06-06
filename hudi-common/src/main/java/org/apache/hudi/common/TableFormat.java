@@ -131,13 +131,13 @@ public interface TableFormat extends Serializable {
   /**
    * Called after marking a complete write action as "savepoint" in the hoodie timeline.
    *
-   * @param instant The completed instant to be marked as savepoint.
+   * @param savepointInstant The completed instant to be marked as savepoint.
    * @param engineContext engine context used for execution - local,spark or flink etc.
    * @param metaClient metaClient from HoodieTable.
    * @param viewManager viewManager from HoodieTable.
    */
   default void savepoint(
-      HoodieInstant instant,
+      HoodieInstant savepointInstant,
       HoodieEngineContext engineContext,
       HoodieTableMetaClient metaClient,
       FileSystemViewManager viewManager) {
