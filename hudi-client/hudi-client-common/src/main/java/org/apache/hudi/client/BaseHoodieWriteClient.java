@@ -967,7 +967,11 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @return the instant generated for the delete partition commit
    */
   public String startDeletePartitionCommit(HoodieTableMetaClient metaClient) {
-    return tableServiceClient.startDeletePartitionCommit(metaClient).requestedTime();
+    String instantTime = tableServiceClient.startDeletePartitionCommit(metaClient).requestedTime();
+    if (config.getFailedWritesCleanPolicy().isLazy()) {
+      this.heartbeatClient.start(instantTime);
+    }
+    return instantTime;
   }
 
   /**
