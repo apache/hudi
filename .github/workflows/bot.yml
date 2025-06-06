@@ -763,7 +763,8 @@ jobs:
       matrix:
         include:
           - flinkProfile: "flink1.20"
-            flinkAvroVersion: "1.11.3"
+            flinkAvroVersion: "1.11.4"
+            flinkParquetVersion: '1.13.1'
     steps:
       - uses: actions/checkout@v3
       - name: Set up JDK 8
