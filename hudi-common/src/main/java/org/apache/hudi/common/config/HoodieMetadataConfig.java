@@ -981,7 +981,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     private boolean getDefaultForStreamingWriteEnabled(EngineType engineType) {
       switch (engineType) {
         case SPARK:
-          return true;
+          return false; // we will flip this to true in future patches.
         case FLINK:
         case JAVA:
           return false;
