@@ -51,8 +51,11 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantComparison;
+import org.apache.hudi.common.table.timeline.TimeGenerator;
+import org.apache.hudi.common.table.timeline.TimeGenerators;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
@@ -415,6 +418,40 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
             PROPS_FILENAME_INFER_NONPARTITIONED_KEYGEN,
             NonpartitionedKeyGenerator.class.getName())
     );
+  }
+
+  @Test
+  public void testGenerateData() throws IOException {
+    int initialInserts = 10000;
+    int recurrentInserts = 1000;
+    int recurrentUpdates = 8000;
+    int updatesWithLowerOrderingValue = 2000;
+    int recurrentDeletes = 1000;
+    int totalRounds = 20;
+
+    String basePath = "/tmp/trial5";
+
+    HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp/path").build();
+    TimeGenerator timeGenerator = TimeGenerators.getTimeGenerator(writeConfig.getTimeGeneratorConfig(), HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()));
+
+    String commit1 = HoodieInstantTimeGenerator.createNewInstantTime(true, timeGenerator, 100);
+
+    List<HoodieRecord> initialInsertRecords = dataGen.generateInserts(commit1, initialInserts);
+
+    Helpers.saveParquetToDFS(Helpers.toGenericRecords(initialInsertRecords), new Path(basePath + "/0/inputdata.parquet"));
+
+    for (int i = 1; i < 10; i++) {
+      String commit = HoodieInstantTimeGenerator.createNewInstantTime(true, timeGenerator, 100);
+      List<HoodieRecord> allRecords = new ArrayList<>();
+      List<GenericRecord> allGenRecs = new ArrayList<>();
+      allGenRecs.addAll(dataGen.generateUniqueDeleteGenRecStream(commit, recurrentDeletes).collect(Collectors.toList()));
+      List<HoodieRecord> updates = dataGen.generateUniqueUpdates(commit, recurrentUpdates, updatesWithLowerOrderingValue, 60000);
+      allRecords.addAll(updates);
+      allRecords.addAll(dataGen.generateInserts(commit, recurrentInserts));
+      allGenRecs.addAll(Helpers.toGenericRecords(allRecords));
+      Helpers.saveParquetToDFS(allGenRecs, new Path(basePath + "/" + i + "/inputdata.parquet"));
+    }
   }
 
   @ParameterizedTest
