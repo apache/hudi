@@ -341,7 +341,9 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
             .collect(Collectors.toList());
     Map<String, List<StoragePathInfo>> partitionToFilesMap =
         tableMetadata.getAllFilesInPartitions(fullPartitionPaths);
-    assertEquals(fsPartitions.size(), partitionToFilesMap.size());
+
+    List<String> partitionsFromMetadata = tableMetadata.getAllPartitionPaths();
+    assertEquals(fsPartitions.size(), partitionsFromMetadata.size());
 
     fsPartitions.forEach(partition -> {
       try {
@@ -381,7 +383,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
     Collections.sort(metadataFilenames);
 
     assertLinesMatch(fsFileNames, metadataFilenames);
-    assertEquals(fsStatuses.length, partitionToFilesMap.get(partitionPath.toString()).size());
+    assertEquals(fsStatuses.length, partitionToFilesMap.getOrDefault(partitionPath.toString(), Collections.emptyList()).size());
 
     // Block sizes should be valid
     metaFilesList.forEach(s -> assertTrue(s.getBlockSize() > 0));
