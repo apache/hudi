@@ -20,13 +20,16 @@ package org.apache.hudi.io.storage;
 
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
+import org.apache.hudi.expression.Predicate;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
+import java.util.List;
 
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 
@@ -46,4 +49,29 @@ public abstract class HoodieAvroFileReader implements HoodieFileReader<IndexedRe
   }
 
   public abstract ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException;
+
+  public abstract ClosableIterator<IndexedRecord> getIndexedRecordsByKeysIterator(List<String> keys,
+                                                                                  Schema readerSchema)
+      throws IOException;
+
+  public abstract ClosableIterator<IndexedRecord> getIndexedRecordsByKeyPrefixIterator(
+      List<String> sortedKeyPrefixes, Schema readerSchema) throws IOException;
+
+  // No key predicate support by default.
+  public boolean supportKeyPredicate() {
+    return false;
+  }
+
+  // No key prefix predicate support by default.
+  public boolean supportKeyPrefixPredicate() {
+    return false;
+  }
+
+  public List<String> extractKeys(Option<Predicate> keyPredicateOpt) {
+    throw new UnsupportedOperationException("Option extractKeys is not supported");
+  }
+
+  public List<String> extractKeyPrefixes(Option<Predicate> keyPrefixPredicateOpt) {
+    throw new UnsupportedOperationException("Option extractKeyPrefixes is not supported");
+  }
 }

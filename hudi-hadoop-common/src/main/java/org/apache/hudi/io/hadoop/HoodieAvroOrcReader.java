@@ -44,6 +44,7 @@ import org.apache.orc.TypeDescription;
 
 import java.io.IOException;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
@@ -125,5 +126,17 @@ public class HoodieAvroOrcReader extends HoodieAvroFileReader {
   @Override
   public long getTotalRecords() {
     return orcUtils.getRowCount(storage, path);
+  }
+
+  @Override
+  public ClosableIterator<IndexedRecord> getIndexedRecordsByKeysIterator(List<String> sortedKeys,
+                                                                         Schema readerSchema) {
+    throw new UnsupportedOperationException("Not supported operation: getIndexedRecordsByKeysIterator");
+  }
+
+  @Override
+  public ClosableIterator<IndexedRecord> getIndexedRecordsByKeyPrefixIterator(List<String> sortedKeyPrefixes,
+                                                                              Schema readerSchema) {
+    throw new UnsupportedOperationException("Not supported operation: getIndexedRecordsByKeyPrefixIterator");
   }
 }
