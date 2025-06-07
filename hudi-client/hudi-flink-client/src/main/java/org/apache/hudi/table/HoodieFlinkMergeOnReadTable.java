@@ -36,8 +36,8 @@ import org.apache.hudi.io.HoodieAppendHandle;
 import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.commit.BucketInfo;
-import org.apache.hudi.table.action.commit.delta.FlinkUpsertPreppedDeltaCommitActionExecutor;
 import org.apache.hudi.table.action.commit.delta.FlinkUpsertDeltaCommitActionExecutor;
+import org.apache.hudi.table.action.commit.delta.FlinkUpsertPreppedDeltaCommitActionExecutor;
 import org.apache.hudi.table.action.compact.HoodieFlinkMergeOnReadTableCompactor;
 import org.apache.hudi.table.action.compact.RunCompactionActionExecutor;
 import org.apache.hudi.table.action.compact.ScheduleCompactionActionExecutor;
@@ -117,7 +117,7 @@ public class HoodieFlinkMergeOnReadTable<T>
       HoodieEngineContext context, String compactionInstantTime) {
     RunCompactionActionExecutor compactionExecutor = new RunCompactionActionExecutor(
         context, config, this, compactionInstantTime, new HoodieFlinkMergeOnReadTableCompactor(),
-        new HoodieFlinkCopyOnWriteTable(config, context, getMetaClient()), WriteOperationType.COMPACT);
+        this, WriteOperationType.COMPACT);
     return convertMetadata(compactionExecutor.execute());
   }
 

@@ -79,7 +79,7 @@ class RunTTLProcedure extends BaseProcedure with ProcedureBuilder with Logging {
     try {
       client = HoodieCLIUtils.createHoodieWriteClient(sparkSession, basePath, confs,
         tableName.asInstanceOf[Option[String]])
-      val ttlInstantTime = client.createNewInstantTime()
+      val ttlInstantTime = client.startDeletePartitionCommit()
       val hoodieTTLMeta = client.managePartitionTTL(ttlInstantTime)
       if (hoodieTTLMeta == null) {
         Seq.empty

@@ -3020,7 +3020,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       validateMetadata(client);
 
       // delete partitions
-      newCommitTime = client.createNewInstantTime();
+      newCommitTime = client.startDeletePartitionCommit(metaClient);
       HoodieWriteResult writeResult = client.deletePartitions(singletonList(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH), newCommitTime);
       client.commit(newCommitTime, writeResult.getWriteStatuses(), Option.empty(), HoodieTimeline.REPLACE_COMMIT_ACTION, writeResult.getPartitionToReplaceFileIds(),
           Option.empty());

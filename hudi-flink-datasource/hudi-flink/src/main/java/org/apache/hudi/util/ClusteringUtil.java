@@ -91,7 +91,8 @@ public class ClusteringUtil {
     inflightInstants.forEach(inflightInstant -> {
       LOG.info("Rollback the inflight clustering instant: " + inflightInstant + " for failover");
       table.rollbackInflightClustering(inflightInstant,
-          commitToRollback -> writeClient.getTableServiceClient().getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false));
+          commitToRollback -> writeClient.getTableServiceClient().getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false),
+          writeClient.getTransactionManager());
       table.getMetaClient().reloadActiveTimeline();
     });
   }
@@ -109,7 +110,8 @@ public class ClusteringUtil {
     if (inflightInstantOpt.isPresent() && ClusteringUtils.isClusteringInstant(activeTimeline, inflightInstantOpt.get(), table.getInstantGenerator())) {
       LOG.warn("Rollback failed clustering instant: [" + instantTime + "]");
       table.rollbackInflightClustering(inflightInstantOpt.get(),
-          commitToRollback -> writeClient.getTableServiceClient().getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false));
+          commitToRollback -> writeClient.getTableServiceClient().getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false),
+          writeClient.getTransactionManager());
     }
   }
 }

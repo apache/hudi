@@ -804,7 +804,7 @@ public class StreamSync implements Serializable, Closeable {
       WriteClientWriteResult writeClientWriteResult = writeToSink(inputBatch, instantTime, useRowWriter);
       Map<String, List<String>> partitionToReplacedFileIds = writeClientWriteResult.getPartitionToReplacedFileIds();
       JavaRDD<WriteStatus> writeStatusRDD = writeClientWriteResult.getWriteStatusRDD();
-      String errorTableInstantTime = writeClient.createNewInstantTime();
+      String errorTableInstantTime = instantTime;
       Option<JavaRDD<WriteStatus>> errorTableWriteStatusRDDOpt = Option.empty();
       if (errorTableWriter.isPresent() && isErrorTableWriteUnificationEnabled) {
         errorTableWriteStatusRDDOpt = errorTableWriter.map(w -> w.upsert(errorTableInstantTime, instantTime, getLatestCommittedInstant()));

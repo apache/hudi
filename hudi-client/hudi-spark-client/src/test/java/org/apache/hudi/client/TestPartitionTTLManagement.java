@@ -18,9 +18,11 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
@@ -28,6 +30,7 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
+import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieTTLConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
@@ -80,6 +83,10 @@ public class TestPartitionTTLManagement extends HoodieClientTestBase {
             .withTTLStrategyType(PartitionTTLStrategyType.KEEP_BY_CREATION_TIME)
             .build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().build())
+        .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
+        .withLockConfig(HoodieLockConfig.newBuilder()
+            .withLockProvider(InProcessLockProvider.class)
+            .build())
         .build();
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEED);
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
@@ -95,10 +102,8 @@ public class TestPartitionTTLManagement extends HoodieClientTestBase {
       String partitionPath2 = dataGen.getPartitionPaths()[2];
       writeRecordsForPartition(client, dataGen, partitionPath2, currentInstant);
 
-      String instantTime = client.createNewInstantTime();
+      String instantTime = client.startDeletePartitionCommit(metaClient);
       HoodieWriteResult result = client.managePartitionTTL(instantTime);
-      client.commit(instantTime, result.getWriteStatuses(), Option.empty(), HoodieTimeline.REPLACE_COMMIT_ACTION,
-          result.getPartitionToReplaceFileIds(), Option.empty());
 
       Assertions.assertEquals(Sets.newHashSet(partitionPath0, partitionPath1), result.getPartitionToReplaceFileIds().keySet());
       Assertions.assertEquals(10, readRecords(new String[] {partitionPath0, partitionPath1, partitionPath2}).size());
@@ -130,7 +135,7 @@ public class TestPartitionTTLManagement extends HoodieClientTestBase {
       String partitionPath2 = dataGen.getPartitionPaths()[2];
       writeRecordsForPartition(client, dataGen, partitionPath2, currentInstant);
 
-      String instantTime = client.createNewInstantTime();
+      String instantTime = client.startDeletePartitionCommit();
       HoodieWriteResult result = client.managePartitionTTL(instantTime);
       client.commit(instantTime, result.getWriteStatuses(), Option.empty(), HoodieTimeline.REPLACE_COMMIT_ACTION,
           result.getPartitionToReplaceFileIds(), Option.empty());

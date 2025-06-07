@@ -19,6 +19,7 @@
 package org.apache.hudi.table.action.compact;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
@@ -62,7 +63,9 @@ public class HoodieFlinkMergeOnReadTableCompactor<T>
         ? instantGenerator.getCompactionInflightInstant(instantTime)
         : instantGenerator.getLogCompactionInflightInstant(instantTime);
     if (pendingCompactionTimeline.containsInstant(inflightInstant)) {
-      table.rollbackInflightCompaction(inflightInstant);
+      try (TransactionManager transactionManager = new TransactionManager(table.getConfig(), table.getStorage())) {
+        table.rollbackInflightCompaction(inflightInstant, transactionManager);
+      }
       table.getMetaClient().reloadActiveTimeline();
     }
   }
