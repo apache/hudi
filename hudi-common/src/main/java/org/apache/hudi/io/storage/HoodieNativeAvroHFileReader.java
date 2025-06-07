@@ -32,6 +32,9 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.io.ByteBufferBackedInputStream;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.expression.Expression;
+import org.apache.hudi.expression.Predicate;
+import org.apache.hudi.expression.Predicates;
 import org.apache.hudi.io.ByteArraySeekableDataInputStream;
 import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.io.hfile.HFileReader;
@@ -50,6 +53,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -233,6 +237,46 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
         iterator, data -> unsafeCast(new HoodieAvroIndexedRecord(data)));
   }
 
+  @Override
+  public boolean supportKeyPredicate() {
+    return true;
+  }
+
+  @Override
+  public boolean supportKeyPrefixPredicate() {
+    return true;
+  }
+
+  @Override
+  public List<String> extractKeys(Option<Predicate> keyFilterOpt) {
+    List<String> keys = new ArrayList<>();
+    if (keyFilterOpt.isPresent()
+        && keyFilterOpt.get().getOperator().equals(Expression.Operator.IN)) {
+      List<Expression> children = ((Predicates.In) keyFilterOpt.get()).getRightChildren();
+      keys = children.stream().map(e -> (String) e.eval(null)).collect(Collectors.toList());
+    }
+
+    if (keys.isEmpty() && keyFilterOpt.isPresent()) {
+      LOG.warn("Cannot extract valid keys from predicate: {}", keyFilterOpt.get());
+    }
+    return keys;
+  }
+
+  @Override
+  public List<String> extractKeyPrefixes(Option<Predicate> keyFilterOpt) {
+    List<String> keyPrefixes = new ArrayList<>();
+    if (keyFilterOpt.isPresent()
+        && keyFilterOpt.get().getOperator().equals(Expression.Operator.STARTS_WITH)) {
+      List<Expression> children = ((Predicates.StringStartsWithAny) keyFilterOpt.get()).getRightChildren();
+      keyPrefixes = children.stream()
+          .map(e -> (String) e.eval(null)).collect(Collectors.toList());
+    }
+    if (keyPrefixes.isEmpty() && keyFilterOpt.isPresent()) {
+      LOG.warn("Cannot extract valid key prefixes from predicate: {}", keyFilterOpt.get());
+    }
+    return keyPrefixes;
+  }
+
   private Schema fetchSchema() {
     try {
       return new Schema.Parser().parse(
@@ -295,15 +339,14 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
   }
 
   public ClosableIterator<IndexedRecord> getIndexedRecordsByKeysIterator(List<String> sortedKeys,
-                                                                         Schema readerSchema)
-      throws IOException {
+                                                                         Schema readerSchema) throws IOException {
     HFileReader reader = newHFileReader();
     return new RecordByKeyIterator(reader, sortedKeys, getSchema(), schema.get());
   }
 
   @Override
-  public ClosableIterator<IndexedRecord> getIndexedRecordsByKeyPrefixIterator(
-      List<String> sortedKeyPrefixes, Schema readerSchema) throws IOException {
+  public ClosableIterator<IndexedRecord> getIndexedRecordsByKeyPrefixIterator(List<String> sortedKeyPrefixes,
+                                                                              Schema readerSchema) throws IOException {
     HFileReader reader = newHFileReader();
     return new RecordByKeyPrefixIterator(reader, sortedKeyPrefixes, getSchema(), readerSchema);
   }
