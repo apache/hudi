@@ -163,6 +163,13 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("The default partition name in case the dynamic partition"
           + " column value is null/empty string");
 
+  @AdvancedConfig
+  public static final ConfigOption<Boolean> WRITE_EXTRA_METADATA_ENABLED = ConfigOptions
+      .key("write.extra.metadata.enabled")
+      .booleanType()
+      .defaultValue(false) // keep sync with hoodie style
+      .withDescription("If enabled, the checkpoint Id will also be written to hudi metadata.");
+
   // ------------------------------------------------------------------------
   //  Changelog Capture Options
   // ------------------------------------------------------------------------

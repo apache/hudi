@@ -48,6 +48,7 @@ import org.apache.hudi.util.ClientIds;
 import org.apache.hudi.util.ClusteringUtil;
 import org.apache.hudi.util.CompactionUtil;
 import org.apache.hudi.util.FlinkWriteClients;
+import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
@@ -549,6 +550,8 @@ public class StreamWriteOperatorCoordinator
 
     if (!hasErrors || this.conf.get(FlinkOptions.IGNORE_FAILED)) {
       HashMap<String, String> checkpointCommitMetadata = new HashMap<>();
+      StreamerUtil.addFlinkCheckpointIdIntoMetaData(conf, checkpointCommitMetadata, checkpointId);
+
       if (hasErrors) {
         LOG.warn("Some records failed to merge but forcing commit since commitOnErrors set to true. Errors/Total="
             + totalErrorRecords + "/" + totalRecords);
