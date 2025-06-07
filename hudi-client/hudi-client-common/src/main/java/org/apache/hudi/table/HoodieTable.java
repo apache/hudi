@@ -991,7 +991,17 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @return instance of {@link HoodieTableMetadataWriter}
    */
   public final Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstantTimestamp) {
-    return getMetadataWriter(triggeringInstantTimestamp, EAGER);
+    return getMetadataWriter(triggeringInstantTimestamp, false);
+  }
+
+  /**
+   * Get Table metadata writer.
+   *
+   * @param triggeringInstantTimestamp - The instant that is triggering this metadata write
+   * @return instance of {@link HoodieTableMetadataWriter}
+   */
+  public final Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstantTimestamp, boolean streamingWrites) {
+    return getMetadataWriter(triggeringInstantTimestamp, EAGER, streamingWrites);
   }
 
   /**
@@ -1001,7 +1011,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @return An instance of {@link HoodieTableMetadataWriter}.
    */
   public Option<HoodieTableMetadataWriter> getIndexingMetadataWriter(String triggeringInstantTimestamp) {
-    return getMetadataWriter(triggeringInstantTimestamp, LAZY);
+    return getMetadataWriter(triggeringInstantTimestamp, LAZY, false);
   }
 
   /**
@@ -1026,7 +1036,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    */
   protected Option<HoodieTableMetadataWriter> getMetadataWriter(
       String triggeringInstantTimestamp,
-      HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy) {
+      HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy, boolean streamingWrites) {
     // Each engine is expected to override this and
     // provide the actual metadata writer, if enabled.
     return Option.empty();
