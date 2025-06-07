@@ -40,6 +40,7 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -187,8 +188,8 @@ public class ClientIds implements AutoCloseable, Serializable {
         return INIT_CLIENT_ID;
       }
       List<Path> sortedPaths = Arrays.stream(fs.listStatus(heartbeatFolderPath))
+          .sorted(Comparator.comparing(FileStatus::getModificationTime))
           .map(FileStatus::getPath)
-          .sorted(Comparator.comparing(Path::getName))
           .collect(Collectors.toList());
       if (sortedPaths.isEmpty()) {
         return INIT_CLIENT_ID;
@@ -204,9 +205,8 @@ public class ClientIds implements AutoCloseable, Serializable {
         }
         return getClientId(zombieHeartbeatPaths.get(0));
       }
-      // 2. else returns an auto inc id
-      String largestClientId = getClientId(sortedPaths.get(sortedPaths.size() - 1));
-      return INIT_CLIENT_ID.equals(largestClientId) ? "1" : (Integer.parseInt(largestClientId) + 1) + "";
+      // 2. else returns a random uuid to avoid conflict of client id
+      return UUID.randomUUID().toString();
     } catch (IOException e) {
       throw new RuntimeException("Generate next client id error", e);
     }
@@ -214,7 +214,7 @@ public class ClientIds implements AutoCloseable, Serializable {
 
   /**
    * Returns the client id from the heartbeat file path, the path name follows
-   * the naming convention: _, _1, _2, ... _N.
+   * the naming convention: _, _UUID.
    */
   private static String getClientId(Path path) {
     String[] splits = path.getName().split(HEARTBEAT_FILE_NAME_PREFIX);
