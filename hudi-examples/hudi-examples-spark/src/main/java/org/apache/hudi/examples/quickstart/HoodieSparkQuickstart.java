@@ -52,10 +52,15 @@ public final class HoodieSparkQuickstart {
     String tablePath = args[0];
     String tableName = args[1];
 
-    SparkSession spark = HoodieExampleSparkUtils.defaultSparkSession("Hudi Spark basic example");
-    SparkConf sparkConf = HoodieExampleSparkUtils.defaultSparkConf("hoodie-client-example");
 
-    try (JavaSparkContext jsc = new JavaSparkContext(sparkConf)) {
+    SparkConf sparkConf = HoodieExampleSparkUtils
+            .defaultSparkConf("hoodie-client-example")
+            //.set("spark.executor.memory", "2g") // You can uncomment and add more configs
+            ;
+
+    SparkSession spark = HoodieExampleSparkUtils.buildSparkSession(sparkConf);
+
+    try (JavaSparkContext jsc = new JavaSparkContext(spark.sparkContext())) {
       runQuickstart(jsc, spark, tableName, tablePath);
     }
   }

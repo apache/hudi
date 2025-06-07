@@ -49,14 +49,7 @@ public class HoodieExampleSparkUtils {
     return sparkConf;
   }
 
-  public static SparkSession defaultSparkSession(String appName) {
-    return buildSparkSession(appName, defaultConf());
-  }
-
-  public static SparkSession buildSparkSession(String appName, Map<String, String> additionalConfigs) {
-
-    SparkSession.Builder builder = SparkSession.builder().appName(appName);
-    additionalConfigs.forEach(builder::config);
-    return builder.getOrCreate();
+  public static SparkSession buildSparkSession(SparkConf sparkConf) {
+    return SparkSession.builder().config(sparkConf).getOrCreate();
   }
 }
