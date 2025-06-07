@@ -122,11 +122,7 @@ public class HoodieMetadataLogRecordReader implements Closeable {
           .map(key -> (HoodieRecord<HoodieMetadataPayload>) allRecords.get(key))
           .filter(Objects::nonNull)
           .collect(Collectors.toMap(HoodieRecord::getRecordKey, r -> r));
-      return HoodieListPairData.eager(res.entrySet().stream()
-          .collect(Collectors.toMap(
-              Map.Entry::getKey,
-              entry -> Collections.singletonList(entry.getValue())
-          )));
+      return HoodieListPairData.eagerMapKV(res);
     }
   }
 
