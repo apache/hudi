@@ -176,20 +176,20 @@ public class EmbeddedTimelineService {
 
     this.serviceConfig = timelineServiceConfBuilder.build();
 
-    server = timelineServiceCreator.create(context, storageConf.newInstance(), serviceConfig, viewManager);
+    server = timelineServiceCreator.create(storageConf.newInstance(), serviceConfig, viewManager);
     serverPort = server.startService();
-    LOG.info("Started embedded timeline server at " + hostAddr + ":" + serverPort);
+    LOG.info("Started embedded timeline server at {}:{}", hostAddr, serverPort);
   }
 
   @FunctionalInterface
   interface TimelineServiceCreator {
-    TimelineService create(HoodieEngineContext context, StorageConfiguration<?> storageConf, TimelineService.Config timelineServerConf,
+    TimelineService create(StorageConfiguration<?> storageConf, TimelineService.Config timelineServerConf,
                            FileSystemViewManager globalFileSystemViewManager) throws IOException;
   }
 
   private void setHostAddr(String embeddedTimelineServiceHostAddr) {
     if (embeddedTimelineServiceHostAddr != null) {
-      LOG.info("Overriding hostIp to (" + embeddedTimelineServiceHostAddr + ") found in write conf. It was " + this.hostAddr);
+      LOG.info("Overriding hostIp to ({}) found in write conf. It was {}", embeddedTimelineServiceHostAddr, this.hostAddr);
       this.hostAddr = embeddedTimelineServiceHostAddr;
     } else {
       LOG.warn("Unable to find driver bind address from write config, use current host name");

@@ -18,7 +18,6 @@
 
 package org.apache.hudi.timeline.service;
 
-import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
@@ -52,12 +51,10 @@ public class TimelineServiceTestHarness extends TimelineService {
   private Option<Server> server;
   private int serverPort;
 
-  public TimelineServiceTestHarness(HoodieEngineContext context,
-                                    Configuration hadoopConf,
+  public TimelineServiceTestHarness(Configuration hadoopConf,
                                     Config timelineServerConf,
                                     FileSystemViewManager globalFileSystemViewManager) throws IOException {
     super(
-        context,
         new HadoopStorageConfiguration(hadoopConf),
         timelineServerConf,
         globalFileSystemViewManager);
@@ -124,12 +121,10 @@ public class TimelineServiceTestHarness extends TimelineService {
       return this;
     }
 
-    public TimelineServiceTestHarness build(HoodieEngineContext context,
-                                            Configuration hadoopConf,
+    public TimelineServiceTestHarness build(Configuration hadoopConf,
                                             Config timelineServerConf,
                                             FileSystemViewManager globalFileSystemViewManager) throws IOException {
-      TimelineServiceTestHarness timelineServiceTestHarness = new TimelineServiceTestHarness(
-          context, hadoopConf, timelineServerConf, globalFileSystemViewManager);
+      TimelineServiceTestHarness timelineServiceTestHarness = new TimelineServiceTestHarness(hadoopConf, timelineServerConf, globalFileSystemViewManager);
       timelineServiceTestHarness.setNumberOfSimulatedConnectionFailures(numberOfSimulatedConnectionFailures);
       return timelineServiceTestHarness;
     }

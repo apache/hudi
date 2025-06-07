@@ -20,7 +20,6 @@ package org.apache.hudi.timeline.service;
 
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
@@ -53,7 +52,6 @@ public class TimelineService {
   private int serverPort;
   private final Config timelineServerConf;
   private final StorageConfiguration<?> storageConf;
-  private transient HoodieEngineContext context;
   private transient Javalin app = null;
   private transient FileSystemViewManager fsViewsManager;
   private transient RequestHandler requestHandler;
@@ -62,12 +60,11 @@ public class TimelineService {
     return serverPort;
   }
 
-  public TimelineService(HoodieEngineContext context, StorageConfiguration<?> storageConf, Config timelineServerConf,
+  public TimelineService(StorageConfiguration<?> storageConf, Config timelineServerConf,
                          FileSystemViewManager globalFileSystemViewManager) {
     this.storageConf = storageConf;
     this.timelineServerConf = timelineServerConf;
     this.serverPort = timelineServerConf.serverPort;
-    this.context = context;
     this.fsViewsManager = globalFileSystemViewManager;
   }
 
@@ -132,13 +129,13 @@ public class TimelineService {
     @Parameter(names = {"--early-conflict-detection-check-commit-conflict"}, description =
         "Whether to enable commit conflict checking or not during early "
             + "conflict detection.")
-    public Boolean checkCommitConflict = false;
+    public boolean checkCommitConflict = false;
 
     @Parameter(names = {"--early-conflict-detection-enable"}, description =
         "Whether to enable early conflict detection based on markers. "
             + "It eagerly detects writing conflict before create markers and fails fast if a "
             + "conflict is detected, to release cluster compute resources as soon as possible.")
-    public Boolean earlyConflictDetectionEnable = false;
+    public boolean earlyConflictDetectionEnable = false;
 
     @Parameter(names = {"--async-conflict-detector-initial-delay-ms"}, description =
         "Used for timeline-server-based markers with "
@@ -374,7 +371,7 @@ public class TimelineService {
     });
 
     requestHandler = new RequestHandler(
-        app, storageConf, timelineServerConf, context, fsViewsManager);
+        app, storageConf, timelineServerConf, fsViewsManager);
     app.get("/", ctx -> ctx.result("Hello Hudi"));
     requestHandler.register();
   }
@@ -446,7 +443,6 @@ public class TimelineService {
     FileSystemViewManager viewManager =
         buildFileSystemViewManager(cfg, storageConf.newInstance());
     TimelineService service = new TimelineService(
-        new HoodieLocalEngineContext(storageConf.newInstance()),
         storageConf.newInstance(),
         cfg,
         viewManager);
