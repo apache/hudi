@@ -20,7 +20,7 @@
 package org.apache.hudi
 
 import org.apache.hudi.RecordLevelIndexSupport.{filterQueryWithRecordKey, getPrunedStoragePaths}
-import org.apache.hudi.SecondaryIndexSupport.{filterQueriesWithSecondaryKey, getSecondaryKeyConfig}
+import org.apache.hudi.SecondaryIndexSupport.filterQueriesWithSecondaryKey
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.HoodieListData
 import org.apache.hudi.common.fs.FSUtils
@@ -80,6 +80,7 @@ class SecondaryIndexSupport(spark: SparkSession,
   private def getCandidateFilesFromSecondaryIndex(allFiles: Seq[StoragePath], secondaryKeys: List[String], secondaryIndexName: String): Set[String] = {
     val recordKeyLocationsMap = metadataTable.readSecondaryIndex(
       HoodieListData.eager(JavaConverters.seqAsJavaListConverter(secondaryKeys).asJava), secondaryIndexName)
+      .collectAsMapWithOverwriteStrategy()
     val fileIdToPartitionMap: mutable.Map[String, String] = mutable.Map.empty
     val candidateFiles: mutable.Set[String] = mutable.Set.empty
     recordKeyLocationsMap.values().forEach(location => fileIdToPartitionMap.put(location.getFileId, location.getPartitionPath))

@@ -167,11 +167,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   @Override
   protected Option<HoodieRecord<HoodieMetadataPayload>> getRecordByKey(String key, String partitionName) {
     Map<String, HoodieRecord<HoodieMetadataPayload>> recordsByKeys = getRecordsByKeys(
-        HoodieListData.eager(Collections.singletonList(key)), partitionName).collectAsList().stream()
-        .collect(Collectors.toMap(
-            Pair::getKey,
-            Pair::getValue
-        ));
+        HoodieListData.eager(Collections.singletonList(key)), partitionName).collectAsMapWithOverwriteStrategy();
     return Option.ofNullable(recordsByKeys.get(key));
   }
 
@@ -321,13 +317,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       }, partitionedKeys.size()).forEach(result::putAll);
     }
 
-    return HoodieListPairData.eager(
-        result.entrySet()
-            .stream().collect(Collectors.toMap(
-              Map.Entry::getKey,
-              entry -> Collections.singletonList(entry.getValue())
-        ))
-    );
+    return HoodieListPairData.eagerMapKV(result);
   }
 
   private static ArrayList<ArrayList<String>> partitionKeysByFileSlices(List<String> keys, int numFileSlices, String partitionName, HoodieTableVersion version) {
@@ -613,13 +603,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         .collectAsList()
         .stream()
         .collect(Collectors.groupingBy(Pair::getKey, Collectors.mapping(Pair::getValue, Collectors.toSet())));
-    return HoodieListPairData.eager(
-        res.entrySet().stream()
-            .collect(Collectors.toMap(
-                Map.Entry::getKey,
-                entry -> Collections.singletonList(entry.getValue())
-            ))
-    );
+    return HoodieListPairData.eagerMapKV(res);
   }
 
   /**
