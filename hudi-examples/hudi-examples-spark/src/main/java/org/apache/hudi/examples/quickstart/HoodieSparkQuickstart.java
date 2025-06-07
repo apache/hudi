@@ -53,9 +53,8 @@ public final class HoodieSparkQuickstart {
     String tableName = args[1];
 
     SparkSession spark = HoodieExampleSparkUtils.defaultSparkSession("Hudi Spark basic example");
-    SparkConf sparkConf = HoodieExampleSparkUtils.defaultSparkConf("hoodie-client-example");
 
-    try (JavaSparkContext jsc = new JavaSparkContext(sparkConf)) {
+    try (JavaSparkContext jsc = new JavaSparkContext(spark.sparkContext())) {
       runQuickstart(jsc, spark, tableName, tablePath);
     }
   }
