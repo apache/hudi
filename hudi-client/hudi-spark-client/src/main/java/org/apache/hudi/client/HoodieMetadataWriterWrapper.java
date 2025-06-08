@@ -47,14 +47,20 @@ public class HoodieMetadataWriterWrapper {
     if (metadataWriterOpt.isPresent()) {
       try {
         metadataWriterOpt.get().completeStreamingCommit(instantTime, table.getContext(), metadataWriteStatsSoFar, metadata);
-        metadataWriterOpt.get().close();
-      } catch (Exception e) {
-        throw new HoodieException("Failed to close metadata writer ", e);
       } finally {
+        closeMetadataWriter(metadataWriterOpt.get());
         metadataWriterMap.remove(instantTime);
       }
     } else {
       throw new HoodieException("Should not be reachable. Metadata Writer should have been instantiated by now");
+    }
+  }
+
+  private void closeMetadataWriter(HoodieTableMetadataWriter metadataWriter) {
+    try {
+      metadataWriter.close();
+    } catch (Exception e) {
+      throw new HoodieException("Failed to close Metadata writer ", e);
     }
   }
 
