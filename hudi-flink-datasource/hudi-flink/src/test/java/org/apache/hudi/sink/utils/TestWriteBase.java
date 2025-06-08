@@ -183,6 +183,11 @@ public class TestWriteBase {
       return this;
     }
 
+    public TestHarness onTimer(long timestamp) throws Exception {
+      this.pipeline.onTimer(timestamp);
+      return this;
+    }
+
     public TestHarness assertConsumeThrows(List<RowData> inputs, String message) {
       assertThrows(HoodieException.class, () -> consume(inputs), message);
       return this;

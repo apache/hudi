@@ -45,6 +45,13 @@ public interface TestFunctionWrapper<I> {
   void invoke(I record) throws Exception;
 
   /**
+   * Process the timer with timestamp.
+   */
+  default void onTimer(long timestamp) throws Exception {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
    * Returns the latest event buffer sent by the write tasks.
    */
   WriteMetadataEvent[] getEventBuffer();
