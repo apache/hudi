@@ -747,8 +747,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
                                                     Function transformInputFn, Function transformOutputFn) throws Exception {
     HoodieTableMetaClient metaClient = createMetaClient();
     String instantTime = "000";
-    HoodieWriteConfig cfg = getConfigBuilder().withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder()
-            .withEnableOptimisticConsistencyGuard(enableOptimisticConsistencyGuard).build()).build();
+    HoodieWriteConfig cfg = getRollbackMarkersAndConsistencyGuardWriteConfig(true, enableOptimisticConsistencyGuard, true);
     BaseHoodieWriteClient client = getHoodieWriteClient(cfg);
     client.setOperationType(WriteOperationType.UPSERT);
     Pair<StoragePath, List<WriteStatus>> result = testConsistencyCheck(context, metaClient, instantTime,
