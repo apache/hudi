@@ -43,6 +43,7 @@ import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.spark.SparkConf;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -72,6 +73,7 @@ import static org.apache.hudi.index.HoodieIndex.IndexType.RECORD_INDEX;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+@Tag("functional")
 public class TestGlobalIndexEnableUpdatePartitions extends SparkClientFunctionalTestHarness {
 
   @Override

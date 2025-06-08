@@ -305,12 +305,13 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
       // to save the checkpoint.
       HoodieWriteConfig writeConfig22 = HoodieWriteConfig.newBuilder().withProperties(writeConfig.getProps()).build();
       writeConfig22.setSchema("\"null\"");
-      final SparkRDDWriteClient client22 = getHoodieWriteClient(writeConfig22);
-      JavaRDD<HoodieRecord> emptyRDD = jsc.emptyRDD();
-      // Perform upsert with empty RDD
-      WriteClientTestUtils.startCommitWithTime(client22, "0013");
-      JavaRDD<WriteStatus> writeStatusRDD = client22.upsert(emptyRDD, "0013");
-      client22.commit("0013", writeStatusRDD);
+      try (final SparkRDDWriteClient client22 = getHoodieWriteClient(writeConfig22)) {
+        JavaRDD<HoodieRecord> emptyRDD = jsc.emptyRDD();
+        // Perform upsert with empty RDD
+        WriteClientTestUtils.startCommitWithTime(client22, "0013");
+        JavaRDD<WriteStatus> writeStatusRDD = client22.upsert(emptyRDD, "0013");
+        client22.commit("0013", writeStatusRDD);
+      }
       totalCommits += 1;
 
       // Validate table schema in the end.

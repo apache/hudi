@@ -28,9 +28,8 @@ import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 
 import org.apache.spark.sql.{Row, SaveMode}
 import org.apache.spark.sql.types.{LongType, StringType, StructField, StructType}
-import org.junit.{Before, Test}
+import org.junit.jupiter.api.{BeforeEach, Tag, Test}
 import org.junit.jupiter.api.Assertions.{assertDoesNotThrow, assertFalse}
-import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.function.Executable
 
 import java.nio.file.{Files, Path}
@@ -42,7 +41,7 @@ class TestIncrementalQueryWithArchivedInstants extends SparkClientFunctionalTest
 
   override def basePath(): String = tmpDir.toAbsolutePath.toUri.toString
 
-  @Before
+  @BeforeEach
   def setUp(): Unit = {
     tmpDir = Files.createTempDirectory("hudi_random")
     tblPath = basePath()

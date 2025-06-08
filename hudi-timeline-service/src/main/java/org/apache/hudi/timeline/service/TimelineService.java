@@ -40,12 +40,13 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * A standalone timeline service exposing File-System View interfaces to clients.
  */
 public class TimelineService {
-
+  private static final AtomicInteger INSTANCE_COUNTER = new AtomicInteger(0);
   private static final Logger LOG = LoggerFactory.getLogger(TimelineService.class);
   private static final int START_SERVICE_MAX_RETRIES = 16;
   private static final int DEFAULT_NUM_THREADS = 250;
@@ -361,6 +362,7 @@ public class TimelineService {
     }
     int maxThreads = timelineServerConf.numThreads > 0 ? timelineServerConf.numThreads : DEFAULT_NUM_THREADS;
     QueuedThreadPool pool = new QueuedThreadPool(maxThreads, 8, 60_000);
+    pool.setName(String.format("timeline-server-%d", INSTANCE_COUNTER.getAndIncrement()));
     pool.setDaemon(true);
     final Server server = new Server(pool);
     ScheduledExecutorScheduler scheduler = new ScheduledExecutorScheduler("TimelineService-JettyScheduler", true, 8);

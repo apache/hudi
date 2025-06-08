@@ -2231,14 +2231,14 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         .build();
 
     // Create commit1 with single writer.
-    SparkRDDWriteClient writeClient = new SparkRDDWriteClient(engineContext, writeConfig);
-    String initialCommit = "0000000";
-    List<HoodieRecord> initialRecords = dataGen.generateInserts(initialCommit, 100);
-    WriteClientTestUtils.startCommitWithTime(writeClient, initialCommit);
-    List<WriteStatus> initialWriteStatuses = writeClient.insert(jsc.parallelize(initialRecords, 1), initialCommit).collect();
-    assertNoWriteErrors(initialWriteStatuses);
-    writeClient.commit(initialCommit, jsc.parallelize(initialWriteStatuses));
-    writeClient.close();
+    try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(engineContext, writeConfig)) {
+      String initialCommit = "0000000";
+      List<HoodieRecord> initialRecords = dataGen.generateInserts(initialCommit, 100);
+      WriteClientTestUtils.startCommitWithTime(writeClient, initialCommit);
+      List<WriteStatus> initialWriteStatuses = writeClient.insert(jsc.parallelize(initialRecords, 1), initialCommit).collect();
+      assertNoWriteErrors(initialWriteStatuses);
+      writeClient.commit(initialCommit, jsc.parallelize(initialWriteStatuses));
+    }
 
     ExecutorService executors = Executors.newFixedThreadPool(dataGen.getPartitionPaths().length);
     // Create clients in advance

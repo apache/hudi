@@ -24,6 +24,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.bucket.partition.PartitionBucketIndexCalculator;
 
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -35,6 +36,7 @@ import java.util.stream.Stream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+@Tag("functional")
 public class TestPartitionBucketIndexCalculator extends HoodieCommonTestHarness {
 
   private static final String DEFAULT_RULE = "regex";

@@ -118,6 +118,7 @@ public class TestDataSourceReadWithDeletes extends SparkClientFunctionalTestHarn
         "[id1,Danny,30,2,par1]",
         "[id3,Julian,40,2,par1]"};
     assertArrayEquals(expected, rows.stream().map(Row::toString).sorted().toArray(String[]::new));
+    client.close();
   }
 
   private HoodieWriteConfig createHoodieWriteConfig() {

@@ -44,6 +44,7 @@ import org.apache.hudi.testutils.HoodieWriteableTestTable;
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -63,6 +64,7 @@ import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+@Tag("functional")
 class TestGlobalSimpleIndex extends HoodieCommonTestHarness {
   private static final Schema SCHEMA = getSchemaFromResource(TestGlobalSimpleIndex.class, "/exampleSchema.avsc", true);
 

@@ -46,6 +46,7 @@ import org.apache.hudi.table.action.clean.CleanActionExecutor;
 import org.apache.hudi.table.action.clean.CleanPlanner;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
@@ -72,6 +73,7 @@ import static org.mockito.Mockito.when;
 /**
  * Tests Clean action executor.
  */
+@Tag("functional")
 public class TestCleanActionExecutor {
 
   private static final StorageConfiguration<?> CONF = getDefaultStorageConf();
