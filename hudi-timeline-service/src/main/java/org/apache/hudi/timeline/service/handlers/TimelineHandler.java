@@ -18,8 +18,12 @@
 
 package org.apache.hudi.timeline.service.handlers;
 
+import java.io.IOException;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.dto.InstantDTO;
 import org.apache.hudi.common.table.timeline.dto.TimelineDTO;
+import org.apache.hudi.common.table.timeline.versioning.v1.InstantComparatorV1;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.timeline.service.TimelineService;
@@ -45,5 +49,31 @@ public class TimelineHandler extends Handler {
 
   public TimelineDTO getTimeline(String basePath) {
     return TimelineDTO.fromTimeline(viewManager.getFileSystemView(basePath).getTimeline());
+  }
+
+  public org.apache.hudi.common.table.timeline.dto.v2.TimelineDTO getTimelineV2(String basePath) {
+    return org.apache.hudi.common.table.timeline.dto.v2.TimelineDTO.fromTimeline(viewManager.getFileSystemView(basePath).getTimeline());
+  }
+
+  public Object getInstantDetails(String basePath, String requestedTime, String action, String state)
+      throws IOException {
+    HoodieTimeline hoodieTimeline = viewManager.getFileSystemView(basePath).getTimeline();
+    try {
+      HoodieInstant requestedInstant = new HoodieInstant(
+          HoodieInstant.State.valueOf(state), action, requestedTime,
+          InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
+
+      switch (requestedInstant.getAction()) {
+        case HoodieTimeline.COMMIT_ACTION:
+        case HoodieTimeline.DELTA_COMMIT_ACTION:
+          return hoodieTimeline.readCommitMetadata(requestedInstant);
+        default:
+          // TODO: implement other actions
+          return null;
+      }
+    } catch (Exception e) {
+      // Input parameters might be invalid
+      return null;
+    }
   }
 }

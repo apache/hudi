@@ -32,6 +32,7 @@ import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import io.javalin.Javalin;
 import io.javalin.core.util.JavalinBindException;
+import org.apache.hudi.timeline.service.ui.UiHandler;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.util.thread.QueuedThreadPool;
 import org.eclipse.jetty.util.thread.ScheduledExecutorScheduler;
@@ -57,6 +58,7 @@ public class TimelineService {
   private transient Javalin app = null;
   private transient FileSystemViewManager fsViewsManager;
   private transient RequestHandler requestHandler;
+  private transient UiHandler uiHandler;
 
   public int getServerPort() {
     return serverPort;
@@ -375,8 +377,20 @@ public class TimelineService {
 
     requestHandler = new RequestHandler(
         app, storageConf, timelineServerConf, context, fsViewsManager);
+    uiHandler = new UiHandler(app);
     app.get("/", ctx -> ctx.result("Hello Hudi"));
     requestHandler.register();
+    uiHandler.register();
+    // API endpoint for returning timeline events dynamically
+    app.get("/api/timeline", ctx -> {
+      // Return some dynamic event data
+      String timelineData = "["
+          + "{\"id\": 1, \"content\": \"Event 1\", \"start\": \"2025-04-01\"},"
+          + "{\"id\": 2, \"content\": \"Event 2\", \"start\": \"2025-04-02\"},"
+          + "{\"id\": 3, \"content\": \"Event 3\", \"start\": \"2025-04-03\"}"
+          + "]";
+      ctx.result(timelineData).contentType("application/json");
+    });
   }
 
   public void run() throws IOException {

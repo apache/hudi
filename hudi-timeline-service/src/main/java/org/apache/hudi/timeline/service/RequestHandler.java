@@ -171,6 +171,18 @@ public class RequestHandler {
     return ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.MIN_INSTANT_PARAM, String.class).getOrDefault("");
   }
 
+  private static String getInstantParam(Context ctx) {
+    return ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.INSTANT_PARAM, String.class).getOrDefault("");
+  }
+
+  private static String getInstantActionParam(Context ctx) {
+    return ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.INSTANT_ACTION_PARAM, String.class).getOrDefault("");
+  }
+
+  private static String getInstantStateParam(Context ctx) {
+    return ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.INSTANT_STATE_PARAM, String.class).getOrDefault("");
+  }
+
   private static String getMarkerDirParam(Context ctx) {
     return ctx.queryParamAsClass(MarkerOperation.MARKER_DIR_PATH_PARAM, String.class).getOrDefault("");
   }
@@ -239,6 +251,19 @@ public class RequestHandler {
       metricsRegistry.add("TIMELINE", 1);
       TimelineDTO dto = instantHandler.getTimeline(getBasePathParam(ctx));
       writeValueAsString(ctx, dto);
+    }, false));
+
+    app.get(RemoteHoodieTableFileSystemView.TIMELINE_V2_URL, new ViewHandler(ctx -> {
+      metricsRegistry.add("TIMELINE_V2", 1);
+      org.apache.hudi.common.table.timeline.dto.v2.TimelineDTO dto = instantHandler.getTimelineV2(getBasePathParam(ctx));
+      writeValueAsString(ctx, dto);
+    }, false));
+
+    app.get(RemoteHoodieTableFileSystemView.INSTANT_DETAILS_URL, new ViewHandler(ctx -> {
+      metricsRegistry.add("INSTANT_DETAILS", 1);
+      Object instantDetailsObj = instantHandler.getInstantDetails(getBasePathParam(ctx),
+          getInstantParam(ctx), getInstantActionParam(ctx), getInstantStateParam(ctx));
+      writeValueAsString(ctx, instantDetailsObj);
     }, false));
   }
 
