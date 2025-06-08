@@ -76,7 +76,7 @@ public class TestDataSourceReadWithDeletes extends SparkClientFunctionalTestHarn
       + "    {\"name\": \"name\", \"type\": [\"null\", \"string\"]},\n"
       + "    {\"name\": \"age\", \"type\": [\"null\", \"int\"]},\n"
       + "    {\"name\": \"ts\", \"type\": [\"null\", \"long\"]},\n"
-      + "    {\"name\": \"part\", \"type\": [\"null\", \"string\"]}\n"
+      + "    {\"name\": \"partition_path\", \"type\": [\"null\", \"string\"]}\n"
       + "  ]\n"
       + "}";
 
@@ -111,7 +111,7 @@ public class TestDataSourceReadWithDeletes extends SparkClientFunctionalTestHarn
     List<Row> rows = spark().read().format("org.apache.hudi")
         .option("hoodie.datasource.query.type", "snapshot")
         .load(config.getBasePath())
-        .select("id", "name", "age", "ts", "part")
+        .select("id", "name", "age", "ts", "partition_path")
         .collectAsList();
     assertEquals(2, rows.size());
     String[] expected = new String[] {
@@ -172,10 +172,10 @@ public class TestDataSourceReadWithDeletes extends SparkClientFunctionalTestHarn
       record.put("name", parts[2]);
       record.put("age", Integer.parseInt(parts[3]));
       record.put("ts", Long.parseLong(parts[4]));
-      record.put("part", parts[5]);
+      record.put("partition_path", parts[5]);
       OverwriteWithLatestAvroPayload payload = new OverwriteWithLatestAvroPayload(record, (Long) record.get("ts"));
       return new HoodieAvroRecord<>(
-          new HoodieKey((String) record.get("id"), (String) record.get("part")),
+          new HoodieKey((String) record.get("id"), (String) record.get("partition_path")),
           payload,
           isDelete ? HoodieOperation.DELETE : HoodieOperation.INSERT);
     }).collect(Collectors.toList());

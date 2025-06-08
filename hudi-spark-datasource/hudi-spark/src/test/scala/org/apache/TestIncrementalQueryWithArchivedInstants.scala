@@ -32,18 +32,12 @@ import org.junit.jupiter.api.{BeforeEach, Tag, Test}
 import org.junit.jupiter.api.Assertions.{assertDoesNotThrow, assertFalse}
 import org.junit.jupiter.api.function.Executable
 
-import java.nio.file.{Files, Path}
-
 @Tag("functional")
 class TestIncrementalQueryWithArchivedInstants extends SparkClientFunctionalTestHarness {
-  var tmpDir: Path = _
   var tblPath: String = _
-
-  override def basePath(): String = tmpDir.toAbsolutePath.toUri.toString
 
   @BeforeEach
   def setUp(): Unit = {
-    tmpDir = Files.createTempDirectory("hudi_random")
     tblPath = basePath()
     super.runBeforeEach()
   }
