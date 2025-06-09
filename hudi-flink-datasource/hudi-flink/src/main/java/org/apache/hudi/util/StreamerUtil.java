@@ -86,6 +86,7 @@ import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Properties;
 
@@ -103,6 +104,8 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.compareTim
 public class StreamerUtil {
 
   private static final Logger LOG = LoggerFactory.getLogger(StreamerUtil.class);
+
+  public static final String FLINK_CHECKPOINT_ID = "flink_checkpoint_id";
 
   public static TypedProperties appendKafkaProps(FlinkStreamerConfig config) {
     TypedProperties properties = getProps(config);
@@ -353,6 +356,22 @@ public class StreamerUtil {
         } else {
           return conf.get(FlinkOptions.RECORD_MERGER_IMPLS);
         }
+    }
+  }
+
+  /**
+   * Write Flink checkpoint id as extra metadata, if write.extra.metadata.enabled is true.
+   *
+   * @param conf Flink configuration
+   * @param checkpointCommitMetadata commit metadata map
+   * @param checkpointId flink checkpoint id
+   */
+  public static void addFlinkCheckpointIdIntoMetaData(
+      Configuration conf,
+      HashMap<String, String> checkpointCommitMetadata,
+      long checkpointId) {
+    if (conf.get(FlinkOptions.WRITE_EXTRA_METADATA_ENABLED)) {
+      checkpointCommitMetadata.put(FLINK_CHECKPOINT_ID, String.valueOf(checkpointId));
     }
   }
 
