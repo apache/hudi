@@ -384,7 +384,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
 
     HoodieMetadataRecord record = new HoodieMetadataRecord(key, type, filesystemMetadata, bloomFilterMetadata,
         columnStatMetadata, recordIndexMetadata, secondaryIndexMetadata);
-    if (HoodieMetadataRecord.getClassSchema().hashCode() == schema.hashCode()) {
+    if (HoodieMetadataRecord.getClassSchema().equals(schema)) {
       // If the schema is same, we can return the record directly
       return Option.of(record);
     } else {
