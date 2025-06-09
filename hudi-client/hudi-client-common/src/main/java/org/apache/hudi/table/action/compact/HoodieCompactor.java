@@ -142,23 +142,14 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     // if this is a MDT, set up the instant range of log reader just like regular MDT snapshot reader.
     Option<InstantRange> instantRange = CompactHelpers.getInstance().getInstantRange(metaClient);
 
-    boolean useFileGroupReaderBasedCompaction = true;
-
-    if (useFileGroupReaderBasedCompaction) {
-      if (operationType == WriteOperationType.LOG_COMPACT) {
-        return context.parallelize(operations).map(
-                operation -> logCompact(config, operation, compactionInstantTime, instantRange, table, taskContextSupplier))
-            .flatMap(List::iterator);
-      } else {
-        ReaderContextFactory<T> readerContextFactory = context.getReaderContextFactory(metaClient);
-        return context.parallelize(operations).map(
-                operation -> compact(config, operation, compactionInstantTime, readerContextFactory.getContext(), table, taskContextSupplier))
-            .flatMap(List::iterator);
-      }
-    } else {
+    if (operationType == WriteOperationType.LOG_COMPACT) {
       return context.parallelize(operations).map(
-              operation -> compact(compactionHandler, metaClient, config, operation, compactionInstantTime, maxInstantTime,
-                  instantRange, taskContextSupplier, executionHelper))
+              operation -> logCompact(config, operation, compactionInstantTime, instantRange, table, taskContextSupplier))
+          .flatMap(List::iterator);
+    } else {
+      ReaderContextFactory<T> readerContextFactory = context.getReaderContextFactory(metaClient);
+      return context.parallelize(operations).map(
+              operation -> compact(config, operation, compactionInstantTime, readerContextFactory.getContext(), table, taskContextSupplier))
           .flatMap(List::iterator);
     }
   }
