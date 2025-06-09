@@ -804,3 +804,7 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 --- [2025-06-05 16:04:24] [release-v1.131.0] ---
 [ENG-22091][INTERNAL] Fix shutdown hook race condition in StorageBasedLockProvider (#1397)
 [AUDIT-1071]: Changelog for release-v1.130.0 (#1396)
+
+--- [2025-06-09 16:51:19] [release-v1.132.0] ---
+[ENG-28046][INTERNAL] Fix include = loading for default DFSPropertiesConfiguration (#1402)
+[AUDIT-1071]: Changelog for release-v1.131.0 (#1399)
