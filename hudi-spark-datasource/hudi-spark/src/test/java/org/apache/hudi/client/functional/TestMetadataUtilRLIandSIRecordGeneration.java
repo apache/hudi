@@ -61,6 +61,7 @@ import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.catalyst.InternalRow;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -90,6 +91,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
+@Tag("functional")
 public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBase {
 
   /**

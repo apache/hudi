@@ -50,6 +50,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.slf4j.Logger;
@@ -76,6 +77,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Tests the {@link RemoteHoodieTableFileSystemView} with metadata table enabled, using
  * {@link org.apache.hudi.common.table.view.HoodieTableFileSystemView} on the timeline server.
  */
+@Tag("functional")
 public class TestRemoteFileSystemViewWithMetadataTable extends HoodieSparkClientTestHarness {
   private static final Logger LOG = LoggerFactory.getLogger(TestRemoteFileSystemViewWithMetadataTable.class);
 
