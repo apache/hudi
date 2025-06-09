@@ -447,7 +447,7 @@ class HoodieSparkSqlWriterInternal {
               .asInstanceOf[SparkRDDWriteClient[_]]
             // Issue delete partitions
             instantTime = client.startCommit(commitActionType)
-            val writeResult =  DataSourceUtils.doDeletePartitionsOperation(client, partitionsToDelete, instantTime)
+            val writeResult = DataSourceUtils.doDeletePartitionsOperation(client, partitionsToDelete, instantTime)
             (writeResult, client)
 
           // Here all other (than DELETE, DELETE_PARTITION) write operations are handled
@@ -848,13 +848,7 @@ class HoodieSparkSqlWriterInternal {
         TableInstantInfo(basePath, instantTime, executor.getCommitActionType, executor.getWriteOperationType), Option.empty)
       (writeSuccessful, HOption.ofNullable(instantTime), compactionInstant, clusteringInstant, writeClient, tableConfig)
     } finally {
-      // close the write client in all cases
-      val asyncCompactionEnabled = isAsyncCompactionEnabled(writeClient, tableConfig, parameters, jsc.hadoopConfiguration())
-      val asyncClusteringEnabled = isAsyncClusteringEnabled(writeClient, parameters)
-      if (!asyncCompactionEnabled && !asyncClusteringEnabled) {
-        log.info("Closing write client")
-        writeClient.close()
-      }
+      handleWriteClientClosure(writeClient, tableConfig, parameters, jsc.hadoopConfiguration())
     }
   }
 
