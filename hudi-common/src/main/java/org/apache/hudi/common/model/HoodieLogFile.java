@@ -48,7 +48,7 @@ public class HoodieLogFile implements Serializable {
 
   private static final Comparator<HoodieLogFile> LOG_FILE_COMPARATOR = new LogFileComparator();
   private static final Comparator<HoodieLogFile> LOG_FILE_COMPARATOR_REVERSED = new LogFileComparator().reversed();
-  private static final Comparator<HoodieLogFile> COMPLETION_TIME_LOG_FILE_COMPARATOR = LogFileComparator.getCompletionTimeLogFileComparator();
+  private static final Comparator<HoodieLogFile> COMPLETION_TIME_LOG_FILE_COMPARATOR = new CompletionTimeLogFileComparator();
 
   private transient StoragePathInfo pathInfo;
   private transient StoragePath path;
@@ -216,27 +216,32 @@ public class HoodieLogFile implements Serializable {
   }
 
   /**
+   * Comparator to order log-files based on completion time.
+   */
+  public static class CompletionTimeLogFileComparator implements Comparator<HoodieLogFile>, Serializable {
+
+    @Override
+    public int compare(HoodieLogFile o1, HoodieLogFile o2) {
+      ValidationUtils.checkArgument(o1.getCompletionTime().isPresent() == o2.getCompletionTime().isPresent(),
+          String.format("We expect either all log files or no log file to have completion time %s %s", o1, o2));
+      if (o1.getCompletionTime().isPresent()) {
+        String completionTime1 = o1.getCompletionTime().get();
+        String completionTime2 = o2.getCompletionTime().get();
+        int comparisonResult = completionTime1.compareTo(completionTime2);
+        return comparisonResult != 0 ? comparisonResult : HoodieLogFile.getReverseLogFileComparator().compare(o1, o2);
+      } else {
+        return HoodieLogFile.getReverseLogFileComparator().compare(o1, o2);
+      }
+    }
+  }
+
+  /**
    * Comparator to order log-files.
    */
   public static class LogFileComparator implements Comparator<HoodieLogFile>, Serializable {
 
     private static final long serialVersionUID = 1L;
     private transient Comparator<String> writeTokenComparator;
-
-    private static Comparator<HoodieLogFile> getCompletionTimeLogFileComparator() {
-      return (entry1, entry2) -> {
-        ValidationUtils.checkArgument(entry1.getCompletionTime().isPresent() == entry2.getCompletionTime().isPresent(),
-            String.format("We expect either all log files or no log file to have completion time %s %s", entry1, entry2));
-        if (entry1.getCompletionTime().isPresent()) {
-          String completionTime1 = entry1.getCompletionTime().get();
-          String completionTime2 = entry2.getCompletionTime().get();
-          int comparisonResult = completionTime1.compareTo(completionTime2);
-          return comparisonResult != 0 ? comparisonResult : getReverseLogFileComparator().compare(entry1, entry2);
-        } else {
-          return getReverseLogFileComparator().compare(entry1, entry2);
-        }
-      };
-    }
 
     private Comparator<String> getWriteTokenComparator() {
       if (null == writeTokenComparator) {

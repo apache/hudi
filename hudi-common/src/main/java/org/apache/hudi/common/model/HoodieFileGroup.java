@@ -109,8 +109,8 @@ public class HoodieFileGroup implements Serializable {
    * <p>CAUTION: the log file must be added in sequence of the delta commit time.
    */
   public void addLogFile(CompletionTimeQueryView completionTimeQueryView, HoodieLogFile logFile) {
-    Option<String> completionTimeOpt = completionTimeQueryView.getCompletionTime(fileSlices.firstKey(), logFile.getDeltaCommitTime());
     String baseInstantTime = getBaseInstantTime(completionTimeQueryView, logFile);
+    Option<String> completionTimeOpt = completionTimeQueryView.getCompletionTime(baseInstantTime, logFile.getDeltaCommitTime());
     if (!fileSlices.containsKey(baseInstantTime)) {
       fileSlices.put(baseInstantTime, new FileSlice(fileGroupId, baseInstantTime));
     }
