@@ -222,13 +222,18 @@ public class HoodieLogFile implements Serializable {
 
     @Override
     public int compare(HoodieLogFile o1, HoodieLogFile o2) {
-      ValidationUtils.checkArgument(o1.getCompletionTime().isPresent() == o2.getCompletionTime().isPresent(),
-          String.format("We expect either all log files or no log file to have completion time %s %s", o1, o2));
-      if (o1.getCompletionTime().isPresent()) {
+      // For inflight log files, completion time would not be present.
+      if (o1.getCompletionTime().isPresent() && o2.getCompletionTime().isPresent()) {
         String completionTime1 = o1.getCompletionTime().get();
         String completionTime2 = o2.getCompletionTime().get();
         int comparisonResult = completionTime1.compareTo(completionTime2);
         return comparisonResult != 0 ? comparisonResult : HoodieLogFile.getReverseLogFileComparator().compare(o1, o2);
+      } else if (o1.getCompletionTime().isPresent()) {
+        // o1 is completed and o2 is inflight
+        return -1;
+      } else if (o2.getCompletionTime().isPresent()) {
+        // o1 is inflight and o2 is completed
+        return 1;
       } else {
         return HoodieLogFile.getReverseLogFileComparator().compare(o1, o2);
       }
