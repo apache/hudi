@@ -60,7 +60,6 @@ import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.sql.catalyst.InternalRow;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -719,8 +718,8 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       });
       TypedProperties properties = new TypedProperties();
       // configure un-merged log file reader
-      HoodieReaderContext<InternalRow> readerContext = context.getReaderContextFactory(metaClient).getContext();
-      HoodieFileGroupReader<InternalRow> reader = HoodieFileGroupReader.<InternalRow>newBuilder()
+      HoodieReaderContext readerContext = context.getReaderContextFactory(metaClient).getContext();
+      HoodieFileGroupReader reader = HoodieFileGroupReader.newBuilder()
           .withReaderContext(readerContext)
           .withDataSchema(writerSchemaOpt.get())
           .withRequestedSchema(writerSchemaOpt.get())
