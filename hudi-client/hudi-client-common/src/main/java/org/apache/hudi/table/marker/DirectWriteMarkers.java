@@ -193,7 +193,7 @@ public class DirectWriteMarkers extends WriteMarkers {
         LOG.warn("Marker Path={} already exists, cancel creation", markerPath);
         return Option.empty();
       }
-      LOG.info("Creating Marker Path={}", markerPath);
+      LOG.debug("Creating Marker Path={}", markerPath);
       storage.create(markerPath, false).close();
     } catch (IOException e) {
       throw new HoodieException("Failed to create marker file " + markerPath, e);
