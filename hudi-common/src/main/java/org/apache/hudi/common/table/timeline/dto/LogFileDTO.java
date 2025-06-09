@@ -19,6 +19,8 @@
 package org.apache.hudi.common.table.timeline.dto;
 
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.storage.StoragePathInfo;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
@@ -36,11 +38,15 @@ public class LogFileDTO {
   private String pathStr;
   @JsonProperty("len")
   private long fileLen;
+  @JsonProperty("completionTime")
+  private String completionTime;
 
   public static HoodieLogFile toHoodieLogFile(LogFileDTO dto) {
     StoragePathInfo pathInfo = FileStatusDTO.toStoragePathInfo(dto.fileStatus);
     HoodieLogFile logFile = (pathInfo == null) ? new HoodieLogFile(dto.pathStr) : new HoodieLogFile(pathInfo);
     logFile.setFileLen(dto.fileLen);
+    Option<String> completionTimeOpt = StringUtils.isNullOrEmpty(dto.completionTime) ? Option.empty() : Option.of(dto.completionTime);
+    logFile.setCompletionTime(completionTimeOpt);
     return logFile;
   }
 
@@ -49,6 +55,7 @@ public class LogFileDTO {
     logFile.fileLen = dataFile.getFileSize();
     logFile.pathStr = dataFile.getPath().toString();
     logFile.fileStatus = FileStatusDTO.fromStoragePathInfo(dataFile.getPathInfo());
+    logFile.completionTime = dataFile.getCompletionTime().orElse("");
     return logFile;
   }
 }

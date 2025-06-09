@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ObjectSizeCalculator;
 
 import org.junit.jupiter.api.Assertions;
@@ -36,6 +37,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.testutils.reader.HoodieFileSliceTestUtils.getMockMetaClient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -44,13 +46,14 @@ import static org.mockito.Mockito.when;
 class TestHoodieFileGroupSizeEstimator {
   @Test
   void estimatorSkipsTimeline() {
+    HoodieTableMetaClient metaClient = getMockMetaClient();
     HoodieFileGroup fileGroup1 = mock(HoodieFileGroup.class);
     HoodieFileGroup fileGroup2 = mock(HoodieFileGroup.class);
 
     // setup mocks
     HoodieFileGroupId fileGroupId = new HoodieFileGroupId("path1", UUID.randomUUID().toString());
     List<FileSlice> fileSlices = Collections.singletonList(new FileSlice(fileGroupId, "001",
-        new HoodieBaseFile("/tmp/" + FSUtils.makeBaseFileName("001", "1-0-1", fileGroupId.getFileId(), "parquet")), Collections.emptyList()));
+        new HoodieBaseFile("/tmp/" + FSUtils.makeBaseFileName("001", "1-0-1", fileGroupId.getFileId(), "parquet")), Collections.emptyList(), metaClient));
     when(fileGroup1.getFileGroupId()).thenReturn(fileGroupId);
     when(fileGroup1.getAllFileSlices()).thenReturn(fileSlices.stream()).thenReturn(fileSlices.stream());
 
@@ -65,13 +68,14 @@ class TestHoodieFileGroupSizeEstimator {
 
   @Test
   void estimatorWithManyFileSlices() {
+    HoodieTableMetaClient metaClient = getMockMetaClient();
     HoodieFileGroup fileGroup1 = mock(HoodieFileGroup.class);
     HoodieFileGroup fileGroup2 = mock(HoodieFileGroup.class);
 
     // setup mocks
     HoodieFileGroupId fileGroupId = new HoodieFileGroupId("path1", UUID.randomUUID().toString());
     List<FileSlice> fileSlices = IntStream.range(1, 100).mapToObj(i -> new FileSlice(fileGroupId, "001",
-        new HoodieBaseFile("/tmp/" + FSUtils.makeBaseFileName("00" + i, "1-0-1", fileGroupId.getFileId(), "parquet")), Collections.emptyList()))
+        new HoodieBaseFile("/tmp/" + FSUtils.makeBaseFileName("00" + i, "1-0-1", fileGroupId.getFileId(), "parquet")), Collections.emptyList(), metaClient))
         .collect(Collectors.toList());
     when(fileGroup1.getFileGroupId()).thenReturn(fileGroupId);
     when(fileGroup1.getAllFileSlices()).thenReturn(fileSlices.stream()).thenReturn(fileSlices.stream());

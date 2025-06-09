@@ -241,7 +241,7 @@ public class BootstrapOperator
     // filter out crushed log files
     fileSlice.getLogFiles()
         .filter(logFile -> isValidFile(logFile.getPathInfo()))
-        .forEach(scanFileSlice::addLogFile);
+        .forEach(logFile1 -> scanFileSlice.addLogFile(logFile1, Option.empty()));
 
     HoodieFileGroupReader<RowData> fileGroupReader = FormatUtils.createFileGroupReader(metaClient, writeConfig, internalSchemaManager, scanFileSlice,
         tableSchema, tableSchema, scanFileSlice.getLatestInstantTime(), FlinkOptions.REALTIME_PAYLOAD_COMBINE, true, Collections.emptyList(), Option.empty());

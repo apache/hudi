@@ -253,7 +253,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
         StoragePath storagePath2 = new StoragePath(partitionMetadataPath.getParent(), hoodieTestTable.getLogFileNameById(fileId1, 1));
         writeLogFiles(new StoragePath(metaClient.getBasePath(), p), HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS, dataGen.generateInsertsForPartition(instant2, 10, p), 1,
             metaClient.getStorage(), new Properties(), fileId1, instant2);
-        fileSlice2.addLogFile(new HoodieLogFile(storagePath2.toUri().toString()));
+        fileSlice2.addLogFile(new HoodieLogFile(storagePath2.toUri().toString()), Option.empty());
         partitionFileSlicePairs.add(Pair.of(p, fileSlice1));
         partitionFileSlicePairs.add(Pair.of(p, fileSlice2));
         // NOTE: we need to set table config as we are not using write client explicitly and these configs are needed for log record reader

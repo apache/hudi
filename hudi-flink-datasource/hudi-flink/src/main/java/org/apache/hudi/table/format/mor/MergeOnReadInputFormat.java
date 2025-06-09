@@ -332,7 +332,8 @@ public class MergeOnReadInputFormat
         // baseInstantTime in FileSlice is not used in FG reader
         "",
         split.getBasePath().map(HoodieBaseFile::new).orElse(null),
-        split.getLogPaths().map(logFiles -> logFiles.stream().map(HoodieLogFile::new).collect(Collectors.toList())).orElse(Collections.emptyList()));
+        split.getLogPaths().map(logFiles -> logFiles.stream().map(HoodieLogFile::new).collect(Collectors.toList())).orElse(Collections.emptyList()),
+        metaClient);
     return FormatUtils.createFileGroupReader(metaClient, writeConfig, internalSchemaManager, fileSlice,
         tableSchema, requiredSchema, split.getLatestCommit(), mergeType, emitDelete, predicates, split.getInstantRange());
   }

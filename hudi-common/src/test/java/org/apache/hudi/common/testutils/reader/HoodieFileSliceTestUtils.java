@@ -35,7 +35,10 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
+import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieCDCDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
@@ -43,6 +46,8 @@ import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieHFileDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieParquetDataBlock;
+import org.apache.hudi.common.table.timeline.CompletionTimeQueryView;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
@@ -60,11 +65,13 @@ import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -78,6 +85,8 @@ import static org.apache.hudi.common.testutils.FileCreateUtilsLegacy.logFileName
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
 import static org.apache.hudi.common.testutils.reader.DataGenerationPlan.OperationType.DELETE;
 import static org.apache.hudi.common.testutils.reader.DataGenerationPlan.OperationType.INSERT;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class HoodieFileSliceTestUtils {
   public static final String FORWARD_SLASH = "/";
@@ -381,10 +390,76 @@ public class HoodieFileSliceTestUtils {
           keyToPositionMap));
     }
 
+    HoodieTableMetaClient metaClient = getMockMetaClient();
     // Assemble the FileSlice finally.
     HoodieFileGroupId fileGroupId = new HoodieFileGroupId(partitionPath, fileId);
     String baseInstantTime = baseFile == null ? null : baseFile.getCommitTime();
-    return new FileSlice(fileGroupId, baseInstantTime, baseFile, logFiles);
+    return new FileSlice(fileGroupId, baseInstantTime, baseFile, logFiles, metaClient);
+  }
+
+  public static HoodieTableMetaClient getMockMetaClient() {
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+    when(metaClient.getTableConfig().getTableVersion()).thenReturn(HoodieTableVersion.EIGHT);
+    when(metaClient.getTimelineLayout().getTimelineFactory().createCompletionTimeQueryView(metaClient)).thenReturn(generateCompletionTimeQueryView());
+    return metaClient;
+  }
+
+  private static CompletionTimeQueryView generateCompletionTimeQueryView() {
+    return new CompletionTimeQueryView() {
+      @Override
+      public boolean isCompleted(String beginInstantTime) {
+        return true;
+      }
+
+      @Override
+      public boolean isArchived(String instantTime) {
+        return false;
+      }
+
+      @Override
+      public boolean isCompletedBefore(String baseInstant, String instantTime) {
+        return false;
+      }
+
+      @Override
+      public boolean isSlicedAfterOrOn(String baseInstant, String instantTime) {
+        return false;
+      }
+
+      @Override
+      public Option<String> getCompletionTime(String baseInstant, String instantTime) {
+        return Option.empty();
+      }
+
+      @Override
+      public Option<String> getCompletionTime(String beginTime) {
+        return Option.empty();
+      }
+
+      @Override
+      public List<String> getInstantTimes(HoodieTimeline timeline, Option<String> startCompletionTime, Option<String> endCompletionTime, InstantRange.RangeType rangeType) {
+        return Collections.emptyList();
+      }
+
+      @Override
+      public List<String> getInstantTimes(String startCompletionTime, String endCompletionTime, Function<String, String> earliestInstantTimeFunc) {
+        return Collections.emptyList();
+      }
+
+      @Override
+      public String getCursorInstant() {
+        return "";
+      }
+
+      @Override
+      public boolean isEmptyTable() {
+        return false;
+      }
+
+      @Override
+      public void close() throws Exception {
+      }
+    };
   }
 
   /**

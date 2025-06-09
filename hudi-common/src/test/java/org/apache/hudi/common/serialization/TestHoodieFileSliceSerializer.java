@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
@@ -32,6 +33,8 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
+
+import static org.apache.hudi.common.testutils.reader.HoodieFileSliceTestUtils.getMockMetaClient;
 
 class TestHoodieFileSliceSerializer {
   private static final String LOG_FILE_PATH_FORMAT = "file:///tmp/basePath/partitionPath/.fileId%s_100.log.%s_1-0-1";
@@ -43,6 +46,7 @@ class TestHoodieFileSliceSerializer {
 
   @Test
   void testSerDe() throws IOException {
+    HoodieTableMetaClient metaClient = getMockMetaClient();
     HoodieFileSliceSerializer hoodieFileSliceSerializer = new HoodieFileSliceSerializer();
     HoodieBaseFile baseFile1 = new HoodieBaseFile(new StoragePathInfo(BASE_FILE_STORAGE_PATH_1, 100, false, BLOCK_REPLICATION, 1024, 0));
     HoodieLogFile logFile1 = new HoodieLogFile(new StoragePathInfo(LOG_FILE_STORAGE_PATH_1, 100, false, BLOCK_REPLICATION, 1024, 0));
@@ -53,8 +57,8 @@ class TestHoodieFileSliceSerializer {
     HoodieLogFile logFile4 = new HoodieLogFile("/dummy/base/" + FSUtils.makeLogFileName("fileId-2", HoodieLogFile.DELTA_EXTENSION, "002", 2, "1-0-1"));
 
     List<FileSlice> fileSliceList = Arrays.asList(
-        new FileSlice(new HoodieFileGroupId("partition1", "fileId-1"), "001", baseFile1, Arrays.asList(logFile1, logFile2)),
-        new FileSlice(new HoodieFileGroupId("partition2", "fileId-2"), "001", baseFile2, Arrays.asList(logFile3, logFile4)),
+        new FileSlice(new HoodieFileGroupId("partition1", "fileId-1"), "001", baseFile1, Arrays.asList(logFile1, logFile2), metaClient),
+        new FileSlice(new HoodieFileGroupId("partition2", "fileId-2"), "001", baseFile2, Arrays.asList(logFile3, logFile4), metaClient),
         new FileSlice("partition3", "002", "fileId-3")
     );
 

@@ -177,8 +177,8 @@ public class CompactionTestUtils {
             Paths.get(basePath, partition, logFileName(instantTime, fileId, 1)).toString();
         String logFilePath2 =
             Paths.get(basePath, partition, logFileName(instantTime, fileId, 2)).toString();
-        slice.addLogFile(new HoodieLogFile(new StoragePath(logFilePath1)));
-        slice.addLogFile(new HoodieLogFile(new StoragePath(logFilePath2)));
+        slice.addLogFile(new HoodieLogFile(new StoragePath(logFilePath1)), Option.empty());
+        slice.addLogFile(new HoodieLogFile(new StoragePath(logFilePath2)), Option.empty());
         HoodieCompactionOperation op =
             CompactionUtils.buildFromFileSlice(partition, slice, Option.empty());
         if (deltaCommitsAfterCompactionRequests) {

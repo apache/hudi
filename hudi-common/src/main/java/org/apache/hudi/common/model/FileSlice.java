@@ -18,6 +18,9 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.timeline.CompletionTimeQueryView;
 import org.apache.hudi.common.table.timeline.InstantComparison;
 import org.apache.hudi.common.util.Option;
 
@@ -62,7 +65,7 @@ public class FileSlice implements Serializable {
     this.baseInstantTime = fileSlice.baseInstantTime;
     this.baseFile = fileSlice.baseFile != null ? new HoodieBaseFile(fileSlice.baseFile) : null;
     this.fileGroupId = fileSlice.fileGroupId;
-    this.logFiles = new TreeSet<>(HoodieLogFile.getReverseLogFileComparator());
+    this.logFiles = new TreeSet<>(HoodieLogFile.getCompletionTimeLogFileComparator());
     if (includeLogFiles) {
       fileSlice.logFiles.forEach(lf -> this.logFiles.add(new HoodieLogFile(lf)));
     }
@@ -76,23 +79,34 @@ public class FileSlice implements Serializable {
     this.fileGroupId = fileGroupId;
     this.baseInstantTime = baseInstantTime;
     this.baseFile = null;
-    this.logFiles = new TreeSet<>(HoodieLogFile.getReverseLogFileComparator());
+    this.logFiles = new TreeSet<>(HoodieLogFile.getCompletionTimeLogFileComparator());
   }
 
   public FileSlice(HoodieFileGroupId fileGroupId, String baseInstantTime,
-                   HoodieBaseFile baseFile, List<HoodieLogFile> logFiles) {
+                   HoodieBaseFile baseFile, List<HoodieLogFile> logFiles, HoodieTableMetaClient metaClient) {
     this.fileGroupId = fileGroupId;
     this.baseInstantTime = baseInstantTime;
     this.baseFile = baseFile;
-    this.logFiles = new TreeSet<>(HoodieLogFile.getReverseLogFileComparator());
-    this.logFiles.addAll(logFiles);
+    this.logFiles = new TreeSet<>(HoodieLogFile.getCompletionTimeLogFileComparator());
+    if (metaClient.getTableConfig().getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
+      CompletionTimeQueryView completionTimeQueryView = metaClient.getTimelineLayout().getTimelineFactory().createCompletionTimeQueryView(metaClient);
+      logFiles.forEach(lf -> {
+        lf.setCompletionTime(completionTimeQueryView.getCompletionTime(baseInstantTime, lf.getDeltaCommitTime()));
+        this.logFiles.add(lf);
+      });
+    } else {
+      this.logFiles.addAll(logFiles);
+    }
   }
 
   public void setBaseFile(HoodieBaseFile baseFile) {
     this.baseFile = baseFile;
   }
 
-  public void addLogFile(HoodieLogFile logFile) {
+  public void addLogFile(HoodieLogFile logFile, Option<String> completionTimeOpt) {
+    if (completionTimeOpt.isPresent()) {
+      logFile.setCompletionTime(completionTimeOpt);
+    }
     this.logFiles.add(logFile);
   }
 

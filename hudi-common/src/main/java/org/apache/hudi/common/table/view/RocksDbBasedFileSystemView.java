@@ -341,7 +341,7 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
                     Map<String, HoodieLogFile> newLogFiles = new HashMap<>(logFiles);
                     deltaLogFiles.entrySet().stream().filter(e -> !logFiles.containsKey(e.getKey()))
                         .forEach(p -> newLogFiles.put(p.getKey(), p.getValue()));
-                    newLogFiles.values().forEach(newFileSlice::addLogFile);
+                    newLogFiles.values().forEach(logFile -> newFileSlice.addLogFile(logFile, Option.empty()));
                     LOG.info("Adding back new File Slice after add FS={}", newFileSlice);
                     return newFileSlice;
                   }
@@ -355,7 +355,7 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
 
                     deltaLogFiles.keySet().forEach(logFiles::remove);
                     // Add remaining log files back
-                    logFiles.values().forEach(newFileSlice::addLogFile);
+                    logFiles.values().forEach(logFile -> newFileSlice.addLogFile(logFile, Option.empty()));
                     if (newFileSlice.getBaseFile().isPresent() || (newFileSlice.getLogFiles().count() > 0)) {
                       LOG.info("Adding back new file-slice after remove FS={}", newFileSlice);
                       return newFileSlice;

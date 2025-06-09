@@ -153,7 +153,7 @@ class TestPartitionDirectoryConverter extends SparkAdapterSupport {
     val sizePerLogRecord = fixedSizePerRecordWithParquetFormat / logFraction
     logRecordNums.zipWithIndex.foreach { case (logRecordNum, index) => {
       val logFile = buildHoodieLogFile(fileId, logRecordNum, sizePerLogRecord.toLong, index)
-      slice.addLogFile(logFile)
+      slice.addLogFile(logFile, org.apache.hudi.common.util.Option.empty())
     }}
     slice
   }
