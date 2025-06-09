@@ -105,7 +105,6 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
   protected Set<String> writtenRecordKeys;
   protected HoodieFileWriter fileWriter;
   protected boolean preserveMetadata = false;
-  protected boolean populateMetaFields;
 
   protected StoragePath newFilePath;
   protected StoragePath oldFilePath;
@@ -130,7 +129,6 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
                            Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
                            TaskContextSupplier taskContextSupplier, HoodieBaseFile baseFile, Option<BaseKeyGenerator> keyGeneratorOpt) {
     super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier);
-    this.populateMetaFields = config.populateMetaFields();
     init(recordItr);
     init(fileId, partitionPath, baseFile);
     validateAndSetAndKeyGenProps(keyGeneratorOpt, config.populateMetaFields());
@@ -145,7 +143,6 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier);
     this.keyToNewRecords = keyToNewRecords;
     this.preserveMetadata = true;
-    this.populateMetaFields = config.populateMetaFields();
     init(fileId, this.partitionPath, dataFileToBeMerged);
     validateAndSetAndKeyGenProps(keyGeneratorOpt, config.populateMetaFields());
   }
@@ -182,7 +179,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
    * Extract old file path, initialize StorageWriter and WriteStatus.
    */
   private void init(String fileId, String partitionPath, HoodieBaseFile baseFileToMerge) {
-    LOG.info("partitionPath:" + partitionPath + ", fileId to be merged:" + fileId);
+    LOG.info("partitionPath:{}, fileId to be merged:{}", partitionPath, fileId);
     this.baseFileToMerge = baseFileToMerge;
     this.writtenRecordKeys = new HashSet<>();
     writeStatus.setStat(new HoodieWriteStat());
@@ -220,7 +217,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       fileWriter = HoodieFileWriterFactory.getFileWriter(instantTime, newFilePath, hoodieTable.getStorage(),
           config, writeSchemaWithMetaFields, taskContextSupplier, recordMerger.getRecordType());
     } catch (IOException io) {
-      LOG.error("Error in update task at commit " + instantTime, io);
+      LOG.error("Error in update task at commit {}", instantTime, io);
       writeStatus.setGlobalError(io);
       throw new HoodieUpsertException("Failed to initialize HoodieUpdateHandle for FileId: " + fileId + " on commit "
           + instantTime + " on path " + hoodieTable.getMetaClient().getBasePath(), io);
@@ -243,7 +240,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     try {
       // Load the new records in a map
       long memoryForMerge = IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config);
-      LOG.info("MaxMemoryPerPartitionMerge => " + memoryForMerge);
+      LOG.info("MaxMemoryPerPartitionMerge => {}", memoryForMerge);
       this.keyToNewRecords = new ExternalSpillableMap<>(memoryForMerge, config.getSpillableMapBasePath(),
           new DefaultSizeEstimator<>(), new HoodieRecordSizeEstimator<>(writeSchema),
           config.getCommonConfig().getSpillableDiskMapType(),
@@ -279,12 +276,10 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       keyToNewRecords.put(record.getRecordKey(), record);
     }
     if (keyToNewRecords instanceof ExternalSpillableMap) {
-      LOG.info("Number of entries in MemoryBasedMap => "
-          + ((ExternalSpillableMap) keyToNewRecords).getInMemoryMapNumEntries()
-          + ", Total size in bytes of MemoryBasedMap => "
-          + ((ExternalSpillableMap) keyToNewRecords).getCurrentInMemoryMapSize() + ", Number of entries in BitCaskDiskMap => "
-          + ((ExternalSpillableMap) keyToNewRecords).getDiskBasedMapNumEntries() + ", Size of file spilled to disk => "
-          + ((ExternalSpillableMap) keyToNewRecords).getSizeOfFileOnDiskInBytes());
+      ExternalSpillableMap<String, HoodieRecord<T>> spillableMap = (ExternalSpillableMap<String, HoodieRecord<T>>) keyToNewRecords;
+      LOG.info("Number of entries in MemoryBasedMap => {}, Total size in bytes of MemoryBasedMap => {}, "
+          + "Number of entries in BitCaskDiskMap => {}, Size of file spilled to disk => {}",
+          spillableMap.getInMemoryMapNumEntries(), spillableMap.getCurrentInMemoryMapSize(), spillableMap.getDiskBasedMapNumEntries(), spillableMap.getSizeOfFileOnDiskInBytes());
     }
   }
 
@@ -360,7 +355,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       newRecord.deflate();
       return true;
     } catch (Exception e) {
-      LOG.error("Error writing record  " + newRecord, e);
+      LOG.error("Error writing record {}", newRecord, e);
       writeStatus.markFailure(newRecord, e, recordMetadata);
     }
     return false;
@@ -448,11 +443,6 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       HoodieRecord<T> hoodieRecord = newRecordsItr.next();
       writeInsertRecord(hoodieRecord);
     }
-  }
-
-  protected HoodieRecord<T> updateFileName(HoodieRecord<T> record, Schema schema, Schema targetSchema, String fileName, Properties prop) {
-    MetadataValues metadataValues = new MetadataValues().setFileName(fileName);
-    return record.prependMetaFields(schema, targetSchema, metadataValues, prop);
   }
 
   @Override
