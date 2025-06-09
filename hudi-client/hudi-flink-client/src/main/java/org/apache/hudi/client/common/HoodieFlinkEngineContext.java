@@ -26,6 +26,7 @@ import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.data.HoodieListPairData;
 import org.apache.hudi.common.data.HoodiePairData;
+import org.apache.hudi.common.engine.AvroReaderContextFactory;
 import org.apache.hudi.common.engine.EngineProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.ReaderContextFactory;
@@ -209,8 +210,12 @@ public class HoodieFlinkEngineContext extends HoodieEngineContext {
   }
 
   @Override
-  public <T> ReaderContextFactory<T> getReaderContextFactory(HoodieTableMetaClient metaClient) {
-    return (ReaderContextFactory<T>) ReflectionUtils.loadClass("org.apache.hudi.table.format.FlinkReaderContextFactory", metaClient);
+  public ReaderContextFactory<?> getReaderContextFactory(HoodieTableMetaClient metaClient) {
+    // metadata table reads currently only support Avro format
+    if (metaClient.isMetadataTable()) {
+      return new AvroReaderContextFactory(metaClient);
+    }
+    return (ReaderContextFactory<?>) ReflectionUtils.loadClass("org.apache.hudi.table.format.FlinkReaderContextFactory", metaClient);
   }
 
   /**
