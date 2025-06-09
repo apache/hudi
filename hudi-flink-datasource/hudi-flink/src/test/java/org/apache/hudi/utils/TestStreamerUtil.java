@@ -37,6 +37,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.HashMap;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -119,6 +120,18 @@ public class TestStreamerUtil {
     String lower = "20210705125806";
     long diff = StreamerUtil.instantTimeDiffSeconds(higher, lower);
     assertThat(diff, is(75L));
+  }
+
+  @Test
+  public void testAddCheckpointIdIntoMetadata() {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+
+    // Test for write extra metadata.
+    conf.set(FlinkOptions.WRITE_EXTRA_METADATA_ENABLED, true);
+
+    HashMap<String, String> metadata = new HashMap<>();
+    StreamerUtil.addFlinkCheckpointIdIntoMetaData(conf, metadata, 123L);
+    assertEquals(metadata.get(StreamerUtil.FLINK_CHECKPOINT_ID), "123");
   }
 
   @Test
