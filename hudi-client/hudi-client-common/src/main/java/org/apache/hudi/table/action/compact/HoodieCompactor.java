@@ -142,14 +142,22 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     // if this is a MDT, set up the instant range of log reader just like regular MDT snapshot reader.
     Option<InstantRange> instantRange = CompactHelpers.getInstance().getInstantRange(metaClient);
 
-    if (operationType == WriteOperationType.LOG_COMPACT) {
-      return context.parallelize(operations).map(
-              operation -> logCompact(config, operation, compactionInstantTime, instantRange, table, taskContextSupplier))
-          .flatMap(List::iterator);
+    boolean useuseFileGroupReaderBasedCompaction = !metaClient.isMetadataTable();
+    if (useuseFileGroupReaderBasedCompaction) {
+      if (operationType == WriteOperationType.LOG_COMPACT) {
+        return context.parallelize(operations).map(
+                operation -> logCompact(config, operation, compactionInstantTime, instantRange, table, taskContextSupplier))
+            .flatMap(List::iterator);
+      } else {
+        ReaderContextFactory<T> readerContextFactory = context.getReaderContextFactory(metaClient);
+        return context.parallelize(operations).map(
+                operation -> compact(config, operation, compactionInstantTime, readerContextFactory.getContext(), table, maxInstantTime, taskContextSupplier))
+            .flatMap(List::iterator);
+      }
     } else {
-      ReaderContextFactory<T> readerContextFactory = context.getReaderContextFactory(metaClient);
       return context.parallelize(operations).map(
-              operation -> compact(config, operation, compactionInstantTime, readerContextFactory.getContext(), table, taskContextSupplier))
+              operation -> compact(compactionHandler, metaClient, config, operation, compactionInstantTime, maxInstantTime,
+                  instantRange, taskContextSupplier, executionHelper))
           .flatMap(List::iterator);
     }
   }
@@ -288,9 +296,10 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
                                    String instantTime,
                                    HoodieReaderContext hoodieReaderContext,
                                    HoodieTable table,
+                                   String maxInstantTime,
                                    TaskContextSupplier taskContextSupplier) throws IOException {
     FileGroupReaderBasedMergeHandle<T, ?, ?, ?> mergeHandle = new FileGroupReaderBasedMergeHandle<>(writeConfig,
-        instantTime, table, getFileSliceFromOperation(operation, writeConfig.getBasePath()), operation, taskContextSupplier, hoodieReaderContext, getEngineRecordType());
+        instantTime, table, getFileSliceFromOperation(operation, writeConfig.getBasePath()), operation, taskContextSupplier, hoodieReaderContext, maxInstantTime, getEngineRecordType());
     mergeHandle.write();
     return mergeHandle.close();
   }
