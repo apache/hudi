@@ -86,7 +86,7 @@ public class DFSPropertiesConfiguration {
   }
 
   public DFSPropertiesConfiguration() {
-    this.hadoopConfig = null;
+    this.hadoopConfig = new Configuration();
     this.mainFilePath = null;
     this.hoodieConfig = new HoodieConfig();
     this.visitedFilePaths = new HashSet<>();
