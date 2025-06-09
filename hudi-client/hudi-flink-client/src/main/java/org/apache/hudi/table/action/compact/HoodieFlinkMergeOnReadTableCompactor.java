@@ -78,9 +78,9 @@ public class HoodieFlinkMergeOnReadTableCompactor<T>
                                    TaskContextSupplier taskContextSupplier,
                                    Option<HoodieReaderContext<?>> readerContextOpt,
                                    HoodieTable table) throws IOException {
+    String maxInstantTime = getMaxInstantTime(metaClient);
     if (readerContextOpt.isEmpty()) {
       LOG.info("Compact using legacy compaction, operation: {}.", operation);
-      String maxInstantTime = getMaxInstantTime(metaClient);
       return compact(
           compactionHandler,
           metaClient,
@@ -97,6 +97,7 @@ public class HoodieFlinkMergeOnReadTableCompactor<T>
           instantTime,
           readerContextOpt.get(),
           table,
+          maxInstantTime,
           taskContextSupplier);
     }
   }
