@@ -129,7 +129,9 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
   protected void readWithFileGroupReader(
       HoodieFileGroupReader<RowData> fileGroupReader,
       List<RowData> recordList,
-      Schema recordSchema) throws IOException {
+      Schema recordSchema,
+      HoodieReaderContext<RowData> readerContext,
+      boolean sortOutput) throws IOException {
     RowDataSerializer rowDataSerializer = RowDataAvroQueryContexts.getRowDataSerializer(recordSchema);
     try (ClosableIterator<RowData> iterator = fileGroupReader.getClosableIterator()) {
       while (iterator.hasNext()) {
