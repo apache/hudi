@@ -384,8 +384,8 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
 
     HoodieMetadataRecord record = new HoodieMetadataRecord(key, type, filesystemMetadata, bloomFilterMetadata,
         columnStatMetadata, recordIndexMetadata, secondaryIndexMetadata);
-    if (HoodieMetadataRecord.getClassSchema().equals(schema)) {
-      // If the schema is same, we can return the record directly
+    if (schema == null || HoodieMetadataRecord.getClassSchema().equals(schema)) {
+      // If the schema is same or none is provided, we can return the record directly
       return Option.of(record);
     } else {
       return Option.of(rewriteRecord(record, schema));
@@ -394,7 +394,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
 
   @Override
   public Option<IndexedRecord> getInsertValue(Schema schema) throws IOException {
-    return getInsertValue(schema, new Properties());
+    return getInsertValue(schema, null);
   }
 
   /**
