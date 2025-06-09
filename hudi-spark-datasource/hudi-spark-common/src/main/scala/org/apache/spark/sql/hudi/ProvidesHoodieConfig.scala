@@ -40,6 +40,7 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Literal}
+import org.apache.spark.sql.classic.ClassicConversions.castToImpl
 import org.apache.spark.sql.execution.datasources.FileStatusCache
 import org.apache.spark.sql.hive.HiveExternalCatalog
 import org.apache.spark.sql.hudi.HoodieOptionConfig.mapSqlOptionsToDataSourceWriteConfigs

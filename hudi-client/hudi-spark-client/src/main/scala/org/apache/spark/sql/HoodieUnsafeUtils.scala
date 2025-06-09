@@ -47,7 +47,7 @@ object HoodieUnsafeUtils {
     //       However in case of [[LogicalRDD]] plan's output-partitioning will be stubbed as [[UnknownPartitioning]]
     //       and therefore we will be falling back to determine number of partitions by looking at the RDD itself
     df.queryExecution.logical match {
-      case LogicalRDD(_, rdd, outputPartitioning, _, _) =>
+      case LogicalRDD(_, rdd, outputPartitioning, _, _, _) =>
         outputPartitioning match {
           case _: UnknownPartitioning => rdd.getNumPartitions
           case _ => outputPartitioning.numPartitions
@@ -64,7 +64,7 @@ object HoodieUnsafeUtils {
    * @param plan given plan to wrap into [[DataFrame]]
    */
   def createDataFrameFrom(spark: SparkSession, plan: LogicalPlan): DataFrame =
-    Dataset.ofRows(spark, plan)
+    org.apache.spark.sql.classic.Dataset.ofRows(spark.asInstanceOf[org.apache.spark.sql.classic.SparkSession], plan)
 
   /**
    * Creates [[DataFrame]] from the in-memory [[Seq]] of [[Row]]s with provided [[schema]]
@@ -77,7 +77,7 @@ object HoodieUnsafeUtils {
    * @param schema target [[DataFrame]]'s schema
    */
   def createDataFrameFromRows(spark: SparkSession, rows: Seq[Row], schema: StructType): DataFrame =
-    Dataset.ofRows(spark, LocalRelation.fromExternalRows(
+    org.apache.spark.sql.classic.Dataset.ofRows(spark.asInstanceOf[org.apache.spark.sql.classic.SparkSession], LocalRelation.fromExternalRows(
       SparkAdapterSupport.sparkAdapter.getSchemaUtils.toAttributes(schema), rows))
 
   /**
@@ -91,7 +91,7 @@ object HoodieUnsafeUtils {
    * @param schema target [[DataFrame]]'s schema
    */
   def createDataFrameFromInternalRows(spark: SparkSession, rows: Seq[InternalRow], schema: StructType): DataFrame =
-    Dataset.ofRows(spark, LocalRelation(SparkAdapterSupport.sparkAdapter.getSchemaUtils.toAttributes(schema), rows))
+    org.apache.spark.sql.classic.Dataset.ofRows(spark.asInstanceOf[org.apache.spark.sql.classic.SparkSession], LocalRelation(SparkAdapterSupport.sparkAdapter.getSchemaUtils.toAttributes(schema), rows))
 
 
   /**
@@ -102,7 +102,7 @@ object HoodieUnsafeUtils {
    * @param schema target [[DataFrame]]'s schema
    */
   def createDataFrameFromRDD(spark: SparkSession, rdd: RDD[InternalRow], schema: StructType): DataFrame =
-    spark.internalCreateDataFrame(rdd, schema)
+    spark.asInstanceOf[org.apache.spark.sql.classic.SparkSession].internalCreateDataFrame(rdd, schema)
 
   /**
    * Canonical implementation of the [[RDD#collect]] for [[HoodieUnsafeRDD]], returning a properly

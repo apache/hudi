@@ -26,6 +26,7 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.classic.ClassicConversions.castToImpl
 import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType

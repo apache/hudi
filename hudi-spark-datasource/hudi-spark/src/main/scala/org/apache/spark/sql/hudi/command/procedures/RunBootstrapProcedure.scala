@@ -29,6 +29,7 @@ import org.apache.hudi.storage.StoragePath
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
+import org.apache.spark.sql.classic.ClassicConversions.castToImpl
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util

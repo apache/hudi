@@ -152,7 +152,7 @@ trait SparkAdapter extends Serializable {
       case plan if !plan.resolved => None
       // NOTE: When resolving Hudi table we allow [[Filter]]s and [[Project]]s be applied
       //       on top of it
-      case PhysicalOperation(_, _, LogicalRelation(_, _, Some(table), _)) if isHoodieTable(table) => Some(table)
+      case PhysicalOperation(_, _, LogicalRelation(_, _, Some(table), _, _)) if isHoodieTable(table) => Some(table)
       case _ => None
     }
   }

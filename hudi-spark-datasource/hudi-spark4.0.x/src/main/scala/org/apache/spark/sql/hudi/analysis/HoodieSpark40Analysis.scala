@@ -67,10 +67,10 @@ case class HoodieSpark40DataSourceV2ToV1Fallback(sparkSession: SparkSession) ext
   private def convertToV1(rv2: DataSourceV2Relation, v2Table: HoodieInternalV2Table) = {
     val output = rv2.output
     val catalogTable = v2Table.catalogTable.map(_ => v2Table.v1Table)
-    val relation = new DefaultSource().createRelation(new SQLContext(sparkSession),
+    val relation = new DefaultSource().createRelation(sparkSession.sqlContext,
       buildHoodieConfig(v2Table.hoodieCatalogTable), v2Table.hoodieCatalogTable.tableSchema)
 
-    LogicalRelation(relation, output, catalogTable, isStreaming = false)
+    LogicalRelation(relation, output, catalogTable, isStreaming = false, Option.empty)
   }
 }
 
@@ -109,14 +109,14 @@ case class HoodieSpark40ResolveColumnsForInsertInto() extends ResolveInsertionBa
             val metadata = relation.tableMeta
             preprocess(i, metadata.identifier.quotedString, metadata.partitionSchema,
               Some(metadata))
-          case LogicalRelation(h: HadoopFsRelation, _, catalogTable, _) =>
+          case LogicalRelation(h: HadoopFsRelation, _, catalogTable, _, _) =>
             preprocess(i, catalogTable, h.partitionSchema)
-          case LogicalRelation(_: InsertableRelation, _, catalogTable, _) =>
+          case LogicalRelation(_: InsertableRelation, _, catalogTable, _, _) =>
             preprocess(i, catalogTable, new StructType())
           // The two conditions below are adapted to Hudi relations
-          case LogicalRelation(_: EmptyRelation, _, catalogTable, _) =>
+          case LogicalRelation(_: EmptyRelation, _, catalogTable, _, _) =>
             preprocess(i, catalogTable)
-          case LogicalRelation(_: HoodieBaseRelation, _, catalogTable, _) =>
+          case LogicalRelation(_: HoodieBaseRelation, _, catalogTable, _, _) =>
             preprocess(i, catalogTable)
           case _ => i
         }

@@ -34,7 +34,7 @@ object DataFrameUtil {
   def createFromInternalRows(sparkSession: SparkSession, schema:
   StructType, rdd: RDD[InternalRow]): DataFrame = {
     val logicalPlan = LogicalRDD(
-      SparkAdapterSupport.sparkAdapter.getSchemaUtils.toAttributes(schema), rdd)(sparkSession)
-    Dataset.ofRows(sparkSession, logicalPlan)
+      SparkAdapterSupport.sparkAdapter.getSchemaUtils.toAttributes(schema), rdd)(sparkSession.asInstanceOf[org.apache.spark.sql.classic.SparkSession])
+    org.apache.spark.sql.classic.Dataset.ofRows(sparkSession.asInstanceOf[org.apache.spark.sql.classic.SparkSession], logicalPlan)
   }
 }

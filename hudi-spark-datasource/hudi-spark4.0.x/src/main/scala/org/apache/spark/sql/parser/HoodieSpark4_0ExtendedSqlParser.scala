@@ -31,6 +31,7 @@ import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.parser.{ParseErrorListener, ParseException, ParserInterface}
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.trees.Origin
+import org.apache.spark.sql.classic.ClassicConversions.castToImpl
 import org.apache.spark.sql.internal.VariableSubstitution
 import org.apache.spark.sql.types._
 
@@ -139,6 +140,8 @@ class HoodieSpark4_0ExtendedSqlParser(session: SparkSession, delegate: ParserInt
       normalized.contains("show indexes") ||
       normalized.contains("refresh index")
   }
+
+  override def parseRoutineParam(sqlText: String): StructType = throw new UnsupportedOperationException()
 }
 
 /**

@@ -1010,7 +1010,7 @@ class HoodieSpark4_0ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
 
     // Note that mapValues creates a view instead of materialized map. We force materialization by
     // mapping over identity.
-    WithWindowDefinition(windowMapView.map(identity).toMap, query)
+    WithWindowDefinition(windowMapView.map(identity).toMap, query, forPipeSQL = false)
   }
 
   /**
@@ -3290,7 +3290,7 @@ class HoodieSpark4_0ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
     val partitioning =
     partitionExpressions(partTransforms, partCols, ctx) ++ bucketSpec.map(_.asTransform)
     val tableSpec = TableSpec(properties, provider, options, location, comment,
-      serdeInfo, external)
+      Option.empty, serdeInfo, external)
 
     Option(ctx.query).map(plan) match {
       case Some(_) if columns.nonEmpty =>

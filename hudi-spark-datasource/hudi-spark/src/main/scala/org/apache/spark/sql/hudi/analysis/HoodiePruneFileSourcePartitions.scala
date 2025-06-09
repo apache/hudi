@@ -41,7 +41,7 @@ import org.apache.spark.sql.types.StructType
 case class HoodiePruneFileSourcePartitions(spark: SparkSession) extends Rule[LogicalPlan] {
 
   override def apply(plan: LogicalPlan): LogicalPlan = plan transformDown {
-    case op @ PhysicalOperation(projects, filters, lr @ LogicalRelation(HoodieRelationMatcher(fileIndex), _, _, _))
+    case op @ PhysicalOperation(projects, filters, lr @ LogicalRelation(HoodieRelationMatcher(fileIndex), _, _, _, _))
       if !fileIndex.hasPredicatesPushedDown =>
 
       val deterministicFilters = filters.filter(f => f.deterministic && !SubqueryExpression.hasSubquery(f))

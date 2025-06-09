@@ -48,7 +48,7 @@ object BucketPartitionUtils {
       .keyBy(row => getPartitionKey(row))
       .repartitionAndSortWithinPartitions(partitioner)
       .values
-    df.sparkSession.internalCreateDataFrame(reRdd, df.schema)
+    df.sparkSession.asInstanceOf[org.apache.spark.sql.classic.SparkSession].internalCreateDataFrame(reRdd, df.schema)
   }
 
   def getRemotePartitioner(viewConf: FileSystemViewStorageConfig, numBucketsFunction: NumBucketsFunction, partitionNum: Int): Partitioner = {

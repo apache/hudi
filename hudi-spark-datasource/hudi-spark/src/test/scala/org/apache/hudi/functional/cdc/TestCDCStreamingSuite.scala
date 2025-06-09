@@ -22,9 +22,10 @@ import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode
 import org.apache.hudi.config.HoodieWriteConfig
 
-import org.apache.spark.sql.{Column, Dataset, Row, SaveMode}
+import org.apache.spark.sql.{Column, Dataset, ExpressionColumnNodeWrapper, Row, SaveMode}
 import org.apache.spark.sql.QueryTest.checkAnswer
 import org.apache.spark.sql.catalyst.expressions.{Add, If, Literal}
+import org.apache.spark.sql.classic.ColumnConversions.toRichColumn
 import org.apache.spark.sql.execution.streaming.MemoryStream
 import org.apache.spark.sql.functions._
 import org.junit.jupiter.params.ParameterizedTest
@@ -127,7 +128,8 @@ class TestCDCStreamingSuite extends HoodieCDCTestBase {
             get_json_object(col("after"), "$.ts").as("ts")
           )
           // aggregate data by country, get the delta change about the population of a country.
-          .withColumn("bcnt", new Column(beforeCntExpr)).withColumn("acnt", new Column(afterCntExpr))
+          .withColumn("bcnt", new Column(ExpressionColumnNodeWrapper.apply(beforeCntExpr)))
+          .withColumn("acnt", new Column(ExpressionColumnNodeWrapper.apply(afterCntExpr)))
           .select(
             explode(array(Array(
               struct(col("bcountry").as("country"), col("bcnt").as("cnt"), col("ts")),
@@ -140,8 +142,8 @@ class TestCDCStreamingSuite extends HoodieCDCTestBase {
           .join(current, Seq("country"), "left")
           .select(
             col("country"),
-            new Column(
-              Add(col("sum(cnt)").expr, If(isnull(col("population")).expr, Literal(0), col("population").expr))).as("population"),
+            new Column(ExpressionColumnNodeWrapper.apply(
+              Add(col("sum(cnt)").expr, If(isnull(col("population")).expr, Literal(0), col("population").expr)))).as("population"),
             col("max(ts)").as("ts")
           )
           .write.format("hudi")

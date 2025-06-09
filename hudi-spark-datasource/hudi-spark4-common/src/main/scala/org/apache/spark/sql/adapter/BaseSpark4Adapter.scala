@@ -160,7 +160,7 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
                           isSplitable: Boolean,
                           maxSplitSize: Long): Seq[PartitionedFile] = {
     partitionDirectory.files.flatMap(file =>
-      PartitionedFileUtil.splitFiles(file, isSplitable, maxSplitSize, partitionDirectory.values)
+      PartitionedFileUtil.splitFiles(file, file.getPath, isSplitable, maxSplitSize, partitionDirectory.values)
     )
   }
 }

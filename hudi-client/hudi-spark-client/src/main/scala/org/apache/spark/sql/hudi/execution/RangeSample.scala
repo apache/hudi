@@ -537,7 +537,7 @@ object RangeSampleSort {
           mutablePair.update(unsafeRow, zValues)
         }
       }.sortBy(x => ByteArraySorting(x._2), numPartitions = fileNum).map(_._1)
-      spark.internalCreateDataFrame(indexRdd, schema)
+      spark.asInstanceOf[org.apache.spark.sql.classic.SparkSession].internalCreateDataFrame(indexRdd, schema)
     }
   }
 }

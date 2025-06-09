@@ -56,7 +56,7 @@ abstract class SparkBaseNestedSchemaPruning extends Rule[LogicalPlan] {
       // NOTE: This is modified to accommodate for Hudi's custom relations, given that original
       //       [[NestedSchemaPruning]] rule is tightly coupled w/ [[HadoopFsRelation]]
       // TODO generalize to any file-based relation
-      l @ LogicalRelation(relation: HoodieBaseRelation, _, _, _))
+      l @ LogicalRelation(relation: HoodieBaseRelation, _, _, _, _))
         if relation.canPruneRelationSchema =>
 
         prunePhysicalColumns(l.output, projects, filters, relation.dataSchema,

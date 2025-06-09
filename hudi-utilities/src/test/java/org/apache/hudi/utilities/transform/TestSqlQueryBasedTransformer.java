@@ -27,6 +27,7 @@ import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.util.Collections;
 
 import static org.apache.hudi.testutils.HoodieClientTestUtils.getSparkConfForTest;
@@ -37,7 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public class TestSqlQueryBasedTransformer {
 
   @Test
-  public void testSqlQuery() {
+  public void testSqlQuery() throws IOException {
 
     SparkSession spark = SparkSession
         .builder()

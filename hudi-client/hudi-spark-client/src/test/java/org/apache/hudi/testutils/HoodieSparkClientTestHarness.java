@@ -206,7 +206,7 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
     jsc = new JavaSparkContext(sparkContext);
     jsc.setLogLevel("ERROR");
     storageConf = HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration());
-    sparkSession = SparkSession.builder()
+    sparkSession = org.apache.spark.sql.classic.SparkSession.builder()
         .withExtensions(JFunction.toScala(sparkSessionExtensions -> {
           sparkSessionExtensionsInjector.ifPresent(injector -> injector.accept(sparkSessionExtensions));
           return null;
@@ -214,7 +214,7 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
         .config(jsc.getConf())
         .getOrCreate();
 
-    sqlContext = new SQLContext(sparkSession);
+    sqlContext = new org.apache.spark.sql.classic.SQLContext((org.apache.spark.sql.classic.SparkSession) sparkSession);
     context = new HoodieSparkEngineContext(jsc, sqlContext);
 
     // NOTE: It's important to set Spark's `Tests.IS_TESTING` so that our tests are recognized

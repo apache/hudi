@@ -517,6 +517,60 @@ jobs:
         run:
           mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_OTHERS_FILTER -DfailIfNoTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
 
+  test-spark4-java17-all-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - scalaProfile: "scala-2.13"
+            sparkProfile: "spark4.0"
+            sparkModules: "hudi-spark-datasource/hudi-spark4.0.x"
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          architecture: x64
+      - name: Build Project
+        run:
+          mvn clean install -T 2 -Pjava17 -D"scala-2.13" -D"spark4.0" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,hudi-spark-datasource/hudi-spark4.0.x"
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          architecture: x64
+      - name: Quickstart Test
+        run:
+          mvn test -Punit-tests -Pjava17 -D"scala-2.13" -D"spark4.0" -DwildcardSuites=skipScalaTests -DfailIfNoTests=false -pl hudi-examples/hudi-examples-spark $MVN_ARGS
+      - name: Java UT 1 - Common & Spark
+        run:
+          mvn test -Punit-tests -Pjava17 -D"scala-2.13" -D"spark4.0" -DwildcardSuites=skipScalaTests $JAVA_UT_FILTER1 -DfailIfNoTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,hudi-spark-datasource/hudi-spark4.0.x" $MVN_ARGS
+      - name: Java UT 2 - Common & Spark
+        run:
+          mvn test -Punit-tests -Pjava17 -D"scala-2.13" -D"spark4.0" -DwildcardSuites=skipScalaTests $JAVA_UT_FILTER2 -DfailIfNoTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,hudi-spark-datasource/hudi-spark4.0.x" $MVN_ARGS
+      - name: Java FTA - Spark
+        run:
+          mvn test -Pfunctional-tests -Pjava17 -D"scala-2.13" -D"spark4.0" -pl "$SPARK_COMMON_MODULES,hudi-spark-datasource/hudi-spark4.0.x" $MVN_ARGS
+      - name: Java FTB - Spark
+        run:
+          mvn test -Pfunctional-tests-b -Pjava17 -D"scala-2.13" -D"spark4.0" -pl "$SPARK_COMMON_MODULES,hudi-spark-datasource/hudi-spark4.0.x" $MVN_ARGS
+      - name: Scala UT DML - Common & Spark
+        run:
+          mvn test -Punit-tests -Pjava17 -D"scala-2.13" -D"spark4.0" -Dtest=skipJavaTests $SCALA_TEST_DML_FILTER -DfailIfNoTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,hudi-spark-datasource/hudi-spark4.0.x" $MVN_ARGS
+      - name: Scala FT DML - Spark
+        run:
+          mvn test -Pfunctional-tests -Pjava17 -D"scala-2.13" -D"spark4.0" -Dtest=skipJavaTests $SCALA_TEST_DML_FILTER -DfailIfNoTests=false -pl "$SPARK_COMMON_MODULES,hudi-spark-datasource/hudi-spark4.0.x" $MVN_ARGS
+      - name: Scala UT Other - Common & Spark
+        run:
+          mvn test -Punit-tests -Pjava17 -D"scala-2.13" -D"spark4.0" -Dtest=skipJavaTests $SCALA_TEST_OTHERS_FILTER -DfailIfNoTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,hudi-spark-datasource/hudi-spark4.0.x" $MVN_ARGS
+      - name: Scala FT Other - Spark
+        run:
+          mvn test -Pfunctional-tests -Pjava17 -D"scala-2.13" -D"spark4.0" -Dtest=skipJavaTests $SCALA_TEST_OTHERS_FILTER -DfailIfNoTests=false -pl "$SPARK_COMMON_MODULES,hudi-spark-datasource/hudi-spark4.0.x" $MVN_ARGS
+
   test-spark-java11-17-java-unit-tests:
     runs-on: ubuntu-latest
     strategy:

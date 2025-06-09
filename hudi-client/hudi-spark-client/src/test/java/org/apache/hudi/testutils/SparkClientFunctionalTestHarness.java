@@ -220,7 +220,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
       SparkConf sparkConf = conf();
       HoodieSparkKryoRegistrar$.MODULE$.register(sparkConf);
       SparkRDDReadClient.addHoodieSupport(sparkConf);
-      spark = SparkSession.builder().config(sparkConf).getOrCreate();
+      spark = org.apache.spark.sql.classic.SparkSession.builder().config(sparkConf).getOrCreate();
       sqlContext = spark.sqlContext();
       HoodieClientTestUtils.overrideSparkHadoopConfiguration(spark.sparkContext());
       jsc = new JavaSparkContext(spark.sparkContext());
@@ -240,7 +240,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
   @AfterAll
   public static synchronized void resetSpark() {
     if (spark != null) {
-      spark.close();
+      ((org.apache.spark.sql.classic.SparkSession) spark).close();
       spark = null;
     }
     if (timelineService != null) {

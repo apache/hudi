@@ -44,6 +44,7 @@ import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeRef
 import org.apache.spark.sql.catalyst.expressions.BindReferences.bindReference
 import org.apache.spark.sql.catalyst.plans.{LeftOuter, QueryPlan}
 import org.apache.spark.sql.catalyst.plans.logical._
+import org.apache.spark.sql.classic.SparkSession
 import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.execution.command.DataWritingCommand
 import org.apache.spark.sql.execution.metric.SQLMetric

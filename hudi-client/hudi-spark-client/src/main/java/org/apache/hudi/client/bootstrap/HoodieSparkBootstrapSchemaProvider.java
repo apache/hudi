@@ -76,7 +76,7 @@ public class HoodieSparkBootstrapSchemaProvider extends HoodieBootstrapSchemaPro
     // TODO(HUDI-4932): add a config to allow type inference of partition column in bootstrap and
     //  support other types of partition column as well
     ((HoodieSparkEngineContext) context).getSqlContext()
-        .setConf(SQLConf.PARTITION_COLUMN_TYPE_INFERENCE(), false);
+        .setConf(SQLConf.PARTITION_COLUMN_TYPE_INFERENCE().key(), "false");
     StructType parquetSchema = ((HoodieSparkEngineContext) context).getSqlContext().read()
         .option("basePath", writeConfig.getBootstrapSourceBasePath())
         .parquet(filePath.toString())

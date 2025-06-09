@@ -28,6 +28,7 @@ import org.apache.hudi.keygen.{ComplexKeyGenerator, CustomKeyGenerator}
 import org.apache.spark.sql.{RuntimeConfig, SparkSession, SQLContext}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.{CatalogStorageFormat, CatalogTable, CatalogTableType, HoodieCatalogTable}
+import org.apache.spark.sql.classic.ClassicConversions.castToImpl
 import org.apache.spark.sql.internal.{SessionState, SQLConf, StaticSQLConf}
 import org.apache.spark.sql.types.StructType
 import org.junit.jupiter.api.Assertions.assertEquals

@@ -25,6 +25,7 @@ import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hadoop.hive.conf.HiveConf
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
+import org.apache.spark.sql.classic.ClassicConversions.castToImpl
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 

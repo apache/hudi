@@ -20,6 +20,7 @@ package org.apache.hudi
 
 import org.apache.hudi.testutils.HoodieClientTestBase
 
+import org.apache.spark.sql.classic.ColumnConversions.toRichColumn
 import org.apache.spark.sql.functions.expr
 import org.apache.spark.sql.sources.Filter
 import org.junit.jupiter.api.Assertions.assertEquals

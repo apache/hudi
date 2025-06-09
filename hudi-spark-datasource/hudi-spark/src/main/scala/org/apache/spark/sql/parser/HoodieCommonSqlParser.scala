@@ -114,6 +114,8 @@ class HoodieCommonSqlParser(session: SparkSession, delegate: ParserInterface)
         throw sparkAdapter.newParseException(Option(command), e, position, position)
     }
   }
+
+  override def parseRoutineParam(sqlText: String): StructType = throw new UnsupportedOperationException()
 }
 
 /**

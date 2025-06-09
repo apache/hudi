@@ -170,7 +170,7 @@
     <spark33.version>3.3.4</spark33.version>
     <spark34.version>3.4.3</spark34.version>
     <spark35.version>3.5.5</spark35.version>
-    <spark40.version>4.0.0-preview1</spark40.version>
+    <spark40.version>4.0.0</spark40.version>
     <hudi.spark.module>hudi-spark3.5.x</hudi.spark.module>
     <hudi.spark.common.module>hudi-spark3-common</hudi.spark.common.module>
     <avro.version>1.11.4</avro.version>

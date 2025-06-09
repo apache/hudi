@@ -29,6 +29,7 @@ import org.apache.spark.sql.catalyst.expressions.{Alias, AttributeReference, Exp
 import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
 import org.apache.spark.sql.catalyst.plans.QueryPlan
 import org.apache.spark.sql.catalyst.plans.logical.{Assignment, Filter, LogicalPlan, Project, UpdateTable}
+import org.apache.spark.sql.classic.SparkSession
 import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.execution.command.DataWritingCommand
 import org.apache.spark.sql.execution.metric.SQLMetric

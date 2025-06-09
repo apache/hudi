@@ -31,6 +31,7 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
+import org.apache.spark.sql.classic.ClassicConversions.castToImpl
 import org.apache.spark.sql.hudi.HoodieOptionConfig
 import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 import org.apache.spark.sql.types.{StructField, StructType}

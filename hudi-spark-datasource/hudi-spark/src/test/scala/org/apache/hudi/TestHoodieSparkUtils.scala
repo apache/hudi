@@ -24,6 +24,7 @@ import org.apache.hudi.testutils.HoodieClientTestUtils.getSparkConfForTest
 
 import org.apache.avro.generic.GenericRecord
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
+import org.apache.spark.sql.classic.ClassicConversions.castToImpl
 import org.apache.spark.sql.types.{ArrayType, StructField, StructType}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test

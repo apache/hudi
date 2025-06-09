@@ -20,13 +20,13 @@ package org.apache.spark.sql.hudi.command
 import org.apache.hudi.{HoodieSparkSqlWriter, SparkAdapterSupport}
 import org.apache.hudi.exception.HoodieException
 
-import org.apache.spark.SparkContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HoodieCatalogTable}
 import org.apache.spark.sql.catalyst.expressions.{Alias, Cast, Literal, NamedExpression}
 import org.apache.spark.sql.catalyst.plans.QueryPlan
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project}
+import org.apache.spark.sql.classic.SparkSession
 import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.execution.command.DataWritingCommand
 import org.apache.spark.sql.execution.datasources.LogicalRelation
