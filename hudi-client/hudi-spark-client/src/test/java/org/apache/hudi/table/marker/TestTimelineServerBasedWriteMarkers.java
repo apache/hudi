@@ -99,7 +99,7 @@ public class TestTimelineServerBasedWriteMarkers extends TestWriteMarkersBase {
     assertIterableEquals(expectedMarkers, allMarkers);
     // Verifies the marker type file
     StoragePath markerTypeFilePath = new StoragePath(markerFolderPath, MarkerUtils.MARKER_TYPE_FILENAME);
-    assertTrue(MarkerUtils.doesMarkerTypeFileExist(storage, markerFolderPath.toString()));
+    assertTrue(MarkerUtils.doesMarkerTypeFileExist(storage, markerFolderPath));
     InputStream inputStream = storage.open(markerTypeFilePath);
     assertEquals(MarkerType.TIMELINE_SERVER_BASED.toString(),
         FileIOUtils.readAsUTFString(inputStream));

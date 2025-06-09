@@ -118,12 +118,11 @@ public class RequestHandler {
    * @param ctx             Javalin context
    * @param obj             object to serialize
    * @param metricsRegistry {@code Registry} instance for storing metrics
-   * @param logger          {@code Logger} instance
    * @return JSON String from the input object
    * @throws JsonProcessingException
    */
   public static String jsonifyResult(
-      Context ctx, Object obj, Registry metricsRegistry, Logger logger)
+      Context ctx, Object obj, Registry metricsRegistry)
       throws JsonProcessingException {
     HoodieTimer timer = HoodieTimer.start();
     boolean prettyPrint = ctx.queryParam("pretty") != null;
@@ -133,8 +132,8 @@ public class RequestHandler {
     final long jsonifyTime = timer.endTimer();
     metricsRegistry.add("WRITE_VALUE_CNT", 1);
     metricsRegistry.add("WRITE_VALUE_TIME", jsonifyTime);
-    if (logger.isDebugEnabled()) {
-      logger.debug("Jsonify TimeTaken={}", jsonifyTime);
+    if (LOG.isDebugEnabled()) {
+      LOG.debug("Jsonify TimeTaken={}", jsonifyTime);
     }
     return result;
   }
@@ -208,14 +207,14 @@ public class RequestHandler {
   }
 
   private void writeValueAsStringSync(Context ctx, Object obj) throws JsonProcessingException {
-    String result = jsonifyResult(ctx, obj, metricsRegistry, LOG);
+    String result = jsonifyResult(ctx, obj, metricsRegistry);
     ctx.result(result);
   }
 
   private void writeValueAsStringAsync(Context ctx, Object obj) {
     ctx.future(CompletableFuture.supplyAsync(() -> {
       try {
-        return jsonifyResult(ctx, obj, metricsRegistry, LOG);
+        return jsonifyResult(ctx, obj, metricsRegistry);
       } catch (JsonProcessingException e) {
         throw new HoodieException("Failed to JSON encode the value", e);
       }

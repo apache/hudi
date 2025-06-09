@@ -269,7 +269,7 @@ public class MarkerHandler extends Handler {
     MarkerCreationFuture future = new MarkerCreationFuture(context, markerDir, markerName);
     try {
       future.complete(jsonifyResult(
-          future.getContext(), future.isSuccessful(), metricsRegistry, LOG));
+          future.getContext(), future.isSuccessful(), metricsRegistry));
     } catch (JsonProcessingException e) {
       throw new HoodieException("Failed to JSON encode the value", e);
     }

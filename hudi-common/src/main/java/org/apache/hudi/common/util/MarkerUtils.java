@@ -99,15 +99,6 @@ public class MarkerUtils {
    * @param markerDir marker directory.
    * @return {@code true} if the MARKERS.type file exists; {@code false} otherwise.
    */
-  public static boolean doesMarkerTypeFileExist(HoodieStorage storage, String markerDir) throws IOException {
-    return storage.exists(new StoragePath(markerDir, MARKER_TYPE_FILENAME));
-  }
-
-  /**
-   * @param storage   {@link HoodieStorage} to use.
-   * @param markerDir marker directory.
-   * @return {@code true} if the MARKERS.type file exists; {@code false} otherwise.
-   */
   public static boolean doesMarkerTypeFileExist(HoodieStorage storage, StoragePath markerDir) throws IOException {
     return storage.exists(new StoragePath(markerDir, MARKER_TYPE_FILENAME));
   }
@@ -120,11 +111,11 @@ public class MarkerUtils {
    * @return the marker type, or empty if the marker type file does not exist.
    */
   public static Option<MarkerType> readMarkerType(HoodieStorage storage, String markerDir) {
-    StoragePath markerTypeFilePath = new StoragePath(markerDir, MARKER_TYPE_FILENAME);
+    StoragePath markerDirPath = new StoragePath(markerDir);
+    StoragePath markerTypeFilePath = new StoragePath(markerDirPath, MARKER_TYPE_FILENAME);
     InputStream inputStream = null;
-    Option<MarkerType> content = Option.empty();
     try {
-      if (!doesMarkerTypeFileExist(storage, markerDir)) {
+      if (!doesMarkerTypeFileExist(storage, markerDirPath)) {
         return Option.empty();
       }
       inputStream = storage.open(markerTypeFilePath);
@@ -132,14 +123,13 @@ public class MarkerUtils {
       if (StringUtils.isNullOrEmpty(markerType)) {
         return Option.empty();
       }
-      content = Option.of(MarkerType.valueOf(markerType));
+      return Option.of(MarkerType.valueOf(markerType));
     } catch (IOException e) {
       throw new HoodieIOException("Cannot read marker type file " + markerTypeFilePath
           + "; " + e.getMessage(), e);
     } finally {
       closeQuietly(inputStream);
     }
-    return content;
   }
 
   /**

@@ -256,7 +256,7 @@ public class MarkerDirState implements Serializable {
     for (MarkerCreationFuture future : pendingMarkerCreationFutures) {
       try {
         future.complete(jsonifyResult(
-            future.getContext(), future.isSuccessful(), metricsRegistry, LOG));
+            future.getContext(), future.isSuccessful(), metricsRegistry));
       } catch (JsonProcessingException e) {
         throw new HoodieException("Failed to JSON encode the value", e);
       }

@@ -49,7 +49,7 @@ class TestMarkerUtils extends HoodieCommonTestHarness {
   public void testReadMarkerType() throws IOException {
     // mock markers file
     String markerDir = this.basePath + "/.hoodie/.temp/testReadMarkerType/";
-    if (MarkerUtils.doesMarkerTypeFileExist(storage, markerDir)) {
+    if (MarkerUtils.doesMarkerTypeFileExist(storage, new StoragePath(markerDir))) {
       MarkerUtils.deleteMarkerTypeFile(storage, markerDir);
     }
 
