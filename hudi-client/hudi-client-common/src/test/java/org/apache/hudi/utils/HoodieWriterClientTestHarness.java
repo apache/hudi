@@ -385,6 +385,18 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
                     .withProperties(properties).build();
   }
 
+  protected HoodieWriteConfig getConsistencyCheckWriteConfig(boolean enableOptimisticConsistencyGuard, boolean populateMetaFields) {
+    HoodieWriteConfig.Builder builder = getConfigBuilder().withProperties(getPropertiesForKeyGen(populateMetaFields));
+    return !enableOptimisticConsistencyGuard ? (builder
+        .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true)
+            .withMaxConsistencyCheckIntervalMs(1).withInitialConsistencyCheckIntervalMs(1).withEnableOptimisticConsistencyGuard(enableOptimisticConsistencyGuard).build())
+        .build()) : (builder
+        .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true)
+            .withEnableOptimisticConsistencyGuard(enableOptimisticConsistencyGuard)
+            .withOptimisticConsistencyGuardSleepTimeMs(1).build())
+        .build());
+  }
+
   protected HoodieWriteConfig getParallelWritingWriteConfig(HoodieFailedWritesCleaningPolicy cleaningPolicy, boolean populateMetaFields) {
     Properties properties = new Properties();
     properties.setProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY, "3000");
@@ -697,10 +709,11 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
   }
 
   protected Pair<StoragePath, List<WriteStatus>> testConsistencyCheck(HoodieEngineContext context, HoodieTableMetaClient metaClient,
-                                                                      String instantTime, HoodieWriteConfig cfg,
-                                                                      Function2<HoodieTable, HoodieTableMetaClient, HoodieWriteConfig> getHoodieTableFn,
-                                                                      Function transformInputFn, Function transformOutputFn)
+                                                                    String instantTime, boolean enableOptimisticConsistencyGuard, boolean populateMetaFields,
+                                                                    Function2<HoodieTable, HoodieTableMetaClient, HoodieWriteConfig> getHoodieTableFn,
+                                                                    Function transformInputFn, Function transformOutputFn)
           throws Exception {
+    HoodieWriteConfig cfg = getConsistencyCheckWriteConfig(enableOptimisticConsistencyGuard, populateMetaFields);
     BaseHoodieWriteClient client = getHoodieWriteClient(cfg);
 
     WriteClientTestUtils.startCommitWithTime(client, instantTime);
@@ -731,7 +744,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
                     FSUtils.makeBaseFileName(instantTime, "1-0-1", UUID.randomUUID().toString(),
                             HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension()),
                     IOType.MERGE);
-    if (!cfg.getConsistencyGuardConfig().shouldEnableOptimisticConsistencyGuard()) {
+    if (!enableOptimisticConsistencyGuard) {
       Exception e = assertThrows(HoodieCommitException.class, () -> client.commit(instantTime, transformInputFn.apply(result)),
               "Commit should fail due to consistency check");
       assertTrue(e.getCause() instanceof HoodieIOException);
@@ -747,11 +760,12 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
                                                     Function transformInputFn, Function transformOutputFn) throws Exception {
     HoodieTableMetaClient metaClient = createMetaClient();
     String instantTime = "000";
-    HoodieWriteConfig cfg = getRollbackMarkersAndConsistencyGuardWriteConfig(true, enableOptimisticConsistencyGuard, true);
+    HoodieWriteConfig cfg = getConfigBuilder().withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder()
+            .withEnableOptimisticConsistencyGuard(enableOptimisticConsistencyGuard).build()).build();
     BaseHoodieWriteClient client = getHoodieWriteClient(cfg);
     client.setOperationType(WriteOperationType.UPSERT);
     Pair<StoragePath, List<WriteStatus>> result = testConsistencyCheck(context, metaClient, instantTime,
-              cfg, getHoodieTableFn, transformInputFn, transformOutputFn);
+              enableOptimisticConsistencyGuard, true, getHoodieTableFn, transformInputFn, transformOutputFn);
 
     // Delete orphan marker and commit should succeed
     metaClient.getStorage().deleteFile(result.getKey());
@@ -775,7 +789,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     String instantTime = "00000000000010";
     HoodieWriteConfig cfg = getRollbackMarkersAndConsistencyGuardWriteConfig(rollbackUsingMarkers, enableOptimisticConsistencyGuard, populateMetaFields);
     BaseHoodieWriteClient client = getHoodieWriteClient(cfg);
-    testConsistencyCheck(context, metaClient, instantTime, cfg, getHoodieTableFn, transformInputFn, transformOutputFn);
+    testConsistencyCheck(context, metaClient, instantTime, enableOptimisticConsistencyGuard, populateMetaFields, getHoodieTableFn, transformInputFn, transformOutputFn);
     rollbackAndAssert(enableOptimisticConsistencyGuard, instantTime, metaClient, client);
   }
 
