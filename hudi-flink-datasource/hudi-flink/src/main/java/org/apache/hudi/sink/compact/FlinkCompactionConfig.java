@@ -19,7 +19,6 @@
 package org.apache.hudi.sink.compact;
 
 import org.apache.hudi.common.config.HoodieMemoryConfig;
-import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.util.FileIOUtils;
@@ -203,8 +202,6 @@ public class FlinkCompactionConfig extends Configuration {
     conf.setBoolean(FlinkOptions.COMPACTION_SCHEDULE_ENABLED, config.schedule);
     // Map memory
     conf.setString(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH.key(), config.spillableMapPath);
-    // set file group reader
-    conf.setString(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), !config.fileGroupReaderDisabled + "");
 
     return conf;
   }
