@@ -64,7 +64,7 @@ public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetada
   }
 
   @Override
-  MetadataIndexGenerator getMetadataIndexGenerator() {
+  MetadataIndexGenerator initializeMetadataIndexGenerator() {
     throw new UnsupportedOperationException("Streaming writes are not supported for Java");
   }
 

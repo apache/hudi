@@ -26,7 +26,6 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieMetadataException;
-import org.apache.hudi.storage.StorageConfiguration;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,16 +52,12 @@ public class MetadataIndexGenerator implements Serializable {
    * WriteStatus instance only.
    */
   static class WriteStatusBasedMetadataIndexMapper implements SerializableFunction<WriteStatus, Iterator<HoodieRecord>> {
-    List<MetadataPartitionType> enabledPartitionTypes;
-    HoodieWriteConfig dataWriteConfig;
-    StorageConfiguration<?> storageConf;
-    String instantTime;
+    private final List<MetadataPartitionType> enabledPartitionTypes;
+    private final HoodieWriteConfig dataWriteConfig;
 
-    public WriteStatusBasedMetadataIndexMapper(List<MetadataPartitionType> enabledPartitionTypes, HoodieWriteConfig dataWriteConfig, StorageConfiguration<?> storageConf, String instantTime) {
+    public WriteStatusBasedMetadataIndexMapper(List<MetadataPartitionType> enabledPartitionTypes, HoodieWriteConfig dataWriteConfig) {
       this.enabledPartitionTypes = enabledPartitionTypes;
       this.dataWriteConfig = dataWriteConfig;
-      this.storageConf = storageConf;
-      this.instantTime = instantTime;
     }
 
     @Override

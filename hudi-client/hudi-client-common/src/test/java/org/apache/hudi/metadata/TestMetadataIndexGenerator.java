@@ -67,7 +67,7 @@ public class TestMetadataIndexGenerator extends HoodieCommonTestHarness {
         .withPath("random")
         .build();
     MetadataIndexGenerator.WriteStatusBasedMetadataIndexMapper writeStatusBasedMetadataIndexMapper = new MetadataIndexGenerator.WriteStatusBasedMetadataIndexMapper(
-        Collections.singletonList(MetadataPartitionType.RECORD_INDEX), writeConfig, storageConf, "001");
+        Collections.singletonList(MetadataPartitionType.RECORD_INDEX), writeConfig);
     Iterator<HoodieRecord> rliRecords = writeStatusBasedMetadataIndexMapper.apply(writeStatus);
     AtomicInteger totalRLIRecords = new AtomicInteger();
     rliRecords.forEachRemaining(rliRecord -> {
@@ -104,7 +104,7 @@ public class TestMetadataIndexGenerator extends HoodieCommonTestHarness {
         .withPath("random")
         .build();
     MetadataIndexGenerator.WriteStatusBasedMetadataIndexMapper writeStatusBasedMetadataIndexMapper = new MetadataIndexGenerator.WriteStatusBasedMetadataIndexMapper(
-        Collections.singletonList(MetadataPartitionType.RECORD_INDEX), writeConfig, storageConf, "001");
+        Collections.singletonList(MetadataPartitionType.RECORD_INDEX), writeConfig);
     Iterator<HoodieRecord> rliRecords = writeStatusBasedMetadataIndexMapper.apply(writeStatus);
     AtomicInteger totalRLIRecords = new AtomicInteger();
     rliRecords.forEachRemaining(rliRecord -> {

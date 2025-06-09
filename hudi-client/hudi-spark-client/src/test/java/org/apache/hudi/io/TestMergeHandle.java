@@ -44,7 +44,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 /**
  * Unit tests {@link HoodieMergeHandle}.
  */
-@SuppressWarnings("checkstyle:LineLength")
 public class TestMergeHandle extends BaseTestHandle {
 
   @Test

@@ -165,7 +165,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   public JavaRDD<WriteStatus> streamWriteToMetadataTable(Pair<List<HoodieFileGroupId>, HoodieData<HoodieRecord>> fileGroupIdToTaggedRecords, String instantTime) {
     JavaRDD<HoodieRecord> mdtRecords = HoodieJavaRDD.getJavaRDD(fileGroupIdToTaggedRecords.getValue());
     engineContext.setJobStatus(this.getClass().getSimpleName(), String.format("Upserting with instant %s into metadata table %s", instantTime, metadataWriteConfig.getTableName()));
-    JavaRDD<WriteStatus> metadataWriteStatusesSoFar = ((SparkRDDMetadataWriteClient)getWriteClient()).upsertPreppedRecords(mdtRecords, instantTime, Option.of(
+    JavaRDD<WriteStatus> metadataWriteStatusesSoFar = getSparkWriteClient(Option.empty()).upsertPreppedRecords(mdtRecords, instantTime, Option.of(
         fileGroupIdToTaggedRecords.getKey()));
     return metadataWriteStatusesSoFar;
   }
@@ -190,7 +190,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
                                  String instantTime,
                                  JavaRDD<HoodieRecord> preppedRecordInputs,
                                  List<HoodieFileGroupId> fileGroupsIdsToUpdate) {
-    JavaRDD<WriteStatus> writeStatusJavaRDD = ((SparkRDDMetadataWriteClient)writeClient).upsertPreppedRecords(preppedRecordInputs, instantTime, Option.of(fileGroupsIdsToUpdate));
+    JavaRDD<WriteStatus> writeStatusJavaRDD = getSparkWriteClient(Option.of(writeClient)).upsertPreppedRecords(preppedRecordInputs, instantTime, Option.of(fileGroupsIdsToUpdate));
     writeClient.commit(instantTime, writeStatusJavaRDD, Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap());
   }
 
@@ -276,8 +276,12 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     return exprIndexRecords;
   }
 
-  protected MetadataIndexGenerator getMetadataIndexGenerator() {
+  protected MetadataIndexGenerator initializeMetadataIndexGenerator() {
     return new MetadataIndexGenerator();
+  }
+
+  protected SparkRDDMetadataWriteClient getSparkWriteClient(Option<BaseHoodieWriteClient<?, JavaRDD<HoodieRecord>, ?, JavaRDD<WriteStatus>>> writeClientOpt) {
+    return ((SparkRDDMetadataWriteClient) writeClientOpt.orElse(getWriteClient()));
   }
 
   @Override

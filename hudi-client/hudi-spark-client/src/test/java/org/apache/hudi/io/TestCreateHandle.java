@@ -42,7 +42,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Unit tests {@link HoodieCreateHandle}.
  */
-@SuppressWarnings("checkstyle:LineLength")
 public class TestCreateHandle extends BaseTestHandle {
 
   @ParameterizedTest

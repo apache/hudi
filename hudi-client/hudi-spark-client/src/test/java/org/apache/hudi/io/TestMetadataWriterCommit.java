@@ -55,7 +55,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
 /**
- * Unit tests {@link HoodieCreateHandle}.
+ * Unit tests Metadata writer APIs with streaming.
  */
 public class TestMetadataWriterCommit extends BaseTestHandle {
 
