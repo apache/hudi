@@ -365,8 +365,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       while (it.hasNext()) {
         GenericRecord metadataRecord = (GenericRecord) it.next();
         HoodieMetadataPayload payload = new HoodieMetadataPayload(Option.of(metadataRecord));
-        String rowKey = payload.key != null
-            ? payload.key : ((GenericRecord) metadataRecord).get(KEY_FIELD_NAME).toString();
+        String rowKey = payload.key != null ? payload.key : metadataRecord.get(KEY_FIELD_NAME).toString();
         HoodieKey hoodieKey = new HoodieKey(rowKey, partitionName);
         records.put(rowKey, new HoodieAvroRecord<>(hoodieKey, payload));
       }
