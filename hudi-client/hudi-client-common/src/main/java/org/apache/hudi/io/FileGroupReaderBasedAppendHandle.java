@@ -80,7 +80,7 @@ public class FileGroupReaderBasedAppendHandle<T, I, K, O> extends HoodieAppendHa
     // Initializes the record iterator
     try (HoodieFileGroupReader<T> fileGroupReader = HoodieFileGroupReader.<T>newBuilder().withReaderContext(readerContext).withHoodieTableMetaClient(hoodieTable.getMetaClient())
         .withLatestCommitTime(instantTime).withFileSlice(fileSlice).withDataSchema(writeSchemaWithMetaFields).withRequestedSchema(writeSchemaWithMetaFields)
-        .withInternalSchema(internalSchemaOption).withProps(props).withShouldUseRecordPosition(usePosition).build()) {
+        .withInternalSchema(internalSchemaOption).withProps(props).withShouldUseRecordPosition(usePosition).withSortOutput(hoodieTable.requireSortedRecords()).build()) {
       recordItr = fileGroupReader.getClosableHoodieRecordIterator();
       super.doAppend();
       // The stats of inserts, updates, and deletes are updated once at the end
