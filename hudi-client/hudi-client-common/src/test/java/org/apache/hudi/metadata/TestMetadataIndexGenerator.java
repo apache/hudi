@@ -45,7 +45,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class TestMetadataIndexGenerator extends HoodieCommonTestHarness {
 
   @Test
-  public void testRLIIndexGeneratorWithInsertsAndUpserts() throws Exception {
+  public void testRLIIndexMapperWithInsertsAndUpserts() throws Exception {
     // Generate write status with inserts and upserts
     WriteStatus writeStatus = new WriteStatus(true, 0.0d);
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
@@ -66,9 +66,9 @@ public class TestMetadataIndexGenerator extends HoodieCommonTestHarness {
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
         .withPath("random")
         .build();
-    MetadataIndexGenerator.WriteStatusBasedMetadataIndexGenerator writeStatusBasedMetadataIndexGenerator = new MetadataIndexGenerator.WriteStatusBasedMetadataIndexGenerator(
+    MetadataIndexGenerator.WriteStatusBasedMetadataIndexMapper writeStatusBasedMetadataIndexMapper = new MetadataIndexGenerator.WriteStatusBasedMetadataIndexMapper(
         Collections.singletonList(MetadataPartitionType.RECORD_INDEX), writeConfig, storageConf, "001");
-    Iterator<HoodieRecord> rliRecords = writeStatusBasedMetadataIndexGenerator.apply(writeStatus);
+    Iterator<HoodieRecord> rliRecords = writeStatusBasedMetadataIndexMapper.apply(writeStatus);
     AtomicInteger totalRLIRecords = new AtomicInteger();
     rliRecords.forEachRemaining(rliRecord -> {
       totalRLIRecords.getAndIncrement();
@@ -103,9 +103,9 @@ public class TestMetadataIndexGenerator extends HoodieCommonTestHarness {
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
         .withPath("random")
         .build();
-    MetadataIndexGenerator.WriteStatusBasedMetadataIndexGenerator writeStatusBasedMetadataIndexGenerator = new MetadataIndexGenerator.WriteStatusBasedMetadataIndexGenerator(
+    MetadataIndexGenerator.WriteStatusBasedMetadataIndexMapper writeStatusBasedMetadataIndexMapper = new MetadataIndexGenerator.WriteStatusBasedMetadataIndexMapper(
         Collections.singletonList(MetadataPartitionType.RECORD_INDEX), writeConfig, storageConf, "001");
-    Iterator<HoodieRecord> rliRecords = writeStatusBasedMetadataIndexGenerator.apply(writeStatus);
+    Iterator<HoodieRecord> rliRecords = writeStatusBasedMetadataIndexMapper.apply(writeStatus);
     AtomicInteger totalRLIRecords = new AtomicInteger();
     rliRecords.forEachRemaining(rliRecord -> {
       totalRLIRecords.getAndIncrement();

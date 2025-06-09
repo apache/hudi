@@ -218,7 +218,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
   @Override
   protected void upsertAndCommit(BaseHoodieWriteClient<?, List<HoodieRecord>, ?, List<WriteStatus>> writeClient, String instantTime, List<HoodieRecord> preppedRecordInputs,
-                                 List<HoodieFileGroupId> mdtFileGroupsIdsToUpdate) {
+                                 List<HoodieFileGroupId> fileGroupsIdsToUpdate) {
     throw new UnsupportedOperationException("Not implemented for Flink engine yet");
   }
 

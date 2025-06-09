@@ -40,24 +40,25 @@ import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
 
 /**
  * For now this is a placeholder to generate all MDT records in one place.
- * Once https://github.com/apache/hudi/pull/13226 is landed, we will leverage the new abstraction to generate MDT records.
+ * Once <a href="https://github.com/apache/hudi/pull/13226">Refactor MDT update logic with Indexer</a> is landed,
+ * we will leverage the new abstraction to generate MDT records.
  */
 public class MetadataIndexGenerator implements Serializable {
 
   private static final Logger LOG = LoggerFactory.getLogger(MetadataIndexGenerator.class);
 
   /**
-   * MDT record generation utility. This function is expected to be invoked from a map Partition call, where one spark task will receive
-   * one WriteStatus as input and the output contains prepared Metadata table records for all eligible partitions that can operate on one
+   * MDT record transformation utility. This function is expected to be invoked from a map Partition call, where one spark task will receive
+   * one WriteStatus as input and the output contains prepared MDT table records for all eligible partitions that can operate on one
    * WriteStatus instance only.
    */
-  static class WriteStatusBasedMetadataIndexGenerator implements SerializableFunction<WriteStatus, Iterator<HoodieRecord>> {
+  static class WriteStatusBasedMetadataIndexMapper implements SerializableFunction<WriteStatus, Iterator<HoodieRecord>> {
     List<MetadataPartitionType> enabledPartitionTypes;
     HoodieWriteConfig dataWriteConfig;
     StorageConfiguration<?> storageConf;
     String instantTime;
 
-    public WriteStatusBasedMetadataIndexGenerator(List<MetadataPartitionType> enabledPartitionTypes, HoodieWriteConfig dataWriteConfig, StorageConfiguration<?> storageConf, String instantTime) {
+    public WriteStatusBasedMetadataIndexMapper(List<MetadataPartitionType> enabledPartitionTypes, HoodieWriteConfig dataWriteConfig, StorageConfiguration<?> storageConf, String instantTime) {
       this.enabledPartitionTypes = enabledPartitionTypes;
       this.dataWriteConfig = dataWriteConfig;
       this.storageConf = storageConf;
