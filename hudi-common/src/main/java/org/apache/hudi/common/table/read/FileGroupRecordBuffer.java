@@ -56,6 +56,7 @@ import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.Locale;
 import java.util.Map;
@@ -85,6 +86,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   protected final boolean shouldCheckCustomDeleteMarker;
   protected final boolean shouldCheckBuiltInDeleteMarker;
   protected final boolean emitDelete;
+  protected final boolean sortOutput;
   protected ClosableIterator<T> baseFileIterator;
   protected Iterator<BufferedRecord<T>> logRecordIterator;
   protected T nextRecord;
@@ -99,7 +101,8 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
                                   TypedProperties props,
                                   HoodieReadStats readStats,
                                   Option<String> orderingFieldName,
-                                  boolean emitDelete) {
+                                  boolean emitDelete,
+                                  boolean sortOutput) {
     this.readerContext = readerContext;
     this.readerSchema = AvroSchemaCache.intern(readerContext.getSchemaHandler().getRequiredSchema());
     this.recordMergeMode = recordMergeMode;
@@ -121,6 +124,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
         DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue());
     this.readStats = readStats;
     this.emitDelete = emitDelete;
+    this.sortOutput = sortOutput;
     try {
       // Store merged records for all versions for this log file, set the in-memory footprint to maxInMemoryMapSize
       this.records = new ExternalSpillableMap<>(maxMemorySizeInBytes, spillableMapBasePath, new DefaultSizeEstimator<>(),
@@ -579,7 +583,11 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
 
   protected boolean hasNextLogRecord() {
     if (logRecordIterator == null) {
-      logRecordIterator = records.values().iterator();
+      if (sortOutput) {
+        logRecordIterator = records.values().stream().sorted(Comparator.comparing(BufferedRecord::getRecordKey)).iterator();
+      } else {
+        logRecordIterator = records.values().iterator();
+      }
     }
 
     while (logRecordIterator.hasNext()) {

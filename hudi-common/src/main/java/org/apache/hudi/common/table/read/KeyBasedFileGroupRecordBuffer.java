@@ -39,6 +39,9 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Iterator;
+import java.util.PriorityQueue;
+import java.util.Queue;
+import java.util.stream.Collectors;
 
 /**
  * A buffer that is used to store log records by {@link org.apache.hudi.common.table.log.HoodieMergedLogRecordReader}
@@ -48,14 +51,19 @@ import java.util.Iterator;
  */
 public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
 
+  // when sorting is enabled, this will hold the base file record if it was not used in the previous iteration
+  private Option<T> queuedBaseFileRecord = Option.empty();
+  private Queue<String> logRecordKeysSorted = null;
+
   public KeyBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
                                        HoodieTableMetaClient hoodieTableMetaClient,
                                        RecordMergeMode recordMergeMode,
                                        TypedProperties props,
                                        HoodieReadStats readStats,
                                        Option<String> orderingFieldName,
-                                       boolean emitDelete) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, orderingFieldName, emitDelete);
+                                       boolean emitDelete,
+                                       boolean sortOutput) {
+    super(readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, orderingFieldName, emitDelete, sortOutput);
   }
 
   @Override
@@ -121,6 +129,18 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
 
   protected boolean hasNextBaseRecord(T baseRecord) throws IOException {
     String recordKey = readerContext.getRecordKey(baseRecord, readerSchema);
+    int comparison;
+    while (sortOutput && !getLogRecordKeysSorted().isEmpty() && (comparison = getLogRecordKeysSorted().peek().compareTo(recordKey)) <= 0) {
+      String nextLogRecordKey = getLogRecordKeysSorted().poll();
+      if (comparison < 0) {
+        BufferedRecord<T> nextLogRecord = records.remove(nextLogRecordKey);
+        if (!nextLogRecord.isDelete() || emitDelete) {
+          nextRecord = nextLogRecord.getRecord();
+          queuedBaseFileRecord = Option.of(baseRecord);
+          return true;
+        }
+      }
+    }
     BufferedRecord<T> logRecordInfo = records.remove(recordKey);
     return hasNextBaseRecord(baseRecord, logRecordInfo);
   }
@@ -128,6 +148,14 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
   @Override
   protected boolean doHasNext() throws IOException {
     ValidationUtils.checkState(baseFileIterator != null, "Base file iterator has not been set yet");
+
+    if (queuedBaseFileRecord.isPresent()) {
+      T nextRecord = queuedBaseFileRecord.get();
+      queuedBaseFileRecord = Option.empty();
+      if (hasNextBaseRecord(nextRecord)) {
+        return true;
+      }
+    }
 
     // Handle merging.
     while (baseFileIterator.hasNext()) {
@@ -138,5 +166,12 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
 
     // Handle records solely from log files.
     return hasNextLogRecord();
+  }
+
+  private Queue<String> getLogRecordKeysSorted() {
+    if (logRecordKeysSorted == null) {
+      logRecordKeysSorted = records.keySet().stream().map(Object::toString).collect(Collectors.toCollection(PriorityQueue::new));
+    }
+    return logRecordKeysSorted;
   }
 }
