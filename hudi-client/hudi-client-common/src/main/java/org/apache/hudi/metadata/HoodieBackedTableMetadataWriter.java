@@ -1227,7 +1227,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       String mdtPartition = mdtRecord.getPartitionPath();
       List<FileSlice> latestFileSlices = partitionToLatestFileSlices.get(mdtPartition);
       FileSlice slice = latestFileSlices.get(HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(mdtRecord.getRecordKey(),
-          latestFileSlices.size()));
+          latestFileSlices.size(), mdtPartition, metadataMetaClient.getTableConfig().getTableVersion()));
       mdtRecord.unseal();
       mdtRecord.setCurrentLocation(new HoodieRecordLocation(slice.getBaseInstantTime(), slice.getFileId()));
       mdtRecord.seal();
