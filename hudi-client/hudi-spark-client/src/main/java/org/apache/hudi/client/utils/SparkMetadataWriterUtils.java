@@ -316,7 +316,8 @@ public class SparkMetadataWriterUtils {
     } else {
       HoodieLogFile logFile = new HoodieLogFile(filePath);
       fileSlice = new FileSlice(partition, logFile.getDeltaCommitTime(), logFile.getFileId());
-      fileSlice.addLogFile(logFile);
+      // Since we are reading the file slice, completion time is not needed here
+      fileSlice.addLogFile(logFile, Option.empty());
     }
     HoodieFileGroupReader<InternalRow> fileGroupReader = HoodieFileGroupReader.<InternalRow>newBuilder()
         .withReaderContext(readerContext)
