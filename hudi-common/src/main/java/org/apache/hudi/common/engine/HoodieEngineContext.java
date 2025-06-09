@@ -128,7 +128,5 @@ public abstract class HoodieEngineContext {
    */
   public abstract <I, O> O aggregate(HoodieData<I> data, O zeroValue, Functions.Function2<O, I, O> seqOp, Functions.Function2<O, O, O> combOp);
 
-  public <T> ReaderContextFactory<T> getReaderContextFactory(HoodieTableMetaClient metaClient) {
-    throw new UnsupportedOperationException("Reader context factory is not yet supported");
-  }
+  public abstract <T> ReaderContextFactory<T> getReaderContextFactory(HoodieTableMetaClient metaClient);
 }
