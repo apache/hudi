@@ -54,7 +54,6 @@ import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -75,7 +74,6 @@ import static org.apache.hudi.index.HoodieIndex.IndexType.INMEMORY;
 /**
  * Asserts that tables initialized from file paths created outside Hudi can properly be loaded.
  */
-@Tag("functional")
 public class TestExternalPathHandling extends HoodieClientTestBase {
 
   private static final String FIELD_1 = "field1";

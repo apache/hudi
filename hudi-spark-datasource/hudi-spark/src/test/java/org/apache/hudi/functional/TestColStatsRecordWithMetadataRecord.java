@@ -56,7 +56,6 @@ import org.apache.avro.util.Utf8;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -85,7 +84,6 @@ import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@Tag("functional")
 public class TestColStatsRecordWithMetadataRecord extends HoodieSparkClientTestHarness {
 
   private static final Logger LOG = LoggerFactory.getLogger(TestColStatsRecordWithMetadataRecord.class);

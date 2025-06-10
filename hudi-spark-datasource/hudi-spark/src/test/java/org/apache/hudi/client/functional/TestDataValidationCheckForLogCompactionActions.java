@@ -52,7 +52,6 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -76,7 +75,6 @@ import static org.apache.hudi.testutils.GenericRecordValidationTestUtils.assertG
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@Tag("functional")
 public class TestDataValidationCheckForLogCompactionActions extends HoodieClientTestBase {
 
   private static final String RECORD_KEY_APPEND_VALUE = "-EXP";

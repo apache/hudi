@@ -41,7 +41,6 @@ import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.testutils.HoodieCleanerTestBase;
 
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -71,7 +70,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Tests covering different clean plan policies/strategies.
  */
-@Tag("functional")
 public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
 
   @Test

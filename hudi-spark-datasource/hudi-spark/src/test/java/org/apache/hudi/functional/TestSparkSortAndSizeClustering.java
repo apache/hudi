@@ -49,7 +49,6 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -62,7 +61,6 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-@Tag("functional")
 public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness {
 
   private HoodieWriteConfig config;
