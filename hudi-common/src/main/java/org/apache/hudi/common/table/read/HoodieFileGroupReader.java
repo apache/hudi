@@ -63,7 +63,6 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath;
-import static org.apache.hudi.common.fs.FSUtils.isMdtBaseFile;
 import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
 
 /**
@@ -77,6 +76,7 @@ import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
  */
 public final class HoodieFileGroupReader<T> implements Closeable {
   private final HoodieReaderContext<T> readerContext;
+  private final HoodieTableMetaClient metaClient;
   private final Option<HoodieBaseFile> hoodieBaseFileOption;
   private final List<HoodieLogFile> logFiles;
   private final String partitionPath;
@@ -121,6 +121,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
                                 Option<InternalSchema> internalSchemaOpt, HoodieTableMetaClient hoodieTableMetaClient, TypedProperties props,
                                 long start, long length, boolean shouldUseRecordPosition, boolean allowInflightInstants, boolean emitDelete) {
     this.readerContext = readerContext;
+    this.metaClient = hoodieTableMetaClient;
     this.storage = storage;
     this.hoodieBaseFileOption = fileSlice.getBaseFile();
     this.logFiles = fileSlice.getLogFiles().sorted(HoodieLogFile.getLogFileComparator()).collect(Collectors.toList());
@@ -238,7 +239,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
           readerContext.getSchemaHandler().getTableSchema(),
           readerContext.getSchemaHandler().getRequiredSchema(), storage);
     }
-    return readerContext.getInstantRange().isPresent() && !isMdtBaseFile(baseFile)
+    return readerContext.getInstantRange().isPresent()
         ? readerContext.applyInstantRangeFilter(recordIterator)
         : recordIterator;
   }
@@ -352,6 +353,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
             new StoragePath(path), logFiles.get(0).getPath().getParent()))
         .withRecordBuffer(recordBuffer)
         .withAllowInflightInstants(allowInflightInstants)
+        .withMetaClient(metaClient)
         .build()) {
       readStats.setTotalLogReadTimeMs(logRecordReader.getTotalTimeTakenToReadAndMergeBlocks());
       readStats.setTotalUpdatedRecordsCompacted(logRecordReader.getNumMergedRecordsInLog());

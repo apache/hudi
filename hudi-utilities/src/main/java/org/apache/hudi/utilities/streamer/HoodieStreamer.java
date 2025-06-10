@@ -925,8 +925,11 @@ public class HoodieStreamer implements Serializable {
 
     @Override
     protected boolean requestShutdownIfNeeded(Option<HoodieData<WriteStatus>> lastWriteStatuses) {
-      Option<JavaRDD<WriteStatus>> lastWriteStatusRDD = Option.ofNullable(lastWriteStatuses.isPresent() ? HoodieJavaRDD.getJavaRDD(lastWriteStatuses.get()) : null);
-      return postWriteTerminationStrategy.isPresent() && postWriteTerminationStrategy.get().shouldShutdown(lastWriteStatusRDD);
+      if (postWriteTerminationStrategy.isPresent()) {
+        Option<JavaRDD<WriteStatus>> lastWriteStatusRDD = lastWriteStatuses.map(HoodieJavaRDD::getJavaRDD);
+        return postWriteTerminationStrategy.get().shouldShutdown(lastWriteStatusRDD);
+      }
+      return false;
     }
 
     /**

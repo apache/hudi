@@ -51,7 +51,7 @@ public class DirectMarkerTransactionManager extends TransactionManager {
       LOG.info("Transaction starting for " + newTxnOwnerInstantTime + " and " + filePath);
       lockManager.lock();
 
-      reset(currentTxnOwnerInstant, Option.of(getInstant(newTxnOwnerInstantTime, instantGenerator)), Option.empty());
+      reset(changeActionInstant, Option.of(getInstant(newTxnOwnerInstantTime, instantGenerator)), Option.empty());
       LOG.info("Transaction started for " + newTxnOwnerInstantTime + " and " + filePath);
     }
   }

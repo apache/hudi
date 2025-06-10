@@ -18,10 +18,13 @@
 
 package org.apache.hudi;
 
+import org.apache.hudi.callback.common.WriteStatusValidator;
 import org.apache.hudi.client.HoodieWriteResult;
 import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
@@ -35,9 +38,11 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.TablePathUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieDuplicateKeyException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.TableNotFoundException;
@@ -57,6 +62,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 import scala.Tuple2;
@@ -344,4 +350,48 @@ public class DataSourceUtils {
     return handleDuplicates(
         new HoodieSparkEngineContext(jssc), incomingHoodieRecords, writeConfig, failOnDuplicates);
   }
+
+  /**
+   * Spark data source WriteStatus validator.
+   *
+   * <ul>
+   *   <li>If there are error records, prints few of them and exit;</li>
+   *   <li>If not, proceeds with the commit.</li>
+   * </ul>
+   */
+  static class SparkDataSourceWriteStatusValidator implements WriteStatusValidator {
+
+    private final WriteOperationType writeOperationType;
+    private final AtomicBoolean hasErrored;
+
+    public SparkDataSourceWriteStatusValidator(WriteOperationType writeOperationType, AtomicBoolean hasErrored) {
+      this.writeOperationType = writeOperationType;
+      this.hasErrored = hasErrored;
+    }
+
+    @Override
+    public boolean validate(long totalRecords, long totalErroredRecords, Option<HoodieData<WriteStatus>> writeStatusesOpt) {
+      if (totalErroredRecords > 0) {
+        hasErrored.set(true);
+        ValidationUtils.checkArgument(writeStatusesOpt.isPresent(), "RDD <WriteStatus> expected to be present when there are errors");
+        LOG.error("{} failed with errors", writeOperationType);
+        if (LOG.isTraceEnabled()) {
+          LOG.trace("Printing out the top 100 errors");
+
+          HoodieJavaRDD.getJavaRDD(writeStatusesOpt.get()).filter(WriteStatus::hasErrors)
+              .take(100)
+              .forEach(ws -> {
+                LOG.trace("Global error:", ws.getGlobalError());
+                if (!ws.getErrors().isEmpty()) {
+                  ws.getErrors().forEach((k, v) -> LOG.trace("Error for key {}: {}", k, v));
+                }
+              });
+        }
+        return false;
+      } else {
+        return true;
+      }
+    }
+  }
 }
+

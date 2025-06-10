@@ -18,13 +18,17 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hudi.callback.common.WriteStatusValidator;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -35,8 +39,12 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import org.apache.spark.api.java.JavaRDD;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
+import java.util.Map;
+import java.util.function.BiConsumer;
 
 /**
  * Write client to assist with writing to metadata table.
@@ -44,6 +52,8 @@ import java.util.List;
  * @param <T>
  */
 public class SparkRDDMetadataWriteClient<T> extends SparkRDDWriteClient<T> {
+
+  private static final Logger LOG = LoggerFactory.getLogger(SparkRDDMetadataWriteClient.class);
 
   // tracks the instants for which upsertPrepped is invoked.
   private Option<String> firstInstantOpt = Option.empty();
@@ -63,10 +73,26 @@ public class SparkRDDMetadataWriteClient<T> extends SparkRDDWriteClient<T> {
     return TimelineUtils.generateInstantTime(false, timeGenerator);
   }
 
+  @Override
+  public boolean commit(String instantTime, JavaRDD<WriteStatus> writeStatuses, Option<Map<String, String>> extraMetadata,
+                        String commitActionType, Map<String, List<String>> partitionToReplacedFileIds,
+                        Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc,
+                        Option<WriteStatusValidator> writeStatusValidatorOpt) {
+    context.setJobStatus(this.getClass().getSimpleName(), "Committing stats: " + config.getTableName());
+    // for metadata table, we don't have any write status validator, since we use FailOnFirstErrorWriteStatus as the write status class.
+    ValidationUtils.checkArgument(!writeStatusValidatorOpt.isPresent(), "Metadata table is not expected to contain write status validator");
+    // Triggering the dag for writes to metadata table.
+    // When streaming writes are enabled, writes to metadata may not call this method as the caller tightly controls the dag de-referencing.
+    // Even then, to initialize a new partition in Metadata table and for non-incremental operations like insert_overwrite, etc., writes to metadata table
+    // will invoke this commit method.
+    List<HoodieWriteStat> hoodieWriteStats = writeStatuses.map(writeStatus -> writeStatus.getStat()).collect();
+    return commitStats(instantTime, hoodieWriteStats, extraMetadata, commitActionType, partitionToReplacedFileIds, extraPreCommitFunc);
+  }
+
   /**
    * Upserts the given prepared records into the Hoodie table, at the supplied instantTime.
-   * <p>
-   * This implementation requires that the input records are already tagged, and de-duped if needed.
+   *
+   * <p>This implementation requires that the input records are already tagged, and de-duped if needed.
    *
    * @param preppedRecords Prepared HoodieRecords to upsert
    * @param instantTime    Instant time of the commit
