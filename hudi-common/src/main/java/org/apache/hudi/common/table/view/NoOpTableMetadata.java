@@ -21,6 +21,7 @@ package org.apache.hudi.common.table.view;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.util.Option;
@@ -92,6 +93,11 @@ class NoOpTableMetadata implements HoodieTableMetadata {
   }
 
   @Override
+  public Map<String, HoodieRecordGlobalLocation> readRecordIndex(List<String> recordKeys, Option<String> dataTablePartition) {
+    throw new HoodieMetadataException("Unsupported operation: readRecordIndex!");
+  }
+
+  @Override
   public HoodieData<HoodieRecord<HoodieMetadataPayload>> getRecordsByKeyPrefixes(List<String> keyPrefixes, String partitionName, boolean shouldLoadInMemory) {
     throw new HoodieMetadataException("Unsupported operation: getRecordsByKeyPrefixes!");
   }
@@ -114,6 +120,11 @@ class NoOpTableMetadata implements HoodieTableMetadata {
   @Override
   public int getNumFileGroupsForPartition(MetadataPartitionType partition) {
     throw new HoodieMetadataException("Unsupported operation: readRecordIndex!");
+  }
+
+  @Override
+  public Map<String, List<FileSlice>> getBucketizedFileGroupsForPartitionedRLI(MetadataPartitionType partition) {
+    throw new HoodieMetadataException("Unsupported operation: getFileGroupsFromPartition!");
   }
 
   @Override

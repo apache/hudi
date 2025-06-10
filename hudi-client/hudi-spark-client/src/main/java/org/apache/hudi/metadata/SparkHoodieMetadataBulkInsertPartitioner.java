@@ -18,17 +18,19 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.table.BulkInsertPartitioner;
+
+import org.apache.spark.Partitioner;
+import org.apache.spark.api.java.JavaRDD;
+
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.table.BulkInsertPartitioner;
-import org.apache.spark.Partitioner;
-import org.apache.spark.api.java.JavaRDD;
 import scala.Tuple2;
 
 /**
@@ -38,9 +40,9 @@ import scala.Tuple2;
  * This partitioner requires the records to be already tagged with location.
  */
 public class SparkHoodieMetadataBulkInsertPartitioner implements BulkInsertPartitioner<JavaRDD<HoodieRecord>> {
-  final int numPartitions;
-  public SparkHoodieMetadataBulkInsertPartitioner(int numPartitions) {
-    this.numPartitions = numPartitions;
+  private final MetadataTableFileGroupIndexParser fileGroupIndexParser;
+  public SparkHoodieMetadataBulkInsertPartitioner(MetadataTableFileGroupIndexParser indexParser) {
+    this.fileGroupIndexParser = indexParser;
   }
 
   private class FileGroupPartitioner extends Partitioner {
@@ -52,7 +54,7 @@ public class SparkHoodieMetadataBulkInsertPartitioner implements BulkInsertParti
 
     @Override
     public int numPartitions() {
-      return numPartitions;
+      return fileGroupIndexParser.getNumberOfFileGroups();
     }
   }
 
@@ -72,7 +74,7 @@ public class SparkHoodieMetadataBulkInsertPartitioner implements BulkInsertParti
     JavaRDD<HoodieRecord> partitionedRDD = records
             // key by <file group index, record key>. The file group index is used to partition and the record key is used to sort within the partition.
             .keyBy(r -> {
-              int fileGroupIndex = HoodieTableMetadataUtil.getFileGroupIndexFromFileId(r.getCurrentLocation().getFileId());
+              int fileGroupIndex = fileGroupIndexParser.getFileGroupIndex(r.getCurrentLocation().getFileId());
               return new Tuple2<>(fileGroupIndex, r.getRecordKey());
             })
             .repartitionAndSortWithinPartitions(new FileGroupPartitioner(), keyComparator)

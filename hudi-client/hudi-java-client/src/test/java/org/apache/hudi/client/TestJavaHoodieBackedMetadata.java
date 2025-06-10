@@ -2361,7 +2361,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
   @Test
   public void testGetFileGroupIndexFromFileId() {
     int index = new Random().nextInt(10000);
-    String fileId = HoodieTableMetadataUtil.getFileIDForFileGroup(FILES, index);
+    String fileId = HoodieTableMetadataUtil.getFileIDForFileGroup(FILES, index, Option.empty());
     assertEquals(fileId.substring(0, fileId.length() - 2), HoodieTableMetadataUtil.getFileGroupPrefix(fileId));
     assertEquals(index, HoodieTableMetadataUtil.getFileGroupIndexFromFileId(fileId));
 

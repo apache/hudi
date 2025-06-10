@@ -21,17 +21,14 @@ package org.apache.hudi.client;
 
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.metadata.DefaultMetadataTableFileGroupIndexParser;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.SparkHoodieMetadataBulkInsertPartitioner;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
+
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Test;
-
-import scala.Tuple2;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -41,6 +38,11 @@ import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+
+import scala.Tuple2;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestSparkHoodieMetadataBulkInsertPartitioner extends SparkClientFunctionalTestHarness {
   @Test
@@ -66,7 +68,7 @@ class TestSparkHoodieMetadataBulkInsertPartitioner extends SparkClientFunctional
     // repeated fileGroups
     initRecords.accept(MetadataPartitionType.FILES.getFileIdPrefix() + "002", 11);
 
-    SparkHoodieMetadataBulkInsertPartitioner partitioner = new SparkHoodieMetadataBulkInsertPartitioner(5);
+    SparkHoodieMetadataBulkInsertPartitioner partitioner = new SparkHoodieMetadataBulkInsertPartitioner(new DefaultMetadataTableFileGroupIndexParser(5));
     JavaRDD<HoodieRecord> partitionedRecords = partitioner.repartitionRecords(jsc().parallelize(records, records.size()), 0);
 
     // Only 5 partitions should be there corresponding to 5 unique fileGroups in MDT

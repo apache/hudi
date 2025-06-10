@@ -285,6 +285,11 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
    */
   @Override
   public Map<String, HoodieRecordGlobalLocation> readRecordIndex(List<String> recordKeys) {
+    return readRecordIndex(recordKeys, Option.empty());
+  }
+
+  @Override
+  public Map<String, HoodieRecordGlobalLocation> readRecordIndex(List<String> recordKeys, Option<String> dataTablePartition) {
     // If record index is not initialized yet, we cannot return an empty result here unlike the code for reading from other
     // indexes. This is because results from this function are used for upserts and returning an empty result here would lead
     // to existing records being inserted again causing duplicates.
@@ -293,7 +298,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
         "Record index is not initialized in MDT");
 
     HoodieTimer timer = HoodieTimer.start();
-    Map<String, HoodieRecord<HoodieMetadataPayload>> result = getRecordsByKeys(recordKeys, MetadataPartitionType.RECORD_INDEX.getPartitionPath());
+    Map<String, HoodieRecord<HoodieMetadataPayload>> result = getRecordsByKeys(recordKeys, MetadataPartitionType.RECORD_INDEX.getPartitionPath(), dataTablePartition);
     Map<String, HoodieRecordGlobalLocation> recordKeyToLocation = new HashMap<>(result.size());
     result.forEach((key, record) -> {
       if (!record.getData().isDeleted()) {
@@ -417,6 +422,8 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
   protected abstract Option<HoodieRecord<HoodieMetadataPayload>> getRecordByKey(String key, String partitionName);
 
   protected abstract Map<String, HoodieRecord<HoodieMetadataPayload>> getRecordsByKeys(List<String> keys, String partitionName);
+
+  protected abstract Map<String, HoodieRecord<HoodieMetadataPayload>> getRecordsByKeys(List<String> keys, String partitionName, Option<String> dataTablePartition);
 
   public HoodieMetadataConfig getMetadataConfig() {
     return metadataConfig;

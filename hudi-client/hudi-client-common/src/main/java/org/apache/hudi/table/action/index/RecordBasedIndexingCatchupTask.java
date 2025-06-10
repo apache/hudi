@@ -83,6 +83,7 @@ public class RecordBasedIndexingCatchupTask extends AbstractIndexingCatchupTask 
         metadataConfig.getRecordIndexMaxParallelism(),
         this.getClass().getSimpleName(),
         metaClient,
-        EngineType.SPARK);
+        EngineType.SPARK,
+        metadataConfig.isPartitionedRecordIndexEnabled());
   }
 }

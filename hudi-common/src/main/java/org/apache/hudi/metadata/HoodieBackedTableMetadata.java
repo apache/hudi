@@ -79,6 +79,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_BL
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_FILES;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getFileSystemView;
+import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
 
 /**
  * Table metadata provided by an internal DFS backed Hudi metadata table.
@@ -102,6 +103,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
   // Latest file slices in the metadata partitions
   private final Map<String, List<FileSlice>> partitionFileSliceMap = new ConcurrentHashMap<>();
+
+  private final Map<String, List<FileSlice>> partitionedRLIFileSliceMap = new ConcurrentHashMap<>();
 
   public HoodieBackedTableMetadata(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig, String datasetBasePath) {
     this(engineContext, metadataConfig, datasetBasePath, false);
@@ -237,6 +240,11 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
   @Override
   protected Map<String, HoodieRecord<HoodieMetadataPayload>> getRecordsByKeys(List<String> keys, String partitionName) {
+    return getRecordsByKeys(keys, partitionName, Option.empty());
+  }
+
+  @Override
+  protected Map<String, HoodieRecord<HoodieMetadataPayload>> getRecordsByKeys(List<String> keys, String partitionName, Option<String> dataTablePartition) {
     if (keys.isEmpty()) {
       return Collections.emptyMap();
     }
@@ -246,6 +254,18 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     // Load the file slices for the partition. Each file slice is a shard which saves a portion of the keys.
     List<FileSlice> partitionFileSlices = partitionFileSliceMap.computeIfAbsent(partitionName,
         k -> HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metadataMetaClient, getMetadataFileSystemView(), partitionName));
+    if (dataTablePartition.isPresent()) {
+      //assume is partitioned rli if a data table partition name is provided
+      //filter to only the files in the partition
+      partitionFileSlices = partitionFileSlices.stream()
+          .filter(fileSlice -> HoodieTableMetadataUtil.getDataTablePartitionNameFromFileGroupName(fileSlice.getFileId()).equals(dataTablePartition.get()))
+          .collect(Collectors.toList());
+      // all keys will be from the same shard index so just calculate the first key and reduce partitionFileSlices to 1
+      int fileGroupIndex = HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(keys.get(0), partitionFileSlices.size());
+      partitionFileSlices = Collections.singletonList(partitionFileSlices.get(fileGroupIndex));
+    } else if (partitionName.equals(RECORD_INDEX.getPartitionPath()) && !partitionFileSlices.isEmpty() && HoodieTableMetadataUtil.verifyRLIFile(partitionFileSlices.get(0).getFileId(), true)) {
+      throw new IllegalArgumentException("File pruning with partitioned rli has not yet been implemented");
+    }
     final int numFileSlices = partitionFileSlices.size();
     ValidationUtils.checkState(numFileSlices > 0, "Number of file slices for partition " + partitionName + " should be > 0");
 
@@ -267,12 +287,13 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
       result = new HashMap<>(keys.size());
       getEngineContext().setJobStatus(this.getClass().getSimpleName(), "Reading keys from metadata table partition " + partitionName);
+      List<FileSlice> finalPartitionFileSlices = partitionFileSlices;
       getEngineContext().map(partitionedKeys, keysList -> {
         if (keysList.isEmpty()) {
           return Collections.<String, HoodieRecord<HoodieMetadataPayload>>emptyMap();
         }
         int shardIndex = HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(keysList.get(0), numFileSlices);
-        return lookupKeysFromFileSlice(partitionName, keysList, partitionFileSlices.get(shardIndex));
+        return lookupKeysFromFileSlice(partitionName, keysList, finalPartitionFileSlices.get(shardIndex));
       }, partitionedKeys.size()).forEach(result::putAll);
     }
 
@@ -524,6 +545,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   public void close() {
     closePartitionReaders();
     partitionFileSliceMap.clear();
+    partitionedRLIFileSliceMap.clear();
     if (this.metadataFileSystemView != null) {
       this.metadataFileSystemView.close();
       this.metadataFileSystemView = null;
@@ -624,14 +646,37 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     // because the metadata timeline may have changed.
     closePartitionReaders();
     partitionFileSliceMap.clear();
+    partitionedRLIFileSliceMap.clear();
+  }
+
+  public List<FileSlice> getFilegroupsForPartition(MetadataPartitionType partition) {
+    partitionFileSliceMap.computeIfAbsent(partition.getPartitionPath(),
+        k -> HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metadataMetaClient,
+            getMetadataFileSystemView(), partition.getPartitionPath()));
+    return partitionFileSliceMap.get(partition.getPartitionPath());
   }
 
   @Override
   public int getNumFileGroupsForPartition(MetadataPartitionType partition) {
-    partitionFileSliceMap.computeIfAbsent(partition.getPartitionPath(),
-        k -> HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metadataMetaClient,
-            getMetadataFileSystemView(), partition.getPartitionPath()));
-    return partitionFileSliceMap.get(partition.getPartitionPath()).size();
+    return getFilegroupsForPartition(partition).size();
+  }
+
+  @Override
+  public Map<String, List<FileSlice>> getBucketizedFileGroupsForPartitionedRLI(MetadataPartitionType partition) {
+    if (!partition.equals(RECORD_INDEX)) {
+      throw new IllegalArgumentException("This method should only be used by RLI");
+    }
+    if (partitionedRLIFileSliceMap.isEmpty()) {
+      List<FileSlice> fileSlices = getFilegroupsForPartition(partition);
+      if (fileSlices.isEmpty()) {
+        return Collections.emptyMap();
+      }
+      if (HoodieTableMetadataUtil.verifyRLIFile(fileSlices.get(0).getFileId(), false)) {
+        throw new IllegalArgumentException("This method should only be used with partitioned RLI");
+      }
+      fileSlices.forEach(s -> partitionedRLIFileSliceMap.computeIfAbsent(HoodieTableMetadataUtil.getDataTablePartitionNameFromFileGroupName(s.getFileId()), x -> new ArrayList<>()).add(s));
+    }
+    return partitionedRLIFileSliceMap;
   }
 
   @Override

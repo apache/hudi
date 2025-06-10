@@ -182,6 +182,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.deleteMetadataTab
 import static org.apache.hudi.metadata.MetadataPartitionType.BLOOM_FILTERS;
 import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
 import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
+import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -2971,13 +2972,28 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   @Test
   public void testGetFileGroupIndexFromFileId() {
     int index = new Random().nextInt(10000);
-    String fileId = HoodieTableMetadataUtil.getFileIDForFileGroup(FILES, index);
+    String fileId = HoodieTableMetadataUtil.getFileIDForFileGroup(FILES, index, Option.empty());
     assertEquals(fileId.substring(0, fileId.length() - 2), HoodieTableMetadataUtil.getFileGroupPrefix(fileId));
     assertEquals(index, HoodieTableMetadataUtil.getFileGroupIndexFromFileId(fileId));
 
     assertEquals(HoodieTableMetadataUtil.getFileGroupPrefix("some-file-id-0"), "some-file-id");
     assertEquals(HoodieTableMetadataUtil.getFileGroupPrefix("some-file-id"), "some-file-id");
     assertEquals(HoodieTableMetadataUtil.getFileGroupPrefix("some-file-id-2"), "some-file-id-2");
+  }
+
+  @Test
+  public void testGetFileGroupIndexFromFileIdPartitionedRLI() {
+    assertEquals("record-index-basicName-0005-0", HoodieTableMetadataUtil.getFileIDForFileGroup(RECORD_INDEX, 5, Option.of("basicName")));
+    assertEquals("basicName", HoodieTableMetadataUtil.getDataTablePartitionNameFromFileGroupName(HoodieTableMetadataUtil.getFileIDForFileGroup(RECORD_INDEX, 5, Option.of("basicName"))));
+    assertEquals("record-index-with%5Funderscore-0005-0", HoodieTableMetadataUtil.getFileIDForFileGroup(RECORD_INDEX, 5, Option.of("with_underscore")));
+    assertEquals("with_underscore", HoodieTableMetadataUtil.getDataTablePartitionNameFromFileGroupName(HoodieTableMetadataUtil.getFileIDForFileGroup(RECORD_INDEX, 5, Option.of("with_underscore"))));
+    assertEquals("record-index-with%2Ddash-0005-0", HoodieTableMetadataUtil.getFileIDForFileGroup(RECORD_INDEX, 5, Option.of("with-dash")));
+    assertEquals("with-dash", HoodieTableMetadataUtil.getDataTablePartitionNameFromFileGroupName(HoodieTableMetadataUtil.getFileIDForFileGroup(RECORD_INDEX, 5, Option.of("with-dash"))));
+    assertEquals("record-index-with%25percent-0005-0", HoodieTableMetadataUtil.getFileIDForFileGroup(RECORD_INDEX, 5, Option.of("with%percent")));
+    assertEquals("with%percent", HoodieTableMetadataUtil.getDataTablePartitionNameFromFileGroupName(HoodieTableMetadataUtil.getFileIDForFileGroup(RECORD_INDEX, 5, Option.of("with%percent"))));
+    assertEquals("record-index-2016%2F08%2F04-0005-0", HoodieTableMetadataUtil.getFileIDForFileGroup(RECORD_INDEX, 5, Option.of("2016/08/04")));
+    assertEquals("2016/08/04", HoodieTableMetadataUtil.getDataTablePartitionNameFromFileGroupName(HoodieTableMetadataUtil.getFileIDForFileGroup(RECORD_INDEX, 5, Option.of("2016/08/04"))));
+
   }
 
   @Test

@@ -25,6 +25,7 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.HoodieSerializableFileStatus;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
@@ -308,8 +309,18 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
   }
 
   @Override
+  public Map<String, HoodieRecordGlobalLocation> readRecordIndex(List<String> recordKeys, Option<String> dataTablePartition) {
+    throw new HoodieMetadataException("Unsupported operation: readRecordIndex!");
+  }
+
+  @Override
   public int getNumFileGroupsForPartition(MetadataPartitionType partition) {
     throw new HoodieMetadataException("Unsupported operation: getNumFileGroupsForPartition");
+  }
+
+  @Override
+  public Map<String, List<FileSlice>> getBucketizedFileGroupsForPartitionedRLI(MetadataPartitionType partition) {
+    throw new HoodieMetadataException("Unsupported operation: getFileGroupsFromPartition!");
   }
 
   @Override

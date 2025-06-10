@@ -28,6 +28,7 @@ import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
+import org.apache.hudi.common.util.Either;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
@@ -66,9 +67,6 @@ import static org.apache.hudi.metadata.HoodieTableMetadata.EMPTY_PARTITION_NAME;
 public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
 
   private static final Logger LOG = LoggerFactory.getLogger(SparkMetadataTableRecordIndex.class);
-  // The index to fallback upon when record index is not initialized yet.
-  // This should be a global index like record index so that the behavior of tagging across partitions is not changed.
-  private static final HoodieIndex.IndexType FALLBACK_INDEX_TYPE = IndexType.GLOBAL_SIMPLE;
 
   public SparkMetadataTableRecordIndex(HoodieWriteConfig config) {
     super(config);
@@ -76,59 +74,81 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
 
   @Override
   public <R> HoodieData<HoodieRecord<R>> tagLocation(HoodieData<HoodieRecord<R>> records, HoodieEngineContext context, HoodieTable hoodieTable) throws HoodieIndexException {
-    int fileGroupSize;
+    Either<Integer, Map<String, Integer>> fileGroupSize;
     try {
       ValidationUtils.checkState(hoodieTable.getMetaClient().getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX));
-      fileGroupSize = hoodieTable.getMetadataTable().getNumFileGroupsForPartition(MetadataPartitionType.RECORD_INDEX);
-      ValidationUtils.checkState(fileGroupSize > 0, "Record index should have at least one file group");
+      fileGroupSize = fetchFileGroupSize(hoodieTable);
+      ValidationUtils.checkState(getTotalFileGroupCount(fileGroupSize) > 0, "Record index should have at least one file group");
     } catch (TableNotFoundException | IllegalStateException e) {
       // This means that record index has not been initialized.
-      LOG.warn(String.format("Record index not initialized so falling back to %s for tagging records", FALLBACK_INDEX_TYPE.name()));
+      LOG.warn(String.format("Record index not initialized so falling back to %s for tagging records", getFallbackIndexType().name()));
 
       // Fallback to another index so that tagLocation is still accurate and there are no duplicates.
       HoodieWriteConfig otherConfig = HoodieWriteConfig.newBuilder().withProperties(config.getProps())
-          .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(FALLBACK_INDEX_TYPE).build()).build();
+          .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(getFallbackIndexType()).build()).build();
       HoodieIndex fallbackIndex = SparkHoodieIndexFactory.createIndex(otherConfig);
 
       // Fallback index needs to be a global index like record index
-      ValidationUtils.checkArgument(fallbackIndex.isGlobal(), "Fallback index needs to be a global index like record index");
+      ValidationUtils.checkArgument(isGlobal() == fallbackIndex.isGlobal(), "Fallback index needs to have same isGlobal() as the record index");
 
       return fallbackIndex.tagLocation(records, context, hoodieTable);
     }
-
-    final int numFileGroups = fileGroupSize;
 
     if (config.getRecordIndexUseCaching()) {
       records.persist(new HoodieConfig(config.getProps()).getString(HoodieIndexConfig.RECORD_INDEX_INPUT_STORAGE_LEVEL_VALUE));
     }
 
-    // Partition the record keys to lookup such that each partition looks up one record index shard
-    JavaRDD<String> partitionedKeyRDD = HoodieJavaRDD.getJavaRDD(records)
-        .map(HoodieRecord::getRecordKey)
-        .keyBy(k -> HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(k, numFileGroups))
-        .partitionBy(new PartitionIdPassthrough(numFileGroups))
-        .map(t -> t._2);
-    ValidationUtils.checkState(partitionedKeyRDD.getNumPartitions() <= numFileGroups);
-
-    // Lookup the keys in the record index
-    HoodiePairData<String, HoodieRecordGlobalLocation> keyAndExistingLocations =
-        HoodieJavaPairRDD.of(partitionedKeyRDD.mapPartitionsToPair(new RecordIndexFileGroupLookupFunction(hoodieTable)));
-
-    HoodiePairData<String, HoodieRecordGlobalLocation> keyAndExistingLocationsProcessed = mayBeValidateAgainstFilesPartition(keyAndExistingLocations, hoodieTable);
+    HoodiePairData<String, HoodieRecordGlobalLocation> keyAndExistingLocations = lookupRecords(records, context, hoodieTable, fileGroupSize);
 
     // Tag the incoming records, as inserts or updates, by joining with existing record keys
-    boolean shouldUpdatePartitionPath = config.getRecordIndexUpdatePartitionPath() && hoodieTable.isPartitioned();
-    HoodieData<HoodieRecord<R>> taggedRecords = tagGlobalLocationBackToRecords(records, keyAndExistingLocationsProcessed,
-        false, shouldUpdatePartitionPath, config, hoodieTable);
-
-    // The number of partitions in the taggedRecords is expected to the maximum of the partitions in
-    // keyToLocationPairRDD and records RDD.
+    HoodieData<HoodieRecord<R>> taggedRecords = tagGlobalLocationBackToRecords(records, keyAndExistingLocations,
+        false, shouldUpdatePartitionPath(hoodieTable), config, hoodieTable);
 
     if (config.getRecordIndexUseCaching()) {
       records.unpersist();
     }
 
     return taggedRecords;
+  }
+
+  /**
+   * The index to fallback upon when record index is not initialized yet.
+   * This should be a global index like record index so that the behavior of tagging across partitions is not changed.
+   */
+  protected HoodieIndex.IndexType getFallbackIndexType() {
+    return IndexType.GLOBAL_SIMPLE;
+  }
+
+  protected <R> HoodiePairData<String, HoodieRecordGlobalLocation> lookupRecords(HoodieData<HoodieRecord<R>> records, HoodieEngineContext context,
+                                                                                 HoodieTable hoodieTable, Either<Integer, Map<String, Integer>> fileGroupSize) {
+    int numFileGroups = fileGroupSize.asLeft();
+    // Partition the record keys to lookup such that each partition looks up one record index shard
+    JavaRDD<String> partitionedKeyRDD = HoodieJavaRDD.getJavaRDD(records)
+        .map(HoodieRecord::getRecordKey)
+        .keyBy(k -> HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(k, numFileGroups))
+        .partitionBy(new PartitionIdPassthrough(numFileGroups))
+        .map(t -> t._2);
+    // The number of partitions in the taggedRecords is expected to the maximum of the partitions in
+    // keyToLocationPairRDD and records RDD.
+    ValidationUtils.checkState(partitionedKeyRDD.getNumPartitions() <= numFileGroups);
+
+    // Lookup the keys in the record index
+    HoodiePairData<String, HoodieRecordGlobalLocation> keyAndExistingLocations =
+        HoodieJavaPairRDD.of(partitionedKeyRDD.mapPartitionsToPair(new RecordIndexFileGroupLookupFunction(hoodieTable)));
+
+    return mayBeValidateAgainstFilesPartition(keyAndExistingLocations, hoodieTable);
+  }
+
+  protected Either<Integer, Map<String, Integer>> fetchFileGroupSize(HoodieTable hoodieTable) {
+    return Either.left(hoodieTable.getMetadataTable().getNumFileGroupsForPartition(MetadataPartitionType.RECORD_INDEX));
+  }
+
+  protected int getTotalFileGroupCount(Either<Integer, Map<String, Integer>> fileGroupSize) {
+    return fileGroupSize.asLeft();
+  }
+
+  protected boolean shouldUpdatePartitionPath(HoodieTable hoodieTable) {
+    return config.getRecordIndexUpdatePartitionPath() && hoodieTable.isPartitioned();
   }
 
   @VisibleForTesting
@@ -240,7 +260,7 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
    * NOTE: This is a workaround for SPARK-39391, which moved the PartitionIdPassthrough from
    * {@link org.apache.spark.sql.execution.ShuffledRowRDD} to {@link Partitioner}.
    */
-  private class PartitionIdPassthrough extends Partitioner {
+  class PartitionIdPassthrough extends Partitioner {
 
     private final int numPartitions;
 

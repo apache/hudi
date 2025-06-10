@@ -81,7 +81,8 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
         1,
         "activeModule",
         metaClient,
-        EngineType.SPARK
+        EngineType.SPARK,
+        false
     );
     assertTrue(result.isEmpty());
   }
@@ -117,7 +118,8 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
         1,
         "activeModule",
         metaClient,
-        EngineType.SPARK
+        EngineType.SPARK,
+        false
     );
     // Validate the result.
     List<HoodieRecord> records = result.collectAsList();

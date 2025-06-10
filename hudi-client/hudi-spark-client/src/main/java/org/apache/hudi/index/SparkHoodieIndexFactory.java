@@ -76,6 +76,8 @@ public final class SparkHoodieIndexFactory {
         }
       case RECORD_INDEX:
         return new SparkMetadataTableRecordIndex(config);
+      case PARTITIONED_RECORD_INDEX:
+        return new SparkMetadataTablePartitionedRecordIndex(config);
       default:
         throw new HoodieIndexException("Index type unspecified, set " + config.getIndexType());
     }
@@ -104,6 +106,8 @@ public final class SparkHoodieIndexFactory {
         return false;
       case RECORD_INDEX:
         return true;
+      case PARTITIONED_RECORD_INDEX:
+        return false;
       default:
         return createIndex(config).isGlobal();
     }

@@ -61,6 +61,7 @@ import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetUtils;
+import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -895,6 +896,9 @@ public class HoodieTableMetadataUtil {
    * @return An integer hash of the given string
    */
   public static int mapRecordKeyToFileGroupIndex(String recordKey, int numFileGroups) {
+    if (numFileGroups == 1) {
+      return 0;
+    }
     int h = 0;
     for (int i = 0; i < recordKey.length(); ++i) {
       h = 31 * h + recordKey.charAt(i);
@@ -1534,10 +1538,31 @@ public class HoodieTableMetadataUtil {
    *
    * @param partitionType The type of the MDT partition
    * @param index         Index of the file group within the partition
+   * @param dataPartitionName If this is a partitioned index, then pass in option of the partition name for the data table
    * @return The fileID
    */
-  public static String getFileIDForFileGroup(MetadataPartitionType partitionType, int index) {
+  public static String getFileIDForFileGroup(MetadataPartitionType partitionType, int index, Option<String> dataPartitionName) {
+    if (dataPartitionName.isPresent()) {
+      return String.format("%s%s%04d-%d", partitionType.getFileIdPrefix(), PartitionPathEncodeUtils.escapeFileName(dataPartitionName.get()).concat("-"), index, 0);
+    }
     return String.format("%s%04d-%d", partitionType.getFileIdPrefix(), index, 0);
+  }
+
+  /**
+   * Uses the MDT filegroup name to determine which partition in the data table the filegroup is an index for
+   *
+   * @param fileGroupName The name of an mdt filegroup
+   * @return the partition in the data table that is indexed by this filegroup
+   */
+  public static String getDataTablePartitionNameFromFileGroupName(String fileGroupName) {
+    String[] splits = fileGroupName.split("-");
+    assert splits.length > 3;
+    return PartitionPathEncodeUtils.unescapePathName(splits[splits.length - 3]);
+  }
+
+  public static boolean verifyRLIFile(String fileID, boolean isPartitioned) {
+    long dashCount = fileID.chars().filter(c -> c == '-').count();
+    return (dashCount == 4) == isPartitioned;
   }
 
   /**
@@ -1683,7 +1708,7 @@ public class HoodieTableMetadataUtil {
     }
 
     // Does any enabled partition being enabled need to track the written records
-    if (config.enableRecordIndex()) {
+    if (config.enableRecordIndex() || config.isPartitionedRecordIndexEnabled()) {
       return true;
     }
     return false;
@@ -1751,7 +1776,8 @@ public class HoodieTableMetadataUtil {
                                                                      int recordIndexMaxParallelism,
                                                                      String basePath,
                                                                      SerializableConfiguration configuration,
-                                                                     String activeModule) {
+                                                                     String activeModule,
+                                                                     boolean isPartitionedRLI) {
     if (partitionBaseFilePairs.isEmpty()) {
       return engineContext.emptyHoodieData();
     }
@@ -1783,7 +1809,7 @@ public class HoodieTableMetadataUtil {
         @Override
         public HoodieRecord next() {
           return forDelete
-              ? HoodieMetadataPayload.createRecordIndexDelete(recordKeyIterator.next())
+              ? HoodieMetadataPayload.createRecordIndexDelete(recordKeyIterator.next(), partition, isPartitionedRLI)
               : HoodieMetadataPayload.createRecordIndexUpdate(recordKeyIterator.next(), partition, fileId, instantTime, 0);
         }
       };
@@ -1798,7 +1824,7 @@ public class HoodieTableMetadataUtil {
                                                                       List<Pair<String, FileSlice>> partitionFileSlicePairs,
                                                                       boolean forDelete,
                                                                       int recordIndexMaxParallelism,
-                                                                      String activeModule, HoodieTableMetaClient metaClient, EngineType engineType) {
+                                                                      String activeModule, HoodieTableMetaClient metaClient, EngineType engineType, boolean isPartitionedRLI) {
     if (partitionFileSlicePairs.isEmpty()) {
       return engineContext.emptyHoodieData();
     }
@@ -1848,7 +1874,7 @@ public class HoodieTableMetadataUtil {
           @Override
           public HoodieRecord next() {
             return forDelete
-                ? HoodieMetadataPayload.createRecordIndexDelete(recordKeyIterator.next())
+                ? HoodieMetadataPayload.createRecordIndexDelete(recordKeyIterator.next(), partition, isPartitionedRLI)
                 : HoodieMetadataPayload.createRecordIndexUpdate(recordKeyIterator.next(), partition, fileSlice.getFileId(), fileSlice.getBaseInstantTime(), 0);
           }
         };
@@ -1876,7 +1902,7 @@ public class HoodieTableMetadataUtil {
         @Override
         public HoodieRecord next() {
           return forDelete
-              ? HoodieMetadataPayload.createRecordIndexDelete(recordKeyIterator.next())
+              ? HoodieMetadataPayload.createRecordIndexDelete(recordKeyIterator.next(), partition, isPartitionedRLI)
               : HoodieMetadataPayload.createRecordIndexUpdate(recordKeyIterator.next(), partition, fileId, instantTime, 0);
         }
       };

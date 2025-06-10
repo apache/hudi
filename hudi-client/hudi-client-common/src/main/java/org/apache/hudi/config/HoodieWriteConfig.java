@@ -2556,12 +2556,24 @@ public class HoodieWriteConfig extends HoodieConfig {
     return metadataConfig.enableRecordIndex();
   }
 
+  public boolean isPartitionedRecordIndexEnabled() {
+    return metadataConfig.isPartitionedRecordIndexEnabled();
+  }
+
   public int getRecordIndexMinFileGroupCount() {
     return metadataConfig.getRecordIndexMinFileGroupCount();
   }
 
   public int getRecordIndexMaxFileGroupCount() {
     return metadataConfig.getRecordIndexMaxFileGroupCount();
+  }
+
+  public int getPartitionedRecordIndexMinFileGroupCount() {
+    return metadataConfig.getPartitionedRecordIndexMinFileGroupCount();
+  }
+
+  public int getPartitionedRecordIndexMaxFileGroupCount() {
+    return metadataConfig.getPartitionedRecordIndexMaxFileGroupCount();
   }
 
   public float getRecordIndexGrowthFactor() {
