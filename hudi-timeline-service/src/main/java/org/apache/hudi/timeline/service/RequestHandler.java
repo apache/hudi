@@ -18,7 +18,6 @@
 
 package org.apache.hudi.timeline.service;
 
-import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.table.marker.MarkerOperation;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -90,7 +89,6 @@ public class RequestHandler {
   private final ScheduledExecutorService asyncResultService;
 
   public RequestHandler(Javalin app, StorageConfiguration<?> conf, TimelineService.Config timelineServiceConfig,
-                        HoodieEngineContext hoodieEngineContext,
                         FileSystemViewManager viewManager) {
     this.timelineServiceConfig = timelineServiceConfig;
     this.viewManager = viewManager;
@@ -100,7 +98,7 @@ public class RequestHandler {
     this.dataFileHandler = new BaseFileHandler(conf, timelineServiceConfig, viewManager);
     if (timelineServiceConfig.enableMarkerRequests) {
       this.markerHandler = new MarkerHandler(
-          conf, timelineServiceConfig, hoodieEngineContext, viewManager, metricsRegistry);
+          conf, timelineServiceConfig, viewManager, metricsRegistry);
     } else {
       this.markerHandler = null;
     }
@@ -120,24 +118,22 @@ public class RequestHandler {
    * @param ctx             Javalin context
    * @param obj             object to serialize
    * @param metricsRegistry {@code Registry} instance for storing metrics
-   * @param objectMapper    JSON object mapper
-   * @param logger          {@code Logger} instance
    * @return JSON String from the input object
    * @throws JsonProcessingException
    */
   public static String jsonifyResult(
-      Context ctx, Object obj, Registry metricsRegistry, ObjectMapper objectMapper, Logger logger)
+      Context ctx, Object obj, Registry metricsRegistry)
       throws JsonProcessingException {
     HoodieTimer timer = HoodieTimer.start();
     boolean prettyPrint = ctx.queryParam("pretty") != null;
     String result =
-        prettyPrint ? objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(obj)
-            : objectMapper.writeValueAsString(obj);
+        prettyPrint ? OBJECT_MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(obj)
+            : OBJECT_MAPPER.writeValueAsString(obj);
     final long jsonifyTime = timer.endTimer();
     metricsRegistry.add("WRITE_VALUE_CNT", 1);
     metricsRegistry.add("WRITE_VALUE_TIME", jsonifyTime);
-    if (logger.isDebugEnabled()) {
-      logger.debug("Jsonify TimeTaken={}", jsonifyTime);
+    if (LOG.isDebugEnabled()) {
+      LOG.debug("Jsonify TimeTaken={}", jsonifyTime);
     }
     return result;
   }
@@ -211,14 +207,14 @@ public class RequestHandler {
   }
 
   private void writeValueAsStringSync(Context ctx, Object obj) throws JsonProcessingException {
-    String result = jsonifyResult(ctx, obj, metricsRegistry, OBJECT_MAPPER, LOG);
+    String result = jsonifyResult(ctx, obj, metricsRegistry);
     ctx.result(result);
   }
 
   private void writeValueAsStringAsync(Context ctx, Object obj) {
     ctx.future(CompletableFuture.supplyAsync(() -> {
       try {
-        return jsonifyResult(ctx, obj, metricsRegistry, OBJECT_MAPPER, LOG);
+        return jsonifyResult(ctx, obj, metricsRegistry);
       } catch (JsonProcessingException e) {
         throw new HoodieException("Failed to JSON encode the value", e);
       }
