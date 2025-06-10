@@ -438,6 +438,11 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
   public abstract HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> getRecordsByKeys(
           HoodieData<String> keys, String partitionName, Option<SerializableFunctionUnchecked<String, String>> keyEncodingFn);
 
+  protected abstract HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> getRecordsByKeys(HoodieData<String> keys,
+                                                                                                  String partitionName,
+                                                                                                  Option<SerializableFunctionUnchecked<String, String>> keyEncodingFn,
+                                                                                                  Option<String> dataTablePartition);
+
   /**
    * Returns a collection of pairs (secondary-key -> set-of-record-keys) for the provided secondary keys.
    *

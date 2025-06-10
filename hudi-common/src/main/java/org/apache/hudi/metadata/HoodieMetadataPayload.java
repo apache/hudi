@@ -706,10 +706,13 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
    * Create and return a {@code HoodieMetadataPayload} to delete a record in the Metadata Table's record index.
    *
    * @param recordKey Key of the record to be deleted
+   * @param partitionPath of the record to be deleted
    */
-  public static HoodieRecord createRecordIndexDelete(String recordKey) {
+  public static HoodieRecord createRecordIndexDelete(String recordKey, String partitionPath, boolean isPartitionedRLI) {
     HoodieKey key = new HoodieKey(recordKey, MetadataPartitionType.RECORD_INDEX.getPartitionPath());
-    return new HoodieAvroRecord<>(key, new EmptyHoodieRecordPayload());
+    return new HoodieAvroRecord<>(key, isPartitionedRLI
+        ? new EmptyHoodieRecordPayloadWithPartition(partitionPath)
+        : new EmptyHoodieRecordPayload());
   }
 
   /**
