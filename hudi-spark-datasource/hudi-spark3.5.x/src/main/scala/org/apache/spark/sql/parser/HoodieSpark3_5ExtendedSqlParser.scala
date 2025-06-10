@@ -39,7 +39,7 @@ import java.util.Locale
 class HoodieSpark3_5ExtendedSqlParser(session: SparkSession, delegate: ParserInterface)
   extends HoodieExtendedParserInterface with Logging {
 
-  private lazy val conf = session.sqlContext.conf
+  private lazy val conf = session.sessionState.conf
   private lazy val builder = new HoodieSpark3_5ExtendedSqlAstBuilder(conf, delegate)
   private val substitutor = new VariableSubstitution
 

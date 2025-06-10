@@ -28,7 +28,6 @@ import org.apache.hudi.keygen.{ComplexKeyGenerator, CustomKeyGenerator}
 import org.apache.spark.sql.{RuntimeConfig, SparkSession, SQLContext}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.{CatalogStorageFormat, CatalogTable, CatalogTableType, HoodieCatalogTable}
-import org.apache.spark.sql.classic.ClassicConversions.castToImpl
 import org.apache.spark.sql.internal.{SessionState, SQLConf, StaticSQLConf}
 import org.apache.spark.sql.types.StructType
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -120,7 +119,6 @@ class TestProvidesHoodieConfig {
     when(mockRuntimeConf.getOption(any())).thenReturn(Option.empty)
     when(mockSparkSession.conf).thenReturn(mockRuntimeConf)
     when(mockSessionState.conf).thenReturn(mockSQLConf)
-    when(mockSQLContext.conf).thenReturn(mockSQLConf)
     when(mockSQLConf.getConf(StaticSQLConf.CATALOG_IMPLEMENTATION)).thenReturn("nothive")
     when(mockSQLConf.getAllConfs).thenReturn(Map.empty[String, String])
 

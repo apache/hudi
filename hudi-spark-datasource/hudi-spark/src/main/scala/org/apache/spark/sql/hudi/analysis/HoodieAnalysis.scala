@@ -391,7 +391,7 @@ case class ResolveImplementationsEarly(spark: SparkSession) extends Rule[Logical
               None
             }
             val hoodieCatalogTable = new HoodieCatalogTable(spark, lr.catalogTable.get)
-            val alignedQuery = alignQueryOutput(projectByUserSpecified.getOrElse(query), hoodieCatalogTable, partition, spark.sqlContext.conf)
+            val alignedQuery = alignQueryOutput(projectByUserSpecified.getOrElse(query), hoodieCatalogTable, partition, spark.sessionState.conf)
             new InsertIntoHoodieTableCommand(lr, alignedQuery, partition, overwrite)
           case _ => iis
         }

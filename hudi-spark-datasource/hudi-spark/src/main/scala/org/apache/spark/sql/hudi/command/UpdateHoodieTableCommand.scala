@@ -55,7 +55,7 @@ case class UpdateHoodieTableCommand(ut: UpdateTable, query: LogicalPlan) extends
     val tableId = catalogTable.table.qualifiedName
 
     logInfo(s"Executing 'UPDATE' command for $tableId")
-    val config = if (sparkSession.sqlContext.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key()
+    val config = if (sparkSession.sessionState.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key()
       , SPARK_SQL_OPTIMIZED_WRITES.defaultValue()) == "true") {
       // Set config to show that this is a prepped write.
       buildHoodieConfig(catalogTable) + (SPARK_SQL_WRITES_PREPPED_KEY -> "true")
@@ -143,7 +143,7 @@ object UpdateHoodieTableCommand extends SparkAdapterSupport with Logging {
       assignedAttributes
     )
 
-    val filteredOutput = if (sparkSession.sqlContext.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key()
+    val filteredOutput = if (sparkSession.sessionState.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key()
       , SPARK_SQL_OPTIMIZED_WRITES.defaultValue()) == "true") {
       ut.table.output
     } else {

@@ -204,7 +204,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
           (attr, expr)
       }
       if (resolving.isEmpty && rk._1.equals("primaryKey")
-        && sparkSession.sqlContext.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key(), "false") == "true") {
+        && sparkSession.sessionState.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key(), "false") == "true") {
         throw new HoodieAnalysisException(s"Hudi tables with record key are required to match on all record key columns. Column: '${rk._2}' not found")
       }
       resolving
@@ -826,7 +826,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
       HoodieWriteConfig.COMBINE_BEFORE_UPSERT.key() -> (!StringUtils.isNullOrEmpty(preCombineField)).toString
     )
 
-    combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf,
+    combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sessionState.conf,
       defaultOpts = Map.empty, overridingOpts = overridingOpts)
   }
 

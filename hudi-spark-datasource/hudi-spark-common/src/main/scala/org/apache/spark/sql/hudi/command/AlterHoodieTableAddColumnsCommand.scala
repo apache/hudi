@@ -31,7 +31,6 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
-import org.apache.spark.sql.classic.ClassicConversions.castToImpl
 import org.apache.spark.sql.hudi.HoodieOptionConfig
 import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 import org.apache.spark.sql.types.{StructField, StructType}
@@ -102,7 +101,7 @@ object AlterHoodieTableAddColumnsCommand extends SparkAdapterSupport with Loggin
       hoodieCatalogTable.tableLocation,
       hoodieCatalogTable.tableName,
       HoodieWriterUtils.parametersWithWriteDefaults(HoodieOptionConfig.mapSqlOptionsToDataSourceWriteConfigs(
-        hoodieCatalogTable.catalogProperties) ++ sparkSession.sqlContext.conf.getAllConfs ++ Map(
+        hoodieCatalogTable.catalogProperties) ++ sparkSession.sessionState.conf.getAllConfs ++ Map(
         HoodieCleanConfig.AUTO_CLEAN.key -> "false",
         HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key -> HoodieFailedWritesCleaningPolicy.NEVER.name,
         HoodieArchivalConfig.AUTO_ARCHIVE.key -> "false"

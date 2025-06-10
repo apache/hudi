@@ -31,7 +31,6 @@ import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.parser.{ParseErrorListener, ParseException, ParserInterface}
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.trees.Origin
-import org.apache.spark.sql.classic.ClassicConversions.castToImpl
 import org.apache.spark.sql.internal.VariableSubstitution
 import org.apache.spark.sql.types._
 
@@ -42,7 +41,7 @@ import scala.jdk.CollectionConverters._
 class HoodieSpark4_0ExtendedSqlParser(session: SparkSession, delegate: ParserInterface)
   extends HoodieExtendedParserInterface with Logging {
 
-  private lazy val conf = session.sqlContext.conf
+  private lazy val conf = session.sessionState.conf
   private lazy val builder = new HoodieSpark4_0ExtendedSqlAstBuilder(conf, delegate)
   private val substitutor = new VariableSubstitution
 

@@ -29,7 +29,6 @@ import org.apache.hudi.storage.StoragePath
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
-import org.apache.spark.sql.classic.ClassicConversions.castToImpl
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util
@@ -131,7 +130,7 @@ class RunBootstrapProcedure extends BaseProcedure with ProcedureBuilder with Log
     cfg.setBootstrapOverwrite(bootstrapOverwrite)
 
     // add session bootstrap conf
-    TypedProperties.putAll(properties, spark.sqlContext.conf.getAllConfs.asJava)
+    TypedProperties.putAll(properties, spark.sessionState.conf.getAllConfs.asJava)
 
     // add conf from procedure, may overwrite session conf
     options match {
