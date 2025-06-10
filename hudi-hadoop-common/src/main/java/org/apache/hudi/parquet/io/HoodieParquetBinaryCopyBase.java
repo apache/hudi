@@ -24,7 +24,6 @@ import org.apache.hudi.exception.HoodieException;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
-import org.apache.parquet.Version;
 import org.apache.parquet.bytes.BytesInput;
 import org.apache.parquet.column.ColumnDescriptor;
 import org.apache.parquet.column.ColumnReader;
@@ -134,27 +133,15 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
       this.requiredSchema = schema;
       this.newCodecName = newCodecName;
       ParquetFileWriter.Mode writerMode = ParquetFileWriter.Mode.CREATE;
-      if (Version.VERSION_NUMBER.compareTo("1.13.1") < 0) {
-        writer = new HoodieParquetFileWriter(
-            HadoopOutputFile.fromPath(outPutFile, conf),
-            schema,
-            writerMode,
-            DEFAULT_BLOCK_SIZE,
-            MAX_PADDING_SIZE_DEFAULT,
-            DEFAULT_COLUMN_INDEX_TRUNCATE_LENGTH,
-            DEFAULT_STATISTICS_TRUNCATE_LENGTH,
-            ParquetProperties.DEFAULT_PAGE_WRITE_CHECKSUM_ENABLED);
-      } else {
-        writer = new ParquetFileWriter(
-            HadoopOutputFile.fromPath(outPutFile, conf),
-            schema,
-            writerMode,
-            DEFAULT_BLOCK_SIZE,
-            MAX_PADDING_SIZE_DEFAULT,
-            DEFAULT_COLUMN_INDEX_TRUNCATE_LENGTH,
-            DEFAULT_STATISTICS_TRUNCATE_LENGTH,
-            ParquetProperties.DEFAULT_PAGE_WRITE_CHECKSUM_ENABLED);
-      }
+      writer = new ParquetFileWriter(
+          HadoopOutputFile.fromPath(outPutFile, conf),
+          schema,
+          writerMode,
+          DEFAULT_BLOCK_SIZE,
+          MAX_PADDING_SIZE_DEFAULT,
+          DEFAULT_COLUMN_INDEX_TRUNCATE_LENGTH,
+          DEFAULT_STATISTICS_TRUNCATE_LENGTH,
+          ParquetProperties.DEFAULT_PAGE_WRITE_CHECKSUM_ENABLED);
       writer.start();
       LOG.info("init writer ");
     } catch (Exception e) {
