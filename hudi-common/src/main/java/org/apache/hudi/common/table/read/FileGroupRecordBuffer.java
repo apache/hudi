@@ -68,6 +68,7 @@ import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_
 import static org.apache.hudi.common.config.HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE;
 import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE;
 import static org.apache.hudi.common.config.HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH;
+import static org.apache.hudi.common.config.HoodieReaderConfig.MERGE_PREFER_OLD_RECORD;
 import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 import static org.apache.hudi.common.model.HoodieRecord.HOODIE_IS_DELETED_FIELD;
 import static org.apache.hudi.common.model.HoodieRecord.OPERATION_METADATA_FIELD;
@@ -87,6 +88,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   protected final boolean shouldCheckCustomDeleteMarker;
   protected final boolean shouldCheckBuiltInDeleteMarker;
   protected final boolean emitDelete;
+  protected final boolean preferOldRecord;
   protected ClosableIterator<T> baseFileIterator;
   protected Iterator<BufferedRecord<T>> logRecordIterator;
   protected T nextRecord;
@@ -134,6 +136,8 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
         readerContext.getSchemaHandler().getCustomDeleteMarkerKeyValue().isPresent();
     this.shouldCheckBuiltInDeleteMarker =
         readerContext.getSchemaHandler().hasBuiltInDelete();
+    this.preferOldRecord = props.getBoolean(
+        MERGE_PREFER_OLD_RECORD.key(), MERGE_PREFER_OLD_RECORD.defaultValue());
   }
 
   /**
@@ -447,7 +451,8 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
           Comparable newOrderingValue = newerRecord.getOrderingValue();
           Comparable oldOrderingValue = olderRecord.getOrderingValue();
           if (!olderRecord.isCommitTimeOrderingDelete()
-              && oldOrderingValue.compareTo(newOrderingValue) > 0) {
+              && (oldOrderingValue.compareTo(newOrderingValue) > 0
+              || (oldOrderingValue.compareTo(newOrderingValue) == 0 && preferOldRecord))) {
             return Pair.of(olderRecord.isDelete(), olderRecord.getRecord());
           }
           return Pair.of(newerRecord.isDelete(), newerRecord.getRecord());
@@ -513,7 +518,9 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
       // handle records coming from DELETE statements(the orderingVal is constant 0)
       return true;
     }
-    return newRecord.getOrderingValue().compareTo(oldRecord.getOrderingValue()) >= 0;
+    return preferOldRecord
+        ? newRecord.getOrderingValue().compareTo(oldRecord.getOrderingValue()) > 0
+        : newRecord.getOrderingValue().compareTo(oldRecord.getOrderingValue()) >= 0;
   }
 
   private Option<Pair<HoodieRecord, Schema>> getMergedRecord(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) throws IOException {

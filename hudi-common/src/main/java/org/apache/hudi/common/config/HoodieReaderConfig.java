@@ -73,6 +73,13 @@ public class HoodieReaderConfig extends HoodieConfig {
       .sinceVersion("1.0.0")
       .withDocumentation("Whether to use positions in the block header for data blocks containing updates and delete blocks for merging.");
 
+  public static final ConfigProperty<Boolean> MERGE_PREFER_OLD_RECORD = ConfigProperty
+      .key("hoodie.merge.prefer.old.record")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Prefer old record when two records have the same ordering value");
+
   public static final String REALTIME_SKIP_MERGE = "skip_merge";
   public static final String REALTIME_PAYLOAD_COMBINE = "payload_combine";
   public static final ConfigProperty<String> MERGE_TYPE = ConfigProperty
