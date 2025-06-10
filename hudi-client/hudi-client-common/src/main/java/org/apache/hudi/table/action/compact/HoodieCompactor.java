@@ -209,38 +209,41 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
             new StoragePath(FSUtils.constructAbsolutePath(
                 metaClient.getBasePath(), operation.getPartitionPath()), p).toString())
         .collect(toList());
-    HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
-        .withStorage(storage)
-        .withBasePath(metaClient.getBasePath())
-        .withLogFilePaths(logFiles)
-        .withReaderSchema(readerSchema)
-        .withLatestInstantTime(executionHelper.instantTimeToUseForScanning(instantTime, maxInstantTime))
-        .withInstantRange(instantRange)
-        .withInternalSchema(internalSchemaOption.orElse(InternalSchema.getEmptyInternalSchema()))
-        .withMaxMemorySizeInBytes(maxMemoryPerCompaction)
-        .withReverseReader(config.getCompactionReverseLogReadEnabled())
-        .withBufferSize(config.getMaxDFSStreamBufferSize())
-        .withSpillableMapBasePath(config.getSpillableMapBasePath())
-        .withDiskMapType(config.getCommonConfig().getSpillableDiskMapType())
-        .withBitCaskDiskMapCompressionEnabled(config.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
-        .withOperationField(config.allowOperationMetadataField())
-        .withPartition(operation.getPartitionPath())
-        .withOptimizedLogBlocksScan(executionHelper.enableOptimizedLogBlockScan(config))
-        .withRecordMerger(config.getRecordMerger())
-        .withTableMetaClient(metaClient)
-        .build();
+    HoodieMergedLogRecordScanner scanner = null;
+    try {
+      scanner = HoodieMergedLogRecordScanner.newBuilder()
+          .withStorage(storage)
+          .withBasePath(metaClient.getBasePath())
+          .withLogFilePaths(logFiles)
+          .withReaderSchema(readerSchema)
+          .withLatestInstantTime(executionHelper.instantTimeToUseForScanning(instantTime, maxInstantTime))
+          .withInstantRange(instantRange)
+          .withInternalSchema(internalSchemaOption.orElse(InternalSchema.getEmptyInternalSchema()))
+          .withMaxMemorySizeInBytes(maxMemoryPerCompaction)
+          .withReverseReader(config.getCompactionReverseLogReadEnabled())
+          .withBufferSize(config.getMaxDFSStreamBufferSize())
+          .withSpillableMapBasePath(config.getSpillableMapBasePath())
+          .withDiskMapType(config.getCommonConfig().getSpillableDiskMapType())
+          .withBitCaskDiskMapCompressionEnabled(config.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
+          .withOperationField(config.allowOperationMetadataField())
+          .withPartition(operation.getPartitionPath())
+          .withOptimizedLogBlocksScan(executionHelper.enableOptimizedLogBlockScan(config))
+          .withRecordMerger(config.getRecordMerger())
+          .withTableMetaClient(metaClient)
+          .build();
+      final HoodieMergedLogRecordScanner finalScanner = scanner;
 
-    Option<HoodieBaseFile> oldDataFileOpt =
-        operation.getBaseFile(metaClient.getBasePath().toString(), operation.getPartitionPath());
+      Option<HoodieBaseFile> oldDataFileOpt =
+          operation.getBaseFile(metaClient.getBasePath().toString(), operation.getPartitionPath());
 
-    // Considering following scenario: if all log blocks in this fileSlice is rollback, it returns an empty scanner.
-    // But in this case, we need to give it a base file. Otherwise, it will lose base file in following fileSlice.
-    if (!scanner.iterator().hasNext()) {
-      if (!oldDataFileOpt.isPresent()) {
-        scanner.close();
-        return new ArrayList<>();
-      } else {
-        // TODO: we may directly rename original parquet file if there is not evolution/devolution of schema
+      // Considering following scenario: if all log blocks in this fileSlice is rollback, it returns an empty scanner.
+      // But in this case, we need to give it a base file. Otherwise, it will lose base file in following fileSlice.
+      if (!scanner.iterator().hasNext()) {
+        if (!oldDataFileOpt.isPresent()) {
+          scanner.close();
+          return new ArrayList<>();
+        } else {
+          // TODO: we may directly rename original parquet file if there is not evolution/devolution of schema
         /*
         TaskContextSupplier taskContextSupplier = hoodieCopyOnWriteTable.getTaskContextSupplier();
         String newFileName = FSUtils.makeDataFileName(instantTime,
@@ -250,36 +253,41 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
         Path newFilePath = new Path(oldFilePath.getParent(), newFileName);
         FileUtil.copy(fs,oldFilePath, fs, newFilePath, false, fs.getConf());
         */
+        }
+      }
+
+      // Compacting is very similar to applying updates to existing file
+      Iterator<List<WriteStatus>> result;
+      result = executionHelper.writeFileAndGetWriteStats(compactionHandler, operation, instantTime, scanner, oldDataFileOpt);
+      scanner.close();
+
+      Iterable<List<WriteStatus>> resultIterable = () -> result;
+      return StreamSupport.stream(resultIterable.spliterator(), false).flatMap(Collection::stream).peek(s -> {
+        final HoodieWriteStat stat = s.getStat();
+        stat.setTotalUpdatedRecordsCompacted(finalScanner.getNumMergedRecordsInLog());
+        stat.setTotalLogFilesCompacted(finalScanner.getTotalLogFiles());
+        stat.setTotalLogRecords(finalScanner.getTotalLogRecords());
+        stat.setPartitionPath(operation.getPartitionPath());
+        stat
+            .setTotalLogSizeCompacted(operation.getMetrics().get(CompactionStrategy.TOTAL_LOG_FILE_SIZE).longValue());
+        stat.setTotalLogBlocks(finalScanner.getTotalLogBlocks());
+        stat.setTotalCorruptLogBlock(finalScanner.getTotalCorruptBlocks());
+        stat.setTotalRollbackBlocks(finalScanner.getTotalRollbacks());
+        RuntimeStats runtimeStats = new RuntimeStats();
+        // scan time has to be obtained from scanner.
+        runtimeStats.setTotalScanTime(finalScanner.getTotalTimeTakenToReadAndMergeBlocks());
+        // create and upsert time are obtained from the create or merge handle.
+        if (stat.getRuntimeStats() != null) {
+          runtimeStats.setTotalCreateTime(stat.getRuntimeStats().getTotalCreateTime());
+          runtimeStats.setTotalUpsertTime(stat.getRuntimeStats().getTotalUpsertTime());
+        }
+        stat.setRuntimeStats(runtimeStats);
+      }).collect(toList());
+    } finally {
+      if (scanner != null) {
+        scanner.close();
       }
     }
-
-    // Compacting is very similar to applying updates to existing file
-    Iterator<List<WriteStatus>> result;
-    result = executionHelper.writeFileAndGetWriteStats(compactionHandler, operation, instantTime, scanner, oldDataFileOpt);
-    scanner.close();
-
-    Iterable<List<WriteStatus>> resultIterable = () -> result;
-    return StreamSupport.stream(resultIterable.spliterator(), false).flatMap(Collection::stream).peek(s -> {
-      final HoodieWriteStat stat = s.getStat();
-      stat.setTotalUpdatedRecordsCompacted(scanner.getNumMergedRecordsInLog());
-      stat.setTotalLogFilesCompacted(scanner.getTotalLogFiles());
-      stat.setTotalLogRecords(scanner.getTotalLogRecords());
-      stat.setPartitionPath(operation.getPartitionPath());
-      stat
-          .setTotalLogSizeCompacted(operation.getMetrics().get(CompactionStrategy.TOTAL_LOG_FILE_SIZE).longValue());
-      stat.setTotalLogBlocks(scanner.getTotalLogBlocks());
-      stat.setTotalCorruptLogBlock(scanner.getTotalCorruptBlocks());
-      stat.setTotalRollbackBlocks(scanner.getTotalRollbacks());
-      RuntimeStats runtimeStats = new RuntimeStats();
-      // scan time has to be obtained from scanner.
-      runtimeStats.setTotalScanTime(scanner.getTotalTimeTakenToReadAndMergeBlocks());
-      // create and upsert time are obtained from the create or merge handle.
-      if (stat.getRuntimeStats() != null) {
-        runtimeStats.setTotalCreateTime(stat.getRuntimeStats().getTotalCreateTime());
-        runtimeStats.setTotalUpsertTime(stat.getRuntimeStats().getTotalUpsertTime());
-      }
-      stat.setRuntimeStats(runtimeStats);
-    }).collect(toList());
   }
 
   /**
