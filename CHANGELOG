@@ -808,3 +808,7 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 --- [2025-06-09 16:51:19] [release-v1.132.0] ---
 [ENG-28046][INTERNAL] Fix include = loading for default DFSPropertiesConfiguration (#1402)
 [AUDIT-1071]: Changelog for release-v1.131.0 (#1399)
+
+--- [2025-06-10 18:39:44] [release-v1.132.1] ---
+[ENG-24737][INTERNAL] Adding partitioned RLI support to hudi for non-global use-cases  (#1347)
+[AUDIT-1071]: Changelog for release-v1.132.0 (#1403)
