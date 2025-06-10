@@ -585,7 +585,7 @@ stages:
           - script: |
               ./scripts/jacoco/generate_jacoco_coverage_report.sh jacoco-lib/lib/jacococli.jar $(Build.SourcesDirectory)
             displayName: 'Generate JaCoCo Code Coverage Report'
-          - task: PublishCodeCoverageResults@2
+          - task: PublishCodeCoverageResults@1
             displayName: 'Publish JaCoCo Code Coverage'
             inputs:
               codeCoverageTool: 'JaCoCo'
