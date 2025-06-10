@@ -29,6 +29,7 @@ import org.apache.avro.Schema;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.Objects;
 import java.util.Properties;
 
 import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
@@ -45,7 +46,7 @@ public class BufferedRecord<T> implements Serializable {
   private final Integer schemaId;
   private final boolean isDelete;
 
-  private BufferedRecord(String recordKey, Comparable orderingValue, T record, Integer schemaId, boolean isDelete) {
+  public BufferedRecord(String recordKey, Comparable orderingValue, T record, Integer schemaId, boolean isDelete) {
     this.recordKey = recordKey;
     this.orderingValue = orderingValue;
     this.record = record;
@@ -106,5 +107,23 @@ public class BufferedRecord<T> implements Serializable {
       record = readerContext.seal(readerContext.toBinaryRow(readerContext.getSchemaFromBufferRecord(this), record));
     }
     return this;
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    BufferedRecord<?> that = (BufferedRecord<?>) o;
+    return isDelete == that.isDelete && Objects.equals(recordKey, that.recordKey) && Objects.equals(orderingValue, that.orderingValue)
+        && Objects.equals(record, that.record) && Objects.equals(schemaId, that.schemaId);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(recordKey, orderingValue, record, schemaId, isDelete);
   }
 }
