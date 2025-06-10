@@ -171,7 +171,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   @Override
-  public JavaRDD<WriteStatus> writeToMetadataTableForBatchPartitions(JavaRDD<HoodieRecord> preppedRecords, String instantTime) {
+  public JavaRDD<WriteStatus> batchWriteToMetadataTablePartitions(JavaRDD<HoodieRecord> preppedRecords, String instantTime) {
     engineContext.setJobStatus(this.getClass().getSimpleName(), String.format("Upserting at %s into metadata table %s", instantTime, metadataWriteConfig.getTableName()));
     JavaRDD<WriteStatus> metadataWriteStatusesSoFar = getWriteClient().upsertPreppedRecords(preppedRecords, instantTime);
     return metadataWriteStatusesSoFar;

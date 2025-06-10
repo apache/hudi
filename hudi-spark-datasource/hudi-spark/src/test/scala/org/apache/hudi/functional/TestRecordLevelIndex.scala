@@ -342,7 +342,6 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
   @ParameterizedTest
   @EnumSource(classOf[HoodieTableType])
   def testRLIWithDTCleaning(tableType: HoodieTableType): Unit = {
-    val tableType = HoodieTableType.MERGE_ON_READ
     var hudiOpts = commonOpts ++ Map(
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
       HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key() -> "1")

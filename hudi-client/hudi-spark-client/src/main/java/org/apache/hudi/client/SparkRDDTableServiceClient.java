@@ -43,7 +43,7 @@ import java.util.stream.Collectors;
 
 public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<HoodieData<HoodieRecord<T>>, HoodieData<WriteStatus>, JavaRDD<WriteStatus>> {
 
-  private HoodieMetadataWriterWrapper metadataWriterWrapper = new HoodieMetadataWriterWrapper();
+  private HoodieMetadataWriteWrapper metadataWriterWrapper = new HoodieMetadataWriteWrapper();
   protected SparkRDDTableServiceClient(HoodieEngineContext context,
                                        HoodieWriteConfig clientConfig,
                                        Option<EmbeddedTimelineService> timelineService) {
@@ -76,13 +76,21 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
 
   @Override
   protected HoodieWriteMetadata<HoodieData<WriteStatus>> processWriteMetadata(HoodieTable table, HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata, String instantTime) {
-    writeMetadata.setWriteStatuses(metadataWriterWrapper.mayBeStreamWriteToMetadataTable(table, config, isMetadataTable, writeMetadata.getWriteStatuses(), instantTime));
+    if (!isMetadataTable && config.isMetadataTableEnabled() && config.isMetadataStreamingWritesEnabled(table.getMetaClient().getTableConfig().getTableVersion())) {
+      writeMetadata.setWriteStatuses(metadataWriterWrapper.streamWriteToMetadataTable(table, writeMetadata.getWriteStatuses(), instantTime));
+    }
     return writeMetadata;
   }
 
   @Override
   protected void writeToMetadataTable(HoodieTable table, String instantTime, HoodieCommitMetadata metadata, List<HoodieWriteStat> metadataWriteStatsSoFar) {
-    metadataWriterWrapper.writeToMetadataTable(table, config, isMetadataTable, instantTime, metadata, metadataWriteStatsSoFar, this);
+    boolean streamingWritesToMetadataTableEnabled = !isMetadataTable && config.isMetadataTableEnabled()
+        && config.isMetadataStreamingWritesEnabled(table.getMetaClient().getTableConfig().getTableVersion());
+    if (streamingWritesToMetadataTableEnabled) {
+      metadataWriterWrapper.writeToMetadataTable(table, instantTime, metadata, metadataWriteStatsSoFar);
+    } else {
+      writeTableMetadata(table, instantTime, metadata);
+    }
   }
 
   @Override

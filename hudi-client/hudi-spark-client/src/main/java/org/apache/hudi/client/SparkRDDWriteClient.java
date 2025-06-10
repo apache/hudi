@@ -70,7 +70,7 @@ public class SparkRDDWriteClient<T> extends
     BaseHoodieWriteClient<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
 
   private static final Logger LOG = LoggerFactory.getLogger(SparkRDDWriteClient.class);
-  private HoodieMetadataWriterWrapper metadataWriterWrapper = new HoodieMetadataWriterWrapper();
+  private HoodieMetadataWriteWrapper metadataWriteWrapper = new HoodieMetadataWriteWrapper();
 
   public SparkRDDWriteClient(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
     this(context, clientConfig, Option.empty());
@@ -108,7 +108,7 @@ public class SparkRDDWriteClient<T> extends
     JavaRDD<WriteStatus> writeStatuses = rawWriteStatuses;
     if (config.isMetadataTableEnabled() && config.isMetadataStreamingWritesEnabled(table.getMetaClient().getTableConfig().getTableVersion())
         && WriteOperationType.streamingWritesToMetadataSupported((getOperationType()))) {
-      writeStatuses = HoodieJavaRDD.getJavaRDD(metadataWriterWrapper.mayBeStreamWriteToMetadataTable(table, config, false, HoodieJavaRDD.of(rawWriteStatuses), instantTime));
+      writeStatuses = HoodieJavaRDD.getJavaRDD(metadataWriteWrapper.streamWriteToMetadataTable(table, HoodieJavaRDD.of(rawWriteStatuses), instantTime));
     }
 
     // Triggering the dag for writes.
@@ -154,8 +154,9 @@ public class SparkRDDWriteClient<T> extends
   @Override
   protected void writeToMetadataTable(boolean skipStreamingWritesToMetadataTable, HoodieWriteConfig config, HoodieTable table, WriteOperationType writeOperationType,
                                       String instantTime, List<HoodieWriteStat> partialMetadataHoodieWriteStatsSoFar, HoodieCommitMetadata metadata) {
-    if (!skipStreamingWritesToMetadataTable && WriteOperationType.streamingWritesToMetadataSupported(writeOperationType)) {
-      metadataWriterWrapper.writeToMetadataTable(table, config, isMetadataTable, instantTime, metadata, partialMetadataHoodieWriteStatsSoFar, this);
+    if (!skipStreamingWritesToMetadataTable && config.isMetadataTableEnabled() && WriteOperationType.streamingWritesToMetadataSupported(writeOperationType)
+        && config.isMetadataStreamingWritesEnabled(table.getMetaClient().getTableConfig().getTableVersion())) {
+      metadataWriteWrapper.writeToMetadataTable(table, instantTime, metadata, partialMetadataHoodieWriteStatsSoFar);
     } else {
       writeTableMetadata(table, instantTime, metadata);
     }
