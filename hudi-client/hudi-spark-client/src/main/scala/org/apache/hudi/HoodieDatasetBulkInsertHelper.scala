@@ -150,7 +150,7 @@ object HoodieDatasetBulkInsertHelper
                  writeConfig: HoodieWriteConfig,
                  arePartitionRecordsSorted: Boolean,
                  shouldPreserveHoodieMetadata: Boolean): HoodieData[WriteStatus] = {
-    val schema = AvroConversionUtils.alignFields(dataset.schema, new Schema.Parser().parse(writeConfig.getSchema))
+    val schema = AvroConversionUtils.alignFieldsNullability(dataset.schema, new Schema.Parser().parse(writeConfig.getSchema))
     HoodieJavaRDD.of(
       injectSQLConf(dataset.queryExecution.toRdd.mapPartitions(iter => {
         val taskContextSupplier: TaskContextSupplier = table.getTaskContextSupplier

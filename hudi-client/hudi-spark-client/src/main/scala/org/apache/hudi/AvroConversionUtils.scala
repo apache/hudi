@@ -271,7 +271,7 @@ object AvroConversionUtils {
   /**
    * Recursively aligns the nullable property of hoodie table schema, supporting nested structures
    */
-  def alignFields(sourceSchema: StructType, avroSchema: Schema): StructType = {
+  def alignFieldsNullability(sourceSchema: StructType, avroSchema: Schema): StructType = {
     // Converts Avro fields to a Map for efficient lookup
     val avroFieldsMap = avroSchema.getFields.asScala.map(f => (f.name, f)).toMap
 
@@ -288,7 +288,7 @@ object AvroConversionUtils {
               // For struct type, recursively process its internal fields
               val nestedAvroSchema = unwrapNullableSchema(avroField.schema)
               if (nestedAvroSchema.getType == Schema.Type.RECORD) {
-                alignedField.copy(dataType = alignFields(structType, nestedAvroSchema))
+                alignedField.copy(dataType = alignFieldsNullability(structType, nestedAvroSchema))
               } else {
                 alignedField
               }
@@ -345,7 +345,7 @@ object AvroConversionUtils {
     dataType match {
       case structType: StructType =>
         if (avroSchema.getType == Schema.Type.RECORD) {
-          alignFields(structType, avroSchema)
+          alignFieldsNullability(structType, avroSchema)
         } else {
           structType
         }
