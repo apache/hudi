@@ -23,7 +23,6 @@ import org.apache.hudi.common.model.ConsistentHashingNode;
 import org.apache.hudi.common.model.HoodieConsistentHashingMetadata;
 import org.apache.hudi.common.util.Option;
 
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -46,7 +45,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Unit test of consistent bucket identifier
  */
-@Tag("functional")
 public class TestConsistentBucketIdIdentifier {
 
   private static Stream<Arguments> splitBucketParams() {
