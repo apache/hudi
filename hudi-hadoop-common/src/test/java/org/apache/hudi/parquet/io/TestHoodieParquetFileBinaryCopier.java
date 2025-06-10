@@ -25,6 +25,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.HadoopReadOptions;
 import org.apache.parquet.Version;
+import org.apache.parquet.column.ColumnDescriptor;
 import org.apache.parquet.column.ParquetProperties;
 import org.apache.parquet.crypto.ParquetCipher;
 import org.apache.parquet.example.data.Group;
@@ -48,11 +49,14 @@ import org.apache.parquet.hadoop.util.CompressionConverter.TransParquetFileReade
 import org.apache.parquet.hadoop.util.HadoopInputFile;
 import org.apache.parquet.internal.column.columnindex.ColumnIndex;
 import org.apache.parquet.internal.column.columnindex.OffsetIndex;
+import org.apache.parquet.io.api.Binary;
 import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.MessageType;
+import org.apache.parquet.schema.OriginalType;
 import org.apache.parquet.schema.PrimitiveType;
 import org.apache.parquet.schema.Type;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -60,6 +64,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -68,16 +73,17 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.model.HoodieRecord.FILENAME_METADATA_FIELD;
+import static org.apache.parquet.internal.column.columnindex.BoundaryOrder.ASCENDING;
 import static org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.BINARY;
 import static org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.INT32;
 import static org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.INT64;
 import static org.apache.parquet.schema.Type.Repetition.OPTIONAL;
 import static org.apache.parquet.schema.Type.Repetition.REPEATED;
 import static org.apache.parquet.schema.Type.Repetition.REQUIRED;
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -85,7 +91,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class TestHoodieParquetFileBinaryCopier {
 
-  private final int numRecord = 1;
+  private final int numRecord = 1000;
   private Configuration conf = new Configuration();
   private List<TestFile> inputFiles = null;
   private String outputFile = null;
@@ -121,24 +127,7 @@ public class TestHoodieParquetFileBinaryCopier {
     StoragePath outputPath = new StoragePath(outputFile);
     writer.binaryCopy(inputPaths, Collections.singletonList(outputPath), schema, new Properties());
     writer.close();
-
-    // Verify the schema are not changed
-    ParquetMetadata pmd = ParquetFileReader.readFooter(conf, new Path(outputFile), ParquetMetadataConverter.NO_FILTER);
-    MessageType fileSchema = pmd.getFileMetaData().getSchema();
-    assertEquals(schema, fileSchema);
-    validateSchema(fileSchema);
-
-    // Verify codec
-    verifyCodec(outputFile, CompressionCodecName.GZIP);
-
-    // Verify the merged data are not changed
-    validateColumnData();
-
-    // Verify the page index
-    validatePageIndex(0, 1, 2, 3, 4);
-
-    // Verify original.created.by is preserved
-    validateCreatedBy();
+    verify(schema, CompressionCodecName.GZIP);
   }
 
   @Test
@@ -156,24 +145,7 @@ public class TestHoodieParquetFileBinaryCopier {
     StoragePath outputPath = new StoragePath(outputFile);
     writer.binaryCopy(inputPaths, Collections.singletonList(outputPath), schema, new Properties());
     writer.close();
-
-    // Verify the schema are not changed for the columns not pruned
-    ParquetMetadata pmd = ParquetFileReader.readFooter(conf, new Path(outputFile), ParquetMetadataConverter.NO_FILTER);
-    MessageType fileSchema = pmd.getFileMetaData().getSchema();
-    assertEquals(schema, fileSchema);
-    validateSchema(fileSchema);
-
-    // Verify codec has been translated
-    verifyCodec(outputFile, CompressionCodecName.ZSTD);
-
-    // Verify the data are not changed for the columns not pruned
-    validateColumnData();
-
-    // Verify the page index
-    validatePageIndex(0, 1, 2, 3, 4);
-
-    // Verify original.created.by is preserved
-    validateCreatedBy();
+    verify(schema, CompressionCodecName.ZSTD);
   }
 
   @Test
@@ -201,23 +173,231 @@ public class TestHoodieParquetFileBinaryCopier {
     StoragePath outputPath = new StoragePath(outputFile);
     writer.binaryCopy(inputPaths, Collections.singletonList(outputPath), schema1, new Properties());
     writer.close();
+    verify(schema1, CompressionCodecName.UNCOMPRESSED);
+  }
 
-    // Verify the schema are not changed for the columns not pruned
-    ParquetMetadata pmd = ParquetFileReader.readFooter(conf, new Path(outputFile), ParquetMetadataConverter.NO_FILTER);
-    MessageType schema = pmd.getFileMetaData().getSchema();
-    validateSchema(schema);
+  @Test
+  public void testConvertLegacy3LevelArrayType() throws Exception {
+    MessageType requiredSchema = new MessageType("schema",
+        new PrimitiveType(REQUIRED, BINARY, "Name"),
+        new GroupType(OPTIONAL, "Links", OriginalType.LIST,
+            new GroupType(REPEATED, "list", new PrimitiveType(REPEATED, BINARY, "element"))
+        )
+    );
+    MessageType inputSchema = new MessageType("schema",
+        new PrimitiveType(REQUIRED, BINARY, "Name"),
+        new GroupType(OPTIONAL, "Links", OriginalType.LIST,
+            new GroupType(OPTIONAL, "bag", new PrimitiveType(REPEATED, BINARY, "array"))
+        )
+    );
+    inputFiles = new ArrayList<>();
+    inputFiles.add(makeTestFile(inputSchema, "GZIP"));
+    inputFiles.add(makeTestFile(inputSchema, "GZIP"));
 
-    // Verify codec has been translated
-    verifyCodec(outputFile, CompressionCodecName.UNCOMPRESSED);
+    List<StoragePath> inputPaths = inputFiles.stream()
+        .map(TestFile::getFileName)
+        .map(StoragePath::new)
+        .collect(Collectors.toList());
 
-    // Verify the data are not changed
-    validateColumnData();
+    writer = parquetFileBinaryCopier(requiredSchema, "GZIP");
+    StoragePath outputPath = new StoragePath(outputFile);
+    writer.binaryCopy(inputPaths, Collections.singletonList(outputPath), requiredSchema, new Properties());
+    writer.close();
 
-    // Verify the page index
-    validatePageIndex(0, 1, 2);
+    List<ColumnDescriptor> columns = inputSchema.getColumns();
+    Assertions.assertEquals(2, columns.size());
+    verifyColumnConvert(columns.get(0), writer::convertLegacy3LevelArray, false, "Name", "Name");
+    verifyColumnConvert(columns.get(1), writer::convertLegacy3LevelArray, true, "Links.bag.array", "Links.list.element");
+    verify(requiredSchema, CompressionCodecName.GZIP);
+  }
 
-    // Verify original.created.by is preserved
-    validateCreatedBy();
+  @Test
+  public void testConvertLegacy3LevelArrayTypeInNestedField() throws Exception {
+    // two column,
+    // column 1: Links is ArrayType with every element is ArrayType
+    // column 1: Map is MapType, key of map is BinaryType and value of map is ArrayType
+    MessageType requiredSchema = new MessageType("schema",
+        new GroupType(OPTIONAL, "Links", OriginalType.LIST,
+            new GroupType(REPEATED, "list",
+                new GroupType(OPTIONAL, "element", OriginalType.LIST,
+                    new GroupType(REPEATED, "list",
+                        new PrimitiveType(REPEATED, BINARY, "element")
+                    )
+                )
+            )
+        ),
+        new GroupType(OPTIONAL, "Map", OriginalType.MAP,
+            new GroupType(REPEATED, "key_value",
+                new PrimitiveType(REQUIRED, BINARY, "key"),
+                new GroupType(OPTIONAL, "value", OriginalType.LIST,
+                    new GroupType(REPEATED, "list",
+                        new PrimitiveType(REPEATED, BINARY, "element")
+                    )
+                )
+            )
+        )
+    );
+
+    MessageType inputSchema = new MessageType("schema",
+        new GroupType(OPTIONAL, "Links", OriginalType.LIST,
+            new GroupType(OPTIONAL, "bag",
+                new GroupType(OPTIONAL, "array", OriginalType.LIST,
+                    new GroupType(OPTIONAL, "bag",
+                        new PrimitiveType(REPEATED, BINARY, "array")
+                    )
+                )
+            )
+        ),
+        new GroupType(OPTIONAL, "Map", OriginalType.MAP,
+            new GroupType(REPEATED, "key_value",
+                new PrimitiveType(REQUIRED, BINARY, "key"),
+                new GroupType(OPTIONAL, "value", OriginalType.LIST,
+                    new GroupType(REPEATED, "bag",
+                        new PrimitiveType(REPEATED, BINARY, "array")
+                    )
+                )
+            )
+        )
+    );
+
+    inputFiles = new ArrayList<>();
+    inputFiles.add(makeTestFile(inputSchema, "GZIP"));
+    inputFiles.add(makeTestFile(inputSchema, "GZIP"));
+
+    List<StoragePath> inputPaths = inputFiles.stream()
+        .map(TestFile::getFileName)
+        .map(StoragePath::new)
+        .collect(Collectors.toList());
+
+    writer = parquetFileBinaryCopier(requiredSchema, "GZIP");
+    StoragePath outputPath = new StoragePath(outputFile);
+    writer.binaryCopy(inputPaths, Collections.singletonList(outputPath), requiredSchema, new Properties());
+    writer.close();
+
+    List<ColumnDescriptor> columns = inputSchema.getColumns();
+    Assertions.assertEquals(3, columns.size());
+    verifyColumnConvert(columns.get(0), writer::convertLegacy3LevelArray, true, "Links.bag.array.bag.array", "Links.list.element.list.element");
+    verifyColumnConvert(columns.get(1), writer::convertLegacy3LevelArray, false, "Map.key_value.key", "Map.key_value.key");
+    verifyColumnConvert(columns.get(2), writer::convertLegacy3LevelArray, true, "Map.key_value.value.bag.array", "Map.key_value.value.list.element");
+    verify(requiredSchema, CompressionCodecName.GZIP);
+  }
+
+  @Test
+  public void testConvertLegacyMapType() throws Exception {
+    MessageType requiredSchema = new MessageType("schema",
+        new PrimitiveType(REQUIRED, BINARY, "Name"),
+        new GroupType(OPTIONAL, "Map", OriginalType.MAP,
+            new GroupType(REPEATED, "key_value", OriginalType.MAP_KEY_VALUE,
+                new PrimitiveType(REQUIRED, BINARY, "key"),
+                new PrimitiveType(OPTIONAL, BINARY, "value")
+            )
+        )
+    );
+    MessageType inputSchema = new MessageType("schema",
+        new PrimitiveType(REQUIRED, BINARY, "Name"),
+        new GroupType(OPTIONAL, "Map", OriginalType.MAP,
+            new GroupType(REPEATED, "map",
+                new PrimitiveType(REQUIRED, BINARY, "key"),
+                new PrimitiveType(OPTIONAL, BINARY, "value")
+            )
+        )
+    );
+    inputFiles = new ArrayList<>();
+    inputFiles.add(makeTestFile(inputSchema, "GZIP"));
+    inputFiles.add(makeTestFile(inputSchema, "GZIP"));
+
+    List<StoragePath> inputPaths = inputFiles.stream()
+        .map(TestFile::getFileName)
+        .map(StoragePath::new)
+        .collect(Collectors.toList());
+
+    writer = parquetFileBinaryCopier(requiredSchema, "GZIP");
+    StoragePath outputPath = new StoragePath(outputFile);
+    writer.binaryCopy(inputPaths, Collections.singletonList(outputPath), requiredSchema, new Properties());
+    writer.close();
+
+    List<ColumnDescriptor> columns = inputSchema.getColumns();
+    Assertions.assertEquals(3, columns.size());
+    verifyColumnConvert(columns.get(0), writer::convertLegacyMap, false, "Name", "Name");
+    verifyColumnConvert(columns.get(1), writer::convertLegacyMap, true, "Map.map.key", "Map.key_value.key");
+    verifyColumnConvert(columns.get(2), writer::convertLegacyMap, true, "Map.map.value", "Map.key_value.value");
+    verify(requiredSchema, CompressionCodecName.GZIP);
+  }
+
+  @Test
+  public void testConvertLegacyMapTypeInNestedField() throws Exception {
+    // two column,
+    // column 1: Links is ArrayType with every element is Map
+    // column 1: Map is MapType, key of map is BinaryType and value of map is Map
+    MessageType requiredSchema = new MessageType("schema",
+        new GroupType(OPTIONAL, "Links", OriginalType.LIST,
+            new GroupType(REPEATED, "list",
+                new GroupType(OPTIONAL, "element", OriginalType.MAP,
+                    new GroupType(REPEATED, "key_value",
+                        new PrimitiveType(REQUIRED, BINARY, "key"),
+                        new PrimitiveType(REPEATED, BINARY, "value")
+                    )
+                )
+            )
+        ),
+        new GroupType(OPTIONAL, "Map", OriginalType.MAP,
+            new GroupType(REPEATED, "key_value",
+                new PrimitiveType(REQUIRED, BINARY, "key"),
+                new GroupType(OPTIONAL, "value", OriginalType.MAP,
+                    new GroupType(REPEATED, "key_value",
+                        new PrimitiveType(REPEATED, BINARY, "key"),
+                        new PrimitiveType(REPEATED, BINARY, "value")
+                    )
+                )
+            )
+        )
+    );
+    MessageType inputSchema = new MessageType("schema",
+        new GroupType(OPTIONAL, "Links", OriginalType.LIST,
+            new GroupType(REPEATED, "list",
+                new GroupType(OPTIONAL, "element", OriginalType.MAP,
+                    new GroupType(REPEATED, "map", OriginalType.MAP_KEY_VALUE,
+                        new PrimitiveType(REQUIRED, BINARY, "key"),
+                        new PrimitiveType(REPEATED, BINARY, "value")
+                    )
+                )
+            )
+        ),
+        new GroupType(OPTIONAL, "Map", OriginalType.MAP,
+            new GroupType(REPEATED, "map", OriginalType.MAP_KEY_VALUE,
+                new PrimitiveType(REQUIRED, BINARY, "key"),
+                new GroupType(OPTIONAL, "value", OriginalType.MAP,
+                    new GroupType(REPEATED, "map", OriginalType.MAP_KEY_VALUE,
+                        new PrimitiveType(REPEATED, BINARY, "key"),
+                        new PrimitiveType(REPEATED, BINARY, "value")
+                    )
+                )
+            )
+        )
+    );
+
+
+    inputFiles = new ArrayList<>();
+    inputFiles.add(makeTestFile(inputSchema, "GZIP"));
+    inputFiles.add(makeTestFile(inputSchema, "GZIP"));
+
+    List<StoragePath> inputPaths = inputFiles.stream()
+        .map(TestFile::getFileName)
+        .map(StoragePath::new)
+        .collect(Collectors.toList());
+
+    writer = parquetFileBinaryCopier(requiredSchema, "GZIP");
+    StoragePath outputPath = new StoragePath(outputFile);
+    writer.binaryCopy(inputPaths, Collections.singletonList(outputPath), requiredSchema, new Properties());
+    writer.close();
+    List<ColumnDescriptor> columns = inputSchema.getColumns();
+    Assertions.assertEquals(5, columns.size());
+    verifyColumnConvert(columns.get(0), writer::convertLegacyMap, true, "Links.list.element.map.key", "Links.list.element.key_value.key");
+    verifyColumnConvert(columns.get(1), writer::convertLegacyMap, true, "Links.list.element.map.value", "Links.list.element.key_value.value");
+    verifyColumnConvert(columns.get(2), writer::convertLegacyMap, true, "Map.map.key", "Map.key_value.key");
+    verifyColumnConvert(columns.get(3), writer::convertLegacyMap, true, "Map.map.value.map.key", "Map.key_value.value.key_value.key");
+    verifyColumnConvert(columns.get(4), writer::convertLegacyMap, true, "Map.map.value.map.value", "Map.key_value.value.key_value.value");
+    verify(requiredSchema, CompressionCodecName.GZIP);
   }
 
   @Test
@@ -242,23 +422,7 @@ public class TestHoodieParquetFileBinaryCopier {
     StoragePath outputPath = new StoragePath(outputFile);
     writer.binaryCopy(inputPaths, Collections.singletonList(outputPath), schema, new Properties());
     writer.close();
-
-    // Verify the schema are not changed for the columns not pruned
-    ParquetMetadata pmd = ParquetFileReader.readFooter(conf, new Path(outputFile), ParquetMetadataConverter.NO_FILTER);
-    MessageType fileSchema = pmd.getFileMetaData().getSchema();
-    assertEquals(schema, fileSchema);
-
-    // Verify codec has been translated
-    verifyCodec(outputFile, CompressionCodecName.GZIP);
-
-    // Verify the data are not changed
-    validateColumnData();
-
-    // Verify the page index
-    validatePageIndex(1, 2, 3, 4);
-
-    // Verify original.created.by is preserved
-    validateCreatedBy();
+    verify(schema, CompressionCodecName.GZIP);
   }
 
   private TestFile makeTestFile(MessageType schema, String codec) throws IOException {
@@ -285,20 +449,7 @@ public class TestHoodieParquetFileBinaryCopier {
             new PrimitiveType(REPEATED, BINARY, "Forward")));
   }
 
-  private void validateSchema(MessageType schema) {
-    List<Type> fields = schema.getFields();
-    assertEquals(fields.size(), 4);
-    assertEquals(fields.get(0).getName(), "DocId");
-    assertEquals(fields.get(1).getName(), "Name");
-    assertEquals(fields.get(2).getName(), "Gender");
-    assertEquals(fields.get(3).getName(), "Links");
-    List<Type> subFields = fields.get(3).asGroupType().getFields();
-    assertEquals(subFields.size(), 2);
-    assertEquals(subFields.get(0).getName(), "Backward");
-    assertEquals(subFields.get(1).getName(), "Forward");
-  }
-
-  private void validateColumnData() throws IOException {
+  private void validateColumnData(MessageType requiredSchema) throws IOException {
     Path outputFilePath = new Path(outputFile);
     ParquetReader<Group> reader = ParquetReader.builder(new GroupReadSupport(), outputFilePath)
         .withConf(conf)
@@ -313,34 +464,65 @@ public class TestHoodieParquetFileBinaryCopier {
     for (int i = 0; i < totalRows; i++) {
       Group group = reader.read();
       assertNotNull(group);
-
       SimpleGroup expectGroup = inputFiles.get(i / numRecord).getFileContent()[i % numRecord];
-      if (group.getType().containsField(FILENAME_METADATA_FIELD)) {
-        assertEquals(group.getString(FILENAME_METADATA_FIELD, 0), outputFilePath.getName());
-        assertNotEquals(group.getString(FILENAME_METADATA_FIELD, 0),
-            expectGroup.getString(FILENAME_METADATA_FIELD, 0));
-      }
-      assertEquals(group.getLong("DocId", 0), expectGroup.getLong("DocId", 0));
-      assertArrayEquals(group.getBinary("Name", 0).getBytes(),
-          expectGroup.getBinary("Name", 0).getBytes());
-      assertArrayEquals(group.getBinary("Gender", 0).getBytes(),
-          expectGroup.getBinary("Gender", 0).getBytes());
-
-      if (expectGroup.getType().containsField("Links")) {
-        Group subGroup = group.getGroup("Links", 0);
-        Group expectSubGroup = expectGroup.getGroup("Links", 0);
-        assertArrayEquals(subGroup.getBinary("Backward", 0).getBytes(),
-            expectSubGroup.getBinary("Backward", 0).getBytes());
-        assertArrayEquals(subGroup.getBinary("Forward", 0).getBytes(),
-            expectSubGroup.getBinary("Forward", 0).getBytes());
-      }
+      checkField(requiredSchema, expectGroup, group);
     }
 
     reader.close();
   }
 
+  private void checkField(GroupType schema, Group expectGroup, Group actualGroup) {
+    for (int i = 0; i < schema.getFieldCount(); i++) {
+      if (expectGroup.getType().getFieldCount() - 1 < i) {
+        assertEquals(0, actualGroup.getFieldRepetitionCount(i));
+        continue;
+      }
+      Type type = schema.getType(i);
+      if (FILENAME_METADATA_FIELD.equals(type.getName())) {
+        Path outputFilePath = new Path(outputFile);
+        assertEquals(outputFilePath.getName(), actualGroup.getString(FILENAME_METADATA_FIELD, 0));
+        assertNotEquals(actualGroup.getString(FILENAME_METADATA_FIELD, 0),
+            expectGroup.getString(FILENAME_METADATA_FIELD, 0));
+        continue;
+      }
+
+      if (type.isPrimitive()) {
+        PrimitiveType primitiveType = (PrimitiveType) type;
+        if (primitiveType.getPrimitiveTypeName().equals(INT32)) {
+          assertEquals(expectGroup.getInteger(i, 0), actualGroup.getInteger(i, 0));
+        } else if (primitiveType.getPrimitiveTypeName().equals(INT64)) {
+          assertEquals(expectGroup.getLong(i, 0), actualGroup.getLong(i, 0));
+        } else if (primitiveType.getPrimitiveTypeName().equals(BINARY)) {
+          assertEquals(expectGroup.getString(i, 0), actualGroup.getString(i, 0));
+        }
+      } else {
+        GroupType groupType = (GroupType) type;
+        checkField(groupType, expectGroup.getGroup(i, 0), actualGroup.getGroup(i, 0));
+      }
+    }
+  }
+
   private ParquetMetadata getFileMetaData(String file) throws IOException {
     return ParquetFileReader.readFooter(conf, new Path(file));
+  }
+
+  private void verify(MessageType requiredSchema, CompressionCodecName expectedCodec) throws Exception {
+    // Verify the schema are not changed for the columns not pruned
+    ParquetMetadata pmd = ParquetFileReader.readFooter(conf, new Path(outputFile), ParquetMetadataConverter.NO_FILTER);
+    MessageType fileSchema = pmd.getFileMetaData().getSchema();
+    assertEquals(requiredSchema, fileSchema);
+
+    // Verify codec has been translated
+    verifyCodec(outputFile, expectedCodec);
+
+    // Verify the data are not changed
+    validateColumnData(requiredSchema);
+
+    // Verify the page index
+    validatePageIndex(requiredSchema);
+
+    // Verify original.created.by is preserved
+    validateCreatedBy();
   }
 
   private void verifyCodec(String file, CompressionCodecName expectedCodecs) throws IOException {
@@ -365,7 +547,7 @@ public class TestHoodieParquetFileBinaryCopier {
    *
    * @param columnIdxs the idx of column to be validated.
    */
-  private void validatePageIndex(Integer... columnIdxs) throws Exception {
+  private void validatePageIndex(MessageType requiredSchema) throws Exception {
     ParquetMetadata outMetaData = getFileMetaData(outputFile);
 
     int inputFileIndex = 0;
@@ -375,8 +557,10 @@ public class TestHoodieParquetFileBinaryCopier {
     );
     ParquetMetadata inMetaData = inReader.getFooter();
 
+
+    Path outputFilePath = new Path(outputFile);
     try (TransParquetFileReader outReader = new TransParquetFileReader(
-        HadoopInputFile.fromPath(new Path(outputFile), conf),
+        HadoopInputFile.fromPath(outputFilePath, conf),
         HadoopReadOptions.builder(conf).build())) {
 
       for (int outBlockId = 0, inBlockId = 0; outBlockId < outMetaData.getBlocks().size(); ++outBlockId, ++inBlockId) {
@@ -391,14 +575,43 @@ public class TestHoodieParquetFileBinaryCopier {
 
         BlockMetaData inBlockMetaData = inMetaData.getBlocks().get(inBlockId);
         BlockMetaData outBlockMetaData = outMetaData.getBlocks().get(outBlockId);
+        int inputColumns = inBlockMetaData.getColumns().size();
 
-        for (int j = 0; j < columnIdxs.length; j++) {
-          ColumnChunkMetaData inChunk = inBlockMetaData.getColumns().get(columnIdxs[j]);
-          ColumnIndex inColumnIndex = inReader.readColumnIndex(inChunk);
-          OffsetIndex inOffsetIndex = inReader.readOffsetIndex(inChunk);
-          ColumnChunkMetaData outChunk = outBlockMetaData.getColumns().get(columnIdxs[j]);
+        List<Type> fields = requiredSchema.getFields();
+        for (int i = 0; i < fields.size(); i++) {
+          ColumnChunkMetaData outChunk = outBlockMetaData.getColumns().get(i);
           ColumnIndex outColumnIndex = outReader.readColumnIndex(outChunk);
           OffsetIndex outOffsetIndex = outReader.readOffsetIndex(outChunk);
+          if (inputColumns - 1 < i) {
+            assertEquals(ASCENDING, outColumnIndex.getBoundaryOrder());
+            assertEquals(1, outColumnIndex.getNullCounts().size());
+            assertEquals(outChunk.getValueCount(), outColumnIndex.getNullCounts().get(0));
+            List<Long> outOffsets = getOffsets(outReader, outChunk);
+            assertEquals(outOffsetIndex.getPageCount(), outOffsets.size());
+            for (int k = 0; k < outOffsetIndex.getPageCount(); k++) {
+              assertEquals(outOffsetIndex.getOffset(k), (long) outOffsets.get(k));
+            }
+            continue;
+          }
+
+          ColumnChunkMetaData inChunk = inBlockMetaData.getColumns().get(i);
+          ColumnIndex inColumnIndex = inReader.readColumnIndex(inChunk);
+          OffsetIndex inOffsetIndex = inReader.readOffsetIndex(inChunk);
+
+          if (outChunk.getPath().toDotString().equals(FILENAME_METADATA_FIELD)) {
+            assertEquals(ASCENDING, outColumnIndex.getBoundaryOrder());
+            assertEquals(1, outColumnIndex.getNullCounts().size());
+            assertEquals(0, outColumnIndex.getNullCounts().get(0));
+            assertEquals(outputFilePath.getName(), Binary.fromReusedByteBuffer(outColumnIndex.getMaxValues().get(0)).toStringUsingUTF8());
+            assertEquals(outputFilePath.getName(), Binary.fromReusedByteBuffer(outColumnIndex.getMinValues().get(0)).toStringUsingUTF8());
+            List<Long> outOffsets = getOffsets(outReader, outChunk);
+            assertEquals(outOffsetIndex.getPageCount(), outOffsets.size());
+            for (int k = 0; k < outOffsetIndex.getPageCount(); k++) {
+              assertEquals(outOffsetIndex.getOffset(k), (long) outOffsets.get(k));
+            }
+            continue;
+          }
+
           if (inColumnIndex != null) {
             assertEquals(inColumnIndex.getBoundaryOrder(), outColumnIndex.getBoundaryOrder());
             assertEquals(inColumnIndex.getMaxValues(), outColumnIndex.getMaxValues());
@@ -643,5 +856,22 @@ public class TestHoodieParquetFileBinaryCopier {
     public SimpleGroup[] getFileContent() {
       return this.fileContent;
     }
+  }
+
+  private void verifyColumnConvert(
+      ColumnDescriptor column,
+      Function<String[], Boolean> converter,
+      Boolean changed,
+      String originalPathStr,
+      String convertedPathStr) {
+    String[] path = column.getPath();
+    String[] originalPath = Arrays.copyOf(path, path.length);
+    assertEquals(changed, converter.apply(path));
+    assertEquals(originalPathStr, pathToString(originalPath));
+    assertEquals(convertedPathStr, pathToString(path));
+  }
+
+  private String pathToString(String[] path) {
+    return Arrays.stream(path).collect(Collectors.joining("."));
   }
 }

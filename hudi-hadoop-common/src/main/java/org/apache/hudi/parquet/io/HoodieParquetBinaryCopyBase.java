@@ -19,10 +19,12 @@
 package org.apache.hudi.parquet.io;
 
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.parquet.Version;
 import org.apache.parquet.bytes.BytesInput;
 import org.apache.parquet.column.ColumnDescriptor;
 import org.apache.parquet.column.ColumnReader;
@@ -36,7 +38,6 @@ import org.apache.parquet.column.page.PageReadStore;
 import org.apache.parquet.column.statistics.Statistics;
 import org.apache.parquet.column.values.bloomfilter.BloomFilter;
 import org.apache.parquet.compression.CompressionCodecFactory;
-import org.apache.parquet.crypto.FileEncryptionProperties;
 import org.apache.parquet.format.BlockCipher;
 import org.apache.parquet.format.DataPageHeader;
 import org.apache.parquet.format.DataPageHeaderV2;
@@ -56,13 +57,13 @@ import org.apache.parquet.hadoop.util.HadoopCodecs;
 import org.apache.parquet.hadoop.util.HadoopOutputFile;
 import org.apache.parquet.internal.column.columnindex.ColumnIndex;
 import org.apache.parquet.internal.column.columnindex.OffsetIndex;
+import org.apache.parquet.io.InvalidRecordException;
 import org.apache.parquet.io.ParquetEncodingException;
 import org.apache.parquet.io.api.Binary;
 import org.apache.parquet.io.api.Converter;
 import org.apache.parquet.io.api.GroupConverter;
 import org.apache.parquet.io.api.PrimitiveConverter;
 import org.apache.parquet.schema.GroupType;
-import org.apache.parquet.schema.LogicalTypeAnnotation;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.PrimitiveType;
 import org.apache.parquet.schema.Type;
@@ -82,6 +83,8 @@ import static org.apache.parquet.column.ParquetProperties.DEFAULT_COLUMN_INDEX_T
 import static org.apache.parquet.column.ParquetProperties.DEFAULT_STATISTICS_TRUNCATE_LENGTH;
 import static org.apache.parquet.hadoop.ParquetWriter.DEFAULT_BLOCK_SIZE;
 import static org.apache.parquet.hadoop.ParquetWriter.MAX_PADDING_SIZE_DEFAULT;
+import static org.apache.parquet.schema.OriginalType.LIST;
+import static org.apache.parquet.schema.OriginalType.MAP;
 
 /**
  * Copy from parquet-hadoop 1.13.1 org.apache.parquet.hadoop.rewrite.ParquetRewriter
@@ -131,16 +134,27 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
       this.requiredSchema = schema;
       this.newCodecName = newCodecName;
       ParquetFileWriter.Mode writerMode = ParquetFileWriter.Mode.CREATE;
-      writer = new ParquetFileWriter(
-          HadoopOutputFile.fromPath(outPutFile, conf),
-          schema,
-          writerMode,
-          DEFAULT_BLOCK_SIZE,
-          MAX_PADDING_SIZE_DEFAULT,
-          DEFAULT_COLUMN_INDEX_TRUNCATE_LENGTH,
-          DEFAULT_STATISTICS_TRUNCATE_LENGTH,
-          ParquetProperties.DEFAULT_PAGE_WRITE_CHECKSUM_ENABLED,
-          (FileEncryptionProperties) null);
+      if (Version.VERSION_NUMBER.compareTo("1.13.1") < 0) {
+        writer = new HoodieParquetFileWriter(
+            HadoopOutputFile.fromPath(outPutFile, conf),
+            schema,
+            writerMode,
+            DEFAULT_BLOCK_SIZE,
+            MAX_PADDING_SIZE_DEFAULT,
+            DEFAULT_COLUMN_INDEX_TRUNCATE_LENGTH,
+            DEFAULT_STATISTICS_TRUNCATE_LENGTH,
+            ParquetProperties.DEFAULT_PAGE_WRITE_CHECKSUM_ENABLED);
+      } else {
+        writer = new ParquetFileWriter(
+            HadoopOutputFile.fromPath(outPutFile, conf),
+            schema,
+            writerMode,
+            DEFAULT_BLOCK_SIZE,
+            MAX_PADDING_SIZE_DEFAULT,
+            DEFAULT_COLUMN_INDEX_TRUNCATE_LENGTH,
+            DEFAULT_STATISTICS_TRUNCATE_LENGTH,
+            ParquetProperties.DEFAULT_PAGE_WRITE_CHECKSUM_ENABLED);
+      }
       writer.start();
       LOG.info("init writer ");
     } catch (Exception e) {
@@ -184,17 +198,33 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
     List<ColumnChunkMetaData> columnsInOrder = block.getColumns();
     List<ColumnDescriptor> converted = new ArrayList<>();
 
-    for (int i = 0, columnId = 0; i < columnsInOrder.size(); i++) {
+    for (int i = 0; i < columnsInOrder.size(); i++) {
       ColumnChunkMetaData chunk = columnsInOrder.get(i);
       ColumnDescriptor descriptor = descriptorsMap.get(chunk.getPath());
 
       // resolve the conflict schema between avro parquet write support and spark native parquet write support
       if (descriptor == null) {
         String[] path = chunk.getPath().toArray();
-        if (path.length == 3 && path[1] == "bag") {
-          // Convert from xxx.bag.array to xxx.list.element
-          path[1] = "list";
-          path[2] = "element";
+        path = Arrays.copyOf(path, path.length);
+        if (convertLegacy3LevelArray(path) || convertLegacyMap(path)) {
+          ColumnPath newPath = ColumnPath.get(path);
+          ColumnChunkMetaData newChunk = ColumnChunkMetaData.get(
+              newPath,
+              chunk.getPrimitiveType(),
+              chunk.getCodec(),
+              chunk.getEncodingStats(),
+              chunk.getEncodings(),
+              chunk.getStatistics(),
+              chunk.getFirstDataPageOffset(),
+              chunk.getDictionaryPageOffset(),
+              chunk.getValueCount(),
+              chunk.getTotalSize(),
+              chunk.getTotalUncompressedSize());
+          newChunk.setRowGroupOrdinal(chunk.getRowGroupOrdinal());
+          newChunk.setBloomFilterOffset(chunk.getBloomFilterOffset());
+          newChunk.setColumnIndexReference(chunk.getColumnIndexReference());
+          newChunk.setOffsetIndexReference(chunk.getOffsetIndexReference());
+          chunk = newChunk;
           descriptor = descriptorsMap.get(chunk.getPath());
           converted.add(descriptor);
         }
@@ -234,7 +264,6 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
         writer.appendColumnChunk(descriptor, reader.getStream(), chunk, bloomFilter, columnIndex, offsetIndex);
       }
 
-      columnId++;
     }
 
     // append missed columns
@@ -594,12 +623,7 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
       if (!field.isPrimitive() && path[0].equals(field.getName())) {
         Type newType = extractField(field.asGroupType(), type);
         if (newType != null) {
-          if (LogicalTypeAnnotation.mapType().equals(field.getLogicalTypeAnnotation())
-              || LogicalTypeAnnotation.listType().equals(field.getLogicalTypeAnnotation())) {
-            return new MessageType(schema.getName(), new MessageType(field.getName(), newType));
-          } else {
-            return new MessageType(schema.getName(), newType);
-          }
+          return new MessageType(schema.getName(), newType);
         }
       }
     }
@@ -622,12 +646,52 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
       } else {
         Type tempField = extractField(field.asGroupType(), targetField);
         if (tempField != null) {
-          return tempField;
+          return new GroupType(candidate.getRepetition(),candidate.getName(),tempField);
         }
       }
     }
 
     return null;
+  }
+
+  @VisibleForTesting
+  public boolean convertLegacy3LevelArray(String[] path) {
+    boolean changed = false;
+    for (int i = 0; i < path.length; i++) {
+      try {
+        String[] subPath = Arrays.copyOf(path, i + 1);
+        Type type = this.requiredSchema.getType(subPath);
+        if (type.getOriginalType() == LIST && "bag".equals(path[i + 1])) {
+          // Convert from xxx.bag.array to xxx.list.element
+          path[i + 1] = "list";
+          path[i + 2] = "element";
+          changed = true;
+        }
+      } catch (InvalidRecordException e) {
+        LOG.debug("field not found due to schema evolution, nothing need to do");
+      }
+    }
+    return changed;
+  }
+
+  public boolean convertLegacyMap(String[] path) {
+    boolean changed = false;
+    for (int i = 0; i < path.length; i++) {
+      try {
+        String[] subPath = Arrays.copyOf(path, i + 1);
+        Type type = this.requiredSchema.getType(subPath);
+        if (type.getOriginalType() == MAP && "map".equals(path[i + 1])) {
+          // Convert legacy mode map
+          // xxx.map.key to xxx.key_value.key
+          // xxx.map.value to xxx.key_value.value
+          path[i + 1] = "key_value";
+          changed = true;
+        }
+      } catch (Throwable e) {
+        LOG.debug("field not found due to schema evolution, nothing need to do");
+      }
+    }
+    return changed;
   }
 
   private static final class DummyGroupConverter extends GroupConverter {

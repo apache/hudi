@@ -20,15 +20,21 @@ package org.apache.hudi.client.clustering.run.strategy;
 
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.bloom.BloomFilterTypeCode;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.ClusteringGroupInfo;
 import org.apache.hudi.common.model.HoodieFileGroupId;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.io.HoodieBinaryCopyHandle;
 import org.apache.hudi.io.BinaryCopyHandleFactory;
 import org.apache.hudi.storage.StoragePath;
@@ -36,6 +42,8 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import org.apache.avro.Schema;
+import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.api.java.JavaSparkContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,8 +51,14 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 
+import scala.Tuple2;
+
+import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
+import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS;
 
 /**
  * Clustering strategy to submit single spark jobs using streaming copy
@@ -54,7 +68,7 @@ import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
  *  2. Sort function is not supported yet.
  *  3. Each clustering group only has one task to write.
  */
-public class SparkBinaryCopyClusteringExecutionStrategy<T> extends SingleSparkJobExecutionStrategy<T> {
+public class SparkBinaryCopyClusteringExecutionStrategy<T> extends SparkSortAndSizeExecutionStrategy<T> {
 
   private static final Logger LOG = LoggerFactory.getLogger(SparkBinaryCopyClusteringExecutionStrategy.class);
 
@@ -70,22 +84,53 @@ public class SparkBinaryCopyClusteringExecutionStrategy<T> extends SingleSparkJo
       HoodieClusteringPlan clusteringPlan,
       Schema schema,
       String instantTime) {
-    if (!supportBinaryStreamCopy()) {
-      String message = "1. Only support for CoW table 2. Not support for sort function";
-      throw new UnsupportedOperationException(message);
 
+    List<ClusteringGroupInfo> clusteringGroupInfos = clusteringPlan.getInputGroups()
+        .stream()
+        .map(ClusteringGroupInfo::create)
+        .collect(Collectors.toList());
+    if (!supportBinaryStreamCopy(clusteringGroupInfos, clusteringPlan.getStrategy().getStrategyParams())) {
+      LOG.info("Required conditions for binary stream copy are currently not satisfied, falling back to default clustering behavior");
+      HoodieWriteConfig newConfig = HoodieWriteConfig.newBuilder().withProperties(writeConfig.getProps())
+          .withStorageConfig(HoodieStorageConfig.newBuilder().parquetWriteLegacyFormat("false").build()).build();
+      resetWriteConfig(newConfig);
+      return super.performClustering(clusteringPlan, schema, instantTime);
     }
     LOG.info("Required conditions are currently satisfied, enabling the optimization of using binary stream copy ");
-    return super.performClustering(clusteringPlan, schema, instantTime);
+
+    JavaSparkContext engineContext = HoodieSparkEngineContext.getSparkContext(getEngineContext());
+    TaskContextSupplier taskContextSupplier = getEngineContext().getTaskContextSupplier();
+    SerializableSchema serializableSchema = new SerializableSchema(schema);
+    boolean shouldPreserveMetadata = Option.ofNullable(clusteringPlan.getPreserveHoodieMetadata()).orElse(false);
+    JavaRDD<ClusteringGroupInfo> groupInfoJavaRDD = engineContext.parallelize(clusteringGroupInfos, clusteringGroupInfos.size());
+    LOG.info("number of partitions for clustering " + groupInfoJavaRDD.getNumPartitions());
+    JavaRDD<WriteStatus> writeStatusRDD = groupInfoJavaRDD
+        .mapPartitions(clusteringOps -> {
+          Iterable<ClusteringGroupInfo> clusteringOpsIterable = () -> clusteringOps;
+          return StreamSupport.stream(clusteringOpsIterable.spliterator(), false)
+              .flatMap(clusteringOp ->
+                  runClusteringForGroup(
+                      clusteringOp,
+                      clusteringPlan.getStrategy().getStrategyParams(),
+                      shouldPreserveMetadata,
+                      serializableSchema,
+                      taskContextSupplier,
+                      instantTime))
+              .iterator();
+        });
+
+    HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata = new HoodieWriteMetadata<>();
+    writeMetadata.setWriteStatuses(HoodieJavaRDD.of(writeStatusRDD));
+    return writeMetadata;
   }
 
   /**
    * Submit job to execute clustering for the group.
    */
-  @Override
-  protected List<WriteStatus> performClusteringForGroup(ReaderContextFactory<T> readerContextFactory, ClusteringGroupInfo clusteringOps, Map<String, String> strategyParams,
+  private Stream<WriteStatus> runClusteringForGroup(ClusteringGroupInfo clusteringOps, Map<String, String> strategyParams,
                                                     boolean preserveHoodieMetadata, SerializableSchema schema,
                                                     TaskContextSupplier taskContextSupplier, String instantTime) {
+    List<WriteStatus> statuses = new ArrayList<>();
     List<HoodieFileGroupId> inputFileIds = clusteringOps.getOperations()
         .stream()
         .map(op -> new HoodieFileGroupId(op.getPartitionPath(), op.getFileId()))
@@ -105,10 +150,55 @@ public class SparkBinaryCopyClusteringExecutionStrategy<T> extends SingleSparkJo
         taskContextSupplier);
 
     handler.write();
-    return new ArrayList<>(handler.close());
+    statuses.addAll(handler.close());
+    return statuses.stream();
   }
 
-  private boolean supportBinaryStreamCopy() {
-    return this.getHoodieTable().getMetaClient().getTableType() == COPY_ON_WRITE;
+  /**
+   * 1. Check Table type
+   * 2. Check bloom filter type code
+   * 3. Check Array Type Schema consistency affected by hoodie.parquet.writelegacyformat.enabled and spark.hadoop.parquet.avro.write-old-list-structure
+   * 4. Check Schema Optional or Required consistency for the same field
+   */
+  public boolean supportBinaryStreamCopy(List<ClusteringGroupInfo> inputGroups, Map<String, String> strategyParams) {
+    if (getHoodieTable().getMetaClient().getTableType() != COPY_ON_WRITE) {
+      LOG.warn("Only support CoW table. Will fall back to common clustering execution strategy.");
+      return false;
+    }
+    Option<String[]> orderByColumnsOpt =
+        Option.ofNullable(strategyParams.get(PLAN_STRATEGY_SORT_COLUMNS.key()))
+            .map(listStr -> listStr.split(","));
+
+    if (orderByColumnsOpt.isPresent()) {
+      LOG.warn("Not support to sort input records. Will fall back to common clustering execution strategy.");
+      return false;
+    }
+
+    JavaSparkContext engineContext = HoodieSparkEngineContext.getSparkContext(getEngineContext());
+    List<Tuple2<BloomFilterTypeCode, Boolean>> fileStatus = engineContext.parallelize(inputGroups, inputGroups.size())
+        .flatMap(group -> group.getOperations().iterator())
+        .map(op -> {
+          String filePath = op.getDataFilePath();
+          ParquetUtils fileUtils = new ParquetUtils();
+          BloomFilter filter = fileUtils.readBloomFilterFromMetadata(getHoodieTable().getStorage(), new StoragePath(filePath));
+          boolean isLegacySchema = !fileUtils.getFormat().equals(PARQUET) || fileUtils.containLegacy2LevelArrayType(getHoodieTable().getStorage(), filePath);
+          return Tuple2.apply(filter == null ? null : filter.getBloomFilterTypeCode(), isLegacySchema);
+        })
+        .collect();
+    boolean hasSameFilterCodeType = fileStatus.stream().filter(t -> t._1 != null).distinct().count() <= 1;
+    boolean notLegacySchema = fileStatus.stream().noneMatch(t -> t._2);
+    if (!hasSameFilterCodeType) {
+      LOG.warn("Find different bloom filter code type of input groups. Will fall back to common clustering execution strategy.");
+      return false;
+    }
+
+    if (!notLegacySchema) {
+      LOG.warn("Find array type schema inconsistency of input groups, usually caused by. Will fall back to common clustering execution strategy. "
+          + "We need to keep spark.hadoop.parquet.avro.write-old-list-structure false for avro write support and "
+          + "keep hoodie.parquet.writelegacyformat.enabled false for spark parquet row writer.");
+      return false;
+    }
+
+    return true;
   }
 }
