@@ -2552,9 +2552,9 @@
                    hudi-hadoop-mr, for ex). Since these Hudi modules might be used from w/in the execution engine(s)
                    bringing these file-formats as dependencies as well, we need to make sure that versions are
                    synchronized to avoid classpath ambiguity -->
-        <parquet.version>1.13.1</parquet.version>
-        <orc.spark.version>2.0.1</orc.spark.version>
-        <avro.version>1.11.3</avro.version>
+        <parquet.version>1.15.2</parquet.version>
+        <orc.spark.version>2.1.2</orc.spark.version>
+        <avro.version>1.12.0</avro.version>
         <antlr.version>4.13.1</antlr.version>
         <fasterxml.spark4.version>2.17.1</fasterxml.spark4.version>
         <fasterxml.version>${fasterxml.spark4.version}</fasterxml.version>

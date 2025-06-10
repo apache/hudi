@@ -19,7 +19,7 @@
 package org.apache.parquet.avro;
 
 import org.apache.avro.generic.GenericData;
-import org.apache.hadoop.conf.Configuration;
+import org.apache.parquet.conf.ParquetConfiguration;
 import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.OriginalType;
@@ -44,7 +44,7 @@ public class HoodieAvroReadSupport<T> extends AvroReadSupport<T> {
   }
 
   @Override
-  public ReadContext init(Configuration configuration, Map<String, String> keyValueMetaData, MessageType fileSchema) {
+  public ReadContext init(ParquetConfiguration configuration, Map<String, String> keyValueMetaData, MessageType fileSchema) {
     boolean legacyMode = checkLegacyMode(fileSchema.getFields());
     adjustConfToReadWithFileProduceMode(legacyMode, configuration);
     ReadContext readContext = super.init(configuration, keyValueMetaData, fileSchema);
@@ -65,14 +65,8 @@ public class HoodieAvroReadSupport<T> extends AvroReadSupport<T> {
    * Later the config value {@link AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE} will still be used
    * to write new file according to the user preferences.
    **/
-  private void adjustConfToReadWithFileProduceMode(boolean isLegacyModeWrittenFile, Configuration configuration) {
-    if (isLegacyModeWrittenFile) {
-      configuration.set(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE,
-          "true", "support reading avro from legacy map/list in parquet file");
-    } else {
-      configuration.set(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE,
-          "false", "support reading avro from non-legacy map/list in parquet file");
-    }
+  private void adjustConfToReadWithFileProduceMode(boolean isLegacyModeWrittenFile, ParquetConfiguration configuration) {
+    configuration.set(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE, String.valueOf(isLegacyModeWrittenFile));
   }
 
   /**
