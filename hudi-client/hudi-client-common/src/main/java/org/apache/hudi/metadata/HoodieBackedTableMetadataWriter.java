@@ -171,9 +171,9 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
 
   // Is the MDT bootstrapped and ready to be read from
   boolean initialized = false;
-  boolean streamingWritesEnabled = false;
   private HoodieTableFileSystemView metadataView;
-  private Option<MetadataIndexGenerator> metadataIndexGenerator;
+  private final boolean streamingWritesEnabled;
+  private final Option<MetadataIndexGenerator> metadataIndexGenerator;
 
   protected HoodieBackedTableMetadataWriter(StorageConfiguration<?> storageConf,
                                             HoodieWriteConfig writeConfig,
@@ -191,15 +191,14 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
    * @param failedWritesCleaningPolicy Cleaning policy on failed writes
    * @param engineContext              Engine context
    * @param inflightInstantTimestamp   Timestamp of any instant in progress
-   * @param streamingWrites      For non streaming writes, we create a new write client, write to metadata table and shut it down.
-   *                                   Whereas for streaming writes, we need a long lived write client. So, this argument will help decide the lifecyle of write client used internally.
+   * @param streamingWritesEnabled     true when streaming writes to metadata table is enabled.
    */
   protected HoodieBackedTableMetadataWriter(StorageConfiguration<?> storageConf,
                                             HoodieWriteConfig writeConfig,
                                             HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                             HoodieEngineContext engineContext,
                                             Option<String> inflightInstantTimestamp,
-                                            boolean streamingWrites) {
+                                            boolean streamingWritesEnabled) {
     this.dataWriteConfig = writeConfig;
     this.engineContext = engineContext;
     this.storageConf = storageConf;
@@ -218,9 +217,8 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       }
     }
     ValidationUtils.checkArgument(!initialized || this.metadata != null, "MDT Reader should have been opened post initialization");
-
-    this.metadataIndexGenerator = streamingWrites ? Option.of(getMetadataIndexGenerator()) : Option.empty();
-    this.streamingWritesEnabled = streamingWrites;
+    this.streamingWritesEnabled = streamingWritesEnabled;
+    this.metadataIndexGenerator = streamingWritesEnabled ? Option.of(getMetadataIndexGenerator()) : Option.empty();
   }
 
   List<MetadataPartitionType> getEnabledPartitions(HoodieMetadataConfig metadataConfig, HoodieTableMetaClient metaClient) {
@@ -1167,7 +1165,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     throw new UnsupportedOperationException("Not yet implemented");
   }
 
-  public O writeToMetadataTableForBatchPartitions(I preppedRecords, String instantTime) {
+  public O batchWriteToMetadataTablePartitions(I preppedRecords, String instantTime) {
     throw new UnsupportedOperationException("Not yet implemented");
   }
 
@@ -1188,7 +1186,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     // write to mdt table for non streaming mdt partitions
     Pair<HoodieData<HoodieRecord>, List<HoodieFileGroupId>> taggedRecords = tagRecordsWithLocation(mdtPartitionsAndUnTaggedRecords);
     I preppedRecords = convertHoodieDataToEngineSpecificData(taggedRecords.getKey());
-    HoodieData<WriteStatus> mdtWriteStatusHoodieData = convertEngineSpecificDataToHoodieData(writeToMetadataTableForBatchPartitions(preppedRecords, instantTime));
+    HoodieData<WriteStatus> mdtWriteStatusHoodieData = convertEngineSpecificDataToHoodieData(batchWriteToMetadataTablePartitions(preppedRecords, instantTime));
     return mdtWriteStatusHoodieData;
   }
 
