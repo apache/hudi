@@ -61,7 +61,7 @@ public class TimelineServiceClient extends TimelineServiceClientBase {
     String url = builder.toString();
     LOG.debug("Sending request : ({})", url);
     org.apache.http.client.fluent.Response response = get(request.getMethod(), url, timeoutMs);
-    return new Response(response.returnContent().asString());
+    return new Response(response.returnContent().asStream());
   }
 
   private org.apache.http.client.fluent.Response get(RequestMethod method, String url, int timeoutMs) throws IOException {

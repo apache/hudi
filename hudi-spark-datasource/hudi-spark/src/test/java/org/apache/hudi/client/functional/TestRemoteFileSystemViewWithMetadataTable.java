@@ -109,7 +109,7 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieSparkClient
           .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
               .withRemoteServerPort(incrementTimelineServicePortToUse()).build())
           .build();
-      timelineService = new TimelineService(localEngineContext, HadoopFSUtils.getStorageConf(),
+      timelineService = new TimelineService(HadoopFSUtils.getStorageConf(),
           TimelineService.Config.builder().enableMarkerRequests(true)
               .serverPort(config.getViewStorageConfig().getRemoteViewServerPort()).build(),
           FileSystemViewManager.createViewManager(

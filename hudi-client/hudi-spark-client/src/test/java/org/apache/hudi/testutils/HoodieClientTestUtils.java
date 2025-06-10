@@ -281,7 +281,7 @@ public class HoodieClientTestUtils {
           .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
               .withRemoteServerPort(timelineServicePort).build())
           .build();
-      TimelineService timelineService = new TimelineService(context, HadoopFSUtils.getStorageConf(),
+      TimelineService timelineService = new TimelineService(HadoopFSUtils.getStorageConf(),
           TimelineService.Config.builder().enableMarkerRequests(true)
               .serverPort(config.getViewStorageConfig().getRemoteViewServerPort()).build(),
           FileSystemViewManager.createViewManager(context, config.getMetadataConfig(), config.getViewStorageConfig(), config.getCommonConfig()));

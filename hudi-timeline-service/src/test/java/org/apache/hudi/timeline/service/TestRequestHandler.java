@@ -76,7 +76,7 @@ class TestRequestHandler extends HoodieCommonTestHarness {
         server.close();
       }
       TimelineServiceTestHarness.Builder builder = TimelineServiceTestHarness.newBuilder();
-      server = builder.build(localEngineContext, configuration,
+      server = builder.build(configuration,
           TimelineService.Config.builder().serverPort(0).enableMarkerRequests(true).build(),
           FileSystemViewManager.createViewManager(localEngineContext, metadataConfig, sConf, commonConfig));
       server.startService();

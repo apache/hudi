@@ -20,6 +20,7 @@ package org.apache.hudi.timeline.service.handlers.marker;
 
 import org.apache.hudi.common.conflict.detection.TimelineServerBasedDetectionStrategy;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.table.marker.MarkerType;
@@ -33,8 +34,6 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.module.afterburner.AfterburnerModule;
 import org.apache.hadoop.util.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -65,9 +64,8 @@ import static org.apache.hudi.timeline.service.RequestHandler.jsonifyResult;
  */
 public class MarkerDirState implements Serializable {
   private static final Logger LOG = LoggerFactory.getLogger(MarkerDirState.class);
-  private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper().registerModule(new AfterburnerModule());
   // Marker directory
-  private final String markerDirPath;
+  private final StoragePath markerDirPath;
   private final HoodieStorage storage;
   private final Registry metricsRegistry;
   // A cached copy of all markers in memory
@@ -94,12 +92,11 @@ public class MarkerDirState implements Serializable {
 
   public MarkerDirState(String markerDirPath, int markerBatchNumThreads,
                         Option<TimelineServerBasedDetectionStrategy> conflictDetectionStrategy,
-                        HoodieStorage storage, Registry metricsRegistry,
-                        HoodieEngineContext hoodieEngineContext, int parallelism) {
-    this.markerDirPath = markerDirPath;
+                        HoodieStorage storage, Registry metricsRegistry, int parallelism) {
+    this.markerDirPath = new StoragePath(markerDirPath);
     this.storage = storage;
     this.metricsRegistry = metricsRegistry;
-    this.hoodieEngineContext = hoodieEngineContext;
+    this.hoodieEngineContext = new HoodieLocalEngineContext(storage.getConf());
     this.parallelism = parallelism;
     this.threadUseStatus =
         Stream.generate(() -> false).limit(markerBatchNumThreads).collect(Collectors.toList());
@@ -113,7 +110,7 @@ public class MarkerDirState implements Serializable {
    */
   public boolean exists() {
     try {
-      return storage.exists(new StoragePath(markerDirPath));
+      return storage.exists(markerDirPath);
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
     }
@@ -259,7 +256,7 @@ public class MarkerDirState implements Serializable {
     for (MarkerCreationFuture future : pendingMarkerCreationFutures) {
       try {
         future.complete(jsonifyResult(
-            future.getContext(), future.isSuccessful(), metricsRegistry, OBJECT_MAPPER, LOG));
+            future.getContext(), future.isSuccessful(), metricsRegistry));
       } catch (JsonProcessingException e) {
         throw new HoodieException("Failed to JSON encode the value", e);
       }
@@ -272,7 +269,7 @@ public class MarkerDirState implements Serializable {
    * @return {@code true} if successful; {@code false} otherwise.
    */
   public boolean deleteAllMarkers() {
-    boolean result = FSUtils.deleteDir(hoodieEngineContext, storage, new StoragePath(markerDirPath), parallelism);
+    boolean result = FSUtils.deleteDir(hoodieEngineContext, storage, markerDirPath, parallelism);
     allMarkers.clear();
     fileMarkersMap.clear();
     return result;
@@ -283,7 +280,7 @@ public class MarkerDirState implements Serializable {
    */
   private void syncMarkersFromFileSystem() {
     Map<String, Set<String>> fileMarkersSetMap = MarkerUtils.readTimelineServerBasedMarkersFromFileSystem(
-        markerDirPath, storage, hoodieEngineContext, parallelism);
+        markerDirPath.toString(), storage, hoodieEngineContext, parallelism);
     for (String markersFilePathStr : fileMarkersSetMap.keySet()) {
       Set<String> fileMarkers = fileMarkersSetMap.get(markersFilePathStr);
       if (!fileMarkers.isEmpty()) {
@@ -321,11 +318,10 @@ public class MarkerDirState implements Serializable {
    * Writes marker type, "TIMELINE_SERVER_BASED", to file.
    */
   private void writeMarkerTypeToFile() {
-    StoragePath dirPath = new StoragePath(markerDirPath);
     try {
-      if (!storage.exists(dirPath) || !MarkerUtils.doesMarkerTypeFileExist(storage, markerDirPath)) {
+      if (!MarkerUtils.doesMarkerTypeFileExist(storage, markerDirPath)) {
         // There is no existing marker directory, create a new directory and write marker type
-        storage.createDirectory(dirPath);
+        storage.createDirectory(markerDirPath);
         MarkerUtils.writeMarkerTypeToFile(MarkerType.TIMELINE_SERVER_BASED, storage, markerDirPath);
       }
     } catch (IOException e) {
