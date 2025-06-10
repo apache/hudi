@@ -35,6 +35,6 @@ public class Spark3HoodieInternalRow extends HoodieInternalRow {
     for (int i = 0; i < metaFields.length; i++) {
       copyMetaFields[i] = metaFields[i] != null ? metaFields[i].copy() : null;
     }
-    return new Spark3HoodieInternalRow(copyMetaFields, sourceRow.copy(), sourceContainsMetaFields);
+    return new Spark3HoodieInternalRow(copyMetaFields, sourceRow == null ? null : sourceRow.copy(), sourceContainsMetaFields);
   }
 }
