@@ -209,9 +209,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
             new StoragePath(FSUtils.constructAbsolutePath(
                 metaClient.getBasePath(), operation.getPartitionPath()), p).toString())
         .collect(toList());
-    HoodieMergedLogRecordScanner scanner = null;
-    try {
-      scanner = HoodieMergedLogRecordScanner.newBuilder()
+    try (HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
           .withStorage(storage)
           .withBasePath(metaClient.getBasePath())
           .withLogFilePaths(logFiles)
@@ -230,8 +228,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
           .withOptimizedLogBlocksScan(executionHelper.enableOptimizedLogBlockScan(config))
           .withRecordMerger(config.getRecordMerger())
           .withTableMetaClient(metaClient)
-          .build();
-      final HoodieMergedLogRecordScanner finalScanner = scanner;
+          .build()) {
 
       Option<HoodieBaseFile> oldDataFileOpt =
           operation.getBaseFile(metaClient.getBasePath().toString(), operation.getPartitionPath());
@@ -262,18 +259,18 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
       Iterable<List<WriteStatus>> resultIterable = () -> result;
       return StreamSupport.stream(resultIterable.spliterator(), false).flatMap(Collection::stream).peek(s -> {
         final HoodieWriteStat stat = s.getStat();
-        stat.setTotalUpdatedRecordsCompacted(finalScanner.getNumMergedRecordsInLog());
-        stat.setTotalLogFilesCompacted(finalScanner.getTotalLogFiles());
-        stat.setTotalLogRecords(finalScanner.getTotalLogRecords());
+        stat.setTotalUpdatedRecordsCompacted(scanner.getNumMergedRecordsInLog());
+        stat.setTotalLogFilesCompacted(scanner.getTotalLogFiles());
+        stat.setTotalLogRecords(scanner.getTotalLogRecords());
         stat.setPartitionPath(operation.getPartitionPath());
         stat
             .setTotalLogSizeCompacted(operation.getMetrics().get(CompactionStrategy.TOTAL_LOG_FILE_SIZE).longValue());
-        stat.setTotalLogBlocks(finalScanner.getTotalLogBlocks());
-        stat.setTotalCorruptLogBlock(finalScanner.getTotalCorruptBlocks());
-        stat.setTotalRollbackBlocks(finalScanner.getTotalRollbacks());
+        stat.setTotalLogBlocks(scanner.getTotalLogBlocks());
+        stat.setTotalCorruptLogBlock(scanner.getTotalCorruptBlocks());
+        stat.setTotalRollbackBlocks(scanner.getTotalRollbacks());
         RuntimeStats runtimeStats = new RuntimeStats();
         // scan time has to be obtained from scanner.
-        runtimeStats.setTotalScanTime(finalScanner.getTotalTimeTakenToReadAndMergeBlocks());
+        runtimeStats.setTotalScanTime(scanner.getTotalTimeTakenToReadAndMergeBlocks());
         // create and upsert time are obtained from the create or merge handle.
         if (stat.getRuntimeStats() != null) {
           runtimeStats.setTotalCreateTime(stat.getRuntimeStats().getTotalCreateTime());
@@ -281,10 +278,6 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
         }
         stat.setRuntimeStats(runtimeStats);
       }).collect(toList());
-    } finally {
-      if (scanner != null) {
-        scanner.close();
-      }
     }
   }
 
