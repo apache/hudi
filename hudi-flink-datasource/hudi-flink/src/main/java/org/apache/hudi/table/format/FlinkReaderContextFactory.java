@@ -29,6 +29,10 @@ import org.apache.flink.table.data.RowData;
 import java.util.Collections;
 import java.util.function.Supplier;
 
+/**
+ * Factory for creating a Flink-specific reader context.
+ * This context is used specifically for table services such as compaction and clustering.
+ */
 public class FlinkReaderContextFactory implements ReaderContextFactory<RowData> {
   private final HoodieTableMetaClient metaClient;
 
