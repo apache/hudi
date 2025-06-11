@@ -158,7 +158,8 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
       case COMMIT_TIME_ORDERING:
         return Option.of(CommitTimeFlinkRecordMerger.INSTANCE);
       default:
-        Option<HoodieRecordMerger> recordMerger = HoodieRecordUtils.createValidRecordMerger(EngineType.FLINK, mergeImplClasses, mergeStrategyId);
+        Option<HoodieRecordMerger> recordMerger = HoodieRecordUtils.createValidRecordMerger(
+            EngineType.FLINK, mergeImplClasses, mergeStrategyId, Option.empty());
         if (recordMerger.isEmpty()) {
           throw new HoodieValidationException("No valid flink merger implementation set for `"
               + RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY + "`");

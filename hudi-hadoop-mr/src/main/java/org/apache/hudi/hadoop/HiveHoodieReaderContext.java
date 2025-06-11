@@ -192,7 +192,8 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
         return Option.of(new OverwriteWithLatestHiveRecordMerger());
       case CUSTOM:
       default:
-        Option<HoodieRecordMerger> recordMerger = HoodieRecordUtils.createValidRecordMerger(EngineType.JAVA, mergeImplClasses, mergeStrategyId);
+        Option<HoodieRecordMerger> recordMerger = HoodieRecordUtils.createValidRecordMerger(
+            EngineType.JAVA, mergeImplClasses, mergeStrategyId, Option.empty());
         if (recordMerger.isEmpty()) {
           throw new IllegalArgumentException("No valid hive merger implementation set for `"
               + RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY + "`");
