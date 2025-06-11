@@ -47,10 +47,10 @@ public class BufferUtils {
     // currently do not need to sort records in the binary buffer.
     NormalizedKeyComputer keyComputer = new NaturalOrderKeyComputer();
     return BinaryInMemorySortBuffer.createBuffer(
-            keyComputer,
-            new RowDataSerializer(rowType),
-            new BinaryRowDataSerializer(rowType.getFieldCount()),
-            recordComparator,
-            memorySegmentPool);
+        keyComputer,
+        new RowDataSerializer(rowType),
+        new BinaryRowDataSerializer(rowType.getFieldCount()),
+        recordComparator,
+        memorySegmentPool);
   }
 }

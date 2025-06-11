@@ -135,8 +135,9 @@ public class AppendWriteFunctionWithBufferSort<T> extends AppendWriteFunction<T>
     BinaryRowData rowData = new BinaryRowData(rowType.getFieldCount());
     while (rowData != null) {
       rowData = iterator.next(rowData);
-      if (rowData != null)
+      if (rowData != null) {
         writerHelper.write(rowData);
+      }
     }
     buffer.reset();
   }
