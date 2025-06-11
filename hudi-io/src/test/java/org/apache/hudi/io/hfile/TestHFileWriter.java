@@ -142,7 +142,6 @@ class TestHFileWriter {
       reader.seekTo();
       for (int i = 0; i < 50; i++) {
         KeyValue kv = reader.getKeyValue().get();
-        System.out.println(kv.getKey().getContentInString());
         assertArrayEquals(
             String.format("key%02d", i).getBytes(),
             kv.getKey().getContentInString().getBytes());

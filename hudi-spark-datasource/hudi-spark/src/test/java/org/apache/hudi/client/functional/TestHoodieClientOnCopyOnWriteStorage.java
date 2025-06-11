@@ -152,11 +152,8 @@ import static org.junit.jupiter.api.Assertions.fail;
 @Tag("functional")
 public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
-  private static final Map<String, String> STRATEGY_PARAMS = new HashMap<String, String>() {
-    {
-      put("sortColumn", "record_key");
-    }
-  };
+  private static final Map<String, String> STRATEGY_PARAMS = Collections.singletonMap("sortColumn", "record_key");
+
   private static Stream<Arguments> smallInsertHandlingParams() {
     return Arrays.stream(new Boolean[][] {{true}, {false}}).map(Arguments::of);
   }

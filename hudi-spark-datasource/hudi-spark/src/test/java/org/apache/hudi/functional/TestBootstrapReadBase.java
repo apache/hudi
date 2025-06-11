@@ -41,7 +41,6 @@ import org.apache.spark.sql.SaveMode;
 import org.apache.spark.sql.functions;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
@@ -54,7 +53,6 @@ import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
 import static org.apache.hudi.common.testutils.RawTripTestPayload.recordToString;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-@Tag("functional")
 public abstract class TestBootstrapReadBase extends HoodieSparkClientTestBase {
 
   @TempDir

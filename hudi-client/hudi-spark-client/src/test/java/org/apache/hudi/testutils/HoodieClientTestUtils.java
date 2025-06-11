@@ -92,7 +92,7 @@ public class HoodieClientTestUtils {
    */
   public static SparkConf getSparkConfForTest(String appName) {
     SparkConf sparkConf = new SparkConf().setAppName(appName)
-        .setMaster("local[8]")
+        .setMaster("local[8,1]")
         .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
         .set("spark.kryo.registrator", "org.apache.spark.HoodieSparkKryoRegistrar")
         .set("spark.sql.shuffle.partitions", "4")

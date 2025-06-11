@@ -188,6 +188,7 @@ public class TestHoodieSparkRollback extends SparkClientFunctionalTestHarness {
     if (failRollback) {
       copyOut(tableType, "002");
       //disable MDT so we don't copy it
+      client.close();
       client = getHoodieWriteClient(getConfigToTestMDTRollbacks(true, false));
       assertTrue(client.rollback("002", "003"));
       metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -205,6 +206,7 @@ public class TestHoodieSparkRollback extends SparkClientFunctionalTestHarness {
     //now we are at a state that we would be at if a write failed after writing to MDT but before commit is finished
 
     //New update will trigger rollback and we will commit this time
+    client.close();
     client = getHoodieWriteClient(getConfigToTestMDTRollbacks(true, true));
     updateRecords(client, dataGen, "004", records);
     //validate that metadata table file listing matches reality
@@ -212,6 +214,7 @@ public class TestHoodieSparkRollback extends SparkClientFunctionalTestHarness {
     TestHoodieBackedMetadata.validateMetadata(cfg, Option.empty(), hoodieStorage(), basePath, metaClient, storageConf(), new HoodieSparkEngineContext(jsc()),
         TestHoodieBackedMetadata.metadata(client, hoodieStorage()), client, HoodieTimer.start());
     assertEquals(HoodieTableVersion.SIX, metaClient.getTableConfig().getTableVersion());
+    client.close();
   }
 
   private void copyOut(HoodieTableType tableType, String commitTime) throws IOException {
@@ -284,6 +287,7 @@ public class TestHoodieSparkRollback extends SparkClientFunctionalTestHarness {
     TestHoodieBackedMetadata.validateMetadata(cfg, Option.empty(), hoodieStorage(), basePath, metaClient,
         storageConf(), new HoodieSparkEngineContext(jsc()), TestHoodieBackedMetadata.metadata(client, hoodieStorage()), client, HoodieTimer.start());
     assertEquals(HoodieTableVersion.SIX, metaClient.getTableConfig().getTableVersion());
+    client.close();
   }
 
   /**

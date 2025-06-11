@@ -119,21 +119,7 @@
         </dependency>
         <dependency>
             <groupId>org.junit.platform</groupId>
-            <artifactId>junit-platform-suite-api</artifactId>
-            <scope>compile</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.junit.platform</groupId>
             <artifactId>junit-platform-commons</artifactId>
-            <scope>compile</scope>
-        </dependency>
-        <!-- This is to support @RunWith(JUnitPlatform.class),
-             which should be replaced by @ExtendWith in JUnit 5
-             TODO remove this junit4 lib HUDI-2516 -->
-        <dependency>
-            <groupId>junit</groupId>
-            <artifactId>junit</artifactId>
-            <version>4.13.2</version>
             <scope>compile</scope>
         </dependency>
         <dependency>

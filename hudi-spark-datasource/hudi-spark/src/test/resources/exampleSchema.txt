@@ -30,12 +30,12 @@
         },
         {
             "name": "ts",
-            "type": ["long", "null"]
+            "type": ["null", "long"]
         },
         {
             "name": "_hoodie_is_deleted",
-            "type": ["boolean", "null"],
-            "default" : false
+            "type": ["null", "boolean"],
+            "default" : null
         }
     ]
 }

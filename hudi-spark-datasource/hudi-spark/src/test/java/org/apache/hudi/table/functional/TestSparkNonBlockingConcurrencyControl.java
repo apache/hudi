@@ -167,6 +167,8 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
     // result is [(id1,Danny,23,2,par1)]
     Map<String, String> result = Collections.singletonMap("par1", "[id1,par1,id1,Danny,23,2,par1]");
     checkWrittenData(result, 1);
+    client1.close();
+    client2.close();
   }
 
   @Test
@@ -216,6 +218,8 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
     // the data files belongs 3rd commit is not included in the last compaction.
     Map<String, String> result = Collections.singletonMap("par1", "[id1,par1,id1,Danny,null,1,par1]");
     checkWrittenData(result, 1);
+    client1.close();
+    client2.close();
   }
 
   // Validate that multiple writers will only produce base files for bulk insert
@@ -345,6 +349,8 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
     // result is [(id1,Danny,23,2,par1)]
     Map<String, String> result = Collections.singletonMap("par1", "[id1,par1,id1,Danny,23,2,par1]");
     checkWrittenData(result, 1);
+    client1.close();
+    client2.close();
   }
 
   /**
@@ -391,6 +397,8 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
           Option.empty(),
           metaClient.getCommitActionType());
     });
+    client1.close();
+    client2.close();
   }
 
   /**
@@ -437,6 +445,8 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
           Option.empty(),
           metaClient.getCommitActionType());
     });
+    client1.close();
+    client2.close();
   }
 
   /**
@@ -491,6 +501,8 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
     // result is [(id1,Danny,23,2,par1)]
     Map<String, String> result = Collections.singletonMap("par1", "[id1,par1,id1,Danny,23,2,par1]");
     checkWrittenData(result, 1);
+    client1.close();
+    client2.close();
   }
 
   /**
@@ -545,6 +557,8 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
     // result is [(id1,Danny,23,2,par1)]
     Map<String, String> result = Collections.singletonMap("par1", "[id1,par1,id1,Danny,23,2,par1]");
     checkWrittenData(result, 1);
+    client1.close();
+    client2.close();
   }
 
   /**
@@ -585,6 +599,8 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
     // result is [(id1,Danny,23,2,par1)]
     Map<String, String> result = Collections.singletonMap("par1", "[id1,par1,id1,Danny,23,2,par1]");
     checkWrittenData(result, 1);
+    client1.close();
+    client2.close();
   }
 
   private HoodieWriteConfig createHoodieWriteConfig() {
