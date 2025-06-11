@@ -100,7 +100,7 @@ public class HoodieFlinkStreamer {
 
     OptionsInference.setupSinkTasks(conf, env.getParallelism());
     OptionsInference.setupClientId(conf);
-    DataStream<Object> pipeline;
+    DataStream<RowData> pipeline;
     // Append mode
     if (OptionsResolver.isAppendMode(conf)) {
       // append mode should not compaction operator

@@ -30,6 +30,7 @@ import org.apache.hudi.sink.StreamWriteFunction;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
+import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.Collector;
 import org.slf4j.Logger;
@@ -122,8 +123,8 @@ public class BucketStreamWriteFunction extends StreamWriteFunction {
 
   @Override
   public void processElement(HoodieFlinkInternalRow record,
-                             ProcessFunction<HoodieFlinkInternalRow, Object>.Context context,
-                             Collector<Object> collector) throws Exception {
+                             ProcessFunction<HoodieFlinkInternalRow, RowData>.Context context,
+                             Collector<RowData> collector) throws Exception {
     defineRecordLocation(record);
     bufferRecord(record);
   }

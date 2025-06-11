@@ -21,19 +21,16 @@ package org.apache.hudi.table;
 import org.apache.hudi.adapter.DataStreamSinkProviderAdapter;
 import org.apache.hudi.adapter.SupportsRowLevelDeleteAdapter;
 import org.apache.hudi.adapter.SupportsRowLevelUpdateAdapter;
-import org.apache.hudi.client.model.HoodieFlinkInternalRow;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsInference;
 import org.apache.hudi.configuration.OptionsResolver;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.utils.Pipelines;
 import org.apache.hudi.util.ChangelogModes;
 import org.apache.hudi.util.DataModificationInfos;
 
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.table.catalog.Column;
 import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.connector.ChangelogMode;
@@ -72,12 +69,12 @@ public class HoodieTableSink implements
 
   @Override
   public SinkRuntimeProvider getSinkRuntimeProvider(Context context) {
+    RowType rowType = (RowType) schema.toSinkRowDataType().notNull().getLogicalType();
     return (DataStreamSinkProviderAdapter) dataStream -> {
-
       // setup configuration
       long ckpTimeout = dataStream.getExecutionEnvironment()
           .getCheckpointConfig().getCheckpointTimeout();
-      conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, ckpTimeout);
+      conf.set(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, ckpTimeout);
       // set up default parallelism
       OptionsInference.setupSinkTasks(conf, dataStream.getExecutionConfig().getParallelism());
       // set up client id
@@ -85,45 +82,10 @@ public class HoodieTableSink implements
       // set up index related configs
       OptionsInference.setupIndexConfigs(conf);
 
-      RowType rowType = (RowType) schema.toSinkRowDataType().notNull().getLogicalType();
-
-      // bulk_insert mode
-      if (OptionsResolver.isBulkInsertOperation(conf)) {
-        if (!context.isBounded()) {
-          throw new HoodieException(
-              "The bulk insert should be run in batch execution mode.");
-        }
-        return Pipelines.bulkInsert(conf, rowType, dataStream);
-      }
-
-      // Append mode
-      if (OptionsResolver.isAppendMode(conf)) {
-        // close compaction for append mode
-        conf.set(FlinkOptions.COMPACTION_SCHEDULE_ENABLED, false);
-        DataStream<Object> pipeline = Pipelines.append(conf, rowType, dataStream);
-        if (OptionsResolver.needsAsyncClustering(conf)) {
-          return Pipelines.cluster(conf, rowType, pipeline);
-        } else if (OptionsResolver.isLazyFailedWritesCleanPolicy(conf)) {
-          // add clean function to rollback failed writes for lazy failed writes cleaning policy
-          return Pipelines.clean(conf, pipeline);
-        } else {
-          return Pipelines.dummySink(pipeline);
-        }
-      }
-
-      // process dataStream and write corresponding files
-      DataStream<Object> pipeline;
-      final DataStream<HoodieFlinkInternalRow> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, dataStream, context.isBounded(), overwrite);
-      pipeline = Pipelines.hoodieStreamWrite(conf, rowType, hoodieRecordDataStream);
-      // compaction
-      if (OptionsResolver.needsAsyncCompaction(conf)) {
-        // use synchronous compaction for bounded source.
-        if (context.isBounded()) {
-          conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
-        }
-        return Pipelines.compact(conf, pipeline);
+      if (OptionsResolver.isSinkV2Enabled(conf)) {
+        return Pipelines.sinkV2(dataStream, conf, rowType, overwrite, context.isBounded());
       } else {
-        return Pipelines.clean(conf, pipeline);
+        return Pipelines.sink(dataStream, conf, rowType, overwrite, context.isBounded());
       }
     };
   }
@@ -135,7 +97,7 @@ public class HoodieTableSink implements
 
   @Override
   public ChangelogMode getChangelogMode(ChangelogMode changelogMode) {
-    if (conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED)) {
+    if (conf.get(FlinkOptions.CHANGELOG_ENABLED)) {
       return ChangelogModes.FULL;
     } else {
       return ChangelogModes.UPSERT;
@@ -156,7 +118,7 @@ public class HoodieTableSink implements
   public void applyStaticPartition(Map<String, String> partitions) {
     // #applyOverwrite should have been invoked.
     if (this.overwrite && !partitions.isEmpty()) {
-      this.conf.setString(FlinkOptions.OPERATION, WriteOperationType.INSERT_OVERWRITE.value());
+      this.conf.set(FlinkOptions.OPERATION, WriteOperationType.INSERT_OVERWRITE.value());
     }
   }
 
@@ -164,22 +126,22 @@ public class HoodieTableSink implements
   public void applyOverwrite(boolean overwrite) {
     this.overwrite = overwrite;
     if (OptionsResolver.overwriteDynamicPartition(conf)) {
-      this.conf.setString(FlinkOptions.OPERATION, WriteOperationType.INSERT_OVERWRITE.value());
+      this.conf.set(FlinkOptions.OPERATION, WriteOperationType.INSERT_OVERWRITE.value());
     } else {
       // if there are explicit partitions, #applyStaticPartition would overwrite the option.
-      this.conf.setString(FlinkOptions.OPERATION, WriteOperationType.INSERT_OVERWRITE_TABLE.value());
+      this.conf.set(FlinkOptions.OPERATION, WriteOperationType.INSERT_OVERWRITE_TABLE.value());
     }
   }
 
   @Override
   public RowLevelDeleteInfoAdapter applyRowLevelDelete() {
-    this.conf.setString(FlinkOptions.OPERATION, WriteOperationType.DELETE.value());
+    this.conf.set(FlinkOptions.OPERATION, WriteOperationType.DELETE.value());
     return DataModificationInfos.DEFAULT_DELETE_INFO;
   }
 
   @Override
   public RowLevelUpdateInfoAdapter applyRowLevelUpdate(List<Column> list) {
-    this.conf.setString(FlinkOptions.OPERATION, WriteOperationType.UPSERT.value());
+    this.conf.set(FlinkOptions.OPERATION, WriteOperationType.UPSERT.value());
     return DataModificationInfos.DEFAULT_UPDATE_INFO;
   }
 }

@@ -108,7 +108,7 @@ public class BulkInsertWriteFunction<I>
   }
 
   @Override
-  public void processElement(I value, Context ctx, Collector<Object> out) throws IOException {
+  public void processElement(I value, Context ctx, Collector<RowData> out) throws IOException {
     initWriterHelperIfNeeded();
     this.writerHelper.write((RowData) value);
   }

@@ -118,7 +118,7 @@ public class ClusteringFunctionWrapper {
     }
     // handle and commit the clustering
     for (ClusteringCommitEvent event : commitEventOutput.getRecords()) {
-      commitSink.invoke(event, null);
+      commitSink.processElement(event, null, null);
     }
   }
 

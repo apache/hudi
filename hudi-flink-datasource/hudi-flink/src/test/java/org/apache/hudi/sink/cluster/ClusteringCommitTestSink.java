@@ -24,6 +24,9 @@ import org.apache.hudi.sink.clustering.ClusteringCommitEvent;
 import org.apache.hudi.sink.clustering.ClusteringCommitSink;
 
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.streaming.api.functions.ProcessFunction;
+import org.apache.flink.table.data.RowData;
+import org.apache.flink.util.Collector;
 
 import java.util.List;
 
@@ -36,8 +39,8 @@ public class ClusteringCommitTestSink extends ClusteringCommitSink {
   }
 
   @Override
-  public void invoke(ClusteringCommitEvent event, Context context) throws Exception {
-    super.invoke(event, context);
+  public void processElement(ClusteringCommitEvent event, ProcessFunction<ClusteringCommitEvent, RowData>.Context context, Collector<RowData> collector) throws Exception {
+    super.processElement(event, context, collector);
     List<HoodieInstant> instants = writeClient.getHoodieTable().getMetaClient().getActiveTimeline().getInstants();
     boolean committed = instants.stream().anyMatch(i -> i.requestedTime().equals(event.getInstant()) && i.isCompleted());
     if (committed && getRuntimeContext().getAttemptNumber() == 0) {

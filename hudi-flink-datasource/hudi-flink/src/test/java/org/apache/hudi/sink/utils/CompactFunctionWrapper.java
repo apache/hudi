@@ -117,7 +117,7 @@ public class CompactFunctionWrapper {
     }
     // handle and commit the compaction
     for (CompactionCommitEvent event : commitEventOutput.getRecords()) {
-      commitSink.invoke(event, null);
+      commitSink.processElement(event, null, null);
     }
   }
 

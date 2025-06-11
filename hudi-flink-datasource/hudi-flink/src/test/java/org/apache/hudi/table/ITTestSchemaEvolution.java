@@ -38,6 +38,7 @@ import org.apache.hudi.sink.compact.CompactOperator;
 import org.apache.hudi.sink.compact.CompactionCommitEvent;
 import org.apache.hudi.sink.compact.CompactionCommitSink;
 import org.apache.hudi.sink.compact.CompactionPlanSourceFunction;
+import org.apache.hudi.sink.utils.Pipelines;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.utils.FlinkMiniCluster;
@@ -47,8 +48,10 @@ import org.apache.avro.SchemaBuilder;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.operators.ProcessOperator;
 import org.apache.flink.table.api.TableResult;
 import org.apache.flink.table.api.bridge.java.StreamTableEnvironment;
+import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.factories.FactoryUtil;
 import org.apache.flink.types.Row;
 import org.apache.flink.util.CloseableIterator;
@@ -484,9 +487,13 @@ public class ITTestSchemaEvolution {
               TypeInformation.of(CompactionCommitEvent.class),
               new CompactOperator(conf))
           .setParallelism(FlinkMiniCluster.DEFAULT_PARALLELISM)
-          .addSink(new CompactionCommitSink(conf))
-          .name("compaction_commit")
-          .uid("uid_compaction_commit")
+          .transform(
+              "compaction_commit",
+              TypeInformation.of(RowData.class),
+              new ProcessOperator<>(new CompactionCommitSink(conf)))
+          .setParallelism(1)
+          .addSink(Pipelines.DummySink.INSTANCE)
+          .name("DUMMY")
           .setParallelism(1);
 
       env.execute("flink_hudi_compaction");

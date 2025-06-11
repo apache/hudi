@@ -42,6 +42,7 @@ import org.apache.hudi.sink.overwrite.PartitionOverwriteMode;
 import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.table.format.HoodieFlinkIOFactory;
 
+import org.apache.flink.FlinkVersion;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
 
@@ -58,6 +59,15 @@ import static org.apache.hudi.common.config.HoodieCommonConfig.INCREMENTAL_READ_
  * Tool helping to resolve the flink options {@link FlinkOptions}.
  */
 public class OptionsResolver {
+  /**
+   * Returns whether sink V2 is enabled. Note hudi sink v2 uses {@code SupportsPreWriteTopology} interface,
+   * which is supported from Flink 1.19.
+   */
+  public static boolean isSinkV2Enabled(Configuration conf) {
+    return conf.get(FlinkOptions.SINK_V2_ENABLED)
+        && FlinkVersion.current().toString().compareTo("1.19") >= 0;
+  }
+
   /**
    * Returns whether insert clustering is allowed with given configuration {@code conf}.
    */

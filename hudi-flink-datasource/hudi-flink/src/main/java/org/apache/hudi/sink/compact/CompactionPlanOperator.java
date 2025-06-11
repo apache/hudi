@@ -40,6 +40,7 @@ import org.apache.flink.streaming.api.operators.BoundedOneInput;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.streaming.api.operators.Output;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
+import org.apache.flink.table.data.RowData;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -56,7 +57,7 @@ import static java.util.stream.Collectors.toList;
  * <p>It should be singleton to avoid conflicts.
  */
 public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPlanEvent>
-    implements OneInputStreamOperator<Object, CompactionPlanEvent>, BoundedOneInput {
+    implements OneInputStreamOperator<RowData, CompactionPlanEvent>, BoundedOneInput {
   private static final Logger LOG = LoggerFactory.getLogger(CompactionPlanOperator.class);
 
   /**
@@ -91,7 +92,7 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
   }
 
   @Override
-  public void processElement(StreamRecord<Object> streamRecord) {
+  public void processElement(StreamRecord<RowData> streamRecord) {
     // no operation
   }
 

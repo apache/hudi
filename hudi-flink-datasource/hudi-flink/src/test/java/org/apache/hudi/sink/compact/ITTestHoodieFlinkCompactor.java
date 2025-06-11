@@ -32,6 +32,7 @@ import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.sink.utils.Pipelines;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.upgrade.FlinkUpgradeDowngradeHelper;
@@ -49,11 +50,13 @@ import org.apache.flink.api.common.time.Time;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.operators.ProcessOperator;
 import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.TableEnvironment;
 import org.apache.flink.table.api.config.ExecutionConfigOptions;
 import org.apache.flink.table.api.config.TableConfigOptions;
 import org.apache.flink.table.api.internal.TableEnvironmentImpl;
+import org.apache.flink.table.data.RowData;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
@@ -183,9 +186,13 @@ public class ITTestHoodieFlinkCompactor {
               TypeInformation.of(CompactionCommitEvent.class),
               new CompactOperator(conf))
           .setParallelism(FlinkMiniCluster.DEFAULT_PARALLELISM)
-          .addSink(new CompactionCommitSink(conf))
-          .name("compaction_commit")
-          .uid("uid_compaction_commit")
+          .transform(
+              "compaction_commit",
+              TypeInformation.of(RowData.class),
+              new ProcessOperator<>(new CompactionCommitSink(conf)))
+          .setParallelism(1)
+          .addSink(Pipelines.DummySink.INSTANCE)
+          .name("DUMMY")
           .setParallelism(1);
 
       env.execute("flink_hudi_compaction");
@@ -268,9 +275,13 @@ public class ITTestHoodieFlinkCompactor {
               TypeInformation.of(CompactionCommitEvent.class),
               new CompactOperator(conf))
           .setParallelism(FlinkMiniCluster.DEFAULT_PARALLELISM)
-          .addSink(new CompactionCommitSink(conf))
-          .name("compaction_commit")
-          .uid("uid_compaction_commit")
+          .transform(
+              "compaction_commit",
+              TypeInformation.of(RowData.class),
+              new ProcessOperator<>(new CompactionCommitSink(conf)))
+          .setParallelism(1)
+          .addSink(Pipelines.DummySink.INSTANCE)
+          .name("DUMMY")
           .setParallelism(1);
 
       env.execute("flink_hudi_compaction");
@@ -389,9 +400,13 @@ public class ITTestHoodieFlinkCompactor {
             TypeInformation.of(CompactionCommitEvent.class),
             new CompactOperator(conf))
         .setParallelism(1)
-        .addSink(new CompactionCommitSink(conf))
-        .name("compaction_commit")
-        .uid("uid_compaction_commit")
+        .transform(
+            "compaction_commit",
+            TypeInformation.of(RowData.class),
+            new ProcessOperator<>(new CompactionCommitSink(conf)))
+        .setParallelism(1)
+        .addSink(Pipelines.DummySink.INSTANCE)
+        .name("DUMMY")
         .setParallelism(1);
 
     env.execute("flink_hudi_compaction");
@@ -515,9 +530,13 @@ public class ITTestHoodieFlinkCompactor {
               TypeInformation.of(CompactionCommitEvent.class),
               new CompactOperator(conf))
           .setParallelism(1)
-          .addSink(new CompactionCommitTestSink(conf))
-          .name("compaction_commit")
-          .uid("uid_compaction_commit")
+          .transform(
+              "compaction_commit",
+              TypeInformation.of(RowData.class),
+              new ProcessOperator<>(new CompactionCommitTestSink(conf)))
+          .setParallelism(1)
+          .addSink(Pipelines.DummySink.INSTANCE)
+          .name("DUMMY")
           .setParallelism(1);
 
       env.execute("flink_hudi_compaction");
