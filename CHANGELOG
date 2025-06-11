@@ -812,3 +812,8 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 --- [2025-06-10 18:39:44] [release-v1.132.1] ---
 [ENG-24737][INTERNAL] Adding partitioned RLI support to hudi for non-global use-cases  (#1347)
 [AUDIT-1071]: Changelog for release-v1.132.0 (#1403)
+
+--- [2025-06-11 16:04:23] [release-v1.133.0] ---
+[AUDIT-1434]: Changelog for release-v1.132.1 (#1405)
+[ENG-24737][INTERNAL] Adding partitioned RLI support to hudi for non-global use-cases  (#1347)
+[AUDIT-1071]: Changelog for release-v1.132.0 (#1403)
