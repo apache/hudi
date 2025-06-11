@@ -111,9 +111,9 @@
     <glassfish.version>2.17</glassfish.version>
     <glassfish.el.version>3.0.1-b12</glassfish.el.version>
     <parquet.version>1.10.1</parquet.version>
-    <junit.jupiter.version>5.8.2</junit.jupiter.version>
-    <junit.vintage.version>5.8.2</junit.vintage.version>
-    <junit.platform.version>1.8.2</junit.platform.version>
+    <junit.jupiter.version>5.13.0</junit.jupiter.version>
+    <junit.vintage.version>5.13.0</junit.vintage.version>
+    <junit.platform.version>1.13.0</junit.platform.version>
     <mockito.jupiter.version>3.12.4</mockito.jupiter.version>
     <log4j2.version>2.17.2</log4j2.version>
     <slf4j.version>1.7.36</slf4j.version>
@@ -1601,6 +1601,12 @@
       </dependency>
       <dependency>
         <groupId>org.junit.jupiter</groupId>
+        <artifactId>junit-jupiter</artifactId>
+        <version>${junit.jupiter.version}</version>
+        <scope>test</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.junit.jupiter</groupId>
         <artifactId>junit-jupiter-engine</artifactId>
         <version>${junit.jupiter.version}</version>
         <scope>test</scope>
@@ -1645,6 +1651,13 @@
         <groupId>org.junit.platform</groupId>
         <artifactId>junit-platform-commons</artifactId>
         <version>${junit.platform.version}</version>
+        <scope>test</scope>
+      </dependency>
+      <!-- Junit 4 -->
+      <dependency>
+        <groupId>junit</groupId>
+        <artifactId>junit</artifactId>
+        <version>4.13.2</version>
         <scope>test</scope>
       </dependency>
 
@@ -1905,9 +1918,6 @@
               <forkedProcessExitTimeoutInSeconds>120</forkedProcessExitTimeoutInSeconds>
               <excludedGroups>functional,functional-b</excludedGroups>
               <excludes>
-                <exclude>**/*FunctionalTestSuite.java</exclude>
-                <exclude>**/*FunctionalTestSuiteA.java</exclude>
-                <exclude>**/*FunctionalTestSuiteB.java</exclude>
                 <exclude>**/IT*.java</exclude>
                 <exclude>**/testsuite/**/Test*.java</exclude>
               </excludes>
@@ -1953,21 +1963,11 @@
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-surefire-plugin</artifactId>
             <version>${maven-surefire-plugin.version}</version>
-            <dependencies>
-              <dependency>
-                <groupId>org.apache.maven.surefire</groupId>
-                <artifactId>surefire-junit47</artifactId>
-                <version>${maven-surefire-plugin.version}</version>
-              </dependency>
-            </dependencies>
             <configuration combine.self="append">
               <skip>${skipFTs}</skip>
               <forkCount>1</forkCount>
               <reuseForks>true</reuseForks>
-              <includes>
-                <include>**/*FunctionalTestSuite.java</include>
-                <include>**/*FunctionalTestSuiteA.java</include>
-              </includes>
+              <groups>functional</groups>
             </configuration>
           </plugin>
           <plugin>
@@ -2010,20 +2010,11 @@
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-surefire-plugin</artifactId>
             <version>${maven-surefire-plugin.version}</version>
-            <dependencies>
-              <dependency>
-                <groupId>org.apache.maven.surefire</groupId>
-                <artifactId>surefire-junit47</artifactId>
-                <version>${maven-surefire-plugin.version}</version>
-              </dependency>
-            </dependencies>
             <configuration combine.self="append">
               <skip>${skipFTs}</skip>
               <forkCount>1</forkCount>
               <reuseForks>true</reuseForks>
-              <includes>
-                <include>**/*FunctionalTestSuiteB.java</include>
-              </includes>
+              <groups>functional-b</groups>
             </configuration>
           </plugin>
           <plugin>

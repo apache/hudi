@@ -1875,8 +1875,9 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
             metaClient.getActiveTimeline.getLastClusteringInstant.get)
         }
         // This should not schedule any new clustering
-        new SparkRDDWriteClient(context, writeConfig)
-          .scheduleClustering(org.apache.hudi.common.util.Option.of(Map[String, String]().asJava))
+        val client = new SparkRDDWriteClient(context, writeConfig)
+        client.scheduleClustering(org.apache.hudi.common.util.Option.of(Map[String, String]().asJava))
+        client.close()
         assertEquals(lastInstant.requestedTime,
           metaClient.reloadActiveTimeline.getCommitsTimeline.lastInstant.get.requestedTime)
       }
