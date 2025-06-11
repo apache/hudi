@@ -80,7 +80,7 @@ public class MetadataIndexGenerator implements Serializable {
 
   protected static List<HoodieRecord> processWriteStatusForRLI(WriteStatus writeStatus, HoodieWriteConfig dataWriteConfig) {
     List<HoodieRecord> allRecords = new ArrayList<>();
-    for (HoodieRecordDelegate recordDelegate : writeStatus.getWrittenRecordDelegates()) {
+    for (HoodieRecordDelegate recordDelegate : writeStatus.getIndexStats().getWrittenRecordDelegates()) {
       if (!writeStatus.isErrored(recordDelegate.getHoodieKey())) {
         if (recordDelegate.getIgnoreIndexUpdate()) {
           continue;
