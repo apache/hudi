@@ -131,6 +131,8 @@
                     <exclude>META-INF/*.DSA</exclude>
                     <exclude>META-INF/*.RSA</exclude>
                     <exclude>META-INF/services/javax.*</exclude>
+                    <exclude>META-INF/versions/21/**</exclude>
+                    <exclude>META-INF/versions/22/**</exclude>
                     <exclude>**/*.proto</exclude>
                   </excludes>
                 </filter>

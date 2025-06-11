@@ -18,7 +18,7 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.testutils.HoodieClientTestBase
+import org.apache.hudi.testutils.{DisabledOnSpark4, HoodieClientTestBase}
 
 import org.apache.spark.sql.classic.ColumnConversions.toRichColumn
 import org.apache.spark.sql.functions.expr
@@ -26,6 +26,9 @@ import org.apache.spark.sql.sources.Filter
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
+@DisabledOnSpark4
+// Temporarily disabled on Spark 4 because of:
+// UnresolvedException: [INTERNAL_ERROR] Invalid call to dataType on unresolved object SQLSTATE: XX000
 class TestHoodieDataSourceHelper extends HoodieClientTestBase with SparkAdapterSupport {
 
   def checkCondition(filter: Option[Filter], outputSet: Set[String], expected: Any): Unit = {
