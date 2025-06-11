@@ -42,7 +42,9 @@ public class SkewAdjustingTimeGenerator extends TimeGeneratorBase {
         lock();
       }
       long ts = System.currentTimeMillis();
-      Thread.sleep(maxExpectedClockSkewMs);
+      if (maxExpectedClockSkewMs > 0) {
+        Thread.sleep(maxExpectedClockSkewMs);
+      }
       return ts;
     } catch (InterruptedException e) {
       throw new HoodieException("Interrupted when get the current time", e);
