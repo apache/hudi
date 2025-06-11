@@ -22,42 +22,26 @@ import org.apache.hudi.avro.AvroRecordSerializer;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecordSerializer;
+import org.apache.hudi.common.testutils.SchemaTestUtil;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.util.HashMap;
 
 public class TestBufferedRecordSerializer {
-  private Schema schema;
-
-  String jsonSchema = "{\n"
-      + "  \"type\": \"record\",\n"
-      + "  \"name\": \"Record\", \"namespace\":\"org.apache.hudi\",\n"
-      + "  \"fields\": [\n"
-      + "    {\"name\": \"id\", \"type\": \"string\"},\n"
-      + "    {\"name\": \"ts\", \"type\": \"long\"},\n"
-      + "    {\"name\": \"city\", \"type\": \"string\"}\n"
-      + "  ]\n"
-      + "}";
-
-  @BeforeEach
-  public void setUp() throws Exception {
-    schema = new Schema.Parser().parse(jsonSchema);
-  }
-
   @Test
-  void testAvroRecordSerAndDe() {
+  void testAvroRecordSerAndDe() throws IOException {
+    Schema schema = SchemaTestUtil.getSimpleSchema();
     GenericRecord record = new GenericData.Record(schema);
-    record.put("id", "id1");
-    record.put("ts", 100L);
-    record.put("city", "SH");
+    record.put("name", "lily");
+    record.put("favorite_number", 100);
+    record.put("favorite_color", "red");
     AvroRecordSerializer avroRecordSerializer = new AvroRecordSerializer(integer -> schema);
     byte[] avroBytes = avroRecordSerializer.serialize(record);
     IndexedRecord result = avroRecordSerializer.deserialize(avroBytes, 1);
@@ -74,10 +58,11 @@ public class TestBufferedRecordSerializer {
 
   @Test
   void testBufferedRecordSerAndDe() throws IOException {
+    Schema schema = SchemaTestUtil.getSimpleSchema();
     GenericRecord record = new GenericData.Record(schema);
-    record.put("id", "id1");
-    record.put("ts", 100L);
-    record.put("city", "SH");
+    record.put("name", "lily");
+    record.put("favorite_number", 100);
+    record.put("favorite_color", "red");
     BufferedRecord<IndexedRecord> bufferedRecord = new BufferedRecord<>("id", 100, record, 1, false);
 
     AvroRecordSerializer avroRecordSerializer = new AvroRecordSerializer(integer -> schema);

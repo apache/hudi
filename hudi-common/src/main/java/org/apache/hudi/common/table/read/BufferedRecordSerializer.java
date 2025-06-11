@@ -53,10 +53,10 @@ public class BufferedRecordSerializer<T> implements CustomSerializer<BufferedRec
     kryo.reset();
     baos.reset();
     try (Output output = new Output(baos)) {
-      this.kryo.writeClassAndObject(output, record.getRecordKey());
-      this.kryo.writeClassAndObject(output, record.getOrderingValue());
-      this.kryo.writeClassAndObject(output, record.getSchemaId());
-      this.kryo.writeClassAndObject(output, record.isDelete());
+      output.writeString(record.getRecordKey());
+      output.writeInt(record.getSchemaId());
+      output.writeBoolean(record.isDelete());
+      kryo.writeClassAndObject(output, record.getOrderingValue());
 
       byte[] avroBytes = recordSerializer.serialize(record.getRecord());
       output.writeInt(avroBytes.length);
@@ -68,15 +68,14 @@ public class BufferedRecordSerializer<T> implements CustomSerializer<BufferedRec
   @Override
   public BufferedRecord<T> deserialize(byte[] bytes) {
     try (Input input = new Input(bytes)) {
-      String recordKey = (String) kryo.readClassAndObject(input);
+      String recordKey = input.readString();
+      int schemaId = input.readInt();
+      boolean isDelete = input.readBoolean();
       Comparable orderingValue = (Comparable) kryo.readClassAndObject(input);
-      Integer schemaId = (Integer) kryo.readClassAndObject(input);
-      boolean isDelete = (boolean) kryo.readClassAndObject(input);
 
       int recordLength = input.readInt();
       byte[] recordBytes = input.readBytes(recordLength);
       T record = recordSerializer.deserialize(recordBytes, schemaId);
-
       return new BufferedRecord<>(recordKey, orderingValue, record, schemaId, isDelete);
     }
   }

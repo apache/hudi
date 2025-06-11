@@ -20,6 +20,7 @@ package org.apache.hudi.avro;
 
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.SizeEstimator;
 
 import org.apache.avro.Schema;
@@ -27,36 +28,20 @@ import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.util.HashMap;
 
-public class TestSizeEstimator {
-  private Schema schema;
-
-  String jsonSchema = "{\n"
-      + "  \"type\": \"record\",\n"
-      + "  \"name\": \"Record\", \"namespace\":\"org.apache.hudi\",\n"
-      + "  \"fields\": [\n"
-      + "    {\"name\": \"id\", \"type\": [\"null\", \"string\"]},\n"
-      + "    {\"name\": \"ts\", \"type\": [\"null\", \"long\"]},\n"
-      + "    {\"name\": \"city\", \"type\": [\"null\", \"string\"]}\n"
-      + "  ]\n"
-      + "}";
-
-  @BeforeEach
-  public void setUp() throws Exception {
-    schema = new Schema.Parser().parse(jsonSchema);
-  }
-
+public class TestAvroRecordSizeEstimator {
   @Test
-  void testEstimatingRecord() {
+  void testEstimatingRecord() throws IOException {
+    Schema schema = SchemaTestUtil.getSimpleSchema();
     // testing Avro builtin IndexedRecord
     GenericRecord record = new GenericData.Record(schema);
-    record.put("id", "id1");
-    record.put("ts", 100);
-    record.put("city", "SH");
+    record.put("name", "lily");
+    record.put("favorite_number", 100);
+    record.put("favorite_color", "red");
     SizeEstimator<BufferedRecord<IndexedRecord>> estimator = new AvroRecordSizeEstimator(schema);
     BufferedRecord<IndexedRecord> bufferedRecord = new BufferedRecord<>("id", 100, record, 1, false);
     long size = estimator.sizeEstimate(bufferedRecord);
