@@ -23,7 +23,9 @@ import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
+import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSliceInfo;
+import org.apache.hudi.avro.model.HoodieInstantInfo;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -295,5 +297,22 @@ public class TestConflictResolutionStrategyUtil {
     replaceMetadata.addWriteStat(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, writeStat);
     replaceMetadata.setOperationType(writeOperationType);
     return replaceMetadata;
+  }
+
+  public static void createRollbackRequested(String rollbackInstantTime, String commitToRollback, HoodieTableMetaClient metaClient) throws Exception {
+    // Create a rollback plan that targets the specified commit
+    HoodieRollbackPlan rollbackPlan = new HoodieRollbackPlan();
+    rollbackPlan.setInstantToRollback(new HoodieInstantInfo(commitToRollback, "commit"));
+    rollbackPlan.setVersion(TimelineLayoutVersion.CURR_VERSION);
+
+    HoodieTestTable.of(metaClient).addRequestedRollback(rollbackInstantTime, rollbackPlan);
+  }
+
+  public static void createRollbackInflight(String rollbackInstantTime, String commitToRollback, HoodieTableMetaClient metaClient) throws Exception {
+    // First create the requested rollback, then transition to inflight
+    createRollbackRequested(rollbackInstantTime, commitToRollback, metaClient);
+
+    // Create the inflight rollback file
+    HoodieTestTable.of(metaClient).addInflightRollback(rollbackInstantTime);
   }
 }

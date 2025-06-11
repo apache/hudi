@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.Option;
@@ -31,6 +32,8 @@ import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.util.List;
@@ -45,6 +48,8 @@ import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyU
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createReplace;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createClusterInflight;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createClusterRequested;
+import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createRollbackInflight;
+import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createRollbackRequested;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 
 public class TestPreferWriterConflictResolutionStrategy extends HoodieCommonTestHarness {
@@ -250,5 +255,107 @@ public class TestPreferWriterConflictResolutionStrategy extends HoodieCommonTest
     } catch (HoodieWriteConflictException e) {
       // expected
     }
+  }
+
+  /**
+   * Positive testcase, ensures that conflict is flagged for an on-going rollback that is targetting the inflight commit.
+   * @param rollbackRequestedOnly - if true, cretes .rollback.requested only, otherwise creates .rollback.inflight
+   * @throws Exception
+   */
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testConcurrentRollbackAndCommitConflict(boolean rollbackRequestedOnly) throws Exception {
+    // Create a base commit that the rollback will target
+    String targetCommitTime = WriteClientTestUtils.createNewInstantTime();
+    createCommit(targetCommitTime, metaClient);
+    HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
+
+    // Consider commits before this are all successful
+    Option<HoodieInstant> lastSuccessfulInstant = timeline.getCommitsTimeline().filterCompletedInstants().lastInstant();
+
+    // Start a new commit (inflight ingestion commit)
+    String inflightCommitTime = WriteClientTestUtils.createNewInstantTime();
+    createInflightCommit(inflightCommitTime, metaClient);
+
+    // Start a rollback operation targeting the same commit timestamp as the inflight commit
+    String rollbackInstantTime = WriteClientTestUtils.createNewInstantTime();
+    if (rollbackRequestedOnly) {
+      createRollbackRequested(rollbackInstantTime, inflightCommitTime, metaClient);
+    } else {
+      createRollbackInflight(rollbackInstantTime, inflightCommitTime, metaClient);
+    }
+
+    // Set up the conflict resolution strategy
+    Option<HoodieInstant> currentInstant = Option.of(INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, inflightCommitTime));
+    SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new PreferWriterConflictResolutionStrategy();
+    HoodieCommitMetadata currentMetadata = createCommitMetadata(inflightCommitTime);
+
+    metaClient.reloadActiveTimeline();
+    List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant.get(), lastSuccessfulInstant).collect(
+        Collectors.toList());
+
+    // The rollback operation should be detected as a candidate instant
+    Assertions.assertTrue(candidateInstants.size() == 1);
+    ConcurrentOperation rollbackOperation = new ConcurrentOperation(candidateInstants.get(0), metaClient);
+    ConcurrentOperation commitOperation = new ConcurrentOperation(currentInstant.get(), currentMetadata);
+
+    // The strategy should detect a conflict between the rollback and commit operations
+    Assertions.assertTrue(strategy.hasConflict(commitOperation, rollbackOperation));
+
+    // Attempting to resolve the conflict should throw an exception
+    try {
+      strategy.resolveConflict(null, commitOperation, rollbackOperation);
+      Assertions.fail("Cannot reach here, rollback and commit should have thrown a conflict");
+    } catch (HoodieWriteConflictException e) {
+      // expected
+    }
+  }
+
+  /**
+   * Negative testcase, ensures that conflict is not flagged for an on-going rollback that is targetting
+   * a different inflight commit.
+   * @param rollbackRequestedOnly - if true, cretes .rollback.requested only, otherwise creates .rollback.inflight
+   * @throws Exception
+   */
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testConcurrentRollbackAndCommitNoConflict(boolean rollbackRequestedOnly) throws Exception {
+    // Create two different commits
+    String targetCommitTime = WriteClientTestUtils.createNewInstantTime();
+    createCommit(targetCommitTime, metaClient);
+    String differentCommitTime = WriteClientTestUtils.createNewInstantTime();
+    createCommit(differentCommitTime, metaClient);
+
+    HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
+    Option<HoodieInstant> lastSuccessfulInstant = timeline.getCommitsTimeline().filterCompletedInstants().lastInstant();
+
+    // Start a new commit (inflight ingestion commit)
+    String inflightCommitTime = WriteClientTestUtils.createNewInstantTime();
+    createInflightCommit(inflightCommitTime, metaClient);
+
+    // Start a rollback operation targeting a different commit (not the inflight one)
+    String rollbackInstantTime = WriteClientTestUtils.createNewInstantTime();
+    if (rollbackRequestedOnly) {
+      createRollbackRequested(rollbackInstantTime, targetCommitTime, metaClient);
+    } else {
+      createRollbackInflight(rollbackInstantTime, targetCommitTime, metaClient);
+    }
+
+    // Set up the conflict resolution strategy
+    Option<HoodieInstant> currentInstant = Option.of(INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, inflightCommitTime));
+    SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new PreferWriterConflictResolutionStrategy();
+    HoodieCommitMetadata currentMetadata = createCommitMetadata(inflightCommitTime);
+
+    metaClient.reloadActiveTimeline();
+    List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant.get(), lastSuccessfulInstant).collect(
+        Collectors.toList());
+
+    // The rollback operation should be detected as a candidate instant
+    Assertions.assertTrue(candidateInstants.size() == 1);
+    ConcurrentOperation rollbackOperation = new ConcurrentOperation(candidateInstants.get(0), metaClient);
+    ConcurrentOperation commitOperation = new ConcurrentOperation(currentInstant.get(), currentMetadata);
+
+    // The strategy should NOT detect a conflict since the rollback targets a different commit
+    Assertions.assertFalse(strategy.hasConflict(commitOperation, rollbackOperation));
   }
 }

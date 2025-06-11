@@ -40,6 +40,7 @@ import java.util.Set;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.ROLLBACK_ACTION;
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
@@ -112,6 +113,7 @@ public class SimpleConcurrentFileWritesConflictResolutionStrategy
         .filterPendingReplaceClusteringAndCompactionTimeline()
         .filter(instant -> isClusteringOrRecentlyRequestedInstant(activeTimeline, metaClient, currentInstant).test(instant))
         .getInstantsAsStream();
+
     return Stream.concat(completedCommitsInstantStream, compactionAndClusteringPendingTimeline);
   }
 
@@ -130,6 +132,11 @@ public class SimpleConcurrentFileWritesConflictResolutionStrategy
 
   @Override
   public boolean hasConflict(ConcurrentOperation thisOperation, ConcurrentOperation otherOperation) {
+    // Check for rollback conflicts first
+    if (isRollbackConflict(thisOperation, otherOperation)) {
+      return true;
+    }
+
     // TODO : UUID's can clash even for insert/insert, handle that case.
     Set<Pair<String, String>> partitionAndFileIdsSetForFirstInstant = thisOperation.getMutatedPartitionAndFileIds();
     Set<Pair<String, String>> partitionAndFileIdsSetForSecondInstant = otherOperation.getMutatedPartitionAndFileIds();
@@ -141,6 +148,38 @@ public class SimpleConcurrentFileWritesConflictResolutionStrategy
       return true;
     }
     return false;
+  }
+
+  /**
+   * Check whether there is a rollback operation in progress that tries to rollback the commit created by this
+   * operation.
+   *
+   * @param thisOperation first concurrent commit operation
+   * @param otherOperation concurrent rollback operation
+   * @return true if there is a rollback conflict, false otherwise
+   */
+  private boolean isRollbackConflict(ConcurrentOperation thisOperation, ConcurrentOperation otherOperation) {
+    // Check if otherOperation is rollback
+    if (isRollbackOperation(otherOperation)) {
+      String rolledbackCommit = otherOperation.getRolledbackCommit();
+      String thisCommitTimestamp = thisOperation.getInstantTimestamp();
+      if (rolledbackCommit != null && rolledbackCommit.equals(thisCommitTimestamp)) {
+        log.error("Found rollback conflict: rollback operation " + otherOperation
+            + " is rolling back commit " + thisCommitTimestamp + " created by operation " + thisOperation);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Check if the given operation is a rollback operation.
+   *
+   * @param operation concurrent operation to check
+   * @return true if it's a rollback operation, false otherwise
+   */
+  private boolean isRollbackOperation(ConcurrentOperation operation) {
+    return ROLLBACK_ACTION.equals(operation.getInstantActionType());
   }
 
   @Override
@@ -163,7 +202,7 @@ public class SimpleConcurrentFileWritesConflictResolutionStrategy
       // Conflict arises only if the log compaction commit has a lesser timestamp compared to compaction commit.
       return thisOperation.getCommitMetadataOption();
     }
-    // just abort the current write if conflicts are found
+    // just abort the current write if conflicts are found (failed for rollback conflicts).
     throw new HoodieWriteConflictException(new ConcurrentModificationException("Cannot resolve conflicts for overlapping writes between first operation = " + thisOperation
         + ", second operation = " + otherOperation));
   }

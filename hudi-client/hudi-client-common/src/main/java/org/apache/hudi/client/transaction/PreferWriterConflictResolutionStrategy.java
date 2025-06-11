@@ -54,10 +54,22 @@ public class PreferWriterConflictResolutionStrategy
     HoodieActiveTimeline activeTimeline = metaClient.reloadActiveTimeline();
     if (ClusteringUtils.isClusteringInstant(activeTimeline, currentInstant, metaClient.getInstantGenerator())
         || COMPACTION_ACTION.equals(currentInstant.getAction())) {
-      return getCandidateInstantsForTableServicesCommits(activeTimeline, currentInstant);
+      return Stream.concat(getCandidateInstantsForTableServicesCommits(activeTimeline, currentInstant),
+          getCandidateInstantsForRollbackConflict(activeTimeline, currentInstant));
     } else {
-      return getCandidateInstantsForNonTableServicesCommits(activeTimeline, currentInstant);
+      return Stream.concat(getCandidateInstantsForNonTableServicesCommits(activeTimeline, currentInstant),
+          getCandidateInstantsForRollbackConflict(activeTimeline, currentInstant));
     }
+  }
+
+  private Stream<HoodieInstant> getCandidateInstantsForRollbackConflict(HoodieActiveTimeline activeTimeline, HoodieInstant currentInstant) {
+    // Add Requested rollback action instants that were created after the current instant.
+    List<HoodieInstant> pendingRollbacks = activeTimeline
+        .findInstantsAfter(currentInstant.requestedTime())
+        .filterPendingRollbackTimeline()
+        .getInstantsAsStream().collect(Collectors.toList());
+    log.info(String.format("Rollback instants that may have conflict with %s are %s", currentInstant, pendingRollbacks));
+    return pendingRollbacks.stream();
   }
 
   private Stream<HoodieInstant> getCandidateInstantsForNonTableServicesCommits(HoodieActiveTimeline activeTimeline, HoodieInstant currentInstant) {
