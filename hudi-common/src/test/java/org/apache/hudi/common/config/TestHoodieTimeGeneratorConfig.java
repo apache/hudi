@@ -31,9 +31,9 @@ class TestHoodieTimeGeneratorConfig {
 
   @ParameterizedTest
   @CsvSource(value = {
-      "org.apache.hudi.client.transaction.lock.InProcessLockProvider,1",
+      "org.apache.hudi.client.transaction.lock.InProcessLockProvider,0",
       "org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider,200",
-      ",1",
+      ",0",
       "any_string,200"
   })
   void testMaxSkewDefaults(String lockProvider, long expected) {
