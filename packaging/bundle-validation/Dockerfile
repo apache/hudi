@@ -16,7 +16,7 @@
 #
 
 ARG IMAGE_TAG=spark313hive313
-FROM apachehudi/hudi-ci-bundle-validation-base:$IMAGE_TAG
+FROM timbrown126/tb-integ-test:$IMAGE_TAG
 
 # configure the stack
 ADD . .
@@ -32,14 +32,6 @@ RUN if [[ $SPARK_HOME =~ 'spark-3.2' ]] || [[ $SPARK_HOME =~ 'spark-3.3' ]]; \
     then printf "\nspark.sql.catalog.spark_catalog org.apache.spark.sql.hudi.catalog.HoodieCatalog\n" >> $SPARK_HOME/conf/spark-defaults.conf; fi
 RUN printf "\ntaskmanager.numberOfTaskSlots: 2\n" >> $FLINK_HOME/conf/flink-conf.yaml
 RUN printf "\nlocalhost\n" >> $FLINK_HOME/conf/workers
-
-# install maven
-RUN wget https://archive.apache.org/dist/maven/maven-3/3.6.3/binaries/apache-maven-3.6.3-bin.tar.gz
-RUN mkdir -p /usr/share/maven
-RUN tar xzvf apache-maven-3.6.3-bin.tar.gz -C /usr/share/maven
-ENV MAVEN_HOME=/usr/share/maven/apache-maven-3.6.3
-ENV PATH=$MAVEN_HOME/bin:$PATH
-RUN mvn --version
 
 # prepare directory for docker java17 test
 RUN mkdir -p /opt/bundle-validation/docker-test
