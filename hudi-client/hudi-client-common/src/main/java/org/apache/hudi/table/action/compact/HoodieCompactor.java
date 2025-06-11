@@ -240,7 +240,6 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
       // But in this case, we need to give it a base file. Otherwise, it will lose base file in following fileSlice.
       if (!scanner.iterator().hasNext()) {
         if (!oldDataFileOpt.isPresent()) {
-          scanner.close();
           return new ArrayList<>();
         } else {
           // TODO: we may directly rename original parquet file if there is not evolution/devolution of schema
@@ -259,7 +258,6 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
       // Compacting is very similar to applying updates to existing file
       Iterator<List<WriteStatus>> result;
       result = executionHelper.writeFileAndGetWriteStats(compactionHandler, operation, instantTime, scanner, oldDataFileOpt);
-      scanner.close();
 
       Iterable<List<WriteStatus>> resultIterable = () -> result;
       return StreamSupport.stream(resultIterable.spliterator(), false).flatMap(Collection::stream).peek(s -> {
