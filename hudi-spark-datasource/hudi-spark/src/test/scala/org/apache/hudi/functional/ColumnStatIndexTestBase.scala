@@ -34,6 +34,7 @@ import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_ST
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 import org.apache.hudi.testutils.{HoodieSparkClientTestBase, LogFileColStatsTestUtil}
+
 import org.apache.avro.Schema
 import org.apache.spark.sql.{DataFrame, _}
 import org.apache.spark.sql.functions.{lit, typedLit}
@@ -42,12 +43,13 @@ import org.junit.jupiter.api._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.params.provider.Arguments
 
-import java.math.{BigInteger, BigDecimal => JBigDecimal}
+import java.math.{BigDecimal => JBigDecimal, BigInteger}
 import java.nio.ByteBuffer
 import java.sql.{Date, Timestamp}
 import java.util
 import java.util.List
 import java.util.stream.Collectors
+
 import scala.collection.JavaConverters._
 import scala.collection.immutable.TreeSet
 import scala.util.Random

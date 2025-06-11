@@ -34,18 +34,20 @@ import org.apache.hudi.functional.ColumnStatIndexTestBase.{ColumnStatsTestCase, 
 import org.apache.hudi.index.HoodieIndex.IndexType.INMEMORY
 import org.apache.hudi.metadata.HoodieBackedTableMetadata
 import org.apache.hudi.util.JavaConversions
+
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, BitwiseOr, EqualTo, Expression, GreaterThan, GreaterThanOrEqual, LessThanOrEqual, Literal, Or}
 import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
 import org.apache.spark.sql.hudi.DataSkippingUtils
 import org.apache.spark.sql.types.StringType
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.{Tag, Test}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 
 import java.io.File
+
 import scala.collection.JavaConverters._
 
 @Tag("functional-b")

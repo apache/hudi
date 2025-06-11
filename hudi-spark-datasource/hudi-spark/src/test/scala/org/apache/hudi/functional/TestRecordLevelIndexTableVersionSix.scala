@@ -20,6 +20,7 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.config.HoodieWriteConfig
+
 import org.junit.jupiter.api.Tag
 
 @Tag("functional")
