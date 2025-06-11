@@ -41,6 +41,7 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
@@ -54,9 +55,13 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX;
 
 /**
  * Base class for all write operations logically performed at the file group level.
@@ -81,6 +86,9 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
   protected final TaskContextSupplier taskContextSupplier;
   // For full schema evolution
   protected final boolean schemaOnReadEnabled;
+  protected final boolean isStreamingWriteToMetadataEnabled;
+  protected final Map<MetadataPartitionType, List<String>> metadataPartitionsToCollectStats =
+      new HashMap<>(hoodieTable.getMetaClient().getTableConfig().getMetadataPartitions().size());
 
   private boolean closed = false;
 
@@ -106,6 +114,19 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     this.recordMerger = config.getRecordMerger();
     this.writeStatus = (WriteStatus) ReflectionUtils.loadClass(config.getWriteStatusClassName(),
         hoodieTable.shouldTrackSuccessRecords(), config.getWriteStatusFailureFraction(), hoodieTable.isMetadataTable());
+    this.isStreamingWriteToMetadataEnabled = config.isMetadataStreamingWritesEnabled(hoodieTable.getMetaClient().getTableConfig().getTableVersion());
+    initMetadataPartitionsToCollectStats();
+  }
+
+  private void initMetadataPartitionsToCollectStats() {
+    if (isStreamingWriteToMetadataEnabled) {
+      // secondary index.
+      if (config.isSecondaryIndexEnabled()) {
+        metadataPartitionsToCollectStats.put(MetadataPartitionType.SECONDARY_INDEX, hoodieTable.getMetaClient().getTableConfig().getMetadataPartitions()
+            .stream()
+            .filter(partition -> partition.startsWith(PARTITION_NAME_SECONDARY_INDEX_PREFIX)).collect(Collectors.toList()));
+      }
+    }
   }
 
   /**
