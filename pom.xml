@@ -2581,7 +2581,7 @@
         <flink.bundle.version>1.16</flink.bundle.version>
         <orc.flink.version>1.5.6</orc.flink.version>
         <flink.avro.version>1.11.4</flink.avro.version>
-        <flink.format.parquet.version>1.12.2</flink.format.parquet.version>
+        <flink.format.parquet.version>1.12.3</flink.format.parquet.version>
         <flink.connector.kafka.version>${flink1.16.version}</flink.connector.kafka.version>
       </properties>
       <activation>
@@ -2598,7 +2598,7 @@
         <flink.bundle.version>1.15</flink.bundle.version>
         <orc.flink.version>1.5.6</orc.flink.version>
         <flink.avro.version>1.11.4</flink.avro.version>
-        <flink.format.parquet.version>1.12.2</flink.format.parquet.version>
+        <flink.format.parquet.version>1.12.3</flink.format.parquet.version>
         <flink.connector.kafka.version>${flink1.15.version}</flink.connector.kafka.version>
       </properties>
       <activation>
