@@ -1340,7 +1340,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     boolean conditionMet = false;
     while (!conditionMet) {
       conditionMet = client.getHeartbeatClient().isHeartbeatExpired("300");
-      Thread.sleep(2000);
+      Thread.sleep(100);
     }
     client.close();
     client = getHoodieWriteClient(getParallelWritingWriteConfig(cleaningPolicy, populateMetaFields));
