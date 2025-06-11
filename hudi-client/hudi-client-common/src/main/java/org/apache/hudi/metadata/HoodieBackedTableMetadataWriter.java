@@ -1640,8 +1640,12 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     // Trigger cleaning with suffixes based on the same instant time. This ensures that any future
     // delta commits synced over will not have an instant time lesser than the last completed instant on the
     // metadata table.
-    writeClient.clean();
+    executeClean(writeClient, instantTime);
     writeClient.lazyRollbackFailedIndexing();
+  }
+
+  protected void executeClean(BaseHoodieWriteClient writeClient, String instantTime) {
+    writeClient.clean();
   }
 
   /**
