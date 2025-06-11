@@ -64,7 +64,7 @@ public class TestWriteStatus {
     }
     assertEquals(1000, status.getFailedRecords().size());
     assertTrue(status.hasErrors());
-    assertTrue(status.getWrittenRecordDelegates().isEmpty());
+    assertTrue(status.getIndexStats().getWrittenRecordDelegates().isEmpty());
     assertEquals(2000, status.getTotalRecords());
   }
 
@@ -191,9 +191,9 @@ public class TestWriteStatus {
     assertEquals(1000, status.getFailedRecords().size());
     assertTrue(status.hasErrors());
     if (trackSuccess) {
-      assertEquals(1000, status.getWrittenRecordDelegates().size());
+      assertEquals(1000, status.getIndexStats().getWrittenRecordDelegates().size());
     } else {
-      assertTrue(status.getWrittenRecordDelegates().isEmpty());
+      assertTrue(status.getIndexStats().getWrittenRecordDelegates().isEmpty());
     }
     assertEquals(2000, status.getTotalRecords());
   }
@@ -214,22 +214,11 @@ public class TestWriteStatus {
     stats.put("field1", HoodieColumnRangeMetadata.<Comparable>create("f1", "field1", 1, 2, 0, 2, 5, 10));
     status.setStat(new HoodieWriteStat());
     status.getStat().putRecordsStats(stats);
-    assertEquals(1, status.getWrittenRecordDelegates().size());
+    assertEquals(1, status.getIndexStats().getWrittenRecordDelegates().size());
     assertEquals(1, status.getStat().getColumnStats().get().size());
 
     // Remove metadata stats
     status.removeMetadataStats();
-    assertEquals(0, status.getWrittenRecordDelegates().size());
-  }
-
-  @Test
-  public void testDropErrorRecords() {
-    WriteStatus status = new WriteStatus(true, 0.1);
-    status.markFailure("key", "partition", new Exception());
-    assertEquals(1, status.getFailedRecords().size());
-
-    // Drop error records
-    status.dropGranularErrorRecordsTracking();
-    assertEquals(0, status.getFailedRecords().size());
+    assertNull(status.getIndexStats());
   }
 }

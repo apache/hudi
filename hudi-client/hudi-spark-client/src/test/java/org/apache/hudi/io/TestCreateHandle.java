@@ -73,8 +73,8 @@ public class TestCreateHandle extends BaseTestHandle {
     assertEquals(0, writeStatus.getTotalErrorRecords());
     // validate write status has all record delegates
     if (populateMetaFields) {
-      assertEquals(records.size(), writeStatus.getWrittenRecordDelegates().size());
-      for (HoodieRecordDelegate recordDelegate : writeStatus.getWrittenRecordDelegates()) {
+      assertEquals(records.size(), writeStatus.getIndexStats().getWrittenRecordDelegates().size());
+      for (HoodieRecordDelegate recordDelegate : writeStatus.getIndexStats().getWrittenRecordDelegates()) {
         assertTrue(recordDelegate.getNewLocation().isPresent());
         assertEquals(fileId, recordDelegate.getNewLocation().get().getFileId());
         assertEquals(instantTime, recordDelegate.getNewLocation().get().getInstantTime());
