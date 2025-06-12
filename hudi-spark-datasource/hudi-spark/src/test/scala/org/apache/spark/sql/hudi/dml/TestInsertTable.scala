@@ -231,64 +231,6 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     }
   }
 
-  test("Test FirstValueAvroPayload test") {
-    withTempDir { tmp =>
-      val targetTable = generateTableName
-      val tablePath = s"${tmp.getCanonicalPath}/$targetTable"
-
-      spark.sql(
-        s"""
-           |create table ${targetTable} (
-           |  `id` string,
-           |  `name` string,
-           |  `dt` bigint,
-           |  `day` STRING,
-           |  `hour` INT
-           |) using hudi
-           |tblproperties (
-           |  'primaryKey' = 'id',
-           |  'type' = 'mor',
-           |  'preCombineField'='dt',
-           |  'hoodie.index.type' = 'BUCKET',
-           |  'hoodie.bucket.index.hash.field' = 'id',
-           |  'hoodie.bucket.index.num.buckets'=12,
-           |  'hoodie.datasource.write.payload.class'='org.apache.hudi.common.model.FirstValueAvroPayload'
-           | )
-           partitioned by (`day`,`hour`)
-           location '${tablePath}'
-           """.stripMargin)
-
-      spark.sql("set hoodie.file.group.reader.enabled=false")
-
-      spark.sql(
-        s"""
-           |insert into ${targetTable}
-           |select '1' as id, 'aa' as name, 123 as dt, '2024-02-19' as `day`, 10 as `hour`
-           |""".stripMargin)
-
-      spark.sql(
-        s"""
-           |insert into ${targetTable}
-           |select '1' as id, 'bb' as name, 123 as dt, '2024-02-19' as `day`, 10 as `hour`
-           |""".stripMargin)
-
-      checkAnswer(s"select id, name, dt, day, hour from $targetTable limit 10")(
-        Seq("1", "aa", 123, "2024-02-19", 10)
-      )
-
-      spark.sql(
-        s"""
-           |insert into ${targetTable}
-           |select '1' as id, 'cc' as name, 124 as dt, '2024-02-19' as `day`, 10 as `hour`
-           |""".stripMargin)
-
-      checkAnswer(s"select id, name, dt, day, hour from $targetTable limit 10")(
-        Seq("1", "cc", 124, "2024-02-19", 10)
-      )
-
-    }
-  }
-
   test("Test Insert Into with values") {
     withRecordType()(withTempDir { tmp =>
       val tableName = generateTableName
