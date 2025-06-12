@@ -68,7 +68,7 @@ public class TestAppendHandle extends BaseTestHandle {
     config.setSchema(TRIP_EXAMPLE_SCHEMA);
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[] {partitionPath});
     // create parquet file
-    createParquetFile(config, table, partitionPath, fileId, instantTime, dataGenerator);
+    createParquetFile(config, table, partitionPath, fileId, instantTime, dataGenerator, true);
     // generate update records
     instantTime = "001";
     List<HoodieRecord> records = dataGenerator.generateUniqueUpdates(instantTime, 50);

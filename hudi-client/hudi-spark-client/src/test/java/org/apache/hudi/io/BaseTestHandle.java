@@ -42,7 +42,7 @@ public class BaseTestHandle extends HoodieSparkClientTestHarness {
 
   @BeforeEach
   public void setUp() throws Exception {
-    initSparkContexts("TestHoodieRowCreateHandle");
+    initSparkContexts("BaseTestHandle");
     initPath();
     initHoodieStorage();
     initTestDataGenerator();
@@ -55,13 +55,15 @@ public class BaseTestHandle extends HoodieSparkClientTestHarness {
     cleanupResources();
   }
 
-  Pair<WriteStatus, List<HoodieRecord>> createParquetFile(HoodieWriteConfig config, HoodieTable table, String partitionPath, String fileId, String instantTime, HoodieTestDataGenerator dataGenerator) {
+  Pair<WriteStatus, List<HoodieRecord>> createParquetFile(HoodieWriteConfig config, HoodieTable table, String partitionPath, String fileId, String instantTime, HoodieTestDataGenerator dataGenerator,
+                                                          boolean preserveMetadata) {
     List<HoodieRecord> records = dataGenerator.generateInserts(instantTime, 100);
     Map<String, HoodieRecord> recordMap = new HashMap<>();
     for (int i = 0; i < records.size(); i++) {
       recordMap.put(String.valueOf(i), records.get(i));
     }
     HoodieCreateHandle handle = new HoodieCreateHandle(config, instantTime, table, partitionPath, fileId, recordMap, new LocalTaskContextSupplier());
+    handle.setPreserveMetadata(preserveMetadata);
     handle.write();
     handle.close();
     return Pair.of(handle.writeStatus, records);

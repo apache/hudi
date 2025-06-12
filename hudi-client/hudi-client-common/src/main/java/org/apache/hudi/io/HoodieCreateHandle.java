@@ -33,6 +33,7 @@ import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieInsertException;
@@ -71,9 +72,9 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   protected long recordsDeleted = 0;
   private Map<String, HoodieRecord<T>> recordMap;
   private boolean useWriterSchema = false;
-  private final boolean preserveMetadata;
+  private boolean preserveMetadata;
   private final Option<HoodieReaderContext<T>> readerContextOpt;
-  private List<Pair<String, String>> secondaryIndexFields = Collections.emptyList();
+  //private List<Pair<String, String>> secondaryIndexFields = Collections.emptyList();
 
   public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                             String partitionPath, String fileId, TaskContextSupplier taskContextSupplier) {
@@ -102,13 +103,6 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         taskContextSupplier);
     this.preserveMetadata = preserveMetadata;
     this.readerContextOpt = readerContextFactoryOpt.map(readerContextFactory -> readerContextFactory.getContext());
-    if (config.isSecondaryIndexEnabled() && readerContextOpt.isPresent()) {
-      secondaryIndexFields = hoodieTable.getMetaClient().getTableConfig().getMetadataPartitions()
-          .stream()
-          .filter(mdtPartition -> mdtPartition.startsWith(PARTITION_NAME_SECONDARY_INDEX_PREFIX))
-          .map(mdtPartitionPath -> Pair.of(mdtPartitionPath, String.join(".", HoodieTableMetadataUtil.getHoodieIndexDefinition(mdtPartitionPath, hoodieTable.getMetaClient()).getSourceFields())))
-          .collect(Collectors.toList());
-    }
     writeStatus.setFileId(fileId);
     writeStatus.setPartitionPath(partitionPath);
     writeStatus.setStat(new HoodieWriteStat());
@@ -196,7 +190,7 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   }
 
   private void trackMetadataIndexStats(HoodieRecord record) {
-    if (!config.isSecondaryIndexEnabled() || !readerContextOpt.isPresent() || secondaryIndexFields.isEmpty() || !config.isMetadataStreamingWritesEnabled(hoodieTable.getMetaClient().getTableConfig().getTableVersion())) {
+    if (!config.isSecondaryIndexEnabled() || secondaryIndexFields.isEmpty() || !config.isMetadataStreamingWritesEnabled(hoodieTable.getMetaClient().getTableConfig().getTableVersion())) {
       return;
     }
     secondaryIndexFields.forEach(secondaryIndexPartitionPathFieldPair -> {
@@ -240,6 +234,11 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   @Override
   public IOType getIOType() {
     return IOType.CREATE;
+  }
+
+  @VisibleForTesting
+  public void setPreserveMetadata(boolean preserveMetadata) {
+    this.preserveMetadata = preserveMetadata;
   }
 
   /**
