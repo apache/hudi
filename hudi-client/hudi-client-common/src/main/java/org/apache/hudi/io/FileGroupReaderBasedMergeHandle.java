@@ -56,6 +56,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS;
+import static org.apache.hudi.common.model.HoodieFileFormat.HFILE;
 
 /**
  * A merge handle implementation based on the {@link HoodieFileGroupReader}.
@@ -86,8 +87,8 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieMergeHand
     this.fileSlice = fileSlice;
     this.operation = operation;
     this.preserveMetadata = true;
-    // If the table is a metadata table, we use AVRO record type, otherwise we use the engine record type.
-    this.recordType = hoodieTable.isMetadataTable() ? HoodieRecord.HoodieRecordType.AVRO : enginRecordType;
+    // If the table is a metadata table or the base file is an HFile, we use AVRO record type, otherwise we use the engine record type.
+    this.recordType = hoodieTable.isMetadataTable() || HFILE.getFileExtension().equals(hoodieTable.getBaseFileExtension()) ? HoodieRecord.HoodieRecordType.AVRO : enginRecordType;
     init(operation, this.partitionPath, fileSlice.getBaseFile());
   }
 
