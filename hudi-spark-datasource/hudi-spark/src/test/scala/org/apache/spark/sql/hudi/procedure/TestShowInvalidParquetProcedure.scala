@@ -69,13 +69,13 @@ class TestShowInvalidParquetProcedure extends HoodieSparkProcedureTestBase {
 
       // collect result for table
       var result = spark.sql(
-        s"""call show_invalid_parquet(path => '$basePath', customParallelism => $customParallelism)""".stripMargin).collect()
+        s"""call show_invalid_parquet(path => '$basePath', parallelism => $customParallelism)""".stripMargin).collect()
       assertResult(2) {
         result.length
       }
 
       result = spark.sql(
-        s"""call show_invalid_parquet(path => '$basePath', customParallelism => $customParallelism, limit => 1)""".stripMargin).collect()
+        s"""call show_invalid_parquet(path => '$basePath', parallelism => $customParallelism, limit => 1)""".stripMargin).collect()
       assertResult(1) {
         result.length
       }
@@ -120,7 +120,7 @@ class TestShowInvalidParquetProcedure extends HoodieSparkProcedureTestBase {
 
       // collect result for table
       val result = spark.sql(
-        s"""call show_invalid_parquet(path => '$basePath', customParallelism => $customParallelism, needDelete => true)""".stripMargin).collect()
+        s"""call show_invalid_parquet(path => '$basePath', parallelism => $customParallelism, needDelete => true)""".stripMargin).collect()
       assertResult(0) {
         result.length
       }
@@ -195,42 +195,42 @@ class TestShowInvalidParquetProcedure extends HoodieSparkProcedureTestBase {
 
       // collect result for table
       var result = spark.sql(
-        s"""call show_invalid_parquet(path => '$basePath', customParallelism => $customParallelism)""".stripMargin).collect()
+        s"""call show_invalid_parquet(path => '$basePath', parallelism => $customParallelism)""".stripMargin).collect()
       assertResult(4) {
         result.length
       }
 
       result = spark.sql(
-        s"""call show_invalid_parquet(path => '$basePath', customParallelism => $customParallelism, partitions => 'year=2022')""".stripMargin).collect()
+        s"""call show_invalid_parquet(path => '$basePath', parallelism => $customParallelism, partitions => 'year=2022')""".stripMargin).collect()
       assertResult(4) {
         result.length
       }
 
       result = spark.sql(
-        s"""call show_invalid_parquet(path => '$basePath', customParallelism => $customParallelism, partitions => 'year=2022/month=07')""".stripMargin).collect()
+        s"""call show_invalid_parquet(path => '$basePath', parallelism => $customParallelism, partitions => 'year=2022/month=07')""".stripMargin).collect()
       assertResult(2) {
         result.length
       }
 
       result = spark.sql(
-        s"""call show_invalid_parquet(path => '$basePath', customParallelism => $customParallelism, partitions => 'year=2022/month=08/day=30,year=2022/month=08/day=31')""".stripMargin).collect()
+        s"""call show_invalid_parquet(path => '$basePath', parallelism => $customParallelism, partitions => 'year=2022/month=08/day=30,year=2022/month=08/day=31')""".stripMargin).collect()
       assertResult(2) {
         result.length
       }
 
       result = spark.sql(
-        s"""call show_invalid_parquet(path => '$basePath', customParallelism => $customParallelism, partitions => 'year=2023')""".stripMargin).collect()
+        s"""call show_invalid_parquet(path => '$basePath', parallelism => $customParallelism, partitions => 'year=2023')""".stripMargin).collect()
       assertResult(0) {
         result.length
       }
 
       result = spark.sql(
-        s"""call show_invalid_parquet(path => '$basePath', customParallelism => $customParallelism, instants => '$instantTime')""".stripMargin).collect()
+        s"""call show_invalid_parquet(path => '$basePath', parallelism => $customParallelism, instants => '$instantTime')""".stripMargin).collect()
       assertResult(4) {
         result.length
       }
       result = spark.sql(
-        s"""call show_invalid_parquet(path => '$basePath', customParallelism => $customParallelism, instants => '$instantTime', partitions => 'year=2022/month=08')""".stripMargin).collect()
+        s"""call show_invalid_parquet(path => '$basePath', parallelism => $customParallelism, instants => '$instantTime', partitions => 'year=2022/month=08')""".stripMargin).collect()
       assertResult(2) {
         result.length
       }
