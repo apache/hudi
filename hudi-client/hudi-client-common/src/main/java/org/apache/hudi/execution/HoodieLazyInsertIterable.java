@@ -20,8 +20,10 @@ package org.apache.hudi.execution;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.utils.LazyIterableIterator;
+import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.io.WriteHandleFactory;
@@ -47,6 +49,7 @@ public abstract class HoodieLazyInsertIterable<T>
   protected final String idPrefix;
   protected TaskContextSupplier taskContextSupplier;
   protected WriteHandleFactory writeHandleFactory;
+  protected Option<ReaderContextFactory<T>> readerContextFactoryOpt;
 
   public HoodieLazyInsertIterable(Iterator<HoodieRecord<T>> recordItr,
                                   boolean areRecordsSorted,
@@ -56,13 +59,13 @@ public abstract class HoodieLazyInsertIterable<T>
                                   String idPrefix,
                                   TaskContextSupplier taskContextSupplier) {
     this(recordItr, areRecordsSorted, config, instantTime, hoodieTable, idPrefix, taskContextSupplier,
-        new CreateHandleFactory<>());
+        new CreateHandleFactory<>(), Option.empty());
   }
 
   public HoodieLazyInsertIterable(Iterator<HoodieRecord<T>> recordItr, boolean areRecordsSorted,
                                   HoodieWriteConfig config, String instantTime, HoodieTable hoodieTable,
                                   String idPrefix, TaskContextSupplier taskContextSupplier,
-                                  WriteHandleFactory writeHandleFactory) {
+                                  WriteHandleFactory writeHandleFactory, Option<ReaderContextFactory<T>> readerContextFactoryOpt) {
     super(recordItr);
     this.areRecordsSorted = areRecordsSorted;
     this.hoodieConfig = config;
@@ -71,6 +74,7 @@ public abstract class HoodieLazyInsertIterable<T>
     this.idPrefix = idPrefix;
     this.taskContextSupplier = taskContextSupplier;
     this.writeHandleFactory = writeHandleFactory;
+    this.readerContextFactoryOpt = readerContextFactoryOpt;
   }
 
   // Used for caching HoodieRecord along with insertValue. We need this to offload computation work to buffering thread.
@@ -124,6 +128,6 @@ public abstract class HoodieLazyInsertIterable<T>
 
   protected CopyOnWriteInsertHandler getInsertHandler() {
     return new CopyOnWriteInsertHandler(hoodieConfig, instantTime, areRecordsSorted, hoodieTable, idPrefix,
-        taskContextSupplier, writeHandleFactory);
+        taskContextSupplier, writeHandleFactory, readerContextFactoryOpt);
   }
 }

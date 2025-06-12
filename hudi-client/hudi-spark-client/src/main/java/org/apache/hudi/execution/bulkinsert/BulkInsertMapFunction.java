@@ -19,7 +19,9 @@
 package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.execution.SparkLazyInsertIterable;
 import org.apache.hudi.io.WriteHandleFactory;
@@ -44,11 +46,13 @@ public class BulkInsertMapFunction<T>
   private final boolean useWriterSchema;
   private final BulkInsertPartitioner partitioner;
   private final WriteHandleFactory writeHandleFactory;
+  private final Option<ReaderContextFactory<T>> readerContextFactoryOpt;
 
   public BulkInsertMapFunction(String instantTime, boolean areRecordsSorted,
                                HoodieWriteConfig config, HoodieTable hoodieTable,
                                boolean useWriterSchema, BulkInsertPartitioner partitioner,
-                               WriteHandleFactory writeHandleFactory) {
+                               WriteHandleFactory writeHandleFactory,
+                               Option<ReaderContextFactory<T>> readerContextFactoryOpt) {
     this.instantTime = instantTime;
     this.areRecordsSorted = areRecordsSorted;
     this.config = config;
@@ -56,12 +60,13 @@ public class BulkInsertMapFunction<T>
     this.useWriterSchema = useWriterSchema;
     this.writeHandleFactory = writeHandleFactory;
     this.partitioner = partitioner;
+    this.readerContextFactoryOpt = readerContextFactoryOpt;
   }
 
   @Override
   public Iterator<List<WriteStatus>> call(Integer partition, Iterator<HoodieRecord<T>> recordItr) {
     return new SparkLazyInsertIterable<>(recordItr, areRecordsSorted, config, instantTime, hoodieTable,
         partitioner.getFileIdPfx(partition), hoodieTable.getTaskContextSupplier(), useWriterSchema,
-        (WriteHandleFactory) partitioner.getWriteHandleFactory(partition).orElse(this.writeHandleFactory));
+        (WriteHandleFactory) partitioner.getWriteHandleFactory(partition).orElse(this.writeHandleFactory), readerContextFactoryOpt);
   }
 }
