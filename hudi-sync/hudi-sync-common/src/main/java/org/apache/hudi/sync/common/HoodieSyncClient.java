@@ -48,7 +48,9 @@ import java.util.Objects;
 import java.util.Set;
 
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_USE_FILE_LISTING_FROM_METADATA;
 
 public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, AutoCloseable {
@@ -86,6 +88,14 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
 
   public HoodieTableMetaClient getMetaClient() {
     return metaClient;
+  }
+
+  public String getTableName() {
+    return config.getString(META_SYNC_TABLE_NAME);
+  }
+
+  public String getDatabaseName() {
+    return config.getString(META_SYNC_DATABASE_NAME);
   }
 
   /**

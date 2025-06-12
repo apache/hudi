@@ -47,19 +47,29 @@ class TestDataHubSyncConfig {
   }
 
   @Test
-  void testDatabaseNameWithProps() {
+  void testDatabaseNameAndTableNameWithProps() {
+    String db = "db";
+    String table = "table";
+
     Properties props = new Properties();
-    props.setProperty(META_SYNC_DATAHUB_DATABASE_NAME.key(), "db");
-    props.setProperty(META_SYNC_DATAHUB_TABLE_NAME.key(), "table");
+    props.setProperty(META_SYNC_DATAHUB_DATABASE_NAME.key(), db);
+    props.setProperty(META_SYNC_DATAHUB_TABLE_NAME.key(), table);
 
     DataHubSyncConfig syncConfig = new DataHubSyncConfig(props);
     DatasetUrn datasetUrn = syncConfig.getDatasetIdentifier().getDatasetUrn();
 
-    assertEquals("db.table", datasetUrn.getDatasetNameEntity());
+    assertEquals(String.format("%s.%s", db, table), datasetUrn.getDatasetNameEntity());
+
+    DataHubSyncConfig.DataHubSyncConfigParams params = new DataHubSyncConfig.DataHubSyncConfigParams();
+    params.databaseName = db;
+    params.hoodieSyncConfigParams.tableName = table;
+
+    assertEquals(db, params.toProps().get(META_SYNC_DATAHUB_DATABASE_NAME.key()));
+    assertEquals(table, params.toProps().get(META_SYNC_DATAHUB_TABLE_NAME.key()));
   }
 
   @Test
-  void testDatabaseNameBackwardConfigurationCompatibility() {
+  void testDatabaseNameAndTableNameBackwardConfigurationCompatibility() {
     Properties props = new Properties();
     props.setProperty(META_SYNC_DATABASE_NAME.key(), "db");
     props.setProperty(META_SYNC_TABLE_NAME.key(), "table");
