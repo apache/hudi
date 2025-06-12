@@ -18,7 +18,9 @@
 
 package org.apache.hudi.io;
 
+import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.engine.TaskContextSupplier;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
@@ -27,7 +29,8 @@ public class AppendHandleFactory<T, I, K, O> extends WriteHandleFactory<T, I, K,
   @Override
   public HoodieAppendHandle<T, I, K, O> create(final HoodieWriteConfig hoodieConfig, final String commitTime,
                                      final HoodieTable<T, I, K, O> hoodieTable, final String partitionPath,
-                                     final String fileIdPrefix, final TaskContextSupplier sparkTaskContextSupplier) {
+                                     final String fileIdPrefix, final TaskContextSupplier sparkTaskContextSupplier,
+                                               Option<ReaderContextFactory<T>> readerContextFactoryOpt) {
 
     return new HoodieAppendHandle(hoodieConfig, commitTime, hoodieTable, partitionPath,
         getNextFileId(fileIdPrefix), sparkTaskContextSupplier);

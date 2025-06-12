@@ -50,7 +50,7 @@ public class JavaBulkInsertPreppedCommitActionExecutor<T>
   public HoodieWriteMetadata<List<WriteStatus>> execute() {
     try {
       return JavaBulkInsertHelper.newInstance().bulkInsert(preppedInputRecord, instantTime, table, config,
-          this, false, userDefinedBulkInsertPartitioner);
+          this, false, userDefinedBulkInsertPartitioner, Option.empty());
     } catch (Throwable e) {
       if (e instanceof HoodieInsertException) {
         throw e;
