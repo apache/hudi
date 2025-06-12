@@ -55,8 +55,8 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_F
 public class GlueTestUtil {
 
   public static TypedProperties glueSyncProps;
-  private static final String DB_NAME = "testdb";
-  private static final String TABLE_NAME = "test1";
+  public static final String DB_NAME = "testdb";
+  public static final String TABLE_NAME = "test1";
   private static String basePath;
   public static FileSystem fileSystem;
   private static HiveSyncConfig hiveSyncConfig;
