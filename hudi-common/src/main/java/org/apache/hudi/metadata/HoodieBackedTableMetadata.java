@@ -49,9 +49,11 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
+import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.expression.BindVisitor;
 import org.apache.hudi.expression.Expression;
@@ -76,6 +78,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -166,7 +169,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
   @Override
   protected Option<HoodieRecord<HoodieMetadataPayload>> getRecordByKey(String key, String partitionName) {
-    Map<String, HoodieRecord<HoodieMetadataPayload>> recordsByKeys = getRecordsByKeys(
+    Map<String, HoodieRecord<HoodieMetadataPayload>> recordsByKeys = getRecordsByKeysWithMapping(
         HoodieListData.eager(Collections.singletonList(key)), partitionName).collectAsMapWithOverwriteStrategy();
     return Option.ofNullable(recordsByKeys.get(key));
   }
@@ -284,9 +287,104 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   }
 
   @Override
-  protected HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> getRecordsByKeys(HoodieData<String> keys, String partitionName) {
+  protected HoodieData<HoodieRecord<HoodieMetadataPayload>> getRecordsByKeysWithoutMapping(HoodieData<String> keys, String partitionName) {
+    boolean isSecondaryIndex = MetadataPartitionType.SECONDARY_INDEX.isPartitionType(partitionName);
+
+    List<FileSlice> partitionFileSlices = partitionFileSliceMap.computeIfAbsent(partitionName,
+        k -> HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metadataMetaClient, metadataFileSystemView, partitionName));
+
+    final int numFileSlices = partitionFileSlices.size();
+    checkState(numFileSlices > 0, "Number of file slices for partition " + partitionName + " should be > 0");
+
+    // Lookup keys from each file slice
+    HoodieData<HoodieRecord<HoodieMetadataPayload>> res;
+    if (numFileSlices == 1) {
+      // Optimization for a single slice for smaller metadata table partitions
+      List<String> sortedKeys = keys.collectAsList().stream().distinct().sorted().collect(Collectors.toList());
+      if (sortedKeys.isEmpty()) {
+        return getEngineContext().emptyHoodieData();
+      }
+      res = engineContext.parallelize(lookupRecordsWithoutMapping(partitionName, sortedKeys, partitionFileSlices.get(0), !isSecondaryIndex), 1);
+      return res;
+    } else {
+      // Parallel lookup for large sized partitions with many file slices
+      // Partition the keys by the file slice which contains it
+      getEngineContext().setJobStatus(this.getClass().getSimpleName(), "Reading keys from metadata table partition " + partitionName);
+      HoodieTableVersion tableVersion = metadataMetaClient.getTableConfig().getTableVersion();
+      keys = adaptiveRepartitioning(keys, partitionName, numFileSlices);
+      res = keys.filter(Objects::nonNull)
+          .mapToPair(recordKey -> new ImmutablePair<>(
+              HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(recordKey, numFileSlices, partitionName, tableVersion),
+              recordKey))
+//          .combineByKey(
+//              // Handle first value for each key
+//              (String firstValue) -> {
+//                HashSet<String> set = new HashSet<>();
+//                set.add(firstValue);
+//                return set;
+//              },
+//              (HashSet<String> set, String value) -> {
+//                set.add(value);
+//                return set;
+//              },
+//              (HashSet<String> set1, HashSet<String> set2) -> {
+//                set1.addAll(set2);
+//                return set1;
+//              })
+          .mapValues(hashSet -> {
+            // Convert to ArrayList and sort once per key group
+            ArrayList<String> sortedList = (ArrayList<String>) new ArrayList<>(hashSet);
+            Collections.sort(sortedList);
+            return sortedList;
+          })
+          .values()
+          .flatMap(sortedKeys -> {
+            if (sortedKeys.isEmpty()) {
+              return Collections.emptyIterator();
+            }
+            FileSlice fileSlice = partitionFileSlices.get(HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(
+                sortedKeys.get(0), numFileSlices, partitionName, tableVersion));
+            try {
+              // Perform the actual lookup
+              return lookupRecordsWithoutMapping(partitionName, sortedKeys, fileSlice, !isSecondaryIndex).iterator();
+            } catch (Exception e) {
+              LOG.error("Failed to lookup keys from file slice " + fileSlice.getFileId(), e);
+              throw new HoodieMetadataException("Failed to lookup keys from metadata table", e);
+            }
+          });
+      return res;
+    }
+  }
+
+  private HoodieData<String> adaptiveRepartitioning(HoodieData<String> keys, String partitionName, int numFileSlices) {
+    //    if (keys instanceof HoodieListData) {
+    //      int parallelism;
+    //      if (metadataTableConfig.getInt(LIST_DATA_IDX_LOOKUP_PARALLELISM) != null) {
+    //        parallelism = metadataTableConfig.getInt(LIST_DATA_IDX_LOOKUP_PARALLELISM);
+    //      } else {
+    //        parallelism = (int) keys.map(k ->
+    //            HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(k, partitionName, numFileSlices)).distinct().count();
+    //      }
+    //      LOG.info("getRecordFast repartition HoodieListData to JavaRDD: exit, partitionName {}, num partitions: {}",
+    //          partitionName, parallelism);
+    //      keys = engineContext.parallelize(keys.collectAsList(), parallelism);
+    //    } else {
+    //      int parallelism;
+    //      if (metadataTableConfig.getInt(IDX_LOOKUP_PARALLELISM) != null) {
+    //        parallelism = metadataTableConfig.getInt(IDX_LOOKUP_PARALLELISM);
+    //      } else {
+    //        parallelism = numFileSlices / 10;
+    //      }
+    //      LOG.info("getRecordFast repartition HoodieNonListData. partitionName {}, num partitions: {}", partitionName, parallelism);
+    //      keys = keys.repartition(parallelism);
+    //    }
+    return keys;
+  }
+
+  @Override
+  protected HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> getRecordsByKeysWithMapping(HoodieData<String> keys, String partitionName) {
+    boolean isSecondaryIndex = MetadataPartitionType.SECONDARY_INDEX.isPartitionType(partitionName);
     ValidationUtils.checkState(keys instanceof HoodieListData, "getRecordsByKeys only support HoodieListData at the moment");
-    List<String> keyList = keys.collectAsList();
     if (keys.isEmpty()) {
       return HoodieListPairData.eager(Collections.emptyList());
     }
@@ -298,22 +396,26 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     final int numFileSlices = partitionFileSlices.size();
     checkState(numFileSlices > 0, "Number of file slices for partition " + partitionName + " should be > 0");
 
+    List<String> sortedKeys = new ArrayList<>(keys.collectAsList());
+    // So we use the natural order to sort.
+    // TTDO: no dedup, only sort?
+    Collections.sort(sortedKeys);
     // Lookup keys from each file slice
     if (numFileSlices == 1) {
       // Optimization for a single slice for smaller metadata table partitions
-      result = lookupKeys(partitionName, keyList, partitionFileSlices.get(0));
+      result = lookupRecordsWithMapping(partitionName, sortedKeys, partitionFileSlices.get(0), !isSecondaryIndex);
     } else {
       // Parallel lookup for large sized partitions with many file slices
       // Partition the keys by the file slice which contains it
-      ArrayList<ArrayList<String>> partitionedKeys = partitionKeysByFileSlices(keyList, numFileSlices, partitionName, metadataMetaClient.getTableConfig().getTableVersion());
-      result = new HashMap<>(keyList.size());
+      ArrayList<ArrayList<String>> partitionedKeys = partitionKeysByFileSlices(sortedKeys, numFileSlices, partitionName, metadataMetaClient.getTableConfig().getTableVersion());
+      result = new HashMap<>(sortedKeys.size());
       getEngineContext().setJobStatus(this.getClass().getSimpleName(), "Reading keys from metadata table partition " + partitionName);
       getEngineContext().map(partitionedKeys, keysList -> {
         if (keysList.isEmpty()) {
           return Collections.<String, HoodieRecord<HoodieMetadataPayload>>emptyMap();
         }
         int shardIndex = HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(keysList.get(0), numFileSlices, partitionName, metadataMetaClient.getTableConfig().getTableVersion());
-        return lookupKeys(partitionName, keysList, partitionFileSlices.get(shardIndex));
+        return lookupRecordsWithMapping(partitionName, keysList, partitionFileSlices.get(shardIndex), !isSecondaryIndex);
       }, partitionedKeys.size()).forEach(result::putAll);
     }
 
@@ -332,13 +434,9 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     return partitionedKeys;
   }
 
-  private Map<String, HoodieRecord<HoodieMetadataPayload>> lookupKeys(String partitionName,
-                                                                      List<String> keys,
-                                                                      FileSlice fileSlice) {
-    // Sort it here once so that we don't need to sort individually for base file and for each individual log files.
-    List<String> sortedKeys = new ArrayList<>(keys);
-    // So we use the natural order to sort.
-    Collections.sort(sortedKeys);
+  private HoodieFileGroupReader<IndexedRecord> buildFileGroupReader(List<String> sortedKeys,
+                                                                   FileSlice fileSlice,
+                                                                   boolean isFullKey) {
     Option<HoodieInstant> latestMetadataInstant =
         metadataMetaClient.getActiveTimeline().filterCompletedInstants().lastInstant();
     String latestMetadataInstantTime =
@@ -354,8 +452,11 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         storageConf,
         metadataMetaClient.getTableConfig(),
         Option.of(instantRange),
-        Option.of(transformKeysToPredicate(sortedKeys)));
-    try (HoodieFileGroupReader<IndexedRecord> fileGroupReader = HoodieFileGroupReader.<IndexedRecord>newBuilder()
+        Option.of(
+            isFullKey
+                ? transformKeysToPredicate(sortedKeys)
+                : transformKeyPrefixesToPredicate(sortedKeys)));
+    return HoodieFileGroupReader.<IndexedRecord>newBuilder()
         .withReaderContext(readerContext)
         .withHoodieTableMetaClient(metadataMetaClient)
         .withLatestCommitTime(latestMetadataInstantTime)
@@ -367,21 +468,50 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         .withLength(Long.MAX_VALUE)
         .withShouldUseRecordPosition(false)
         .build();
+  }
+
+  private Map<String, HoodieRecord<HoodieMetadataPayload>> lookupRecordsWithMapping(String partitionName,
+                                                                                    List<String> sortedKeys,
+                                                                                    FileSlice fileSlice,
+                                                                                    Boolean isFullKey) {
+    Map<String, HoodieRecord<HoodieMetadataPayload>> records = new HashMap<>();
+    lookupRecords(sortedKeys, fileSlice, isFullKey, payload -> {
+      String rowKey = payload.key != null ? payload.key : ((GenericRecord) payload.getInsertValue(null).get()).get(KEY_FIELD_NAME).toString();
+      records.put(rowKey, new HoodieAvroRecord<>(new HoodieKey(rowKey, partitionName), payload));
+    });
+    return records;
+  }
+
+  private List<HoodieRecord<HoodieMetadataPayload>> lookupRecordsWithoutMapping(String partitionName,
+                                                                                List<String> keys,
+                                                                                FileSlice fileSlice,
+                                                                                Boolean isFullKey) {
+    List<HoodieRecord<HoodieMetadataPayload>> records = new ArrayList<>();
+    lookupRecords(keys, fileSlice, isFullKey, payload ->
+        records.add(new HoodieAvroRecord<>(new HoodieKey(payload.key, partitionName), payload)));
+    return records;
+  }
+
+  private void lookupRecords(List<String> sortedKeys,
+                            FileSlice fileSlice,
+                            Boolean isFullKey,
+                            RecordConsumer consumer) {
+    try (HoodieFileGroupReader<IndexedRecord> fileGroupReader = buildFileGroupReader(sortedKeys, fileSlice, isFullKey);
          ClosableIterator<IndexedRecord> it = fileGroupReader.getClosableIterator()) {
-      Map<String, HoodieRecord<HoodieMetadataPayload>> records = new HashMap<>();
       while (it.hasNext()) {
         GenericRecord metadataRecord = (GenericRecord) it.next();
         HoodieMetadataPayload payload = new HoodieMetadataPayload(Option.of(metadataRecord));
-        String rowKey = payload.key != null
-            ? payload.key : ((GenericRecord) metadataRecord).get(KEY_FIELD_NAME).toString();
-        HoodieKey hoodieKey = new HoodieKey(rowKey, partitionName);
-        records.put(rowKey, new HoodieAvroRecord<>(hoodieKey, payload));
+        consumer.accept(payload);
       }
-      return records;
     } catch (IOException e) {
       throw new HoodieIOException(
-          "Error merging records from metadata table for " + keys.size() + " keys : ", e);
+          "Error merging records from metadata table for " + sortedKeys.size() + " keys : ", e);
     }
+  }
+
+  @FunctionalInterface
+  private interface RecordConsumer {
+    void accept(HoodieMetadataPayload payload) throws IOException;
   }
 
   private Set<String> getValidInstantTimestamps() {
