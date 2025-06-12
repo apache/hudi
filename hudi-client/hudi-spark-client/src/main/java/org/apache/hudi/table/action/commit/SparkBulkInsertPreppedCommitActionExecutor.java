@@ -49,7 +49,7 @@ public class SparkBulkInsertPreppedCommitActionExecutor<T>
   public HoodieWriteMetadata<HoodieData<WriteStatus>> execute() {
     try {
       return SparkBulkInsertHelper.newInstance().bulkInsert(preppedInputRecordRdd, instantTime, table, config,
-          this, false, userDefinedBulkInsertPartitioner);
+          this, false, userDefinedBulkInsertPartitioner, Option.of(context.getReaderContextFactory(table.getMetaClient())));
     } catch (Throwable e) {
       if (e instanceof HoodieInsertException) {
         throw e;

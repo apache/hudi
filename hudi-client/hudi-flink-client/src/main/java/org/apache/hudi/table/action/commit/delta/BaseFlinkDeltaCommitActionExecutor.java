@@ -20,8 +20,10 @@ package org.apache.hudi.table.action.commit.delta;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.execution.FlinkLazyInsertIterable;
 import org.apache.hudi.io.ExplicitWriteHandleFactory;
@@ -51,7 +53,8 @@ public abstract class BaseFlinkDeltaCommitActionExecutor<T>
   }
 
   @Override
-  public Iterator<List<WriteStatus>> handleUpdate(String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr) {
+  public Iterator<List<WriteStatus>> handleUpdate(String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr,
+                                                  Option<ReaderContextFactory<T>> readerContextFactoryOpt) {
     FlinkAppendHandle appendHandle = (FlinkAppendHandle) writeHandle;
     appendHandle.doAppend();
     List<WriteStatus> writeStatuses = appendHandle.close();

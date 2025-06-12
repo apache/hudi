@@ -19,6 +19,7 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -66,7 +67,8 @@ public class JavaBulkInsertHelper<T, R> extends BaseBulkInsertHelper<T, List<Hoo
                                                            final HoodieWriteConfig config,
                                                            final BaseCommitActionExecutor<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>, R> executor,
                                                            final boolean performDedupe,
-                                                           final Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner) {
+                                                           final Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner,
+                                                           Option<ReaderContextFactory<T>> readerContextFactoryOpt) {
     HoodieWriteMetadata result = new HoodieWriteMetadata();
 
     // It's possible the transition to inflight could have already happened.
@@ -81,7 +83,7 @@ public class JavaBulkInsertHelper<T, R> extends BaseBulkInsertHelper<T, List<Hoo
 
     // write new files
     List<WriteStatus> writeStatuses = bulkInsert(inputRecords, instantTime, table, config, performDedupe, partitioner, false,
-        config.getBulkInsertShuffleParallelism(), new CreateHandleFactory(false));
+        config.getBulkInsertShuffleParallelism(), new CreateHandleFactory(false), readerContextFactoryOpt);
     //update index
     ((BaseJavaCommitActionExecutor) executor).updateIndexAndMaybeRunPreCommitValidations(writeStatuses, result);
     return result;
@@ -96,7 +98,8 @@ public class JavaBulkInsertHelper<T, R> extends BaseBulkInsertHelper<T, List<Hoo
                                       BulkInsertPartitioner partitioner,
                                       boolean useWriterSchema,
                                       int configuredParallelism,
-                                      WriteHandleFactory writeHandleFactory) {
+                                      WriteHandleFactory writeHandleFactory,
+                                      Option<ReaderContextFactory<T>> readerContextFactoryOpt) {
 
     // De-dupe/merge if needed
     List<HoodieRecord<T>> dedupedRecords = inputRecords;
@@ -127,7 +130,8 @@ public class JavaBulkInsertHelper<T, R> extends BaseBulkInsertHelper<T, List<Hoo
         config, instantTime, table,
         fileIdPrefix, table.getTaskContextSupplier(),
         // Always get the first WriteHandleFactory, as there is only a single data partition for hudi java engine.
-        (WriteHandleFactory) partitioner.getWriteHandleFactory(0).orElse(writeHandleFactory)).forEachRemaining(writeStatuses::addAll);
+        (WriteHandleFactory) partitioner.getWriteHandleFactory(0).orElse(writeHandleFactory), Option.empty()
+        ).forEachRemaining(writeStatuses::addAll);
 
     return writeStatuses;
   }

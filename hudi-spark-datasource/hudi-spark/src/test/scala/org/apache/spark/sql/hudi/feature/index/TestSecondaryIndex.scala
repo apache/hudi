@@ -264,7 +264,8 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
       var updateDf = spark.read.json(spark.sparkContext.parallelize(updateRecords.toSeq, 2))
       updateDf.write.format("hudi")
         .options(hudiOpts)
-        .option(OPERATION.key, UPSERT_OPERATION_OPT_VAL)
+        .option(OPERATION.key, BULK_INSERT_OPERATION_OPT_VAL)
+        .option(DataSourceWriteOptions.ENABLE_ROW_WRITER.key, "false")
         .mode(SaveMode.Append)
         .save(basePath)
       // Verify secondary index after updates

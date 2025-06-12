@@ -536,6 +536,9 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         writer.close();
         writer = null;
       }
+
+      // generate Secondary index stats if streaming is enabled.
+
       // update final size, once for all log files
       // TODO we can actually deduce file size purely from AppendResult (based on offset and size
       //      of the appended block)

@@ -48,7 +48,7 @@ public class IndexStats implements Serializable {
     secondaryIndexStats.put(secondaryIndexPartitionPath, new ArrayList<>());
   }
 
-  void addSecondaryIndexStats(String secondaryIndexPartitionPath, String recordKey, String secondaryIndexValue, boolean isDeleted) {
+  public void addSecondaryIndexStats(String secondaryIndexPartitionPath, String recordKey, String secondaryIndexValue, boolean isDeleted) {
     secondaryIndexStats.get(secondaryIndexPartitionPath).add(new SecondaryIndexStatsTracker(recordKey, secondaryIndexValue, isDeleted));
   }
 

@@ -18,8 +18,10 @@
 
 package org.apache.hudi.io;
 
+import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
@@ -29,7 +31,7 @@ public abstract class WriteHandleFactory<T, I, K, O> implements Serializable {
   private int numFilesWritten = 0;
 
   public abstract HoodieWriteHandle<T, I, K, O> create(HoodieWriteConfig config, String commitTime, HoodieTable<T, I, K, O> hoodieTable,
-      String partitionPath, String fileIdPrefix, TaskContextSupplier taskContextSupplier);
+      String partitionPath, String fileIdPrefix, TaskContextSupplier taskContextSupplier, Option<ReaderContextFactory<T>> readerContextFactoryOpt);
 
   protected String getNextFileId(String idPfx) {
     return FSUtils.createNewFileId(idPfx, numFilesWritten++);

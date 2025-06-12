@@ -345,7 +345,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
     BaseSparkCommitActionExecutor actionExecutor = new SparkInsertCommitActionExecutor(context, config, table,
         firstCommitTime, context.parallelize(records));
     List<WriteStatus> writeStatuses = jsc.parallelize(Arrays.asList(1)).map(x -> {
-      return actionExecutor.handleInsert(FSUtils.createNewFileIdPfx(), records.iterator());
+      return actionExecutor.handleInsert(FSUtils.createNewFileIdPfx(), records.iterator(), Option.empty());
     }).flatMap(Transformations::flattenAsIterator).collect();
 
     Map<String, String> allWriteStatusMergedMetadataMap =
@@ -388,7 +388,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
     BaseSparkCommitActionExecutor actionExecutor = new SparkInsertPreppedCommitActionExecutor(context, config, table,
         instantTime, context.parallelize(recs2));
     List<WriteStatus> returnedStatuses = jsc.parallelize(Arrays.asList(1)).map(x -> {
-      return actionExecutor.handleInsert(FSUtils.createNewFileIdPfx(), recs2.iterator());
+      return actionExecutor.handleInsert(FSUtils.createNewFileIdPfx(), recs2.iterator(), Option.empty());
     }).flatMap(Transformations::flattenAsIterator).collect();
 
     // TODO: check the actual files and make sure 11 records, total were written.
@@ -409,7 +409,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
     BaseSparkCommitActionExecutor newActionExecutor = new SparkUpsertPreppedCommitActionExecutor(context, config, table,
         instantTime, context.parallelize(recs3));
     returnedStatuses = jsc.parallelize(Arrays.asList(1)).map(x -> {
-      return newActionExecutor.handleInsert(FSUtils.createNewFileIdPfx(), recs3.iterator());
+      return newActionExecutor.handleInsert(FSUtils.createNewFileIdPfx(), recs3.iterator(), Option.empty());
     }).flatMap(Transformations::flattenAsIterator).collect();
 
     assertEquals(3, returnedStatuses.size());
@@ -442,7 +442,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
     BaseSparkCommitActionExecutor actionExecutor = new SparkUpsertCommitActionExecutor(context, config, table,
         instantTime, context.parallelize(records));
     jsc.parallelize(Arrays.asList(1))
-        .map(i -> actionExecutor.handleInsert(FSUtils.createNewFileIdPfx(), records.iterator()))
+        .map(i -> actionExecutor.handleInsert(FSUtils.createNewFileIdPfx(), records.iterator(), Option.empty()))
         .map(Transformations::flatten).collect();
 
     // Check the updated file
@@ -477,7 +477,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
             instantTime, context.parallelize(inserts));
     final List<List<WriteStatus>> ws = jsc.parallelize(Arrays.asList(1))
         .map(x -> (Iterator<List<WriteStatus>>)
-            actionExecutor.handleInsert(UUID.randomUUID().toString(), inserts.iterator()))
+            actionExecutor.handleInsert(UUID.randomUUID().toString(), inserts.iterator(), Option.empty()))
         .map(Transformations::flatten).collect();
 
     WriteStatus writeStatus = ws.get(0).get(0);
