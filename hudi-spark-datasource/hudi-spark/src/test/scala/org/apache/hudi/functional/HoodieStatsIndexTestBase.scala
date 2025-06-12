@@ -53,7 +53,8 @@ class HoodieStatsIndexTestBase extends HoodieSparkClientTestBase {
     "hoodie.upsert.shuffle.parallelism" -> "4",
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
     RECORDKEY_FIELD.key -> "_row_key",
-    PRECOMBINE_FIELD.key -> "timestamp"
+    PRECOMBINE_FIELD.key -> "timestamp",
+    HoodieWriteConfig.MARKERS_TIMELINE_SERVER_BASED_BATCH_INTERVAL_MS.key -> "10"
   )
 
   @BeforeEach

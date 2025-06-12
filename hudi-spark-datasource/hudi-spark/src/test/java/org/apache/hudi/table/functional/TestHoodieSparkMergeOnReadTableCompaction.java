@@ -145,6 +145,7 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
             .parquetMaxFileSize(1024).build())
         .withLayoutConfig(layoutConfig)
         .withIndexConfig(HoodieIndexConfig.newBuilder().fromProperties(props).withIndexType(indexType).withBucketNum("1").build())
+        .withMarkersTimelineServerBasedBatchIntervalMs(10)
         .build();
     props.putAll(config.getProps());
 
@@ -199,6 +200,7 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
               .withLayoutType(HoodieStorageLayout.LayoutType.BUCKET.name())
               .withLayoutPartitioner(SparkBucketIndexPartitioner.class.getName()).build())
           .withIndexConfig(HoodieIndexConfig.newBuilder().fromProperties(props).withIndexType(HoodieIndex.IndexType.BUCKET).withBucketNum("1").build())
+          .withMarkersTimelineServerBasedBatchIntervalMs(10)
           .build();
       props.putAll(config.getProps());
 
@@ -263,6 +265,7 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
         .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class).build())
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).build())
+        .withMarkersTimelineServerBasedBatchIntervalMs(10)
         .build();
     props.putAll(config.getProps());
 

@@ -22,6 +22,7 @@ package org.apache
 import org.apache.hudi.DataSourceWriteOptions.RECORD_MERGE_MODE
 import org.apache.hudi.common.config.RecordMergeMode
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.storage.HoodieStorageUtils
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
@@ -57,7 +58,9 @@ class TestIncrementalQueryWithArchivedInstants extends SparkClientFunctionalTest
       "hoodie.populate.meta.fields" -> "true",
       "hoodie.compaction.payload.class" -> "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload",
       "hoodie.datasource.write.payload.class" -> "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload",
-      RECORD_MERGE_MODE.key -> RecordMergeMode.COMMIT_TIME_ORDERING.name)
+      RECORD_MERGE_MODE.key -> RecordMergeMode.COMMIT_TIME_ORDERING.name,
+      HoodieWriteConfig.MARKERS_TIMELINE_SERVER_BASED_BATCH_INTERVAL_MS.key -> "10"
+    )
 
     val serviceOpt: Map[String, String] = Map(
       "hoodie.table.services.enabled" -> "true",
