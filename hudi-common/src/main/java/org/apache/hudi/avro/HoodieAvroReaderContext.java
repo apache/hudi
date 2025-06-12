@@ -29,11 +29,14 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.OverwriteWithLatestMerger;
+import org.apache.hudi.common.serialization.CustomSerializer;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.BufferedRecordSerializer;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.SizeEstimator;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
@@ -169,6 +172,16 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
   @Override
   public IndexedRecord toBinaryRow(Schema avroSchema, IndexedRecord record) {
     return record;
+  }
+
+  @Override
+  public SizeEstimator<BufferedRecord<IndexedRecord>> getRecordSizeEstimator() {
+    return new AvroRecordSizeEstimator(getSchemaHandler().getRequiredSchema());
+  }
+
+  @Override
+  public CustomSerializer<BufferedRecord<IndexedRecord>> getRecordSerializer() {
+    return new BufferedRecordSerializer<>(new AvroRecordSerializer(this::decodeAvroSchema));
   }
 
   @Override
