@@ -88,7 +88,6 @@ public class TestFiltersInFileGroupReader extends TestBootstrapReadBase {
     //for bootstrap, _hoodie_record_key is in the skeleton while begin_lat is in the data
     //We have a record key filter so that tests MORs filter pushdown with position based merging
     return sparkSession.read().format("hudi")
-        .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), fgReaderEnabled)
         .option(HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS.key(), mergeUseRecordPositions)
         .load(tableBasePath)
         .drop("city_to_state")

@@ -102,7 +102,6 @@ public class TestNewHoodieParquetFileFormat extends TestBootstrapReadBase {
     Dataset<Row> legacyDf = sparkSession.read().format("hudi")
         .load(tableBasePath);
     Dataset<Row> fileFormatDf = sparkSession.read().format("hudi")
-        .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "true")
         .load(tableBasePath);
     assertEquals(legacyDf.count(), fileFormatDf.count());
   }

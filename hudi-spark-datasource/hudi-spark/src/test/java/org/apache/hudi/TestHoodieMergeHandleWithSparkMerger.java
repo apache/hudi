@@ -63,7 +63,6 @@ import java.util.Properties;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.config.HoodieReaderConfig.FILE_GROUP_READER_ENABLED;
 import static org.apache.hudi.common.config.HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT;
 import static org.apache.hudi.common.model.HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY;
 import static org.apache.hudi.config.HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES;
@@ -97,7 +96,6 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
     HoodieWriteConfig writeConfig = buildDefaultWriteConfig(SCHEMA);
     HoodieRecordMerger merger = writeConfig.getRecordMerger();
     assertTrue(merger instanceof DefaultMerger);
-    assertTrue(writeConfig.getBooleanOrDefault(FILE_GROUP_READER_ENABLED.key(), false));
     insertAndUpdate(writeConfig, 114);
   }
 
@@ -106,7 +104,6 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
     HoodieWriteConfig writeConfig = buildNoFlushWriteConfig(SCHEMA);
     HoodieRecordMerger merger = writeConfig.getRecordMerger();
     assertTrue(merger instanceof NoFlushMerger);
-    assertTrue(writeConfig.getBooleanOrDefault(FILE_GROUP_READER_ENABLED.key(), false));
     insertAndUpdate(writeConfig, 64);
   }
 
@@ -115,7 +112,6 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
     HoodieWriteConfig writeConfig = buildCustomWriteConfig(SCHEMA);
     HoodieRecordMerger merger = writeConfig.getRecordMerger();
     assertTrue(merger instanceof CustomMerger);
-    assertTrue(writeConfig.getBooleanOrDefault(FILE_GROUP_READER_ENABLED.key(), false));
     insertAndUpdate(writeConfig, 95);
   }
 

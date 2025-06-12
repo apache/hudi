@@ -34,7 +34,7 @@ class TestSparkSqlWithTimestampKeyGenerator extends HoodieSparkSqlTestBase {
     withTempDir { tmp =>
       Seq(
         Seq("COPY_ON_WRITE"),
-        Seq("MERGE_ON_READ"),
+        Seq("MERGE_ON_READ")
       ).foreach { testParams =>
         val tableType = testParams.head
         timestampKeyGeneratorSettings.foreach { keyGeneratorSettings =>
@@ -123,7 +123,6 @@ class TestSparkSqlWithTimestampKeyGenerator extends HoodieSparkSqlTestBase {
       val queryResult = spark.sql(s"SELECT id, name, precomb, ts FROM test_default_path_ts ORDER BY id").collect().mkString("; ")
       LOG.warn(s"Query result: $queryResult")
       assertResult(expectedQueryResult)(queryResult)
-
     }
   }
 

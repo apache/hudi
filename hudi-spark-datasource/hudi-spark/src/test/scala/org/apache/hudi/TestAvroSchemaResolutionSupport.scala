@@ -249,8 +249,7 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
     // read out the table
     //schemaValidationEnabled is a writer config, so we will also test the fg reader with the
     //same param since that will only affect the reader
-    val readDf = spark.read.format("hudi")
-      .load(tempRecordPath)
+    val readDf = spark.read.format("hudi").load(tempRecordPath)
     readDf.printSchema()
     readDf.show(false)
     readDf.foreach(_ => {})
@@ -820,7 +819,7 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
 
   @ParameterizedTest
   @MethodSource(Array("testArgs"))
-  def testNestedTypeVectorizedReadWithTypeChange(isCow: Boolean, useFileGroupReader: Boolean): Unit = {
+  def testNestedTypeVectorizedReadWithTypeChange(isCow: Boolean): Unit = {
     // test to change the value type of a MAP in a column of ARRAY< MAP<k,v> > type
     val tempRecordPath = basePath + "/record_tbl/"
     val arrayMapData = Seq(
@@ -895,7 +894,6 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
       }
     }
   }
-
 }
 
 object TestAvroSchemaResolutionSupport {
