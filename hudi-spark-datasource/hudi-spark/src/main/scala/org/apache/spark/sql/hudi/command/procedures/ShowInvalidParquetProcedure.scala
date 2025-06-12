@@ -37,7 +37,7 @@ import java.util.function.Supplier
 class ShowInvalidParquetProcedure extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS = Array[ProcedureParameter](
     ProcedureParameter.required(0, "path", DataTypes.StringType),
-    ProcedureParameter.required(1, "customParallelism", DataTypes.IntegerType),
+    ProcedureParameter.optional(1, "parallelism", DataTypes.IntegerType, 100),
     ProcedureParameter.optional(2, "limit", DataTypes.IntegerType, 100),
     ProcedureParameter.optional(3, "needDelete", DataTypes.BooleanType, false),
     ProcedureParameter.optional(4, "partitions", DataTypes.StringType, ""),
@@ -56,7 +56,7 @@ class ShowInvalidParquetProcedure extends BaseProcedure with ProcedureBuilder {
     super.checkArgs(PARAMETERS, args)
 
     val srcPath = getArgValueOrDefault(args, PARAMETERS(0)).get.asInstanceOf[String]
-    val customParallelism = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[Int]
+    val parallelism = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[Int]
     val limit = getArgValueOrDefault(args, PARAMETERS(2))
     val needDelete = getArgValueOrDefault(args, PARAMETERS(3)).get.asInstanceOf[Boolean]
     val partitions = getArgValueOrDefault(args, PARAMETERS(4)).map(_.toString).getOrElse("")
@@ -73,37 +73,42 @@ class ShowInvalidParquetProcedure extends BaseProcedure with ProcedureBuilder {
       HadoopFSUtils.getAllDataFilesInPartition(fs, HadoopFSUtils.constructAbsolutePathInHadoopPath(srcPath, part))
     }).toList
 
-    val parquetRdd = jsc.parallelize(fileStatus, customParallelism).filter(fileStatus => {
-      if (instantsList.nonEmpty) {
-        val parquetCommitTime = FSUtils.getCommitTimeWithFullPath(fileStatus.getPath.toString)
-        instantsList.contains(parquetCommitTime)
-      } else {
-       true
-      }}).filter(status => {
-      val filePath = status.getPath
-      var isInvalid = false
-      if (filePath.toString.endsWith(".parquet")) {
-        try ParquetFileReader.readFooter(storageConf.unwrap(), filePath, SKIP_ROW_GROUPS).getFileMetaData catch {
-          case e: Exception =>
-            isInvalid = e.getMessage.contains("is not a Parquet file")
-            if (isInvalid && needDelete) {
-              val fs = HadoopFSUtils.getFs(new Path(srcPath), storageConf.unwrap())
-              try {
-                isInvalid = !fs.delete(filePath, false)
-              } catch {
-                case ex: Exception =>
-                  isInvalid = true
-              }
-            }
-        }
-      }
-      isInvalid
-    }).map(status => Row(status.getPath.toString))
-
-    if (limit.isDefined) {
-      parquetRdd.take(limit.get.asInstanceOf[Int])
+    if (fileStatus.isEmpty) {
+      Seq.empty
     } else {
-      parquetRdd.collect()
+      val parquetRdd = jsc.parallelize(fileStatus, Math.min(fileStatus.size, parallelism)).filter(fileStatus => {
+        if (instantsList.nonEmpty) {
+          val parquetCommitTime = FSUtils.getCommitTimeWithFullPath(fileStatus.getPath.toString)
+          instantsList.contains(parquetCommitTime)
+        } else {
+          true
+        }
+      }).filter(status => {
+        val filePath = status.getPath
+        var isInvalid = false
+        if (filePath.toString.endsWith(".parquet")) {
+          try ParquetFileReader.readFooter(storageConf.unwrap(), filePath, SKIP_ROW_GROUPS).getFileMetaData catch {
+            case e: Exception =>
+              isInvalid = e.getMessage.contains("is not a Parquet file")
+              if (isInvalid && needDelete) {
+                val fs = HadoopFSUtils.getFs(new Path(srcPath), storageConf.unwrap())
+                try {
+                  isInvalid = !fs.delete(filePath, false)
+                } catch {
+                  case ex: Exception =>
+                    isInvalid = true
+                }
+              }
+          }
+        }
+        isInvalid
+      }).map(status => Row(status.getPath.toString))
+
+      if (limit.isDefined) {
+        parquetRdd.take(limit.get.asInstanceOf[Int])
+      } else {
+        parquetRdd.collect()
+      }
     }
   }
 
