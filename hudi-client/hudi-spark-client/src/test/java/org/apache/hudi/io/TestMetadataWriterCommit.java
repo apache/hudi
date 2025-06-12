@@ -85,7 +85,7 @@ public class TestMetadataWriterCommit extends BaseTestHandle {
     // create a parquet file and obtain corresponding write status
     config.setSchema(TRIP_EXAMPLE_SCHEMA);
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[] {partitionPath});
-    Pair<WriteStatus, List<HoodieRecord>> statusListPair = createParquetFile(config, table, partitionPath, fileId, instantTime, dataGenerator);
+    Pair<WriteStatus, List<HoodieRecord>> statusListPair = createParquetFile(config, table, partitionPath, fileId, instantTime, dataGenerator, true);
     WriteStatus writeStatus = statusListPair.getLeft();
     List<HoodieRecord> records = statusListPair.getRight();
     HoodieCommitMetadata commitMetadata = createCommitMetadata(writeStatus.getStat(), partitionPath);
