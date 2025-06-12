@@ -509,7 +509,7 @@ public class HoodieFlinkWriteClient<T>
 
   @Override
   public HoodieFlinkWriteClient<T> createNewClient() {
-    return new HoodieFlinkWriteClient<>(context, config);
+    return new HoodieFlinkWriteClient<>(context, HoodieWriteConfig.newBuilder().withProperties(config.getProps()).build());
   }
 
   private final class AutoCloseableWriteHandle implements AutoCloseable {

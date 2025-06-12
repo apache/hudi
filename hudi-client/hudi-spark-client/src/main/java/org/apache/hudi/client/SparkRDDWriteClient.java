@@ -393,7 +393,7 @@ public class SparkRDDWriteClient<T> extends
 
   @Override
   public SparkRDDWriteClient<T> createNewClient() {
-    return new SparkRDDWriteClient<>(context, config);
+    return new SparkRDDWriteClient<>(context, HoodieWriteConfig.newBuilder().withProperties(config.getProps()).build());
   }
 
   /**

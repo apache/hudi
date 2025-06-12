@@ -222,7 +222,7 @@ public class HoodieJavaWriteClient<T> extends
 
   @Override
   public HoodieJavaWriteClient<T> createNewClient() {
-    return new HoodieJavaWriteClient<>(context, config);
+    return new HoodieJavaWriteClient<>(context, HoodieWriteConfig.newBuilder().withProperties(config.getProps()).build());
   }
 
   /**
