@@ -555,7 +555,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     assertTrue(HoodieIndexUtils.checkIfValidCommit(timeline, instantTimestampSec));
 
     // With a sec format instant time checkIfValid should return false assuming its > first entry in the active timeline
-    Thread.sleep(2000); // sleep required so that new timestamp differs in the seconds rather than msec
+    Thread.sleep(1010); // sleep required so that new timestamp differs in the seconds rather than msec
     instantTimestamp = writeClient.createNewInstantTime();
     instantTimestampSec = instantTimestamp.substring(0, instantTimestamp.length() - HoodieInstantTimeGenerator.DEFAULT_MILLIS_EXT.length());
     assertFalse(timeline.empty());
@@ -567,7 +567,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     // Timestamp contain in inflight timeline, checkContainsInstant() should return true
     String checkInstantTimestampSec = instantTimestamp.substring(0, instantTimestamp.length() - HoodieInstantTimeGenerator.DEFAULT_MILLIS_EXT.length());
     String checkInstantTimestamp = checkInstantTimestampSec + HoodieInstantTimeGenerator.DEFAULT_MILLIS_EXT;
-    Thread.sleep(2000); // sleep required so that new timestamp differs in the seconds rather than msec
+    Thread.sleep(1010); // sleep required so that new timestamp differs in the seconds rather than msec
     String newTimestamp = writeClient.createNewInstantTime();
     String newTimestampSec = newTimestamp.substring(0, newTimestamp.length() - HoodieInstantTimeGenerator.DEFAULT_MILLIS_EXT.length());
     final HoodieInstant instant5 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, newTimestamp);
@@ -599,11 +599,10 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     writeClient.commit(newCommitTime, writeStatues);
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
 
     // Now tagLocation for these records, index should tag them correctly
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    hoodieTable = HoodieSparkTable.create(config, context, metaClient);
+    HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
     JavaRDD<HoodieRecord> javaRDD = tagLocation(hoodieTable.getIndex(), writeRecords, hoodieTable);
     Map<String, String> recordKeyToPartitionPathMap = new HashMap<>();
     List<HoodieRecord> hoodieRecords = writeRecords.collect();

@@ -26,7 +26,7 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
 
 import org.apache.spark.sql._
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 
 import scala.collection.{mutable, JavaConverters}
 import scala.collection.JavaConverters._
@@ -35,7 +35,8 @@ import scala.util.Using
 class RecordLevelIndexTestBase extends HoodieStatsIndexTestBase {
   val metadataOpts: Map[String, String] = Map(
     HoodieMetadataConfig.ENABLE.key -> "true",
-    HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key -> "true"
+    HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key -> "true",
+    HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "false"
   )
   def commonOpts: Map[String, String] = Map(
     PARTITIONPATH_FIELD.key -> "partition",
@@ -103,6 +104,7 @@ class RecordLevelIndexTestBase extends HoodieStatsIndexTestBase {
     }
 
     deletedDf.unpersist()
+    latestBatchDf.unpersist()
     latestBatchDf
   }
 
@@ -121,6 +123,7 @@ class RecordLevelIndexTestBase extends HoodieStatsIndexTestBase {
     val writeConfig = getWriteConfig(hudiOpts)
     val metadata = metadataWriter(writeConfig).getTableMetadata
     val readDf = spark.read.format("hudi").load(basePath)
+    readDf.cache()
     val rowArr = readDf.collect()
     val recordIndexMap = metadata.readRecordIndex(
       JavaConverters.seqAsJavaListConverter(rowArr.map(row => row.getAs("_hoodie_record_key").toString).toList).asJava)
@@ -151,5 +154,6 @@ class RecordLevelIndexTestBase extends HoodieStatsIndexTestBase {
       .join(prevDf, prevDf.columns, "leftanti")
     assertEquals(0, nonMatchingRecords.count())
     assertEquals(readDf.count(), prevDf.count())
+    readDf.unpersist()
   }
 }

@@ -86,9 +86,6 @@ public class TestPreferWriterConflictResolutionStrategy extends HoodieCommonTest
     createInflightCommit(currentWriterInstant, metaClient);
     // compaction 1 gets scheduled and finishes
     String newInstantTime = metaClient.createNewInstantTime();
-    // TODO: Remove sleep stmt once the modified times issue is fixed.
-    // Sleep thread for at least 1sec for consecutive commits that way they do not have two commits modified times falls on the same millisecond.
-    Thread.sleep(1000);
     createCompaction(newInstantTime, metaClient);
 
     Option<HoodieInstant> currentInstant = Option.of(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
@@ -199,9 +196,6 @@ public class TestPreferWriterConflictResolutionStrategy extends HoodieCommonTest
     // writer 1 starts
     String currentWriterInstant = metaClient.createNewInstantTime();
     createInflightCommit(currentWriterInstant, metaClient);
-    // TODO: Remove sleep stmt once the modified times issue is fixed.
-    // Sleep thread for at least 1sec for consecutive commits that way they do not have two commits modified times falls on the same millisecond.
-    Thread.sleep(1000);
     // clustering writer starts and complete before ingestion commit.
     String replaceWriterInstant = metaClient.createNewInstantTime();
     createCluster(replaceWriterInstant, WriteOperationType.CLUSTER, metaClient);
@@ -235,9 +229,6 @@ public class TestPreferWriterConflictResolutionStrategy extends HoodieCommonTest
     // writer 1 starts
     String currentWriterInstant = metaClient.createNewInstantTime();
     createInflightCommit(currentWriterInstant, metaClient);
-    // TODO: Remove sleep stmt once the modified times issue is fixed.
-    // Sleep thread for at least 1sec for consecutive commits that way they do not have two commits modified times falls on the same millisecond.
-    Thread.sleep(1000);
     // replace 1 gets scheduled and finished
     String newInstantTime = metaClient.createNewInstantTime();
     createReplace(newInstantTime, WriteOperationType.INSERT_OVERWRITE, metaClient);

@@ -148,9 +148,7 @@ class TestMetadataRecordIndex extends HoodieSparkClientTestBase {
       val prevDf = prevDfOpt.get
       val prevDfOld = prevDf.join(inputDF1, prevDf("_row_key") === inputDF1("_row_key")
         && prevDf("partition") === inputDF1("partition"), "leftanti")
-      prevDfOld.show(500, false)
       val unionDf = prevDfOld.union(inputDF1)
-      unionDf.show(500, false)
       mergedDfList = mergedDfList :+ unionDf
     }
   }
@@ -204,10 +202,7 @@ class TestMetadataRecordIndex extends HoodieSparkClientTestBase {
     val nonMatchingRecords = readDf.drop("_hoodie_commit_time", "_hoodie_commit_seqno", "_hoodie_record_key",
       "_hoodie_partition_path", "_hoodie_file_name", "tip_history")
       .join(prevDf, prevDf.columns, "leftanti")
-    nonMatchingRecords.show(500, false)
     assertEquals(0, nonMatchingRecords.count())
-    readDf.show(500, false)
-    prevDf.show(500, false)
     assertEquals(readDf.count(), prevDf.count())
   }
 }

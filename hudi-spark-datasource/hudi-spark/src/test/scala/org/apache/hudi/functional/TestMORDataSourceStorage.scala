@@ -70,7 +70,8 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition_path",
       DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
-      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+      HoodieWriteConfig.MARKERS_TIMELINE_SERVER_BASED_BATCH_INTERVAL_MS.key -> "10"
     )
     val verificationCol: String = "driver"
     val updatedVerificationVal: String = "driver_update"

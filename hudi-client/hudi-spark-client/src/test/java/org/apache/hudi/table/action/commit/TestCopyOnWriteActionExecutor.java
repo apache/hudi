@@ -238,7 +238,6 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
 
     List<HoodieRecord> updatedRecords = Arrays.asList(updatedRecord1, insertedRecord1);
 
-    Thread.sleep(1000);
     metaClient = HoodieTableMetaClient.reload(metaClient);
     String newCommitTime = writeClient.startCommit();
     writeStatusJavaRDD = writeClient.upsert(jsc.parallelize(updatedRecords), newCommitTime);
