@@ -168,9 +168,6 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
     extraProperties.setProperty(
         HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), "record_key");
     extraProperties.setProperty(
-        FILE_GROUP_READER_ENABLED.key(),
-        "true");
-    extraProperties.setProperty(
         WRITE_RECORD_POSITIONS.key(),
         "true");
     extraProperties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(),"partition_path");
@@ -237,9 +234,6 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
     properties.put(
         PAYLOAD_ORDERING_FIELD_PROP_KEY,
         HoodieRecord.HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName());
-    properties.put(
-        FILE_GROUP_READER_ENABLED.key(),
-        "true");
     properties.put(
         WRITE_RECORD_POSITIONS.key(),
         "true");

@@ -19,7 +19,6 @@
 package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.DataSourceReadOptions;
-import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -88,8 +87,7 @@ import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.getHoll
 public class HoodieIncrSource extends RowSource {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieIncrSource.class);
-  public static final Set<String> HOODIE_INCR_SOURCE_READ_OPT_KEYS =
-      CollectionUtils.createImmutableSet(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key());
+  public static final Set<String> HOODIE_INCR_SOURCE_READ_OPT_KEYS = CollectionUtils.createImmutableSet();
   private final Option<SnapshotLoadQuerySplitter> snapshotLoadQuerySplitter;
   private final Option<HoodieIngestionMetrics> metricsOption;
 

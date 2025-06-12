@@ -26,7 +26,6 @@ import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.spark.sql.types.{Decimal, DecimalType, IntegerType, StructField, StructType}
 import org.apache.spark.sql.{DataFrame, Row, SaveMode}
 import org.junit.jupiter.api.Assertions.assertTrue
-import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 
@@ -35,7 +34,6 @@ class TestDecimalTypeDataWorkflow extends SparkClientFunctionalTestHarness{
     HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> "parquet",
     HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key -> classOf[DefaultSparkRecordMerger].getName)
   val fgReaderOpts: Map[String, String] = Map(
-    HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key -> "true",
     HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS.key -> "true")
   val opts = sparkOpts ++ fgReaderOpts
 

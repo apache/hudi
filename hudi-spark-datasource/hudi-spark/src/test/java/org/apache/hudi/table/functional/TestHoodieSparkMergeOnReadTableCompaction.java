@@ -26,7 +26,6 @@ import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
@@ -185,7 +184,7 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
   public void testWriteLogDuringCompaction(boolean enableMetadataTable, boolean enableTimelineServer) throws IOException {
     try {
       //disable for this test because it seems like we process mor in a different order?
-      jsc().hadoopConfiguration().set(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false");
+      jsc().hadoopConfiguration();
       Properties props = getPropertiesForKeyGen(true);
       HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
           .forTable("test-trip-table")
@@ -234,7 +233,7 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
       client.commit(commit4, writeStatuses);
       assertEquals(100, readTableTotalRecordsNum());
     } finally {
-      jsc().hadoopConfiguration().set(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "true");
+      jsc().hadoopConfiguration();
     }
   }
 

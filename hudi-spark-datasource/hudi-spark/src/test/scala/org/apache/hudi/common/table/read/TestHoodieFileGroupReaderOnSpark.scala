@@ -157,14 +157,12 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
 
   @ParameterizedTest
   @MethodSource(Array("customDeleteTestParams"))
-  def testCustomDelete(useFgReader: String,
-                       tableType: String,
+  def testCustomDelete(tableType: String,
                        positionUsed: String,
                        mergeMode: String): Unit = {
     val payloadClass = "org.apache.hudi.common.table.read.CustomPayloadForTesting"
     val fgReaderOpts: Map[String, String] = Map(
       HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key -> "0",
-      HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key -> useFgReader,
       HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS.key -> positionUsed,
       HoodieWriteConfig.RECORD_MERGE_MODE.key -> mergeMode
     )
@@ -347,12 +345,12 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
 object TestHoodieFileGroupReaderOnSpark {
   def customDeleteTestParams(): java.util.List[Arguments] = {
     java.util.Arrays.asList(
-      Arguments.of("true", "MERGE_ON_READ", "false", "EVENT_TIME_ORDERING"),
-      Arguments.of("true", "MERGE_ON_READ", "true", "EVENT_TIME_ORDERING"),
-      Arguments.of("true", "MERGE_ON_READ", "false", "COMMIT_TIME_ORDERING"),
-      Arguments.of("true", "MERGE_ON_READ", "true", "COMMIT_TIME_ORDERING"),
-      Arguments.of("true", "MERGE_ON_READ", "false", "CUSTOM"),
-      Arguments.of("true", "MERGE_ON_READ", "true", "CUSTOM"))
+      Arguments.of("MERGE_ON_READ", "false", "EVENT_TIME_ORDERING"),
+      Arguments.of("MERGE_ON_READ", "true", "EVENT_TIME_ORDERING"),
+      Arguments.of("MERGE_ON_READ", "false", "COMMIT_TIME_ORDERING"),
+      Arguments.of("MERGE_ON_READ", "true", "COMMIT_TIME_ORDERING"),
+      Arguments.of("MERGE_ON_READ", "false", "CUSTOM"),
+      Arguments.of("MERGE_ON_READ", "true", "CUSTOM"))
   }
 
   def getFileCount(metaClient: HoodieTableMetaClient, basePath: String): (Long, Long) = {

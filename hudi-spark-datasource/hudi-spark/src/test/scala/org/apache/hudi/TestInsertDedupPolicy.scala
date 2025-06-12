@@ -58,7 +58,6 @@ class TestInsertDedupPolicy extends SparkClientFunctionalTestHarness {
   def testInsertLogic(tableType: String,
                       dedupPolicy: String): Unit = {
     val fgReaderOpts: Map[String, String] = Map(
-      HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key -> "true",
       HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS.key -> "true",
       HoodieWriteConfig.RECORD_MERGE_MODE.key -> "EVENT_TIME_ORDERING",
       DataSourceWriteOptions.OPERATION.key -> INSERT_OPERATION_OPT_VAL)

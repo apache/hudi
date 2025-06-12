@@ -69,12 +69,10 @@ class TestPartialUpdateAvroPayload extends HoodieClientTestBase {
 
   @ParameterizedTest
   @CsvSource(Array(
-    "COPY_ON_WRITE,false",
-    "MERGE_ON_READ,false",
-    "COPY_ON_WRITE,true",
-    "MERGE_ON_READ,true"
+    "COPY_ON_WRITE",
+    "MERGE_ON_READ"
   ))
-  def testPartialUpdatesAvroPayloadPrecombine(tableType: String, useFileGroupReader: Boolean): Unit = {
+  def testPartialUpdatesAvroPayloadPrecombine(tableType: String): Unit = {
     val hoodieTableType = HoodieTableType.valueOf(tableType)
     val dataGenerator = new QuickstartUtils.DataGenerator()
     val records = convertToStringList(dataGenerator.generateInserts(1))
@@ -127,7 +125,6 @@ class TestPartialUpdateAvroPayload extends HoodieClientTestBase {
       .save(basePath)
 
     val finalDF = spark.read.format("hudi")
-      .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), String.valueOf(useFileGroupReader))
       .load(basePath)
     assertEquals(finalDF.select("rider").collectAsList().get(0).getString(0), upsert1DF.select("rider").collectAsList().get(0).getString(0))
     assertEquals(finalDF.select("driver").collectAsList().get(0).getString(0), upsert2DF.select("driver").collectAsList().get(0).getString(0))

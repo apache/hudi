@@ -1339,7 +1339,6 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
           HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key -> "0",
           DataSourceWriteOptions.ENABLE_MERGE_INTO_PARTIAL_UPDATES.key -> "true",
           HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> logDataBlockFormat,
-          HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key -> "true",
           HoodieClusteringConfig.INLINE_CLUSTERING.key -> "true",
           HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key -> "2",
           HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key -> "id,price") {
