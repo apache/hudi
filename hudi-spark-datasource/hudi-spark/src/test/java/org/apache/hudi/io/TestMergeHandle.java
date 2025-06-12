@@ -21,13 +21,17 @@ package org.apache.hudi.io;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
+import org.apache.hudi.common.engine.LocalTaskContextSupplier;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.metadata.HoodieTableMetadataWriter;
+import org.apache.hudi.metadata.SparkMetadataWriterFactory;
 import org.apache.hudi.table.HoodieSparkCopyOnWriteTable;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.action.commit.HoodieMergeHelper;
@@ -65,7 +69,7 @@ public class TestMergeHandle extends BaseTestHandle {
     // Create a parquet file
     config.setSchema(TRIP_EXAMPLE_SCHEMA);
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[] {partitionPath});
-    Pair<WriteStatus, List<HoodieRecord>> statusListPair = createParquetFile(config, table, partitionPath, fileId, instantTime, dataGenerator);
+    Pair<WriteStatus, List<HoodieRecord>> statusListPair = createParquetFile(config, table, partitionPath, fileId, instantTime, dataGenerator, true);
     WriteStatus writeStatus = statusListPair.getLeft();
     List<HoodieRecord> records = statusListPair.getRight();
     assertEquals(records.size(), writeStatus.getTotalRecords());
@@ -75,6 +79,57 @@ public class TestMergeHandle extends BaseTestHandle {
     List<HoodieRecord> updates = dataGenerator.generateUniqueUpdates(instantTime, 10);
     HoodieMergeHandle mergeHandle = new HoodieMergeHandle(config, instantTime, table, updates.iterator(), partitionPath, fileId, table.getTaskContextSupplier(),
         new HoodieBaseFile(writeStatus.getStat().getPath()), Option.of(new KeyGeneratorForDataGeneratorRecords(config.getProps())));
+    HoodieMergeHelper.newInstance().runMerge(table, mergeHandle);
+    writeStatus = mergeHandle.writeStatus;
+    // verify stats after merge
+    assertEquals(records.size(), writeStatus.getStat().getNumWrites());
+    assertEquals(10, writeStatus.getStat().getNumUpdateWrites());
+  }
+
+  @Test
+  public void testMergeHandleSecondaryIndexStats() throws Exception {
+    // init config and table
+    HoodieWriteConfig config = getConfigBuilder(basePath)
+        .withPopulateMetaFields(false)
+        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder().withRemoteServerPort(timelineServicePort).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .withEnableRecordIndex(true)
+            .withStreamingWriteEnabled(true)
+            .withSecondaryIndexEnabled(true)
+            .withSecondaryIndexName("sec-rider")
+            .withSecondaryIndexForColumn("rider")
+            .build())
+        .withKeyGenerator(KeyGeneratorForDataGeneratorRecords.class.getCanonicalName())
+        .build();
+    HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(config, new HoodieLocalEngineContext(storageConf), metaClient);
+    HoodieTableMetadataWriter metadataWriter = SparkMetadataWriterFactory.create(storageConf, config, context, table.getMetaClient().getTableConfig());
+    metadataWriter.close();
+
+    // one round per partition
+    String partitionPath = HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[0];
+    // init some args
+    String fileId = UUID.randomUUID().toString();
+    String instantTime = "000";
+
+    // Create a parquet file
+    config.setSchema(TRIP_EXAMPLE_SCHEMA);
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    table = (HoodieSparkCopyOnWriteTable) HoodieSparkCopyOnWriteTable.create(config, context, metaClient);
+    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[] {partitionPath});
+
+    Pair<WriteStatus, List<HoodieRecord>> statusListPair = createParquetFile(config, table, partitionPath, fileId, instantTime, dataGenerator, false);
+    WriteStatus writeStatus = statusListPair.getLeft();
+    List<HoodieRecord> records = statusListPair.getRight();
+    assertEquals(records.size(), writeStatus.getTotalRecords());
+    assertEquals(0, writeStatus.getTotalErrorRecords());
+
+    instantTime = "001";
+    List<HoodieRecord> updates = dataGenerator.generateUniqueUpdates(instantTime, 10);
+    HoodieMergeHandle mergeHandle = new HoodieMergeHandle(config, instantTime, table, updates.iterator(), partitionPath, fileId, new LocalTaskContextSupplier(),
+        new HoodieBaseFile(writeStatus.getStat().getPath()), Option.of(new KeyGeneratorForDataGeneratorRecords(config.getProps())));
+//    HoodieMergeHandle mergeHandle = new HoodieMergeHandle(config, instantTime, table, updates.iterator(), partitionPath, fileId, new LocalTaskContextSupplier(),
+//        new HoodieBaseFile(writeStatus.getStat().getPath()), Option.empty());
     HoodieMergeHelper.newInstance().runMerge(table, mergeHandle);
     writeStatus = mergeHandle.writeStatus;
     // verify stats after merge

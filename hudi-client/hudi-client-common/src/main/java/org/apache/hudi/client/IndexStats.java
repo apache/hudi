@@ -49,10 +49,11 @@ public class IndexStats implements Serializable {
   }
 
   public void addSecondaryIndexStats(String secondaryIndexPartitionPath, String recordKey, String secondaryIndexValue, boolean isDeleted) {
-    secondaryIndexStats.get(secondaryIndexPartitionPath).add(new SecondaryIndexStatsTracker(recordKey, secondaryIndexValue, isDeleted));
+    secondaryIndexStats.computeIfAbsent(secondaryIndexPartitionPath, k -> new ArrayList<>())
+        .add(new SecondaryIndexStatsTracker(recordKey, secondaryIndexValue, isDeleted));
   }
 
-  Map<String, List<SecondaryIndexStatsTracker>> getSecondaryIndexStats() {
+  public Map<String, List<SecondaryIndexStatsTracker>> getSecondaryIndexStats() {
     return secondaryIndexStats;
   }
 
