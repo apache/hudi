@@ -28,7 +28,6 @@ import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantGenerator;
@@ -71,19 +70,18 @@ public class HoodieFlinkMergeOnReadTableCompactor<T>
   }
 
   public List<WriteStatus> compact(HoodieCompactionHandler compactionHandler,
-                                   HoodieTableMetaClient metaClient,
                                    HoodieWriteConfig writeConfig,
                                    CompactionOperation operation,
                                    String instantTime,
                                    TaskContextSupplier taskContextSupplier,
                                    Option<HoodieReaderContext<?>> readerContextOpt,
                                    HoodieTable table) throws IOException {
-    String maxInstantTime = getMaxInstantTime(metaClient);
+    String maxInstantTime = getMaxInstantTime(table.getMetaClient());
     if (readerContextOpt.isEmpty()) {
       LOG.info("Compact using legacy compaction, operation: {}.", operation);
       return compact(
           compactionHandler,
-          metaClient,
+          table.getMetaClient(),
           writeConfig,
           operation,
           instantTime,

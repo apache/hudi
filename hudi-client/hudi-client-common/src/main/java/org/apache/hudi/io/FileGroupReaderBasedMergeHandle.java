@@ -58,7 +58,7 @@ import java.util.Map;
 import static org.apache.hudi.common.config.HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS;
 
 /**
- * A base merge handle implementation based on the {@link HoodieFileGroupReader}.
+ * A merge handle implementation based on the {@link HoodieFileGroupReader}.
  * <p>
  * This merge handle is used for compaction, which passes a file slice from the
  * compaction operation of a single file group to a file group reader, get an iterator of
