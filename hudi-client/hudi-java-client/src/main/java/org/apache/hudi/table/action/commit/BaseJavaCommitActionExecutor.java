@@ -21,6 +21,7 @@ package org.apache.hudi.table.action.commit;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -213,7 +214,7 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
     BucketType btype = binfo.bucketType;
     try {
       if (btype.equals(BucketType.INSERT)) {
-        return handleInsert(binfo.fileIdPrefix, recordItr);
+        return handleInsert(binfo.fileIdPrefix, recordItr, Option.empty());
       } else if (btype.equals(BucketType.UPDATE)) {
         return handleUpdate(binfo.partitionPath, binfo.fileIdPrefix, recordItr);
       } else {
@@ -233,7 +234,8 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
 
   @Override
   public Iterator<List<WriteStatus>> handleUpdate(String partitionPath, String fileId,
-                                                  Iterator<HoodieRecord<T>> recordItr)
+                                                  Iterator<HoodieRecord<T>> recordItr,
+                                                  Option<ReaderContextFactory<T>> readerContextFactoryOpt)
       throws IOException {
     // This is needed since sometimes some buckets are never picked in getPartition() and end up with 0 records
     if (!recordItr.hasNext()) {
@@ -266,14 +268,14 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
   }
 
   @Override
-  public Iterator<List<WriteStatus>> handleInsert(String idPfx, Iterator<HoodieRecord<T>> recordItr) {
+  public Iterator<List<WriteStatus>> handleInsert(String idPfx, Iterator<HoodieRecord<T>> recordItr, Option<ReaderContextFactory<T>> readerContextFactoryOpt) {
     // This is needed since sometimes some buckets are never picked in getPartition() and end up with 0 records
     if (!recordItr.hasNext()) {
       LOG.info("Empty partition");
       return Collections.singletonList((List<WriteStatus>) Collections.EMPTY_LIST).iterator();
     }
     return new JavaLazyInsertIterable<>(recordItr, true, config, instantTime, table, idPfx,
-        taskContextSupplier, new CreateHandleFactory<>());
+        taskContextSupplier, new CreateHandleFactory<>(), Option.of(context.getReaderContextFactory(table.getMetaClient())));
   }
 
   /**

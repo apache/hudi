@@ -20,6 +20,7 @@ package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -187,7 +188,8 @@ public abstract class BaseFlinkCommitActionExecutor<T> extends
 
   @Override
   public Iterator<List<WriteStatus>> handleUpdate(String partitionPath, String fileId,
-                                                  Iterator<HoodieRecord<T>> recordItr)
+                                                  Iterator<HoodieRecord<T>> recordItr,
+                                                  Option<ReaderContextFactory<T>> readerContextFactoryOpt)
       throws IOException {
     // This is needed since sometimes some buckets are never picked in getPartition() and end up with 0 records
     HoodieMergeHandle<?, ?, ?, ?> upsertHandle = (HoodieMergeHandle<?, ?, ?, ?>) this.writeHandle;
