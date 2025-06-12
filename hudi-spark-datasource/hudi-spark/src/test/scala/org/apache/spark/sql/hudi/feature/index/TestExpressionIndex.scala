@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.spark.sql.hudi.command.index
+package org.apache.spark.sql.hudi.feature.index
 
 import org.apache.hudi.{DataSourceReadOptions, ExpressionIndexSupport, HoodieFileIndex, HoodieSparkUtils}
 import org.apache.hudi.DataSourceWriteOptions._
