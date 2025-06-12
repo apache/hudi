@@ -470,6 +470,7 @@
               <include>org.apache.hbase.thirdparty:hbase-shaded-miscellaneous</include>
               <include>org.apache.hbase.thirdparty:hbase-shaded-netty</include>
               <include>org.apache.hbase.thirdparty:hbase-shaded-protobuf</include>
+              <include>org.apache.hbase.thirdparty:hbase-shaded-gson</include>
               <include>org.apache.htrace:htrace-core4</include>
               <!-- afterburner module for jackson performance -->
               <include>com.fasterxml.jackson.module:jackson-module-afterburner</include>

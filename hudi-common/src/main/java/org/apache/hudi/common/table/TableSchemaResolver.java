@@ -51,7 +51,6 @@ import org.apache.avro.Schema.Field;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.format.converter.ParquetMetadataConverter;
 import org.apache.parquet.hadoop.ParquetFileReader;
@@ -338,8 +337,7 @@ public class TableSchemaResolver {
     LOG.info("Reading schema from " + hFilePath);
 
     FileSystem fs = metaClient.getRawFs();
-    CacheConfig cacheConfig = new CacheConfig(fs.getConf());
-    try (HoodieAvroHFileReader hFileReader = new HoodieAvroHFileReader(fs.getConf(), hFilePath, cacheConfig)) {
+    try (HoodieAvroHFileReader hFileReader = new HoodieAvroHFileReader(fs.getConf(), hFilePath)) {
       return convertAvroSchemaToParquet(hFileReader.getSchema());
     }
   }
