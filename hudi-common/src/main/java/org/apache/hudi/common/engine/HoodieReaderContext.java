@@ -248,10 +248,13 @@ public abstract class HoodieReaderContext<T> {
    * @param mergeMode        record merge mode
    * @param mergeStrategyId  record merge strategy ID
    * @param mergeImplClasses custom implementation classes for record merging
-   *
+   * @param payloadClassOpt  optional payload class name
    * @return {@link HoodieRecordMerger} to use.
    */
-  public abstract Option<HoodieRecordMerger> getRecordMerger(RecordMergeMode mergeMode, String mergeStrategyId, String mergeImplClasses);
+  public abstract Option<HoodieRecordMerger> getRecordMerger(RecordMergeMode mergeMode,
+                                                             String mergeStrategyId,
+                                                             String mergeImplClasses,
+                                                             Option<String> payloadClassOpt);
 
   /**
    * Gets the field value.

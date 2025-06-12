@@ -67,7 +67,10 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
   }
 
   @Override
-  public Option<HoodieRecordMerger> getRecordMerger(RecordMergeMode mergeMode, String mergeStrategyId, String mergeImplClasses) {
+  public Option<HoodieRecordMerger> getRecordMerger(RecordMergeMode mergeMode,
+                                                    String mergeStrategyId,
+                                                    String mergeImplClasses,
+                                                    Option<String> payloadClassOpt) {
     // TODO(HUDI-7843):
     // get rid of event time and commit time ordering. Just return Option.empty
     switch (mergeMode) {
@@ -78,7 +81,7 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
       case CUSTOM:
       default:
         Option<HoodieRecordMerger> recordMerger = HoodieRecordUtils.createValidRecordMerger(
-            EngineType.SPARK, mergeImplClasses, mergeStrategyId, Option.empty());
+            EngineType.SPARK, mergeImplClasses, mergeStrategyId, payloadClassOpt);
         if (recordMerger.isEmpty()) {
           throw new IllegalArgumentException("No valid spark merger implementation set for `"
               + RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY + "`");
