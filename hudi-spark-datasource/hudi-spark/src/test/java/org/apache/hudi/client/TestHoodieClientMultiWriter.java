@@ -132,7 +132,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
-@Tag("functional-b")
+@Tag("functional")
 public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
   private Properties lockProperties = null;
