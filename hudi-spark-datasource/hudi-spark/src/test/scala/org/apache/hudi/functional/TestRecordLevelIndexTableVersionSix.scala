@@ -23,7 +23,7 @@ import org.apache.hudi.config.HoodieWriteConfig
 
 import org.junit.jupiter.api.Tag
 
-@Tag("functional")
+@Tag("functional-b")
 class TestRecordLevelIndexTableVersionSix extends TestRecordLevelIndex {
   override def commonOpts: Map[String, String] = super.commonOpts ++ Map(
     HoodieTableConfig.VERSION.key() -> "6",

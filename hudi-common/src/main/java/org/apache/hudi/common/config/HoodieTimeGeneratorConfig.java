@@ -47,7 +47,7 @@ public class HoodieTimeGeneratorConfig extends HoodieConfig {
       .defaultValue(200L)
       .withInferFunction(cfg -> {
         if (DEFAULT_LOCK_PROVIDER.equals(cfg.getString(LOCK_PROVIDER_KEY))) {
-          return Option.of(0L);
+          return Option.of(1L);
         }
         return Option.empty();
       })
