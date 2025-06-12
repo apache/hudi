@@ -22,7 +22,6 @@ import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.append.AppendWriteFunction;
-import org.apache.hudi.sink.append.AppendWriteFunctionWithBufferSort;
 import org.apache.hudi.sink.append.AppendWriteFunctions;
 import org.apache.hudi.sink.bulk.BulkInsertWriterHelper;
 import org.apache.hudi.sink.common.AbstractWriteFunction;
@@ -145,15 +144,6 @@ public class InsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
   @Override
   public void endInput() {
     writeFunction.endInput();
-  }
-
-  @Override
-  public void onTimer(long timestamp) throws Exception {
-    if (writeFunction instanceof AppendWriteFunctionWithBufferSort) {
-      AppendWriteFunctionWithBufferSort<RowData> writeFunctionWithBufferSort =
-          (AppendWriteFunctionWithBufferSort<RowData>) writeFunction;
-      writeFunctionWithBufferSort.onTimer(timestamp, null, null);
-    }
   }
 
   public void checkpointComplete(long checkpointId) {

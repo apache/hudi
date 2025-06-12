@@ -27,7 +27,6 @@ import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.append.sort.RowDataComparator;
 
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.streaming.api.functions.ProcessFunction;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.Collector;
@@ -38,7 +37,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.time.Duration;
 
 /**
  * Sink function to write the data to the underneath filesystem with buffer sort
@@ -52,18 +50,14 @@ import java.time.Duration;
  */
 public class AppendWriteFunctionWithBufferSort<T> extends AppendWriteFunction<T> {
   private static final Logger LOG = LoggerFactory.getLogger(AppendWriteFunctionWithBufferSort.class);
-  private final Duration writeTimerInterval;
   private final long writebufferSize;
   private final RowDataComparator rowDataComparator;
   private transient BinaryInMemorySortBuffer buffer;
   private transient MemorySegmentPool memorySegmentPool;
-  private long nextTimer;
 
   public AppendWriteFunctionWithBufferSort(Configuration config, RowType rowType) {
     super(config, rowType);
     this.writebufferSize = config.get(FlinkOptions.WRITE_BUFFER_SIZE);
-    this.writeTimerInterval = config.get(FlinkOptions.WRITE_TIMER_INTERVAL);
-
     String sortKeys = config.get(FlinkOptions.WRITE_BUFFER_SORT_KEYS);
     if (sortKeys == null) {
       throw new IllegalArgumentException("Sort keys can't be null for append write with buffer sort.");
@@ -86,12 +80,6 @@ public class AppendWriteFunctionWithBufferSort<T> extends AppendWriteFunction<T>
     if (buffer.size() >= writebufferSize) {
       sortAndSend();
     }
-
-    // register timer for flush buffers
-    if (nextTimer == 0 && ctx != null && ctx.timerService() != null) {
-      nextTimer = ctx.timerService().currentProcessingTime() + writeTimerInterval.toMillis();
-      ctx.timerService().registerProcessingTimeTimer(nextTimer);
-    }
   }
 
   @Override
@@ -103,27 +91,6 @@ public class AppendWriteFunctionWithBufferSort<T> extends AppendWriteFunction<T>
       throw new FlinkRuntimeException(e);
     }
     super.snapshotState();
-  }
-
-  /**
-   * onTimer trigger of sorting and flushing buffer data. It is to prevent data of small
-   * message per second topics from long delay.
-   *
-   * @param timestamp processing time stamp
-   * @param ctx onTimer context
-   * @param out output collector
-   * @throws IOException
-   */
-  @Override
-  public void onTimer(
-      long timestamp,
-      ProcessFunction<T, Object>.OnTimerContext ctx,
-      Collector<Object> out) throws IOException {
-    sortAndSend();
-    if (ctx != null && ctx.timerService() != null) {
-      nextTimer = ctx.timerService().currentProcessingTime() + writeTimerInterval.toMillis();
-      ctx.timerService().registerProcessingTimeTimer(nextTimer);
-    }
   }
 
   private void sortAndSend() throws IOException {

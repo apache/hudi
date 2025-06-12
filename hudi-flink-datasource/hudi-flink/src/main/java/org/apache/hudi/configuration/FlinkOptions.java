@@ -608,14 +608,6 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("Buffer size of each partition key for append write function.");
 
   @AdvancedConfig
-  public static final ConfigOption<Duration> WRITE_TIMER_INTERVAL = ConfigOptions
-      .key("write.timer.interval")
-      .durationType()
-      .defaultValue(Duration.ofSeconds(10)) // 10 seoncds
-      .withDescription("Write timer interval for append write function.");
-
-
-  @AdvancedConfig
   public static final ConfigOption<Long> WRITE_RATE_LIMIT = ConfigOptions
       .key("write.rate.limit")
       .longType()

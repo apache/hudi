@@ -39,7 +39,6 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
 import java.sql.Timestamp;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -62,7 +61,6 @@ public class ITTestAppendWriteFunctionWithBufferSort extends TestWriteBase {
     this.conf.setString(FlinkOptions.OPERATION, "insert");
     this.conf.setString(FlinkOptions.WRITE_BUFFER_SORT_KEYS, "name,age");
     this.conf.setLong(FlinkOptions.WRITE_BUFFER_SIZE, 100);
-    this.conf.set(FlinkOptions.WRITE_TIMER_INTERVAL, Duration.ofSeconds(1));
 
     // Define the row type with fields: name (STRING), age (INT), partition (STRING)
     List<RowType.RowField> fields = new ArrayList<>();
@@ -94,7 +92,7 @@ public class ITTestAppendWriteFunctionWithBufferSort extends TestWriteBase {
   }
 
   @Test
-  public void testBufferFlushOnTimer() throws Exception {
+  public void testBufferFlushOnCheckpoint() throws Exception {
     // Create test data
     List<RowData> inputData = Arrays.asList(
         createRowData("uuid1", "Bob", 30, "1970-01-01 00:00:01.123", "p1"),
@@ -105,7 +103,7 @@ public class ITTestAppendWriteFunctionWithBufferSort extends TestWriteBase {
     TestWriteBase.TestHarness.instance()
         .preparePipeline(tempFile, conf)
         .consume(inputData)
-        .onTimer(System.currentTimeMillis())
+        .checkpoint(1)
         .endInput();
 
     // Verify data was written
