@@ -47,6 +47,7 @@ import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.util.Lazy;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
@@ -65,8 +66,8 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.avro.HoodieAvroUtils.rewriteRecord;
 import static org.apache.hudi.avro.HoodieAvroUtils.wrapValueIntoAvro;
+import static org.apache.hudi.common.model.HoodieRecord.HOODIE_META_COLUMNS;
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
@@ -383,13 +384,33 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       return Option.empty();
     }
 
-    HoodieMetadataRecord record = new HoodieMetadataRecord(key, type, filesystemMetadata, bloomFilterMetadata,
-        columnStatMetadata, recordIndexMetadata, secondaryIndexMetadata);
     if (schema == null || HoodieMetadataRecord.getClassSchema().equals(schema)) {
       // If the schema is same or none is provided, we can return the record directly
+      HoodieMetadataRecord record = new HoodieMetadataRecord(key, type, filesystemMetadata, bloomFilterMetadata,
+          columnStatMetadata, recordIndexMetadata, secondaryIndexMetadata);
       return Option.of(record);
     } else {
-      return Option.of(rewriteRecord(record, schema));
+      // Otherwise, the assumption is that the schema required contains the metadata fields so we construct a new GenericRecord with these fields
+      GenericData.Record record = new GenericData.Record(schema);
+      int offset = HOODIE_META_COLUMNS.size();
+      record.put(offset, key);
+      record.put(offset + 1, type);
+      if (filesystemMetadata != null) {
+        record.put(offset + 2, filesystemMetadata);
+      }
+      if (bloomFilterMetadata != null) {
+        record.put(offset + 3, bloomFilterMetadata);
+      }
+      if (columnStatMetadata != null) {
+        record.put(offset + 4, columnStatMetadata);
+      }
+      if (recordIndexMetadata != null) {
+        record.put(offset + 5, recordIndexMetadata);
+      }
+      if (secondaryIndexMetadata != null) {
+        record.put(offset + 6, secondaryIndexMetadata);
+      }
+      return Option.of(record);
     }
   }
 
