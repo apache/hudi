@@ -507,6 +507,11 @@ public class HoodieFlinkWriteClient<T>
     return table.getSliceView().getLatestFileSlices(partitionPath).map(FileSlice::getFileId).distinct().collect(Collectors.toList());
   }
 
+  @Override
+  public HoodieFlinkWriteClient<T> createNewClient() {
+    return new HoodieFlinkWriteClient<>(context, config);
+  }
+
   private final class AutoCloseableWriteHandle implements AutoCloseable {
     private final HoodieWriteHandle<?, ?, ?, ?> writeHandle;
 

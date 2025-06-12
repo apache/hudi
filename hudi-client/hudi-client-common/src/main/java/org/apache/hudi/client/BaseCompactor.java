@@ -24,7 +24,7 @@ import java.io.Serializable;
 /**
  * Run one round of compaction.
  */
-public abstract class BaseCompactor<T, I, K, O> implements Serializable {
+public abstract class BaseCompactor<T, I, K, O> implements Serializable, AutoCloseable {
 
   private static final long serialVersionUID = 1L;
 
@@ -40,4 +40,8 @@ public abstract class BaseCompactor<T, I, K, O> implements Serializable {
     this.compactionClient = writeClient;
   }
 
+  @Override
+  public void close() {
+    compactionClient.close();
+  }
 }

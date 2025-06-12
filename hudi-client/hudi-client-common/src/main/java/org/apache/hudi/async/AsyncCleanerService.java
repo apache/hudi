@@ -43,7 +43,7 @@ public class AsyncCleanerService extends HoodieAsyncTableService {
 
   protected AsyncCleanerService(BaseHoodieWriteClient writeClient) {
     super(writeClient.getConfig());
-    this.writeClient = writeClient;
+    this.writeClient = writeClient.createNewClient();
   }
 
   @Override
@@ -81,5 +81,11 @@ public class AsyncCleanerService extends HoodieAsyncTableService {
       LOG.info("Shutting down async clean service...");
       asyncCleanerService.shutdown(true);
     }
+  }
+
+  @Override
+  public void shutdown(boolean force) {
+    super.shutdown(force);
+    writeClient.close();
   }
 }
