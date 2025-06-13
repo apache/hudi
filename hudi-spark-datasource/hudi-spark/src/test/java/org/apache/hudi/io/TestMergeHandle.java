@@ -128,12 +128,14 @@ public class TestMergeHandle extends BaseTestHandle {
     List<HoodieRecord> updates = dataGenerator.generateUniqueUpdates(instantTime, 10);
     HoodieMergeHandle mergeHandle = new HoodieMergeHandle(config, instantTime, table, updates.iterator(), partitionPath, fileId, new LocalTaskContextSupplier(),
         new HoodieBaseFile(writeStatus.getStat().getPath()), Option.of(new KeyGeneratorForDataGeneratorRecords(config.getProps())));
-//    HoodieMergeHandle mergeHandle = new HoodieMergeHandle(config, instantTime, table, updates.iterator(), partitionPath, fileId, new LocalTaskContextSupplier(),
-//        new HoodieBaseFile(writeStatus.getStat().getPath()), Option.empty());
     HoodieMergeHelper.newInstance().runMerge(table, mergeHandle);
     writeStatus = mergeHandle.writeStatus;
     // verify stats after merge
     assertEquals(records.size(), writeStatus.getStat().getNumWrites());
     assertEquals(10, writeStatus.getStat().getNumUpdateWrites());
+    // verify secondary index stats
+    assertEquals(1, writeStatus.getIndexStats().getSecondaryIndexStats().size());
+    // 10 si records for old secondary keys and 10 for new secondary keys
+    assertEquals(20, writeStatus.getIndexStats().getSecondaryIndexStats().values().stream().findFirst().get().size());
   }
 }
