@@ -68,6 +68,7 @@ public class SortedKeyBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupRec
         if (!nextLogRecord.isDelete() || emitDelete) {
           nextRecord = nextLogRecord.getRecord();
           queuedBaseFileRecord = Option.of(baseRecord);
+          readStats.incrementNumInserts();
           return true;
         }
       }
