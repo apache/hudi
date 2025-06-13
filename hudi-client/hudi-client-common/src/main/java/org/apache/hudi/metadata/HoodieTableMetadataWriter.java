@@ -22,8 +22,11 @@ import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieIndexPartitionInfo;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
 
@@ -35,6 +38,48 @@ import java.util.List;
  * Interface that supports updating metadata for a given table, as actions complete.
  */
 public interface HoodieTableMetadataWriter<I,O> extends Serializable, AutoCloseable {
+
+  /**
+   * Starts a new commit in metadata table for streaming write flow.
+   *
+   * @param instantTime The instant time of interest.
+   */
+  void startCommit(String instantTime);
+
+  /**
+   * Prepare records and write to MDT table for all eligible partitions except FILES partition.
+   *
+   * <p>This will be used in streaming writes, where in data table write-statuses are maintained as HoodieData,
+   * prepares records and write to MDT table partitions (except FILES).
+   *
+   * <p>Caution: that no actions should be triggered on the incoming HoodieData&lt;WriteStatus&gt;
+   * and the writes to metadata table. Caller is expected to trigger #collect just once for both set of HoodieData&lt;WriteStatus&gt;.
+   *
+   * @param writeStatus {@link HoodieData} of {@link WriteStatus} from data table writes.
+   * @param instantTime  instant time of interest.
+   *
+   * @return {@link HoodieData} of {@link WriteStatus} for writes to metadata table.
+   */
+  HoodieData<WriteStatus> streamWriteToMetadataPartitions(HoodieData<WriteStatus> writeStatus, String instantTime);
+
+  /**
+   * Completes the multiple commits in streaming writes.
+   *
+   * <p>The streaming writes work flow:
+   *
+   * <ol>
+   *   <li>writes the inputs in data table o all data files;</li>
+   *   <li>update metadata table partitions in {@link #streamWriteToMetadataPartitions};</li>
+   *   <li>finalizes the writes for data table;</li>
+   *   <li>caller invokes this method to update metadata table for other non-streaming enabled partitions(included FILES), and finally completes the commit in metadata table.</li>
+   * </ol>
+   *
+   * @param instantTime       Instant time of interest.
+   * @param context           The engine context {@link HoodieEngineContext}.
+   * @param partialWriteStats List<HoodieWriteStat> for partial/streaming writes to metadata table completed so far.
+   * @param commitMetadata    The data table {@link HoodieCommitMetadata}.
+   */
+  void completeStreamingCommit(String instantTime, HoodieEngineContext context, List<HoodieWriteStat> partialWriteStats, HoodieCommitMetadata commitMetadata);
 
   /**
    * Builds the given metadata partitions to create index.

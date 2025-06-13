@@ -33,6 +33,7 @@ import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -116,7 +117,16 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
                                        HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                        HoodieEngineContext engineContext,
                                        Option<String> inflightInstantTimestamp) {
-    super(hadoopConf, writeConfig, failedWritesCleaningPolicy, engineContext, inflightInstantTimestamp);
+    this(hadoopConf, writeConfig, failedWritesCleaningPolicy, engineContext, inflightInstantTimestamp, false);
+  }
+
+  SparkHoodieBackedTableMetadataWriter(StorageConfiguration<?> hadoopConf,
+                                       HoodieWriteConfig writeConfig,
+                                       HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
+                                       HoodieEngineContext engineContext,
+                                       Option<String> inflightInstantTimestamp,
+                                       boolean streamingWrites) {
+    super(hadoopConf, writeConfig, failedWritesCleaningPolicy, engineContext, inflightInstantTimestamp, streamingWrites);
   }
 
   @Override
@@ -147,7 +157,23 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   @Override
-  protected void bulkInsertAndCommit(BaseHoodieWriteClient<?, JavaRDD<HoodieRecord>, ?, JavaRDD<WriteStatus>> writeClient, String instantTime, JavaRDD<HoodieRecord> preppedRecordInputs,
+  protected HoodieData<WriteStatus> convertEngineSpecificDataToHoodieData(JavaRDD<WriteStatus> records) {
+    return HoodieJavaRDD.of(records);
+  }
+
+  @Override
+  public JavaRDD<WriteStatus> streamWriteToMetadataTable(Pair<List<HoodieFileGroupId>, HoodieData<HoodieRecord>> fileGroupIdToTaggedRecords, String instantTime) {
+    JavaRDD<HoodieRecord> mdtRecords = HoodieJavaRDD.getJavaRDD(fileGroupIdToTaggedRecords.getValue());
+    engineContext.setJobStatus(this.getClass().getSimpleName(), String.format("Upserting with instant %s into metadata table %s", instantTime, metadataWriteConfig.getTableName()));
+    JavaRDD<WriteStatus> metadataWriteStatusesSoFar = getSparkWriteClient(Option.empty()).upsertPreppedRecords(mdtRecords, instantTime, Option.of(
+        fileGroupIdToTaggedRecords.getKey()));
+    return metadataWriteStatusesSoFar;
+  }
+
+  @Override
+  protected void bulkInsertAndCommit(BaseHoodieWriteClient<?, JavaRDD<HoodieRecord>, ?, JavaRDD<WriteStatus>> writeClient,
+                                     String instantTime,
+                                     JavaRDD<HoodieRecord> preppedRecordInputs,
                                      Option<BulkInsertPartitioner> bulkInsertPartitioner) {
     JavaRDD<WriteStatus> writeStatusJavaRDD = writeClient.bulkInsertPreppedRecords(preppedRecordInputs, instantTime, bulkInsertPartitioner);
     writeClient.commit(instantTime, writeStatusJavaRDD, Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap());
@@ -156,6 +182,15 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   @Override
   protected void upsertAndCommit(BaseHoodieWriteClient<?, JavaRDD<HoodieRecord>, ?, JavaRDD<WriteStatus>> writeClient, String instantTime, JavaRDD<HoodieRecord> preppedRecordInputs) {
     JavaRDD<WriteStatus> writeStatusJavaRDD = writeClient.upsertPreppedRecords(preppedRecordInputs, instantTime);
+    writeClient.commit(instantTime, writeStatusJavaRDD, Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap());
+  }
+
+  @Override
+  protected void upsertAndCommit(BaseHoodieWriteClient<?, JavaRDD<HoodieRecord>, ?, JavaRDD<WriteStatus>> writeClient,
+                                 String instantTime,
+                                 JavaRDD<HoodieRecord> preppedRecordInputs,
+                                 List<HoodieFileGroupId> fileGroupsIdsToUpdate) {
+    JavaRDD<WriteStatus> writeStatusJavaRDD = getSparkWriteClient(Option.of(writeClient)).upsertPreppedRecords(preppedRecordInputs, instantTime, Option.of(fileGroupsIdsToUpdate));
     writeClient.commit(instantTime, writeStatusJavaRDD, Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap());
   }
 
@@ -239,6 +274,14 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
       exprIndexRecords = exprIndexRecords.union(expressionIndexComputationMetadata.getPartitionStatRecordsOption().get());
     }
     return exprIndexRecords;
+  }
+
+  protected MetadataIndexGenerator initializeMetadataIndexGenerator() {
+    return new MetadataIndexGenerator();
+  }
+
+  protected SparkRDDMetadataWriteClient getSparkWriteClient(Option<BaseHoodieWriteClient<?, JavaRDD<HoodieRecord>, ?, JavaRDD<WriteStatus>>> writeClientOpt) {
+    return ((SparkRDDMetadataWriteClient) writeClientOpt.orElse(getWriteClient()));
   }
 
   @Override

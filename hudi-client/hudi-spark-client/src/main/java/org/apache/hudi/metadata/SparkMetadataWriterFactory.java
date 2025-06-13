@@ -49,6 +49,11 @@ public class SparkMetadataWriterFactory {
     }
   }
 
+  public static HoodieTableMetadataWriter createWithStreamingWrites(StorageConfiguration<?> conf, HoodieWriteConfig writeConfig, HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
+                                                                    HoodieEngineContext context, Option<String> inflightInstantTimestamp) {
+    return new SparkHoodieBackedTableMetadataWriter(conf, writeConfig, failedWritesCleaningPolicy, context, inflightInstantTimestamp, true);
+  }
+
   public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf, HoodieWriteConfig writeConfig, HoodieEngineContext context, HoodieTableConfig tableConfig) {
     return create(conf, writeConfig, context, Option.empty(), tableConfig);
   }
