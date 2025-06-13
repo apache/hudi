@@ -1163,6 +1163,14 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     throw new UnsupportedOperationException("Not yet implemented");
   }
 
+  /**
+   * Upsert the prepped records to metadata table as a batch. This is expected to be invoked only when streaming writes to metadata table is enabled.
+   * When enabled, first call has to be made to {@link #streamWriteToMetadataTable(Pair, String)} and second call will be made to this method for non streaming metadata
+   * partitions.
+   * @param preppedRecords Prepped records that needs to be ingested.
+   * @param instantTime instant time of interest.
+   * @return Engine specific HoodieData of {@link WriteStatus} for the writes to metadata table.
+   */
   public O batchWriteToMetadataTablePartitions(I preppedRecords, String instantTime) {
     throw new UnsupportedOperationException("Not yet implemented");
   }

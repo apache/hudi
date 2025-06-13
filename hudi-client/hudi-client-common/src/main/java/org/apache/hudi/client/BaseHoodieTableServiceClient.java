@@ -343,6 +343,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
 
   /**
    * The API triggers the data write and fetches the corresponding write stats using the write metadata.
+   * When streaming writes to metadata table is enabled, writes to metadata table is expected to be triggered here and the List of {@link HoodieWriteStat} to be returned
+   * as part of this call.
    */
   protected abstract Pair<List<HoodieWriteStat>, List<HoodieWriteStat>> triggerWritesAndFetchWriteStats(HoodieWriteMetadata<O> writeMetadata);
 
@@ -385,12 +387,12 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
 
   public void commitLogCompaction(String compactionInstantTime, HoodieWriteMetadata<O> writeMetadata, Option<HoodieTable> tableOpt) {
     // dereferencing the write dag for log compaction for the first time.
-    Pair<List<HoodieWriteStat>, List<HoodieWriteStat>> dataTableAndMetadataTableHoodieWriteStats = triggerWritesAndFetchWriteStats(writeMetadata);
+    Pair<List<HoodieWriteStat>, List<HoodieWriteStat>> dataAndMetadataHoodieWriteStats = triggerWritesAndFetchWriteStats(writeMetadata);
     // fetch HoodieCommitMetadata and update HoodieWriteStat
-    CommonClientUtils.stitchCompactionHoodieWriteStats(writeMetadata, dataTableAndMetadataTableHoodieWriteStats.getKey());
+    CommonClientUtils.stitchCompactionHoodieWriteStats(writeMetadata, dataAndMetadataHoodieWriteStats.getKey());
     metrics.emitCompactionCompleted();
     HoodieTable table = tableOpt.orElseGet(() -> createTable(config, context.getStorageConf()));
-    completeLogCompaction(writeMetadata.getCommitMetadata().get(), table, compactionInstantTime, dataTableAndMetadataTableHoodieWriteStats.getValue());
+    completeLogCompaction(writeMetadata.getCommitMetadata().get(), table, compactionInstantTime, dataAndMetadataHoodieWriteStats.getValue());
   }
   
   /**

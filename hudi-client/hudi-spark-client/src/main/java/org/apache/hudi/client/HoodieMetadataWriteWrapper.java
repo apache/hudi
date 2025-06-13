@@ -56,8 +56,6 @@ public class HoodieMetadataWriteWrapper {
     }
   }
 
-  // to be invoked by write client or table service client.
-
   /**
    * To be invoked by write client or table service client to write to metadata table.
    * When streaming writes are enabled, writes to left over metadata partitions which was not covered in {@link #streamWriteToMetadataTable(HoodieTable, HoodieData, String)}
@@ -70,19 +68,6 @@ public class HoodieMetadataWriteWrapper {
    */
   public void writeToMetadataTable(HoodieTable table, String instantTime,
                                    HoodieCommitMetadata metadata, List<HoodieWriteStat> metadataWriteStatsSoFar) {
-    writeToMetadataTable(table, instantTime, metadataWriteStatsSoFar, metadata);
-  }
-
-  private HoodieData<WriteStatus> streamWriteToMetadataTable(HoodieData<WriteStatus> dtWriteStatuses, Option<HoodieTableMetadataWriter> metadataWriterOpt,
-                                                             HoodieTable table, String instantTime) {
-    HoodieData<WriteStatus> allWriteStatus = dtWriteStatuses;
-    HoodieData<WriteStatus> mdtWriteStatuses = metadataWriterOpt.get().streamWriteToMetadataPartitions(dtWriteStatuses, instantTime);
-    allWriteStatus = allWriteStatus.union(mdtWriteStatuses);
-    allWriteStatus.persist("MEMORY_AND_DISK_SER", table.getContext(), HoodieData.HoodieDataCacheKey.of(table.getMetaClient().getBasePath().toString(), instantTime));
-    return allWriteStatus;
-  }
-
-  private void writeToMetadataTable(HoodieTable table, String instantTime, List<HoodieWriteStat> metadataWriteStatsSoFar, HoodieCommitMetadata metadata) {
     Option<HoodieTableMetadataWriter> metadataWriterOpt = getMetadataWriter(instantTime, table);
     if (metadataWriterOpt.isPresent()) {
       try {
@@ -94,6 +79,15 @@ public class HoodieMetadataWriteWrapper {
     } else {
       throw new HoodieException("Should not be reachable. Metadata Writer should have been instantiated by now");
     }
+  }
+
+  private HoodieData<WriteStatus> streamWriteToMetadataTable(HoodieData<WriteStatus> dtWriteStatuses, Option<HoodieTableMetadataWriter> metadataWriterOpt,
+                                                             HoodieTable table, String instantTime) {
+    HoodieData<WriteStatus> allWriteStatus = dtWriteStatuses;
+    HoodieData<WriteStatus> mdtWriteStatuses = metadataWriterOpt.get().streamWriteToMetadataPartitions(dtWriteStatuses, instantTime);
+    allWriteStatus = allWriteStatus.union(mdtWriteStatuses);
+    allWriteStatus.persist("MEMORY_AND_DISK_SER", table.getContext(), HoodieData.HoodieDataCacheKey.of(table.getMetaClient().getBasePath().toString(), instantTime));
+    return allWriteStatus;
   }
 
   private void closeMetadataWriter(HoodieTableMetadataWriter metadataWriter) {
