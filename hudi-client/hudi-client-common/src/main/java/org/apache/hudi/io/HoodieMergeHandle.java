@@ -326,7 +326,8 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     return writeRecord(newRecord, Option.empty(), combineRecord, schema, prop, false);
   }
 
-  private boolean writeRecord(HoodieRecord<T> newRecord, Option<HoodieRecord<T>> oldRecordOpt, Option<HoodieRecord> combineRecord, Schema schema, Properties prop, boolean isDelete) throws IOException {
+  private boolean writeRecord(HoodieRecord<T> newRecord, Option<HoodieRecord<T>> oldRecordOpt, Option<HoodieRecord> combineRecord, Schema schema, Properties prop,
+                              boolean isDelete) throws IOException {
     Option recordMetadata = newRecord.getMetadata();
     if (!partitionPath.equals(newRecord.getPartitionPath())) {
       HoodieUpsertException failureEx = new HoodieUpsertException("mismatched partition path, record partition: "
@@ -340,15 +341,15 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
         boolean decision = recordMerger.shouldFlush(combineRecord.get(), schema, config.getProps());
 
         if (decision) { // CASE (1): Flush the merged record.
-          trackMetadataIndexStats(combineRecord.get(), oldRecordOpt, false);
+          trackMetadataIndexStats(Option.of(newRecord.getKey()), combineRecord, oldRecordOpt, false);
           writeToFile(newRecord.getKey(), combineRecord.get(), schema, prop, preserveMetadata);
           recordsWritten++;
         } else {  // CASE (2): A delete operation.
-          trackMetadataIndexStats(combineRecord.get(), oldRecordOpt, true);
+          trackMetadataIndexStats(Option.empty(), combineRecord, oldRecordOpt, true);
           recordsDeleted++;
         }
       } else {
-        trackMetadataIndexStats(combineRecord.get(), oldRecordOpt, true);
+        trackMetadataIndexStats(Option.empty(), combineRecord, oldRecordOpt, true);
         recordsDeleted++;
         // Clear the new location as the record was deleted
         newRecord.unseal();
@@ -457,22 +458,29 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     return record.prependMetaFields(schema, targetSchema, metadataValues, prop);
   }
 
-  private void trackMetadataIndexStats(HoodieRecord<T> newRecord, Option<HoodieRecord<T>> oldRecordOpt, boolean isDelete) {
+  private void trackMetadataIndexStats(Option<HoodieKey> hoodieKeyOpt, Option<HoodieRecord> combinedRecordOpt, Option<HoodieRecord<T>> oldRecordOpt, boolean isDelete) {
     if (!config.isSecondaryIndexEnabled() || secondaryIndexFields.isEmpty() || !config.isMetadataStreamingWritesEnabled(hoodieTable.getMetaClient().getTableConfig().getTableVersion())) {
       return;
     }
     secondaryIndexFields.forEach(secondaryIndexPartitionPathFieldPair -> {
-      if (newRecord instanceof HoodieAvroIndexedRecord && !isDelete) {
-        Object secondaryKey = ((GenericRecord)((HoodieAvroIndexedRecord) newRecord).getData()).get(secondaryIndexPartitionPathFieldPair.getValue());
-        if (secondaryKey != null) {
-          writeStatus.getIndexStats().addSecondaryIndexStats(secondaryIndexPartitionPathFieldPair.getKey(), newRecord.getRecordKey(), secondaryKey.toString(), false);
+      try {
+        if (combinedRecordOpt.isPresent() && combinedRecordOpt.get() instanceof HoodieAvroIndexedRecord && !isDelete) {
+          GenericRecord genericRecord = ((GenericRecord) ((HoodieAvroIndexedRecord) combinedRecordOpt.get()).getData());
+          Object secondaryKey = (genericRecord).get(secondaryIndexPartitionPathFieldPair.getValue());
+          if (secondaryKey != null) {
+            String recordKey = hoodieKeyOpt.map(hoodieKey -> hoodieKey.getRecordKey()).orElseGet(() -> combinedRecordOpt.get().getRecordKey());
+            writeStatus.getIndexStats().addSecondaryIndexStats(secondaryIndexPartitionPathFieldPair.getKey(), recordKey, secondaryKey.toString(), false);
+          }
         }
+      } catch (NullPointerException npe) {
+        System.out.println("adsfa");
       }
       if (oldRecordOpt.isPresent() && oldRecordOpt.get() instanceof HoodieAvroIndexedRecord) {
         HoodieRecord<T> oldRecord = oldRecordOpt.get();
         Object secondaryKey = ((GenericRecord)((HoodieAvroIndexedRecord) oldRecord).getData()).get(secondaryIndexPartitionPathFieldPair.getValue());
         if (secondaryKey != null) {
-          writeStatus.getIndexStats().addSecondaryIndexStats(secondaryIndexPartitionPathFieldPair.getKey(), oldRecord.getRecordKey(), secondaryKey.toString(), true);
+          String recordKey = hoodieKeyOpt.map(hoodieKey -> hoodieKey.getRecordKey()).orElseGet(() -> oldRecord.getRecordKey());
+          writeStatus.getIndexStats().addSecondaryIndexStats(secondaryIndexPartitionPathFieldPair.getKey(), recordKey, secondaryKey.toString(), true);
         }
       }
 
