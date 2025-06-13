@@ -44,7 +44,7 @@ public class IndexStats implements Serializable {
     return writtenRecordDelegates;
   }
 
-  void instantiateSecondaryIndexStatsForIndex(String secondaryIndexPartitionPath) {
+  public void instantiateSecondaryIndexStatsForIndex(String secondaryIndexPartitionPath) {
     secondaryIndexStats.put(secondaryIndexPartitionPath, new ArrayList<>());
   }
 
