@@ -20,7 +20,6 @@ package org.apache.hudi.io;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
@@ -68,8 +67,6 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   private Map<String, HoodieRecord<T>> recordMap;
   private boolean useWriterSchema = false;
   private boolean preserveMetadata;
-  private final Option<HoodieReaderContext<T>> readerContextOpt;
-  //private List<Pair<String, String>> secondaryIndexFields = Collections.emptyList();
 
   public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                             String partitionPath, String fileId, TaskContextSupplier taskContextSupplier) {
@@ -188,6 +185,8 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     if (!config.isSecondaryIndexEnabled() || secondaryIndexFields.isEmpty() || !config.isMetadataStreamingWritesEnabled(hoodieTable.getMetaClient().getTableConfig().getTableVersion())) {
       return;
     }
+
+    // Add secondary index records for all the inserted records
     secondaryIndexFields.forEach(secondaryIndexPartitionPathFieldPair -> {
       if (record instanceof HoodieAvroIndexedRecord) {
         Object secondaryKey = ((GenericRecord)((HoodieAvroIndexedRecord) record).getData()).get(secondaryIndexPartitionPathFieldPair.getValue());
@@ -195,11 +194,6 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
           writeStatus.getIndexStats().addSecondaryIndexStats(secondaryIndexPartitionPathFieldPair.getKey(), record.getRecordKey(), secondaryKey.toString(), false);
         }
       }
-
-      /*Object secondaryKey = readerContextOpt.get().getValue((T) record, writeSchemaWithMetaFields, secondaryIndexPartitionPathFieldPair.getValue());
-      if (secondaryKey != null) {
-        writeStatus.getIndexStats().addSecondaryIndexStats(secondaryIndexPartitionPathFieldPair.getKey(), record.getRecordKey(), secondaryKey.toString(), false);
-      }*/
     });
   }
 
