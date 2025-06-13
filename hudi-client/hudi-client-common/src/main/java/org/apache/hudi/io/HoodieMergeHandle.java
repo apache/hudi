@@ -481,8 +481,8 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       }
       if (shouldUpdate) {
         String recordKey = hoodieKeyOpt.map(HoodieKey::getRecordKey)
-            .or(oldRecordOpt.map(HoodieRecord::getRecordKey))
-            .or(combinedRecordOpt.map(HoodieRecord::getRecordKey))
+            .or(() -> oldRecordOpt.map(HoodieRecord::getRecordKey))
+            .or(() -> combinedRecordOpt.map(HoodieRecord::getRecordKey))
             .get();
         // Add secondary index delete records for old records
         oldSecondaryKeyOpt.ifPresent(secKey -> addSecondaryIndexStat(secondaryIndexPartitionPathFieldPair, recordKey, secKey, true));
