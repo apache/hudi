@@ -238,3 +238,4 @@ class TestShowInvalidParquetProcedure extends HoodieSparkProcedureTestBase {
     }
   }
 }
+
