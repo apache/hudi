@@ -463,32 +463,43 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       return;
     }
     secondaryIndexFields.forEach(secondaryIndexPartitionPathFieldPair -> {
-      try {
-        if (combinedRecordOpt.isPresent() && combinedRecordOpt.get() instanceof HoodieAvroIndexedRecord && !isDelete) {
-          GenericRecord genericRecord = ((GenericRecord) ((HoodieAvroIndexedRecord) combinedRecordOpt.get()).getData());
-          Object secondaryKey = (genericRecord).get(secondaryIndexPartitionPathFieldPair.getValue());
-          if (secondaryKey != null) {
-            String recordKey = hoodieKeyOpt.map(hoodieKey -> hoodieKey.getRecordKey()).orElseGet(() -> combinedRecordOpt.get().getRecordKey());
-            writeStatus.getIndexStats().addSecondaryIndexStats(secondaryIndexPartitionPathFieldPair.getKey(), recordKey, secondaryKey.toString(), false);
-          }
-        }
-      } catch (NullPointerException npe) {
-        System.out.println("adsfa");
-      }
+      Option<Object> oldSecondaryKeyOpt = Option.empty();
+      Option<Object> newSecondaryKeyOpt = Option.empty();
       if (oldRecordOpt.isPresent() && oldRecordOpt.get() instanceof HoodieAvroIndexedRecord) {
         HoodieRecord<T> oldRecord = oldRecordOpt.get();
-        Object secondaryKey = ((GenericRecord)((HoodieAvroIndexedRecord) oldRecord).getData()).get(secondaryIndexPartitionPathFieldPair.getValue());
-        if (secondaryKey != null) {
-          String recordKey = hoodieKeyOpt.map(hoodieKey -> hoodieKey.getRecordKey()).orElseGet(() -> oldRecord.getRecordKey());
-          writeStatus.getIndexStats().addSecondaryIndexStats(secondaryIndexPartitionPathFieldPair.getKey(), recordKey, secondaryKey.toString(), true);
+        Object oldSecondaryKey = ((GenericRecord)((HoodieAvroIndexedRecord) oldRecord).getData()).get(secondaryIndexPartitionPathFieldPair.getValue());
+        if (oldSecondaryKey != null) {
+          oldSecondaryKeyOpt = Option.of(oldSecondaryKey);
         }
       }
 
-      /*Object secondaryKey = readerContextOpt.get().getValue((T) record, writeSchemaWithMetaFields, secondaryIndexPartitionPathFieldPair.getValue());
-      if (secondaryKey != null) {
-        writeStatus.getIndexStats().addSecondaryIndexStats(secondaryIndexPartitionPathFieldPair.getKey(), record.getRecordKey(), secondaryKey.toString(), false);
-      }*/
+      if (combinedRecordOpt.isPresent() && combinedRecordOpt.get() instanceof HoodieAvroIndexedRecord && !isDelete) {
+        GenericRecord genericRecord = ((GenericRecord) ((HoodieAvroIndexedRecord) combinedRecordOpt.get()).getData());
+        Object secondaryKey = (genericRecord).get(secondaryIndexPartitionPathFieldPair.getValue());
+        if (secondaryKey != null) {
+          newSecondaryKeyOpt = Option.of(secondaryKey);
+        }
+      }
+
+      boolean shouldUpdate = true;
+      if (oldSecondaryKeyOpt.isPresent() && newSecondaryKeyOpt.isPresent()) {
+        // If new secondary key is different from old secondary key, update secondary index records
+        shouldUpdate = !oldSecondaryKeyOpt.get().equals(newSecondaryKeyOpt.get());
+      }
+      if (shouldUpdate) {
+        String recordKey = hoodieKeyOpt.map(HoodieKey::getRecordKey)
+            .or(oldRecordOpt.map(HoodieRecord::getRecordKey))
+            .or(combinedRecordOpt.map(HoodieRecord::getRecordKey))
+            .get();
+        // Add secondary index delete records for old records
+        oldSecondaryKeyOpt.ifPresent(secKey -> addSecondaryIndexStat(secondaryIndexPartitionPathFieldPair, recordKey, secKey, true));
+        newSecondaryKeyOpt.ifPresent(secKey -> addSecondaryIndexStat(secondaryIndexPartitionPathFieldPair, recordKey, secKey, false));
+      }
     });
+  }
+
+  private void addSecondaryIndexStat(Pair<String, String> secondaryIndexPartitionPathFieldPair, String recordKey, Object secKey, boolean isDeleted) {
+    writeStatus.getIndexStats().addSecondaryIndexStats(secondaryIndexPartitionPathFieldPair.getKey(), recordKey, secKey.toString(), isDeleted);
   }
 
   @Override

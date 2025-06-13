@@ -1233,19 +1233,13 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
         fileSlices.stream().forEach(fileSlice -> {
           updatedMDTFileGroupIds.add(fileSlice.getFileGroupId());
         });
-        if (fileGroupCount == 0) {
-          System.out.println("adfa");
-        }
-        //ValidationUtils.checkArgument(fileGroupCount > 0, String.format("FileGroup count for MDT partition %s should be > 0", partitionName));
+        ValidationUtils.checkArgument(fileGroupCount > 0, String.format("FileGroup count for MDT partition %s should be > 0", partitionName));
       });
     }
 
     HoodieData<HoodieRecord> taggedMdtRecords = untaggedMdtRecords.map(mdtRecord -> {
       String mdtPartition = mdtRecord.getPartitionPath();
       List<FileSlice> latestFileSlices = mdtPartitionLatestFileSlices.get(mdtPartition);
-      if (latestFileSlices == null || latestFileSlices.isEmpty()) {
-        System.out.println("adfasd");
-      }
       FileSlice slice = latestFileSlices.get(HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(mdtRecord.getRecordKey(),
           latestFileSlices.size()));
       mdtRecord.unseal();

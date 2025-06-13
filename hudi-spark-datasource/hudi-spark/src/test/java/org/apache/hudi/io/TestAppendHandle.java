@@ -149,6 +149,8 @@ public class TestAppendHandle extends BaseTestHandle {
     // validate write status has all record delegates
     if (populateMetaFields) {
       assertEquals(1, writeStatus.getIndexStats().getSecondaryIndexStats().size());
+      // Since the MDT is not populated during the create, the updates would be considered as new records by the Append handle
+      // Therefore only secondary index records for the 50 updates would appear here
       assertEquals(50, writeStatus.getIndexStats().getSecondaryIndexStats().values().stream().findFirst().get().size());
     }
   }

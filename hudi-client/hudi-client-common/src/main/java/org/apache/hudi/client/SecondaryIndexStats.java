@@ -18,17 +18,17 @@
 
 package org.apache.hudi.client;
 
-public class SecondaryIndexStatsTracker {
+/**
+ * Class is used to hold secondary index metadata updates. These updates are generated from
+ * various write handles during write.
+ */
+public class SecondaryIndexStats {
 
   private String recordKey;
   private String secondaryKeyValue;
   private boolean isDeleted;
 
-  public SecondaryIndexStatsTracker(String recordKey, String secondaryKeyValue) {
-    this(recordKey, secondaryKeyValue, false);
-  }
-
-  public SecondaryIndexStatsTracker(String recordKey, String secondaryKeyValue, boolean isDeleted) {
+  public SecondaryIndexStats(String recordKey, String secondaryKeyValue, boolean isDeleted) {
     this.recordKey = recordKey;
     this.secondaryKeyValue = secondaryKeyValue;
     this.isDeleted = isDeleted;

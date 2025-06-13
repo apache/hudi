@@ -18,7 +18,7 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.hudi.client.SecondaryIndexStatsTracker;
+import org.apache.hudi.client.SecondaryIndexStats;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -124,10 +124,10 @@ public class MetadataIndexGenerator implements Serializable {
 
   protected static List<HoodieRecord> processWriteStatusForSecondaryIndex(WriteStatus writeStatus) {
     List<HoodieRecord> secondaryIndexRecords = new ArrayList<>(writeStatus.getIndexStats().getSecondaryIndexStats().size());
-    for (Map.Entry<String, List<SecondaryIndexStatsTracker>> entry : writeStatus.getIndexStats().getSecondaryIndexStats().entrySet()) {
+    for (Map.Entry<String, List<SecondaryIndexStats>> entry : writeStatus.getIndexStats().getSecondaryIndexStats().entrySet()) {
       String indexPartitionName = entry.getKey();
-      List<SecondaryIndexStatsTracker> secondaryIndexStats = entry.getValue();
-      for (SecondaryIndexStatsTracker stat : secondaryIndexStats) {
+      List<SecondaryIndexStats> secondaryIndexStats = entry.getValue();
+      for (SecondaryIndexStats stat : secondaryIndexStats) {
         secondaryIndexRecords.add(HoodieMetadataPayload.createSecondaryIndexRecord(stat.getRecordKey(), stat.getSecondaryKeyValue(), indexPartitionName, stat.isDeleted()));
       }
     }
