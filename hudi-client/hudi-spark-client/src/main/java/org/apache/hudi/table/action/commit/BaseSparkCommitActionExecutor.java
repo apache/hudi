@@ -20,6 +20,7 @@ package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.clustering.update.strategy.SparkAllowUpdateStrategy;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.client.utils.SparkValidatorUtils;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
@@ -137,9 +138,17 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
           .map(Map.Entry::getValue)
           .collect(Collectors.toSet());
       pendingClusteringInstantsToRollback.forEach(instant -> {
-        String commitTime = table.getMetaClient().createNewInstantTime();
-        table.scheduleRollback(context, commitTime, instant, false, config.shouldRollbackUsingMarkers(), false);
-        table.rollback(context, commitTime, instant, true, true);
+        try (TransactionManager transactionManager = new TransactionManager(table.getConfig(), table.getStorage())) {
+          transactionManager.beginStateChange(Option.empty(), Option.empty());
+          String commitTime;
+          try {
+            commitTime = table.getMetaClient().createNewInstantTime(false);
+            table.scheduleRollback(context, commitTime, instant, false, config.shouldRollbackUsingMarkers(), false);
+          } finally {
+            transactionManager.endStateChange(Option.empty());
+          }
+          table.rollback(context, commitTime, instant, true, true);
+        }
       });
       table.getMetaClient().reloadActiveTimeline();
     }

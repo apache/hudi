@@ -1860,14 +1860,16 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
         }
         if (firstClusteringState == HoodieInstant.State.REQUESTED.name()) {
           val table = HoodieSparkTable.create(writeConfig, context)
-          table.rollbackInflightClustering(
-            metaClient.getActiveTimeline.getLastClusteringInstant.get,
-            new java.util.function.Function[String, Option[HoodiePendingRollbackInfo]] {
-              override def apply(commitToRollback: String): Option[HoodiePendingRollbackInfo] = {
-                new SparkRDDWriteClient(context, writeConfig).getTableServiceClient
-                  .getPendingRollbackInfo(table.getMetaClient, commitToRollback, false)
-              }
-            })
+          val client = new SparkRDDWriteClient(context, writeConfig)
+          try {
+            table.rollbackInflightClustering(
+              metaClient.getActiveTimeline.getLastClusteringInstant.get,
+              (commitToRollback: String) => {
+                client.getTableServiceClient.getPendingRollbackInfo(table.getMetaClient, commitToRollback, false)
+              }, client.getTransactionManager)
+          } finally {
+            client.close()
+          }
           val requestedClustering = metaClient.reloadActiveTimeline.getCommitsTimeline.lastInstant.get
           assertTrue(requestedClustering.isRequested)
           assertEquals(
