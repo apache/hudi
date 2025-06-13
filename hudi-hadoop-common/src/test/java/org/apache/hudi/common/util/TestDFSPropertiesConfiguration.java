@@ -214,8 +214,8 @@ public class TestDFSPropertiesConfiguration {
     // Use default ctor (hadoopConfig should be non-null internally)
     DFSPropertiesConfiguration cfg = new DFSPropertiesConfiguration();
 
-    // Should load t3.props (which includes t2.props → t1.props) without NPE
-    cfg.addPropsFromFile(new Path(dfsBasePath + "/t3.props"));
+    // Should load t3.props (which includes t2.props which includes t1.props) without NPE
+    cfg.addPropsFromFile(new StoragePath(dfsBasePath + "/t3.props"));
     TypedProperties props = cfg.getProps();
 
     // Values from t1, t2 and t3 should be resolved in order
@@ -225,9 +225,9 @@ public class TestDFSPropertiesConfiguration {
     assertEquals("t3.value", props.getString("string.prop"));
     assertEquals(1354354354L, props.getLong("long.prop"));
 
-    // And a self-include still triggers the loop-detection
+    // And a self include still triggers the loop detection
     assertThrows(IllegalStateException.class, () -> {
-      cfg.addPropsFromFile(new Path(dfsBasePath + "/t4.props"));
+      cfg.addPropsFromFile(new StoragePath(dfsBasePath + "/t4.props"));
     });
   }
 }
