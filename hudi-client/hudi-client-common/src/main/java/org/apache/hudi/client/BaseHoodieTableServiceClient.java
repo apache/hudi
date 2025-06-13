@@ -719,17 +719,13 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
   }
 
   HoodieInstant startDeletePartitionCommit(HoodieTableMetaClient metaClient) {
-    txnManager.beginStateChange(Option.empty(), Option.empty());
-    try {
-      String instantTime = createNewInstantTime(false);
+    return txnManager.runInLock(instantTime -> {
       HoodieInstant dropPartitionsInstant = metaClient.getInstantGenerator().createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime);
       HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
           .setOperationType(WriteOperationType.DELETE_PARTITION.name()).setExtraMetadata(Collections.emptyMap()).build();
       metaClient.getActiveTimeline().saveToPendingReplaceCommit(dropPartitionsInstant, requestedReplaceMetadata);
       return dropPartitionsInstant;
-    } finally {
-      txnManager.endStateChange(Option.empty());
-    }
+    });
   }
 
   protected HoodieTable createTableAndValidate(HoodieWriteConfig config,
