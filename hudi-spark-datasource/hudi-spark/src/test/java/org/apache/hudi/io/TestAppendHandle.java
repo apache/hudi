@@ -23,9 +23,12 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordDelegate;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.metadata.HoodieTableMetadataWriter;
+import org.apache.hudi.metadata.SparkMetadataWriterFactory;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 
@@ -92,6 +95,61 @@ public class TestAppendHandle extends BaseTestHandle {
         assertEquals(fileId, recordDelegate.getNewLocation().get().getFileId());
         assertEquals(instantTime, recordDelegate.getNewLocation().get().getInstantTime());
       }
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = { true, false })
+  public void testAppendHandleSecondaryIndexStats(boolean populateMetaFields) throws Exception {
+    // init config and table
+    HoodieWriteConfig config = getConfigBuilder(basePath)
+        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder().withRemoteServerPort(timelineServicePort).build())
+        .withPopulateMetaFields(populateMetaFields)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .withEnableRecordIndex(true)
+            .withStreamingWriteEnabled(true)
+            .withSecondaryIndexEnabled(true)
+            .withSecondaryIndexName("sec-rider")
+            .withSecondaryIndexForColumn("rider")
+            .build())
+        .build();
+
+    HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
+    HoodieTableMetadataWriter metadataWriter = SparkMetadataWriterFactory.create(storageConf, config, context, table.getMetaClient().getTableConfig());
+    metadataWriter.close();
+
+    // one round per partition
+    String partitionPath = HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[0];
+    // init some args
+    String fileId = UUID.randomUUID().toString();
+    String instantTime = "000";
+
+    config.setSchema(TRIP_EXAMPLE_SCHEMA);
+    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[] {partitionPath});
+    // create parquet file
+    createParquetFile(config, table, partitionPath, fileId, instantTime, dataGenerator, true);
+    // generate update records
+    instantTime = "001";
+    List<HoodieRecord> records = dataGenerator.generateUniqueUpdates(instantTime, 50);
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    table = HoodieSparkTable.create(config, context, metaClient);
+    HoodieAppendHandle handle = new HoodieAppendHandle(config, instantTime, table, partitionPath, fileId, records.iterator(), new LocalTaskContextSupplier());
+    Map<String, HoodieRecord> recordMap = new HashMap<>();
+    for (int i = 0; i < records.size(); i++) {
+      recordMap.put(String.valueOf(i), records.get(i));
+    }
+    // write the update records
+    handle.write(recordMap);
+    WriteStatus writeStatus = handle.writeStatus;
+    handle.close();
+
+    assertEquals(records.size(), writeStatus.getTotalRecords());
+    assertEquals(0, writeStatus.getTotalErrorRecords());
+    // validate write status has all record delegates
+    if (populateMetaFields) {
+      assertEquals(1, writeStatus.getIndexStats().getSecondaryIndexStats().size());
+      assertEquals(50, writeStatus.getIndexStats().getSecondaryIndexStats().values().stream().findFirst().get().size());
     }
   }
 }
