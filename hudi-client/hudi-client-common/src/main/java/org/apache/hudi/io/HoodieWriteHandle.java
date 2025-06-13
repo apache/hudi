@@ -126,6 +126,9 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
           .filter(mdtPartition -> mdtPartition.startsWith(PARTITION_NAME_SECONDARY_INDEX_PREFIX))
           .map(mdtPartitionPath -> Pair.of(mdtPartitionPath, String.join(".", HoodieTableMetadataUtil.getHoodieIndexDefinition(mdtPartitionPath, hoodieTable.getMetaClient()).getSourceFields())))
           .collect(Collectors.toList());
+      if (!secondaryIndexFields.isEmpty()) {
+        secondaryIndexFields.forEach(secondaryIndexField -> writeStatus.getIndexStats().instantiateSecondaryIndexStatsForIndex(secondaryIndexField.getKey()));
+      }
     }
   }
 

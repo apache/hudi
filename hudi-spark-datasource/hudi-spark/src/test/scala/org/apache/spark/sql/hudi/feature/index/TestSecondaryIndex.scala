@@ -55,7 +55,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
     PRECOMBINE_FIELD.key -> "timestamp",
     HoodieClusteringConfig.INLINE_CLUSTERING.key -> "true",
     HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key -> "4",
-    HoodieCompactionConfig.INLINE_COMPACT.key() -> "true",
+    HoodieCompactionConfig.INLINE_COMPACT.key() -> "false",
     HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key() -> "3",
     HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key() -> "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload",
     DataSourceWriteOptions.RECORD_MERGE_MODE.key() -> RecordMergeMode.COMMIT_TIME_ORDERING.name()
@@ -252,7 +252,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
       val basePath = s"${tmp.getCanonicalPath}/$tableName"
       // Step 1: Initial Insertion of Records
       val dataGen = new HoodieTestDataGenerator()
-      val hudiOpts: Map[String, String] = loadInitialBatchAndCreateSecondaryIndex(tableName, basePath, dataGen)
+      val hudiOpts: Map[String, String] = loadInitialBatchAndCreateSecondaryIndex(tableName, basePath, dataGen, tableType = "COPY_ON_WRITE")
 
       // Verify initial state of secondary index
       val initialKeys = spark.sql(s"select _row_key from $tableName limit 5").collect().map(_.getString(0))
@@ -264,8 +264,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
       var updateDf = spark.read.json(spark.sparkContext.parallelize(updateRecords.toSeq, 2))
       updateDf.write.format("hudi")
         .options(hudiOpts)
-        .option(OPERATION.key, BULK_INSERT_OPERATION_OPT_VAL)
-        .option(DataSourceWriteOptions.ENABLE_ROW_WRITER.key, "false")
+        .option(OPERATION.key, UPSERT_OPERATION_OPT_VAL)
         .mode(SaveMode.Append)
         .save(basePath)
       // Verify secondary index after updates
@@ -534,10 +533,11 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
     }
   }
 
-  private def loadInitialBatchAndCreateSecondaryIndex(tableName: String, basePath: String, dataGen: HoodieTestDataGenerator, numInserts: Integer = 50) = {
+  private def loadInitialBatchAndCreateSecondaryIndex(tableName: String, basePath: String, dataGen: HoodieTestDataGenerator, numInserts: Integer = 50,
+                                                      tableType: String = "MERGE_ON_READ") = {
     val initialRecords = recordsToStrings(dataGen.generateInserts(getInstantTime, numInserts, true)).asScala
     val initialDf = spark.read.json(spark.sparkContext.parallelize(initialRecords.toSeq, 2))
-    val hudiOpts = commonOpts ++ Map(TABLE_TYPE.key -> "MERGE_ON_READ", HoodieWriteConfig.TBL_NAME.key -> tableName)
+    val hudiOpts = commonOpts ++ Map(TABLE_TYPE.key -> tableType, HoodieWriteConfig.TBL_NAME.key -> tableName)
     initialDf.write.format("hudi")
       .options(hudiOpts)
       .option(OPERATION.key, INSERT_OPERATION_OPT_VAL)
