@@ -218,8 +218,8 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       prevCommit = instantTime;
       if (hoodieTable.getMetaClient().getTableConfig().isCDCEnabled()) {
         // the cdc reader needs the base file metadata to have deterministic update sequence.
-      fileSlice = getFileSlice();
-      if (fileSlice.isPresent()) {
+        fileSlice = getFileSlice();
+        if (fileSlice.isPresent()) {
           prevCommit = fileSlice.get().getBaseInstantTime();
           baseFile = fileSlice.get().getBaseFile().map(BaseFile::getFileName).orElse("");
           logFiles = fileSlice.get().getLogFiles().map(HoodieLogFile::getFileName).collect(Collectors.toList());
@@ -591,7 +591,6 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   private void trackMetadataIndexStatsForStreamingMetadataWrites(Option<FileSlice> fileSliceOpt, List<String> newLogFiles, WriteStatus status) {
     // TODO: Optimise the computation for multiple secondary indexes
     secondaryIndexDefns.forEach(secondaryIndexDefnPair -> {
-      status.getIndexStats().instantiateSecondaryIndexStatsForIndex(secondaryIndexDefnPair.getKey());
 
       // fetch primary key -> secondary index for prev file slice.
       Map<String, String> recordKeyToSecondaryKeyForPreviousFileSlice = fileSliceOpt.map(fileSlice -> {

@@ -34,7 +34,7 @@ public class IndexStats implements Serializable {
   private static final long serialVersionUID = 1L;
 
   private final List<HoodieRecordDelegate> writtenRecordDelegates = new ArrayList<>();
-  private final Map<String, List<SecondaryIndexStatsTracker>> secondaryIndexStats = new HashMap<>();
+  private final Map<String, List<SecondaryIndexStats>> secondaryIndexStats = new HashMap<>();
 
   void addHoodieRecordDelegate(HoodieRecordDelegate hoodieRecordDelegate) {
     this.writtenRecordDelegates.add(hoodieRecordDelegate);
@@ -44,16 +44,12 @@ public class IndexStats implements Serializable {
     return writtenRecordDelegates;
   }
 
-  public void instantiateSecondaryIndexStatsForIndex(String secondaryIndexPartitionPath) {
-    secondaryIndexStats.put(secondaryIndexPartitionPath, new ArrayList<>());
-  }
-
   public void addSecondaryIndexStats(String secondaryIndexPartitionPath, String recordKey, String secondaryIndexValue, boolean isDeleted) {
     secondaryIndexStats.computeIfAbsent(secondaryIndexPartitionPath, k -> new ArrayList<>())
-        .add(new SecondaryIndexStatsTracker(recordKey, secondaryIndexValue, isDeleted));
+        .add(new SecondaryIndexStats(recordKey, secondaryIndexValue, isDeleted));
   }
 
-  public Map<String, List<SecondaryIndexStatsTracker>> getSecondaryIndexStats() {
+  public Map<String, List<SecondaryIndexStats>> getSecondaryIndexStats() {
     return secondaryIndexStats;
   }
 
