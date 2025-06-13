@@ -22,9 +22,11 @@ import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.client.HoodieJavaWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -59,6 +61,11 @@ public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetada
                                                 HoodieEngineContext engineContext,
                                                 Option<String> inflightInstantTimestamp) {
     super(storageConf, writeConfig, failedWritesCleaningPolicy, engineContext, inflightInstantTimestamp);
+  }
+
+  @Override
+  MetadataIndexGenerator initializeMetadataIndexGenerator() {
+    throw new UnsupportedOperationException("Streaming writes are not supported for Java");
   }
 
   public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf,
@@ -103,6 +110,11 @@ public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetada
   }
 
   @Override
+  protected HoodieData<WriteStatus> convertEngineSpecificDataToHoodieData(List<WriteStatus> records) {
+    return HoodieListData.lazy(records);
+  }
+
+  @Override
   protected void bulkCommit(String instantTime, String partitionName, HoodieData<HoodieRecord> records, int fileGroupCount) {
     commitInternal(instantTime, Collections.singletonMap(partitionName, records), true, Option.of(new JavaHoodieMetadataBulkInsertPartitioner()));
   }
@@ -118,6 +130,12 @@ public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetada
   protected void upsertAndCommit(BaseHoodieWriteClient<?, List<HoodieRecord>, ?, List<WriteStatus>> writeClient, String instantTime, List<HoodieRecord> preppedRecordInputs) {
     List<WriteStatus> writeStatusJavaRDD = writeClient.upsertPreppedRecords(preppedRecordInputs, instantTime);
     writeClient.commit(instantTime, writeStatusJavaRDD);
+  }
+
+  @Override
+  protected void upsertAndCommit(BaseHoodieWriteClient<?, List<HoodieRecord>, ?, List<WriteStatus>> writeClient, String instantTime, List<HoodieRecord> preppedRecordInputs,
+                                 List<HoodieFileGroupId> fileGroupsIdsToUpdate) {
+    throw new UnsupportedOperationException("Not implemented for Java engine yet");
   }
 
   @Override
