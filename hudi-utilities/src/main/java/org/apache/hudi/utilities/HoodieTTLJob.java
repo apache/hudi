@@ -74,7 +74,7 @@ public class HoodieTTLJob {
     // need to do commit in SparkDeletePartitionCommitActionExecutor#execute
     try (SparkRDDWriteClient<HoodieRecordPayload> client =
              UtilHelpers.createHoodieClient(jsc, cfg.basePath, "", cfg.parallelism, Option.empty(), props)) {
-      String instantTime = client.createNewInstantTime();
+      String instantTime = client.startDeletePartitionCommit(metaClient);
       HoodieWriteResult result = client.managePartitionTTL(instantTime);
       client.commit(instantTime, result.getWriteStatuses(), Option.empty(), HoodieTimeline.REPLACE_COMMIT_ACTION,
           result.getPartitionToReplaceFileIds(), Option.empty());

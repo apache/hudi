@@ -20,9 +20,11 @@
 package org.apache.hudi.table.action.restore;
 
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.rollback.MergeOnReadRollbackActionExecutor;
@@ -49,15 +51,23 @@ public class MergeOnReadRestoreActionExecutor<T, I, K, O>
       default:
         throw new IllegalArgumentException("invalid action name " + instantToRollback.getAction());
     }
-    table.getMetaClient().reloadActiveTimeline();
-    String instantTime = table.getMetaClient().createNewInstantTime();
-    table.scheduleRollback(context, instantTime, instantToRollback, false, false, true);
+    String newInstantTime;
+    try (TransactionManager transactionManager = new TransactionManager(config, table.getStorage())) {
+      table.getMetaClient().reloadActiveTimeline();
+      transactionManager.beginStateChange(Option.empty(), Option.empty());
+      try {
+        newInstantTime = table.getMetaClient().createNewInstantTime(false);
+        table.scheduleRollback(context, newInstantTime, instantToRollback, false, false, true);
+      } finally {
+        transactionManager.endStateChange(Option.empty());
+      }
+    }
     table.getMetaClient().reloadActiveTimeline();
     MergeOnReadRollbackActionExecutor rollbackActionExecutor = new MergeOnReadRollbackActionExecutor(
         context,
         config,
         table,
-        instantTime,
+        newInstantTime,
         instantToRollback,
         true,
         true,

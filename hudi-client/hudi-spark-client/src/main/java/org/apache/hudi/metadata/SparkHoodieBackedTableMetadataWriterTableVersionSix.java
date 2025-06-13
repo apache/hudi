@@ -44,8 +44,6 @@ import org.apache.hudi.metrics.DistributedRegistry;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.BulkInsertPartitioner;
-import org.apache.hudi.table.HoodieSparkTable;
-import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaRDD;
@@ -151,11 +149,6 @@ public class SparkHoodieBackedTableMetadataWriterTableVersionSix extends HoodieB
     String actionType = CommitUtils.getCommitActionType(WriteOperationType.DELETE_PARTITION, HoodieTableType.MERGE_ON_READ);
     writeClient.startCommitForMetadataTable(metadataMetaClient, instantTime, actionType);
     writeClient.deletePartitions(partitionsToDrop, instantTime);
-  }
-
-  @Override
-  protected HoodieTable getTable(HoodieWriteConfig writeConfig, HoodieTableMetaClient metaClient) {
-    return HoodieSparkTable.create(writeConfig, engineContext, metaClient);
   }
 
   @Override
