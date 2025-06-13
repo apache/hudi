@@ -103,7 +103,6 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
       val basePath = tmp.getCanonicalPath + "/" + tableName
       spark.sql(s"set ${HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key} = 0")
       spark.sql(s"set ${DataSourceWriteOptions.ENABLE_MERGE_INTO_PARTIAL_UPDATES.key} = true")
-      spark.sql(s"set ${HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key} = true")
 
       // Create a table with five data fields
       spark.sql(
@@ -151,7 +150,6 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
       val basePath = tmp.getCanonicalPath + "/" + tableName
       spark.sql(s"set ${HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key} = 0")
       spark.sql(s"set ${DataSourceWriteOptions.ENABLE_MERGE_INTO_PARTIAL_UPDATES.key} = true")
-      spark.sql(s"set ${HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key} = true")
       // Write inserts to log block
       spark.sql(s"set ${HoodieIndexConfig.INDEX_TYPE.key} = INMEMORY")
 
@@ -289,7 +287,6 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
       spark.sql(s"set ${HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key} = 0")
       spark.sql(s"set ${DataSourceWriteOptions.ENABLE_MERGE_INTO_PARTIAL_UPDATES.key} = true")
       spark.sql(s"set ${HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key} = $logDataBlockFormat")
-      spark.sql(s"set ${HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key} = true")
       val mergeMode = if (commitTimeOrdering) {
         RecordMergeMode.COMMIT_TIME_ORDERING.name()
       } else {
@@ -463,7 +460,6 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
         """.stripMargin)
         spark.sql(s"insert into $tableName2 values(1, 'a1', 10)")
 
-        spark.sql(s"set ${HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key} = true")
         spark.sql(s"set ${HoodieClusteringConfig.INLINE_CLUSTERING.key} = true")
         spark.sql(s"set ${HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key} = 1")
 
@@ -502,7 +498,6 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
       spark.sql(s"set ${HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key} = 0")
       spark.sql(s"set ${DataSourceWriteOptions.ENABLE_MERGE_INTO_PARTIAL_UPDATES.key} = true")
       spark.sql(s"set ${HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key} = $logDataBlockFormat")
-      spark.sql(s"set ${HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key} = true")
       val mergeMode = if (commitTimeOrdering) {
         RecordMergeMode.COMMIT_TIME_ORDERING.name()
       } else {

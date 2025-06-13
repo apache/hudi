@@ -56,12 +56,12 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
 
   @ParameterizedTest
   @CsvSource(Array(
-    "true,,false",
-    "true,fare.currency,false",
-    "false,,false",
-    "false,fare.currency,true"
+    "true,",
+    "true,fare.currency",
+    "false,",
+    "false,fare.currency"
   ))
-  def testMergeOnReadStorage(isMetadataEnabled: Boolean, preCombineField: String, useFileGroupReader: Boolean): Unit = {
+  def testMergeOnReadStorage(isMetadataEnabled: Boolean, preCombineField: String): Unit = {
     val commonOpts = Map(
       "hoodie.insert.shuffle.parallelism" -> "4",
       "hoodie.upsert.shuffle.parallelism" -> "4",
@@ -80,9 +80,6 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
       (HoodieMetadataConfig.ENABLE.key -> String.valueOf(isMetadataEnabled))
     if (!StringUtils.isNullOrEmpty(preCombineField)) {
       options += (DataSourceWriteOptions.PRECOMBINE_FIELD.key() -> preCombineField)
-    }
-    if (useFileGroupReader) {
-      options += (HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key() -> String.valueOf(useFileGroupReader))
     }
     val dataGen = new HoodieTestDataGenerator(0xDEEF)
     val fs = HadoopFSUtils.getFs(basePath, spark.sparkContext.hadoopConfiguration)

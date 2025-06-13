@@ -21,7 +21,6 @@ package org.apache.hudi.sink.compact;
 import org.apache.hudi.adapter.MaskingOutputAdapter;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.util.Option;
@@ -177,7 +176,6 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
   private Option<HoodieReaderContext<?>> initReaderContext(HoodieFlinkWriteClient<?> writeClient) {
     HoodieTableMetaClient metaClient = flinkTable.getMetaClient();
     boolean useFileGroupReaderBasedCompaction = !metaClient.isMetadataTable()
-        && writeClient.getConfig().getBooleanOrDefault(HoodieReaderConfig.FILE_GROUP_READER_ENABLED)
         && writeClient.getConfig().populateMetaFields()                                                         // Virtual key support by fg reader is not ready
         && !(metaClient.getTableConfig().isCDCEnabled() && writeClient.getConfig().isYieldingPureLogForMor());  // do not support produce cdc log during fg reader
     if (useFileGroupReaderBasedCompaction) {
