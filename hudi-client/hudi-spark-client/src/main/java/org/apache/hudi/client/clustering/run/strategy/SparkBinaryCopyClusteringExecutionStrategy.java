@@ -21,8 +21,6 @@ package org.apache.hudi.client.clustering.run.strategy;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
-import org.apache.hudi.common.bloom.BloomFilter;
-import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.data.HoodieData;
@@ -32,29 +30,29 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.ClusteringGroupInfo;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.io.HoodieBinaryCopyHandle;
 import org.apache.hudi.io.BinaryCopyHandleFactory;
+import org.apache.hudi.parquet.io.ParquetBinaryCopyChecker;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import org.apache.avro.Schema;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
-
-import scala.Tuple2;
 
 import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
@@ -175,30 +173,17 @@ public class SparkBinaryCopyClusteringExecutionStrategy<T> extends SparkSortAndS
     }
 
     JavaSparkContext engineContext = HoodieSparkEngineContext.getSparkContext(getEngineContext());
-    List<Tuple2<BloomFilterTypeCode, Boolean>> fileStatus = engineContext.parallelize(inputGroups, inputGroups.size())
+
+    List<ParquetBinaryCopyChecker.ParquetFileInfo> fileStatus = engineContext.parallelize(inputGroups, inputGroups.size())
         .flatMap(group -> group.getOperations().iterator())
         .map(op -> {
           String filePath = op.getDataFilePath();
-          ParquetUtils fileUtils = new ParquetUtils();
-          BloomFilter filter = fileUtils.readBloomFilterFromMetadata(getHoodieTable().getStorage(), new StoragePath(filePath));
-          boolean isLegacySchema = !fileUtils.getFormat().equals(PARQUET) || fileUtils.containLegacy2LevelArrayType(getHoodieTable().getStorage(), filePath);
-          return Tuple2.apply(filter == null ? null : filter.getBloomFilterTypeCode(), isLegacySchema);
+          if (!filePath.endsWith(PARQUET.getFileExtension())) {
+            return new ParquetBinaryCopyChecker.ParquetFileInfo(false, "", Collections.emptyMap());
+          }
+          return ParquetBinaryCopyChecker.verifyFile(getHoodieTable().getStorageConf().unwrapAs(Configuration.class), filePath);
         })
         .collect();
-    boolean hasSameFilterCodeType = fileStatus.stream().filter(t -> t._1 != null).distinct().count() <= 1;
-    boolean notLegacySchema = fileStatus.stream().noneMatch(t -> t._2);
-    if (!hasSameFilterCodeType) {
-      LOG.warn("Find different bloom filter code type of input groups. Will fall back to common clustering execution strategy.");
-      return false;
-    }
-
-    if (!notLegacySchema) {
-      LOG.warn("Find array type schema inconsistency of input groups, usually caused by. Will fall back to common clustering execution strategy. "
-          + "We need to keep spark.hadoop.parquet.avro.write-old-list-structure false for avro write support and "
-          + "keep hoodie.parquet.writelegacyformat.enabled false for spark parquet row writer.");
-      return false;
-    }
-
-    return true;
+    return ParquetBinaryCopyChecker.verifyFiles(fileStatus);
   }
 }

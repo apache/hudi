@@ -18,12 +18,20 @@
 
 package org.apache.hudi.functional;
 
+import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.avro.HoodieBloomFilterWriteSupport;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.clustering.run.strategy.SparkBinaryCopyClusteringExecutionStrategy;
+import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
+import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.engine.EngineProperty;
+import org.apache.hudi.common.engine.TaskContextSupplier;
+import org.apache.hudi.common.model.ClusteringGroupInfo;
+import org.apache.hudi.common.model.ClusteringOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -31,26 +39,40 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.io.hadoop.HoodieAvroParquetWriter;
+import org.apache.hudi.io.storage.HoodieParquetConfig;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.table.HoodieSparkTable;
+import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
+import org.apache.avro.Schema;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.parquet.avro.AvroSchemaConverter;
+import org.apache.parquet.hadoop.ParquetWriter;
+import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.parquet.hadoop.metadata.FileMetaData;
+import org.apache.parquet.schema.MessageType;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -58,8 +80,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.bloom.BloomFilterTypeCode.DYNAMIC_V0;
+import static org.apache.hudi.common.bloom.BloomFilterTypeCode.SIMPLE;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_NESTED_EXAMPLE_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -192,4 +219,115 @@ public class TestSparkBinaryCopyClusteringAndValidationMeta extends HoodieClient
     assertTrue(rows.select("_hoodie_file_name").collectAsList().stream()
         .allMatch(t -> t.getAs(0).equals(clusteredFileName)));
   }
+
+  @Test
+  public void testSupportBinaryStreamCopy() throws IOException {
+    HoodieWriteConfig writeConfig = new HoodieWriteConfig.Builder()
+        .withPath(basePath)
+        .withSchema(TRIP_EXAMPLE_SCHEMA)
+        .withEmbeddedTimelineServerEnabled(false)
+        .build();
+    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
+    HoodieTable table = HoodieSparkTable.create(writeConfig, engineContext, metaClient);
+    SparkBinaryCopyClusteringExecutionStrategy strategy = new SparkBinaryCopyClusteringExecutionStrategy(table, engineContext, writeConfig);
+
+    MessageType legacySchema = new AvroSchemaConverter().convert(AVRO_SCHEMA);
+    Configuration conf = new Configuration();
+    conf.set("parquet.avro.write-old-list-structure", "false");
+    MessageType standardSchema = new AvroSchemaConverter(conf).convert(AVRO_SCHEMA);
+
+    BloomFilter simpleBloomFilter = BloomFilterFactory.createBloomFilter(1000, 0.0001, 10000, SIMPLE.name());
+    BloomFilter dynmicBloomFilter = BloomFilterFactory.createBloomFilter(1000, 0.0001, 10000, DYNAMIC_V0.name());
+    String file1 = makeTestFile("file-1.parquet", AVRO_SCHEMA, legacySchema, simpleBloomFilter);
+    String file2 = makeTestFile("file-2.parquet", AVRO_SCHEMA, legacySchema, dynmicBloomFilter);
+    String file3 = makeTestFile("file-3.parquet", AVRO_SCHEMA, standardSchema, dynmicBloomFilter);
+    String file4 = makeTestFile("file-4.parquet", AVRO_SCHEMA, standardSchema, dynmicBloomFilter);
+
+    // input file contains multiple bloom filter code type, should return false
+    List<ClusteringGroupInfo> groups = makeClusteringGroup(file1, file2);
+    Assertions.assertFalse(strategy.supportBinaryStreamCopy(groups, new HashMap<>()));
+
+    // input file contains legacy schema, should return false
+    groups = makeClusteringGroup(file2, file3);
+    Assertions.assertFalse(strategy.supportBinaryStreamCopy(groups, new HashMap<>()));
+
+    // otherwise should return true
+    groups = makeClusteringGroup(file3, file4);
+    Assertions.assertTrue(strategy.supportBinaryStreamCopy(groups, new HashMap<>()));
+
+    metaClient = HoodieTestUtils.init(basePath, HoodieTableType.MERGE_ON_READ);
+    table = HoodieSparkTable.create(writeConfig, engineContext, metaClient);
+    strategy = new SparkBinaryCopyClusteringExecutionStrategy(table, engineContext, writeConfig);
+    Assertions.assertFalse(strategy.supportBinaryStreamCopy(groups, new HashMap<>()));
+  }
+
+  private String makeTestFile(String fileName, Schema schema, MessageType messageType, BloomFilter filter) throws IOException {
+    HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(messageType, schema, Option.of(filter), new Properties());
+    StoragePath filePath = new StoragePath(tempDir.resolve(fileName).toAbsolutePath().toString());
+    HoodieConfig hoodieConfig = new HoodieConfig();
+    hoodieConfig.setValue("hoodie.base.path", basePath);
+    HoodieParquetConfig<HoodieAvroWriteSupport> parquetConfig =
+        new HoodieParquetConfig(
+            writeSupport,
+            CompressionCodecName.GZIP,
+            ParquetWriter.DEFAULT_BLOCK_SIZE,
+            ParquetWriter.DEFAULT_PAGE_SIZE,
+            1024 * 1024 * 1024,
+            storageConf,
+            0.1,
+            true);
+
+    HoodieAvroParquetWriter writer =
+        new HoodieAvroParquetWriter(filePath, parquetConfig, "001", new DummyTaskContextSupplier(), true);
+    writer.close();
+    return filePath.toString();
+  }
+
+  private List<ClusteringGroupInfo> makeClusteringGroup(String... files) {
+    List<ClusteringOperation> operations = Arrays.stream(files)
+        .map(file -> {
+          ClusteringOperation op = new ClusteringOperation();
+          op.setDataFilePath(file);
+          return op;
+        })
+        .collect(Collectors.toList());
+    ClusteringGroupInfo group = new ClusteringGroupInfo();
+    group.setNumOutputGroups(1);
+    group.setOperations(operations);
+    return Collections.singletonList(group);
+  }
+
+  static class DummyTaskContextSupplier extends TaskContextSupplier {
+
+    @Override
+    public Supplier<Integer> getPartitionIdSupplier() {
+      return () -> 1;
+    }
+
+    @Override
+    public Supplier<Integer> getStageIdSupplier() {
+      return () -> 1;
+    }
+
+    @Override
+    public Supplier<Long> getAttemptIdSupplier() {
+      return () -> 1L;
+    }
+
+    @Override
+    public Option<String> getProperty(EngineProperty prop) {
+      return Option.empty();
+    }
+
+    @Override
+    public Supplier<Integer> getTaskAttemptNumberSupplier() {
+      return () -> 1;
+    }
+
+    @Override
+    public Supplier<Integer> getStageAttemptNumberSupplier() {
+      return () -> 1;
+    }
+  }
+
 }

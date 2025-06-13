@@ -191,7 +191,7 @@ public class TestHoodieParquetFileBinaryCopier {
         )
     );
     inputFiles = new ArrayList<>();
-    inputFiles.add(makeTestFile(inputSchema, "GZIP"));
+    inputFiles.add(makeTestFile(requiredSchema, "GZIP"));
     inputFiles.add(makeTestFile(inputSchema, "GZIP"));
 
     List<StoragePath> inputPaths = inputFiles.stream()
@@ -261,7 +261,7 @@ public class TestHoodieParquetFileBinaryCopier {
     );
 
     inputFiles = new ArrayList<>();
-    inputFiles.add(makeTestFile(inputSchema, "GZIP"));
+    inputFiles.add(makeTestFile(requiredSchema, "GZIP"));
     inputFiles.add(makeTestFile(inputSchema, "GZIP"));
 
     List<StoragePath> inputPaths = inputFiles.stream()
@@ -303,7 +303,7 @@ public class TestHoodieParquetFileBinaryCopier {
         )
     );
     inputFiles = new ArrayList<>();
-    inputFiles.add(makeTestFile(inputSchema, "GZIP"));
+    inputFiles.add(makeTestFile(requiredSchema, "GZIP"));
     inputFiles.add(makeTestFile(inputSchema, "GZIP"));
 
     List<StoragePath> inputPaths = inputFiles.stream()
@@ -378,7 +378,7 @@ public class TestHoodieParquetFileBinaryCopier {
 
 
     inputFiles = new ArrayList<>();
-    inputFiles.add(makeTestFile(inputSchema, "GZIP"));
+    inputFiles.add(makeTestFile(requiredSchema, "GZIP"));
     inputFiles.add(makeTestFile(inputSchema, "GZIP"));
 
     List<StoragePath> inputPaths = inputFiles.stream()

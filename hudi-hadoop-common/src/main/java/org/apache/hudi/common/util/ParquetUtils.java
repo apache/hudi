@@ -53,11 +53,9 @@ import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
 import org.apache.parquet.io.api.Binary;
 import org.apache.parquet.schema.DecimalMetadata;
-import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.OriginalType;
 import org.apache.parquet.schema.PrimitiveType;
-import org.apache.parquet.schema.Type;
 import org.apache.parquet.schema.Types;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -320,29 +318,6 @@ public class ParquetUtils extends FileFormatUtils {
   @Override
   public HoodieFileFormat getFormat() {
     return HoodieFileFormat.PARQUET;
-  }
-
-  public boolean containLegacy2LevelArrayType(HoodieStorage storage, String filePath) {
-    StoragePath path = new StoragePath(filePath);
-    MessageType messageType = readSchema(storage, path);
-    return containLegacy2LevelArrayType(messageType.getFields());
-  }
-
-  public static boolean containLegacy2LevelArrayType(List<Type> parquetFields) {
-    for (Type type : parquetFields) {
-      if (!type.isPrimitive()) {
-        GroupType groupType = type.asGroupType();
-        OriginalType originalType = groupType.getOriginalType();
-        if (originalType == OriginalType.LIST
-            && groupType.getType(0).getName().equals("array")) {
-          return true;
-        }
-        if (containLegacy2LevelArrayType(groupType.getFields())) {
-          return true;
-        }
-      }
-    }
-    return false;
   }
 
   /**
