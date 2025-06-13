@@ -28,6 +28,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
+import java.util.function.Function;
+import java.util.function.Supplier;
 
 /**
  * This class allows clients to start and end transactions. Anything done between a start and end transaction is
@@ -48,6 +50,22 @@ public class TransactionManager implements Serializable, AutoCloseable {
   protected TransactionManager(LockManager lockManager, boolean isLockRequired) {
     this.lockManager = lockManager;
     this.isLockRequired = isLockRequired;
+  }
+
+  public <T> T runInLock(Function<String, T> instantTimeConsumingAction) {
+    if (isLockRequired()) {
+      lockManager.lock();
+    }
+    String requestedInstant;
+    try {
+      LOG.info("State change started for {}", changeActionInstant);
+      return instantTimeConsumingAction.apply(requestedInstant);
+    } finally {
+      if (isLockRequired()) {
+        lockManager.unlock();
+        LOG.info("State change ended for {}", requestedInstant);
+      }
+    }
   }
 
   public void beginStateChange(Option<HoodieInstant> changeActionInstant,
