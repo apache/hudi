@@ -61,7 +61,7 @@ public abstract class SqlQueryPreCommitValidator<T, I, K, O extends HoodieData<W
     before.registerTempTable(hoodieTableBeforeCurrentCommit);
     after.registerTempTable(hoodieTableWithInflightCommit);
     JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(getEngineContext());
-    SQLContext sqlContext = new SQLContext(jsc);
+    SQLContext sqlContext = new org.apache.spark.sql.classic.SQLContext(jsc);
 
     String[] queries = getQueriesToRun();
 

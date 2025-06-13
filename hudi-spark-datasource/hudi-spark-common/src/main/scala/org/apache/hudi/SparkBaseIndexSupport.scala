@@ -28,7 +28,7 @@ import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata}
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS
 
 import org.apache.spark.api.java.JavaSparkContext
-import org.apache.spark.sql.{Column, DataFrame, SparkSession}
+import org.apache.spark.sql.{Column, DataFrame, ExpressionColumnNodeWrapper, SparkSession}
 import org.apache.spark.sql.catalyst.expressions.{And, Expression}
 import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
 import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr
@@ -115,7 +115,7 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
     } else {
       // only lookup in col stats if all filters are eligible to be looked up in col stats index in MDT
       val prunedCandidateFileNames =
-        indexDf.where(new Column(indexFilter))
+        indexDf.where(new Column(ExpressionColumnNodeWrapper.apply(indexFilter)))
           .select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
           .collect()
           .map(_.getString(0))

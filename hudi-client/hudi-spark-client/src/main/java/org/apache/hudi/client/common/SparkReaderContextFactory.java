@@ -68,7 +68,7 @@ class SparkReaderContextFactory implements ReaderContextFactory<InternalRow> {
 
   SparkReaderContextFactory(HoodieSparkEngineContext hoodieSparkEngineContext, HoodieTableMetaClient metaClient,
                             TableSchemaResolver resolver, SparkAdapter sparkAdapter) {
-    SQLConf sqlConf = hoodieSparkEngineContext.getSqlContext().sessionState().conf();
+    SQLConf sqlConf = hoodieSparkEngineContext.getSqlContext().sparkSession().sessionState().conf();
     JavaSparkContext jsc = hoodieSparkEngineContext.jsc();
 
     // Prepare

@@ -29,6 +29,7 @@ import org.apache.spark.sql.catalyst.expressions.{Alias, AttributeReference, Exp
 import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
 import org.apache.spark.sql.catalyst.plans.QueryPlan
 import org.apache.spark.sql.catalyst.plans.logical.{Assignment, Filter, LogicalPlan, Project, UpdateTable}
+import org.apache.spark.sql.classic.SparkSession
 import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.execution.command.DataWritingCommand
 import org.apache.spark.sql.execution.metric.SQLMetric
@@ -36,6 +37,7 @@ import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.failAnalysis
 import org.apache.spark.sql.hudi.command.HoodieCommandMetrics.updateCommitMetrics
+import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 
 case class UpdateHoodieTableCommand(ut: UpdateTable, query: LogicalPlan) extends DataWritingCommand
   with SparkAdapterSupport with ProvidesHoodieConfig {
@@ -53,7 +55,7 @@ case class UpdateHoodieTableCommand(ut: UpdateTable, query: LogicalPlan) extends
     val tableId = catalogTable.table.qualifiedName
 
     logInfo(s"Executing 'UPDATE' command for $tableId")
-    val config = if (sparkSession.sqlContext.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key()
+    val config = if (sparkSession.sessionState.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key()
       , SPARK_SQL_OPTIMIZED_WRITES.defaultValue()) == "true") {
       // Set config to show that this is a prepped write.
       buildHoodieConfig(catalogTable) + (SPARK_SQL_WRITES_PREPPED_KEY -> "true")
@@ -100,7 +102,7 @@ object UpdateHoodieTableCommand extends SparkAdapterSupport with Logging {
     fields.foreach(field => if (assignments.exists {
       case (attr, _) => resolver(attr.name, field)
     }) {
-      throw new AnalysisException(s"Detected disallowed assignment clause in UPDATE statement for $fieldType " +
+      throw new HoodieAnalysisException(s"Detected disallowed assignment clause in UPDATE statement for $fieldType " +
         s"`$field` for table `$tableId`. Please remove the assignment clause to avoid the error.")
     })
   }
@@ -141,7 +143,7 @@ object UpdateHoodieTableCommand extends SparkAdapterSupport with Logging {
       assignedAttributes
     )
 
-    val filteredOutput = if (sparkSession.sqlContext.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key()
+    val filteredOutput = if (sparkSession.sessionState.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key()
       , SPARK_SQL_OPTIMIZED_WRITES.defaultValue()) == "true") {
       ut.table.output
     } else {

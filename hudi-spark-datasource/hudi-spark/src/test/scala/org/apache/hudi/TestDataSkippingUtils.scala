@@ -20,7 +20,7 @@ package org.apache.hudi
 import org.apache.hudi.ColumnStatsIndexSupport.composeIndexSchema
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 
-import org.apache.spark.sql.{Column, Row, SparkSession}
+import org.apache.spark.sql.{Column, ExpressionColumnNodeWrapper, Row, SparkSession}
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.resolveExpr
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.encoders.DummyExpressionHolder
@@ -28,6 +28,7 @@ import org.apache.spark.sql.catalyst.expressions.{Expression, InSet, Not}
 import org.apache.spark.sql.catalyst.optimizer.OptimizeIn
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.rules.Rule
+import org.apache.spark.sql.classic.ColumnConversions.toRichColumn
 import org.apache.spark.sql.functions.{col, lower}
 import org.apache.spark.sql.hudi.DataSkippingUtils
 import org.apache.spark.sql.internal.SQLConf.SESSION_LOCAL_TIMEZONE
@@ -132,7 +133,7 @@ class TestDataSkippingUtils extends HoodieSparkClientTestBase with SparkAdapterS
 
     val indexDf = spark.createDataset(input)
 
-    val rows = indexDf.where(new Column(lookupFilter))
+    val rows = indexDf.where(new Column(ExpressionColumnNodeWrapper.apply(lookupFilter)))
       .select("fileName")
       .collect()
       .map(_.getString(0))
@@ -159,7 +160,7 @@ class TestDataSkippingUtils extends HoodieSparkClientTestBase with SparkAdapterS
 
     val indexDf = spark.createDataFrame(input.map(_.toRow).asJava, indexSchema)
 
-    indexDf.where(new Column(lookupFilter))
+    indexDf.where(new Column(ExpressionColumnNodeWrapper.apply(lookupFilter)))
       .select("fileName")
       .collect()
       .map(_.getString(0))
