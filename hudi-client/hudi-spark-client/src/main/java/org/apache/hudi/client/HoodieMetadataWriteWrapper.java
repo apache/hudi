@@ -28,9 +28,9 @@ import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.table.HoodieTable;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Abstraction for data table write client and table service client to write to metadata table.
@@ -38,7 +38,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class HoodieMetadataWriteWrapper {
 
   // Cached HoodieTableMetadataWriter for each action in data table. This will be cleaned up when action is completed or when write client is closed.
-  protected Map<String, Option<HoodieTableMetadataWriter>> metadataWriterMap = new ConcurrentHashMap<>();
+  protected final Map<String, Option<HoodieTableMetadataWriter>> metadataWriterMap = new HashMap<>();
 
   /**
    * Called by data table write client and data table table service client to perform streaming write to metadata table.

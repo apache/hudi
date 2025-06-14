@@ -70,7 +70,7 @@ public class SparkRDDWriteClient<T> extends
     BaseHoodieWriteClient<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
 
   private static final Logger LOG = LoggerFactory.getLogger(SparkRDDWriteClient.class);
-  private HoodieMetadataWriteWrapper metadataWriteWrapper = new HoodieMetadataWriteWrapper();
+  private final HoodieMetadataWriteWrapper metadataWriteWrapper = new HoodieMetadataWriteWrapper();
 
   public SparkRDDWriteClient(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
     this(context, clientConfig, Option.empty());
@@ -106,8 +106,8 @@ public class SparkRDDWriteClient<T> extends
     // write to metadata table if streaming writes are enabled.
     HoodieTable table = createTable(config);
     JavaRDD<WriteStatus> writeStatuses = rawWriteStatuses;
-    if (config.isMetadataTableEnabled() && config.isMetadataStreamingWritesEnabled(table.getMetaClient().getTableConfig().getTableVersion())
-        && WriteOperationType.streamingWritesToMetadataSupported((getOperationType()))) {
+    if (WriteOperationType.streamingWritesToMetadataSupported((getOperationType())) && isStreamingWriteToMetadataEnabled(table)) {
+      // this code block is expected to create a new Metadata Writer, start a new commit in metadata table and trigger streaming write to metadata table.
       writeStatuses = HoodieJavaRDD.getJavaRDD(metadataWriteWrapper.streamWriteToMetadataTable(table, HoodieJavaRDD.of(rawWriteStatuses), instantTime));
     }
 
@@ -118,8 +118,7 @@ public class SparkRDDWriteClient<T> extends
     //
     // When streaming writes are enabled, data table's WriteStatus is expected to contain all stats required to generate metadata table records and so each object will be larger.
     // Here all additional stats and error records are dropped to retain only the required information and prevent collecting large objects on the driver.
-    List<SlimWriteStats> slimWriteStatsList = writeStatuses
-        .map(writeStatus -> new SlimWriteStats(writeStatus.isMetadataTable(), writeStatus.getTotalRecords(), writeStatus.getTotalErrorRecords(), writeStatus.getStat())).collect();
+    List<SlimWriteStats> slimWriteStatsList = SlimWriteStats.from(writeStatuses);
     // Compute stats for the data table writes and invoke callback
     AtomicLong totalRecords = new AtomicLong(0);
     AtomicLong totalErrorRecords = new AtomicLong(0);
@@ -143,7 +142,7 @@ public class SparkRDDWriteClient<T> extends
       // when streaming writes are enabled, writeStatuses is a mix of data table write status and mdt write status
       List<HoodieWriteStat> dataTableHoodieWriteStats = slimWriteStatsList.stream().filter(entry -> !entry.isMetadataTable()).map(SlimWriteStats::getWriteStat).collect(Collectors.toList());
       List<HoodieWriteStat> partialMetadataHoodieWriteStatsSoFar = slimWriteStatsList.stream().filter(entry -> entry.isMetadataTable).map(slimWriteStats -> slimWriteStats.getWriteStat()).collect(Collectors.toList());
-      return commitStats(instantTime, dataTableHoodieWriteStats, partialMetadataHoodieWriteStatsSoFar, extraMetadata, commitActionType, partitionToReplacedFileIds, extraPreCommitFunc,
+      return commitStats(instantTime, new TableWriteStatsHolder(dataTableHoodieWriteStats, partialMetadataHoodieWriteStatsSoFar), extraMetadata, commitActionType, partitionToReplacedFileIds, extraPreCommitFunc,
           false, Option.of(table));
     } else {
       LOG.error("Exiting early due to errors with write operation ");
@@ -154,8 +153,7 @@ public class SparkRDDWriteClient<T> extends
   @Override
   protected void writeToMetadataTable(boolean skipStreamingWritesToMetadataTable, HoodieWriteConfig config, HoodieTable table, WriteOperationType writeOperationType,
                                       String instantTime, List<HoodieWriteStat> partialMetadataHoodieWriteStatsSoFar, HoodieCommitMetadata metadata) {
-    if (!skipStreamingWritesToMetadataTable && config.isMetadataTableEnabled() && WriteOperationType.streamingWritesToMetadataSupported(writeOperationType)
-        && config.isMetadataStreamingWritesEnabled(table.getMetaClient().getTableConfig().getTableVersion())) {
+    if (!skipStreamingWritesToMetadataTable && WriteOperationType.streamingWritesToMetadataSupported(writeOperationType) && isStreamingWriteToMetadataEnabled(table)) {
       metadataWriteWrapper.writeToMetadataTable(table, instantTime, metadata, partialMetadataHoodieWriteStatsSoFar);
     } else {
       writeTableMetadata(table, instantTime, metadata);
@@ -425,11 +423,16 @@ public class SparkRDDWriteClient<T> extends
     private long totalErrorRecords;
     private HoodieWriteStat writeStat;
 
-    public SlimWriteStats(boolean isMetadataTable, long totalRecords, long totalErrorRecords, HoodieWriteStat writeStat) {
+    private SlimWriteStats(boolean isMetadataTable, long totalRecords, long totalErrorRecords, HoodieWriteStat writeStat) {
       this.isMetadataTable = isMetadataTable;
       this.totalRecords = totalRecords;
       this.totalErrorRecords = totalErrorRecords;
       this.writeStat = writeStat;
+    }
+
+    public static List<SlimWriteStats> from(JavaRDD<WriteStatus> writeStatuses) {
+      return writeStatuses.map(writeStatus -> new SlimWriteStats(writeStatus.isMetadataTable(), writeStatus.getTotalRecords(), writeStatus.getTotalErrorRecords(),
+          writeStatus.getStat())).collect();
     }
 
     public boolean isMetadataTable() {

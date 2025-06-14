@@ -1466,7 +1466,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       // The deltacommit that will be rolled back
       HoodieInstant deltaCommitInstant = metadataMetaClient.createNewInstant(HoodieInstant.State.COMPLETED,
           HoodieTimeline.DELTA_COMMIT_ACTION, commitToRollbackInstantTime);
-      if (metadataMetaClient.getActiveTimeline().getDeltaCommitTimeline().containsInstant(deltaCommitInstant)) {
+      if (metadataMetaClient.getActiveTimeline().getDeltaCommitTimeline().containsInstant(deltaCommitInstant.requestedTime())) {
         validateRollback(commitToRollbackInstantTime);
         LOG.info("Rolling back MDT deltacommit {}", commitToRollbackInstantTime);
         if (!getWriteClient().rollback(commitToRollbackInstantTime, instantTime)) {
@@ -1543,7 +1543,6 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     Pair<HoodieData<HoodieRecord>, List<HoodieFileGroupId>> result = tagRecordsWithLocation(partitionRecordsMap, isInitializing);
     HoodieData<HoodieRecord> preppedRecords = result.getKey();
     I preppedRecordInputs = convertHoodieDataToEngineSpecificData(preppedRecords);
-    List<HoodieFileGroupId> updatedMDTFileGroupIds = result.getValue();
 
     BaseHoodieWriteClient<?, I, ?, O> writeClient = getWriteClient();
     // rollback partially failed writes if any.

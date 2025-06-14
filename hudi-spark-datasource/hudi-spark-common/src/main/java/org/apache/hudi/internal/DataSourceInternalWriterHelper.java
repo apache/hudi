@@ -19,6 +19,7 @@
 package org.apache.hudi.internal;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.TableWriteStatsHolder;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -84,7 +85,7 @@ public class DataSourceInternalWriterHelper {
   public void commit(List<WriteStatus> writeStatuses) {
     try {
       List<HoodieWriteStat> writeStatList = writeStatuses.stream().map(WriteStatus::getStat).collect(Collectors.toList());
-      writeClient.commitStats(instantTime, writeStatList, Collections.emptyList(), Option.of(extraMetadata),
+      writeClient.commitStats(instantTime, new TableWriteStatsHolder(writeStatList), Option.of(extraMetadata),
           CommitUtils.getCommitActionType(operationType, metaClient.getTableType()), Collections.emptyMap(), Option.empty(),
           true, Option.empty());
     } catch (Exception ioe) {

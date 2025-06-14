@@ -21,17 +21,14 @@ package org.apache.hudi.client;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.HoodieJavaTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -49,8 +46,8 @@ public class HoodieJavaTableServiceClient<T> extends BaseHoodieTableServiceClien
   }
 
   @Override
-  protected Pair<List<HoodieWriteStat>, List<HoodieWriteStat>> triggerWritesAndFetchWriteStats(HoodieWriteMetadata<List<WriteStatus>> writeMetadata) {
-    return Pair.of(writeMetadata.getWriteStatuses().stream().map(writeStatus -> writeStatus.getStat()).collect(Collectors.toList()), Collections.emptyList());
+  protected TableWriteStatsHolder triggerWritesAndFetchWriteStats(HoodieWriteMetadata<List<WriteStatus>> writeMetadata) {
+    return new TableWriteStatsHolder(writeMetadata.getWriteStatuses().stream().map(writeStatus -> writeStatus.getStat()).collect(Collectors.toList()));
   }
 
   @Override

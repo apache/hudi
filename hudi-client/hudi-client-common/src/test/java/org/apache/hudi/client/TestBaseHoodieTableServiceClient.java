@@ -24,7 +24,6 @@ import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
-import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -34,7 +33,6 @@ import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.testutils.MockHoodieTimeline;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
@@ -51,7 +49,6 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
@@ -266,7 +263,7 @@ class TestBaseHoodieTableServiceClient extends HoodieCommonTestHarness {
     }
 
     @Override
-    protected Pair<List<HoodieWriteStat>, List<HoodieWriteStat>> triggerWritesAndFetchWriteStats(HoodieWriteMetadata<String> writeMetadata) {
+    protected TableWriteStatsHolder triggerWritesAndFetchWriteStats(HoodieWriteMetadata<String> writeMetadata) {
       return null;
     }
 
