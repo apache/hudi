@@ -62,7 +62,7 @@ import scala.concurrent.duration._
 /**
  * Test cases for secondary index
  */
-@Tag("functional")
+@Tag("functional-c")
 class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
 
   val metadataOpts: Map[String, String] = Map(

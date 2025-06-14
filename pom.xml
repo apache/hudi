@@ -1916,7 +1916,7 @@
             <configuration combine.self="append">
               <skip>${skipUTs}</skip>
               <forkedProcessExitTimeoutInSeconds>120</forkedProcessExitTimeoutInSeconds>
-              <excludedGroups>functional,functional-b</excludedGroups>
+              <excludedGroups>functional,functional-b,functional-c</excludedGroups>
               <excludes>
                 <exclude>**/IT*.java</exclude>
                 <exclude>**/testsuite/**/Test*.java</exclude>
@@ -2015,6 +2015,53 @@
               <forkCount>1</forkCount>
               <reuseForks>true</reuseForks>
               <groups>functional-b</groups>
+            </configuration>
+          </plugin>
+          <plugin>
+            <groupId>org.jacoco</groupId>
+            <artifactId>jacoco-maven-plugin</artifactId>
+            <executions>
+              <execution>
+                <goals>
+                  <goal>prepare-agent</goal>
+                </goals>
+                <configuration>
+                  <destFile>${project.build.directory}/jacoco-agent/${jacoco.agent.dest.filename}</destFile>
+                </configuration>
+              </execution>
+              <execution>
+                <id>post-functional-tests</id>
+                <phase>test</phase>
+                <goals>
+                  <goal>report</goal>
+                </goals>
+                <configuration>
+                  <outputDirectory>${project.reporting.outputDirectory}/jacoco-ft</outputDirectory>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+    <profile>
+      <id>functional-tests-c</id>
+      <properties>
+        <skipUTs>true</skipUTs>
+        <skipFTs>false</skipFTs>
+        <skipITs>true</skipITs>
+      </properties>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-surefire-plugin</artifactId>
+            <version>${maven-surefire-plugin.version}</version>
+            <configuration combine.self="append">
+              <skip>${skipFTs}</skip>
+              <forkCount>1</forkCount>
+              <reuseForks>true</reuseForks>
+              <groups>functional-c</groups>
             </configuration>
           </plugin>
           <plugin>
