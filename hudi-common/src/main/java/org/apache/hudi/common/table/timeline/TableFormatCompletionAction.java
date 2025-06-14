@@ -23,7 +23,7 @@ package org.apache.hudi.common.table.timeline;
  * Functional Interface for executing table format actions.
  */
 @FunctionalInterface
-public interface TableFormatAction {
+public interface TableFormatCompletionAction {
   /**
    * Execute the table format action with the given completed instant.
    */

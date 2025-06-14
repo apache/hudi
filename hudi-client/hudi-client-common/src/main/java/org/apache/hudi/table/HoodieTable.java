@@ -1140,12 +1140,12 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
 
   public HoodieTableMetadata getMetadataTable() {
     if (metadata == null) {
-      metadata = refreshMetadataTable();
+      metadata = refreshAndGetTableMetadata();
     }
     return metadata;
   }
 
-  public HoodieTableMetadata refreshMetadataTable() {
+  public HoodieTableMetadata refreshAndGetTableMetadata() {
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
         .fromProperties(config.getMetadataConfig().getProps())
         .build();

@@ -40,7 +40,7 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantGenerator;
-import org.apache.hudi.common.table.timeline.TableFormatAction;
+import org.apache.hudi.common.table.timeline.TableFormatCompletionAction;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.timeline.versioning.v2.InstantGeneratorV2;
 import org.apache.hudi.common.util.collection.Pair;
@@ -126,7 +126,7 @@ public class ClusteringUtils {
    */
   public static <T> void transitionClusteringOrReplaceInflightToComplete(boolean shouldLock, HoodieInstant clusteringInstant,
                                                                          HoodieReplaceCommitMetadata metadata, HoodieActiveTimeline activeTimeline,
-                                                                         TableFormatAction tableFormatCompletionAction) {
+                                                                         TableFormatCompletionAction tableFormatCompletionAction) {
     if (clusteringInstant.getAction().equals(HoodieTimeline.CLUSTERING_ACTION)) {
       activeTimeline.transitionClusterInflightToComplete(shouldLock, clusteringInstant, metadata, tableFormatCompletionAction);
     } else {
