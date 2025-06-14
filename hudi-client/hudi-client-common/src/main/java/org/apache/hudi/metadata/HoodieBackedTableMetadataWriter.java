@@ -1164,7 +1164,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
         new MetadataIndexGenerator.WriteStatusBasedMetadataIndexMapper(mdtPartitionsToTag, dataWriteConfig));
 
     // tag records w/ location
-    Pair<List<HoodieFileGroupId>, HoodieData<HoodieRecord>> hoodieFileGroupsToUpdateAndTaggedMdtRecords = tagRecordsWithLocationWithStreamingWrites(untaggedMdtRecords,
+    Pair<List<HoodieFileGroupId>, HoodieData<HoodieRecord>> hoodieFileGroupsToUpdateAndTaggedMdtRecords = tagRecordsWithLocationForStreamingWrites(untaggedRecords,
         mdtPartitionPathsToTag);
 
     // write partial writes to MDT table (for those partitions where streaming writes are enabled)
