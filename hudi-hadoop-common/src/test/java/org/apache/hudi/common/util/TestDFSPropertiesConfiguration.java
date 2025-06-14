@@ -208,4 +208,26 @@ public class TestDFSPropertiesConfiguration {
     assertEquals("BLOOM", DFSPropertiesConfiguration.getGlobalProps().get("hoodie.index.type"));
     assertEquals("true", DFSPropertiesConfiguration.getGlobalProps().get("hoodie.metadata.enable"));
   }
+
+  @Test
+  public void testDefaultConstructorHandlesIncludes() {
+    // Use default ctor (hadoopConfig should be non-null internally)
+    DFSPropertiesConfiguration cfg = new DFSPropertiesConfiguration();
+
+    // Should load t3.props (which includes t2.props which includes t1.props) without NPE
+    cfg.addPropsFromFile(new StoragePath(dfsBasePath + "/t3.props"));
+    TypedProperties props = cfg.getProps();
+
+    // Values from t1, t2 and t3 should be resolved in order
+    assertEquals(123, props.getInteger("int.prop"));
+    assertEquals(243.4, props.getDouble("double.prop"), 0.001);
+    assertTrue(props.getBoolean("boolean.prop"));
+    assertEquals("t3.value", props.getString("string.prop"));
+    assertEquals(1354354354L, props.getLong("long.prop"));
+
+    // And a self include still triggers the loop detection
+    assertThrows(IllegalStateException.class, () -> {
+      cfg.addPropsFromFile(new StoragePath(dfsBasePath + "/t4.props"));
+    });
+  }
 }
