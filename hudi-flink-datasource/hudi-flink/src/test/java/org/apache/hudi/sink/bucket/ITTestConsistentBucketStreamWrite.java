@@ -188,7 +188,7 @@ public class ITTestConsistentBucketStreamWrite extends TestLogger {
       Pipelines.bulkInsert(conf, rowType, dataStream);
     } else {
       DataStream<HoodieFlinkInternalRow> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, dataStream);
-      DataStream<Object> pipeline = Pipelines.hoodieStreamWrite(conf, rowType, hoodieRecordDataStream);
+      DataStream<RowData> pipeline = Pipelines.hoodieStreamWrite(conf, rowType, hoodieRecordDataStream);
       execEnv.addOperator(pipeline.getTransformation());
     }
     JobClient client = execEnv.executeAsync(jobName);

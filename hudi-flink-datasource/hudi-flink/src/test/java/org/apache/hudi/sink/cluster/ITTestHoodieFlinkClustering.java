@@ -36,6 +36,7 @@ import org.apache.hudi.sink.clustering.ClusteringOperator;
 import org.apache.hudi.sink.clustering.ClusteringPlanSourceFunction;
 import org.apache.hudi.sink.clustering.FlinkClusteringConfig;
 import org.apache.hudi.sink.clustering.HoodieFlinkClusteringJob;
+import org.apache.hudi.sink.utils.Pipelines;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.CompactionUtil;
@@ -56,6 +57,7 @@ import org.apache.flink.configuration.ExecutionOptions;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.sink.DiscardingSink;
+import org.apache.flink.streaming.api.operators.ProcessOperator;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.Table;
@@ -66,6 +68,7 @@ import org.apache.flink.table.api.bridge.java.StreamTableEnvironment;
 import org.apache.flink.table.api.config.ExecutionConfigOptions;
 import org.apache.flink.table.api.config.TableConfigOptions;
 import org.apache.flink.table.api.internal.TableEnvironmentImpl;
+import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.planner.plan.nodes.exec.utils.ExecNodeUtil;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
@@ -196,11 +199,12 @@ public class ITTestHoodieFlinkClustering {
       ExecNodeUtil.setManagedMemoryWeight(dataStream.getTransformation(),
           conf.getInteger(FlinkOptions.WRITE_SORT_MEMORY) * 1024L * 1024L);
 
-      dataStream
-          .addSink(new ClusteringCommitSink(conf))
-          .name("clustering_commit")
-          .uid("uid_clustering_commit")
-          .setParallelism(1);
+      Pipelines.dummySink(
+          dataStream.transform(
+              "clustering_commit",
+              TypeInformation.of(RowData.class),
+              new ProcessOperator<>(new ClusteringCommitSink(conf)))
+          .setParallelism(1));
 
       env.execute("flink_hudi_clustering");
       TestData.checkWrittenData(tempFile, EXPECTED, 4);
@@ -664,11 +668,12 @@ public class ITTestHoodieFlinkClustering {
       ExecNodeUtil.setManagedMemoryWeight(dataStream.getTransformation(),
           conf.getInteger(FlinkOptions.WRITE_SORT_MEMORY) * 1024L * 1024L);
 
-      dataStream
-          .addSink(new ClusteringCommitSink(conf))
-          .name("clustering_commit")
-          .uid("uid_clustering_commit")
-          .setParallelism(1);
+      Pipelines.dummySink(
+          dataStream.transform(
+                  "clustering_commit",
+                  TypeInformation.of(RowData.class),
+                  new ProcessOperator<>(new ClusteringCommitSink(conf)))
+              .setParallelism(1));
 
       env.execute("flink_hudi_clustering");
     }
@@ -765,11 +770,12 @@ public class ITTestHoodieFlinkClustering {
       ExecNodeUtil.setManagedMemoryWeight(dataStream.getTransformation(),
           conf.getInteger(FlinkOptions.WRITE_SORT_MEMORY) * 1024L * 1024L);
 
-      dataStream
-          .addSink(new ClusteringCommitTestSink(conf))
-          .name("clustering_commit")
-          .uid("uid_clustering_commit")
-          .setParallelism(1);
+      Pipelines.dummySink(
+          dataStream.transform(
+                  "clustering_commit",
+                  TypeInformation.of(RowData.class),
+                  new ProcessOperator<>(new ClusteringCommitTestSink(conf)))
+              .setParallelism(1));
 
       env.execute("flink_hudi_clustering");
     }

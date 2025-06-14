@@ -26,6 +26,9 @@ import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.streaming.api.functions.ProcessFunction;
+import org.apache.flink.table.data.RowData;
+import org.apache.flink.util.Collector;
 
 import java.util.List;
 
@@ -38,8 +41,8 @@ public class CompactionCommitTestSink extends CompactionCommitSink {
   }
 
   @Override
-  public void invoke(CompactionCommitEvent event, Context context) throws Exception {
-    super.invoke(event, context);
+  public void processElement(CompactionCommitEvent event, ProcessFunction<CompactionCommitEvent, RowData>.Context context, Collector<RowData> collector) throws Exception {
+    super.processElement(event, context, collector);
     List<HoodieInstant> instants = writeClient.getHoodieTable().getMetaClient().getActiveTimeline().getInstants();
     boolean compactCommitted = instants.stream().anyMatch(i -> i.requestedTime().equals(event.getInstant()) && i.isCompleted());
     if (compactCommitted && getRuntimeContext().getAttemptNumber() == 0) {

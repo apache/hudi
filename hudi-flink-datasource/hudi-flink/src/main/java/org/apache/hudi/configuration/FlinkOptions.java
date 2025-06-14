@@ -397,6 +397,12 @@ public class FlinkOptions extends HoodieConfig {
   // ------------------------------------------------------------------------
   //  Write Options
   // ------------------------------------------------------------------------
+  @AdvancedConfig
+  public static final ConfigOption<Boolean> SINK_V2_ENABLED = ConfigOptions
+      .key("write.sink-v2.enabled")
+      .booleanType()
+      .defaultValue(true)
+      .withDescription("Whether to use hoodie sink based on Flink sink V2 API.");
 
   @AdvancedConfig
   public static final ConfigOption<Boolean> INSERT_CLUSTER = ConfigOptions

@@ -23,13 +23,14 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
 import org.apache.hudi.util.FlinkWriteClients;
 
-import org.apache.flink.api.common.functions.AbstractRichFunction;
 import org.apache.flink.api.common.state.CheckpointListener;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.runtime.state.FunctionSnapshotContext;
 import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
-import org.apache.flink.streaming.api.functions.sink.SinkFunction;
+import org.apache.flink.streaming.api.functions.ProcessFunction;
+import org.apache.flink.table.data.RowData;
+import org.apache.flink.util.Collector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,8 +41,8 @@ import org.slf4j.LoggerFactory;
  * at a time, a new task can not be scheduled until the last task finished(fails or normally succeed).
  * The cleaning task never expects to throw but only log.
  */
-public class CleanFunction<T> extends AbstractRichFunction
-    implements SinkFunction<T>, CheckpointedFunction, CheckpointListener {
+public class CleanFunction<T> extends ProcessFunction<T, RowData>
+    implements CheckpointedFunction, CheckpointListener {
   private static final Logger LOG = LoggerFactory.getLogger(CleanFunction.class);
 
   private final Configuration conf;
@@ -114,5 +115,10 @@ public class CleanFunction<T> extends AbstractRichFunction
     if (this.writeClient != null) {
       this.writeClient.close();
     }
+  }
+
+  @Override
+  public void processElement(T t, ProcessFunction<T, RowData>.Context context, Collector<RowData> collector) throws Exception {
+    // do nothing.
   }
 }

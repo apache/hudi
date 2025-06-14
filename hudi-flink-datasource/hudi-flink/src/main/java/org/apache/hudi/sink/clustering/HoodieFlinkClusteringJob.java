@@ -31,6 +31,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.compact.HoodieFlinkCompactor;
+import org.apache.hudi.sink.utils.Pipelines;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.ClusteringUtil;
@@ -46,6 +47,8 @@ import org.apache.flink.client.deployment.application.ApplicationExecutionExcept
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.operators.ProcessOperator;
+import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.planner.plan.nodes.exec.utils.ExecNodeUtil;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
@@ -344,12 +347,14 @@ public class HoodieFlinkClusteringJob {
       }
 
       dataStream
-          .addSink(new ClusteringCommitSink(conf))
-          .name("clustering_commit")
-          .uid("uid_clustering_commit")
+          .transform(
+              "clustering_commit",
+              TypeInformation.of(RowData.class),
+              new ProcessOperator<>(new ClusteringCommitSink(conf)))
           .setParallelism(1)
-          .getTransformation()
-          .setMaxParallelism(1);
+          .setMaxParallelism(1)
+          .addSink(Pipelines.DummySink.INSTANCE)
+          .setParallelism(1);
 
       env.execute("flink_hudi_clustering_" + clusteringInstant.requestedTime());
     }

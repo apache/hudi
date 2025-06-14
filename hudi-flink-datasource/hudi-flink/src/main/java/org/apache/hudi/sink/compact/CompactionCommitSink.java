@@ -34,6 +34,9 @@ import org.apache.hudi.util.FlinkWriteClients;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.metrics.MetricGroup;
+import org.apache.flink.streaming.api.functions.ProcessFunction;
+import org.apache.flink.table.data.RowData;
+import org.apache.flink.util.Collector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -106,7 +109,8 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
   }
 
   @Override
-  public void invoke(CompactionCommitEvent event, Context context) throws Exception {
+  public void processElement(CompactionCommitEvent event, ProcessFunction<CompactionCommitEvent, RowData>.Context context, Collector<RowData> collector)
+      throws Exception {
     final String instant = event.getInstant();
     if (event.isFailed()
         || (event.getWriteStatuses() != null

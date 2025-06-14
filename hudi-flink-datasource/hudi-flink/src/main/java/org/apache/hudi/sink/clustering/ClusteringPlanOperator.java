@@ -39,6 +39,7 @@ import org.apache.flink.streaming.api.operators.AbstractStreamOperator;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.streaming.api.operators.Output;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
+import org.apache.flink.table.data.RowData;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,7 +54,7 @@ import java.util.stream.Collectors;
  * <p>It should be singleton to avoid conflicts.
  */
 public class ClusteringPlanOperator extends AbstractStreamOperator<ClusteringPlanEvent>
-    implements OneInputStreamOperator<Object, ClusteringPlanEvent> {
+    implements OneInputStreamOperator<RowData, ClusteringPlanEvent> {
   private static final Logger LOG = LoggerFactory.getLogger(ClusteringPlanOperator.class);
 
   /**
@@ -85,7 +86,7 @@ public class ClusteringPlanOperator extends AbstractStreamOperator<ClusteringPla
   }
 
   @Override
-  public void processElement(StreamRecord<Object> streamRecord) {
+  public void processElement(StreamRecord<RowData> streamRecord) {
     // no operation
   }
 

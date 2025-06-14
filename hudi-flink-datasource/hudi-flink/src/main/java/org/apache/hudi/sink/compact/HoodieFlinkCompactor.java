@@ -31,6 +31,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.compact.strategy.CompactionPlanStrategies;
+import org.apache.hudi.sink.utils.Pipelines;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.util.CompactionUtil;
 import org.apache.hudi.util.FlinkWriteClients;
@@ -42,6 +43,8 @@ import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.client.deployment.application.ApplicationExecutionException;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.operators.ProcessOperator;
+import org.apache.flink.table.data.RowData;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -297,12 +300,15 @@ public class HoodieFlinkCompactor {
               TypeInformation.of(CompactionCommitEvent.class),
               new CompactOperator(conf))
           .setParallelism(compactionParallelism)
-          .addSink(new CompactionCommitSink(conf))
-          .name("compaction_commit")
-          .uid("uid_compaction_commit")
+          .transform(
+              "compaction_commit",
+              TypeInformation.of(RowData.class),
+              new ProcessOperator<>(new CompactionCommitSink(conf)))
           .setParallelism(1)
-          .getTransformation()
-          .setMaxParallelism(1);
+          .setMaxParallelism(1)
+          .addSink(Pipelines.DummySink.INSTANCE)
+          .name("DUMMY")
+          .setParallelism(1);
 
       env.execute("flink_hudi_compaction_" + String.join(",", compactionInstantTimes));
     }
