@@ -26,16 +26,20 @@ import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.data.HoodieListPairData;
 import org.apache.hudi.common.data.HoodiePairData;
+import org.apache.hudi.common.engine.AvroReaderContextFactory;
 import org.apache.hudi.common.engine.EngineProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.function.SerializableConsumer;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializablePairFlatMapFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
@@ -59,6 +63,7 @@ import static org.apache.hudi.common.function.FunctionWrapper.throwingForeachWra
 import static org.apache.hudi.common.function.FunctionWrapper.throwingMapToPairWrapper;
 import static org.apache.hudi.common.function.FunctionWrapper.throwingMapWrapper;
 import static org.apache.hudi.common.function.FunctionWrapper.throwingReduceWrapper;
+import static org.apache.hudi.common.model.HoodieFileFormat.HFILE;
 
 /**
  * A flink engine implementation of HoodieEngineContext.
@@ -203,6 +208,15 @@ public class HoodieFlinkEngineContext extends HoodieEngineContext {
   @Override
   public <I, O> O aggregate(HoodieData<I> data, O zeroValue, Functions.Function2<O, I, O> seqOp, Functions.Function2<O, O, O> combOp) {
     return data.collectAsList().stream().parallel().reduce(zeroValue, seqOp::apply, combOp::apply);
+  }
+
+  @Override
+  public ReaderContextFactory<?> getReaderContextFactory(HoodieTableMetaClient metaClient) {
+    // metadata table and HFile reads are only supported by the AvroReaderContext.
+    if (metaClient.isMetadataTable() || HFILE.getFileExtension().equals(metaClient.getTableConfig().getBaseFileFormat().getFileExtension())) {
+      return new AvroReaderContextFactory(metaClient);
+    }
+    return (ReaderContextFactory<?>) ReflectionUtils.loadClass("org.apache.hudi.table.format.FlinkReaderContextFactory", metaClient);
   }
 
   /**

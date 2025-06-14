@@ -144,6 +144,19 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   }
 
   @Override
+  public HoodieRecord updateMetaField(Schema recordSchema, int ordinal, String value) {
+    try {
+      Option<IndexedRecord> avroRecordOpt = getData().getInsertValue(recordSchema);
+      // value should always be present if the meta fields are being updated since the record is being written
+      IndexedRecord avroRecord = avroRecordOpt.orElseThrow(() -> new HoodieIOException("Failed to get insert value for record schema: " + recordSchema));
+      avroRecord.put(ordinal, value);
+      return new HoodieAvroIndexedRecord(getKey(), avroRecord, getOperation(), this.currentLocation, this.newLocation);
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to deserialize record!", e);
+    }
+  }
+
+  @Override
   public HoodieRecord rewriteRecordWithNewSchema(Schema recordSchema, Properties props, Schema newSchema, Map<String, String> renameCols) {
     try {
       GenericRecord oldRecord = (GenericRecord) getData().getInsertValue(recordSchema, props).get();
