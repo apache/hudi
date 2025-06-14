@@ -150,7 +150,7 @@ public class MarkerBasedRollbackStrategy<T, I, K, O> implements BaseRollbackPlan
         // NOTE: Since we're rolling back incomplete Delta Commit, it only could have appended its
         //       block to the latest log-file
         try {
-          latestLogFileOption = FSUtils.getLatestLogFile(table.getMetaClient().getStorage(), partitionPath, fileId,
+          latestLogFileOption = FSUtils.getLatestLogFile(table.getStorage(), partitionPath, fileId,
               HoodieFileFormat.HOODIE_LOG.getFileExtension(), baseCommitTime);
           if (latestLogFileOption.isPresent() && baseCommitTime.equals(instantToRollback.requestedTime())) {
             // Log file can be deleted if the commit to rollback is also the commit that created the fileGroup

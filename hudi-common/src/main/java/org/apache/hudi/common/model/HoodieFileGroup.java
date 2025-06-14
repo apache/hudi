@@ -110,10 +110,11 @@ public class HoodieFileGroup implements Serializable {
    */
   public void addLogFile(CompletionTimeQueryView completionTimeQueryView, HoodieLogFile logFile) {
     String baseInstantTime = getBaseInstantTime(completionTimeQueryView, logFile);
+    Option<String> completionTimeOpt = completionTimeQueryView.getCompletionTime(baseInstantTime, logFile.getDeltaCommitTime());
     if (!fileSlices.containsKey(baseInstantTime)) {
       fileSlices.put(baseInstantTime, new FileSlice(fileGroupId, baseInstantTime));
     }
-    fileSlices.get(baseInstantTime).addLogFile(logFile);
+    fileSlices.get(baseInstantTime).addLogFile(logFile, completionTimeOpt);
   }
 
   @VisibleForTesting

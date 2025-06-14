@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.StoragePath;
 
 import org.junit.jupiter.api.Test;
@@ -38,10 +39,10 @@ public class TestFileSlice {
     FileSlice fileSlice = new FileSlice("par1", baseInstant, "fg1");
     assertThat(fileSlice.getLatestInstantTime(), is(baseInstant));
 
-    fileSlice.addLogFile(new HoodieLogFile(new StoragePath(getLogFileName(deltaInstant2))));
+    fileSlice.addLogFile(new HoodieLogFile(new StoragePath(getLogFileName(deltaInstant2))), Option.empty());
     assertThat(fileSlice.getLatestInstantTime(), is(baseInstant));
 
-    fileSlice.addLogFile(new HoodieLogFile(new StoragePath(getLogFileName(deltaInstant4))));
+    fileSlice.addLogFile(new HoodieLogFile(new StoragePath(getLogFileName(deltaInstant4))), Option.empty());
     assertThat(fileSlice.getLatestInstantTime(), is(deltaInstant4));
   }
 

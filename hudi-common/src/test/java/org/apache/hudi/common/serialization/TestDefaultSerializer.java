@@ -22,6 +22,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroupId;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.versioning.v1.InstantComparatorV1;
 
@@ -31,6 +32,7 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.UUID;
 
+import static org.apache.hudi.common.testutils.reader.HoodieFileSliceTestUtils.getMockMetaClient;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class TestDefaultSerializer {
@@ -40,8 +42,9 @@ class TestDefaultSerializer {
     String partition = "1";
     String fileId1 = UUID.randomUUID().toString();
     HoodieInstant instant1 = new HoodieInstant(HoodieInstant.State.COMPLETED, "commit", "001", InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
+    HoodieTableMetaClient metaClient = getMockMetaClient();
     FileSlice fileSlice = new FileSlice(new HoodieFileGroupId(partition, fileId1), instant1.requestedTime(),
-        new HoodieBaseFile("/tmp/" + FSUtils.makeBaseFileName(instant1.requestedTime(), "1-0-1", fileId1, "parquet")), Collections.emptyList());
+        new HoodieBaseFile("/tmp/" + FSUtils.makeBaseFileName(instant1.requestedTime(), "1-0-1", fileId1, "parquet")), Collections.emptyList(), metaClient);
 
     DefaultSerializer<FileSlice> serializer = new DefaultSerializer<>();
     byte[] serializedValue = serializer.serialize(fileSlice);

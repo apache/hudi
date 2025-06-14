@@ -282,7 +282,8 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
         // baseInstantTime in FileSlice is not used in FG reader
         "",
         Option.ofNullable(clusterOperation.getDataFilePath()).map(HoodieBaseFile::new).orElse(null),
-        clusterOperation.getDeltaFilePaths().stream().map(HoodieLogFile::new).collect(Collectors.toList()));
+        clusterOperation.getDeltaFilePaths().stream().map(HoodieLogFile::new).collect(Collectors.toList()),
+        table.getMetaClient());
 
     HoodieFileGroupReader<RowData> fileGroupReader = FormatUtils.createFileGroupReader(table.getMetaClient(), writeConfig, InternalSchemaManager.DISABLED,
         fileSlice, schema, readerSchema, instantTime, FlinkOptions.REALTIME_PAYLOAD_COMBINE, false, Collections.emptyList(), Option.empty());

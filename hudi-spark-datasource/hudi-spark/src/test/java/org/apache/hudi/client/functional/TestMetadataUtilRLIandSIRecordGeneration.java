@@ -715,7 +715,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       FileSlice fileSlice = new FileSlice(partition, baseInstantTime, fileId);
       logFilePaths.forEach(logFilePath -> {
         HoodieLogFile logFile = new HoodieLogFile(logFilePath);
-        fileSlice.addLogFile(logFile);
+        fileSlice.addLogFile(logFile, Option.empty());
       });
       TypedProperties properties = new TypedProperties();
       // configure un-merged log file reader

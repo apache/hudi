@@ -1689,7 +1689,8 @@ public class HoodieTableMetadataUtil {
       // read log files without merging for lower overhead, log files may contain multiple records for the same key resulting in a wider range of values than the merged result
       HoodieLogFile logFile = new HoodieLogFile(filePath);
       FileSlice fileSlice = new FileSlice(partitionPath, logFile.getDeltaCommitTime(), logFile.getFileId());
-      fileSlice.addLogFile(logFile);
+      // since we are only fetching column range metadata from the log file here, completion time should not be required in the file slice
+      fileSlice.addLogFile(logFile, Option.empty());
       TypedProperties properties = new TypedProperties();
       properties.setProperty(MAX_MEMORY_FOR_MERGE.key(), Long.toString(maxBufferSize));
       properties.setProperty(HoodieReaderConfig.MERGE_TYPE.key(), REALTIME_SKIP_MERGE);

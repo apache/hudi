@@ -82,7 +82,7 @@ public abstract class BaseFileGroupReaderBasedMergeHandle<T, I, K, O> extends Ho
         operation.getFileGroupId(),
         operation.getBaseInstantTime(),
         baseFileOpt.isPresent() ? baseFileOpt.get() : null,
-        logFiles);
+        logFiles, hoodieTable.getMetaClient());
     this.preserveMetadata = true;
     init(operation, this.partitionPath, baseFileOpt);
     validateAndSetAndKeyGenProps(keyGeneratorOpt, config.populateMetaFields());

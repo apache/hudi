@@ -146,7 +146,7 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
         .withReaderContext(readerContext)
         .withHoodieTableMetaClient(metaClient)
         .withLatestCommitTime(latestCommitTime)
-        .withFileSlice(getFileSliceFromSplit(fileSplit, getFs(tableBasePath, jobConfCopy), tableBasePath))
+        .withFileSlice(getFileSliceFromSplit(fileSplit, getFs(tableBasePath, jobConfCopy), tableBasePath, metaClient))
         .withDataSchema(tableSchema)
         .withRequestedSchema(requestedSchema)
         .withProps(props)
@@ -239,7 +239,7 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
   /**
    * Convert FileSplit to FileSlice
    */
-  private static FileSlice getFileSliceFromSplit(FileSplit split, FileSystem fs, String tableBasePath) throws IOException {
+  private static FileSlice getFileSliceFromSplit(FileSplit split, FileSystem fs, String tableBasePath, HoodieTableMetaClient metaClient) throws IOException {
     BaseFile bootstrapBaseFile = createBootstrapBaseFile(split, fs);
     if (split instanceof RealtimeSplit) {
       // MOR
@@ -256,10 +256,10 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
       }
       HoodieFileGroupId fileGroupId = new HoodieFileGroupId(getRelativePartitionPath(new Path(realtimeSplit.getBasePath()), realtimeSplit.getPath()), fileID);
       if (isLogFile) {
-        return new FileSlice(fileGroupId, commitTime, null, realtimeSplit.getDeltaLogFiles());
+        return new FileSlice(fileGroupId, commitTime, null, realtimeSplit.getDeltaLogFiles(), metaClient);
       }
       HoodieBaseFile hoodieBaseFile = new HoodieBaseFile(convertToStoragePathInfo(fs.getFileStatus(realtimeSplit.getPath()), realtimeSplit.getLocations()), bootstrapBaseFile);
-      return new FileSlice(fileGroupId, commitTime, hoodieBaseFile, realtimeSplit.getDeltaLogFiles());
+      return new FileSlice(fileGroupId, commitTime, hoodieBaseFile, realtimeSplit.getDeltaLogFiles(), metaClient);
     }
     // COW
     HoodieFileGroupId fileGroupId = new HoodieFileGroupId(getFileId(split.getPath().getName()), getRelativePartitionPath(new Path(tableBasePath), split.getPath()));
@@ -267,7 +267,7 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
         fileGroupId,
         getCommitTime(split.getPath().toString()),
         new HoodieBaseFile(convertToStoragePathInfo(fs.getFileStatus(split.getPath()), split.getLocations()), bootstrapBaseFile),
-        Collections.emptyList());
+        Collections.emptyList(), metaClient);
   }
 
   private static BaseFile createBootstrapBaseFile(FileSplit split, FileSystem fs) throws IOException {
