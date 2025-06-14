@@ -1256,6 +1256,33 @@ public class HoodieAvroUtils {
   }
 
   /**
+   * Checks whether the provided schema contains a timestamp millis field
+   * @param schema input
+   * @return true if a timestamp millis field is present, false otherwise
+   */
+  public static boolean hasTimestampMillisField(Schema schema) {
+    switch (schema.getType()) {
+      case RECORD:
+        for (Field field : schema.getFields()) {
+          if (hasTimestampMillisField(field.schema())) {
+            return true;
+          }
+        }
+        return false;
+      case ARRAY:
+        return hasTimestampMillisField(schema.getElementType());
+      case MAP:
+        return hasTimestampMillisField(schema.getValueType());
+      case UNION:
+        return hasTimestampMillisField(getActualSchemaFromUnion(schema, null));
+      case LONG:
+        return LogicalTypes.timestampMillis().equals(schema.getLogicalType());
+      default:
+        return false;
+    }
+  }
+
+  /**
    * Avro does not support type promotion from numbers to string. This function returns true if
    * it will be necessary to rewrite the record to support this promotion.
    * NOTE: this does not determine whether the writerSchema and readerSchema are compatible.
