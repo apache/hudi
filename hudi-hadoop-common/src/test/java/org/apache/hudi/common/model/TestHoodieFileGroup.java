@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.CompletionTimeQueryView;
 import org.apache.hudi.common.table.timeline.versioning.v2.CompletionTimeQueryViewV2;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -30,6 +31,8 @@ import org.apache.hudi.storage.StoragePath;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.invocation.InvocationOnMock;
 
@@ -80,7 +83,7 @@ public class TestHoodieFileGroup {
     Stream<String> completed = Stream.of("001");
     Stream<String> inflight = Stream.of("002");
     MockHoodieTimeline activeTimeline = new MockHoodieTimeline(completed, inflight);
-    CompletionTimeQueryView queryView = getMockCompletionTimeQueryView(activeTimeline);
+    CompletionTimeQueryView queryView = getMockCompletionTimeQueryView(activeTimeline, preTableVersion8);
     HoodieFileGroup fileGroup = new HoodieFileGroup("", "data",
         activeTimeline.getCommitsTimeline().filterCompletedInstants());
     for (int i = 0; i < 3; i++) {
@@ -120,7 +123,7 @@ public class TestHoodieFileGroup {
     Stream<String> completed = Stream.of("001", "002", "003", "004", "005", "007");
     Stream<String> inflight = Stream.of("006", "008");
     MockHoodieTimeline activeTimeline = new MockHoodieTimeline(completed, inflight);
-    CompletionTimeQueryView queryView = getMockCompletionTimeQueryView(activeTimeline);
+    CompletionTimeQueryView queryView = getMockCompletionTimeQueryView(activeTimeline, useBaseInstantTime);
 
     // when: building a file group with file slices like table version 6.
     HoodieFileGroup fileGroup = new HoodieFileGroup("", "f1", activeTimeline);
@@ -161,62 +164,83 @@ public class TestHoodieFileGroup {
     testFileSlicingForTableVersion(false);
   }
 
-  @Test
-  public void testGetBaseInstantTime() {
+  private static Stream<Arguments> testGetBaseInstantTime() {
+    return Stream.of(
+      Arguments.of(false, false),
+      Arguments.of(true, false),
+      Arguments.of(false, true),
+      Arguments.of(true, true)
+    );
+  }
+
+  @ParameterizedTest
+  @MethodSource("testGetBaseInstantTime")
+  public void testGetBaseInstantTime(boolean preTableVersion8, boolean firstLogCompleted) {
     MockHoodieTimeline activeTimeline = new MockHoodieTimeline(Stream.of(
-        INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "001", "001"),
+        INSTANT_GENERATOR.createNewInstant(firstLogCompleted ? HoodieInstant.State.COMPLETED : HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "001", "001"),
         INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "002", "011"), // finishes in the last
         INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "003", "007"),
         INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "004", "006"),
         INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "005", "007")
     ).collect(Collectors.toList()));
 
-    CompletionTimeQueryViewV2 queryView = getMockCompletionTimeQueryView(activeTimeline);
+    CompletionTimeQueryViewV2 queryView = getMockCompletionTimeQueryView(activeTimeline, preTableVersion8);
 
     HoodieFileGroup fileGroup = new HoodieFileGroup("", "data", activeTimeline.filterCompletedAndCompactionInstants());
 
     HoodieLogFile logFile1 = new HoodieLogFile(new StoragePath(getLogFileName("001")));
     fileGroup.addLogFile(queryView, logFile1);
-    assertThat("no base file in the file group, returns the delta commit instant itself",
-        fileGroup.getBaseInstantTime(queryView, logFile1), is("001"));
-    assertThat(collectFileSlices(fileGroup), is("001"));
+    String firstBaseInstant;
+    if (preTableVersion8 || firstLogCompleted) {
+      // table version 6 will always return the first log file's instant time as base instant time
+      firstBaseInstant = "001";
+    } else {
+      // the table version 8 and first log file is not completed, so it will return the INIT INSTANT TIME for base instant time
+      firstBaseInstant = HoodieTimeline.INIT_INSTANT_TS;
+    }
+    assertThat(collectFileSlices(fileGroup), is(firstBaseInstant));
 
     HoodieLogFile logFile2 = new HoodieLogFile(new StoragePath(getLogFileName("002")));
     fileGroup.addLogFile(queryView, logFile2);
     assertThat("no base file in the file group, returns the earliest delta commit instant",
-        fileGroup.getBaseInstantTime(queryView, logFile2), is("001"));
-    assertThat(collectFileSlices(fileGroup), is("001"));
+        fileGroup.getBaseInstantTime(queryView, logFile2), is(firstBaseInstant));
+    assertThat(collectFileSlices(fileGroup), is(firstBaseInstant));
 
     fileGroup.addNewFileSliceAtInstant("003");
     assertThat("Include the pending compaction instant time as constitute of the file slice base instant time list",
-        collectFileSlices(fileGroup), is("001,003"));
+        collectFileSlices(fileGroup), is(firstBaseInstant + ",003"));
 
     HoodieLogFile logFile3 = new HoodieLogFile(new StoragePath(getLogFileName("004")));
     fileGroup.addLogFile(queryView, logFile3);
     assertThat("Assign the log file to maximum base instant time that less than or equals its completion time",
         fileGroup.getBaseInstantTime(queryView, logFile2), is("003"));
-    assertThat(collectFileSlices(fileGroup), is("001,003"));
+    assertThat(collectFileSlices(fileGroup), is(firstBaseInstant + ",003"));
 
     // now add the base files
     fileGroup.addBaseFile(new HoodieBaseFile(getBaseFileName("003")));
     fileGroup.addBaseFile(new HoodieBaseFile(getBaseFileName("005")));
 
-    assertThat(collectFileSlices(fileGroup), is("001,003,005"));
+    assertThat(collectFileSlices(fileGroup), is(firstBaseInstant + ",003,005"));
 
     // check the delta commit that takes a long time to finish
     assertThat("no base file in the file group, returns the earliest delta commit instant",
         fileGroup.getBaseInstantTime(queryView, logFile2), is("005"));
   }
 
-  private CompletionTimeQueryViewV2 getMockCompletionTimeQueryView(MockHoodieTimeline activeTimeline) {
+  private CompletionTimeQueryViewV2 getMockCompletionTimeQueryView(MockHoodieTimeline activeTimeline, boolean useBaseInstant) {
     Map<String, String> completionTimeMap = activeTimeline.filterCompletedInstants().getInstantsAsStream()
         .collect(Collectors.toMap(HoodieInstant::requestedTime, HoodieInstant::getCompletionTime));
     CompletionTimeQueryViewV2 queryView = mock(CompletionTimeQueryViewV2.class);
+    when(queryView.getTableVersion()).thenReturn(useBaseInstant ? HoodieTableVersion.SIX : HoodieTableVersion.EIGHT);
     when(queryView.getCompletionTime(any(String.class), any(String.class)))
         .thenAnswer((InvocationOnMock invocationOnMock) -> {
           String instantTime = invocationOnMock.getArgument(1);
           return Option.ofNullable(completionTimeMap.get(instantTime));
         });
+    when(queryView.isCompleted(any(String.class))).thenAnswer((InvocationOnMock invocationOnMock) -> {
+      String instantTime = invocationOnMock.getArgument(0);
+      return completionTimeMap.containsKey(instantTime);
+    });
     return queryView;
   }
 
