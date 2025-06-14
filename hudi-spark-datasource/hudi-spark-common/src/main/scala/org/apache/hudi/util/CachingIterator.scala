@@ -33,7 +33,7 @@ trait CachingIterator[T >: Null] extends Iterator[T] {
 
   protected def doHasNext: Boolean
 
-  override final def hasNext: Boolean = nextRecord != null || doHasNext
+  override final def hasNext: Boolean = nextRecord == null || doHasNext
 
   override final def next: T = {
     val record = nextRecord
