@@ -124,7 +124,10 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
   }
 
   @Override
-  public Option<HoodieRecordMerger> getRecordMerger(RecordMergeMode mergeMode, String mergeStrategyId, String mergeImplClasses) {
+  public Option<HoodieRecordMerger> getRecordMerger(RecordMergeMode mergeMode,
+                                                    String mergeStrategyId,
+                                                    String mergeImplClasses,
+                                                    Option<String> payloadClassOpt) {
     switch (mergeMode) {
       case EVENT_TIME_ORDERING:
         return Option.of(new HoodieAvroRecordMerger());
@@ -132,7 +135,8 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
         return Option.of(new OverwriteWithLatestMerger());
       case CUSTOM:
       default:
-        Option<HoodieRecordMerger> recordMerger = HoodieRecordUtils.createValidRecordMerger(EngineType.JAVA, mergeImplClasses, mergeStrategyId);
+        Option<HoodieRecordMerger> recordMerger = HoodieRecordUtils.createValidRecordMerger(
+            EngineType.JAVA, mergeImplClasses, mergeStrategyId, payloadClassOpt);
         if (recordMerger.isEmpty()) {
           throw new IllegalArgumentException("No valid merger implementation set for `"
               + RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY + "`");

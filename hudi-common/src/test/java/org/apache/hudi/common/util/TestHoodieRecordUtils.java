@@ -22,15 +22,16 @@ import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.debezium.LegacyMySqlDebeziumAvroMerger;
 import org.apache.hudi.exception.HoodieException;
 
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestHoodieRecordUtils {
-
   @Test
   void loadHoodieMerge() {
     String mergeClassName = HoodieAvroRecordMerger.class.getName();
@@ -51,5 +52,54 @@ class TestHoodieRecordUtils {
     String payloadClassName = DefaultHoodieRecordPayload.class.getName();
     HoodieRecordPayload payload = HoodieRecordUtils.loadPayload(payloadClassName, null, 0);
     assertEquals(payload.getClass().getName(), payloadClassName);
+  }
+
+  @Test
+  void testNullStrategyReturnsEmpty() {
+    Option<HoodieRecordMerger> result = HoodieRecordUtils.createRecordMergerFromPayloadClass(
+        null, Option.empty());
+    assertTrue(result.isEmpty());
+  }
+
+  @Test
+  void testNonPayloadStrategyReturnsEmpty() {
+    Option<HoodieRecordMerger> result = HoodieRecordUtils.createRecordMergerFromPayloadClass(
+        "custom-strategy", Option.empty());
+    assertTrue(result.isEmpty());
+  }
+
+  @Test
+  void testEmptyPayloadClassReturnsEmpty() {
+    Option<HoodieRecordMerger> result = HoodieRecordUtils.createRecordMergerFromPayloadClass(
+        HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID,
+        Option.empty());
+    assertTrue(result.isEmpty());
+  }
+
+  @Test
+  void testDefaultPayloadClassReturned() {
+    Option<HoodieRecordMerger> result = HoodieRecordUtils.createRecordMergerFromPayloadClass(
+        HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID,
+        Option.of("random-class"));
+    assertTrue(result.isPresent());
+    assertEquals(HoodieAvroRecordMerger.INSTANCE, result.get());
+  }
+
+  @Test
+  void testLegacyMySqlDebeziumClassReturnsInstance() {
+    Option<HoodieRecordMerger> result = HoodieRecordUtils.createRecordMergerFromPayloadClass(
+        HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID,
+        Option.of(LegacyMySqlDebeziumAvroMerger.class.getName()));
+    assertTrue(result.isPresent());
+    assertEquals(LegacyMySqlDebeziumAvroMerger.INSTANCE, result.get());
+  }
+
+  @Test
+  void testOtherClassReturnsAvroMergerInstance() {
+    Option<HoodieRecordMerger> result = HoodieRecordUtils.createRecordMergerFromPayloadClass(
+        HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID,
+        Option.of("some.other.class.Name"));
+    assertTrue(result.isPresent());
+    assertEquals(HoodieAvroRecordMerger.INSTANCE, result.get());
   }
 }
