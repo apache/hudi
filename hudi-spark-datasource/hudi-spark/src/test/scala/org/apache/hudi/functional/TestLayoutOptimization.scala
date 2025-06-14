@@ -36,7 +36,7 @@ import org.junit.jupiter.params.provider.Arguments.arguments
 
 import scala.collection.JavaConverters._
 
-@Tag("functional")
+@Tag("functional-c")
 class TestLayoutOptimization extends HoodieSparkClientTestBase {
   var spark: SparkSession = _
 

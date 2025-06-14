@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.hudi.command.index
+package org.apache.spark.sql.hudi.feature.index
 
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
