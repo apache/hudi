@@ -1122,9 +1122,10 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
 
     if (!metadataMetaClient.getActiveTimeline().getCommitsTimeline().containsInstant(instantTime)) {
       // if this is a new commit being applied to metadata for the first time
-      LOG.info("New commit at {} being applied to MDT.", instantTime);
+      LOG.info("New commit at {} being applied to Metadata table  {}", instantTime);
     } else {
-      throw new HoodieMetadataException("Starting the same commit in Metadata table more than once w/o rolling back : " + instantTime);
+      LOG.error("Rolling back already inflight commit in Metadata table {} ", instantTime);
+      getWriteClient().rollback(instantTime);
     }
 
     // this is where we might instantiate the write client to metadata table for the first time.
