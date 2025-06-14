@@ -391,6 +391,11 @@ public class SparkRDDWriteClient<T> extends
     SparkReleaseResources.releaseCachedData(context, config, basePath, instantTime);
   }
 
+  @Override
+  public SparkRDDWriteClient<T> createNewClient() {
+    return new SparkRDDWriteClient<>(context, HoodieWriteConfig.newBuilder().withProperties(config.getProps()).build());
+  }
+
   /**
    * Slim WriteStatus to hold info like total records, total record records,
    * HoodieWriteStat and whether the writeStatus is referring to metadata table or not.
