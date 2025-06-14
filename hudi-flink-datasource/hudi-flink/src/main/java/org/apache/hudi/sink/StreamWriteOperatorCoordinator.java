@@ -580,7 +580,7 @@ public class StreamWriteOperatorCoordinator
           LOG.error("The first 100 records-level errors for partition path {} and fileID {}:",
               ws.getPartitionPath(), ws.getFileId());
           ws.getErrors().entrySet().stream().limit(100).forEach(entry -> LOG.error("Error for key: "
-              + entry.getKey() + " and Exception: " + entry.getValue().getMessage()));
+              + entry.getKey() + " and Exception: " + entry.getValue().getMessage(), entry.getValue()));
         }
       });
       // Rolls back instant
