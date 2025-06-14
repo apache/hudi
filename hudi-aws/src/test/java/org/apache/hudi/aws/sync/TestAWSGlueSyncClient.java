@@ -259,6 +259,12 @@ class TestAWSGlueSyncClient {
     assertThrows(HoodieGlueSyncException.class, () -> awsGlueSyncClient.updateTableProperties(tableName, newTableProperties));
   }
 
+  @Test
+  void testTableAndDatabaseName() {
+    assertEquals(GlueTestUtil.DB_NAME, awsGlueSyncClient.getDatabaseName());
+    assertEquals(GlueTestUtil.TABLE_NAME, awsGlueSyncClient.getTableName());
+  }
+
   private CompletableFuture<GetTableResponse> getTableWithDefaultProps(String tableName, List<Column> columns, List<Column> partitionColumns) {
     String databaseName = "testdb";
     String inputFormatClass = "inputFormat";
