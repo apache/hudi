@@ -190,7 +190,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
    * @param failedWritesCleaningPolicy Cleaning policy on failed writes
    * @param engineContext              Engine context
    * @param inflightInstantTimestamp   Timestamp of any instant in progress
-   * @param streamingWritesEnabled     true when streaming writes to metadata table is enabled.
+   * @param streamingWritesEnabled     True when streaming writes to metadata table is enabled
    */
   protected HoodieBackedTableMetadataWriter(StorageConfiguration<?> storageConf,
                                             HoodieWriteConfig writeConfig,
@@ -1122,7 +1122,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
 
     if (!metadataMetaClient.getActiveTimeline().getCommitsTimeline().containsInstant(instantTime)) {
       // if this is a new commit being applied to metadata for the first time
-      LOG.info("New commit at {} being applied to Metadata table  {}", instantTime);
+      LOG.info("New commit at {} being applied to metadata table", instantTime);
     } else {
       LOG.error("Rolling back already inflight commit in Metadata table {} ", instantTime);
       getWriteClient().rollback(instantTime);
@@ -1165,14 +1165,17 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   }
 
   /**
-   * Upsert the prepped records to metadata table as a batch. This is expected to be invoked only when streaming writes to metadata table is enabled.
-   * When enabled, first call has to be made to {@link #streamWriteToMetadataTable(Pair, String)} and second call will be made to this method for non streaming metadata
-   * partitions.
+   * Secondary writes to the metadata table.
+   *
+   * <p>This is expected to be invoked only when streaming writes to metadata table is enabled.
+   * When enabled, first call has to be made to {@link #streamWriteToMetadataTable(Pair, String)} and second call will be made to this method
+   * for non-streaming metadata partitions.
+   *
    * @param preppedRecords Prepped records that needs to be ingested.
-   * @param instantTime instant time of interest.
+   * @param instantTime    Instant time of interest.
    * @return Engine specific HoodieData of {@link WriteStatus} for the writes to metadata table.
    */
-  public O batchWriteToMetadataTablePartitions(I preppedRecords, String instantTime) {
+  public O secondaryWriteToMetadataTablePartitions(I preppedRecords, String instantTime) {
     throw new UnsupportedOperationException("Not yet implemented");
   }
 
@@ -1180,20 +1183,20 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   public void completeStreamingCommit(String instantTime, HoodieEngineContext context, List<HoodieWriteStat> partialWriteStats, HoodieCommitMetadata metadata) {
     List<HoodieWriteStat> allWriteStats = new ArrayList<>(partialWriteStats);
     // update metadata for left over partitions which does not have streaming writes support.
-    allWriteStats.addAll(prepareAndWriteToNonStreamingPartitions(context, metadata, instantTime).map(WriteStatus::getStat).collectAsList());
+    allWriteStats.addAll(prepareAndWriteToNonStreamingPartitions(metadata, instantTime).map(WriteStatus::getStat).collectAsList());
     getWriteClient().commitStats(instantTime, allWriteStats, Option.empty(), HoodieTimeline.DELTA_COMMIT_ACTION,
         Collections.emptyMap(), Option.empty());
   }
 
-  private HoodieData<WriteStatus> prepareAndWriteToNonStreamingPartitions(HoodieEngineContext context, HoodieCommitMetadata commitMetadata, String instantTime) {
+  private HoodieData<WriteStatus> prepareAndWriteToNonStreamingPartitions(HoodieCommitMetadata commitMetadata, String instantTime) {
     Set<String> partitionsToUpdate = getNonStreamingMetadataPartitionsToUpdate();
     Map<String, HoodieData<HoodieRecord>> mdtPartitionsAndUnTaggedRecords = new BatchMetadataConversionFunction(instantTime, commitMetadata, partitionsToUpdate)
         .convertMetadata();
 
-    // write to mdt table for non streaming mdt partitions
+    // write to mdt table for non-streaming mdt partitions
     Pair<HoodieData<HoodieRecord>, List<HoodieFileGroupId>> taggedRecords = tagRecordsWithLocation(mdtPartitionsAndUnTaggedRecords, false);
     I preppedRecords = convertHoodieDataToEngineSpecificData(taggedRecords.getKey());
-    return convertEngineSpecificDataToHoodieData(batchWriteToMetadataTablePartitions(preppedRecords, instantTime));
+    return convertEngineSpecificDataToHoodieData(secondaryWriteToMetadataTablePartitions(preppedRecords, instantTime));
   }
 
   private Set<String> getNonStreamingMetadataPartitionsToUpdate() {

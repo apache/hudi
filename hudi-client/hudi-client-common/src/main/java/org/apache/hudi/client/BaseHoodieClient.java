@@ -41,7 +41,6 @@ import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieWriteConflictException;
-import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.storage.HoodieStorage;
@@ -77,7 +76,6 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
   protected final HoodieHeartbeatClient heartbeatClient;
   protected final TransactionManager txnManager;
   protected final TimeGenerator timeGenerator;
-  protected final boolean isMetadataTable;
 
   /**
    * Timeline Server has the same lifetime as that of Client. Any operations done on the same timeline service will be
@@ -112,7 +110,6 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
     this.context = context;
     this.basePath = clientConfig.getBasePath();
     this.config = clientConfig;
-    this.isMetadataTable = HoodieTableMetadata.isMetadataTable(config.getBasePath());
     this.timelineServer = timelineServer;
     shouldStopTimelineServer = !timelineServer.isPresent();
     this.heartbeatClient = new HoodieHeartbeatClient(storage, this.basePath,
@@ -325,7 +322,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
   }
 
   protected boolean isStreamingWriteToMetadataEnabled(HoodieTable table) {
-    return !isMetadataTable && config.isMetadataTableEnabled()
+    return config.isMetadataTableEnabled()
         && config.isMetadataStreamingWritesEnabled(table.getMetaClient().getTableConfig().getTableVersion());
   }
 }

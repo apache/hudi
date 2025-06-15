@@ -24,18 +24,18 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * Class to hold List of {@link HoodieWriteStat} for data table and metadata table.
+ * Class to hold list of {@link HoodieWriteStat} for data table and metadata table.
  */
-public class TableWriteStatsHolder {
+public class TableWriteStats {
 
   private final List<HoodieWriteStat> dataTableHoodieWriteStats;
   private final List<HoodieWriteStat> metadataTableHoodieWriteStats;
 
-  public TableWriteStatsHolder(List<HoodieWriteStat> dataTableHoodieWriteStats) {
+  public TableWriteStats(List<HoodieWriteStat> dataTableHoodieWriteStats) {
     this(dataTableHoodieWriteStats, Collections.emptyList());
   }
 
-  public TableWriteStatsHolder(List<HoodieWriteStat> dataTableHoodieWriteStats, List<HoodieWriteStat> metadataTableHoodieWriteStats) {
+  public TableWriteStats(List<HoodieWriteStat> dataTableHoodieWriteStats, List<HoodieWriteStat> metadataTableHoodieWriteStats) {
     this.dataTableHoodieWriteStats = dataTableHoodieWriteStats;
     this.metadataTableHoodieWriteStats = metadataTableHoodieWriteStats;
   }
@@ -46,5 +46,9 @@ public class TableWriteStatsHolder {
 
   public List<HoodieWriteStat> getMetadataTableHoodieWriteStats() {
     return metadataTableHoodieWriteStats;
+  }
+
+  public boolean isEmptyDataTableWriteStats() {
+    return dataTableHoodieWriteStats.isEmpty();
   }
 }
