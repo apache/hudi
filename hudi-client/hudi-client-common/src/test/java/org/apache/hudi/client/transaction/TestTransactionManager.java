@@ -245,10 +245,10 @@ public class TestTransactionManager extends HoodieCommonTestHarness {
     Assertions.assertFalse(transactionManager.getLastCompletedTransactionOwner().isPresent());
 
     // 6. Transactions with no owners should also go through
-    transactionManager.beginStateChange(Option.empty(), Option.empty());
+    transactionManager.beginStateChange();
     Assertions.assertFalse(transactionManager.getCurrentTransactionOwner().isPresent());
     Assertions.assertFalse(transactionManager.getLastCompletedTransactionOwner().isPresent());
-    transactionManager.endStateChange(Option.empty());
+    transactionManager.endStateChange();
     Assertions.assertFalse(transactionManager.getCurrentTransactionOwner().isPresent());
     Assertions.assertFalse(transactionManager.getLastCompletedTransactionOwner().isPresent());
   }
