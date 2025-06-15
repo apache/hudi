@@ -20,7 +20,6 @@ package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
-import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -67,8 +66,7 @@ public class SparkBulkInsertHelper<T, R> extends BaseBulkInsertHelper<T, HoodieD
                                                                  final HoodieWriteConfig config,
                                                                  final BaseCommitActionExecutor<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>, R> executor,
                                                                  final boolean performDedupe,
-                                                                 final Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner,
-                                                                 Option<ReaderContextFactory<T>> readerContextFactoryOpt) {
+                                                                 final Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner) {
     HoodieWriteMetadata result = new HoodieWriteMetadata();
 
     // Transition bulk_insert state to inflight
@@ -81,7 +79,7 @@ public class SparkBulkInsertHelper<T, R> extends BaseBulkInsertHelper<T, HoodieD
     // Write new files
     HoodieData<WriteStatus> writeStatuses =
         bulkInsert(inputRecords, instantTime, table, config, performDedupe, partitioner, false,
-            config.getBulkInsertShuffleParallelism(), new CreateHandleFactory(false), readerContextFactoryOpt);
+            config.getBulkInsertShuffleParallelism(), new CreateHandleFactory(false));
 
     // Update index
     ((BaseSparkCommitActionExecutor) executor).updateIndexAndMaybeRunPreCommitValidations(writeStatuses, result);
@@ -99,7 +97,7 @@ public class SparkBulkInsertHelper<T, R> extends BaseBulkInsertHelper<T, HoodieD
                                             BulkInsertPartitioner partitioner,
                                             boolean useWriterSchema,
                                             int parallelism) {
-    return bulkInsert(inputRecords, instantTime, table, config, performDedupe, partitioner, useWriterSchema, parallelism, null, Option.empty());
+    return bulkInsert(inputRecords, instantTime, table, config, performDedupe, partitioner, useWriterSchema, parallelism, null);
   }
 
   @Override
@@ -111,8 +109,7 @@ public class SparkBulkInsertHelper<T, R> extends BaseBulkInsertHelper<T, HoodieD
                                             BulkInsertPartitioner partitioner,
                                             boolean useWriterSchema,
                                             int configuredParallelism,
-                                            WriteHandleFactory writeHandleFactory,
-                                            Option<ReaderContextFactory<T>> readerContextFactoryOpt) {
+                                            WriteHandleFactory writeHandleFactory) {
 
     // De-dupe/merge if needed
     HoodieData<HoodieRecord<T>> dedupedRecords = inputRecords;
@@ -130,7 +127,7 @@ public class SparkBulkInsertHelper<T, R> extends BaseBulkInsertHelper<T, HoodieD
 
     JavaRDD<WriteStatus> writeStatusRDD = HoodieJavaRDD.getJavaRDD(repartitionedRecords)
         .mapPartitionsWithIndex(new BulkInsertMapFunction<>(instantTime,
-            partitioner.arePartitionRecordsSorted(), config, table, useWriterSchema, partitioner, writeHandleFactory, readerContextFactoryOpt), true)
+            partitioner.arePartitionRecordsSorted(), config, table, useWriterSchema, partitioner, writeHandleFactory), true)
         .flatMap(List::iterator);
 
     return HoodieJavaRDD.of(writeStatusRDD);

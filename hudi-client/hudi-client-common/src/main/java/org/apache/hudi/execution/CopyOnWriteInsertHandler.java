@@ -19,10 +19,8 @@
 package org.apache.hudi.execution;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.queue.HoodieConsumer;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.execution.HoodieLazyInsertIterable.HoodieInsertValueGenResult;
@@ -56,7 +54,6 @@ public class CopyOnWriteInsertHandler<T>
   private final String idPrefix;
   private final TaskContextSupplier taskContextSupplier;
   private final WriteHandleFactory writeHandleFactory;
-  private final Option<ReaderContextFactory<T>> readerContextFactoryOpt;
 
   // Tracks number of skipped records seen by this instance
   private int numSkippedRecords = 0;
@@ -70,8 +67,7 @@ public class CopyOnWriteInsertHandler<T>
   public CopyOnWriteInsertHandler(HoodieWriteConfig config, String instantTime,
                                   boolean areRecordsSorted, HoodieTable hoodieTable, String idPrefix,
                                   TaskContextSupplier taskContextSupplier,
-                                  WriteHandleFactory writeHandleFactory,
-                                  Option<ReaderContextFactory<T>> readerContextFactoryOpt) {
+                                  WriteHandleFactory writeHandleFactory) {
     this.config = config;
     this.instantTime = instantTime;
     this.areRecordsSorted = areRecordsSorted;
@@ -79,7 +75,6 @@ public class CopyOnWriteInsertHandler<T>
     this.idPrefix = idPrefix;
     this.taskContextSupplier = taskContextSupplier;
     this.writeHandleFactory = writeHandleFactory;
-    this.readerContextFactoryOpt = readerContextFactoryOpt;
   }
 
   @Override
@@ -105,7 +100,7 @@ public class CopyOnWriteInsertHandler<T>
       }
       // Lazily initialize the handle, for the first time
       handle = writeHandleFactory.create(config, instantTime, hoodieTable,
-          record.getPartitionPath(), idPrefix, taskContextSupplier, readerContextFactoryOpt);
+          record.getPartitionPath(), idPrefix, taskContextSupplier);
       handles.put(partitionPath, handle);
     }
 
@@ -114,7 +109,7 @@ public class CopyOnWriteInsertHandler<T>
       statuses.addAll(handle.close());
       // Open new handle
       handle = writeHandleFactory.create(config, instantTime, hoodieTable,
-          record.getPartitionPath(), idPrefix, taskContextSupplier, readerContextFactoryOpt);
+          record.getPartitionPath(), idPrefix, taskContextSupplier);
       handles.put(partitionPath, handle);
     }
     handle.write(record, genResult.schema, config.getProps());

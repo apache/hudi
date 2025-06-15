@@ -25,7 +25,6 @@ import org.apache.hudi.client.utils.SparkValidatorUtils;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -281,12 +280,11 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
       // Partition only
       partitionedRDD = mappedRDD.partitionBy(partitioner);
     }
-    ReaderContextFactory<T> readerContextFactory = context.getReaderContextFactory(table.getMetaClient());
     return HoodieJavaRDD.of(partitionedRDD.map(Tuple2::_2).mapPartitionsWithIndex((partition, recordItr) -> {
       if (WriteOperationType.isChangingRecords(operationType)) {
-        return handleUpsertPartition(instantTime, partition, recordItr, partitioner, Option.of(readerContextFactory));
+        return handleUpsertPartition(instantTime, partition, recordItr, partitioner);
       } else {
-        return handleInsertPartition(instantTime, partition, recordItr, partitioner, Option.of(readerContextFactory));
+        return handleInsertPartition(instantTime, partition, recordItr, partitioner);
       }
     }, true).flatMap(List::iterator));
   }
@@ -336,13 +334,13 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
 
   @SuppressWarnings("unchecked")
   protected Iterator<List<WriteStatus>> handleUpsertPartition(String instantTime, Integer partition, Iterator recordItr,
-                                                              Partitioner partitioner, Option<ReaderContextFactory<T>> readerContextFactoryOpt) {
+                                                              Partitioner partitioner) {
     SparkHoodiePartitioner upsertPartitioner = (SparkHoodiePartitioner) partitioner;
     BucketInfo binfo = upsertPartitioner.getBucketInfo(partition);
     BucketType btype = binfo.bucketType;
     try {
       if (btype.equals(BucketType.INSERT)) {
-        return handleInsert(binfo.fileIdPrefix, recordItr, readerContextFactoryOpt);
+        return handleInsert(binfo.fileIdPrefix, recordItr);
       } else if (btype.equals(BucketType.UPDATE)) {
         return handleUpdate(binfo.partitionPath, binfo.fileIdPrefix, recordItr);
       } else {
@@ -356,14 +354,13 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
   }
 
   protected Iterator<List<WriteStatus>> handleInsertPartition(String instantTime, Integer partition, Iterator recordItr,
-                                                              Partitioner partitioner, Option<ReaderContextFactory<T>> readerContextFactoryOpt) {
-    return handleUpsertPartition(instantTime, partition, recordItr, partitioner, readerContextFactoryOpt);
+                                                              Partitioner partitioner) {
+    return handleUpsertPartition(instantTime, partition, recordItr, partitioner);
   }
 
   @Override
   public Iterator<List<WriteStatus>> handleUpdate(String partitionPath, String fileId,
-                                                  Iterator<HoodieRecord<T>> recordItr,
-                                                  Option<ReaderContextFactory<T>> readerContextFactoryOpt)
+                                                  Iterator<HoodieRecord<T>> recordItr)
       throws IOException {
     // This is needed since sometimes some buckets are never picked in getPartition() and end up with 0 records
     if (!recordItr.hasNext()) {
@@ -374,7 +371,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     // Pre-check: if the old file does not exist (which may happen in bucket index case), fallback to insert
     if (!table.getBaseFileOnlyView().getLatestBaseFile(partitionPath, fileId).isPresent()
         && HoodieIndex.IndexType.BUCKET.equals(config.getIndexType())) {
-      return handleInsert(fileId, recordItr, readerContextFactoryOpt);
+      return handleInsert(fileId, recordItr);
     }
 
     // these are updates
@@ -394,14 +391,14 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
   }
 
   @Override
-  public Iterator<List<WriteStatus>> handleInsert(String idPfx, Iterator<HoodieRecord<T>> recordItr, Option<ReaderContextFactory<T>> readerContextFactoryOpt) {
+  public Iterator<List<WriteStatus>> handleInsert(String idPfx, Iterator<HoodieRecord<T>> recordItr) {
     // This is needed since sometimes some buckets are never picked in getPartition() and end up with 0 records
     if (!recordItr.hasNext()) {
       LOG.info("Empty partition");
       return Collections.emptyIterator();
     }
     return new SparkLazyInsertIterable<>(recordItr, true, config, instantTime, table, idPfx,
-        taskContextSupplier, new CreateHandleFactory<>(), readerContextFactoryOpt);
+        taskContextSupplier, new CreateHandleFactory<>());
   }
 
   public Partitioner getUpsertPartitioner(WorkloadProfile profile) {

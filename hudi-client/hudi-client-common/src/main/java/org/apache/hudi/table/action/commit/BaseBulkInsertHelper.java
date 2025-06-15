@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table.action.commit;
 
-import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.function.SerializableFunctionUnchecked;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -39,8 +38,7 @@ public abstract class BaseBulkInsertHelper<T, I, K, O, R> extends ParallelismHel
   public abstract HoodieWriteMetadata<O> bulkInsert(I inputRecords, String instantTime,
                                                     HoodieTable<T, I, K, O> table, HoodieWriteConfig config,
                                                     BaseCommitActionExecutor<T, I, K, O, R> executor, boolean performDedupe,
-                                                    Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner,
-                                                    Option<ReaderContextFactory<T>> readerContextFactoryOpt);
+                                                    Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner);
 
   /**
    * Only write input records. Does not change timeline/index. Return information about new files created.
@@ -53,6 +51,5 @@ public abstract class BaseBulkInsertHelper<T, I, K, O, R> extends ParallelismHel
                                BulkInsertPartitioner partitioner,
                                boolean addMetadataFields,
                                int parallelism,
-                               WriteHandleFactory writeHandleFactory,
-                               Option<ReaderContextFactory<T>> readerContextFactoryOpt);
+                               WriteHandleFactory writeHandleFactory);
 }

@@ -174,7 +174,7 @@ public class SingleSparkJobConsistentHashingExecutionStrategy<T> extends SingleS
           // records sorted, so we can close the previous handles
           closeOpenHandles();
         }
-        handle = writeHandleFactory.create(config, instantTime, hoodieTable, record.getPartitionPath(), fileIdPrefix, taskContextSupplier, Option.empty());
+        handle = writeHandleFactory.create(config, instantTime, hoodieTable, record.getPartitionPath(), fileIdPrefix, taskContextSupplier);
         writeHandles.put(fileIdPrefix, handle);
       }
       handle.write(record, schema, config.getProps());

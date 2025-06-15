@@ -181,11 +181,10 @@ public class RDDConsistentBucketBulkInsertPartitioner<T> extends RDDBucketIndexP
   public Option<WriteHandleFactory> getWriteHandleFactory(int idx) {
     return super.getWriteHandleFactory(idx).map(writeHandleFactory -> new WriteHandleFactory() {
       @Override
-      public HoodieWriteHandle create(HoodieWriteConfig config, String commitTime, HoodieTable hoodieTable, String partitionPath, String fileIdPrefix, TaskContextSupplier taskContextSupplier,
-                                      Option readerContextFactoryOpt) {
+      public HoodieWriteHandle create(HoodieWriteConfig config, String commitTime, HoodieTable hoodieTable, String partitionPath, String fileIdPrefix, TaskContextSupplier taskContextSupplier) {
         // Ensure we do not create append handle for consistent hashing bulk_insert, align with `ConsistentBucketBulkInsertDataInternalWriterHelper`
         ValidationUtils.checkArgument(!doAppend.get(idx), "Consistent Hashing bulk_insert only support write to new file group");
-        return writeHandleFactory.create(config, commitTime, hoodieTable, partitionPath, fileIdPrefix, taskContextSupplier, Option.empty());
+        return writeHandleFactory.create(config, commitTime, hoodieTable, partitionPath, fileIdPrefix, taskContextSupplier);
       }
     });
   }

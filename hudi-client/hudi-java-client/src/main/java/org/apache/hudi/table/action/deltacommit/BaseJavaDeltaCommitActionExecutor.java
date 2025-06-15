@@ -21,7 +21,6 @@ package org.apache.hudi.table.action.deltacommit;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
@@ -70,8 +69,7 @@ abstract class BaseJavaDeltaCommitActionExecutor<T> extends BaseJavaCommitAction
   }
 
   @Override
-  public Iterator<List<WriteStatus>> handleUpdate(String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr,
-                                                  Option<ReaderContextFactory<T>> readerContextFactoryOpt) throws IOException {
+  public Iterator<List<WriteStatus>> handleUpdate(String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr) throws IOException {
     LOG.info("Merging updates for commit " + instantTime + " for file " + fileId);
     if (!table.getIndex().canIndexLogFiles() && partitioner != null
         && partitioner.getSmallFileIds().contains(fileId)) {
@@ -86,13 +84,13 @@ abstract class BaseJavaDeltaCommitActionExecutor<T> extends BaseJavaCommitAction
   }
 
   @Override
-  public Iterator<List<WriteStatus>> handleInsert(String idPfx, Iterator<HoodieRecord<T>> recordItr, Option<ReaderContextFactory<T>> readerContextFactoryOpt) {
+  public Iterator<List<WriteStatus>> handleInsert(String idPfx, Iterator<HoodieRecord<T>> recordItr) {
     // If canIndexLogFiles, write inserts to log files else write inserts to base files
     if (table.getIndex().canIndexLogFiles()) {
       return new JavaLazyInsertIterable<>(recordItr, true, config, instantTime, table, idPfx,
-          taskContextSupplier, new AppendHandleFactory<>(), Option.empty());
+          taskContextSupplier, new AppendHandleFactory<>());
     } else {
-      return super.handleInsert(idPfx, recordItr, Option.empty());
+      return super.handleInsert(idPfx, recordItr);
     }
   }
 }
