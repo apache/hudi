@@ -71,8 +71,9 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
 
     if (HoodieTableMetadata.isMetadataTable(config.getBasePath())) {
       ValidationUtils.checkArgument(dataTableWriteStats.isEmpty(), "Metadata table should not expect any data table write status.");
+      return new TableWriteStats(mdtWriteStats, Collections.emptyList());
     }
-    return new TableWriteStats(mdtWriteStats, Collections.emptyList());
+    return new TableWriteStats(dataTableWriteStats, mdtWriteStats);
   }
 
   @Override

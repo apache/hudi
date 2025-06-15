@@ -425,7 +425,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
   /**
    * Commit Log Compaction and track metrics.
    */
-  protected void completeLogCompaction(HoodieCommitMetadata metadata, HoodieTable table, String logCompactionCommitTime, List<HoodieWriteStat> metadataWriteStatsSoFar) {
+  protected void completeLogCompaction(HoodieCommitMetadata metadata, HoodieTable table, String logCompactionCommitTime, List<HoodieWriteStat> partialMetadataWriteStats) {
     this.context.setJobStatus(this.getClass().getSimpleName(), "Collect log compaction write status and commit compaction");
     List<HoodieWriteStat> writeStats = metadata.getWriteStats();
     handleWriteErrors(writeStats, TableServiceType.LOG_COMPACT);
@@ -436,7 +436,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       preCommit(metadata);
       finalizeWrite(table, logCompactionCommitTime, writeStats);
       // commit to data table after committing to metadata table.
-      writeToMetadataTable(table, logCompactionCommitTime, metadata, metadataWriteStatsSoFar);
+      writeToMetadataTable(table, logCompactionCommitTime, metadata, partialMetadataWriteStats);
       LOG.info("Committing Log Compaction {}", logCompactionCommitTime);
       CompactHelpers.getInstance().completeInflightLogCompaction(table, logCompactionCommitTime, metadata);
       LOG.debug("Log Compaction {} finished with result {}", logCompactionCommitTime, metadata);
@@ -556,7 +556,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
                                   List<HoodieWriteStat> writeStats,
                                   HoodieTable table,
                                   String clusteringCommitTime,
-                                  List<HoodieWriteStat> metadataWriteStatsSoFar) {
+                                  List<HoodieWriteStat> partialMetadataWriteStats) {
 
     handleWriteErrors(writeStats, TableServiceType.CLUSTER);
     final HoodieInstant clusteringInstant = ClusteringUtils.getInflightClusteringInstant(clusteringCommitTime,
@@ -571,7 +571,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
         preCommit(replaceCommitMetadata);
       }
       // Update table's metadata (table)
-      writeToMetadataTable(table, clusteringInstant.requestedTime(), replaceCommitMetadata, metadataWriteStatsSoFar);
+      writeToMetadataTable(table, clusteringInstant.requestedTime(), replaceCommitMetadata, partialMetadataWriteStats);
 
       LOG.info("Committing Clustering {} for table {}", clusteringCommitTime, table.getConfig().getBasePath());
 
