@@ -339,7 +339,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .withProperties(cfg.getMetadataConfig().getProps())
             .withMetadataIndexColumnStats(false)
-            .withDropMetadataIndex(COLUMN_STATS.getPartitionPath())
+            .withMetadataIndexPartitionStats(false)
             .build())
         .build();
 

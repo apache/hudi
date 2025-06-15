@@ -22,6 +22,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -30,6 +31,7 @@ import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.io.storage.HoodieFileWriter;
@@ -38,6 +40,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -62,7 +65,7 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   protected long recordsDeleted = 0;
   private Map<String, HoodieRecord<T>> recordMap;
   private boolean useWriterSchema = false;
-  private final boolean preserveMetadata;
+  private boolean preserveMetadata;
 
   public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                             String partitionPath, String fileId, TaskContextSupplier taskContextSupplier) {
@@ -116,8 +119,8 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
    * Called by the compactor code path.
    */
   public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-      String partitionPath, String fileId, Map<String, HoodieRecord<T>> recordMap,
-      TaskContextSupplier taskContextSupplier) {
+                            String partitionPath, String fileId, Map<String, HoodieRecord<T>> recordMap,
+                            TaskContextSupplier taskContextSupplier) {
     this(config, instantTime, hoodieTable, partitionPath, fileId, taskContextSupplier, true);
     this.recordMap = recordMap;
     this.useWriterSchema = true;
@@ -143,10 +146,12 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
 
         if (preserveMetadata) {
           HoodieRecord populatedRecord = updateFileName(record, schema, writeSchemaWithMetaFields, path.getName(), config.getProps());
+          trackMetadataIndexStats(populatedRecord);
           fileWriter.write(record.getRecordKey(), populatedRecord, writeSchemaWithMetaFields);
         } else {
           // rewrite the record to include metadata fields in schema, and the values will be set later.
           record = record.prependMetaFields(schema, writeSchemaWithMetaFields, new MetadataValues(), config.getProps());
+          trackMetadataIndexStats(record);
           fileWriter.writeWithMetadata(record.getKey(), record, writeSchemaWithMetaFields);
         }
 
@@ -171,6 +176,23 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       writeStatus.markFailure(record, t, recordMetadata);
       LOG.error("Error writing record " + record, t);
     }
+  }
+
+  private void trackMetadataIndexStats(HoodieRecord record) {
+    if (!config.isSecondaryIndexEnabled() || secondaryIndexDefns.isEmpty() || !config.isMetadataStreamingWritesEnabled(hoodieTable.getMetaClient().getTableConfig().getTableVersion())) {
+      return;
+    }
+
+    // Add secondary index records for all the inserted records
+    secondaryIndexDefns.forEach(secondaryIndexPartitionPathFieldPair -> {
+      String secondaryIndexSourceField = String.join(".",secondaryIndexPartitionPathFieldPair.getValue().getSourceFields());
+      if (record instanceof HoodieAvroIndexedRecord) {
+        Object secondaryKey = ((GenericRecord)((HoodieAvroIndexedRecord) record).getData()).get(secondaryIndexSourceField);
+        if (secondaryKey != null) {
+          writeStatus.getIndexStats().addSecondaryIndexStats(secondaryIndexPartitionPathFieldPair.getKey(), record.getRecordKey(), secondaryKey.toString(), false);
+        }
+      }
+    });
   }
 
   protected HoodieRecord<T> updateFileName(HoodieRecord<T> record, Schema schema, Schema targetSchema, String fileName, Properties prop) {
@@ -199,6 +221,11 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   @Override
   public IOType getIOType() {
     return IOType.CREATE;
+  }
+
+  @VisibleForTesting
+  public void setPreserveMetadata(boolean preserveMetadata) {
+    this.preserveMetadata = preserveMetadata;
   }
 
   /**

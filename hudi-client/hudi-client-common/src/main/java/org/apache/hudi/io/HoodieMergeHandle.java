@@ -22,12 +22,12 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.model.IOType;
@@ -52,6 +52,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -130,7 +131,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
                            Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
                            TaskContextSupplier taskContextSupplier, HoodieBaseFile baseFile, Option<BaseKeyGenerator> keyGeneratorOpt) {
     super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier);
-    init(fileId, recordItr);
+    init(recordItr);
     init(fileId, partitionPath, baseFile);
     validateAndSetAndKeyGenProps(keyGeneratorOpt, config.populateMetaFields());
   }
@@ -263,14 +264,14 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
   /**
    * Load the new incoming records in a map and return partitionPath.
    */
-  protected void init(String fileId, Iterator<HoodieRecord<T>> newRecordsItr) {
+  protected void init(Iterator<HoodieRecord<T>> newRecordsItr) {
     initializeIncomingRecordsMap();
     while (newRecordsItr.hasNext()) {
       HoodieRecord<T> record = newRecordsItr.next();
       // update the new location of the record, so we know where to find it next
       if (needsUpdateLocation()) {
         record.unseal();
-        record.setNewLocation(new HoodieRecordLocation(instantTime, fileId));
+        record.setNewLocation(newRecordLocation);
         record.seal();
       }
       // NOTE: Once Records are added to map (spillable-map), DO NOT change it as they won't persist
@@ -302,7 +303,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       }
       updatedRecordsWritten++;
     }
-    return writeRecord(newRecord, combineRecordOpt, writerSchema, config.getPayloadConfig().getProps(), isDelete);
+    return writeRecord(newRecord, Option.of(oldRecord), combineRecordOpt, writerSchema, config.getPayloadConfig().getProps(), isDelete);
   }
 
   protected void writeInsertRecord(HoodieRecord<T> newRecord) throws IOException {
@@ -316,16 +317,17 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
 
   protected void writeInsertRecord(HoodieRecord<T> newRecord, Schema schema, Properties prop)
       throws IOException {
-    if (writeRecord(newRecord, Option.of(newRecord), schema, prop, HoodieOperation.isDelete(newRecord.getOperation()))) {
+    if (writeRecord(newRecord, Option.empty(), Option.of(newRecord), schema, prop, HoodieOperation.isDelete(newRecord.getOperation()))) {
       insertRecordsWritten++;
     }
   }
 
   protected boolean writeRecord(HoodieRecord<T> newRecord, Option<HoodieRecord> combineRecord, Schema schema, Properties prop) throws IOException {
-    return writeRecord(newRecord, combineRecord, schema, prop, false);
+    return writeRecord(newRecord, Option.empty(), combineRecord, schema, prop, false);
   }
 
-  private boolean writeRecord(HoodieRecord<T> newRecord, Option<HoodieRecord> combineRecord, Schema schema, Properties prop, boolean isDelete) throws IOException {
+  private boolean writeRecord(HoodieRecord<T> newRecord, Option<HoodieRecord<T>> oldRecordOpt, Option<HoodieRecord> combineRecord, Schema schema, Properties prop,
+                              boolean isDelete) throws IOException {
     Option recordMetadata = newRecord.getMetadata();
     if (!partitionPath.equals(newRecord.getPartitionPath())) {
       HoodieUpsertException failureEx = new HoodieUpsertException("mismatched partition path, record partition: "
@@ -339,12 +341,15 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
         boolean decision = recordMerger.shouldFlush(combineRecord.get(), schema, config.getProps());
 
         if (decision) { // CASE (1): Flush the merged record.
+          trackMetadataIndexStats(Option.of(newRecord.getKey()), combineRecord, oldRecordOpt, false);
           writeToFile(newRecord.getKey(), combineRecord.get(), schema, prop, preserveMetadata);
           recordsWritten++;
         } else {  // CASE (2): A delete operation.
+          trackMetadataIndexStats(Option.empty(), combineRecord, oldRecordOpt, true);
           recordsDeleted++;
         }
       } else {
+        trackMetadataIndexStats(Option.empty(), combineRecord, oldRecordOpt, true);
         recordsDeleted++;
         // Clear the new location as the record was deleted
         newRecord.unseal();
@@ -451,6 +456,51 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
   protected HoodieRecord<T> updateFileName(HoodieRecord<T> record, Schema schema, Schema targetSchema, String fileName, Properties prop) {
     MetadataValues metadataValues = new MetadataValues().setFileName(fileName);
     return record.prependMetaFields(schema, targetSchema, metadataValues, prop);
+  }
+
+  private void trackMetadataIndexStats(Option<HoodieKey> hoodieKeyOpt, Option<HoodieRecord> combinedRecordOpt, Option<HoodieRecord<T>> oldRecordOpt, boolean isDelete) {
+    if (!config.isSecondaryIndexEnabled() || secondaryIndexDefns.isEmpty() || !config.isMetadataStreamingWritesEnabled(hoodieTable.getMetaClient().getTableConfig().getTableVersion())) {
+      return;
+    }
+    secondaryIndexDefns.forEach(secondaryIndexPartitionPathFieldPair -> {
+      String secondaryIndexSourceField = String.join(".",secondaryIndexPartitionPathFieldPair.getValue().getSourceFields());
+      Option<Object> oldSecondaryKeyOpt = Option.empty();
+      Option<Object> newSecondaryKeyOpt = Option.empty();
+      if (oldRecordOpt.isPresent() && oldRecordOpt.get() instanceof HoodieAvroIndexedRecord) {
+        HoodieRecord<T> oldRecord = oldRecordOpt.get();
+        Object oldSecondaryKey = ((GenericRecord)((HoodieAvroIndexedRecord) oldRecord).getData()).get(secondaryIndexSourceField);
+        if (oldSecondaryKey != null) {
+          oldSecondaryKeyOpt = Option.of(oldSecondaryKey);
+        }
+      }
+
+      if (combinedRecordOpt.isPresent() && combinedRecordOpt.get() instanceof HoodieAvroIndexedRecord && !isDelete) {
+        GenericRecord genericRecord = ((GenericRecord) ((HoodieAvroIndexedRecord) combinedRecordOpt.get()).getData());
+        Object secondaryKey = (genericRecord).get(secondaryIndexSourceField);
+        if (secondaryKey != null) {
+          newSecondaryKeyOpt = Option.of(secondaryKey);
+        }
+      }
+
+      boolean shouldUpdate = true;
+      if (oldSecondaryKeyOpt.isPresent() && newSecondaryKeyOpt.isPresent()) {
+        // If new secondary key is different from old secondary key, update secondary index records
+        shouldUpdate = !oldSecondaryKeyOpt.get().equals(newSecondaryKeyOpt.get());
+      }
+      if (shouldUpdate) {
+        String recordKey = hoodieKeyOpt.map(HoodieKey::getRecordKey)
+            .or(() -> oldRecordOpt.map(HoodieRecord::getRecordKey))
+            .or(() -> combinedRecordOpt.map(HoodieRecord::getRecordKey))
+            .get();
+        // Add secondary index delete records for old records
+        oldSecondaryKeyOpt.ifPresent(secKey -> addSecondaryIndexStat(secondaryIndexPartitionPathFieldPair.getKey(), recordKey, secKey, true));
+        newSecondaryKeyOpt.ifPresent(secKey -> addSecondaryIndexStat(secondaryIndexPartitionPathFieldPair.getKey(), recordKey, secKey, false));
+      }
+    });
+  }
+
+  private void addSecondaryIndexStat(String secondaryIndexPartitionPath, String recordKey, Object secKey, boolean isDeleted) {
+    writeStatus.getIndexStats().addSecondaryIndexStats(secondaryIndexPartitionPath, recordKey, secKey.toString(), isDeleted);
   }
 
   @Override

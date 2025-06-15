@@ -100,7 +100,7 @@ public abstract class HoodieSparkTable<T>
   @Override
   protected Option<HoodieTableMetadataWriter> getMetadataWriter(
       String triggeringInstantTimestamp,
-      HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy) {
+      HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy, boolean streamingWrites) {
     if (isMetadataTable()) {
       return Option.empty();
     }
@@ -112,8 +112,8 @@ public abstract class HoodieSparkTable<T>
       // Create the metadata table writer. First time after the upgrade this creation might trigger
       // metadata table bootstrapping. Bootstrapping process could fail and checking the table
       // existence after the creation is needed.
-      HoodieTableMetadataWriter metadataWriter = SparkMetadataWriterFactory.create(
-          getContext().getStorageConf(), config, failedWritesCleaningPolicy, getContext(),
+      HoodieTableMetadataWriter metadataWriter = streamingWrites ? SparkMetadataWriterFactory.createWithStreamingWrites(getContext().getStorageConf(), config, failedWritesCleaningPolicy, getContext(),
+          Option.of(triggeringInstantTimestamp)) : SparkMetadataWriterFactory.create(getContext().getStorageConf(), config, failedWritesCleaningPolicy, getContext(),
           Option.of(triggeringInstantTimestamp), metaClient.getTableConfig());
       try {
         if (isMetadataTableExists || metaClient.getStorage().exists(
