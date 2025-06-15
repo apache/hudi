@@ -18,9 +18,7 @@
 
 package org.apache.hudi.io;
 
-import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.engine.TaskContextSupplier;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
@@ -48,8 +46,7 @@ public class SingleFileHandleCreateFactory<T, I, K, O> extends CreateHandleFacto
   @Override
   public HoodieWriteHandle<T, I, K, O> create(final HoodieWriteConfig hoodieConfig, final String commitTime,
                                               final HoodieTable<T, I, K, O> hoodieTable, final String partitionPath,
-                                              final String fileIdPrefix, TaskContextSupplier taskContextSupplier,
-                                              Option<ReaderContextFactory<T>> readerContextFactoryOpt) {
+                                              final String fileIdPrefix, TaskContextSupplier taskContextSupplier) {
 
     if (isHandleCreated.compareAndSet(false, true)) {
       return new HoodieUnboundedCreateHandle(hoodieConfig, commitTime, hoodieTable, partitionPath,

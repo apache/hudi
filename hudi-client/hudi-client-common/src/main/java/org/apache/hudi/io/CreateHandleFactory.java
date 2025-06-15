@@ -18,9 +18,7 @@
 
 package org.apache.hudi.io;
 
-import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.engine.TaskContextSupplier;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
@@ -41,10 +39,9 @@ public class CreateHandleFactory<T, I, K, O> extends WriteHandleFactory<T, I, K,
   @Override
   public HoodieWriteHandle<T, I, K, O> create(final HoodieWriteConfig hoodieConfig, final String commitTime,
                                               final HoodieTable<T, I, K, O> hoodieTable, final String partitionPath,
-                                              final String fileIdPrefix, TaskContextSupplier taskContextSupplier,
-                                              Option<ReaderContextFactory<T>> readerContextFactoryOpt) {
+                                              final String fileIdPrefix, TaskContextSupplier taskContextSupplier) {
 
     return new HoodieCreateHandle(hoodieConfig, commitTime, hoodieTable, partitionPath,
-        getNextFileId(fileIdPrefix), taskContextSupplier, preserveMetadata, readerContextFactoryOpt);
+        getNextFileId(fileIdPrefix), taskContextSupplier, preserveMetadata);
   }
 }
