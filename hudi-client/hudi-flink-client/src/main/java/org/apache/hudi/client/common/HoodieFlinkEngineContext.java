@@ -63,7 +63,6 @@ import static org.apache.hudi.common.function.FunctionWrapper.throwingForeachWra
 import static org.apache.hudi.common.function.FunctionWrapper.throwingMapToPairWrapper;
 import static org.apache.hudi.common.function.FunctionWrapper.throwingMapWrapper;
 import static org.apache.hudi.common.function.FunctionWrapper.throwingReduceWrapper;
-import static org.apache.hudi.common.model.HoodieFileFormat.HFILE;
 
 /**
  * A flink engine implementation of HoodieEngineContext.
@@ -212,8 +211,8 @@ public class HoodieFlinkEngineContext extends HoodieEngineContext {
 
   @Override
   public ReaderContextFactory<?> getReaderContextFactory(HoodieTableMetaClient metaClient) {
-    // metadata table and HFile reads are only supported by the AvroReaderContext.
-    if (metaClient.isMetadataTable() || HFILE.getFileExtension().equals(metaClient.getTableConfig().getBaseFileFormat().getFileExtension())) {
+    // metadata table reads are only supported by the AvroReaderContext.
+    if (metaClient.isMetadataTable()) {
       return new AvroReaderContextFactory(metaClient);
     }
     return (ReaderContextFactory<?>) ReflectionUtils.loadClass("org.apache.hudi.table.format.FlinkReaderContextFactory", metaClient);

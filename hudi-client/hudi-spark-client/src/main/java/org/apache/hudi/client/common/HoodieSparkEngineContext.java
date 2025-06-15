@@ -66,8 +66,6 @@ import java.util.stream.Stream;
 
 import scala.Tuple2;
 
-import static org.apache.hudi.common.model.HoodieFileFormat.HFILE;
-
 /**
  * A Spark engine implementation of HoodieEngineContext.
  */
@@ -253,8 +251,8 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
 
   @Override
   public ReaderContextFactory<?> getReaderContextFactory(HoodieTableMetaClient metaClient) {
-    // metadata table and HFile reads are only supported by the AvroReaderContext.
-    if (metaClient.isMetadataTable() || HFILE.getFileExtension().equals(metaClient.getTableConfig().getBaseFileFormat().getFileExtension())) {
+    // metadata table are only supported by the AvroReaderContext.
+    if (metaClient.isMetadataTable()) {
       return new AvroReaderContextFactory(metaClient);
     }
     return new SparkReaderContextFactory(this, metaClient);
