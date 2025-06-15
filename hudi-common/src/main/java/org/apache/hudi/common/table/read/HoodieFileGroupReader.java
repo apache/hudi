@@ -33,6 +33,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.PartitionPathParser;
+import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordReader;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
@@ -122,7 +123,10 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     this.storage = storage;
     this.hoodieBaseFileOption = fileSlice.getBaseFile();
     readerContext.setHasBootstrapBaseFile(hoodieBaseFileOption.isPresent() && hoodieBaseFileOption.get().getBootstrapBaseFile().isPresent());
-    this.logFiles = fileSlice.getLogFiles().sorted(HoodieLogFile.getLogFileComparator()).collect(Collectors.toList());
+    this.logFiles = fileSlice.getLogFiles()
+        .sorted(HoodieLogFile.getLogFileComparator())
+        .filter(logFile -> !logFile.getFileName().endsWith(HoodieCDCUtils.CDC_LOGFILE_SUFFIX))
+        .collect(Collectors.toList());
     readerContext.setHasLogFiles(!this.logFiles.isEmpty());
     if (readerContext.getHasLogFiles() && start != 0) {
       throw new IllegalArgumentException("Filegroup reader is doing log file merge but not reading from the start of the base file");

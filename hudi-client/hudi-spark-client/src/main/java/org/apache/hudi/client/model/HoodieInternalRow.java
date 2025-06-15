@@ -130,7 +130,7 @@ public class HoodieInternalRow extends InternalRow {
     if (ordinal < metaFields.length) {
       return metaFields[ordinal] == null;
     }
-    return sourceRow.isNullAt(rebaseOrdinal(ordinal));
+    return sourceRow == null || sourceRow.isNullAt(rebaseOrdinal(ordinal));
   }
 
   @Override
@@ -138,7 +138,7 @@ public class HoodieInternalRow extends InternalRow {
     if (ordinal < metaFields.length) {
       return metaFields[ordinal];
     }
-    return sourceRow.getUTF8String(rebaseOrdinal(ordinal));
+    return sourceRow == null ? null : sourceRow.getUTF8String(rebaseOrdinal(ordinal));
   }
 
   @Override
@@ -147,7 +147,7 @@ public class HoodieInternalRow extends InternalRow {
       validateMetaFieldDataType(dataType);
       return metaFields[ordinal];
     }
-    return sourceRow.get(rebaseOrdinal(ordinal), dataType);
+    return sourceRow == null ? null : sourceRow.get(rebaseOrdinal(ordinal), dataType);
   }
 
   @Override
@@ -195,7 +195,7 @@ public class HoodieInternalRow extends InternalRow {
   @Override
   public Decimal getDecimal(int ordinal, int precision, int scale) {
     ruleOutMetaFieldsAccess(ordinal, Decimal.class);
-    return sourceRow.getDecimal(rebaseOrdinal(ordinal), precision, scale);
+    return sourceRow == null ? null : sourceRow.getDecimal(rebaseOrdinal(ordinal), precision, scale);
   }
 
   @Override
@@ -207,25 +207,25 @@ public class HoodieInternalRow extends InternalRow {
   @Override
   public CalendarInterval getInterval(int ordinal) {
     ruleOutMetaFieldsAccess(ordinal, CalendarInterval.class);
-    return sourceRow.getInterval(rebaseOrdinal(ordinal));
+    return sourceRow == null ? null : sourceRow.getInterval(rebaseOrdinal(ordinal));
   }
 
   @Override
   public InternalRow getStruct(int ordinal, int numFields) {
     ruleOutMetaFieldsAccess(ordinal, InternalRow.class);
-    return sourceRow.getStruct(rebaseOrdinal(ordinal), numFields);
+    return sourceRow == null ? null : sourceRow.getStruct(rebaseOrdinal(ordinal), numFields);
   }
 
   @Override
   public ArrayData getArray(int ordinal) {
     ruleOutMetaFieldsAccess(ordinal, ArrayData.class);
-    return sourceRow.getArray(rebaseOrdinal(ordinal));
+    return sourceRow == null ? null : sourceRow.getArray(rebaseOrdinal(ordinal));
   }
 
   @Override
   public MapData getMap(int ordinal) {
     ruleOutMetaFieldsAccess(ordinal, MapData.class);
-    return sourceRow.getMap(rebaseOrdinal(ordinal));
+    return sourceRow == null ? null : sourceRow.getMap(rebaseOrdinal(ordinal));
   }
 
   @Override
