@@ -21,7 +21,6 @@ package org.apache.hudi.client;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieIndexCommitMetadata;
-import org.apache.hudi.avro.model.HoodieIndexPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRestorePlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
@@ -887,13 +886,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     if (failedRestore.isPresent() && savepointToRestoreTimestamp.equals(RestoreUtils.getSavepointToRestoreTimestamp(table, failedRestore.get()))) {
       return Pair.of(failedRestore.get().requestedTime(), Option.of(RestoreUtils.getRestorePlan(table.getMetaClient(), failedRestore.get())));
     }
-    txnManager.beginStateChange(Option.empty(), Option.empty());
-    try {
-      final String restoreInstantTimestamp = createNewInstantTime(false);
-      return Pair.of(restoreInstantTimestamp, table.scheduleRestore(context, restoreInstantTimestamp, savepointToRestoreTimestamp));
-    } finally {
-      txnManager.endStateChange(Option.empty());
-    }
+    return txnManager.executeStateChangeWithInstant(restoreInstantTimestamp -> Pair.of(restoreInstantTimestamp, table.scheduleRestore(context, restoreInstantTimestamp, savepointToRestoreTimestamp)));
   }
 
   /**
@@ -1018,11 +1011,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     CleanerUtils.rollbackFailedWrites(config.getFailedWritesCleanPolicy(),
         HoodieTimeline.COMMIT_ACTION, () -> tableServiceClient.rollbackFailedWrites(metaClient));
 
-    txnManager.beginStateChange(Option.empty(), lastCompletedTxnAndMetadata.map(Pair::getLeft));
-    String instantTime;
-    HoodieInstant instant = null;
-    try {
-      instantTime = providedInstantTime.orElseGet(() -> createNewInstantTime(false));
+    return txnManager.executeStateChangeWithInstant(providedInstantTime, lastCompletedTxnAndMetadata.map(Pair::getLeft), instantTime -> {
       // check there are no inflight restore before starting a new commit.
       HoodieTimeline inflightRestoreTimeline = metaClient.getActiveTimeline().getRestoreTimeline().filterInflightsAndRequested();
       ValidationUtils.checkArgument(inflightRestoreTimeline.countInstants() == 0,
@@ -1035,15 +1024,12 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       }
 
       if (ClusteringUtils.isClusteringOrReplaceCommitAction(actionType)) {
-        instant = metaClient.getActiveTimeline().createRequestedCommitWithReplaceMetadata(instantTime, actionType);
+        metaClient.getActiveTimeline().createRequestedCommitWithReplaceMetadata(instantTime, actionType);
       } else {
-        instant = metaClient.createNewInstant(State.REQUESTED, actionType, instantTime);
-        metaClient.getActiveTimeline().createNewInstant(instant);
+        metaClient.getActiveTimeline().createNewInstant(metaClient.createNewInstant(State.REQUESTED, actionType, instantTime));
       }
-    } finally {
-      txnManager.endStateChange(Option.ofNullable(instant));
-    }
-    return instantTime;
+      return instantTime;
+    });
   }
 
   /**
@@ -1073,15 +1059,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @return instant time for the requested INDEX action
    */
   public Option<String> scheduleIndexing(List<MetadataPartitionType> partitionTypes, List<String> partitionPaths) {
-    txnManager.beginStateChange(Option.empty(), Option.empty());
-    try {
-      String instantTime = createNewInstantTime(false);
-      Option<HoodieIndexPlan> indexPlan = createTable(config)
-          .scheduleIndexing(context, instantTime, partitionTypes, partitionPaths);
-      return indexPlan.map(plan -> instantTime);
-    } finally {
-      txnManager.endStateChange(Option.empty());
-    }
+    return txnManager.executeStateChangeWithInstant(instantTime -> createTable(config).scheduleIndexing(context, instantTime, partitionTypes, partitionPaths).map(plan -> instantTime));
   }
 
   /**
@@ -1100,11 +1078,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param metadataPartitions - list of metadata partitions which need to be dropped
    */
   public void dropIndex(List<String> metadataPartitions) {
-    this.txnManager.beginStateChange(Option.empty(), Option.empty());
-    HoodieTable table = createTable(config);
-    String dropInstant = createNewInstantTime(false);
-    HoodieInstant ownerInstant = table.getMetaClient().createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.INDEXING_ACTION, dropInstant);
-    try {
+    this.txnManager.executeStateChangeWithInstant(dropInstant -> {
+      HoodieTable table = createTable(config);
+
       context.setJobStatus(this.getClass().getSimpleName(), "Dropping partitions from metadata table: " + config.getTableName());
       HoodieTableMetaClient metaClient = table.getMetaClient();
       // For secondary index and expression index with wrong parameters, index definition for the MDT partition is
@@ -1135,9 +1111,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
           }
         }
       }
-    } finally {
-      this.txnManager.endStateChange(Option.of(ownerInstant));
-    }
+      return null;
+    });
   }
 
   /**
