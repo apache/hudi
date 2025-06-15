@@ -20,10 +20,8 @@ package org.apache.hudi.execution;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.queue.HoodieExecutor;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -47,10 +45,8 @@ public class SparkLazyInsertIterable<T> extends HoodieLazyInsertIterable<T> {
                                  HoodieTable hoodieTable,
                                  String idPrefix,
                                  TaskContextSupplier taskContextSupplier,
-                                 WriteHandleFactory writeHandleFactory,
-                                 Option<ReaderContextFactory<T>> readerContextFactoryOpt) {
-    this(recordItr, areRecordsSorted, config, instantTime, hoodieTable, idPrefix, taskContextSupplier, false, writeHandleFactory,
-        readerContextFactoryOpt);
+                                 WriteHandleFactory writeHandleFactory) {
+    this(recordItr, areRecordsSorted, config, instantTime, hoodieTable, idPrefix, taskContextSupplier, false, writeHandleFactory);
   }
 
   public SparkLazyInsertIterable(Iterator<HoodieRecord<T>> recordItr,
@@ -61,9 +57,8 @@ public class SparkLazyInsertIterable<T> extends HoodieLazyInsertIterable<T> {
                                  String idPrefix,
                                  TaskContextSupplier taskContextSupplier,
                                  boolean useWriterSchema,
-                                 WriteHandleFactory writeHandleFactory,
-                                 Option<ReaderContextFactory<T>> readerContextFactoryOpt) {
-    super(recordItr, areRecordsSorted, config, instantTime, hoodieTable, idPrefix, taskContextSupplier, writeHandleFactory, readerContextFactoryOpt);
+                                 WriteHandleFactory writeHandleFactory) {
+    super(recordItr, areRecordsSorted, config, instantTime, hoodieTable, idPrefix, taskContextSupplier, writeHandleFactory);
     this.useWriterSchema = useWriterSchema;
   }
 

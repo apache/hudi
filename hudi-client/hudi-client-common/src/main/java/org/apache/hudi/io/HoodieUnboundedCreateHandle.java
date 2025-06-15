@@ -43,7 +43,7 @@ public class HoodieUnboundedCreateHandle<T, I, K, O> extends HoodieCreateHandle<
                                      String partitionPath, String fileId, TaskContextSupplier taskContextSupplier,
                                      boolean preserveHoodieMetadata) {
     super(config, instantTime, hoodieTable, partitionPath, fileId, Option.empty(),
-        taskContextSupplier, preserveHoodieMetadata, Option.empty());
+        taskContextSupplier, preserveHoodieMetadata);
   }
 
   @Override

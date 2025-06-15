@@ -27,7 +27,6 @@ import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.client.utils.TransactionUtils;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
@@ -280,17 +279,10 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
   }
 
   protected abstract Iterator<List<WriteStatus>> handleInsert(String idPfx,
-                                                              Iterator<HoodieRecord<T>> recordItr,
-                                                              Option<ReaderContextFactory<T>> readerContextFactoryOpt) throws Exception;
-
-  protected Iterator<List<WriteStatus>> handleUpdate(String partitionPath, String fileId,
-                                                     Iterator<HoodieRecord<T>> recordItr) throws IOException {
-    return handleUpdate(partitionPath, fileId, recordItr, Option.empty());
-  }
+                                                              Iterator<HoodieRecord<T>> recordItr) throws Exception;
 
   protected abstract Iterator<List<WriteStatus>> handleUpdate(String partitionPath, String fileId,
-                                                              Iterator<HoodieRecord<T>> recordItr,
-                                                              Option<ReaderContextFactory<T>> readerContextFactoryOpt) throws IOException;
+                                                              Iterator<HoodieRecord<T>> recordItr) throws IOException;
 
   protected HoodieWriteMetadata<HoodieData<WriteStatus>> executeClustering(HoodieClusteringPlan clusteringPlan) {
     context.setJobStatus(this.getClass().getSimpleName(), "Clustering records for " + config.getTableName());

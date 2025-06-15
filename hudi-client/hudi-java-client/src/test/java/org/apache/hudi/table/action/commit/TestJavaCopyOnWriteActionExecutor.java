@@ -298,7 +298,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
     BaseJavaCommitActionExecutor actionExecutor = new JavaInsertCommitActionExecutor(context, config, table,
         firstCommitTime, records);
     List<WriteStatus> writeStatuses = new ArrayList<>();
-    actionExecutor.handleInsert(FSUtils.createNewFileIdPfx(), records.iterator(), Option.empty())
+    actionExecutor.handleInsert(FSUtils.createNewFileIdPfx(), records.iterator())
         .forEachRemaining(x -> writeStatuses.addAll((List<WriteStatus>)x));
 
     Map<String, String> allWriteStatusMergedMetadataMap =
@@ -342,7 +342,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
         instantTime, recs2);
 
     final List<WriteStatus> returnedStatuses = new ArrayList<>();
-    actionExecutor.handleInsert(FSUtils.createNewFileIdPfx(), recs2.iterator(), Option.empty())
+    actionExecutor.handleInsert(FSUtils.createNewFileIdPfx(), recs2.iterator())
         .forEachRemaining(x -> returnedStatuses.addAll((List<WriteStatus>)x));
 
     assertEquals(2, returnedStatuses.size());
@@ -363,7 +363,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
         instantTime, recs3);
 
     final List<WriteStatus> returnedStatuses1 = new ArrayList<>();
-    newActionExecutor.handleInsert(FSUtils.createNewFileIdPfx(), recs3.iterator(), Option.empty())
+    newActionExecutor.handleInsert(FSUtils.createNewFileIdPfx(), recs3.iterator())
         .forEachRemaining(x -> returnedStatuses1.addAll((List<WriteStatus>)x));
 
     assertEquals(3, returnedStatuses1.size());
@@ -398,7 +398,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
         instantTime, records);
 
     Arrays.asList(1).stream()
-        .map(i -> actionExecutor.handleInsert(FSUtils.createNewFileIdPfx(), records.iterator(), Option.empty()))
+        .map(i -> actionExecutor.handleInsert(FSUtils.createNewFileIdPfx(), records.iterator()))
         .map(Transformations::flatten).collect(Collectors.toList());
 
     // Check the updated file
@@ -431,7 +431,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
         instantTime, inserts);
 
     final List<List<WriteStatus>> ws = new ArrayList<>();
-    actionExecutor.handleInsert(UUID.randomUUID().toString(), inserts.iterator(), Option.empty())
+    actionExecutor.handleInsert(UUID.randomUUID().toString(), inserts.iterator())
         .forEachRemaining(x -> ws.add((List<WriteStatus>)x));
 
     WriteStatus writeStatus = ws.get(0).get(0);

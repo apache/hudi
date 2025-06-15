@@ -93,7 +93,7 @@ public class TestUpdateSchemaEvolution extends HoodieSparkClientTestHarness impl
       Map<String, HoodieRecord> insertRecordMap = insertRecords.stream()
           .collect(Collectors.toMap(r -> r.getRecordKey(), Function.identity()));
       HoodieWriteHandle<?,?,?,?> createHandle = new CreateHandleFactory<>(false)
-          .create(config, "100", table, insertRecords.get(0).getPartitionPath(), "f1-0", supplier, Option.empty());
+          .create(config, "100", table, insertRecords.get(0).getPartitionPath(), "f1-0", supplier);
       for (HoodieRecord record : insertRecordMap.values()) {
         createHandle.write(record, createHandle.getWriterSchemaWithMetaFields(), createHandle.getConfig().getProps());
       }

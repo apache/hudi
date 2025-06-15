@@ -32,7 +32,6 @@ import org.apache.hudi.client.utils.SparkValidatorUtils;
 import org.apache.hudi.common.bootstrap.index.BootstrapIndex;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
-import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.model.BootstrapFileMapping;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -326,14 +325,12 @@ public class SparkBootstrapCommitActionExecutor<T>
   }
 
   @Override
-  protected Iterator<List<WriteStatus>> handleInsert(String idPfx, Iterator<HoodieRecord<T>> recordItr,
-                                                     Option<ReaderContextFactory<T>> readerContextFactoryOpt) {
+  protected Iterator<List<WriteStatus>> handleInsert(String idPfx, Iterator<HoodieRecord<T>> recordItr) {
     throw new UnsupportedOperationException("Should not called in bootstrap code path");
   }
 
   @Override
-  protected Iterator<List<WriteStatus>> handleUpdate(String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr,
-                                                     Option<ReaderContextFactory<T>> readerContextFactoryOpt) {
+  protected Iterator<List<WriteStatus>> handleUpdate(String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr) {
     throw new UnsupportedOperationException("Should not called in bootstrap code path");
   }
 

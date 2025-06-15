@@ -51,7 +51,7 @@ public class JavaBulkInsertPreppedDeltaCommitActionExecutor<T>
   public HoodieWriteMetadata<List<WriteStatus>> execute() {
     try {
       return JavaBulkInsertHelper.newInstance().bulkInsert(preppedInputRecord, instantTime, table, config,
-          this, false, userDefinedBulkInsertPartitioner, Option.empty());
+          this, false, userDefinedBulkInsertPartitioner);
     } catch (Throwable e) {
       if (e instanceof HoodieInsertException) {
         throw e;

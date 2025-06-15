@@ -20,7 +20,6 @@ package org.apache.hudi.table.action.deltacommit;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
-import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
@@ -72,13 +71,12 @@ public abstract class BaseSparkDeltaCommitActionExecutor<T>
 
   @Override
   public Iterator<List<WriteStatus>> handleUpdate(String partitionPath, String fileId,
-                                                  Iterator<HoodieRecord<T>> recordItr,
-                                                  Option<ReaderContextFactory<T>> readerContextFactoryOpt) throws IOException {
+      Iterator<HoodieRecord<T>> recordItr) throws IOException {
     LOG.info("Merging updates for commit {} for file {}", instantTime, fileId);
     if (!table.getIndex().canIndexLogFiles() && mergeOnReadUpsertPartitioner != null
         && mergeOnReadUpsertPartitioner.getSmallFileIds().contains(fileId)) {
       LOG.info("Small file corrections for updates for commit {} for file {}", instantTime, fileId);
-      return super.handleUpdate(partitionPath, fileId, recordItr, readerContextFactoryOpt);
+      return super.handleUpdate(partitionPath, fileId, recordItr);
     } else {
       HoodieAppendHandle<?, ?, ?, ?> appendHandle = new HoodieAppendHandle<>(config, instantTime, table,
           partitionPath, fileId, recordItr, taskContextSupplier);
@@ -88,13 +86,13 @@ public abstract class BaseSparkDeltaCommitActionExecutor<T>
   }
 
   @Override
-  public Iterator<List<WriteStatus>> handleInsert(String idPfx, Iterator<HoodieRecord<T>> recordItr, Option<ReaderContextFactory<T>> readerContextFactoryOpt) {
+  public Iterator<List<WriteStatus>> handleInsert(String idPfx, Iterator<HoodieRecord<T>> recordItr) {
     // If canIndexLogFiles, write inserts to log files else write inserts to base files
     if (table.getIndex().canIndexLogFiles()) {
       return new SparkLazyInsertIterable<>(recordItr, true, config, instantTime, table,
-          idPfx, taskContextSupplier, new AppendHandleFactory<>(), readerContextFactoryOpt);
+          idPfx, taskContextSupplier, new AppendHandleFactory<>());
     } else {
-      return super.handleInsert(idPfx, recordItr, readerContextFactoryOpt);
+      return super.handleInsert(idPfx, recordItr);
     }
   }
 
