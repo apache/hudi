@@ -34,7 +34,6 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieFileGroupId;
-import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodiePayloadProps;
@@ -88,7 +87,6 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.collectColumnRangeMetadata;
 
 /**
@@ -144,7 +142,6 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   private boolean generateStatsForStreamingMetadataWrites;
   private Option<FileSlice> fileSliceOpt;
   private Option<HoodieReaderContext<T>> readerContextOpt = Option.empty();
-  private List<Pair<String, HoodieIndexDefinition>> secondaryIndexDefns = Collections.emptyList();
 
   /**
    * This is used by log compaction only.
@@ -179,11 +176,6 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         ? getBaseFileInstantTimeOfPositions()
         : Option.empty();
     if (!hoodieTable.isMetadataTable() && config.isSecondaryIndexEnabled() && isStreamingWriteToMetadataEnabled) {
-      secondaryIndexDefns = hoodieTable.getMetaClient().getTableConfig().getMetadataPartitions()
-          .stream()
-          .filter(mdtPartition -> mdtPartition.startsWith(PARTITION_NAME_SECONDARY_INDEX_PREFIX))
-          .map(mdtPartitionPath -> Pair.of(mdtPartitionPath, HoodieTableMetadataUtil.getHoodieIndexDefinition(mdtPartitionPath, hoodieTable.getMetaClient())))
-          .collect(Collectors.toList());
       generateStatsForStreamingMetadataWrites = !secondaryIndexDefns.isEmpty() && config.populateMetaFields();
       if (generateStatsForStreamingMetadataWrites) {
         HoodieEngineContext engineContext = new HoodieLocalEngineContext(hoodieTable.getStorageConf(), taskContextSupplier);

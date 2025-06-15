@@ -179,14 +179,15 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   }
 
   private void trackMetadataIndexStats(HoodieRecord record) {
-    if (!config.isSecondaryIndexEnabled() || secondaryIndexFields.isEmpty() || !config.isMetadataStreamingWritesEnabled(hoodieTable.getMetaClient().getTableConfig().getTableVersion())) {
+    if (!config.isSecondaryIndexEnabled() || secondaryIndexDefns.isEmpty() || !config.isMetadataStreamingWritesEnabled(hoodieTable.getMetaClient().getTableConfig().getTableVersion())) {
       return;
     }
 
     // Add secondary index records for all the inserted records
-    secondaryIndexFields.forEach(secondaryIndexPartitionPathFieldPair -> {
+    secondaryIndexDefns.forEach(secondaryIndexPartitionPathFieldPair -> {
+      String secondaryIndexSourceField = String.join(".",secondaryIndexPartitionPathFieldPair.getValue().getSourceFields());
       if (record instanceof HoodieAvroIndexedRecord) {
-        Object secondaryKey = ((GenericRecord)((HoodieAvroIndexedRecord) record).getData()).get(secondaryIndexPartitionPathFieldPair.getValue());
+        Object secondaryKey = ((GenericRecord)((HoodieAvroIndexedRecord) record).getData()).get(secondaryIndexSourceField);
         if (secondaryKey != null) {
           writeStatus.getIndexStats().addSecondaryIndexStats(secondaryIndexPartitionPathFieldPair.getKey(), record.getRecordKey(), secondaryKey.toString(), false);
         }
