@@ -302,6 +302,11 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   }
 
   public RawTripTestPayload generateRandomValueAsPerSchema(String schemaStr, HoodieKey key, String commitTime, boolean isFlattened) throws IOException {
+    return generateRandomValueAsPerSchema(schemaStr, key, commitTime, isFlattened, -1);
+  }
+
+  public RawTripTestPayload generateRandomValueAsPerSchema(String schemaStr, HoodieKey key, String commitTime, boolean isFlattened,
+                                                           int numMillisLess) throws IOException {
     if (TRIP_FLATTENED_SCHEMA.equals(schemaStr)) {
       return generateRandomValue(key, commitTime, true);
     } else if (TRIP_EXAMPLE_SCHEMA.equals(schemaStr)) {
@@ -331,6 +336,11 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     return generateRandomValue(key, instantTime, false);
   }
 
+  private RawTripTestPayload generateRandomValue(
+      HoodieKey key, String instantTime, boolean isFlattened) {
+    return generateRandomValue(key, instantTime, isFlattened);
+  }
+
   /**
    * Generates a new avro record with the specified schema (nested or flattened),
    * retaining the key if optionally provided.
@@ -342,8 +352,8 @@ public class HoodieTestDataGenerator implements AutoCloseable {
    * @throws IOException
    */
   private RawTripTestPayload generateRandomValue(
-      HoodieKey key, String instantTime, boolean isFlattened) throws IOException {
-    return generateRandomValue(key, instantTime, isFlattened, 0);
+      HoodieKey key, String instantTime, boolean isFlattened, int numMillisLess) throws IOException {
+    return generateRandomValue(key, instantTime, isFlattened, 0, numMillisLess);
   }
 
   private RawTripTestPayload generateNestedExampleRandomValue(
@@ -352,11 +362,14 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   }
 
   private RawTripTestPayload generateRandomValue(
-      HoodieKey key, String instantTime, boolean isFlattened, long timestamp) throws IOException {
+      HoodieKey key, String instantTime, boolean isFlattened, long timestamp, int numMillisLess) throws IOException {
+    long curTime = System.currentTimeMillis();
+    curTime = numMillisLess > 0 ? (curTime - numMillisLess) : curTime;
     GenericRecord rec = generateGenericRecord(
         key.getRecordKey(), key.getPartitionPath(), "rider-" + instantTime, "driver-" + instantTime, timestamp,
-        false, isFlattened);
-    return new RawTripTestPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), TRIP_EXAMPLE_SCHEMA);
+        false, isFlattened, curTime);
+    return new RawTripTestPayload(
+        Option.of(rec.toString()), key.getRecordKey(), key.getPartitionPath(), TRIP_EXAMPLE_SCHEMA, false, curTime);
   }
 
   private RawTripTestPayload generateNestedExampleRandomValue(
@@ -397,7 +410,12 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   private RawTripTestPayload generateRandomDeleteValue(HoodieKey key, String instantTime) throws IOException {
     GenericRecord rec = generateGenericRecord(key.getRecordKey(), key.getPartitionPath(), "rider-" + instantTime, "driver-" + instantTime, 0,
         true, false);
-    return new RawTripTestPayload(Option.of(rec.toString()), key.getRecordKey(), key.getPartitionPath(), TRIP_EXAMPLE_SCHEMA, true, 0L);
+    return new RawTripTestPayload(Option.of(rec.toString()), key.getRecordKey(), key.getPartitionPath(), TRIP_EXAMPLE_SCHEMA, true, (Long)rec.get("current_ts"));
+  }
+
+  private GenericRecord generateRandomDeleteValueAsGenRec(HoodieKey key, String instantTime) throws IOException {
+    return generateGenericRecord(key.getRecordKey(), key.getPartitionPath(), "rider-" + instantTime, "driver-" + instantTime, 0,
+        true, false, System.currentTimeMillis());
   }
 
   /**
@@ -442,12 +460,18 @@ public class HoodieTestDataGenerator implements AutoCloseable {
    * Populate rec with values for EXTRA_TYPE_SCHEMA
    */
   private void generateExtraSchemaValues(GenericRecord rec) {
+    generateExtraSchemaValues(rec, genRandomTimeMillis(rand));
+  }
+
+  /**
+   * Populate rec with values for EXTRA_TYPE_SCHEMA
+   */
+  private void generateExtraSchemaValues(GenericRecord rec, long randomMillis) {
     rec.put("distance_in_meters", rand.nextInt());
     rec.put("seconds_since_epoch", rand.nextLong());
     rec.put("weight", rand.nextFloat());
     byte[] bytes = getUTF8Bytes("Canada");
     rec.put("nation", ByteBuffer.wrap(bytes));
-    long randomMillis = genRandomTimeMillis(rand);
     Instant instant = Instant.ofEpochMilli(randomMillis);
     rec.put("current_date", makeDatesAmbiguous ? -1000000 :
         (int) LocalDateTime.ofInstant(instant, ZoneOffset.UTC).toLocalDate().toEpochDay());
@@ -500,19 +524,25 @@ public class HoodieTestDataGenerator implements AutoCloseable {
       rec.put("_hoodie_is_deleted", false);
     }
   }
-  
+
+  public GenericRecord generateGenericRecord(String rowKey, String partitionPath, String riderName, String driverName,
+                                             long timestamp, boolean isDeleteRecord,
+                                             boolean isFlattened) {
+    return generateGenericRecord(rowKey, partitionPath, riderName, driverName, timestamp, isDeleteRecord, isFlattened, -1);
+  }
+
   /**
    * Generate record conforming to TRIP_EXAMPLE_SCHEMA or TRIP_FLATTENED_SCHEMA if isFlattened is true
    */
   public GenericRecord generateGenericRecord(String rowKey, String partitionPath, String riderName, String driverName,
                                                     long timestamp, boolean isDeleteRecord,
-                                                    boolean isFlattened) {
+                                                    boolean isFlattened, long currentTimeMs) {
     GenericRecord rec = new GenericData.Record(isFlattened ? FLATTENED_AVRO_SCHEMA : AVRO_SCHEMA);
     generateTripPrefixValues(rec, rowKey, partitionPath, riderName, driverName, timestamp);
     if (isFlattened) {
       generateFareFlattenedValues(rec);
     } else {
-      generateExtraSchemaValues(rec);
+      generateExtraSchemaValues(rec, currentTimeMs);
       generateMapTypeValues(rec);
       generateFareNestedValues(rec);
       generateTipNestedValues(rec);
@@ -908,7 +938,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
   }
 
   public HoodieRecord generateUpdateRecordWithTimestamp(HoodieKey key, String instantTime, long timestamp) throws IOException {
-    return new HoodieAvroRecord(key, generateRandomValue(key, instantTime, false, timestamp));
+    return new HoodieAvroRecord(key, generateRandomValue(key, instantTime, false, timestamp, -1));
   }
 
   public List<HoodieRecord> generateUpdates(String instantTime, List<HoodieRecord> baseRecords) throws IOException {
@@ -1004,6 +1034,10 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     return generateUniqueUpdatesStream(instantTime, n, schemaStr).collect(Collectors.toList());
   }
 
+  public List<HoodieRecord> generateUniqueUpdates(String instantTime, Integer n, int numRecordsWithLowerOrderingValue, int numMillisLess) {
+    return generateUniqueUpdatesStream(instantTime, n, TRIP_EXAMPLE_SCHEMA, Option.of(numRecordsWithLowerOrderingValue), numMillisLess).collect(Collectors.toList());
+  }
+
   public List<HoodieRecord> generateUniqueUpdatesNestedExample(String instantTime, Integer n) {
     return generateUniqueUpdatesStream(instantTime, n, TRIP_NESTED_EXAMPLE_SCHEMA).collect(Collectors.toList());
   }
@@ -1022,6 +1056,12 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     return generateUniqueDeleteStream(n).collect(Collectors.toList());
   }
 
+  // , int numRecordsWithLowerOrderingValue, int numMillisLess
+
+  public Stream<HoodieRecord> generateUniqueUpdatesStream(String instantTime, Integer n, String schemaStr) {
+    return generateUniqueUpdatesStream(instantTime, n, schemaStr, Option.empty(), -1);
+  }
+
   /**
    * Generates deduped updates of keys previously inserted, randomly distributed across the keys above.
    *
@@ -1029,12 +1069,17 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
    * @param n          Number of unique records
    * @return stream of hoodie record updates
    */
-  public Stream<HoodieRecord> generateUniqueUpdatesStream(String instantTime, Integer n, String schemaStr) {
+  public Stream<HoodieRecord> generateUniqueUpdatesStream(String instantTime, Integer n, String schemaStr, Option<Integer> numRecordsWithLowerTs, int numMillisLess) {
     final Set<KeyPartition> used = new HashSet<>();
     int numExistingKeys = numKeysBySchema.getOrDefault(schemaStr, 0);
     Map<Integer, KeyPartition> existingKeys = existingKeysBySchema.get(schemaStr);
     if (n > numExistingKeys) {
       throw new IllegalArgumentException("Requested unique updates is greater than number of available keys");
+    }
+
+    AtomicInteger numRecordsGeneratedWithLowerTs = new AtomicInteger(numRecordsWithLowerTs.orElse(0));
+    if (numRecordsGeneratedWithLowerTs.get() > 0) {
+      logger.info("Generating " + numRecordsGeneratedWithLowerTs + " records with lower current ts out of " + n);
     }
 
     return IntStream.range(0, n).boxed().map(i -> {
@@ -1048,7 +1093,10 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
       logger.debug("key getting updated: {}", kp.key.getRecordKey());
       used.add(kp);
       try {
-        return new HoodieAvroRecord(kp.key, generateRandomValueAsPerSchema(schemaStr, kp.key, instantTime, false));
+        HoodieAvroRecord toReturn = new HoodieAvroRecord(kp.key, generateRandomValueAsPerSchema(schemaStr, kp.key, instantTime, false,
+            numRecordsGeneratedWithLowerTs.get() > 0 ? numMillisLess : -1));
+        numRecordsGeneratedWithLowerTs.getAndDecrement();
+        return toReturn;
       } catch (IOException e) {
         throw new HoodieIOException(e.getMessage(), e);
       }
@@ -1115,6 +1163,36 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
       used.add(kp);
       try {
         result.add(new HoodieAvroRecord(kp.key, generateRandomDeleteValue(kp.key, instantTime)));
+      } catch (IOException e) {
+        throw new HoodieIOException(e.getMessage(), e);
+      }
+    }
+    numKeysBySchema.put(TRIP_EXAMPLE_SCHEMA, numExistingKeys);
+    return result.stream();
+  }
+
+  public Stream<GenericRecord> generateUniqueDeleteGenRecStream(String instantTime, Integer n) {
+    final Set<KeyPartition> used = new HashSet<>();
+    Map<Integer, KeyPartition> existingKeys = existingKeysBySchema.get(TRIP_EXAMPLE_SCHEMA);
+    Integer numExistingKeys = numKeysBySchema.get(TRIP_EXAMPLE_SCHEMA);
+    if (n > numExistingKeys) {
+      throw new IllegalArgumentException("Requested unique deletes is greater than number of available keys");
+    }
+
+    List<GenericRecord> result = new ArrayList<>();
+    for (int i = 0; i < n; i++) {
+      int index = rand.nextInt(numExistingKeys);
+      while (!existingKeys.containsKey(index)) {
+        index = (index + 1) % numExistingKeys;
+      }
+      // swap chosen index with last index and remove last entry.
+      KeyPartition kp = existingKeys.remove(index);
+      existingKeys.put(index, existingKeys.get(numExistingKeys - 1));
+      existingKeys.remove(numExistingKeys - 1);
+      numExistingKeys--;
+      used.add(kp);
+      try {
+        result.add(generateRandomDeleteValueAsGenRec(kp.key, instantTime));
       } catch (IOException e) {
         throw new HoodieIOException(e.getMessage(), e);
       }

@@ -110,6 +110,11 @@ public interface HoodieFileGroupRecordBuffer<T> {
   void setBaseFileIterator(ClosableIterator<T> baseFileIterator);
 
   /**
+   * @return statistics of log merging.
+   */
+  HoodieReadStats getStats();
+
+  /**
    * Check if next merged record exists.
    *
    * @return true if it has, otherwise false.
