@@ -26,6 +26,7 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
+import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -38,12 +39,12 @@ import org.apache.hudi.common.table.log.LogFileCreationCallback;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
-import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
@@ -57,9 +58,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
@@ -89,9 +88,7 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
   // For full schema evolution
   protected final boolean schemaOnReadEnabled;
   protected final boolean isStreamingWriteToMetadataEnabled;
-  protected final Map<MetadataPartitionType, List<String>> metadataPartitionsToCollectStats =
-      new HashMap<>(hoodieTable.getMetaClient().getTableConfig().getMetadataPartitions().size());
-  List<Pair<String, String>> secondaryIndexFields = Collections.emptyList();
+  List<Pair<String, HoodieIndexDefinition>> secondaryIndexDefns = Collections.emptyList();
 
   private boolean closed = false;
 
@@ -119,23 +116,19 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
         hoodieTable.shouldTrackSuccessRecords(), config.getWriteStatusFailureFraction(), hoodieTable.isMetadataTable());
     this.isStreamingWriteToMetadataEnabled = config.isMetadataStreamingWritesEnabled(hoodieTable.getMetaClient().getTableConfig().getTableVersion());
     initMetadataPartitionsToCollectStats();
-
-    if (config.isSecondaryIndexEnabled()) {
-      secondaryIndexFields = hoodieTable.getMetaClient().getTableConfig().getMetadataPartitions()
-          .stream()
-          .filter(mdtPartition -> mdtPartition.startsWith(PARTITION_NAME_SECONDARY_INDEX_PREFIX))
-          .map(mdtPartitionPath -> Pair.of(mdtPartitionPath, String.join(".", HoodieTableMetadataUtil.getHoodieIndexDefinition(mdtPartitionPath, hoodieTable.getMetaClient()).getSourceFields())))
-          .collect(Collectors.toList());
-    }
   }
 
   private void initMetadataPartitionsToCollectStats() {
     if (isStreamingWriteToMetadataEnabled) {
       // secondary index.
       if (config.isSecondaryIndexEnabled()) {
-        metadataPartitionsToCollectStats.put(MetadataPartitionType.SECONDARY_INDEX, hoodieTable.getMetaClient().getTableConfig().getMetadataPartitions()
+        ValidationUtils.checkArgument(recordMerger.getRecordType() == HoodieRecord.HoodieRecordType.AVRO,
+            "Only Avro record type is supported for streaming writes to metadata table with write handles");
+        secondaryIndexDefns = hoodieTable.getMetaClient().getTableConfig().getMetadataPartitions()
             .stream()
-            .filter(partition -> partition.startsWith(PARTITION_NAME_SECONDARY_INDEX_PREFIX)).collect(Collectors.toList()));
+            .filter(mdtPartition -> mdtPartition.startsWith(PARTITION_NAME_SECONDARY_INDEX_PREFIX))
+            .map(mdtPartitionPath -> Pair.of(mdtPartitionPath, HoodieTableMetadataUtil.getHoodieIndexDefinition(mdtPartitionPath, hoodieTable.getMetaClient())))
+            .collect(Collectors.toList());
       }
     }
   }
