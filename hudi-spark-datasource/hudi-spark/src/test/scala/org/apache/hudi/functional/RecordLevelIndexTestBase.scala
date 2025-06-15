@@ -126,7 +126,7 @@ class RecordLevelIndexTestBase extends HoodieStatsIndexTestBase {
     val readDf = spark.read.format("hudi").load(basePath)
     readDf.cache()
     val rowArr = readDf.collect()
-    val recordIndexMap = metadata.readRecordIndex(
+    val recordIndexMap = metadata.readRecordIndexWithMapping(
       HoodieListData.eager(JavaConverters.seqAsJavaListConverter(
         rowArr.map(row => row.getAs("_hoodie_record_key").toString).toList).asJava))
       .collectAsMapWithOverwriteStrategy()
@@ -142,7 +142,7 @@ class RecordLevelIndexTestBase extends HoodieStatsIndexTestBase {
     }
 
     val deletedRows = deletedDf.collect()
-    val recordIndexMapForDeletedRows = metadata.readRecordIndex(
+    val recordIndexMapForDeletedRows = metadata.readRecordIndexWithMapping(
       HoodieListData.eager(JavaConverters.seqAsJavaListConverter(
         deletedRows.map(row => row.getAs("_row_key").toString).toList).asJava))
       .collectAsMapWithOverwriteStrategy()
