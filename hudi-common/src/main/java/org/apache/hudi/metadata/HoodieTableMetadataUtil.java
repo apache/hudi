@@ -46,6 +46,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieAccumulator;
 import org.apache.hudi.common.data.HoodieAtomicLongAccumulator;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -75,6 +76,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
@@ -183,6 +185,7 @@ import static org.apache.hudi.index.expression.HoodieExpressionIndex.EXPRESSION_
 import static org.apache.hudi.index.expression.HoodieExpressionIndex.IDENTITY_TRANSFORM;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_IS_TIGHT_BOUND;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.RECORD_INDEX_MISSING_FILEINDEX_FALLBACK;
+import static org.apache.hudi.metadata.HoodieMetadataPayload.SECONDARY_INDEX_RECORD_KEY_SEPARATOR;
 import static org.apache.hudi.metadata.HoodieTableMetadata.EMPTY_PARTITION_NAME;
 import static org.apache.hudi.metadata.HoodieTableMetadata.NON_PARTITIONED_NAME;
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
@@ -1325,15 +1328,31 @@ public class HoodieTableMetadataUtil {
   }
 
   /**
-   * Map a record key to a file group in partition of interest.
+   * Maps a record key to a file group index in the specified partition.
    * <p>
-   * Note: For hashing, the algorithm is same as String.hashCode() but is being defined here as hashCode()
-   * implementation is not guaranteed by the JVM to be consistent across JVM versions and implementations.
+   * For secondary index partitions (version >= 8), if the record key contains the secondary index separator,
+   * the secondary key portion is used for hashing. Otherwise, the full record key is used.
+   * <p>
+   * Note: The hashing algorithm is same as String.hashCode() but is defined here explicitly since
+   * hashCode() implementation is not guaranteed by the JVM to be consistent across versions.
    *
-   * @param recordKey record key for which the file group index is looked up for.
-   * @return An integer hash of the given string
+   * @param recordKey record key for which the file group index is looked up
+   * @param numFileGroups number of file groups to map the key to
+   * @param partitionName name of the partition
+   * @param version table version to determine hashing behavior
+   * @return file group index for the given record key
    */
-  public static int mapRecordKeyToFileGroupIndex(String recordKey, int numFileGroups) {
+  public static int mapRecordKeyToFileGroupIndex(String recordKey, int numFileGroups, String partitionName, HoodieTableVersion version) {
+    if (version.greaterThanOrEquals(HoodieTableVersion.NINE)
+        && MetadataPartitionType.SECONDARY_INDEX.isPartitionType(partitionName)
+        && recordKey.contains(SECONDARY_INDEX_RECORD_KEY_SEPARATOR)) {
+      return mapRecordKeyToFileGroupIndex(SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey(recordKey), numFileGroups);
+    }
+    return mapRecordKeyToFileGroupIndex(recordKey, numFileGroups);
+  }
+
+  // change to configurable larger group
+  private static int mapRecordKeyToFileGroupIndex(String recordKey, int numFileGroups) {
     int h = 0;
     for (int i = 0; i < recordKey.length(); ++i) {
       h = 31 * h + recordKey.charAt(i);
@@ -2692,7 +2711,8 @@ public class HoodieTableMetadataUtil {
               .collect(Collectors.toSet());
           // Fetch metadata table COLUMN_STATS partition records for above files
           List<HoodieColumnRangeMetadata<Comparable>> partitionColumnMetadata = tableMetadata
-              .getRecordsByKeyPrefixes(generateKeyPrefixes(colsToIndex, partitionName), MetadataPartitionType.COLUMN_STATS.getPartitionPath(), false)
+              .getRecordsByKeyPrefixes(
+                  HoodieListData.eager(generateKeyPrefixes(colsToIndex, partitionName)), MetadataPartitionType.COLUMN_STATS.getPartitionPath(), false)
               // schema and properties are ignored in getInsertValue, so simply pass as null
               .map(record -> ((HoodieMetadataPayload)record.getData()).getColumnStatMetadata())
               .filter(Option::isPresent)
