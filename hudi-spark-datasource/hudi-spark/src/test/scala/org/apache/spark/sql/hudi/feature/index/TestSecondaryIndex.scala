@@ -28,9 +28,9 @@ import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtil
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
+import org.apache.hudi.metadata.{HoodieIndexVersion, SecondaryIndexKeyUtils}
 import org.apache.hudi.metadata.HoodieMetadataPayload.SECONDARY_INDEX_RECORD_KEY_SEPARATOR
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX
-import org.apache.hudi.metadata.{HoodieIndexVersion, SecondaryIndexKeyUtils}
 import org.apache.hudi.storage.StoragePath
 
 import org.apache.spark.sql.SaveMode
@@ -201,9 +201,10 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
   test("Auto upgrade/downgrade drops secondary index") {
     /**
      * Helper function to create and validate secondary indexes
-     * @param tableName Name of the table
-     * @param basePath Base path of the table
-     * @param version Expected table version
+     *
+     * @param tableName    Name of the table
+     * @param basePath     Base path of the table
+     * @param version      Expected table version
      * @param expectedData Expected data in the table
      */
     def createIdxAndValidate(tableName: String, basePath: String, version: Int, expectedData: Seq[Seq[Any]]): Unit = {
