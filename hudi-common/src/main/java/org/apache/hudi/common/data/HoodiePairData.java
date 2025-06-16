@@ -171,6 +171,11 @@ public interface HoodiePairData<K, V> extends Serializable {
         ));
   }
 
+  default HoodiePairData<Integer, String> rangeBasedRepartitionForEachKey(
+      int keyRange, double sampleFraction, int maxKeyPerBucket, long seed) {
+    throw new UnsupportedOperationException("repartitionWithSplits method is not implenented");
+  }
+
   /**
    * @return the deduce number of shuffle partitions
    */

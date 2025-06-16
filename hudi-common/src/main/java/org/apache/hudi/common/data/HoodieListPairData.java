@@ -247,6 +247,13 @@ public class HoodieListPairData<K, V> extends HoodieBaseListData<Pair<K, V>> imp
   }
 
   @Override
+  public HoodiePairData<Integer, String> rangeBasedRepartitionForEachKey(
+      int keyRange, double sampleFraction, int maxKeyPerBucket, long seed) {
+    // No op
+    return (HoodiePairData<Integer, String>) this;
+  }
+
+  @Override
   public int deduceNumPartitions() {
     return 1;
   }

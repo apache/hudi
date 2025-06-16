@@ -1519,6 +1519,8 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
     spark.sql("set hoodie.enable.data.skipping=true")
     spark.sql("set hoodie.fileIndex.dataSkippingFailureMode=strict")
 
+//    verifyQueryPredicate(hudiOpts, "string_col")
+
     secondaryIndexColumns.foreach { col =>
       val (queryFilter, value) = col match {
         case "string_col" => (s"$col = 'abc'", "abc")
