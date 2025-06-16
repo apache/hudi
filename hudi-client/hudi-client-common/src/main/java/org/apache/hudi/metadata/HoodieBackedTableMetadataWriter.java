@@ -1227,7 +1227,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       String mdtPartition = mdtRecord.getPartitionPath();
       List<FileSlice> latestFileSlices = partitionToLatestFileSlices.get(mdtPartition);
       FileSlice slice = latestFileSlices.get(HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(mdtRecord.getRecordKey(),
-          latestFileSlices.size()));
+          latestFileSlices.size(), mdtPartition, metadataMetaClient.getTableConfig().getTableVersion()));
       mdtRecord.unseal();
       mdtRecord.setCurrentLocation(new HoodieRecordLocation(slice.getBaseInstantTime(), slice.getFileId()));
       mdtRecord.seal();
@@ -1658,7 +1658,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
         List<FileSlice> finalFileSlices = fileSlices;
         HoodieData<HoodieRecord> rddSinglePartitionRecords = records.map(r -> {
           FileSlice slice = finalFileSlices.get(HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(r.getRecordKey(),
-              fileGroupCount));
+              fileGroupCount, partitionName, metadataMetaClient.getTableConfig().getTableVersion()));
           r.unseal();
           r.setCurrentLocation(new HoodieRecordLocation(slice.getBaseInstantTime(), slice.getFileId()));
           r.seal();
