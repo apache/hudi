@@ -28,8 +28,7 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.config.HoodieConfig;
-import org.apache.hudi.common.engine.EngineProperty;
-import org.apache.hudi.common.engine.TaskContextSupplier;
+import org.apache.hudi.common.engine.LocalTaskContextSupplier;
 import org.apache.hudi.common.model.ClusteringGroupInfo;
 import org.apache.hudi.common.model.ClusteringOperation;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -278,7 +277,7 @@ public class TestSparkBinaryCopyClusteringAndValidationMeta extends HoodieClient
             true);
 
     HoodieAvroParquetWriter writer =
-        new HoodieAvroParquetWriter(filePath, parquetConfig, "001", new DummyTaskContextSupplier(), true);
+        new HoodieAvroParquetWriter(filePath, parquetConfig, "001", new LocalTaskContextSupplier(), true);
     writer.close();
     return filePath.toString();
   }
@@ -296,38 +295,4 @@ public class TestSparkBinaryCopyClusteringAndValidationMeta extends HoodieClient
     group.setOperations(operations);
     return Collections.singletonList(group);
   }
-
-  static class DummyTaskContextSupplier extends TaskContextSupplier {
-
-    @Override
-    public Supplier<Integer> getPartitionIdSupplier() {
-      return () -> 1;
-    }
-
-    @Override
-    public Supplier<Integer> getStageIdSupplier() {
-      return () -> 1;
-    }
-
-    @Override
-    public Supplier<Long> getAttemptIdSupplier() {
-      return () -> 1L;
-    }
-
-    @Override
-    public Option<String> getProperty(EngineProperty prop) {
-      return Option.empty();
-    }
-
-    @Override
-    public Supplier<Integer> getTaskAttemptNumberSupplier() {
-      return () -> 1;
-    }
-
-    @Override
-    public Supplier<Integer> getStageAttemptNumberSupplier() {
-      return () -> 1;
-    }
-  }
-
 }
