@@ -29,7 +29,6 @@ import collection.JavaConverters._
 import org.apache.hadoop.fs.Path
 import org.apache.parquet.format.converter.ParquetMetadataConverter.SKIP_ROW_GROUPS
 import org.apache.parquet.hadoop.ParquetFileReader
-import org.apache.spark.api.java.JavaRDD
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
@@ -38,10 +37,11 @@ import java.util.function.Supplier
 class ShowInvalidParquetProcedure extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS = Array[ProcedureParameter](
     ProcedureParameter.required(0, "path", DataTypes.StringType),
-    ProcedureParameter.optional(1, "limit", DataTypes.IntegerType, 100),
-    ProcedureParameter.optional(2, "needDelete", DataTypes.BooleanType, false),
-    ProcedureParameter.optional(3, "partitions", DataTypes.StringType, ""),
-    ProcedureParameter.optional(4, "instants", DataTypes.StringType, "")
+    ProcedureParameter.optional(1, "parallelism", DataTypes.IntegerType, 100),
+    ProcedureParameter.optional(2, "limit", DataTypes.IntegerType, 100),
+    ProcedureParameter.optional(3, "needDelete", DataTypes.BooleanType, false),
+    ProcedureParameter.optional(4, "partitions", DataTypes.StringType, ""),
+    ProcedureParameter.optional(5, "instants", DataTypes.StringType, "")
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -56,31 +56,34 @@ class ShowInvalidParquetProcedure extends BaseProcedure with ProcedureBuilder {
     super.checkArgs(PARAMETERS, args)
 
     val srcPath = getArgValueOrDefault(args, PARAMETERS(0)).get.asInstanceOf[String]
-    val limit = getArgValueOrDefault(args, PARAMETERS(1))
-    val needDelete = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[Boolean]
-    val partitions = getArgValueOrDefault(args, PARAMETERS(3)).map(_.toString).getOrElse("")
-    val instants = getArgValueOrDefault(args, PARAMETERS(4)).map(_.toString).getOrElse("")
+    val parallelism = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[Int]
+    val limit = getArgValueOrDefault(args, PARAMETERS(2))
+    val needDelete = getArgValueOrDefault(args, PARAMETERS(3)).get.asInstanceOf[Boolean]
+    val partitions = getArgValueOrDefault(args, PARAMETERS(4)).map(_.toString).getOrElse("")
+    val instants = getArgValueOrDefault(args, PARAMETERS(5)).map(_.toString).getOrElse("")
+
     val storageConf = HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration())
     val storage = new HoodieHadoopStorage(srcPath, storageConf)
     val metadataConfig = HoodieMetadataConfig.newBuilder.enable(false).build
     val metadata = HoodieTableMetadata.create(new HoodieSparkEngineContext(jsc), storage, metadataConfig, srcPath)
     val partitionPaths: java.util.List[String] = metadata.getPartitionPathWithPathPrefixes(partitions.split(",").toList.asJava)
-    val partitionPathsSize = if (partitionPaths.size() == 0) 1 else partitionPaths.size()
     val instantsList = if (StringUtils.isNullOrEmpty(instants)) Array.empty[String] else instants.split(",")
+    val fileStatus = partitionPaths.asScala.flatMap(part => {
+      val fs = HadoopFSUtils.getFs(new Path(srcPath), storageConf.unwrap())
+      HadoopFSUtils.getAllDataFilesInPartition(fs, HadoopFSUtils.constructAbsolutePathInHadoopPath(srcPath, part))
+    }).toList
 
-    val javaRdd: JavaRDD[String] = jsc.parallelize(partitionPaths, partitionPathsSize)
-    val parquetRdd = javaRdd.rdd.map(part => {
-        val fs = HadoopFSUtils.getFs(new Path(srcPath), storageConf.unwrap())
-        HadoopFSUtils.getAllDataFilesInPartition(fs, HadoopFSUtils.constructAbsolutePathInHadoopPath(srcPath, part)).filter(fileStatus => {
-          var isFilter = true
-          if (!instantsList.isEmpty) {
-            val parquetCommitTime = FSUtils.getCommitTimeWithFullPath(fileStatus.getPath.toString)
-            isFilter = instantsList.contains(parquetCommitTime)
-          }
-          isFilter
-        })
-    }).flatMap(_.toList)
-      .filter(status => {
+    if (fileStatus.isEmpty) {
+      Seq.empty
+    } else {
+      val parquetRdd = jsc.parallelize(fileStatus, Math.min(fileStatus.size, parallelism)).filter(fileStatus => {
+        if (instantsList.nonEmpty) {
+          val parquetCommitTime = FSUtils.getCommitTimeWithFullPath(fileStatus.getPath.toString)
+          instantsList.contains(parquetCommitTime)
+        } else {
+          true
+        }
+      }).filter(status => {
         val filePath = status.getPath
         var isInvalid = false
         if (filePath.toString.endsWith(".parquet")) {
@@ -99,12 +102,13 @@ class ShowInvalidParquetProcedure extends BaseProcedure with ProcedureBuilder {
           }
         }
         isInvalid
-      })
-      .map(status => Row(status.getPath.toString))
-    if (limit.isDefined) {
-      parquetRdd.take(limit.get.asInstanceOf[Int])
-    } else {
-      parquetRdd.collect()
+      }).map(status => Row(status.getPath.toString))
+
+      if (limit.isDefined) {
+        parquetRdd.take(limit.get.asInstanceOf[Int])
+      } else {
+        parquetRdd.collect()
+      }
     }
   }
 
