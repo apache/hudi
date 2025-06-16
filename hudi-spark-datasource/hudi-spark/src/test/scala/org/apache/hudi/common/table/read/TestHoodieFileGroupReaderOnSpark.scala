@@ -101,7 +101,10 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     new SparkFileFormatInternalRowReaderContext(reader, Seq.empty, Seq.empty, getStorageConf, metaClient.getTableConfig)
   }
 
-  override def commitToTable(recordList: util.List[HoodieRecord[_]], operation: String, options: util.Map[String, String]): Unit = {
+  override def commitToTable(recordList: util.List[HoodieRecord[_]],
+                             operation: String,
+                             options: util.Map[String, String],
+                             schemaStr: String): Unit = {
     val recs = RawTripTestPayload.recordsToStrings(recordList)
     val inputDF: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(recs.asScala.toList, 2))
 
