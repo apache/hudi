@@ -3061,7 +3061,6 @@ public class HoodieTableMetadataUtil {
     }
   }
 
-
   private static TypedProperties getFileGroupReaderPropertiesFromStorageConf(StorageConfiguration<?> storageConf) {
     TypedProperties properties = new TypedProperties();
     properties.setProperty(MAX_MEMORY_FOR_MERGE.key(),
