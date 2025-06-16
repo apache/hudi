@@ -162,7 +162,13 @@ public enum WriteOperationType {
         || operation == WriteOperationType.BULK_INSERT_PREPPED
         || operation == WriteOperationType.INSERT_OVERWRITE
         || operation == WriteOperationType.INSERT_OVERWRITE_TABLE;
+  }
 
+  public static boolean isInsertWithoutReplace(WriteOperationType operation) {
+    return operation == WriteOperationType.INSERT
+        || operation == WriteOperationType.INSERT_PREPPED
+        || operation == WriteOperationType.BULK_INSERT
+        || operation == WriteOperationType.BULK_INSERT_PREPPED;
   }
 
   public static boolean isUpsert(WriteOperationType operation) {
@@ -180,5 +186,12 @@ public enum WriteOperationType {
 
   public static boolean isCompactionOrClustering(WriteOperationType operationType) {
     return operationType == COMPACT || operationType == CLUSTER;
+  }
+
+  /**
+   * @return true if streaming writes to metadata table is supported for a given {@link WriteOperationType}. false otherwise.
+   */
+  public static boolean streamingWritesToMetadataSupported(WriteOperationType writeOperationType) {
+    return (isInsertWithoutReplace(writeOperationType) || isChangingRecords(writeOperationType) || isCompactionOrClustering(writeOperationType));
   }
 }

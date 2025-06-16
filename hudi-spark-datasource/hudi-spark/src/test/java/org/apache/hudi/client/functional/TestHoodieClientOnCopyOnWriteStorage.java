@@ -1037,7 +1037,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     // trigger another commit. this should rollback latest partial commit.
     JavaRDD<WriteStatus> statuses = (JavaRDD<WriteStatus>)
         insertBatchRecords(client, commitTime1, 200, 1, 2, SparkRDDWriteClient::upsert).getLeft();
-    client.commit(commitTime1, statuses);
     metaClient.reloadActiveTimeline();
     // rollback should have succeeded. Essentially, the pending clustering should not hinder the rollback of regular commits.
     assertEquals(1, metaClient.getActiveTimeline().getCommitsTimeline().filterInflightsAndRequested().countInstants());

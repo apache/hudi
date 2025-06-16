@@ -43,6 +43,7 @@ import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
@@ -108,10 +109,14 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
   @ParameterizedTest
   @CsvSource({"true,6", "true,8", "false,6", "false,8"})
   void testCOWToMORConvertedTableRollback(boolean rollbackUsingMarkers, int tableVersion) throws Exception {
+
     // Set TableType to COW
     Properties properties = new Properties();
     properties.put(HoodieTableConfig.VERSION.key(), String.valueOf(tableVersion));
     properties.put(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), String.valueOf(tableVersion));
+    properties.setProperty(HoodieTableConfig.TIMELINE_LAYOUT_VERSION.key(), tableVersion == 6
+        ? Integer.toString(TimelineLayoutVersion.LAYOUT_VERSION_1.getVersion()) : Integer.toString(TimelineLayoutVersion.LAYOUT_VERSION_2.getVersion()));
+
     HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.COPY_ON_WRITE, properties);
 
     HoodieWriteConfig cfg = getConfig(false, rollbackUsingMarkers);
@@ -152,7 +157,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
       assertNoWriteErrors(statuses);
 
       // Set TableType to MOR
-      metaClient = getHoodieMetaClient(MERGE_ON_READ);
+      metaClient = getHoodieMetaClient(MERGE_ON_READ, properties);
 
       // rollback a COW commit when TableType is MOR
       client.rollback(newCommitTime);
@@ -373,15 +378,18 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
   @ParameterizedTest
   @MethodSource("testReattemptRollbackArguments")
   void testReattemptRollback(boolean rollbackUsingMarkers, boolean partitionedTable) throws Exception {
+
     HoodieWriteConfig.Builder cfgBuilder =
         getConfigBuilder(false, rollbackUsingMarkers, HoodieIndex.IndexType.SIMPLE);
 
     addConfigsForPopulateMetaFields(cfgBuilder, true);
-    HoodieWriteConfig cfg = cfgBuilder.build();
-    cfg.setValue(HoodieWriteConfig.WRITE_TABLE_VERSION, "6");
+    cfgBuilder = cfgBuilder.withWriteTableVersion(6);
+    cfgBuilder = cfgBuilder.withTimelineLayoutVersion(TimelineLayoutVersion.LAYOUT_VERSION_1.getVersion());
 
+    HoodieWriteConfig cfg = cfgBuilder.build();
     Properties properties = CollectionUtils.copy(cfg.getProps());
     properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().toString());
+    properties.setProperty(HoodieTableConfig.VERSION.key(), "6");
     HoodieTableMetaClient metaClient = getHoodieMetaClient(MERGE_ON_READ, properties);
 
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {

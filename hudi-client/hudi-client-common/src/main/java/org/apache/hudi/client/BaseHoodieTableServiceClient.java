@@ -235,7 +235,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     logCompactionTimer = metrics.getLogCompactionCtx();
     WriteMarkersFactory.get(config.getMarkersType(), table, logCompactionInstantTime);
     HoodieWriteMetadata<T> writeMetadata = table.logCompact(context, logCompactionInstantTime);
-    HoodieWriteMetadata<O> logCompactionMetadata = convertToOutputMetadata(writeMetadata);
+    HoodieWriteMetadata<T> updatedWriteMetadata = partialUpdateTableMetadata(table, writeMetadata, logCompactionInstantTime);
+    HoodieWriteMetadata<O> logCompactionMetadata = convertToOutputMetadata(updatedWriteMetadata);
     if (shouldComplete) {
       commitLogCompaction(logCompactionInstantTime, logCompactionMetadata, Option.of(table));
     }
@@ -317,33 +318,48 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     }
     compactionTimer = metrics.getCompactionCtx();
     HoodieWriteMetadata<T> writeMetadata = table.compact(context, compactionInstantTime);
-    HoodieWriteMetadata<O> compactionWriteMetadata = convertToOutputMetadata(writeMetadata);
+    HoodieWriteMetadata<T> updatedWriteMetadata = partialUpdateTableMetadata(table, writeMetadata, compactionInstantTime);
+    HoodieWriteMetadata<O> compactionWriteMetadata = convertToOutputMetadata(updatedWriteMetadata);
     if (shouldComplete) {
       commitCompaction(compactionInstantTime, compactionWriteMetadata, Option.of(table));
     }
     return compactionWriteMetadata;
   }
 
+  /**
+   * Partially update the table metadata if the streaming writes is enabled.
+   *
+   * @return The passed in {@code HoodieWriteMetadata} with probable partially updated write statuses.
+   */
+  protected HoodieWriteMetadata<T> partialUpdateTableMetadata(HoodieTable table, HoodieWriteMetadata<T> writeMetadata, String instantTime) {
+    return writeMetadata;
+  }
+
   public void commitCompaction(String compactionInstantTime, HoodieWriteMetadata<O> compactionWriteMetadata, Option<HoodieTable> tableOpt) {
-    // dereferencing the write dag for compaction for the first time.
-    List<HoodieWriteStat> writeStats = triggerWritesAndFetchWriteStats(compactionWriteMetadata);
+    // de-referencing the write dag for compaction for the first time.
+    TableWriteStats tableWriteStats = triggerWritesAndFetchWriteStats(compactionWriteMetadata);
     // Fetch commit metadata from HoodieWriteMetadata and update HoodieWriteStat
-    CommonClientUtils.stitchCompactionHoodieWriteStats(compactionWriteMetadata, writeStats);
+    CommonClientUtils.stitchCompactionHoodieWriteStats(compactionWriteMetadata, tableWriteStats.getDataTableWriteStats());
     metrics.emitCompactionCompleted();
 
     HoodieTable table = tableOpt.orElseGet(() -> createTable(config, context.getStorageConf()));
-    completeCompaction(compactionWriteMetadata.getCommitMetadata().get(), table, compactionInstantTime);
+    completeCompaction(compactionWriteMetadata.getCommitMetadata().get(), table, compactionInstantTime, tableWriteStats.getMetadataTableWriteStats());
   }
 
   /**
-   * The API triggers the data write and fetches the corresponding write stats using the write metadata.
+   * The API triggers the data write and fetches the corresponding write-stats using the write metadata.
+   *
+   * <p>When streaming writes to metadata table is enabled, writes to metadata table is expected to be triggered here
+   * and the list of {@link HoodieWriteStat} are returned as part of this call.
+   *
+   * @return instance of {@link TableWriteStats} to hold stats for the writes.
    */
-  protected abstract List<HoodieWriteStat> triggerWritesAndFetchWriteStats(HoodieWriteMetadata<O> writeMetadata);
+  protected abstract TableWriteStats triggerWritesAndFetchWriteStats(HoodieWriteMetadata<O> writeMetadata);
 
   /**
    * Commit Compaction and track metrics.
    */
-  protected void completeCompaction(HoodieCommitMetadata metadata, HoodieTable table, String compactionCommitTime) {
+  protected void completeCompaction(HoodieCommitMetadata metadata, HoodieTable table, String compactionCommitTime, List<HoodieWriteStat> partialMetadataWriteStats) {
     this.context.setJobStatus(this.getClass().getSimpleName(), "Collect compaction write status and commit compaction: " + config.getTableName());
     List<HoodieWriteStat> writeStats = metadata.getWriteStats();
     handleWriteErrors(writeStats, TableServiceType.COMPACT);
@@ -353,7 +369,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       this.txnManager.beginStateChange(Option.of(compactionInstant), Option.empty());
       finalizeWrite(table, compactionCommitTime, writeStats);
       // commit to data table after committing to metadata table.
-      writeTableMetadata(table, compactionCommitTime, metadata);
+      writeToMetadataTable(table, compactionCommitTime, metadata, partialMetadataWriteStats);
       LOG.info("Committing Compaction {}", compactionCommitTime);
       CompactHelpers.getInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
       LOG.debug("Compaction {} finished with result: {}", compactionCommitTime, metadata);
@@ -372,14 +388,19 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     LOG.info("Compacted successfully on commit {}", compactionCommitTime);
   }
 
+  protected void writeToMetadataTable(HoodieTable table, String instantTime, HoodieCommitMetadata metadata, List<HoodieWriteStat> partialMetadataWriteStats) {
+    // legacy write DAG to metadata table.
+    writeTableMetadata(table, instantTime, metadata);
+  }
+
   public void commitLogCompaction(String compactionInstantTime, HoodieWriteMetadata<O> writeMetadata, Option<HoodieTable> tableOpt) {
     // dereferencing the write dag for log compaction for the first time.
-    List<HoodieWriteStat> writeStats = triggerWritesAndFetchWriteStats(writeMetadata);
+    TableWriteStats tableWriteStats = triggerWritesAndFetchWriteStats(writeMetadata);
     // fetch HoodieCommitMetadata and update HoodieWriteStat
-    CommonClientUtils.stitchCompactionHoodieWriteStats(writeMetadata, writeStats);
+    CommonClientUtils.stitchCompactionHoodieWriteStats(writeMetadata, tableWriteStats.getDataTableWriteStats());
     metrics.emitCompactionCompleted();
     HoodieTable table = tableOpt.orElseGet(() -> createTable(config, context.getStorageConf()));
-    completeLogCompaction(writeMetadata.getCommitMetadata().get(), table, compactionInstantTime);
+    completeLogCompaction(writeMetadata.getCommitMetadata().get(), table, compactionInstantTime, tableWriteStats.getMetadataTableWriteStats());
   }
   
   /**
@@ -404,7 +425,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
   /**
    * Commit Log Compaction and track metrics.
    */
-  protected void completeLogCompaction(HoodieCommitMetadata metadata, HoodieTable table, String logCompactionCommitTime) {
+  protected void completeLogCompaction(HoodieCommitMetadata metadata, HoodieTable table, String logCompactionCommitTime, List<HoodieWriteStat> partialMetadataWriteStats) {
     this.context.setJobStatus(this.getClass().getSimpleName(), "Collect log compaction write status and commit compaction");
     List<HoodieWriteStat> writeStats = metadata.getWriteStats();
     handleWriteErrors(writeStats, TableServiceType.LOG_COMPACT);
@@ -415,7 +436,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       preCommit(metadata);
       finalizeWrite(table, logCompactionCommitTime, writeStats);
       // commit to data table after committing to metadata table.
-      writeTableMetadata(table, logCompactionCommitTime, metadata);
+      writeToMetadataTable(table, logCompactionCommitTime, metadata, partialMetadataWriteStats);
       LOG.info("Committing Log Compaction {}", logCompactionCommitTime);
       CompactHelpers.getInstance().completeInflightLogCompaction(table, logCompactionCommitTime, metadata);
       LOG.debug("Log Compaction {} finished with result {}", logCompactionCommitTime, metadata);
@@ -466,7 +487,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     clusteringTimer = metrics.getClusteringCtx();
     LOG.info("Starting clustering at {} for table {}", clusteringInstant, table.getConfig().getBasePath());
     HoodieWriteMetadata<T> writeMetadata = table.cluster(context, clusteringInstant);
-    HoodieWriteMetadata<O> clusteringMetadata = convertToOutputMetadata(writeMetadata);
+    HoodieWriteMetadata<T> updatedWriteMetadata = partialUpdateTableMetadata(table, writeMetadata, clusteringInstant);
+    HoodieWriteMetadata<O> clusteringMetadata = convertToOutputMetadata(updatedWriteMetadata);
 
     // TODO : Where is shouldComplete used ?
     if (shouldComplete) {
@@ -504,11 +526,11 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
 
   private void commitClustering(HoodieWriteMetadata<O> clusteringWriteMetadata, HoodieTable table, String clusteringCommitTime) {
     // triggering the dag for the first time for clustering
-    List<HoodieWriteStat> writeStats = triggerWritesAndFetchWriteStats(clusteringWriteMetadata);
-    clusteringWriteMetadata.setWriteStats(writeStats);
+    TableWriteStats tableWriteStats = triggerWritesAndFetchWriteStats(clusteringWriteMetadata);
+    clusteringWriteMetadata.setWriteStats(tableWriteStats.getDataTableWriteStats());
     // Fetch Replace commit metadata and update HoodieWriteStats annd Partition to Replace FileIds
     HoodieReplaceCommitMetadata replaceCommitMetadata = (HoodieReplaceCommitMetadata) clusteringWriteMetadata.getCommitMetadata().get();
-    for (HoodieWriteStat writeStat: writeStats) {
+    for (HoodieWriteStat writeStat: tableWriteStats.getDataTableWriteStats()) {
       replaceCommitMetadata.addWriteStat(writeStat.getPartitionPath(), writeStat);
     }
     HoodieClusteringPlan clusteringPlan = ClusteringUtils.getPendingClusteringPlan(table.getMetaClient(), clusteringCommitTime);
@@ -526,13 +548,15 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
               .forEach(metrics::updateClusteringFileCreationMetrics));
     }
 
-    completeClustering(replaceCommitMetadata, writeStats, table, clusteringCommitTime);
+    completeClustering(replaceCommitMetadata, tableWriteStats.getDataTableWriteStats(), table, clusteringCommitTime,
+        tableWriteStats.getMetadataTableWriteStats());
   }
 
   private void completeClustering(HoodieReplaceCommitMetadata replaceCommitMetadata,
                                   List<HoodieWriteStat> writeStats,
                                   HoodieTable table,
-                                  String clusteringCommitTime) {
+                                  String clusteringCommitTime,
+                                  List<HoodieWriteStat> partialMetadataWriteStats) {
 
     handleWriteErrors(writeStats, TableServiceType.CLUSTER);
     final HoodieInstant clusteringInstant = ClusteringUtils.getInflightClusteringInstant(clusteringCommitTime,
@@ -547,7 +571,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
         preCommit(replaceCommitMetadata);
       }
       // Update table's metadata (table)
-      writeTableMetadata(table, clusteringInstant.requestedTime(), replaceCommitMetadata);
+      writeToMetadataTable(table, clusteringInstant.requestedTime(), replaceCommitMetadata, partialMetadataWriteStats);
 
       LOG.info("Committing Clustering {} for table {}", clusteringCommitTime, table.getConfig().getBasePath());
 

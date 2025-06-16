@@ -59,9 +59,8 @@ public class TestWriteClient extends HoodieSparkClientTestBase {
     try {
       String firstCommit = "001";
       int numRecords = 200;
-      JavaRDD<WriteStatus> result = insertFirstBatch(cfgBuilder.build(), client, firstCommit, "000", numRecords, SparkRDDWriteClient::insert,
+      insertFirstBatch(cfgBuilder.build(), client, firstCommit, "000", numRecords, SparkRDDWriteClient::insert,
           false, false, numRecords, INSTANT_GENERATOR);
-      assertTrue(client.commit(firstCommit, result), "Commit should succeed");
 
       // Re-init client with null writer schema.
       cfgBuilder = getConfigBuilder((String) null);
@@ -70,7 +69,7 @@ public class TestWriteClient extends HoodieSparkClientTestBase {
       String secondCommit = "002";
       WriteClientTestUtils.startCommitWithTime(client, secondCommit);
       JavaRDD<HoodieRecord> emptyRdd = context.emptyRDD();
-      result = client.insert(emptyRdd, secondCommit);
+      JavaRDD<WriteStatus> result = client.insert(emptyRdd, secondCommit);
       assertTrue(client.commit(secondCommit, result), "Commit should succeed");
       // Schema Validations.
       HoodieTableMetaClient metaClient = createMetaClient(jsc, basePath);
