@@ -139,9 +139,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   private boolean useWriterSchema = false;
 
   private final Properties recordProperties = new Properties();
-  private boolean generateStatsForStreamingMetadataWrites;
   private Option<FileSlice> fileSliceOpt;
-  private Option<HoodieReaderContext<T>> readerContextOpt = Option.empty();
 
   /**
    * This is used by log compaction only.
@@ -175,13 +173,6 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     this.baseFileInstantTimeOfPositions = shouldWriteRecordPositions
         ? getBaseFileInstantTimeOfPositions()
         : Option.empty();
-    if (!hoodieTable.isMetadataTable() && config.isSecondaryIndexEnabled() && isStreamingWriteToMetadataEnabled) {
-      generateStatsForStreamingMetadataWrites = !secondaryIndexDefns.isEmpty() && config.populateMetaFields();
-      if (generateStatsForStreamingMetadataWrites) {
-        HoodieEngineContext engineContext = new HoodieLocalEngineContext(hoodieTable.getStorageConf(), taskContextSupplier);
-        this.readerContextOpt = Option.of((HoodieReaderContext<T>) engineContext.getReaderContextFactory(hoodieTable.getMetaClient()).getContext());
-      }
-    }
   }
 
   public HoodieAppendHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
@@ -569,7 +560,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       }
 
       // generate Secondary index stats if streaming is enabled.
-      if (generateStatsForStreamingMetadataWrites) {
+      if (!isSecondaryIndexStreamingDisabled() && config.populateMetaFields()) {
         trackMetadataIndexStatsForStreamingMetadataWrites(fileSliceOpt.or(getFileSlice()), statuses.stream().map(status -> status.getStat().getPath()).collect(Collectors.toList()),
             statuses.get(statuses.size() - 1));
       }
@@ -582,12 +573,16 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
 
   private void trackMetadataIndexStatsForStreamingMetadataWrites(Option<FileSlice> fileSliceOpt, List<String> newLogFiles, WriteStatus status) {
     // TODO: Optimise the computation for multiple secondary indexes
+    HoodieEngineContext engineContext = new HoodieLocalEngineContext(hoodieTable.getStorageConf(), taskContextSupplier);
+    HoodieReaderContext readerContext = engineContext.getReaderContextFactory(hoodieTable.getMetaClient()).getContext();
+
     secondaryIndexDefns.forEach(secondaryIndexDefnPair -> {
+      status.getIndexStats().instantiateSecondaryIndexStatsForIndex(secondaryIndexDefnPair.getKey());
 
       // fetch primary key -> secondary index for prev file slice.
       Map<String, String> recordKeyToSecondaryKeyForPreviousFileSlice = fileSliceOpt.map(fileSlice -> {
         try {
-          return SecondaryIndexRecordGenerationUtils.getRecordKeyToSecondaryKey(hoodieTable.getMetaClient(), readerContextOpt.get(), fileSlice, writeSchemaWithMetaFields,
+          return SecondaryIndexRecordGenerationUtils.getRecordKeyToSecondaryKey(hoodieTable.getMetaClient(), readerContext, fileSlice, writeSchemaWithMetaFields,
               secondaryIndexDefnPair.getValue(), instantTime, config.getProps(), false);
         } catch (IOException e) {
           throw new HoodieIOException("Failed to generate secondary index stats ", e);
@@ -600,7 +595,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       newLogFiles.stream().forEach(logFile -> latestIncludingInflight.addLogFile(new HoodieLogFile(new StoragePath(config.getBasePath(), logFile))));
       Map<String, String> recordKeyToSecondaryKeyForCurrentFileSlice;
       try {
-        recordKeyToSecondaryKeyForCurrentFileSlice = SecondaryIndexRecordGenerationUtils.getRecordKeyToSecondaryKey(hoodieTable.getMetaClient(), readerContextOpt.get(),
+        recordKeyToSecondaryKeyForCurrentFileSlice = SecondaryIndexRecordGenerationUtils.getRecordKeyToSecondaryKey(hoodieTable.getMetaClient(), readerContext,
             latestIncludingInflight, writeSchemaWithMetaFields, secondaryIndexDefnPair.getValue(), instantTime, config.getProps(), true);
       } catch (IOException e) {
         throw new HoodieIOException("Failed to generate secondary index stats ", e);

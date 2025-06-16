@@ -44,6 +44,10 @@ public class IndexStats implements Serializable {
     return writtenRecordDelegates;
   }
 
+  public void instantiateSecondaryIndexStatsForIndex(String secondaryIndexPartitionPath) {
+    secondaryIndexStats.put(secondaryIndexPartitionPath, new ArrayList<>());
+  }
+
   public void addSecondaryIndexStats(String secondaryIndexPartitionPath, String recordKey, String secondaryIndexValue, boolean isDeleted) {
     secondaryIndexStats.computeIfAbsent(secondaryIndexPartitionPath, k -> new ArrayList<>())
         .add(new SecondaryIndexStats(recordKey, secondaryIndexValue, isDeleted));
@@ -55,5 +59,6 @@ public class IndexStats implements Serializable {
 
   void clear() {
     this.writtenRecordDelegates.clear();
+    this.secondaryIndexStats.clear();
   }
 }
