@@ -44,7 +44,7 @@ import java.util.stream.Collectors;
 
 public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<HoodieData<HoodieRecord<T>>, HoodieData<WriteStatus>, JavaRDD<WriteStatus>> {
 
-  private final HoodieMetadataWriters metadataWriterWrapper = new HoodieMetadataWriters();
+  private final StreamingMetadataWriteHandler streamingMetadataWriteHandler = new StreamingMetadataWriteHandler();
   protected SparkRDDTableServiceClient(HoodieEngineContext context,
                                        HoodieWriteConfig clientConfig,
                                        Option<EmbeddedTimelineService> timelineService) {
@@ -82,7 +82,7 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
       HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata,
       String instantTime) {
     if (isStreamingWriteToMetadataEnabled(table)) {
-      writeMetadata.setWriteStatuses(metadataWriterWrapper.streamWriteToMetadataTable(table, writeMetadata.getWriteStatuses(), instantTime));
+      writeMetadata.setWriteStatuses(streamingMetadataWriteHandler.streamWriteToMetadataTable(table, writeMetadata.getWriteStatuses(), instantTime));
     }
     return writeMetadata;
   }
@@ -90,7 +90,7 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
   @Override
   protected void writeToMetadataTable(HoodieTable table, String instantTime, HoodieCommitMetadata metadata, List<HoodieWriteStat> partialMetadataWriteStats) {
     if (isStreamingWriteToMetadataEnabled(table)) {
-      metadataWriterWrapper.commitToMetadataTable(table, instantTime, metadata, partialMetadataWriteStats);
+      streamingMetadataWriteHandler.commitToMetadataTable(table, instantTime, metadata, partialMetadataWriteStats);
     } else {
       writeTableMetadata(table, instantTime, metadata);
     }

@@ -33,9 +33,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Utilities for data table write client and table service client to write to metadata table.
+ * Class to assist with streaming writes to metadata table.
  */
-public class HoodieMetadataWriters {
+public class StreamingMetadataWriteHandler {
 
   // Mappings of {instant -> metadata writer option} for each action in data table.
   // This will be cleaned up when action is completed or when write client is closed.

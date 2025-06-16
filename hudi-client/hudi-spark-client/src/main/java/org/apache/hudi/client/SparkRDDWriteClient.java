@@ -70,7 +70,7 @@ public class SparkRDDWriteClient<T> extends
     BaseHoodieWriteClient<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
 
   private static final Logger LOG = LoggerFactory.getLogger(SparkRDDWriteClient.class);
-  private final HoodieMetadataWriters metadataWriteWrapper = new HoodieMetadataWriters();
+  private final StreamingMetadataWriteHandler streamingMetadataWriteHandler = new StreamingMetadataWriteHandler();
 
   public SparkRDDWriteClient(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
     this(context, clientConfig, Option.empty());
@@ -108,7 +108,7 @@ public class SparkRDDWriteClient<T> extends
     final JavaRDD<WriteStatus> writeStatuses;
     if (WriteOperationType.streamingWritesToMetadataSupported((getOperationType())) && isStreamingWriteToMetadataEnabled(table)) {
       // this code block is expected to create a new Metadata Writer, start a new commit in metadata table and trigger streaming write to metadata table.
-      writeStatuses = HoodieJavaRDD.getJavaRDD(metadataWriteWrapper.streamWriteToMetadataTable(table, HoodieJavaRDD.of(rawWriteStatuses), instantTime));
+      writeStatuses = HoodieJavaRDD.getJavaRDD(streamingMetadataWriteHandler.streamWriteToMetadataTable(table, HoodieJavaRDD.of(rawWriteStatuses), instantTime));
     } else {
       writeStatuses = rawWriteStatuses;
     }
@@ -160,7 +160,7 @@ public class SparkRDDWriteClient<T> extends
     if (!skipStreamingWritesToMetadataTable
         && isStreamingWriteToMetadataEnabled(table)
         && WriteOperationType.streamingWritesToMetadataSupported(getOperationType())) {
-      metadataWriteWrapper.commitToMetadataTable(table, instantTime, metadata, partialMetadataTableWriteStats);
+      streamingMetadataWriteHandler.commitToMetadataTable(table, instantTime, metadata, partialMetadataTableWriteStats);
     } else {
       writeTableMetadata(table, instantTime, metadata);
     }
