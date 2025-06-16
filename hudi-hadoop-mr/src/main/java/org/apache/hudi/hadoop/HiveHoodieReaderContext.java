@@ -235,6 +235,12 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   }
 
   @Override
+  public HoodieRecord<ArrayWritable> constructHoodieRecord(ArrayWritable record, Schema schema, Option<String> orderingFieldName) {
+    HoodieKey key = new HoodieKey(getRecordKey(record, schema), partitionPath);
+    return new HoodieHiveRecord(key, record, schema, objectInspectorCache);
+  }
+
+  @Override
   public ArrayWritable seal(ArrayWritable record) {
     return new ArrayWritable(Writable.class, Arrays.copyOf(record.get(), record.get().length));
   }

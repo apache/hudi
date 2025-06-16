@@ -25,6 +25,7 @@ import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
+import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
@@ -37,7 +38,6 @@ import org.apache.hudi.common.table.read.BufferedRecordSerializer;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SizeEstimator;
-import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
@@ -68,7 +68,6 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  * This implementation does not rely on a specific engine and can be used in any JVM environment as a result.
  */
 public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> {
-  private final String payloadClass;
 
   public HoodieAvroReaderContext(
       StorageConfiguration<?> storageConfiguration,
@@ -76,7 +75,6 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       Option<InstantRange> instantRangeOpt,
       Option<Predicate> filterOpt) {
     super(storageConfiguration, tableConfig, instantRangeOpt, filterOpt);
-    this.payloadClass = tableConfig.getPayloadClass();
   }
 
   @Override
@@ -120,7 +118,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
 
   @Override
   public IndexedRecord getDeleteRow(IndexedRecord record, String recordKey) {
-    throw new UnsupportedOperationException("Not supported for " + this.getClass().getSimpleName());
+    return new DeleteRecord(recordKey, record);
   }
 
   @Override
@@ -153,15 +151,22 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
 
   @Override
   public HoodieRecord<IndexedRecord> constructHoodieRecord(BufferedRecord<IndexedRecord> bufferedRecord) {
-    if (bufferedRecord.isDelete()) {
-      return SpillableMapUtils.generateEmptyPayload(
-          bufferedRecord.getRecordKey(),
-          partitionPath,
-          bufferedRecord.getOrderingValue(),
-          payloadClass);
-    }
     HoodieKey hoodieKey = new HoodieKey(bufferedRecord.getRecordKey(), partitionPath);
+    if (bufferedRecord.isDelete()) {
+      return new HoodieEmptyRecord<>(hoodieKey, HoodieRecord.HoodieRecordType.AVRO);
+    }
     return new HoodieAvroIndexedRecord(hoodieKey, bufferedRecord.getRecord());
+  }
+
+  @Override
+  public HoodieRecord<IndexedRecord> constructHoodieRecord(IndexedRecord record, Schema schema, Option<String> orderingFieldName) {
+    if (record instanceof DeleteRecord) {
+      return new HoodieEmptyRecord<>(
+          new HoodieKey(((DeleteRecord) record).getRecordKey(), partitionPath),
+          HoodieRecord.HoodieRecordType.AVRO);
+    }
+    HoodieKey hoodieKey = new HoodieKey(getRecordKey(record, schema), partitionPath);
+    return new HoodieAvroIndexedRecord(hoodieKey, record);
   }
 
   @Override

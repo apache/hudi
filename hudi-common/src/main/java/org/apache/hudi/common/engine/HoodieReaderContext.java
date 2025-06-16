@@ -379,6 +379,16 @@ public abstract class HoodieReaderContext<T> {
   public abstract HoodieRecord<T> constructHoodieRecord(BufferedRecord<T> bufferedRecord);
 
   /**
+   * Constructs a new {@link HoodieRecord} based on the given record and schema.
+   *
+   * @param record            The engine-specific row.
+   * @param schema            The Avro schema of the record.
+   * @param orderingFieldName The name of the ordering field, if any.
+   * @return A new instance of {@link HoodieRecord}.
+   */
+  public abstract HoodieRecord<T> constructHoodieRecord(T record, Schema schema, Option<String> orderingFieldName);
+
+  /**
    * Seals the engine-specific record to make sure the data referenced in memory do not change.
    *
    * @param record The record.
