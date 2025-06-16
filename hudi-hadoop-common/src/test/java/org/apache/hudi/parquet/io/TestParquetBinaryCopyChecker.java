@@ -49,6 +49,14 @@ import static org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.INT32;
 import static org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.INT64;
 import static org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.INT96;
 import static org.apache.parquet.schema.Type.Repetition.OPTIONAL;
+import static org.apache.parquet.schema.Types.optional;
+import static org.apache.parquet.schema.Types.optionalGroup;
+import static org.apache.parquet.schema.Types.optionalList;
+import static org.apache.parquet.schema.Types.optionalMap;
+import static org.apache.parquet.schema.Types.repeated;
+import static org.apache.parquet.schema.Types.required;
+import static org.apache.parquet.schema.Types.requiredGroup;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestParquetBinaryCopyChecker {
@@ -56,121 +64,231 @@ public class TestParquetBinaryCopyChecker {
   private Configuration conf = new Configuration();
   private final int numRecord = 0;
 
-  private static final PrimitiveType BINARY_TYPE = Types.optional(BINARY).named("Binary");
-  private static final PrimitiveType INT32_TYPE = Types.optional(INT32).named("Int32");
-  private static final PrimitiveType INT64_TYPE = Types.optional(INT64).named("Int64");
-  private static final PrimitiveType INT96_TYPE = Types.optional(INT96).named("Int96");
-  private static final PrimitiveType FLOAT_TYPE = Types.optional(FLOAT).named("Float");
-  private static final PrimitiveType DOUBLE_TYPE = Types.optional(DOUBLE).named("DOUBLE");
-  private static final PrimitiveType BOOLEAN_TYPE = Types.optional(BOOLEAN).named("BOOLEAN");
-  private static final PrimitiveType FIXED_LEN_BYTE_ARRAY_TYPE = Types.optional(FIXED_LEN_BYTE_ARRAY)
+  private static final PrimitiveType BINARY_TYPE = optional(BINARY).named("Binary");
+  private static final PrimitiveType INT32_TYPE = optional(INT32).named("Int32");
+  private static final PrimitiveType INT64_TYPE = optional(INT64).named("Int64");
+  private static final PrimitiveType INT96_TYPE = optional(INT96).named("Int96");
+  private static final PrimitiveType FLOAT_TYPE = optional(FLOAT).named("Float");
+  private static final PrimitiveType DOUBLE_TYPE = optional(DOUBLE).named("DOUBLE");
+  private static final PrimitiveType BOOLEAN_TYPE = optional(BOOLEAN).named("BOOLEAN");
+  private static final PrimitiveType FIXED_LEN_BYTE_ARRAY_TYPE = optional(FIXED_LEN_BYTE_ARRAY)
       .length(20)
       .named("FIXED_LEN_BYTE_ARRAY_TYPE");
 
-  private static final GroupType LEGACY_TWO_LEVEL_ARRAY_TYPE = Types.optionalGroup()
+  private static final GroupType LEGACY_TWO_LEVEL_ARRAY_TYPE = optionalGroup()
       .as(OriginalType.LIST)
-      .addField(Types.repeated(BINARY).named("array"))
+      .addField(repeated(BINARY).named("array"))
       .named("LEGACY_TWO_LEVEL_ARRAY_TYPE");
-  private static final GroupType LEGACY_TREE_LEVEL_ARRAY_TYPE = Types.optionalGroup()
+  private static final GroupType LEGACY_TREE_LEVEL_ARRAY_TYPE = optionalGroup()
       .as(OriginalType.LIST)
       .optionalGroup()
-      .addField(Types.optional(BINARY).named("array"))
+      .addField(optional(BINARY).named("array"))
       .named("bag")
       .named("LEGACY_TREE_LEVEL_ARRAY_TYPE");
-  private static final GroupType STANDARD_THREE_LEVEL_ARRAY_TYPE = Types.optionalList()
+  private static final GroupType STANDARD_THREE_LEVEL_ARRAY_TYPE = optionalList()
       .element(BINARY, OPTIONAL)
       .named("STANDARD_THREE_LEVEL_ARRAY_TYPE");
 
-  private static final GroupType LEGACY_MAP_TYPE = Types.optionalGroup()
+  private static final GroupType LEGACY_MAP_TYPE = optionalGroup()
       .as(OriginalType.MAP)
       .optionalGroup()
-      .addField(Types.required(BINARY).named("key"))
-      .addField(Types.optional(BINARY).named("value"))
+      .addField(required(BINARY).named("key"))
+      .addField(optional(BINARY).named("value"))
       .named("map")
       .named("LEGACY_MAP_TYPE");
-  private static final GroupType STANDARD_MAP_TYPE = Types.optionalMap()
+  private static final GroupType STANDARD_MAP_TYPE = optionalMap()
       .key(BINARY)
       .value(BINARY, OPTIONAL)
       .named("STANDARD_MAP_TYPE");
 
-
-  private static final PrimitiveType INT32_DECIMAL_TYPE = Types.optional(INT32)
+  private static final PrimitiveType INT32_DECIMAL_TYPE = optional(INT32)
       .as(LogicalTypeAnnotation.decimalType(2, 5))
       .named("INT32_DECIMAL_TYPE");
-  private static final PrimitiveType INT64_DECIMAL_TYPE = Types.optional(INT64)
+  private static final PrimitiveType INT64_DECIMAL_TYPE = optional(INT64)
       .as(LogicalTypeAnnotation.decimalType(2, 15))
       .named("INT64_DECIMAL_TYPE");
-  private static final PrimitiveType FIXED_LEN_BYTE_ARRAY_DECIMAL_TYPE = Types.optional(FIXED_LEN_BYTE_ARRAY)
+  private static final PrimitiveType FIXED_LEN_BYTE_ARRAY_DECIMAL_TYPE = optional(FIXED_LEN_BYTE_ARRAY)
       .length(25)
       .as(LogicalTypeAnnotation.decimalType(2, 25))
       .named("FIXED_LEN_BYTE_ARRAY_DECIMAL_TYPE");
 
   @Test
-  public void testVerifyFiles() {
+  public void testVerifyFilesBySupport() {
+    ParquetFileInfo file = makeSchemaNotSupportFileInfo();
+    // file schema not support, should return false
+    List<ParquetFileInfo> files = makeFileInfos(file);
+    assertFalse(ParquetBinaryCopyChecker.verifyFiles(files));
+  }
+
+  @Test
+  public void testVerifyFilesByFilterCode() {
     List<ParquetFileInfo> files;
-
-    ParquetFileInfo file0 = makeSchemaNotSupportFileInfo();
-    ParquetFileInfo file1 = makeFileInfo(true, null);
-    ParquetFileInfo file2 = makeFileInfo(
-        true,
-        "simple",
-        "field1", "required",
-        "field2", "optional",
-        "field2", "repeated"
-    );
-    ParquetFileInfo file3 = makeFileInfo(
-        true,
-        "dynamic",
-        "field1", "required",
-        "field2", "optional",
-        "field3", "repeated"
-    );
-    ParquetFileInfo file4 = makeFileInfo(
-        true,
-        "dynamic",
-        "field1", "optional",
-        "field2", "optional",
-        "field3", "optional"
-    );
-    ParquetFileInfo file5 = makeFileInfo(
-        true,
-        "dynamic",
-        "field1", "optional",
-        "field2", "optional",
-        "field3", "optional",
-        "field4", "optional"
-    );
-    ParquetFileInfo file6 = makeFileInfo(
-        true,
-        "dynamic",
-        "field1", "optional",
-        "field2", "optional",
-        "field3", "optional",
-        "field4", "optional"
-    );
-
-    // file0 schema not support, should return false
-    files = makeFileInfos(file0);
-    Assertions.assertFalse(ParquetBinaryCopyChecker.verifyFiles(files));
+    String schema = Types.buildMessage()
+        .addField(required(BINARY).named("field1"))
+        .addField(optional(BINARY).named("field2"))
+        .addField(repeated(BINARY).named("field3"))
+        .named("schema")
+        .toString();
+    ParquetFileInfo file1 = makeFileInfo(true, null, null);
+    ParquetFileInfo file2 = makeFileInfo(true, "simple", schema);
+    ParquetFileInfo file3 = makeFileInfo(true, "dynamic", schema);
 
     // file1 schema contains none bloom filter, file2 contains simple bloom filter, should return false
     files = makeFileInfos(file1, file2);
-    Assertions.assertFalse(ParquetBinaryCopyChecker.verifyFiles(files));
+    assertFalse(ParquetBinaryCopyChecker.verifyFiles(files));
 
     // files contains multip bloom filter, should return false
     files = makeFileInfos(file2, file3);
-    Assertions.assertFalse(ParquetBinaryCopyChecker.verifyFiles(files));
+    assertFalse(ParquetBinaryCopyChecker.verifyFiles(files));
+  }
 
-    // files contains multip repetition for some column, should return false
-    files = makeFileInfos(file3, file4);
-    Assertions.assertFalse(ParquetBinaryCopyChecker.verifyFiles(files));
+  @Test
+  public void testVerifyFilesByRepetition() {
+    List<ParquetFileInfo> files;
+    String schema = Types.buildMessage()
+        .addField(required(BINARY).named("field1"))
+        .addField(optionalList().requiredElement(BINARY).named("list-simple"))
+        .addField(optionalList().optionalGroupElement().addField(optional(INT32).named("ele")).named("list-nested"))
+        .addField(optionalMap()
+            .key(required(BINARY).named("key"))
+            .value(optional(BINARY).named("value"))
+            .named("map-simple"))
+        .addField(optionalMap()
+            .key(required(BINARY).named("key"))
+            .value(optionalGroup().addField(optional(BINARY).named("map-ele")).named("value"))
+            .named("map-nested"))
+        .addField(optionalGroup().addField(optional(BINARY).named("struct-field1")).named("struct-simple"))
+        .addField(optionalGroup().addField(
+                optionalGroup().addField(optional(INT64).named("struct-field2-int")).named("struct-field2"))
+            .named("struct-nested"))
+        .named("schema")
+        .toString();
+    ParquetFileInfo file1 = makeFileInfo(true, "dynamic", schema);
+
+    schema = Types.buildMessage()
+        .addField(optional(BINARY).named("field1"))
+        .addField(optionalList().requiredElement(BINARY).named("list-simple"))
+        .addField(optionalList().optionalGroupElement().addField(optional(INT32).named("ele")).named("list-nested"))
+        .addField(optionalMap()
+            .key(required(BINARY).named("key"))
+            .value(optional(BINARY).named("value"))
+            .named("map-simple"))
+        .addField(optionalMap()
+            .key(required(BINARY).named("key"))
+            .value(optionalGroup().addField(optional(BINARY).named("map-ele")).named("value"))
+            .named("map-nested"))
+        .addField(optionalGroup().addField(optional(BINARY).named("struct-field1")).named("struct-simple"))
+        .addField(optionalGroup().addField(
+                optionalGroup().addField(optional(INT64).named("struct-field2-int")).named("struct-field2"))
+            .named("struct-nested"))
+        .named("schema")
+        .toString();
+    ParquetFileInfo file2 = makeFileInfo(true, "dynamic", schema);
+
+    schema = Types.buildMessage()
+        .addField(required(BINARY).named("field1"))
+        .addField(optionalList().requiredElement(BINARY).named("list-simple"))
+        .addField(optionalList().requiredGroupElement().addField(optional(INT32).named("ele")).named("list-nested"))
+        .addField(optionalMap()
+            .key(required(BINARY).named("key"))
+            .value(optional(BINARY).named("value"))
+            .named("map-simple"))
+        .addField(optionalMap()
+            .key(required(BINARY).named("key"))
+            .value(optionalGroup().addField(optional(BINARY).named("map-ele")).named("value"))
+            .named("map-nested"))
+        .addField(optionalGroup().addField(optional(BINARY).named("struct-field1")).named("struct-simple"))
+        .addField(optionalGroup().addField(
+                optionalGroup().addField(optional(INT64).named("struct-field2-int")).named("struct-field2"))
+            .named("struct-nested"))
+        .named("schema")
+        .toString();
+    ParquetFileInfo file3 = makeFileInfo(true, "dynamic", schema);
+
+    schema = Types.buildMessage()
+        .addField(required(BINARY).named("field1"))
+        .addField(optionalList().requiredElement(BINARY).named("list-simple"))
+        .addField(optionalList().optionalGroupElement().addField(optional(INT32).named("ele")).named("list-nested"))
+        .addField(optionalMap()
+            .key(required(BINARY).named("key"))
+            .value(optional(BINARY).named("value"))
+            .named("map-simple"))
+        .addField(optionalMap()
+            .key(required(BINARY).named("key"))
+            .value(requiredGroup().addField(optional(BINARY).named("map-ele")).named("value"))
+            .named("map-nested"))
+        .addField(optionalGroup().addField(optional(BINARY).named("struct-field1")).named("struct-simple"))
+        .addField(optionalGroup().addField(
+                optionalGroup().addField(optional(INT64).named("struct-field2-int")).named("struct-field2"))
+            .named("struct-nested"))
+        .named("schema")
+        .toString();
+    ParquetFileInfo file4 = makeFileInfo(true, "dynamic", schema);
+
+    schema = Types.buildMessage()
+        .addField(required(BINARY).named("field1"))
+        .addField(optionalList().requiredElement(BINARY).named("list-simple"))
+        .addField(optionalList().optionalGroupElement().addField(optional(INT32).named("ele")).named("list-nested"))
+        .addField(optionalMap()
+            .key(required(BINARY).named("key"))
+            .value(optional(BINARY).named("value"))
+            .named("map-simple"))
+        .addField(optionalMap()
+            .key(required(BINARY).named("key"))
+            .value(optionalGroup().addField(optional(BINARY).named("map-ele")).named("value"))
+            .named("map-nested"))
+        .addField(optionalGroup().addField(optional(BINARY).named("struct-field1")).named("struct-simple"))
+        .addField(optionalGroup().addField(
+                optionalGroup().addField(required(INT64).named("struct-field2-int")).named("struct-field2"))
+            .named("struct-nested"))
+        .named("schema")
+        .toString();
+    ParquetFileInfo file5 = makeFileInfo(true, "dynamic", schema);
+
+    schema = Types.buildMessage()
+        .addField(required(BINARY).named("field1"))
+        .addField(optionalList().requiredElement(BINARY).named("list-simple"))
+        .addField(optionalList().optionalGroupElement().addField(optional(INT32).named("ele")).named("list-nested"))
+        .addField(optionalMap()
+            .key(required(BINARY).named("key"))
+            .value(optional(BINARY).named("value"))
+            .named("map-simple"))
+        .addField(optionalMap()
+            .key(required(BINARY).named("key"))
+            .value(optionalGroup().addField(optional(BINARY).named("map-ele")).named("value"))
+            .named("map-nested"))
+        .addField(optionalGroup().addField(optional(BINARY).named("struct-field1")).named("struct-simple"))
+        .addField(optionalGroup().addField(
+                optionalGroup().addField(optional(INT64).named("struct-field2-int")).named("struct-field2"))
+            .named("struct-nested"))
+        .addField(optional(BINARY).named("field-added"))
+        .named("schema")
+        .toString();
+    ParquetFileInfo file6 = makeFileInfo(true, "dynamic", schema);
+    ParquetFileInfo file7 = makeFileInfo(true, "dynamic", schema);
+
+    // files contains multip repetition for binary column, should return false
+    files = makeFileInfos(file1, file2);
+    assertFalse(ParquetBinaryCopyChecker.verifyFiles(files));
+
+    // files contains multip repetition for nested list column, should return false
+    files = makeFileInfos(file1, file3);
+    assertFalse(ParquetBinaryCopyChecker.verifyFiles(files));
+
+    // files contains multip repetition for nested map column, should return false
+    files = makeFileInfos(file1, file4);
+    assertFalse(ParquetBinaryCopyChecker.verifyFiles(files));
+
+    // files contains multip repetition for nested struct column, should return false
+    files = makeFileInfos(file1, file5);
+    assertFalse(ParquetBinaryCopyChecker.verifyFiles(files));
 
     // files contains schema evolution, should return true
-    files = makeFileInfos(file4, file5);
+    files = makeFileInfos(file1, file6);
     assertTrue(ParquetBinaryCopyChecker.verifyFiles(files));
 
     // all same, should return true
-    files = makeFileInfos(file5, file6);
+    files = makeFileInfos(file6, file7);
     assertTrue(ParquetBinaryCopyChecker.verifyFiles(files));
   }
 
@@ -179,62 +297,41 @@ public class TestParquetBinaryCopyChecker {
     MessageType schema = new MessageType("schema",
         BINARY_TYPE,
         INT32_TYPE,
+        INT64_TYPE,
         INT96_TYPE,
         FLOAT_TYPE,
         DOUBLE_TYPE,
         BOOLEAN_TYPE,
         FIXED_LEN_BYTE_ARRAY_TYPE);
     String testFile = makeTestFile(schema, "simple");
-    ParquetFileInfo info = ParquetBinaryCopyChecker.verifyFile(conf, testFile);
+    ParquetFileInfo info = ParquetBinaryCopyChecker.collectFileInfo(conf, testFile);
     Assertions.assertNotNull(info);
-    Assertions.assertTrue(info.isSchemaSupport());
+    Assertions.assertTrue(info.canBinaryCopy());
+    String schemaString = schema.toString();
     assertFileInfo(
         info,
         true,
-        "simple",
-        "Float", "OPTIONAL",
-        "Int96", "OPTIONAL",
-        "Int32", "OPTIONAL",
-        "FIXED_LEN_BYTE_ARRAY_TYPE", "OPTIONAL",
-        "DOUBLE", "OPTIONAL",
-        "Binary", "OPTIONAL",
-        "BOOLEAN", "OPTIONAL");
+        "simple", schemaString);
     TestHoodieParquetFileBinaryCopier.TestFileBuilder.deleteTempFile(testFile);
 
     schema = new MessageType("schema", LEGACY_TWO_LEVEL_ARRAY_TYPE);
-    withTempFile(makeTestFile(schema), file -> {
-      assertFileInfo(ParquetBinaryCopyChecker.verifyFile(conf, file), false);
-    });
+    testSingleFile(schema,false);
     schema = new MessageType("schema", LEGACY_TREE_LEVEL_ARRAY_TYPE);
-    withTempFile(makeTestFile(schema), file -> {
-      assertFileInfo(ParquetBinaryCopyChecker.verifyFile(conf, file), true, null, "LEGACY_TREE_LEVEL_ARRAY_TYPE", "OPTIONAL");
-    });
+    testSingleFile(schema,true);
     schema = new MessageType("schema", STANDARD_THREE_LEVEL_ARRAY_TYPE);
-    withTempFile(makeTestFile(schema), file -> {
-      assertFileInfo(ParquetBinaryCopyChecker.verifyFile(conf, file), true, null, "STANDARD_THREE_LEVEL_ARRAY_TYPE", "OPTIONAL");
-    });
+    testSingleFile(schema,true);
 
     schema = new MessageType("schema", LEGACY_MAP_TYPE);
-    withTempFile(makeTestFile(schema), file -> {
-      assertFileInfo(ParquetBinaryCopyChecker.verifyFile(conf, file), true, null, "LEGACY_MAP_TYPE", "OPTIONAL");
-    });
+    testSingleFile(schema,true);
     schema = new MessageType("schema", STANDARD_MAP_TYPE);
-    withTempFile(makeTestFile(schema), file -> {
-      assertFileInfo(ParquetBinaryCopyChecker.verifyFile(conf, file), true, null, "STANDARD_MAP_TYPE", "OPTIONAL");
-    });
+    testSingleFile(schema,true);
 
     schema = new MessageType("schema", INT32_DECIMAL_TYPE);
-    withTempFile(makeTestFile(schema), file -> {
-      assertFileInfo(ParquetBinaryCopyChecker.verifyFile(conf, file), false);
-    });
+    testSingleFile(schema,false);
     schema = new MessageType("schema", INT64_DECIMAL_TYPE);
-    withTempFile(makeTestFile(schema), file -> {
-      assertFileInfo(ParquetBinaryCopyChecker.verifyFile(conf, file), false);
-    });
+    testSingleFile(schema,false);
     schema = new MessageType("schema", FIXED_LEN_BYTE_ARRAY_DECIMAL_TYPE);
-    withTempFile(makeTestFile(schema), file -> {
-      assertFileInfo(ParquetBinaryCopyChecker.verifyFile(conf, file), true, null, "FIXED_LEN_BYTE_ARRAY_DECIMAL_TYPE", "OPTIONAL");
-    });
+    testSingleFile(schema,true);
   }
 
   private List<ParquetFileInfo> makeFileInfos(ParquetFileInfo... infos) {
@@ -242,16 +339,11 @@ public class TestParquetBinaryCopyChecker {
   }
 
   private ParquetFileInfo makeSchemaNotSupportFileInfo() {
-    return makeFileInfo(false, null);
+    return makeFileInfo(false, null, null);
   }
 
-  private ParquetFileInfo makeFileInfo(boolean schemaSupport, String typeCode, String... repetitions) {
-    assertTrue(repetitions.length % 2 == 0);
-    Map<String, String> repetition = new HashMap<>();
-    for (int i = 0; i < repetitions.length; i += 2) {
-      repetition.put(repetitions[i], repetitions[i + 1]);
-    }
-    return new ParquetFileInfo(schemaSupport, typeCode, repetition);
+  private ParquetFileInfo makeFileInfo(boolean schemaSupport, String typeCode, String schema) {
+    return new ParquetFileInfo(schemaSupport, typeCode, schema);
   }
 
   private String makeTestFile(MessageType schema) throws IOException {
@@ -269,6 +361,16 @@ public class TestParquetBinaryCopyChecker {
         .getFileName();
   }
 
+  private void testSingleFile(MessageType schema, String inputTypeCode, boolean support, String typeCode) throws IOException {
+    withTempFile(makeTestFile(schema, inputTypeCode), file -> {
+      assertFileInfo(ParquetBinaryCopyChecker.collectFileInfo(conf, file), support, typeCode, schema.toString());
+    });
+  }
+
+  private void testSingleFile(MessageType schema, boolean support) throws IOException {
+    testSingleFile(schema, null, support, null);
+  }
+
   private void withTempFile(String file, Consumer<String> run) {
     try {
       run.accept(file);
@@ -277,19 +379,12 @@ public class TestParquetBinaryCopyChecker {
     }
   }
 
-  private void assertFileInfo(ParquetFileInfo info, boolean support) {
-    assertFileInfo(info, support, null);
-  }
-
-  private void assertFileInfo(ParquetFileInfo info, boolean support, String codeType, String... repetitions) {
+  private void assertFileInfo(ParquetFileInfo info, boolean support, String codeType, String schema) {
     Assertions.assertNotNull(info);
-    Assertions.assertEquals(support, info.isSchemaSupport());
-    Assertions.assertEquals(codeType, info.getBloomFilterTypeCode());
-    assertTrue(repetitions.length % 2 == 0);
-    Map<String, String> repetition = new HashMap<>();
-    for (int i = 0; i < repetitions.length; i += 2) {
-      repetition.put(repetitions[i], repetitions[i + 1]);
+    Assertions.assertEquals(support, info.canBinaryCopy());
+    if (support) {
+      Assertions.assertEquals(codeType, info.getBloomFilterTypeCode());
+      Assertions.assertEquals(schema, info.getSchema().toString());
     }
-    Assertions.assertEquals(repetition, info.getRepetitions());
   }
 }

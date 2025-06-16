@@ -47,7 +47,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -179,9 +178,9 @@ public class SparkBinaryCopyClusteringExecutionStrategy<T> extends SparkSortAndS
         .map(op -> {
           String filePath = op.getDataFilePath();
           if (!filePath.endsWith(PARQUET.getFileExtension())) {
-            return new ParquetBinaryCopyChecker.ParquetFileInfo(false, "", Collections.emptyMap());
+            return new ParquetBinaryCopyChecker.ParquetFileInfo(false, null, null);
           }
-          return ParquetBinaryCopyChecker.verifyFile(getHoodieTable().getStorageConf().unwrapAs(Configuration.class), filePath);
+          return ParquetBinaryCopyChecker.collectFileInfo(getHoodieTable().getStorageConf().unwrapAs(Configuration.class), filePath);
         })
         .collect();
     return ParquetBinaryCopyChecker.verifyFiles(fileStatus);
