@@ -20,6 +20,9 @@ package org.apache.hudi.io;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieLocalEngineContext;
+import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
@@ -52,7 +55,6 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -307,7 +309,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
   }
 
   protected void writeInsertRecord(HoodieRecord<T> newRecord) throws IOException {
-    Schema schema = preserveMetadata ? writeSchemaWithMetaFields : writeSchema;
+    Schema schema = getNewSchema();
     // just skip the ignored record
     if (newRecord.shouldIgnore(schema, config.getProps())) {
       return;
@@ -379,7 +381,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     // the record is deserialized with schema including metadata fields,
     // see HoodieMergeHelper#runMerge for more details.
     Schema oldSchema = writeSchemaWithMetaFields;
-    Schema newSchema = preserveMetadata ? writeSchemaWithMetaFields : writeSchema;
+    Schema newSchema = getNewSchema();
     boolean copyOldRecord = true;
     String key = oldRecord.getRecordKey(oldSchema, keyGeneratorOpt);
     TypedProperties props = config.getPayloadConfig().getProps();
@@ -463,21 +465,24 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     if (isSecondaryIndexStreamingDisabled()) {
       return;
     }
+    HoodieEngineContext engineContext = new HoodieLocalEngineContext(hoodieTable.getStorageConf(), taskContextSupplier);
+    HoodieReaderContext readerContext = engineContext.getReaderContextFactory(hoodieTable.getMetaClient()).getContext();
+
     secondaryIndexDefns.forEach(secondaryIndexPartitionPathFieldPair -> {
       String secondaryIndexSourceField = String.join(".",secondaryIndexPartitionPathFieldPair.getValue().getSourceFields());
       Option<Object> oldSecondaryKeyOpt = Option.empty();
       Option<Object> newSecondaryKeyOpt = Option.empty();
       if (oldRecordOpt.isPresent() && oldRecordOpt.get() instanceof HoodieAvroIndexedRecord) {
         HoodieRecord<T> oldRecord = oldRecordOpt.get();
-        Object oldSecondaryKey = ((GenericRecord)((HoodieAvroIndexedRecord) oldRecord).getData()).get(secondaryIndexSourceField);
+        Object oldSecondaryKey = readerContext.getValue(oldRecord.getData(), writeSchemaWithMetaFields, secondaryIndexSourceField);
         if (oldSecondaryKey != null) {
           oldSecondaryKeyOpt = Option.of(oldSecondaryKey);
         }
       }
 
       if (combinedRecordOpt.isPresent() && combinedRecordOpt.get() instanceof HoodieAvroIndexedRecord && !isDelete) {
-        GenericRecord genericRecord = ((GenericRecord) ((HoodieAvroIndexedRecord) combinedRecordOpt.get()).getData());
-        Object secondaryKey = (genericRecord).get(secondaryIndexSourceField);
+        Schema newSchema = getNewSchema();
+        Object secondaryKey = readerContext.getValue(combinedRecordOpt.get().getData(), newSchema, secondaryIndexSourceField);
         if (secondaryKey != null) {
           newSecondaryKeyOpt = Option.of(secondaryKey);
         }
@@ -498,6 +503,10 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
         newSecondaryKeyOpt.ifPresent(secKey -> addSecondaryIndexStat(secondaryIndexPartitionPathFieldPair.getKey(), recordKey, secKey, false));
       }
     });
+  }
+
+  private Schema getNewSchema() {
+    return preserveMetadata ? writeSchemaWithMetaFields : writeSchema;
   }
 
   private void addSecondaryIndexStat(String secondaryIndexPartitionPath, String recordKey, Object secKey, boolean isDeleted) {
