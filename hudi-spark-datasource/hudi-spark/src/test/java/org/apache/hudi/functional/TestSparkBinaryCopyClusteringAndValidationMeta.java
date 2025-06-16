@@ -79,7 +79,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.bloom.BloomFilterTypeCode.DYNAMIC_V0;
