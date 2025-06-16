@@ -96,7 +96,7 @@ class TestBucketIndexSupport extends HoodieSparkClientTestBase with PredicateHel
         .withRemoteServerPort(incrementTimelineServicePortToUse).build)
       .build
 
-    val timelineService = new TimelineService(context, HadoopFSUtils.getStorageConf,
+    val timelineService = new TimelineService(HadoopFSUtils.getStorageConf,
       TimelineService.Config.builder.enableMarkerRequests(true).enableRemotePartitioner(true)
       .serverPort(config.getViewStorageConfig.getRemoteViewServerPort).build,
       FileSystemViewManager.createViewManager(context, config.getMetadataConfig, config.getViewStorageConfig, config.getCommonConfig))

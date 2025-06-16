@@ -1860,14 +1860,16 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
         }
         if (firstClusteringState == HoodieInstant.State.REQUESTED.name()) {
           val table = HoodieSparkTable.create(writeConfig, context)
-          table.rollbackInflightClustering(
-            metaClient.getActiveTimeline.getLastClusteringInstant.get,
-            new java.util.function.Function[String, Option[HoodiePendingRollbackInfo]] {
-              override def apply(commitToRollback: String): Option[HoodiePendingRollbackInfo] = {
-                new SparkRDDWriteClient(context, writeConfig).getTableServiceClient
-                  .getPendingRollbackInfo(table.getMetaClient, commitToRollback, false)
-              }
-            })
+          val client = new SparkRDDWriteClient(context, writeConfig)
+          try {
+            table.rollbackInflightClustering(
+              metaClient.getActiveTimeline.getLastClusteringInstant.get,
+              (commitToRollback: String) => {
+                client.getTableServiceClient.getPendingRollbackInfo(table.getMetaClient, commitToRollback, false)
+              }, client.getTransactionManager)
+          } finally {
+            client.close()
+          }
           val requestedClustering = metaClient.reloadActiveTimeline.getCommitsTimeline.lastInstant.get
           assertTrue(requestedClustering.isRequested)
           assertEquals(
@@ -1875,8 +1877,9 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
             metaClient.getActiveTimeline.getLastClusteringInstant.get)
         }
         // This should not schedule any new clustering
-        new SparkRDDWriteClient(context, writeConfig)
-          .scheduleClustering(org.apache.hudi.common.util.Option.of(Map[String, String]().asJava))
+        val client = new SparkRDDWriteClient(context, writeConfig)
+        client.scheduleClustering(org.apache.hudi.common.util.Option.of(Map[String, String]().asJava))
+        client.close()
         assertEquals(lastInstant.requestedTime,
           metaClient.reloadActiveTimeline.getCommitsTimeline.lastInstant.get.requestedTime)
       }

@@ -53,7 +53,8 @@ class HoodieStatsIndexTestBase extends HoodieSparkClientTestBase {
     "hoodie.upsert.shuffle.parallelism" -> "4",
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
     RECORDKEY_FIELD.key -> "_row_key",
-    PRECOMBINE_FIELD.key -> "timestamp"
+    PRECOMBINE_FIELD.key -> "timestamp",
+    HoodieWriteConfig.MARKERS_TIMELINE_SERVER_BASED_BATCH_INTERVAL_MS.key -> "10"
   )
 
   @BeforeEach
@@ -98,7 +99,6 @@ class HoodieStatsIndexTestBase extends HoodieSparkClientTestBase {
     val lastInstant = getLastInstant()
     if (enforce || metaClient.getActiveTimeline.lastInstant().isEmpty
       || metaClient.getActiveTimeline.lastInstant().get().requestedTime.compareTo(lastInstant) < 0) {
-      println("Reloaded timeline")
       metaClient.reloadActiveTimeline()
       metaClient
     }
@@ -127,8 +127,9 @@ class HoodieStatsIndexTestBase extends HoodieSparkClientTestBase {
       mergedDfList = mergedDfList.take(mergedDfList.size - 1)
     }
     val writeConfig = getWriteConfig(hudiOpts)
-    new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig)
-      .rollback(lastInstant.requestedTime)
+    val client = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig)
+    client.rollback(lastInstant.requestedTime)
+    client.close()
 
     if (lastInstant.getAction != ActionType.clean.name()) {
       assertEquals(ActionType.rollback.name(), getLatestMetaClient(true).getActiveTimeline.lastInstant().get().getAction)

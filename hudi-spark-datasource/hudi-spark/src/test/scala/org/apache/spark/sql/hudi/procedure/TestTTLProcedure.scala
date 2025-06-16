@@ -75,6 +75,7 @@ class TestTTLProcedure extends HoodieSparkProcedureTestBase with SparkDatasetMix
           Seq(partitionPath0),
           Seq(partitionPath1)
         )
+        client.close()
       }
       }
     }

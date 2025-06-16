@@ -1,21 +1,23 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 
-package org.apache.spark.sql.hudi.dml
+package org.apache.spark.sql.hudi.dml.insert
 
 import org.apache.hudi.{DataSourceWriteOptions, HoodieCLIUtils, HoodieSparkUtils}
 import org.apache.hudi.DataSourceWriteOptions._
@@ -228,64 +230,6 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         Seq("1", "aa", 123, "2024-02-19", 10),
         Seq("2", "bb", 456, "2024-02-19", 10)
       )
-    }
-  }
-
-  test("Test FirstValueAvroPayload test") {
-    withTempDir { tmp =>
-      val targetTable = generateTableName
-      val tablePath = s"${tmp.getCanonicalPath}/$targetTable"
-
-      spark.sql(
-        s"""
-           |create table ${targetTable} (
-           |  `id` string,
-           |  `name` string,
-           |  `dt` bigint,
-           |  `day` STRING,
-           |  `hour` INT
-           |) using hudi
-           |tblproperties (
-           |  'primaryKey' = 'id',
-           |  'type' = 'mor',
-           |  'preCombineField'='dt',
-           |  'hoodie.index.type' = 'BUCKET',
-           |  'hoodie.bucket.index.hash.field' = 'id',
-           |  'hoodie.bucket.index.num.buckets'=12,
-           |  'hoodie.datasource.write.payload.class'='org.apache.hudi.common.model.FirstValueAvroPayload'
-           | )
-           partitioned by (`day`,`hour`)
-           location '${tablePath}'
-           """.stripMargin)
-
-      spark.sql("set hoodie.file.group.reader.enabled=false")
-
-      spark.sql(
-        s"""
-           |insert into ${targetTable}
-           |select '1' as id, 'aa' as name, 123 as dt, '2024-02-19' as `day`, 10 as `hour`
-           |""".stripMargin)
-
-      spark.sql(
-        s"""
-           |insert into ${targetTable}
-           |select '1' as id, 'bb' as name, 123 as dt, '2024-02-19' as `day`, 10 as `hour`
-           |""".stripMargin)
-
-      checkAnswer(s"select id, name, dt, day, hour from $targetTable limit 10")(
-        Seq("1", "aa", 123, "2024-02-19", 10)
-      )
-
-      spark.sql(
-        s"""
-           |insert into ${targetTable}
-           |select '1' as id, 'cc' as name, 124 as dt, '2024-02-19' as `day`, 10 as `hour`
-           |""".stripMargin)
-
-      checkAnswer(s"select id, name, dt, day, hour from $targetTable limit 10")(
-        Seq("1", "cc", 124, "2024-02-19", 10)
-      )
-
     }
   }
 

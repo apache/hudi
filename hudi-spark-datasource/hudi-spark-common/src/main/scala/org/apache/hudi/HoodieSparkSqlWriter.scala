@@ -446,7 +446,7 @@ class HoodieSparkSqlWriterInternal {
                 parameters.asJava))
               .asInstanceOf[SparkRDDWriteClient[_]]
             // Issue delete partitions
-            instantTime = client.startCommit(commitActionType)
+            instantTime = client.startDeletePartitionCommit(tableMetaClient)
             val writeResult =  DataSourceUtils.doDeletePartitionsOperation(client, partitionsToDelete, instantTime)
             (writeResult, client)
 

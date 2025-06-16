@@ -235,18 +235,19 @@ class TestHoodieMultiTableServicesMain extends HoodieCommonTestHarness implement
     // enable files and bloom_filters on the regular write client
     HoodieWriteConfig writeConfig = writeConfigBuilder.build();
     // do one upsert with synchronous metadata update
-    SparkRDDWriteClient writeClient = new SparkRDDWriteClient(context, writeConfig);
-    List<HoodieRecord> records;
-    WriteClientTestUtils.startCommitWithTime(writeClient, instant);
-    if (update) {
-      records = dataGen.generateUpdates(instant, 100);
-    } else {
-      records = dataGen.generateInserts(instant, 100);
+    try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(context, writeConfig)) {
+      List<HoodieRecord> records;
+      WriteClientTestUtils.startCommitWithTime(writeClient, instant);
+      if (update) {
+        records = dataGen.generateUpdates(instant, 100);
+      } else {
+        records = dataGen.generateInserts(instant, 100);
+      }
+      JavaRDD<WriteStatus> result = writeClient.upsert(jsc.parallelize(records, 8), instant);
+      List<WriteStatus> statuses = result.collect();
+      assertNoWriteErrors(statuses);
+      writeClient.commit(instant, jsc().parallelize(statuses));
     }
-    JavaRDD<WriteStatus> result = writeClient.upsert(jsc.parallelize(records, 8), instant);
-    List<WriteStatus> statuses = result.collect();
-    assertNoWriteErrors(statuses);
-    writeClient.commit(instant, jsc().parallelize(statuses));
   }
 
   private HoodieWriteConfig.Builder getWriteConfigBuilder(StoragePath basePath, String tableName) {

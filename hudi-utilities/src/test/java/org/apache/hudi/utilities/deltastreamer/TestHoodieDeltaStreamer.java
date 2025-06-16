@@ -3394,11 +3394,12 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
    * Return empty table.
    */
   public static class DropAllTransformer implements Transformer {
+    private static final Logger LOG = LoggerFactory.getLogger(DropAllTransformer.class);
 
     @Override
     public Dataset apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset,
                          TypedProperties properties) {
-      System.out.println("DropAllTransformer called !!");
+      LOG.info("DropAllTransformer called !!");
       return sparkSession.createDataFrame(jsc.emptyRDD(), rowDataset.schema());
     }
   }

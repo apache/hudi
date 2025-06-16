@@ -112,9 +112,9 @@
     <glassfish.version>2.17</glassfish.version>
     <glassfish.el.version>3.0.1-b12</glassfish.el.version>
     <parquet.version>1.10.1</parquet.version>
-    <junit.jupiter.version>5.8.2</junit.jupiter.version>
-    <junit.vintage.version>5.8.2</junit.vintage.version>
-    <junit.platform.version>1.8.2</junit.platform.version>
+    <junit.jupiter.version>5.13.0</junit.jupiter.version>
+    <junit.vintage.version>5.13.0</junit.vintage.version>
+    <junit.platform.version>1.13.0</junit.platform.version>
     <mockito.jupiter.version>3.12.4</mockito.jupiter.version>
     <log4j2.version>2.17.2</log4j2.version>
     <slf4j.version>1.7.36</slf4j.version>
@@ -1612,6 +1612,12 @@
       </dependency>
       <dependency>
         <groupId>org.junit.jupiter</groupId>
+        <artifactId>junit-jupiter</artifactId>
+        <version>${junit.jupiter.version}</version>
+        <scope>test</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.junit.jupiter</groupId>
         <artifactId>junit-jupiter-engine</artifactId>
         <version>${junit.jupiter.version}</version>
         <scope>test</scope>
@@ -1656,6 +1662,13 @@
         <groupId>org.junit.platform</groupId>
         <artifactId>junit-platform-commons</artifactId>
         <version>${junit.platform.version}</version>
+        <scope>test</scope>
+      </dependency>
+      <!-- Junit 4 -->
+      <dependency>
+        <groupId>junit</groupId>
+        <artifactId>junit</artifactId>
+        <version>4.13.2</version>
         <scope>test</scope>
       </dependency>
 
@@ -1914,11 +1927,8 @@
             <configuration combine.self="append">
               <skip>${skipUTs}</skip>
               <forkedProcessExitTimeoutInSeconds>120</forkedProcessExitTimeoutInSeconds>
-              <excludedGroups>functional,functional-b</excludedGroups>
+              <excludedGroups>functional,functional-b,functional-c</excludedGroups>
               <excludes>
-                <exclude>**/*FunctionalTestSuite.java</exclude>
-                <exclude>**/*FunctionalTestSuiteA.java</exclude>
-                <exclude>**/*FunctionalTestSuiteB.java</exclude>
                 <exclude>**/IT*.java</exclude>
                 <exclude>**/testsuite/**/Test*.java</exclude>
               </excludes>
@@ -1964,21 +1974,11 @@
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-surefire-plugin</artifactId>
             <version>${maven-surefire-plugin.version}</version>
-            <dependencies>
-              <dependency>
-                <groupId>org.apache.maven.surefire</groupId>
-                <artifactId>surefire-junit47</artifactId>
-                <version>${maven-surefire-plugin.version}</version>
-              </dependency>
-            </dependencies>
             <configuration combine.self="append">
               <skip>${skipFTs}</skip>
               <forkCount>1</forkCount>
               <reuseForks>true</reuseForks>
-              <includes>
-                <include>**/*FunctionalTestSuite.java</include>
-                <include>**/*FunctionalTestSuiteA.java</include>
-              </includes>
+              <groups>functional</groups>
             </configuration>
           </plugin>
           <plugin>
@@ -2021,20 +2021,58 @@
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-surefire-plugin</artifactId>
             <version>${maven-surefire-plugin.version}</version>
-            <dependencies>
-              <dependency>
-                <groupId>org.apache.maven.surefire</groupId>
-                <artifactId>surefire-junit47</artifactId>
-                <version>${maven-surefire-plugin.version}</version>
-              </dependency>
-            </dependencies>
             <configuration combine.self="append">
               <skip>${skipFTs}</skip>
               <forkCount>1</forkCount>
               <reuseForks>true</reuseForks>
-              <includes>
-                <include>**/*FunctionalTestSuiteB.java</include>
-              </includes>
+              <groups>functional-b</groups>
+            </configuration>
+          </plugin>
+          <plugin>
+            <groupId>org.jacoco</groupId>
+            <artifactId>jacoco-maven-plugin</artifactId>
+            <executions>
+              <execution>
+                <goals>
+                  <goal>prepare-agent</goal>
+                </goals>
+                <configuration>
+                  <destFile>${project.build.directory}/jacoco-agent/${jacoco.agent.dest.filename}</destFile>
+                </configuration>
+              </execution>
+              <execution>
+                <id>post-functional-tests</id>
+                <phase>test</phase>
+                <goals>
+                  <goal>report</goal>
+                </goals>
+                <configuration>
+                  <outputDirectory>${project.reporting.outputDirectory}/jacoco-ft</outputDirectory>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+    <profile>
+      <id>functional-tests-c</id>
+      <properties>
+        <skipUTs>true</skipUTs>
+        <skipFTs>false</skipFTs>
+        <skipITs>true</skipITs>
+      </properties>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-surefire-plugin</artifactId>
+            <version>${maven-surefire-plugin.version}</version>
+            <configuration combine.self="append">
+              <skip>${skipFTs}</skip>
+              <forkCount>1</forkCount>
+              <reuseForks>true</reuseForks>
+              <groups>functional-c</groups>
             </configuration>
           </plugin>
           <plugin>
@@ -2665,7 +2703,7 @@
         <flink.bundle.version>1.16</flink.bundle.version>
         <orc.flink.version>1.5.6</orc.flink.version>
         <flink.avro.version>1.11.4</flink.avro.version>
-        <flink.format.parquet.version>1.12.2</flink.format.parquet.version>
+        <flink.format.parquet.version>1.12.3</flink.format.parquet.version>
         <flink.connector.kafka.version>${flink1.16.version}</flink.connector.kafka.version>
       </properties>
       <activation>
@@ -2682,7 +2720,7 @@
         <flink.bundle.version>1.15</flink.bundle.version>
         <orc.flink.version>1.5.6</orc.flink.version>
         <flink.avro.version>1.11.4</flink.avro.version>
-        <flink.format.parquet.version>1.12.2</flink.format.parquet.version>
+        <flink.format.parquet.version>1.12.3</flink.format.parquet.version>
         <flink.connector.kafka.version>${flink1.15.version}</flink.connector.kafka.version>
       </properties>
       <activation>

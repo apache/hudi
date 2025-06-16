@@ -27,7 +27,7 @@ import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig}
 import org.apache.hudi.common.model.{HoodieBaseFile, HoodieFileGroup, HoodieLogFile, HoodieTableType}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.view.FileSystemViewManager
-import org.apache.hudi.config.HoodieCompactionConfig
+import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.functional.ColumnStatIndexTestBase.{ColumnStatsTestCase, ColumnStatsTestParams}
 import org.apache.hudi.metadata.HoodieTableMetadataUtil
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS
@@ -54,7 +54,6 @@ import scala.collection.JavaConverters._
 import scala.collection.immutable.TreeSet
 import scala.util.Random
 
-@Tag("functional-b")
 class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
   var spark: SparkSession = _
   var dfList: Seq[DataFrame] = Seq()
@@ -119,6 +118,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
       .option(DataSourceWriteOptions.OPERATION.key, params.operation)
       .option(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE.key(), String.valueOf(params.parquetMaxFileSize))
       .option(HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key(), String.valueOf(params.smallFileLimit))
+      .option(HoodieWriteConfig.MARKERS_TIMELINE_SERVER_BASED_BATCH_INTERVAL_MS.key, "10")
       .mode(params.saveMode)
       .save(basePath)
     dfList = dfList :+ inputDF

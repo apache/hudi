@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.spark.sql.hudi.command.index
+package org.apache.spark.sql.hudi.feature.index
 
 import org.apache.hudi.{DataSourceReadOptions, ExpressionIndexSupport, HoodieFileIndex, HoodieSparkUtils}
 import org.apache.hudi.DataSourceWriteOptions._
@@ -1982,6 +1982,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
         .withMetadataIndexColumnStats(false).withMetadataIndexPartitionStats(false).build())
       val writeClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext)), configBuilder.build())
       writeClient.rollback(lastCompletedInstant.get().requestedTime)
+      writeClient.close()
       // validate the expression index
       checkAnswer(metadataSql)(
         // the last commit is rolledback so no records for that

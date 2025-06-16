@@ -32,7 +32,6 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -173,9 +172,9 @@ public class DirectWriteMarkers extends WriteMarkers {
                                                               HoodieWriteConfig config, String fileId, HoodieActiveTimeline activeTimeline) {
     String strategyClassName = config.getEarlyConflictDetectionStrategyClassName();
     if (!ReflectionUtils.isSubClass(strategyClassName, DirectMarkerBasedDetectionStrategy.class)) {
-      LOG.warn("Cannot use " + strategyClassName + " for direct markers.");
+      LOG.warn("Cannot use {} for direct markers.", strategyClassName);
       strategyClassName = getDefaultEarlyConflictDetectionStrategy(MarkerType.DIRECT);
-      LOG.warn("Falling back to " + strategyClassName);
+      LOG.warn("Falling back to {}", strategyClassName);
     }
     DirectMarkerBasedDetectionStrategy strategy =
         (DirectMarkerBasedDetectionStrategy) ReflectionUtils.loadClass(strategyClassName,
@@ -189,26 +188,17 @@ public class DirectWriteMarkers extends WriteMarkers {
 
   private Option<StoragePath> create(StoragePath markerPath, boolean checkIfExists) {
     HoodieTimer timer = HoodieTimer.start();
-    StoragePath dirPath = markerPath.getParent();
-    try {
-      if (!storage.exists(dirPath)) {
-        storage.createDirectory(dirPath); // create a new partition as needed.
-      }
-    } catch (IOException e) {
-      throw new HoodieIOException("Failed to make dir " + dirPath, e);
-    }
     try {
       if (checkIfExists && storage.exists(markerPath)) {
-        LOG.warn("Marker Path=" + markerPath + " already exists, cancel creation");
+        LOG.warn("Marker Path={} already exists, cancel creation", markerPath);
         return Option.empty();
       }
-      LOG.info("Creating Marker Path=" + markerPath);
+      LOG.debug("Creating Marker Path={}", markerPath);
       storage.create(markerPath, false).close();
     } catch (IOException e) {
       throw new HoodieException("Failed to create marker file " + markerPath, e);
     }
-    LOG.info("[direct] Created marker file " + markerPath
-        + " in " + timer.endTimer() + " ms");
+    LOG.info("[direct] Created marker file {} in {} ms", markerPath, timer.endTimer());
     return Option.of(markerPath);
   }
 }

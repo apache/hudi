@@ -24,7 +24,6 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.exception.HoodieLockException;
 import org.apache.hudi.storage.StorageConfiguration;
 
-import junit.framework.AssertionFailedError;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
@@ -123,7 +122,7 @@ public class TestInProcessLockProvider {
       boolean isLocked = lockProvider3.getLock().isWriteLocked();
       if (!isLocked) {
         writer3TryLock.set(true);
-        throw new AssertionFailedError("The lock instance in Writer 3 should be held by Writer 2: "
+        throw new RuntimeException("The lock instance in Writer 3 should be held by Writer 2: "
             + lockProvider3.getLock());
       }
       assertDoesNotThrow(() -> {

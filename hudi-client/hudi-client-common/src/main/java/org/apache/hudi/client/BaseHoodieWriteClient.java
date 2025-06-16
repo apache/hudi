@@ -815,7 +815,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   public boolean rollback(final String commitInstantTime, String rollbackInstantTimestamp) throws HoodieRollbackException {
     HoodieTable<T, I, K, O> table = initTable(WriteOperationType.UNKNOWN, Option.empty());
     Option<HoodiePendingRollbackInfo> pendingRollbackInfo = tableServiceClient.getPendingRollbackInfo(table.getMetaClient(), commitInstantTime);
-    return tableServiceClient.rollback(commitInstantTime, pendingRollbackInfo, false, false);
+    return tableServiceClient.rollback(commitInstantTime, pendingRollbackInfo, Option.of(rollbackInstantTimestamp), false, false);
   }
 
   /**
@@ -863,7 +863,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     }
     txnManager.beginStateChange(Option.empty(), Option.empty());
     try {
-      final String restoreInstantTimestamp = createNewInstantTime();
+      final String restoreInstantTimestamp = createNewInstantTime(false);
       return Pair.of(restoreInstantTimestamp, table.scheduleRestore(context, restoreInstantTimestamp, savepointToRestoreTimestamp));
     } finally {
       txnManager.endStateChange(Option.empty());
@@ -951,6 +951,27 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   public void startCommitForMetadataTable(HoodieTableMetaClient metadataMetaClient, String instantTime, String actionType) {
     ValidationUtils.checkArgument(metadataMetaClient.isMetadataTable(), "Attempting to create an instant with a predetermined time on a non-metadata table.");
     startCommit(Option.of(instantTime), actionType, metadataMetaClient);
+  }
+
+  /**
+   * Starts a new commit for deleting partitions from the table.
+   * @return the instant generated for the delete partition commit
+   */
+  public String startDeletePartitionCommit() {
+    return startDeletePartitionCommit(createMetaClient(false));
+  }
+
+  /**
+   * Starts a new commit for deleting partitions from the table.
+   * @param metaClient a meta client for the table
+   * @return the instant generated for the delete partition commit
+   */
+  public String startDeletePartitionCommit(HoodieTableMetaClient metaClient) {
+    String instantTime = tableServiceClient.startDeletePartitionCommit(metaClient).requestedTime();
+    if (config.getFailedWritesCleanPolicy().isLazy()) {
+      this.heartbeatClient.start(instantTime);
+    }
+    return instantTime;
   }
 
   /**
@@ -1053,10 +1074,10 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param metadataPartitions - list of metadata partitions which need to be dropped
    */
   public void dropIndex(List<String> metadataPartitions) {
+    this.txnManager.beginStateChange(Option.empty(), Option.empty());
     HoodieTable table = createTable(config);
-    String dropInstant = createNewInstantTime();
+    String dropInstant = createNewInstantTime(false);
     HoodieInstant ownerInstant = table.getMetaClient().createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.INDEXING_ACTION, dropInstant);
-    this.txnManager.beginStateChange(Option.of(ownerInstant), Option.empty());
     try {
       context.setJobStatus(this.getClass().getSimpleName(), "Dropping partitions from metadata table: " + config.getTableName());
       HoodieTableMetaClient metaClient = table.getMetaClient();
@@ -1297,15 +1318,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       // TODO: this also does MT table management..
       initMetadataTable(instantTime, metaClient);
     });
-  }
-
-  private void executeUsingTxnManager(Option<HoodieInstant> ownerInstant, Runnable r) {
-    this.txnManager.beginStateChange(ownerInstant, Option.empty());
-    try {
-      r.run();
-    } finally {
-      this.txnManager.endStateChange(ownerInstant);
-    }
   }
 
   /**
