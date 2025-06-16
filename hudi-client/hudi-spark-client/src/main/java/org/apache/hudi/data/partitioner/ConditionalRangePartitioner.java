@@ -58,26 +58,6 @@ public class ConditionalRangePartitioner extends Partitioner {
     LOG.info("Total num of partitions to be enforced is {}", totalPartitions);
   }
 
-  public static List<String> computeSplitPoints(List<String> sortedValues, int numSplits) {
-    // If we have way less data points to split, then use every value as a split point.
-    if (sortedValues.size() < numSplits) {
-      return sortedValues;
-    }
-    List<String> splits = new ArrayList<>();
-    int n = sortedValues.size();
-    for (double i = 1; i <= numSplits; i++) {
-      int index = (int) Math.ceil(i * n / (numSplits + 1)) - 1;
-      splits.add(sortedValues.get(index));
-    }
-    return splits;
-  }
-
-  public static JavaPairRDD<Tuple2<Integer, String>, String> repartitionWithSplits(
-      JavaPairRDD<Integer, String> baseRdd, ConditionalRangePartitioner partitioner) {
-    JavaPairRDD<Tuple2<Integer, String>, String> compositeKeyRdd = baseRdd.mapToPair(t -> new Tuple2<>(t, t._2()));
-    return compositeKeyRdd.repartitionAndSortWithinPartitions(partitioner, new CompositeKeyComparator());
-  }
-
   @Override
   public int numPartitions() {
     return totalPartitions;
@@ -142,5 +122,25 @@ public class ConditionalRangePartitioner extends Partitioner {
           }
         })
         .collectAsMap(); // Now result is small enough to collect to driver
+  }
+
+  public static List<String> computeSplitPoints(List<String> sortedValues, int numSplits) {
+    // If we have way less data points to split, then use every value as a split point.
+    if (sortedValues.size() < numSplits) {
+      return sortedValues;
+    }
+    List<String> splits = new ArrayList<>();
+    int n = sortedValues.size();
+    for (double i = 1; i <= numSplits; i++) {
+      int index = (int) Math.ceil(i * n / (numSplits + 1)) - 1;
+      splits.add(sortedValues.get(index));
+    }
+    return splits;
+  }
+
+  public static JavaPairRDD<Tuple2<Integer, String>, String> repartitionWithSplits(
+      JavaPairRDD<Integer, String> baseRdd, ConditionalRangePartitioner partitioner) {
+    JavaPairRDD<Tuple2<Integer, String>, String> compositeKeyRdd = baseRdd.mapToPair(t -> new Tuple2<>(t, t._2()));
+    return compositeKeyRdd.repartitionAndSortWithinPartitions(partitioner, new CompositeKeyComparator());
   }
 }

@@ -21,14 +21,15 @@ package org.apache.hudi.data;
 
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.metadata.HoodieBackedTestDelayedTableMetadata;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -44,139 +45,11 @@ import scala.Tuple3;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-
 public class HoodieJavaPairRDDTest {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieJavaPairRDDTest.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieBackedTestDelayedTableMetadata.class);
 
   private JavaSparkContext jsc;
-
-  @BeforeEach
-  public void setUp() {
-    jsc = new JavaSparkContext("local[2]", "test");
-  }
-
-  @AfterEach
-  public void tearDown() {
-    if (jsc != null) {
-      jsc.stop();
-      jsc = null;
-    }
-  }
-
-  @Test
-  public void testRangeBasedRepartitionForEachKey() {
-    // Create initial RDD with uneven distribution
-    Map<Integer, Long> maxValueByKey = new HashMap<>();
-    maxValueByKey.put(1, 12L);  // Key 1 has 10 values
-    maxValueByKey.put(2, 5L);   // Key 2 has 5 values
-    maxValueByKey.put(3, 18L);  // Key 3 has 15 values
-
-    JavaPairRDD<Integer, String> initialRdd = generateRandomRDDWithWeightedPartitions(jsc, maxValueByKey, Arrays.asList(0.6, 0.3, 0.1));
-    HoodieJavaPairRDD<Integer, String> hoodieRdd = HoodieJavaPairRDD.of(initialRdd);
-
-    // Apply range-based repartitioning
-    HoodiePairData<Integer, String> repartitionedRdd = hoodieRdd.rangeBasedRepartitionForEachKey(
-        30,  // keyRange
-        1.0, // sampleFraction
-        6,   // maxKeyPerBucket
-        42L  // seed
-    );
-
-    Map<Integer, Map<Integer, List<String>>> expectedPartitionContents = Collections.unmodifiableMap(
-        new HashMap<Integer, Map<Integer, List<String>>>() {{
-          put(0, Collections.singletonMap(1, Arrays.asList("1", "10", "11", "12", "2", "3")));
-          put(1, Collections.singletonMap(1, Arrays.asList("4", "5", "6", "7", "8", "9")));
-          put(2, Collections.singletonMap(2, Arrays.asList("1", "2", "3", "4", "5")));
-          put(3, Collections.singletonMap(3, Arrays.asList("1", "10", "11", "12", "13", "14")));
-          put(4, Collections.singletonMap(3, Arrays.asList("15", "16", "17", "18", "2", "3")));
-          put(5, Collections.singletonMap(3, Arrays.asList("4", "5", "6", "7", "8", "9")));
-        }});
-
-    // Collect actual partition contents without any extra processing
-    JavaPairRDD<Integer, String> javaPairRDD = HoodieJavaPairRDD.getJavaPairRDD(repartitionedRdd);
-    Map<Integer, Map<Integer, List<String>>> actualPartitionContents = dumpRDDContent(javaPairRDD);
-
-    // Directly compare the maps
-    assertEquals(expectedPartitionContents, actualPartitionContents,
-        "Partition contents should match exactly");
-  }
-
-//  @Test
-  public void testUnderSampling() {
-    // Create initial RDD with uneven distribution
-    Map<Integer, Long> maxValueByKey = new HashMap<>();
-    maxValueByKey.put(1, 16L);
-    maxValueByKey.put(2, 16L);
-    maxValueByKey.put(3, 10L);
-
-    JavaPairRDD<Integer, String> initialRdd = generateRandomRDDWithWeightedPartitions(jsc, maxValueByKey, Arrays.asList(0.6, 0.3, 0.1));
-    HoodieJavaPairRDD<Integer, String> hoodieRdd = HoodieJavaPairRDD.of(initialRdd);
-
-    // Apply range-based repartitioning
-    HoodiePairData<Integer, String> repartitionedRdd = hoodieRdd.rangeBasedRepartitionForEachKey(
-        30,  // keyRange
-        0.0625, // per key only sample at max 1 value
-        4,   // need to split into 4 buckets per key per value
-        42L  // seed
-    );
-
-    // Collect actual partition contents without any extra processing
-    validateRepartitionedRDDProperties(hoodieRdd, repartitionedRdd, Option.of(Collections.unmodifiableMap(
-        new HashMap<Integer,Integer>() {{
-          put(1, 2); // it will sample at least 1 value no matter what, in that case, can have empty partitions. This validation needs to be modified.
-          put(2, 2);
-          put(3, 2);
-        }})));
-  }
-
-//  @Test
-  public void testLargeScaleRandomized() {
-    // Validation needs modifications. Need more exhaustive testing. List all of them first.
-    Random rand = new Random(42);
-
-    // Random number of keys (1 to 50)
-    int numKeys = 1 + rand.nextInt(50);
-    int maxKeyVal = 400;
-    Map<Integer, Long> maxValueByKey = new HashMap<>();
-
-    for (int i = 0; i < numKeys; i++) {
-      int key = 1 + rand.nextInt(maxKeyVal); // keys in [1, 400]
-      long numValues = 50 + rand.nextInt(351); // values in [50, 400]
-      maxValueByKey.put(key, numValues);
-    }
-
-    // Random number of partitions [10, 100]
-    int numPartitions = 10 + rand.nextInt(91);
-
-    // Random partition weight percentages, normalized to sum to 1.0
-    List<Double> partitionWeights = new ArrayList<>();
-    double totalWeight = 0.0;
-    for (int i = 0; i < numPartitions; i++) {
-      double weight = 0.1 + rand.nextDouble(); // avoid zero-weight partitions
-      partitionWeights.add(weight);
-      totalWeight += weight;
-    }
-
-    // Normalize
-    for (int i = 0; i < partitionWeights.size(); i++) {
-      partitionWeights.set(i, partitionWeights.get(i) / totalWeight);
-    }
-
-    // Generate initial RDD
-    JavaPairRDD<Integer, String> initialRdd = generateRandomRDDWithWeightedPartitions(jsc, maxValueByKey, partitionWeights);
-    HoodieJavaPairRDD<Integer, String> hoodieRdd = HoodieJavaPairRDD.of(initialRdd);
-
-    // Repartition
-    HoodiePairData<Integer, String> repartitionedRdd = hoodieRdd.rangeBasedRepartitionForEachKey(
-        maxKeyVal,     // keyRange
-        0.05,          // sample rate
-        1 + rand.nextInt(25),  // target split buckets per key
-        rand.nextLong()     // random seed
-    );
-
-    validateRepartitionedRDDProperties(hoodieRdd, repartitionedRdd, Option.empty());
-  }
 
   /** Modified RDD generator that supports weighted partition distribution */
   public static JavaPairRDD<Integer, String> generateRandomRDDWithWeightedPartitions(
@@ -206,7 +79,9 @@ public class HoodieJavaPairRDDTest {
       JavaPairRDD<Integer, String> sliceRdd = sc.parallelize(slice, 1).mapToPair(t -> t);
       rdds.add(sliceRdd);
       start = end;
-      if (start >= total) break;
+      if (start >= total) {
+        break;
+      }
     }
 
     JavaPairRDD<Integer, String> combined = rdds.get(0);
@@ -219,25 +94,18 @@ public class HoodieJavaPairRDDTest {
 
   /**
    * Validates various properties of a repartitioned RDD.
-   *
-   * @param repartitionedRdd           the RDD to inspect
-   * @param expectedPartitionsPerKey   map <key, expected #partitions>
-   * @return actualPartitionContents   map <partitionId, map<key, list<values>>> – useful for debugging
-   *
    * @throws AssertionError if any check fails
    */
   private static Map<Integer, Map<Integer, List<String>>> validateRepartitionedRDDProperties(
       HoodiePairData<Integer, String> originalRdd,
       HoodiePairData<Integer, String> repartitionedRdd,
-      Option<Map<Integer, Integer>> expectedPartitionsPerKey) {
+      Option<Map<Integer, Integer>> maxPartitionCountByKey) {
     JavaPairRDD<Integer, String> javaPairRDD = HoodieJavaPairRDD.getJavaPairRDD(repartitionedRdd);
 
     Map<Integer, Map<Integer, List<String>>> actualPartitionContents = dumpRDDContent(javaPairRDD);
 
     try {
-      /* ------------------------------------------------------------------
-       Step 2:  Per-partition validations
-       ------------------------------------------------------------------ */
+      // Step 2:  Per-partition validations
       for (Map.Entry<Integer, Map<Integer, List<String>>> p : actualPartitionContents.entrySet()) {
         int partitionId = p.getKey();
         Map<Integer, List<String>> keyToValues = p.getValue();
@@ -249,15 +117,13 @@ public class HoodieJavaPairRDDTest {
           Collections.sort(sorted);
           if (!values.equals(sorted)) {
             throw new AssertionError(
-                "Partition " + partitionId + ", key " + kv.getKey() +
-                    " has unsorted values: " + values);
+                "Partition " + partitionId + ", key " + kv.getKey()
+                    + " has unsorted values: " + values);
           }
         }
       }
 
-    /* ------------------------------------------------------------------
-       Step 3:  Build key → list<(partitionId, min, max)>
-       ------------------------------------------------------------------ */
+      // Step 3:  Build key → list<(partitionId, min, max)>
       Map<Integer, List<Tuple3<Integer, String, String>>> keyToPartitionRanges = new HashMap<>();
 
       for (Map.Entry<Integer, Map<Integer, List<String>>> p : actualPartitionContents.entrySet()) {
@@ -271,23 +137,21 @@ public class HoodieJavaPairRDDTest {
         }
       }
 
-    /* ------------------------------------------------------------------
-       Step 4:  Range-overlap check *and* expected-partition-count check
-       ------------------------------------------------------------------ */
+      // Step 4:  Range-overlap check *and* expected-partition-count check
       for (Map.Entry<Integer, List<Tuple3<Integer, String, String>>> e : keyToPartitionRanges.entrySet()) {
         int key = e.getKey();
         List<Tuple3<Integer, String, String>> ranges = e.getValue();
 
         // 4a. confirm expected #partitions
-        if (expectedPartitionsPerKey.isPresent()) {
-          Integer expectedCnt = expectedPartitionsPerKey.get().get(key);
-          if (expectedCnt == null) {
-            throw new AssertionError("Unexpected key " + key +
-                " appeared in RDD but not in expectedPartitionsPerKey map");
+        if (maxPartitionCountByKey.isPresent()) {
+          Integer maxPartitionCnt = maxPartitionCountByKey.get().get(key);
+          if (maxPartitionCnt == null) {
+            throw new AssertionError("Unexpected key " + key
+                + " appeared in RDD but not in expectedPartitionsPerKey map");
           }
-          if (ranges.size() != expectedCnt) {
-            throw new AssertionError("Key " + key + " should occupy " + expectedCnt +
-                " partitions but actually occupies " + ranges.size());
+          if (ranges.size() > maxPartitionCnt) {
+            throw new AssertionError("Key " + key + " should occupy at most " + maxPartitionCnt
+                + " partitions but actually occupies " + ranges.size());
           }
         }
 
@@ -307,11 +171,9 @@ public class HoodieJavaPairRDDTest {
         }
       }
 
-    /* ------------------------------------------------------------------
-       Step 5:  Verify no key is missing from actual data
-       ------------------------------------------------------------------ */
-      if (expectedPartitionsPerKey.isPresent()) {
-        for (Integer expectedKey : expectedPartitionsPerKey.get().keySet()) {
+      // Step 5:  Verify no key is missing from actual data
+      if (maxPartitionCountByKey.isPresent()) {
+        for (Integer expectedKey : maxPartitionCountByKey.get().keySet()) {
           if (!keyToPartitionRanges.containsKey(expectedKey)) {
             throw new AssertionError("Expected key " + expectedKey + " never appeared in the RDD");
           }
@@ -346,7 +208,7 @@ public class HoodieJavaPairRDDTest {
   }
 
   private static void logRDDContent(String label, JavaPairRDD<Integer, String> rdd) {
-    LOG.info("===== " + label + " =====");
+    LOG.info("===== {} =====", label);
     rdd
         .mapPartitionsWithIndex((idx, iter) -> {
           StringBuilder builder = new StringBuilder();
@@ -362,5 +224,143 @@ public class HoodieJavaPairRDDTest {
         .collect()
         .forEach(line -> LOG.info(line));
     LOG.info("============================\n");
+  }
+
+  @BeforeEach
+  public void setUp() {
+    jsc = new JavaSparkContext("local[2]", "test");
+  }
+
+  @AfterEach
+  public void tearDown() {
+    if (jsc != null) {
+      jsc.stop();
+      jsc = null;
+    }
+  }
+
+  @Test
+  public void testRangeBasedRepartitionForEachKey() {
+    // Create initial RDD with uneven distribution
+    Map<Integer, Long> maxValueByKey = new HashMap<>();
+    maxValueByKey.put(1, 12L);  // Key 1 has 10 values
+    maxValueByKey.put(2, 5L);   // Key 2 has 5 values
+    maxValueByKey.put(3, 18L);  // Key 3 has 15 values
+
+    JavaPairRDD<Integer, String> initialRdd = generateRandomRDDWithWeightedPartitions(jsc, maxValueByKey, Arrays.asList(0.6, 0.3, 0.1));
+    HoodieJavaPairRDD<Integer, String> hoodieRdd = HoodieJavaPairRDD.of(initialRdd);
+
+    // Apply range-based repartitioning
+    HoodiePairData<Integer, String> repartitionedRdd = hoodieRdd.rangeBasedRepartitionForEachKey(
+        30,  // keyRange
+        1.0, // sampleFraction
+        6,   // maxKeyPerBucket
+        42L  // seed
+    );
+
+    Map<Integer, Map<Integer, List<String>>> expectedPartitionContents = Collections.unmodifiableMap(
+        new HashMap<Integer, Map<Integer, List<String>>>() {
+          {
+          put(0, Collections.singletonMap(1, Arrays.asList("1", "10", "11", "12", "2", "3")));
+          put(1, Collections.singletonMap(1, Arrays.asList("4", "5", "6", "7", "8", "9")));
+          put(2, Collections.singletonMap(2, Arrays.asList("1", "2", "3", "4", "5")));
+          put(3, Collections.singletonMap(3, Arrays.asList("1", "10", "11", "12", "13", "14")));
+          put(4, Collections.singletonMap(3, Arrays.asList("15", "16", "17", "18", "2", "3")));
+          put(5, Collections.singletonMap(3, Arrays.asList("4", "5", "6", "7", "8", "9")));
+        }
+      }
+    );
+
+    // Collect actual partition contents without any extra processing
+    JavaPairRDD<Integer, String> javaPairRDD = HoodieJavaPairRDD.getJavaPairRDD(repartitionedRdd);
+    Map<Integer, Map<Integer, List<String>>> actualPartitionContents = dumpRDDContent(javaPairRDD);
+
+    // Directly compare the maps
+    assertEquals(expectedPartitionContents, actualPartitionContents,
+        "Partition contents should match exactly");
+  }
+
+  @Test
+  public void testUnderSampling() {
+    // Create initial RDD with uneven distribution
+    Map<Integer, Long> maxValueByKey = new HashMap<>();
+    maxValueByKey.put(1, 16L);
+    maxValueByKey.put(2, 16L);
+    maxValueByKey.put(3, 10L);
+
+    JavaPairRDD<Integer, String> initialRdd = generateRandomRDDWithWeightedPartitions(jsc, maxValueByKey, Arrays.asList(0.6, 0.3, 0.1));
+    HoodieJavaPairRDD<Integer, String> hoodieRdd = HoodieJavaPairRDD.of(initialRdd);
+
+    // Apply range-based repartitioning
+    HoodiePairData<Integer, String> repartitionedRdd = hoodieRdd.rangeBasedRepartitionForEachKey(
+        30,  // keyRange
+        0.0625, // per key only sample at max 1 value
+        4,   // need to split into 4 buckets per key per value
+        42L  // seed
+    );
+
+    // Collect actual partition contents without any extra processing. Per key take at most 2 partitions.
+    validateRepartitionedRDDProperties(hoodieRdd, repartitionedRdd, Option.of(Collections.unmodifiableMap(
+        new HashMap<Integer, Integer>() {
+          {
+            put(1, 2);
+            put(2, 2);
+            put(3, 2);
+          }
+        }
+        )
+      )
+    );
+  }
+
+  @Test
+  public void testLargeScaleRandomized() {
+    // Validation needs modifications. Need more exhaustive testing. List all of them first.
+    Random rand = new Random(42);
+
+    // Random number of keys (1 to 50)
+    int numKeys = 1 + rand.nextInt(50);
+    int maxKeyVal = 200;
+    double sampleRate = 1.0;
+    Map<Integer, Long> maxValueByKey = new HashMap<>();
+    Map<Integer, Integer> maxPartitionCountByKey = new HashMap<>();
+    int maxKeyPerBucket = 10 + rand.nextInt(40); // target split buckets per key [10, 50]
+    for (int i = 0; i < numKeys; i++) {
+      int key = 1 + rand.nextInt(maxKeyVal); // keys in [1, 400]
+      long numValues = 50 + rand.nextInt(351); // values in [50, 400]
+      maxValueByKey.put(key, numValues);
+      maxPartitionCountByKey.put(key, (int) Math.ceil((double) numValues / maxKeyPerBucket));
+    }
+
+    // Random number of partitions [10, 100]
+    int numPartitions = 10 + rand.nextInt(91);
+
+    // Random partition weight percentages, normalized to sum to 1.0
+    List<Double> partitionWeights = new ArrayList<>();
+    double totalWeight = 0.0;
+    for (int i = 0; i < numPartitions; i++) {
+      double weight = 0.1 + rand.nextDouble(); // avoid zero-weight partitions
+      partitionWeights.add(weight);
+      totalWeight += weight;
+    }
+
+    // Normalize
+    for (int i = 0; i < partitionWeights.size(); i++) {
+      partitionWeights.set(i, partitionWeights.get(i) / totalWeight);
+    }
+
+    // Generate initial RDD
+    JavaPairRDD<Integer, String> initialRdd = generateRandomRDDWithWeightedPartitions(jsc, maxValueByKey, partitionWeights);
+    HoodieJavaPairRDD<Integer, String> hoodieRdd = HoodieJavaPairRDD.of(initialRdd);
+
+    // Repartition
+    HoodiePairData<Integer, String> repartitionedRdd = hoodieRdd.rangeBasedRepartitionForEachKey(
+        maxKeyVal,     // keyRange
+        sampleRate,
+        maxKeyPerBucket,
+        rand.nextLong()     // random seed
+    );
+
+    validateRepartitionedRDDProperties(hoodieRdd, repartitionedRdd, Option.of(maxPartitionCountByKey));
   }
 }

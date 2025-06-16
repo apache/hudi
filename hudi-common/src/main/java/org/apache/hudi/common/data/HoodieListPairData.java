@@ -28,6 +28,7 @@ import org.apache.hudi.common.util.collection.Pair;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -249,8 +250,16 @@ public class HoodieListPairData<K, V> extends HoodieBaseListData<Pair<K, V>> imp
   @Override
   public HoodiePairData<Integer, String> rangeBasedRepartitionForEachKey(
       int keyRange, double sampleFraction, int maxKeyPerBucket, long seed) {
-    // No op
-    return (HoodiePairData<Integer, String>) this;
+
+    Comparator<Pair<Integer, String>> comparator = Comparator
+        .comparing((Pair<Integer, String> p) -> p.getKey())
+        .thenComparing(p -> p.getValue());
+
+    List<Pair<Integer, String>> sorted = ((HoodieListPairData<Integer, String>)this).asStream()
+        .sorted(comparator)
+        .collect(Collectors.toList());
+
+    return new HoodieListPairData<>(sorted, lazy);
   }
 
   @Override
