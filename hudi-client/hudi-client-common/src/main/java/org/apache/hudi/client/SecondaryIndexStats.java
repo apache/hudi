@@ -24,9 +24,9 @@ package org.apache.hudi.client;
  */
 public class SecondaryIndexStats {
 
-  private String recordKey;
-  private String secondaryKeyValue;
-  private boolean isDeleted;
+  private final String recordKey;
+  private final String secondaryKeyValue;
+  private final boolean isDeleted;
 
   public SecondaryIndexStats(String recordKey, String secondaryKeyValue, boolean isDeleted) {
     this.recordKey = recordKey;

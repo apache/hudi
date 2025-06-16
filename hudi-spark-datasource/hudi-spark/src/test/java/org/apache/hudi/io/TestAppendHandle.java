@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io;
 
+import org.apache.hudi.client.SecondaryIndexStats;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
@@ -26,22 +27,25 @@ import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkMetadataWriterFactory;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -49,13 +53,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class TestAppendHandle extends BaseTestHandle {
 
-  @ParameterizedTest
-  @ValueSource(booleans = { true, false })
-  public void testAppendHandleRLIStats(boolean populateMetaFields) {
+  @Test
+  public void testAppendHandleRLIStats() {
     // init config and table
     HoodieWriteConfig config = getConfigBuilder(basePath)
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder().withRemoteServerPort(timelineServicePort).build())
-        .withPopulateMetaFields(populateMetaFields)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).withEnableRecordIndex(true).withStreamingWriteEnabled(true).build())
         .build();
 
@@ -70,7 +72,7 @@ public class TestAppendHandle extends BaseTestHandle {
     config.setSchema(TRIP_EXAMPLE_SCHEMA);
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[] {partitionPath});
     // create parquet file
-    createParquetFile(config, table, partitionPath, fileId, instantTime, dataGenerator, true);
+    createParquetFile(config, table, partitionPath, fileId, instantTime, dataGenerator);
     // generate update records
     instantTime = "001";
     List<HoodieRecord> records = dataGenerator.generateUniqueUpdates(instantTime, 50);
@@ -87,23 +89,19 @@ public class TestAppendHandle extends BaseTestHandle {
     assertEquals(records.size(), writeStatus.getTotalRecords());
     assertEquals(0, writeStatus.getTotalErrorRecords());
     // validate write status has all record delegates
-    if (populateMetaFields) {
-      assertEquals(records.size(), writeStatus.getIndexStats().getWrittenRecordDelegates().size());
-      for (HoodieRecordDelegate recordDelegate : writeStatus.getIndexStats().getWrittenRecordDelegates()) {
-        assertTrue(recordDelegate.getNewLocation().isPresent());
-        assertEquals(fileId, recordDelegate.getNewLocation().get().getFileId());
-        assertEquals(instantTime, recordDelegate.getNewLocation().get().getInstantTime());
-      }
+    assertEquals(records.size(), writeStatus.getIndexStats().getWrittenRecordDelegates().size());
+    for (HoodieRecordDelegate recordDelegate : writeStatus.getIndexStats().getWrittenRecordDelegates()) {
+      assertTrue(recordDelegate.getNewLocation().isPresent());
+      assertEquals(fileId, recordDelegate.getNewLocation().get().getFileId());
+      assertEquals(instantTime, recordDelegate.getNewLocation().get().getInstantTime());
     }
   }
 
-  @ParameterizedTest
-  @ValueSource(booleans = { true, false })
-  public void testAppendHandleSecondaryIndexStats(boolean populateMetaFields) throws Exception {
+  @Test
+  public void testAppendHandleSecondaryIndexStats() throws Exception {
     // init config and table
     HoodieWriteConfig config = getConfigBuilder(basePath)
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder().withRemoteServerPort(timelineServicePort).build())
-        .withPopulateMetaFields(populateMetaFields)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
             .withEnableRecordIndex(true)
@@ -127,7 +125,7 @@ public class TestAppendHandle extends BaseTestHandle {
     config.setSchema(TRIP_EXAMPLE_SCHEMA);
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[] {partitionPath});
     // create parquet file
-    createParquetFile(config, table, partitionPath, fileId, instantTime, dataGenerator, true);
+    createParquetFile(config, table, partitionPath, fileId, instantTime, dataGenerator);
     // generate update records
     instantTime = "001";
     List<HoodieRecord> records = dataGenerator.generateUniqueUpdates(instantTime, 50);
@@ -146,11 +144,22 @@ public class TestAppendHandle extends BaseTestHandle {
     assertEquals(records.size(), writeStatus.getTotalRecords());
     assertEquals(0, writeStatus.getTotalErrorRecords());
     // validate write status has all record delegates
-    if (populateMetaFields) {
-      assertEquals(1, writeStatus.getIndexStats().getSecondaryIndexStats().size());
-      // Since the MDT is not populated during the create, the updates would be considered as new records by the Append handle
-      // Therefore only secondary index records for the 50 updates would appear here
-      assertEquals(50, writeStatus.getIndexStats().getSecondaryIndexStats().values().stream().findFirst().get().size());
+    assertEquals(1, writeStatus.getIndexStats().getSecondaryIndexStats().size());
+    // Since the MDT is not populated during the create, the updates would be considered as new records by the Append handle
+    // Therefore only secondary index records for the 50 updates would appear here
+    assertEquals(50, writeStatus.getIndexStats().getSecondaryIndexStats().values().stream().findFirst().get().size());
+
+    // Validate the secondary index stats returned
+    Set<String> returnedRecordKeys = new HashSet<>();
+    for (SecondaryIndexStats stat : writeStatus.getIndexStats().getSecondaryIndexStats().values().stream().findFirst().get()) {
+      // verify si stat marks record as not deleted
+      assertFalse(stat.isDeleted());
+      // verify the record key and secondary key is present
+      assertTrue(StringUtils.nonEmpty(stat.getRecordKey()));
+      assertTrue(StringUtils.nonEmpty(stat.getSecondaryKeyValue()));
+      returnedRecordKeys.add(stat.getRecordKey());
     }
+    // Ensure that all record keys are unique and match the initial insert size
+    assertEquals(50, returnedRecordKeys.size());
   }
 }

@@ -129,8 +129,16 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
             .filter(mdtPartition -> mdtPartition.startsWith(PARTITION_NAME_SECONDARY_INDEX_PREFIX))
             .map(mdtPartitionPath -> Pair.of(mdtPartitionPath, HoodieTableMetadataUtil.getHoodieIndexDefinition(mdtPartitionPath, hoodieTable.getMetaClient())))
             .collect(Collectors.toList());
+        secondaryIndexDefns.forEach(pair -> writeStatus.getIndexStats().instantiateSecondaryIndexStatsForIndex(pair.getKey()));
       }
     }
+  }
+
+  /**
+   * Returns true if streaming is enabled and secondary index is configured for the table.
+   */
+  boolean isSecondaryIndexStreamingDisabled() {
+    return !config.isSecondaryIndexEnabled() || secondaryIndexDefns.isEmpty() || !config.isMetadataStreamingWritesEnabled(hoodieTable.getMetaClient().getTableConfig().getTableVersion());
   }
 
   /**

@@ -334,20 +334,21 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       return false;
     }
     try {
+      Option<HoodieKey> hoodieKeyOpt = Option.of(newRecord.getKey());
       if (combineRecord.isPresent() && !combineRecord.get().isDelete(schema, config.getProps()) && !isDelete) {
         // Last-minute check.
         boolean decision = recordMerger.shouldFlush(combineRecord.get(), schema, config.getProps());
 
         if (decision) { // CASE (1): Flush the merged record.
-          trackMetadataIndexStats(Option.of(newRecord.getKey()), combineRecord, oldRecordOpt, false);
+          trackMetadataIndexStats(hoodieKeyOpt, combineRecord, oldRecordOpt, false);
           writeToFile(newRecord.getKey(), combineRecord.get(), schema, prop, preserveMetadata);
           recordsWritten++;
         } else {  // CASE (2): A delete operation.
-          trackMetadataIndexStats(Option.empty(), combineRecord, oldRecordOpt, true);
+          trackMetadataIndexStats(hoodieKeyOpt, combineRecord, oldRecordOpt, true);
           recordsDeleted++;
         }
       } else {
-        trackMetadataIndexStats(Option.empty(), combineRecord, oldRecordOpt, true);
+        trackMetadataIndexStats(hoodieKeyOpt, combineRecord, oldRecordOpt, true);
         recordsDeleted++;
         // Clear the new location as the record was deleted
         newRecord.unseal();
@@ -452,7 +453,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
   }
 
   private void trackMetadataIndexStats(Option<HoodieKey> hoodieKeyOpt, Option<HoodieRecord> combinedRecordOpt, Option<HoodieRecord<T>> oldRecordOpt, boolean isDelete) {
-    if (!config.isSecondaryIndexEnabled() || secondaryIndexDefns.isEmpty() || !config.isMetadataStreamingWritesEnabled(hoodieTable.getMetaClient().getTableConfig().getTableVersion())) {
+    if (isSecondaryIndexStreamingDisabled()) {
       return;
     }
     secondaryIndexDefns.forEach(secondaryIndexPartitionPathFieldPair -> {
@@ -482,7 +483,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       }
       if (shouldUpdate) {
         String recordKey = hoodieKeyOpt.map(HoodieKey::getRecordKey)
-            .or(() -> oldRecordOpt.map(HoodieRecord::getRecordKey))
+            .or(() -> oldRecordOpt.map(rec -> rec.getRecordKey(writeSchemaWithMetaFields, keyGeneratorOpt)))
             .or(() -> combinedRecordOpt.map(HoodieRecord::getRecordKey))
             .get();
         // Add secondary index delete records for old records
