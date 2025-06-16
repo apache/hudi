@@ -398,6 +398,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       getEngineContext().setJobStatus(this.getClass().getSimpleName(), "Reading keys from metadata table partition " + partitionName);
       HoodieTableVersion tableVersion = metadataMetaClient.getTableConfig().getTableVersion();
       keys = repartitioningIfNeeded(keys, partitionName, numFileSlices, tableVersion);
+      // Need to do if else here. Cut jira that hoodie pair list needs to have parallelism and map partition capabilities.
       keys = adaptiveSortDedupRepartition(keys, partitionName, numFileSlices, tableVersion);
       res = keys.mapPartitions(distinctSortedKeyIter -> {
         if (!distinctSortedKeyIter.hasNext()) {

@@ -171,11 +171,12 @@ public interface HoodiePairData<K, V> extends Serializable {
         ));
   }
 
+  // HoodiePairData does not have a notion of partition, so it cannot do map partitions or work
+  // with anything that requires partition like logic.
   default HoodiePairData<Integer, String> rangeBasedRepartitionForEachKey(
       int keyRange, double sampleFraction, int maxKeyPerBucket, long seed) {
-    throw new UnsupportedOperationException("repartitionWithSplits method is not implenented");
+    throw new UnsupportedOperationException("No implementation provided");
   }
-
   /**
    * @return the deduce number of shuffle partitions
    */
