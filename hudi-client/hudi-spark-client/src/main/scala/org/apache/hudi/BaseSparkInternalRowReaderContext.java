@@ -190,9 +190,6 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
 
   @Override
   public InternalRow getDeleteRow(InternalRow record, String recordKey) {
-    if (record != null) {
-      return record;
-    }
-    return new HoodieInternalRow(null, null, UTF8String.fromString(recordKey), UTF8String.fromString(partitionPath), null, null, false);
+    return HoodieInternalRow.createDeleteRow(UTF8String.fromString(recordKey), UTF8String.fromString(partitionPath), record);
   }
 }
