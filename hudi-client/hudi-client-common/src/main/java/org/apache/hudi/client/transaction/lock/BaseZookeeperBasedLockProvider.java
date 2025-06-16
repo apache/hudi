@@ -21,6 +21,7 @@ package org.apache.hudi.client.transaction.lock;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.common.lock.LockState;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieLockException;
@@ -39,14 +40,13 @@ import javax.annotation.concurrent.NotThreadSafe;
 import java.io.Serializable;
 import java.util.concurrent.TimeUnit;
 
-import static org.apache.hudi.common.config.LockConfiguration.DEFAULT_ZK_CONNECTION_TIMEOUT_MS;
-import static org.apache.hudi.common.config.LockConfiguration.DEFAULT_ZK_SESSION_TIMEOUT_MS;
-import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY;
-import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_RETRY_MAX_WAIT_TIME_IN_MILLIS_PROP_KEY;
-import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY;
-import static org.apache.hudi.common.config.LockConfiguration.ZK_CONNECTION_TIMEOUT_MS_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.ZK_CONNECT_URL_PROP_KEY;
-import static org.apache.hudi.common.config.LockConfiguration.ZK_SESSION_TIMEOUT_MS_PROP_KEY;
+import static org.apache.hudi.config.HoodieLockConfig.LOCK_ACQUIRE_NUM_RETRIES;
+import static org.apache.hudi.config.HoodieLockConfig.LOCK_ACQUIRE_RETRY_MAX_WAIT_TIME_IN_MILLIS;
+import static org.apache.hudi.config.HoodieLockConfig.LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS;
+import static org.apache.hudi.config.HoodieLockConfig.ZK_CONNECTION_TIMEOUT_MS;
+import static org.apache.hudi.config.HoodieLockConfig.ZK_CONNECT_URL;
+import static org.apache.hudi.config.HoodieLockConfig.ZK_SESSION_TIMEOUT_MS;
 
 /**
  * A zookeeper based lock. This {@link LockProvider} implementation allows to lock table operations
@@ -69,12 +69,13 @@ public abstract class BaseZookeeperBasedLockProvider implements LockProvider<Int
     zkBasePath = getZkBasePath(lockConfiguration);
     lockKey = getLockKey(lockConfiguration);
     this.curatorFrameworkClient = CuratorFrameworkFactory.builder()
-        .connectString(lockConfiguration.getConfig().getString(ZK_CONNECT_URL_PROP_KEY))
-        .retryPolicy(new BoundedExponentialBackoffRetry(lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY),
-            lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_RETRY_MAX_WAIT_TIME_IN_MILLIS_PROP_KEY),
-            lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY)))
-        .sessionTimeoutMs(lockConfiguration.getConfig().getInteger(ZK_SESSION_TIMEOUT_MS_PROP_KEY, DEFAULT_ZK_SESSION_TIMEOUT_MS))
-        .connectionTimeoutMs(lockConfiguration.getConfig().getInteger(ZK_CONNECTION_TIMEOUT_MS_PROP_KEY, DEFAULT_ZK_CONNECTION_TIMEOUT_MS))
+        .connectString(ConfigUtils.getStringWithAltKeys(lockConfiguration.getConfig(), ZK_CONNECT_URL))
+        .retryPolicy(new BoundedExponentialBackoffRetry(
+            ConfigUtils.getIntWithAltKeys(lockConfiguration.getConfig(), LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS),
+            ConfigUtils.getIntWithAltKeys(lockConfiguration.getConfig(), LOCK_ACQUIRE_RETRY_MAX_WAIT_TIME_IN_MILLIS),
+            ConfigUtils.getIntWithAltKeys(lockConfiguration.getConfig(), LOCK_ACQUIRE_NUM_RETRIES)))
+        .sessionTimeoutMs(ConfigUtils.getIntWithAltKeys(lockConfiguration.getConfig(), ZK_SESSION_TIMEOUT_MS))
+        .connectionTimeoutMs(ConfigUtils.getIntWithAltKeys(lockConfiguration.getConfig(), ZK_CONNECTION_TIMEOUT_MS))
         .build();
     this.curatorFrameworkClient.start();
     createPathIfNotExists();
@@ -95,7 +96,7 @@ public abstract class BaseZookeeperBasedLockProvider implements LockProvider<Int
   private void createPathIfNotExists() {
     try {
       String lockPath = getLockPath();
-      LOG.info(String.format("Creating zookeeper path %s if not exists", lockPath));
+      LOG.info("Creating zookeeper path {} if not exists", lockPath);
       String[] parts = lockPath.split("/");
       StringBuilder currentPath = new StringBuilder();
       for (String part : parts) {
@@ -105,7 +106,7 @@ public abstract class BaseZookeeperBasedLockProvider implements LockProvider<Int
         }
       }
     } catch (Exception e) {
-      LOG.error("Failed to create ZooKeeper path: " + e.getMessage());
+      LOG.error("Failed to create ZooKeeper path", e);
       throw new HoodieLockException("Failed to initialize ZooKeeper path", e);
     }
   }
@@ -117,7 +118,7 @@ public abstract class BaseZookeeperBasedLockProvider implements LockProvider<Int
         // to avoid failure due to synchronous calls.
       } catch (KeeperException e) {
         if (e.code() == KeeperException.Code.NODEEXISTS) {
-          LOG.debug(String.format("Node already exist for path = %s", path));
+          LOG.debug("Node already exist for path = {}", path);
         } else {
           throw new HoodieLockException("Failed to create zookeeper node", e);
         }

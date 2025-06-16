@@ -18,17 +18,25 @@
 
 package org.apache.hudi.util;
 
+import org.apache.hudi.client.model.CommitTimeFlinkRecordMerger;
+import org.apache.hudi.client.model.EventTimeFlinkRecordMerger;
+import org.apache.hudi.client.model.PartialUpdateFlinkRecordMerger;
 import org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.model.PartialUpdateAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -39,6 +47,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodiePayloadConfig;
@@ -77,6 +86,7 @@ import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Properties;
 
@@ -94,6 +104,8 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.compareTim
 public class StreamerUtil {
 
   private static final Logger LOG = LoggerFactory.getLogger(StreamerUtil.class);
+
+  public static final String FLINK_CHECKPOINT_ID = "flink_checkpoint_id";
 
   public static TypedProperties appendKafkaProps(FlinkStreamerConfig config) {
     TypedProperties properties = getProps(config);
@@ -219,7 +231,7 @@ public class StreamerUtil {
    */
   public static TypedProperties flinkConf2TypedProperties(Configuration conf) {
     Configuration flatConf = FlinkOptions.flatOptions(conf);
-    Properties properties = new Properties();
+    TypedProperties properties = new TypedProperties();
     // put all the set options
     flatConf.addAllToProperties(properties);
     // put all the default options
@@ -229,7 +241,7 @@ public class StreamerUtil {
       }
     }
     properties.put(HoodieTableConfig.TYPE.key(), conf.getString(FlinkOptions.TABLE_TYPE));
-    return new TypedProperties(properties);
+    return properties;
   }
 
   /**
@@ -258,9 +270,11 @@ public class StreamerUtil {
           .setTableType(conf.getString(FlinkOptions.TABLE_TYPE))
           .setTableName(conf.getString(FlinkOptions.TABLE_NAME))
           .setTableVersion(conf.getInteger(FlinkOptions.WRITE_TABLE_VERSION))
+          .setRecordMergeMode(getMergeMode(conf))
+          .setRecordMergeStrategyId(getMergeStrategyId(conf))
+          .setPayloadClassName(getPayloadClass(conf))
           .setDatabaseName(conf.getString(FlinkOptions.DATABASE_NAME))
           .setRecordKeyFields(conf.getString(FlinkOptions.RECORD_KEY_FIELD, null))
-          .setPayloadClassName(conf.getString(FlinkOptions.PAYLOAD_CLASS_NAME))
           .setPreCombineField(OptionsResolver.getPreCombineField(conf))
           .setArchiveLogFolder(TIMELINE_HISTORY_PATH.defaultValue())
           .setPartitionFields(conf.getString(FlinkOptions.PARTITION_PATH_FIELD, null))
@@ -282,6 +296,94 @@ public class StreamerUtil {
 
     // Do not close the filesystem in order to use the CACHE,
     // some filesystems release the handles in #close method.
+  }
+
+  private static String getMergeStrategyId(Configuration conf) {
+    if (conf.contains(FlinkOptions.RECORD_MERGER_IMPLS)) {
+      return HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID;
+    } else if (conf.contains(FlinkOptions.PAYLOAD_CLASS_NAME)) {
+      // for the compatibility of legacy payload class configuration
+      String payloadClass = conf.get(FlinkOptions.PAYLOAD_CLASS_NAME);
+      if (payloadClass.contains(PartialUpdateAvroPayload.class.getSimpleName())) {
+        return HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID;
+      }
+    }
+    return null;
+  }
+
+  private static String getPayloadClass(Configuration conf) {
+    if (conf.contains(FlinkOptions.RECORD_MERGER_IMPLS)) {
+      // check whether contains partial update merger class
+      String mergerClasses = conf.get(FlinkOptions.RECORD_MERGER_IMPLS);
+      if (mergerClasses.contains(PartialUpdateFlinkRecordMerger.class.getSimpleName())) {
+        return PartialUpdateAvroPayload.class.getName();
+      }
+    }
+    if (conf.contains(FlinkOptions.PAYLOAD_CLASS_NAME)) {
+      return conf.get(FlinkOptions.PAYLOAD_CLASS_NAME);
+    } else if (getMergeMode(conf) == RecordMergeMode.COMMIT_TIME_ORDERING) {
+      return OverwriteWithLatestAvroPayload.class.getName();
+    } else {
+      // payload inferred in HoodieTableConfig for EVENT_TIME_ORDERING is DefaultHoodieRecordPayload,
+      // but Flink use EventTimeAvroPayload, so return default value here if necessary
+      return conf.get(FlinkOptions.PAYLOAD_CLASS_NAME);
+    }
+  }
+
+  /**
+   * Returns the merge mode.
+   */
+  public static RecordMergeMode getMergeMode(Configuration conf) {
+    if (conf.contains(FlinkOptions.RECORD_MERGE_MODE)) {
+      return RecordMergeMode.valueOf(conf.get(FlinkOptions.RECORD_MERGE_MODE));
+    } else {
+      return null;
+    }
+  }
+
+  /**
+   * Returns the merger classes.
+   */
+  public static String getMergerClasses(Configuration conf, RecordMergeMode mergeMode, String payloadClass) {
+    switch (mergeMode) {
+      case EVENT_TIME_ORDERING:
+        return EventTimeFlinkRecordMerger.class.getName();
+      case COMMIT_TIME_ORDERING:
+        return CommitTimeFlinkRecordMerger.class.getName();
+      default:
+        if (payloadClass.contains(PartialUpdateAvroPayload.class.getSimpleName())) {
+          return PartialUpdateFlinkRecordMerger.class.getName();
+        } else {
+          return conf.get(FlinkOptions.RECORD_MERGER_IMPLS);
+        }
+    }
+  }
+
+  /**
+   * Write Flink checkpoint id as extra metadata, if write.extra.metadata.enabled is true.
+   *
+   * @param conf Flink configuration
+   * @param checkpointCommitMetadata commit metadata map
+   * @param checkpointId flink checkpoint id
+   */
+  public static void addFlinkCheckpointIdIntoMetaData(
+      Configuration conf,
+      HashMap<String, String> checkpointCommitMetadata,
+      long checkpointId) {
+    if (conf.get(FlinkOptions.WRITE_EXTRA_METADATA_ENABLED)) {
+      checkpointCommitMetadata.put(FLINK_CHECKPOINT_ID, String.valueOf(checkpointId));
+    }
+  }
+
+  /**
+   * Infers the merging behavior based on what the user sets (or doesn't set).
+   *
+   * @param conf Flink configuration
+   * @return The correct merging behaviour: <merge_mode, payload_class, merge_strategy_id>
+   */
+  public static Triple<RecordMergeMode, String, String> inferMergingBehavior(Configuration conf) {
+    return HoodieTableConfig.inferCorrectMergingBehavior(
+        getMergeMode(conf), getPayloadClass(conf), getMergeStrategyId(conf), OptionsResolver.getPreCombineField(conf), HoodieTableVersion.EIGHT);
   }
 
   /**
@@ -319,7 +421,11 @@ public class StreamerUtil {
    * Generates the bucket ID using format {partition path}_{fileID}.
    */
   public static String generateBucketKey(String partitionPath, String fileId) {
-    return partitionPath + "_" + fileId;
+    return new StringBuilder()
+        .append(partitionPath)
+        .append('_')
+        .append(fileId)
+        .toString();
   }
 
   /**

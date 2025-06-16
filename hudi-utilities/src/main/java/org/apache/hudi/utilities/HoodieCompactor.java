@@ -55,7 +55,7 @@ public class HoodieCompactor {
   public static final String SCHEDULE_AND_EXECUTE = "scheduleandexecute";
   private final Config cfg;
   private transient FileSystem fs;
-  private TypedProperties props;
+  private final TypedProperties props;
   private final JavaSparkContext jsc;
   private HoodieTableMetaClient metaClient;
 
@@ -270,6 +270,7 @@ public class HoodieCompactor {
         }
       }
       HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client.compact(cfg.compactionInstantTime);
+      client.commitCompaction(cfg.compactionInstantTime, compactionMetadata, Option.empty());
       clean(client);
       return UtilHelpers.handleErrors(compactionMetadata.getCommitMetadata().get(), cfg.compactionInstantTime);
     }
@@ -279,13 +280,7 @@ public class HoodieCompactor {
     try (SparkRDDWriteClient client =
              UtilHelpers.createHoodieClient(jsc, cfg.basePath, "", cfg.parallelism, Option.of(cfg.strategyClassName), props)) {
 
-      if (StringUtils.isNullOrEmpty(cfg.compactionInstantTime)) {
-        LOG.warn("No instant time is provided for scheduling compaction.");
-        return client.scheduleCompaction(Option.empty());
-      }
-
-      client.scheduleCompactionAtInstant(cfg.compactionInstantTime, Option.empty());
-      return Option.of(cfg.compactionInstantTime);
+      return client.scheduleCompaction(Option.empty());
     }
   }
 

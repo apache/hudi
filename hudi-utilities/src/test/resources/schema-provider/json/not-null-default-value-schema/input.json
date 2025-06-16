@@ -1,0 +1,67 @@
+{
+  "title": "json schema with non null default values",
+  "type": "object",
+  "properties": {
+    "field1": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "property1": {
+              "type": "string",
+              "default": "\"property1_defaultvalue\""
+            },
+            "property2": {
+              "type": "number"
+            },
+            "property3": {
+              "type": "integer",
+              "default": "10"
+            },
+            "property4": {
+              "type": "number",
+              "default": "8.25"
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "field2": {
+      "type": "string",
+      "default": "\"property2_defaultvalue\""
+    },
+    "field3": {
+      "oneOf":[{"type":"null"},{"type":"string","default":"\"N\""}]
+    },
+    "field4": {
+      "type": "integer",
+      "default": "40"
+    },
+    "field5": {
+      "type": "integer",
+      "default": 50
+    },
+    "field6": {
+      "oneOf":[{"type":"null"},{"type":"integer","default":"60"}]
+    },
+    "field7": {
+      "type": "number",
+      "default": "7.75"
+    },
+    "field8": {
+      "type": "number",
+      "default": 8.375
+    },
+    "field9": {
+      "type": "boolean",
+      "default": "true"
+    },
+    "field10": {
+      "type": "boolean",
+      "default": false
+    }
+  }
+}

@@ -37,13 +37,13 @@ import java.util.List;
 public class BulkInsertMapFunction<T>
     implements Function2<Integer, Iterator<HoodieRecord<T>>, Iterator<List<WriteStatus>>> {
 
-  private String instantTime;
-  private boolean areRecordsSorted;
-  private HoodieWriteConfig config;
-  private HoodieTable hoodieTable;
-  private boolean useWriterSchema;
-  private BulkInsertPartitioner partitioner;
-  private WriteHandleFactory writeHandleFactory;
+  private final String instantTime;
+  private final boolean areRecordsSorted;
+  private final HoodieWriteConfig config;
+  private final HoodieTable hoodieTable;
+  private final boolean useWriterSchema;
+  private final BulkInsertPartitioner partitioner;
+  private final WriteHandleFactory writeHandleFactory;
 
   public BulkInsertMapFunction(String instantTime, boolean areRecordsSorted,
                                HoodieWriteConfig config, HoodieTable hoodieTable,

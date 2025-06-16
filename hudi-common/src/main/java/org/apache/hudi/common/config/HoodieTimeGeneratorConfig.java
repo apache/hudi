@@ -58,7 +58,7 @@ public class HoodieTimeGeneratorConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> TIME_GENERATOR_REUSE_ENABLE = ConfigProperty
       .key("_hoodie.time.generator.reuse.enable")
-      .defaultValue(true)
+      .defaultValue(false)
       .sinceVersion("1.0.1")
       .markAdvanced()
       .withDocumentation("Used only for internal purposes. TimeGeneratos are cached per table base path and re-used across invocations. "
@@ -132,11 +132,10 @@ public class HoodieTimeGeneratorConfig extends HoodieConfig {
     }
 
     public HoodieTimeGeneratorConfig build() {
-      timeGeneratorConfig.setDefaults(HoodieTimeGeneratorConfig.class.getName());
-
       if (!timeGeneratorConfig.contains(LOCK_PROVIDER_KEY)) {
         timeGeneratorConfig.setValue(LOCK_PROVIDER_KEY, DEFAULT_LOCK_PROVIDER);
       }
+      timeGeneratorConfig.setDefaults(HoodieTimeGeneratorConfig.class.getName());
       return timeGeneratorConfig;
     }
   }

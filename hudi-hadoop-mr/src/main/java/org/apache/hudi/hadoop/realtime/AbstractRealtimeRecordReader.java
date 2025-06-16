@@ -22,6 +22,7 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.Option;
@@ -76,7 +77,7 @@ public abstract class AbstractRealtimeRecordReader {
   protected boolean supportPayload;
   // handle hive type to avro record
   protected HiveAvroSerializer serializer;
-  private boolean supportTimestamp;
+  private final boolean supportTimestamp;
 
   public AbstractRealtimeRecordReader(RealtimeSplit split, JobConf job) {
     this.split = split;
@@ -111,8 +112,13 @@ public abstract class AbstractRealtimeRecordReader {
   }
 
   private boolean usesCustomPayload(HoodieTableMetaClient metaClient) {
-    return metaClient.getTableConfig().getRecordMergeMode().equals(RecordMergeMode.CUSTOM)
-        && metaClient.getTableConfig().getRecordMergeStrategyId().equals(HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID);
+    HoodieTableConfig tableConfig = metaClient.getTableConfig();
+    if (tableConfig.contains(HoodieTableConfig.RECORD_MERGE_MODE)
+        && tableConfig.contains(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID)) {
+      return tableConfig.getRecordMergeMode().equals(RecordMergeMode.CUSTOM)
+          && tableConfig.getRecordMergeStrategyId().equals(HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID);
+    }
+    return false;
   }
 
   private void prepareHiveAvroSerializer() {
@@ -129,7 +135,7 @@ public abstract class AbstractRealtimeRecordReader {
         if (writerSchemaColNames.contains(lastColName)) {
           break;
         }
-        LOG.debug(String.format("remove virtual column: %s", lastColName));
+        LOG.debug("remove virtual column: {}", lastColName);
         columnNameList.remove(columnNameList.size() - 1);
         columnTypeList.remove(columnTypeList.size() - 1);
       }
@@ -183,14 +189,14 @@ public abstract class AbstractRealtimeRecordReader {
       } else {
         // Hive has some extra virtual columns like BLOCK__OFFSET__INSIDE__FILE which do not exist in table schema.
         // They will get skipped as they won't be found in the original schema.
-        LOG.debug("Skipping Hive Column => " + columnName);
+        LOG.debug("Skipping Hive Column => {}", columnName);
       }
     }
 
     Schema hiveSchema = Schema.createRecord(writerSchema.getName(), writerSchema.getDoc(), writerSchema.getNamespace(),
         writerSchema.isError());
     hiveSchema.setFields(hiveSchemaFields);
-    LOG.debug("HIVE Schema is :" + hiveSchema.toString(true));
+    LOG.debug("HIVE Schema is :{}", hiveSchema);
     return hiveSchema;
   }
 

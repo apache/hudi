@@ -62,7 +62,7 @@ import scala.concurrent.duration._
 /**
  * Test cases for secondary index
  */
-@Tag("functional")
+@Tag("functional-c")
 class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
 
   val metadataOpts: Map[String, String] = Map(
@@ -684,7 +684,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       val compactionTimeline = metadataTableFSView.getVisibleCommitsAndCompactionTimeline.filterCompletedAndCompactionInstants()
       val lastCompactionInstant = compactionTimeline
         .filter(JavaConversions.getPredicate((instant: HoodieInstant) =>
-          metaClient.getTimelineLayout.getCommitMetadataSerDe.deserialize(instant, compactionTimeline.getInstantDetails(instant).get, classOf[HoodieCommitMetadata])
+          compactionTimeline.readCommitMetadata(instant)
             .getOperationType == WriteOperationType.COMPACT))
         .lastInstant()
       val compactionBaseFile = metadataTableFSView.getAllBaseFiles("secondary_index_idx_not_record_key_col")
@@ -1318,6 +1318,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
     val firstCompletedInstant = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants().lastInstant()
     val writeClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), getWriteConfig(hudiOpts))
     writeClient.savepoint(firstCompletedInstant.get().requestedTime, "testUser", "savepoint to first commit")
+    writeClient.close()
     val savepointTimestamp = metaClient.reloadActiveTimeline().getSavePointTimeline.filterCompletedInstants().lastInstant().get().requestedTime
     assertEquals(firstCompletedInstant.get().requestedTime, savepointTimestamp)
     // Restore to savepoint

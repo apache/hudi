@@ -121,11 +121,11 @@ public class S3EventsMetaSelector extends CloudObjectsSelector {
           if (ALLOWED_S3_EVENT_PREFIX.stream().anyMatch(eventName::startsWith)) {
             validEvents.add(event);
           } else {
-            log.debug(String.format("This S3 event %s is not allowed, so ignoring it.", eventName));
+            log.debug("This S3 event {} is not allowed, so ignoring it.", eventName);
           }
         }
       } else {
-        log.debug(String.format("Message is not expected format or it's s3:TestEvent. Message: %s", message));
+        log.debug("Message is not expected format or it's s3:TestEvent. Message: {}", message);
       }
       processedMessages.add(message);
     }
@@ -144,9 +144,9 @@ public class S3EventsMetaSelector extends CloudObjectsSelector {
     processedMessages.clear();
     log.info("Reading messages....");
     try {
-      log.info("Start Checkpoint : " + lastCheckpoint);
+      log.info("Start Checkpoint : {}", lastCheckpoint);
       List<Map<String, Object>> eventRecords = getValidEvents(sqs, processedMessages);
-      log.info("Number of valid events: " + eventRecords.size());
+      log.info("Number of valid events: {}", eventRecords.size());
       List<String> filteredEventRecords = new ArrayList<>();
       long newCheckpointTime = eventRecords.stream()
           .mapToLong(eventRecord -> Date.from(Instant.from(

@@ -70,7 +70,8 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition_path",
       DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
-      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+      HoodieWriteConfig.MARKERS_TIMELINE_SERVER_BASED_BATCH_INTERVAL_MS.key -> "10"
     )
     val verificationCol: String = "driver"
     val updatedVerificationVal: String = "driver_update"
@@ -190,6 +191,7 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
     // compaction should have been completed
     val metaClient = HoodieTestUtils.createMetaClient(new HadoopStorageConfiguration(fs.getConf), basePath)
     assertEquals(1, metaClient.getActiveTimeline.getCommitAndReplaceTimeline.countInstants())
+    assertEquals(100, hudiDF1.count())
   }
 
   @ParameterizedTest
@@ -334,9 +336,7 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
                                         shouldContainRecordPosition: Boolean,
                                         shouldBaseFileInstantTimeMatch: Boolean = true): List[HoodieLogFile] = {
     val instant = metaClient.getActiveTimeline.getDeltaCommitTimeline.lastInstant().get()
-    val commitMetadata = metaClient.getCommitMetadataSerDe.deserialize(
-      instant, metaClient.getActiveTimeline.getInstantDetails(instant).get,
-      classOf[HoodieCommitMetadata])
+    val commitMetadata = metaClient.getActiveTimeline.readCommitMetadata(instant)
     val logFileList: List[HoodieLogFile] = commitMetadata.getFileIdAndFullPaths(metaClient.getBasePath)
       .asScala.values
       .filter(e => FSUtils.isLogFile(new StoragePath(e)))

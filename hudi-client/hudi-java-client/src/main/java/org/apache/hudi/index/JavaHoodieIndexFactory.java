@@ -18,7 +18,6 @@
 
 package org.apache.hudi.index;
 
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -63,7 +62,7 @@ public final class JavaHoodieIndexFactory {
   private static Option<BaseKeyGenerator> getKeyGeneratorForSimpleIndex(HoodieWriteConfig config) {
     try {
       return config.populateMetaFields() ? Option.empty()
-          : Option.of((BaseKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(new TypedProperties(config.getProps())));
+          : Option.of((BaseKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(config.getProps()));
     } catch (IOException e) {
       throw new HoodieIOException("KeyGenerator instantiation failed ", e);
     }

@@ -125,7 +125,7 @@ public class KafkaConnectControlAgent implements KafkaControlAgent {
     Properties props = new Properties();
     props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
     // Todo fetch the worker id or name instead of a uuid.
-    props.put(ConsumerConfig.GROUP_ID_CONFIG, "hudi-control-group" + UUID.randomUUID().toString());
+    props.put(ConsumerConfig.GROUP_ID_CONFIG, "hudi-control-group" + UUID.randomUUID());
     props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
     props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
 
@@ -143,8 +143,8 @@ public class KafkaConnectControlAgent implements KafkaControlAgent {
         records = consumer.poll(Duration.ofMillis(KAFKA_POLL_TIMEOUT_MS));
         for (ConsumerRecord<String, byte[]> record : records) {
           try {
-            LOG.debug(String.format("Kafka consumerGroupId = %s topic = %s, partition = %s, offset = %s, customer = %s, country = %s",
-                "", record.topic(), record.partition(), record.offset(), record.key(), record.value()));
+            LOG.debug("Kafka consumerGroupId = {} topic = {}, partition = {}, offset = {}, customer = {}, country = {}",
+                "", record.topic(), record.partition(), record.offset(), record.key(), record.value());
             ControlMessage message = ControlMessage.parseFrom(record.value());
             String senderTopic = message.getTopicName();
 

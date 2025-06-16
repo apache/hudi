@@ -41,6 +41,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.time.Instant;
 import java.time.ZonedDateTime;
 import java.util.Date;
@@ -52,6 +53,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeAvroMetadata;
 
 /**
  * Utils for clean action.
@@ -107,21 +109,18 @@ public class CleanerUtils {
    */
   public static HoodieCleanMetadata getCleanerMetadata(HoodieTableMetaClient metaClient, HoodieInstant cleanInstant)
       throws IOException {
-    CleanMetadataMigrator metadataMigrator = new CleanMetadataMigrator(metaClient);
-    HoodieCleanMetadata cleanMetadata = TimelineMetadataUtils.deserializeHoodieCleanMetadata(
-        metaClient.getActiveTimeline().readCleanerInfoAsBytes(cleanInstant).get());
-    return metadataMigrator.upgradeToLatest(cleanMetadata, cleanMetadata.getVersion());
+    HoodieCleanMetadata cleanMetadata = metaClient.getActiveTimeline().readCleanMetadata(cleanInstant);
+    return upgradeCleanMetadata(metaClient, cleanMetadata);
   }
 
-  /**
-   * Get Latest Version of Hoodie Cleaner Metadata - Output of cleaner operation.
-   * @return Latest version of Clean metadata corresponding to clean instant
-   * @throws IOException
-   */
-  public static HoodieCleanMetadata getCleanerMetadata(HoodieTableMetaClient metaClient, byte[] details)
+  public static HoodieCleanMetadata getCleanerMetadata(HoodieTableMetaClient metaClient, InputStream inputStream)
       throws IOException {
+    HoodieCleanMetadata cleanMetadata = deserializeAvroMetadata(inputStream, HoodieCleanMetadata.class);
+    return upgradeCleanMetadata(metaClient, cleanMetadata);
+  }
+
+  private static HoodieCleanMetadata upgradeCleanMetadata(HoodieTableMetaClient metaClient, HoodieCleanMetadata cleanMetadata) {
     CleanMetadataMigrator metadataMigrator = new CleanMetadataMigrator(metaClient);
-    HoodieCleanMetadata cleanMetadata = TimelineMetadataUtils.deserializeHoodieCleanMetadata(details);
     return metadataMigrator.upgradeToLatest(cleanMetadata, cleanMetadata.getVersion());
   }
 
@@ -169,22 +168,22 @@ public class CleanerUtils {
   public static HoodieCleanerPlan getCleanerPlan(HoodieTableMetaClient metaClient, HoodieInstant cleanInstant)
       throws IOException {
     CleanPlanMigrator cleanPlanMigrator = new CleanPlanMigrator(metaClient);
-    HoodieCleanerPlan cleanerPlan = TimelineMetadataUtils.deserializeAvroMetadata(
-        metaClient.getActiveTimeline().readCleanerInfoAsBytes(cleanInstant).get(), HoodieCleanerPlan.class);
+    cleanInstant = getCleanRequestInstant(metaClient, cleanInstant);
+    HoodieCleanerPlan cleanerPlan = metaClient.getActiveTimeline().readCleanerPlan(cleanInstant);
     return cleanPlanMigrator.upgradeToLatest(cleanerPlan, cleanerPlan.getVersion());
   }
 
-  /**
-   * Get Latest version of cleaner plan corresponding to a clean instant.
-   *
-   * @param metaClient   Hoodie Table Meta Client
-   * @return Cleaner plan corresponding to clean instant
-   * @throws IOException
-   */
-  public static HoodieCleanerPlan getCleanerPlan(HoodieTableMetaClient metaClient, byte[] details)
+  public static HoodieInstant getCleanRequestInstant(HoodieTableMetaClient metaClient, HoodieInstant cleanInstant) {
+    if (!cleanInstant.isRequested()) {
+      return metaClient.getInstantGenerator().getRequestedInstant(cleanInstant);
+    }
+    return cleanInstant;
+  }
+
+  public static HoodieCleanerPlan getCleanerPlan(HoodieTableMetaClient metaClient, InputStream in)
       throws IOException {
     CleanPlanMigrator cleanPlanMigrator = new CleanPlanMigrator(metaClient);
-    HoodieCleanerPlan cleanerPlan = TimelineMetadataUtils.deserializeAvroMetadata(details, HoodieCleanerPlan.class);
+    HoodieCleanerPlan cleanerPlan = TimelineMetadataUtils.deserializeAvroMetadata(in, HoodieCleanerPlan.class);
     return cleanPlanMigrator.upgradeToLatest(cleanerPlan, cleanerPlan.getVersion());
   }
 

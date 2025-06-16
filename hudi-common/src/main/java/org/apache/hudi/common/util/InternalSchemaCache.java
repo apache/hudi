@@ -20,6 +20,7 @@ package org.apache.hudi.common.util;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.CommitMetadataSerDe;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -27,6 +28,8 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
 import org.apache.hudi.common.table.timeline.InstantFileNameParser;
 import org.apache.hudi.common.table.timeline.InstantGenerator;
+import org.apache.hudi.common.table.timeline.TimelineLayout;
+import org.apache.hudi.common.table.timeline.TimelinePathProvider;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.internal.schema.InternalSchema;
@@ -36,11 +39,11 @@ import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import org.apache.avro.Schema;
-import org.apache.hudi.storage.StoragePathInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -61,11 +64,11 @@ public class InternalSchemaCache {
   private static final Logger LOG = LoggerFactory.getLogger(InternalSchemaCache.class);
   // Use segment lock to reduce competition.
   // the lock size should be powers of 2 for better hash.
-  private static Object[] lockList = new Object[16];
+  private static final Object[] LOCK_LIST = new Object[16];
 
   static {
-    for (int i = 0; i < lockList.length; i++) {
-      lockList[i] = new Object();
+    for (int i = 0; i < LOCK_LIST.length; i++) {
+      LOCK_LIST[i] = new Object();
     }
   }
 
@@ -79,7 +82,7 @@ public class InternalSchemaCache {
    * first step: try to get internalSchema from hoodie commit files, we no need to add lock.
    * if we cannot get internalSchema by first step, then we try to get internalSchema from cache.
    *
-   * @param versionID schema version_id need to search
+   * @param versionID  schema version_id need to search
    * @param metaClient current hoodie metaClient
    * @return internalSchema
    */
@@ -90,7 +93,7 @@ public class InternalSchemaCache {
     }
     String tablePath = metaClient.getBasePath().toString();
     // use segment lock to reduce competition.
-    synchronized (lockList[tablePath.hashCode() & (lockList.length - 1)]) {
+    synchronized (LOCK_LIST[tablePath.hashCode() & (LOCK_LIST.length - 1)]) {
       TreeMap<Long, InternalSchema> historicalSchemas = HISTORICAL_SCHEMA_CACHE.getIfPresent(tablePath);
       if (historicalSchemas == null || InternalSchemaUtils.searchSchema(versionID, historicalSchemas) == null) {
         historicalSchemas = getHistoricalSchemas(metaClient);
@@ -123,8 +126,7 @@ public class InternalSchemaCache {
       if (instants.isEmpty()) {
         return Option.empty();
       }
-      byte[] data = timeline.getInstantDetails(instants.get(0)).get();
-      HoodieCommitMetadata metadata = metaClient.getCommitMetadataSerDe().deserialize(instants.get(0), data, HoodieCommitMetadata.class);
+      HoodieCommitMetadata metadata = timeline.readCommitMetadata(instants.get(0));
       String latestInternalSchemaStr = metadata.getMetadata(SerDeHelper.LATEST_SCHEMA);
       return SerDeHelper.fromJson(latestInternalSchemaStr);
     } catch (Exception e) {
@@ -135,20 +137,19 @@ public class InternalSchemaCache {
   /**
    * Get internalSchema and avroSchema for compaction/cluster operation.
    *
-   * @param metaClient current hoodie metaClient
+   * @param metaClient                     current hoodie metaClient
    * @param compactionAndClusteringInstant first instant before current compaction/cluster instant
    * @return (internalSchemaStrOpt, avroSchemaStrOpt) a pair of InternalSchema/avroSchema
    */
   public static Pair<Option<String>, Option<String>> getInternalSchemaAndAvroSchemaForClusteringAndCompaction(HoodieTableMetaClient metaClient, String compactionAndClusteringInstant) {
     // try to load internalSchema to support Schema Evolution
     HoodieTimeline timelineBeforeCurrentCompaction = metaClient.getCommitsAndCompactionTimeline().findInstantsBefore(compactionAndClusteringInstant).filterCompletedInstants();
-    Option<HoodieInstant> lastInstantBeforeCurrentCompaction =  timelineBeforeCurrentCompaction.lastInstant();
+    Option<HoodieInstant> lastInstantBeforeCurrentCompaction = timelineBeforeCurrentCompaction.lastInstant();
     if (lastInstantBeforeCurrentCompaction.isPresent()) {
       // try to find internalSchema
-      byte[] data = timelineBeforeCurrentCompaction.getInstantDetails(lastInstantBeforeCurrentCompaction.get()).get();
       HoodieCommitMetadata metadata;
       try {
-        metadata = metaClient.getCommitMetadataSerDe().deserialize(lastInstantBeforeCurrentCompaction.get(), data, HoodieCommitMetadata.class);
+        metadata = timelineBeforeCurrentCompaction.readCommitMetadata(lastInstantBeforeCurrentCompaction.get());
       } catch (Exception e) {
         throw new HoodieException(String.format("cannot read metadata from commit: %s", lastInstantBeforeCurrentCompaction.get()), e);
       }
@@ -174,38 +175,41 @@ public class InternalSchemaCache {
    * if we cannot parser internalSchema in step2  (eg: schema evolution is not enabled when we create hoodie table, however after some inserts we enable schema evolution)
    * try to convert table schema to internalSchema.
    *
-   * @param versionId    the internalSchema version to be search.
-   * @param tablePath    table path
-   * @param storage      {@link HoodieStorage} instance.
-   * @param validCommits current validate commits, use to make up the commit file path/verify the validity of the history schema files
-   * @param fileNameParser InstantFileNameParser
-   * @param commitMetadataSerDe CommitMetadataSerDe
-   * @param instantGenerator InstantGenerator
+   * @param versionId           the internalSchema version to be search.
+   * @param tablePath           table path
+   * @param storage             {@link HoodieStorage} instance.
+   * @param validCommits        current validate commits, use to make up the commit file path/verify the validity of the history schema files
+   * @param timelineLayout      {@link TimelineLayout} instance, used to get {@link InstantFileNameParser}/{@link CommitMetadataSerDe}/{@link InstantGenerator}/{@link TimelinePathProvider} instance.
+   * @param tableConfig         {@link HoodieTableConfig} instance, used to get the timeline path.
    * @return a internalSchema.
    */
   public static InternalSchema getInternalSchemaByVersionId(long versionId, String tablePath, HoodieStorage storage, String validCommits,
-                                                            InstantFileNameParser fileNameParser, CommitMetadataSerDe commitMetadataSerDe, InstantGenerator instantGenerator) {
+                                                            TimelineLayout timelineLayout, HoodieTableConfig tableConfig) {
+    InstantFileNameParser fileNameParser = timelineLayout.getInstantFileNameParser();
+    CommitMetadataSerDe commitMetadataSerDe = timelineLayout.getCommitMetadataSerDe();
+    InstantGenerator instantGenerator = timelineLayout.getInstantGenerator();
+    TimelinePathProvider timelinePathProvider = timelineLayout.getTimelinePathProvider();
+    StoragePath timelinePath = timelinePathProvider.getTimelinePath(tableConfig, new StoragePath(tablePath));
+
     String avroSchema = "";
     Set<String> commitSet = Arrays.stream(validCommits.split(",")).collect(Collectors.toSet());
     List<String> validateCommitList =
         commitSet.stream().map(fileNameParser::extractTimestamp).collect(Collectors.toList());
 
-    StoragePath hoodieMetaPath = new StoragePath(tablePath, HoodieTableMetaClient.METAFOLDER_NAME);
     //step1:
     StoragePath candidateCommitFile = commitSet.stream()
         .filter(fileName -> fileNameParser.extractTimestamp(fileName).equals(versionId + ""))
-        .findFirst().map(f -> new StoragePath(hoodieMetaPath, f)).orElse(null);
+        .findFirst().map(f -> new StoragePath(timelinePath, f)).orElse(null);
     if (candidateCommitFile != null) {
       try {
-        byte[] data;
+        HoodieCommitMetadata metadata;
         try (InputStream is = storage.open(candidateCommitFile)) {
-          data = FileIOUtils.readAsByteArray(is);
+          metadata = commitMetadataSerDe.deserialize(instantGenerator.createNewInstant(
+                  new StoragePathInfo(candidateCommitFile, -1, false, (short) 0, 0L, 0L)),
+              is, () -> false, HoodieCommitMetadata.class);
         } catch (IOException e) {
           throw e;
         }
-        HoodieCommitMetadata metadata = commitMetadataSerDe.deserialize(instantGenerator.createNewInstant(
-            new StoragePathInfo(candidateCommitFile, -1, false, (short)0, 0L, 0L)),
-            data, HoodieCommitMetadata.class);
         String latestInternalSchemaStr = metadata.getMetadata(SerDeHelper.LATEST_SCHEMA);
         avroSchema = metadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY);
         if (latestInternalSchemaStr != null) {
@@ -234,12 +238,16 @@ public class InternalSchemaCache {
         : fileSchema;
   }
 
+  public static InternalSchema getInternalSchemaByVersionId(long versionId, String tablePath, HoodieStorage storage, String validCommits, TimelineLayout timelineLayout) {
+    return getInternalSchemaByVersionId(versionId, tablePath, storage, validCommits, timelineLayout, HoodieTableConfig.loadFromHoodieProps(storage, tablePath));
+  }
+
   public static InternalSchema getInternalSchemaByVersionId(long versionId, HoodieTableMetaClient metaClient) {
     InstantFileNameGenerator factory = metaClient.getInstantFileNameGenerator();
     String validCommitLists = metaClient
         .getCommitsAndCompactionTimeline().filterCompletedInstants().getInstantsAsStream().map(factory::getFileName).collect(Collectors.joining(","));
     return getInternalSchemaByVersionId(versionId, metaClient.getBasePath().toString(), metaClient.getStorage(),
-        validCommitLists, metaClient.getInstantFileNameParser(), metaClient.getCommitMetadataSerDe(), metaClient.getInstantGenerator());
+        validCommitLists, metaClient.getTimelineLayout(), metaClient.getTableConfig());
   }
 }
 

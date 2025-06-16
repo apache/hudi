@@ -21,12 +21,10 @@ package org.apache.hudi.table.action.index;
 
 import org.apache.hudi.avro.model.HoodieIndexPartitionInfo;
 import org.apache.hudi.avro.model.HoodieIndexPlan;
-import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.InstantGenerator;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -39,7 +37,6 @@ import org.apache.hudi.table.action.BaseActionExecutor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
@@ -74,8 +71,6 @@ public class ScheduleIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<
 
   private final List<String> partitionPaths;
 
-  private final TransactionManager txnManager;
-
   public ScheduleIndexActionExecutor(HoodieEngineContext context,
                                      HoodieWriteConfig config,
                                      HoodieTable<T, I, K, O> table,
@@ -85,7 +80,6 @@ public class ScheduleIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<
     super(context, config, table, instantTime);
     this.partitionIndexTypes = partitionIndexTypes;
     this.partitionPaths = partitionPaths;
-    this.txnManager = new TransactionManager(config, table.getStorage());
   }
 
   @Override
@@ -109,7 +103,6 @@ public class ScheduleIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<
         .filter(p -> requestedPartitions.contains(p.getPartitionPath())).collect(Collectors.toList());
     final HoodieInstant indexInstant = instantGenerator.getIndexRequestedInstant(instantTime);
     try {
-      this.txnManager.beginTransaction(Option.of(indexInstant), Option.empty());
       // get last completed instant
       Option<HoodieInstant> indexUptoInstant = table.getActiveTimeline().getContiguousCompletedWriteTimeline().lastInstant();
       if (indexUptoInstant.isPresent()) {
@@ -119,16 +112,13 @@ public class ScheduleIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<
             .collect(Collectors.toList());
         HoodieIndexPlan indexPlan = new HoodieIndexPlan(LATEST_INDEX_PLAN_VERSION, indexPartitionInfos);
         // update data timeline with requested instant
-        table.getActiveTimeline().saveToPendingIndexAction(indexInstant, TimelineMetadataUtils.serializeIndexPlan(indexPlan));
+        table.getActiveTimeline().saveToPendingIndexAction(indexInstant, indexPlan);
         return Option.of(indexPlan);
       }
-    } catch (IOException e) {
+    } catch (HoodieIOException e) {
       LOG.error("Could not initialize file groups", e);
       // abort gracefully
       abort(indexInstant);
-      throw new HoodieIOException(e.getMessage(), e);
-    } finally {
-      this.txnManager.endTransaction(Option.of(indexInstant));
     }
 
     return Option.empty();

@@ -81,9 +81,7 @@ public class HiveSchemaUtil {
     } catch (IOException e) {
       throw new HoodieHiveSyncException("Failed to convert parquet schema to hive schema", e);
     }
-    if (LOG.isDebugEnabled()) {
-      LOG.debug("Getting schema difference for " + tableSchema + "\r\n\r\n" + newTableSchema);
-    }
+    LOG.debug("Getting schema difference for {} \r\n\r\n{}", tableSchema, newTableSchema);
 
     SchemaDifference.Builder schemaDiffBuilder = SchemaDifference.newBuilder(storageSchema, tableSchema);
     Set<String> tableColumns = new HashSet<>();
@@ -123,11 +121,9 @@ public class HiveSchemaUtil {
         schemaDiffBuilder.addTableColumn(entry.getKey(), entry.getValue());
       }
     }
-    if (LOG.isDebugEnabled()) {
-      LOG.debug("Difference between schemas: " + schemaDiffBuilder.build().toString());
-    }
-
-    return schemaDiffBuilder.build();
+    SchemaDifference result = schemaDiffBuilder.build();
+    LOG.debug("Difference between schemas: {}", result);
+    return result;
   }
 
   private static String getExpectedType(Map<String, String> newTableSchema, String fieldName) {
@@ -446,8 +442,8 @@ public class HiveSchemaUtil {
     List<String> partitionFields = new ArrayList<>();
     for (String partitionKey : config.getSplitStrings(META_SYNC_PARTITION_FIELDS)) {
       String partitionKeyWithTicks = tickSurround(partitionKey);
-      partitionFields.add(new StringBuilder().append(partitionKeyWithTicks).append(" ")
-          .append(getPartitionKeyType(hiveSchema, partitionKeyWithTicks)).toString());
+      partitionFields.add(partitionKeyWithTicks + " "
+          + getPartitionKeyType(hiveSchema, partitionKeyWithTicks));
     }
 
     String partitionsStr = String.join(",", partitionFields);

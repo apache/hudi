@@ -24,7 +24,6 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.exception.HoodieException;
 
-import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -50,7 +49,7 @@ class TestHoodieRecordUtils {
   @Test
   void loadPayload() {
     String payloadClassName = DefaultHoodieRecordPayload.class.getName();
-    HoodieRecordPayload payload = HoodieRecordUtils.loadPayload(payloadClassName, new Object[] {null, 0}, GenericRecord.class, Comparable.class);
+    HoodieRecordPayload payload = HoodieRecordUtils.loadPayload(payloadClassName, null, 0);
     assertEquals(payload.getClass().getName(), payloadClassName);
   }
 }

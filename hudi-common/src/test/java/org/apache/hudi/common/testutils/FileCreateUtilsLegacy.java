@@ -34,10 +34,12 @@ import org.apache.hudi.common.table.timeline.CommitMetadataSerDe;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.io.RandomAccessFile;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -52,11 +54,7 @@ import java.util.List;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
-import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCompactionPlan;
-import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeRequestedReplaceMetadata;
-import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeRollbackPlan;
-import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.COMMIT_METADATA_SER_DE;
 
 /**
  * Utils for creating dummy Hudi files in testing.
@@ -83,11 +81,17 @@ public class FileCreateUtilsLegacy extends FileCreateUtilsBase {
   }
 
   private static void createMetaFile(String basePath, String instantTime, String suffix) throws IOException {
-    createMetaFile(basePath, instantTime, suffix, getUTF8Bytes(""));
+    createMetaFile(basePath, instantTime, suffix, Option.empty());
   }
 
-  private static void createMetaFile(String basePath, String instantTime, String suffix, byte[] content) throws IOException {
-    createMetaFile(getTimelinePath(new StoragePath(basePath)).toUri().getPath(), instantTime, InProcessTimeGenerator::createNewInstantTime, suffix, content);
+  private static <T> void createMetaFile(String basePath, String instantTime, String suffix, Option<T> metadata) throws IOException {
+    createMetaFile(getTimelinePath(new StoragePath(basePath)).toUri().getPath(), instantTime,
+        InProcessTimeGenerator::createNewInstantTime, suffix, metadata.flatMap(COMMIT_METADATA_SER_DE::getInstantWriter));
+  }
+
+  private static void createMetaFile(String basePath, String instantTime, String suffix, HoodieInstantWriter writer) throws IOException {
+    createMetaFile(getTimelinePath(new StoragePath(basePath)).toUri().getPath(), instantTime,
+        InProcessTimeGenerator::createNewInstantTime, suffix, Option.of(writer));
   }
 
   public static void createCommit(String basePath, String instantTime) throws IOException {
@@ -106,10 +110,9 @@ public class FileCreateUtilsLegacy extends FileCreateUtilsBase {
     if (metadata.isPresent()) {
       HoodieCommitMetadata commitMetadata = metadata.get();
       createMetaFile(timelinePath, instantTime, completionTimeSupplier, HoodieTimeline.COMMIT_EXTENSION,
-          serializeCommitMetadata(commitMetadataSerDe, commitMetadata).get());
+          COMMIT_METADATA_SER_DE.getInstantWriter(commitMetadata));
     } else {
-      createMetaFile(timelinePath, instantTime, completionTimeSupplier, HoodieTimeline.COMMIT_EXTENSION,
-          getUTF8Bytes(""));
+      createMetaFile(timelinePath, instantTime, completionTimeSupplier, HoodieTimeline.COMMIT_EXTENSION, Option.empty());
     }
   }
 
@@ -124,8 +127,7 @@ public class FileCreateUtilsLegacy extends FileCreateUtilsBase {
 
   public static void createDeltaCommit(CommitMetadataSerDe commitMetadataSerDe, String basePath, String instantTime,
                                        HoodieCommitMetadata metadata) throws IOException {
-    createMetaFile(basePath, instantTime, HoodieTimeline.DELTA_COMMIT_EXTENSION,
-        serializeCommitMetadata(commitMetadataSerDe, metadata).get());
+    createMetaFile(basePath, instantTime, HoodieTimeline.DELTA_COMMIT_EXTENSION, Option.of(metadata));
   }
 
   public static void createDeltaCommit(String basePath, String instantTime) throws IOException {
@@ -149,30 +151,26 @@ public class FileCreateUtilsLegacy extends FileCreateUtilsBase {
 
   public static void createReplaceCommit(CommitMetadataSerDe commitMetadataSerDe, String basePath,
                                          String instantTime, HoodieReplaceCommitMetadata metadata) throws IOException {
-    createMetaFile(basePath, instantTime, HoodieTimeline.REPLACE_COMMIT_EXTENSION,
-        serializeCommitMetadata(commitMetadataSerDe, metadata).get());
+    createMetaFile(basePath, instantTime, HoodieTimeline.REPLACE_COMMIT_EXTENSION, Option.of(metadata));
   }
 
   public static void createRequestedClusterCommit(String basePath, String instantTime,
-                                                  HoodieRequestedReplaceMetadata requestedReplaceMetadata)
-      throws IOException {
-    createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_CLUSTERING_COMMIT_EXTENSION,
-        serializeRequestedReplaceMetadata(requestedReplaceMetadata).get());
+                                                  HoodieRequestedReplaceMetadata requestedReplaceMetadata) throws IOException {
+    createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_CLUSTERING_COMMIT_EXTENSION, Option.of(requestedReplaceMetadata));
   }
 
   public static void createRequestedCompactionCommit(String basePath, String instantTime,
-                                                     HoodieCompactionPlan requestedCompactionPlan)
-      throws IOException {
-    createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_COMPACTION_EXTENSION,
-        serializeCompactionPlan(requestedCompactionPlan).get());
+                                                     HoodieCompactionPlan requestedCompactionPlan) throws IOException {
+    createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_COMPACTION_EXTENSION, Option.of(requestedCompactionPlan));
   }
 
   public static void createRequestedRollbackFile(String basePath, String instantTime, HoodieRollbackPlan plan) throws IOException {
-    createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_ROLLBACK_EXTENSION, serializeRollbackPlan(plan).get());
+    createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_ROLLBACK_EXTENSION, Option.of(plan));
   }
 
   public static void createRequestedRollbackFile(String basePath, String instantTime, byte[] content) throws IOException {
-    createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_ROLLBACK_EXTENSION, content);
+    createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_ROLLBACK_EXTENSION,
+        HoodieInstantWriter.convertByteArrayToWriter(content));
   }
 
   public static void createInflightCompaction(String basePath, String instantTime) throws IOException {
@@ -253,18 +251,20 @@ public class FileCreateUtilsLegacy extends FileCreateUtilsBase {
     return markerFilePath.toAbsolutePath().toString();
   }
 
-  private static void createMetaFile(String timelinePath, String instantTime, Supplier<String> completionTimeSupplier, String suffix, byte[] content) throws IOException {
+  private static void createMetaFile(String timelinePath, String instantTime, Supplier<String> completionTimeSupplier, String suffix,
+                                     Option<HoodieInstantWriter> writerOption) throws IOException {
     try {
       Path parentPath = Paths.get(new StoragePath(timelinePath).makeQualified(new URI("file:///")).toUri());
-
       Files.createDirectories(parentPath);
       if (suffix.contains(HoodieTimeline.INFLIGHT_EXTENSION) || suffix.contains(HoodieTimeline.REQUESTED_EXTENSION)) {
         Path metaFilePath = parentPath.resolve(instantTime + suffix);
         if (Files.notExists(metaFilePath)) {
-          if (content.length == 0) {
+          if (writerOption.isEmpty()) {
             Files.createFile(metaFilePath);
           } else {
-            Files.write(metaFilePath, content);
+            try (OutputStream outputStream = Files.newOutputStream(metaFilePath)) {
+              writerOption.get().writeToStream(outputStream);
+            }
           }
         }
       } else {
@@ -274,10 +274,12 @@ public class FileCreateUtilsLegacy extends FileCreateUtilsBase {
             // doesn't contains completion time
             String instantTimeAndCompletionTime = instantTime + "_" + completionTimeSupplier.get();
             Path metaFilePath = parentPath.resolve(instantTimeAndCompletionTime + suffix);
-            if (content.length == 0) {
+            if (writerOption.isEmpty()) {
               Files.createFile(metaFilePath);
             } else {
-              Files.write(metaFilePath, content);
+              try (OutputStream outputStream = Files.newOutputStream(metaFilePath)) {
+                writerOption.get().writeToStream(outputStream);
+              }
             }
           }
         }

@@ -168,7 +168,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
             .withPartitionStatsIndexParallelism(1)
             .build(),
         metaClient,
-        Option.of(HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS),
+        Lazy.eagerly(Option.of(HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS)),
         Option.empty());
     // Validate the result.
     validatePartitionStats(result, instant1, instant2);
@@ -262,6 +262,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
         metaClient.getTableConfig().setValue(HoodieTableConfig.PARTITION_FIELDS.key(), "partition_path");
         List<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataLogFile = HoodieTableMetadataUtil.getLogFileColumnRangeMetadata(
             storagePath2.toString(),
+            p,
             metaClient,
             columnsToIndex,
             Option.of(HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS),
@@ -283,7 +284,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
             .withPartitionStatsIndexParallelism(1)
             .build(),
         metaClient,
-        Option.of(HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS),
+        Lazy.eagerly(Option.of(HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS)),
         Option.empty());
     // Validate the result.
     validatePartitionStats(result, instant1, instant2, 6);
@@ -652,6 +653,27 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
         .name("dateField").type(dateFieldSchema).noDefault()
         .endRecord();
     assertTrue(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("dateField").schema(), Option.empty()));
+
+    // Test for logical decimal type with allowed precision and scale
+    schema = Schema.create(Schema.Type.BYTES);
+    LogicalTypes.Decimal decimalType = LogicalTypes.decimal(30, 15);
+    decimalType.addToSchema(schema);
+    // Expect the column to be supported.
+    assertTrue(HoodieTableMetadataUtil.isColumnTypeSupported(schema, Option.of(HoodieRecord.HoodieRecordType.AVRO)));
+
+    // Test for logical decimal type with precision and scale exceeding the limit
+    schema = Schema.create(Schema.Type.BYTES);
+    decimalType = LogicalTypes.decimal(35, 20);
+    decimalType.addToSchema(schema);
+    // Expect the column to be unsupported.
+    assertFalse(HoodieTableMetadataUtil.isColumnTypeSupported(schema, Option.of(HoodieRecord.HoodieRecordType.AVRO)));
+
+    // Test for logical decimal type with precision exceeding limit after upscaling
+    schema = Schema.create(Schema.Type.BYTES);
+    decimalType = LogicalTypes.decimal(28, 10);
+    decimalType.addToSchema(schema);
+    // Expect the column to be unsupported.
+    assertFalse(HoodieTableMetadataUtil.isColumnTypeSupported(schema, Option.of(HoodieRecord.HoodieRecordType.AVRO)));
   }
 
   @Test

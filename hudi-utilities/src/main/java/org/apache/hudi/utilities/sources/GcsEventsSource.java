@@ -229,10 +229,8 @@ public class GcsEventsSource extends RowSource {
   }
 
   private void logDetails(MetadataMessage message, String msgStr) {
-    if (LOG.isDebugEnabled()) {
-      LOG.debug("eventType: {}, objectId: {}", message.getEventType(), message.getObjectId());
-      LOG.debug("msg: " + msgStr);
-    }
+    LOG.debug("eventType: {}, objectId: {}", message.getEventType(), message.getObjectId());
+    LOG.debug("msg: {}", msgStr);
   }
 
 }

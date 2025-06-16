@@ -51,7 +51,7 @@ public class HoodieStorageConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> PARQUET_PAGE_SIZE = ConfigProperty
       .key("hoodie.parquet.page.size")
-      .defaultValue(String.valueOf(1 * 1024 * 1024))
+      .defaultValue(String.valueOf(1024 * 1024))
       .markAdvanced()
       .withDocumentation("Parquet page size in bytes. Page is the unit of read within a parquet file. "
           + "Within a block, pages are compressed separately.");
@@ -160,6 +160,14 @@ public class HoodieStorageConfig extends HoodieConfig {
       .withDocumentation("Control whether to write bloom filter or not. Default true. "
           + "We can set to false in non bloom index cases for CPU resource saving.");
 
+  public static final ConfigProperty<Boolean> WRITE_UTC_TIMEZONE = ConfigProperty
+      .key("hoodie.parquet.write.utc-timezone.enabled")
+      .defaultValue(true)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Use UTC timezone or local timezone to the conversion between epoch"
+              + " time and LocalDateTime. Default value is utc timezone for forward compatibility.");
+
   public static final ConfigProperty<String> HFILE_COMPRESSION_ALGORITHM_NAME = ConfigProperty
       .key("hoodie.hfile.compression.algorithm")
       .defaultValue("GZ")
@@ -178,7 +186,8 @@ public class HoodieStorageConfig extends HoodieConfig {
       .defaultValue(String.valueOf(0.35))
       .markAdvanced()
       .withDocumentation("Expected additional compression as records move from log files to parquet. Used for merge_on_read "
-          + "table to send inserts into log files & control the size of compacted parquet file.");
+          + "table to send inserts into log files & control the size of compacted parquet file."
+          + "When encoding log blocks in parquet format, increase this value for a more accurate estimation");
 
   // Configs that control the bloom filter that is written to the file footer
   public static final ConfigProperty<String> BLOOM_FILTER_TYPE = ConfigProperty
@@ -236,6 +245,14 @@ public class HoodieStorageConfig extends HoodieConfig {
       .withDocumentation("Provided write support class should extend HoodieRowParquetWriteSupport class "
           + "and it is loaded at runtime. This is only required when trying to "
           + "override the existing write context when `hoodie.datasource.write.row.writer.enable=true`.");
+
+  public static final ConfigProperty<String> HOODIE_PARQUET_FLINK_ROW_DATA_WRITE_SUPPORT_CLASS = ConfigProperty
+      .key("hoodie.parquet.flink.rowdata.write.support.class")
+      .defaultValue("org.apache.hudi.io.storage.row.HoodieRowDataParquetWriteSupport")
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Provided write support class should extend HoodieRowDataParquetWriteSupport class "
+          + "and it is loaded at runtime. This is only required when trying to override the existing write support.");
 
   public static final ConfigProperty<String> HOODIE_STORAGE_CLASS = ConfigProperty
       .key("hoodie.storage.class")
@@ -368,6 +385,10 @@ public class HoodieStorageConfig extends HoodieConfig {
     super();
   }
 
+  public String getBloomFilterType() {
+    return getString(BLOOM_FILTER_TYPE);
+  }
+
   public static HoodieStorageConfig.Builder newBuilder() {
     return new Builder();
   }
@@ -490,6 +511,16 @@ public class HoodieStorageConfig extends HoodieConfig {
 
     public Builder withAvroWriteSupport(String avroWriteSupportClassName) {
       storageConfig.setValue(HOODIE_AVRO_WRITE_SUPPORT_CLASS, avroWriteSupportClassName);
+      return this;
+    }
+
+    public Builder withRowDataWriteSupport(String rowDataWriteSupportClassName) {
+      storageConfig.setValue(HOODIE_PARQUET_FLINK_ROW_DATA_WRITE_SUPPORT_CLASS, rowDataWriteSupportClassName);
+      return this;
+    }
+
+    public Builder withWriteUtcTimezone(boolean writeUtcTimezone) {
+      storageConfig.setValue(WRITE_UTC_TIMEZONE, String.valueOf(writeUtcTimezone));
       return this;
     }
 

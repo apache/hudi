@@ -55,7 +55,7 @@ import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -123,7 +123,7 @@ public class KafkaConnectUtils {
     props.put("bootstrap.servers", bootstrapServers);
     try {
       AdminClient client = AdminClient.create(props);
-      DescribeTopicsResult result = client.describeTopics(Arrays.asList(topicName));
+      DescribeTopicsResult result = client.describeTopics(Collections.singletonList(topicName));
       Map<String, KafkaFuture<TopicDescription>> values = result.values();
       KafkaFuture<TopicDescription> topicDescription = values.get(topicName);
       int numPartitions = topicDescription.get().partitions().size();
@@ -207,8 +207,7 @@ public class KafkaConnectUtils {
     Option<HoodieInstant> latestInstant = timeline.lastInstant();
     if (latestInstant.isPresent()) {
       try {
-        byte[] data = timeline.getInstantDetails(latestInstant.get()).get();
-        return Option.of(metaClient.getCommitMetadataSerDe().deserialize(latestInstant.get(), data, HoodieCommitMetadata.class));
+        return Option.of(timeline.readCommitMetadata(latestInstant.get()));
       } catch (Exception e) {
         throw new HoodieException("Failed to read schema from commit metadata", e);
       }

@@ -21,6 +21,7 @@ package org.apache.hudi.sink.utils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
+import org.apache.hudi.sink.common.AbstractWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 
 import org.apache.flink.runtime.operators.coordination.MockOperatorCoordinatorContext;
@@ -44,14 +45,26 @@ public interface TestFunctionWrapper<I> {
   void invoke(I record) throws Exception;
 
   /**
-   * Returns the event buffer sent by the write tasks.
+   * Returns the latest event buffer sent by the write tasks.
    */
   WriteMetadataEvent[] getEventBuffer();
 
   /**
-   * Returns the next event.
+   * Returns the event buffer sent by the write tasks with given checkpoint ID.
+   */
+  WriteMetadataEvent[] getEventBuffer(long checkpointId);
+
+  /**
+   * Returns the next event sent to Coordinator.
    */
   OperatorEvent getNextEvent();
+
+  /**
+   * Returns the next event sent to subtask.
+   */
+  default OperatorEvent getNextSubTaskEvent() {
+    throw new UnsupportedOperationException();
+  }
 
   /**
    * Snapshot all the functions in the wrapper.
@@ -104,6 +117,11 @@ public interface TestFunctionWrapper<I> {
   StreamWriteOperatorCoordinator getCoordinator();
 
   /**
+   * Returns the write function.
+   */
+  AbstractWriteFunction getWriteFunction();
+
+  /**
    * Returns the data buffer of the write task.
    */
   default Map<String, List<HoodieRecord>> getDataBuffer() {
@@ -142,13 +160,6 @@ public interface TestFunctionWrapper<I> {
    * Returns whether the bootstrap function already bootstrapped.
    */
   default boolean isAlreadyBootstrap() throws Exception {
-    throw new UnsupportedOperationException();
-  }
-
-  /**
-   * Returns whether the write task is confirming.
-   */
-  default boolean isConforming() {
     throw new UnsupportedOperationException();
   }
 

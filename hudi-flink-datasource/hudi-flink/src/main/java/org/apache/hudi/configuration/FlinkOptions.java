@@ -19,6 +19,7 @@
 package org.apache.hudi.configuration;
 
 import org.apache.hudi.client.clustering.plan.strategy.FlinkSizeBasedClusteringPlanStrategy;
+import org.apache.hudi.client.model.EventTimeFlinkRecordMerger;
 import org.apache.hudi.common.config.AdvancedConfig;
 import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
@@ -26,7 +27,6 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
-import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieSyncTableStrategy;
@@ -132,11 +132,20 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<String> RECORD_MERGER_IMPLS = ConfigOptions
       .key("record.merger.impls")
       .stringType()
-      .defaultValue(HoodieAvroRecordMerger.class.getName())
+      .defaultValue(EventTimeFlinkRecordMerger.class.getName())
       .withFallbackKeys(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key())
       .withDescription("List of HoodieMerger implementations constituting Hudi's merging strategy -- based on the engine used. "
           + "These merger impls will filter by record.merger.strategy. "
           + "Hudi will pick most efficient implementation to perform merging/combining of the records (during update, reading MOR table, etc)");
+
+  @AdvancedConfig
+  public static final ConfigOption<String> RECORD_MERGE_MODE = ConfigOptions
+      .key(HoodieWriteConfig.RECORD_MERGE_MODE.key())
+      .stringType()
+      .noDefaultValue()
+      .withDescription("Using EVENT_TIME_ORDERING to merge records by ordering value,"
+          + "using COMMIT_TIME_ORDERING to merge records by commit time,"
+          + "and using CUSTOM to merge records by the user specified logic.");
 
   @AdvancedConfig
   public static final ConfigOption<String> RECORD_MERGER_STRATEGY_ID = ConfigOptions
@@ -153,6 +162,13 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(DEFAULT_PARTITION_PATH) // keep sync with hoodie style
       .withDescription("The default partition name in case the dynamic partition"
           + " column value is null/empty string");
+
+  @AdvancedConfig
+  public static final ConfigOption<Boolean> WRITE_EXTRA_METADATA_ENABLED = ConfigOptions
+      .key("write.extra.metadata.enabled")
+      .booleanType()
+      .defaultValue(false) // keep sync with hoodie style
+      .withDescription("If enabled, the checkpoint Id will also be written to hudi metadata.");
 
   // ------------------------------------------------------------------------
   //  Changelog Capture Options
@@ -474,6 +490,21 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(4) // default 4 buckets per partition
       .withDescription("Hudi bucket number per partition. Only affected if using Hudi bucket index.");
 
+  @AdvancedConfig
+  public static final ConfigOption<String> BUCKET_INDEX_PARTITION_RULE = ConfigOptions
+      .key(HoodieIndexConfig.BUCKET_INDEX_PARTITION_RULE_TYPE.key())
+      .stringType()
+      .defaultValue(HoodieIndexConfig.BUCKET_INDEX_PARTITION_RULE_TYPE.defaultValue())
+      .withDescription("Rule parser for expressions when using partition level bucket index, default regex.");
+
+  @AdvancedConfig
+  public static final ConfigOption<String> BUCKET_INDEX_PARTITION_EXPRESSIONS = ConfigOptions
+      .key(HoodieIndexConfig.BUCKET_INDEX_PARTITION_EXPRESSIONS.key())
+      .stringType()
+      .noDefaultValue()
+      .withDescription("Users can use this parameter to specify expression and the corresponding bucket "
+          + "numbers (separated by commas).Multiple rules are separated by semicolons like "
+          + "hoodie.bucket.index.partition.expressions=expression1,bucket-number1;expression2,bucket-number2");
   public static final ConfigOption<String> PARTITION_PATH_FIELD = ConfigOptions
       .key(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key())
       .stringType()
@@ -619,6 +650,13 @@ public class FlinkOptions extends HoodieConfig {
       .intType()
       .defaultValue(100) // default 100 MB
       .withDescription("Max memory in MB for merge, default 100MB");
+
+  @AdvancedConfig
+  public static final ConfigOption<Integer> WRITE_MEMORY_SEGMENT_PAGE_SIZE = ConfigOptions
+      .key("write.memory.segment.page.size")
+      .intType()
+      .defaultValue(32 * 1024) // default 32 KB
+      .withDescription("Page size for memory segment used for write buffer.");
 
   // this is only for internal use
   @AdvancedConfig

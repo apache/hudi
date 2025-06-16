@@ -27,6 +27,7 @@ import com.google.monitoring.v3.ListTimeSeriesRequest;
 import com.google.monitoring.v3.Point;
 import com.google.monitoring.v3.ProjectName;
 import com.google.monitoring.v3.TimeInterval;
+import com.google.monitoring.v3.TimeSeries;
 import com.google.protobuf.util.Timestamps;
 import com.google.pubsub.v1.AcknowledgeRequest;
 import com.google.pubsub.v1.PullRequest;
@@ -34,6 +35,7 @@ import com.google.pubsub.v1.PullResponse;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -45,7 +47,7 @@ public class PubsubQueueClient {
     return GrpcSubscriberStub.create(subscriberStubSettings);
   }
 
-  public PullResponse makePullRequest(SubscriberStub subscriber, String subscriptionName, int batchSize) throws IOException {
+  public PullResponse makePullRequest(SubscriberStub subscriber, String subscriptionName, int batchSize) {
     PullRequest pullRequest = PullRequest.newBuilder()
         .setMaxMessages(batchSize)
         .setSubscription(subscriptionName)
@@ -73,7 +75,11 @@ public class PubsubQueueClient {
                   .build())
               .build());
       // use the latest value from the window
-      List<Point> pointList = response.getPage().getValues().iterator().next().getPointsList();
+      Iterator<TimeSeries> values = response.getPage().getValues().iterator();
+      if (!values.hasNext()) {
+        return 0;
+      }
+      List<Point> pointList = values.next().getPointsList();
       return pointList.stream().findFirst().map(point -> point.getValue().getInt64Value()).orElse(Long.MAX_VALUE);
     }
   }

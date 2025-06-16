@@ -20,12 +20,14 @@ package org.apache.hudi.client.functional;
 
 import org.apache.hudi.client.HoodieJavaWriteClient;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.testutils.GenericRecordValidationTestUtils;
 import org.apache.hudi.testutils.HoodieJavaClientTestHarness;
 
@@ -44,8 +46,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieJavaClientOnMergeOnReadStorage extends HoodieJavaClientTestHarness {
 
-  private HoodieTestTable testTable;
-
   @BeforeEach
   public void setUpTestTable() {
     testTable = HoodieTestTable.of(metaClient);
@@ -54,7 +54,7 @@ public class TestHoodieJavaClientOnMergeOnReadStorage extends HoodieJavaClientTe
   @Test
   public void testReadingMORTableWithoutBaseFile() throws Exception {
     HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA,
-        HoodieIndex.IndexType.INMEMORY).withAutoCommit(true)
+        HoodieIndex.IndexType.INMEMORY)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(2).build())
         .build();
     HoodieJavaWriteClient client = getHoodieWriteClient(config);
@@ -64,6 +64,11 @@ public class TestHoodieJavaClientOnMergeOnReadStorage extends HoodieJavaClientTe
     String commitTime = client.createNewInstantTime();
     insertBatch(config, client, commitTime, "000", 100, HoodieJavaWriteClient::insert,
         false, false, 100, 100, 1, Option.empty(), INSTANT_GENERATOR);
+    // check that only log files exist
+    try (SyncableFileSystemView fileSystemView = getFileSystemView(metaClient.reloadActiveTimeline())) {
+      Arrays.stream(dataGen.getPartitionPaths())
+          .forEach(partition -> fileSystemView.getLatestFileSlices(partition).forEach(fileSlice -> assertTrue(fileSlice.getBaseFile().isEmpty())));
+    }
 
     // Update
     String commitTimeBetweenPrevAndNew = commitTime;
@@ -87,7 +92,7 @@ public class TestHoodieJavaClientOnMergeOnReadStorage extends HoodieJavaClientTe
   @Test
   public void testCompactionOnMORTable() throws Exception {
     HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA,
-        HoodieIndex.IndexType.INMEMORY).withAutoCommit(true)
+        HoodieIndex.IndexType.INMEMORY)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(2).build())
         .build();
     HoodieJavaWriteClient client = getHoodieWriteClient(config);
@@ -108,8 +113,9 @@ public class TestHoodieJavaClientOnMergeOnReadStorage extends HoodieJavaClientTe
     // Schedule and execute compaction.
     Option<String> timeStamp = client.scheduleCompaction(Option.empty());
     assertTrue(timeStamp.isPresent());
-    client.compact(timeStamp.get());
-
+    HoodieWriteMetadata writeMetadata = client.compact(timeStamp.get());
+    client.commitCompaction(timeStamp.get(), writeMetadata, Option.empty());
+    assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(timeStamp.get()));
     // Verify all the records.
     metaClient.reloadActiveTimeline();
     assertDataInMORTable(config, commitTime, timeStamp.get(), storageConf, Arrays.asList(dataGen.getPartitionPaths()));
@@ -118,7 +124,7 @@ public class TestHoodieJavaClientOnMergeOnReadStorage extends HoodieJavaClientTe
   @Test
   public void testAsyncCompactionOnMORTable() throws Exception {
     HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA,
-        HoodieIndex.IndexType.INMEMORY).withAutoCommit(true)
+        HoodieIndex.IndexType.INMEMORY)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(2).build())
         .build();
     HoodieJavaWriteClient client = getHoodieWriteClient(config);
@@ -150,7 +156,10 @@ public class TestHoodieJavaClientOnMergeOnReadStorage extends HoodieJavaClientTe
     assertDataInMORTable(config, commitTime, timeStamp.get(), storageConf, Arrays.asList(dataGen.getPartitionPaths()));
 
     // now run compaction
-    client.compact(timeStamp.get());
+    HoodieWriteMetadata writeMetadata = client.compact(timeStamp.get());
+    client.commitCompaction(timeStamp.get(), writeMetadata, Option.empty());
+    assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(timeStamp.get()));
+
     // Verify all the records.
     metaClient.reloadActiveTimeline();
     assertDataInMORTable(config, commitTime, timeStamp.get(), storageConf, Arrays.asList(dataGen.getPartitionPaths()));

@@ -189,6 +189,7 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
 
   /**
    * Fetch all files for given partition paths.
+   *
    * NOTE: Absolute partition paths are expected here
    */
   Map<String, List<StoragePathInfo>> getAllFilesInPartitions(Collection<String> partitionPaths)
@@ -253,17 +254,29 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
   Map<Pair<String, String>, HoodieMetadataColumnStats> getColumnStats(final List<Pair<String, String>> partitionNameFileNameList, final String columnName)
       throws HoodieMetadataException;
 
+
+  /**
+   * Get column stats for files from the metadata table index.
+   *
+   * @param partitionNameFileNameList - List of partition and file name pair for which bloom filters need to be retrieved.
+   * @param columnNames               - List of column name for which stats are needed.
+   * @return Map of partition and file name pair to a list of column stats.
+   * @throws HoodieMetadataException
+   */
+  Map<Pair<String, String>, List<HoodieMetadataColumnStats>> getColumnStats(List<Pair<String, String>> partitionNameFileNameList, List<String> columnNames)
+      throws HoodieMetadataException;
+
   /**
    * Returns the location of record keys which are found in the record index.
-   * Records that are not found are ignored and won't be part of map object that is returned.
+   * Records that are not found are ignored and wont be part of map object that is returned.
    */
-  Map<String, List<HoodieRecordGlobalLocation>> readRecordIndex(List<String> recordKeys);
+  Map<String, HoodieRecordGlobalLocation> readRecordIndex(List<String> recordKeys);
 
   /**
    * Returns the location of records which the provided secondary keys maps to.
    * Records that are not found are ignored and won't be part of map object that is returned.
    */
-  Map<String, List<HoodieRecordGlobalLocation>> readSecondaryIndex(List<String> secondaryKeys, String partitionName);
+  Map<String, HoodieRecordGlobalLocation> readSecondaryIndex(List<String> secondaryKeys, String partitionName);
 
   /**
    * Fetch records by key prefixes. Key prefix passed is expected to match the same prefix as stored in Metadata table partitions. For eg, in case of col stats partition,
@@ -276,15 +289,6 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
   HoodieData<HoodieRecord<HoodieMetadataPayload>> getRecordsByKeyPrefixes(List<String> keyPrefixes,
                                                                           String partitionName,
                                                                           boolean shouldLoadInMemory);
-
-  /**
-   * Fetch records for given keys. A key could have multiple records associated with it. This method returns all the records for given keys.
-   *
-   * @param keys          list of key for which interested records are looked up for.
-   * @param partitionName partition name in metadata table where the records are looked up for.
-   * @return Map of key to {@link List} of {@link HoodieRecord}s with records matching the passed in keys.
-   */
-  Map<String, List<HoodieRecord<HoodieMetadataPayload>>> getAllRecordsByKeys(List<String> keys, String partitionName);
 
   /**
    * Get the instant time to which the metadata is synced w.r.t data timeline.

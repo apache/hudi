@@ -66,6 +66,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
@@ -105,24 +106,25 @@ public class TestClientRollback extends HoodieClientTestBase {
        * Write 1 (only inserts)
        */
       String newCommitTime = "001";
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
       JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
 
-      List<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime).collect();
-      assertNoWriteErrors(statuses);
+      List<WriteStatus> statusList = client.upsert(writeRecords, newCommitTime).collect();
+      client.commit(newCommitTime, jsc.parallelize(statusList), Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+      assertNoWriteErrors(statusList);
 
       /**
        * Write 2 (updates)
        */
       newCommitTime = "002";
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
       records = dataGen.generateUpdates(newCommitTime, records);
-      statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
-      // Verify there are no errors
-      assertNoWriteErrors(statuses);
+      statusList = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
+      client.commit(newCommitTime, jsc.parallelize(statusList), Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+      assertNoWriteErrors(statusList);
 
       client.savepoint("hoodie-unit-test", "test");
 
@@ -130,12 +132,12 @@ public class TestClientRollback extends HoodieClientTestBase {
        * Write 3 (updates)
        */
       newCommitTime = "003";
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
       records = dataGen.generateUpdates(newCommitTime, records);
-      statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
-      // Verify there are no errors
-      assertNoWriteErrors(statuses);
+      statusList = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
+      client.commit(newCommitTime, jsc.parallelize(statusList), Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+
       HoodieWriteConfig config = getConfig();
       List<String> partitionPaths =
           FSUtils.getAllPartitionPaths(context, storage, config.getMetadataConfig(), cfg.getBasePath());
@@ -157,12 +159,11 @@ public class TestClientRollback extends HoodieClientTestBase {
        * Write 4 (updates)
        */
       newCommitTime = "004";
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
       records = dataGen.generateUpdates(newCommitTime, records);
-      statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
-      // Verify there are no errors
-      assertNoWriteErrors(statuses);
+      statusList = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
+      client.commit(newCommitTime, jsc.parallelize(statusList), Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
 
       metaClient = HoodieTableMetaClient.reload(metaClient);
       table = HoodieSparkTable.create(getConfig(), context, metaClient);
@@ -221,10 +222,11 @@ public class TestClientRollback extends HoodieClientTestBase {
   }
 
   private List<HoodieRecord> updateRecords(SparkRDDWriteClient client, List<HoodieRecord> records, String newCommitTime) throws IOException {
-    client.startCommitWithTime(newCommitTime);
+    WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
     List<HoodieRecord> recs = dataGen.generateUpdates(newCommitTime, records);
-    List<WriteStatus> statuses = client.upsert(jsc.parallelize(recs, 1), newCommitTime).collect();
-    assertNoWriteErrors(statuses);
+    List<WriteStatus> statusList = client.upsert(jsc.parallelize(recs, 1), newCommitTime).collect();
+    client.commit(newCommitTime, jsc.parallelize(statusList), Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+    assertNoWriteErrors(statusList);
     return recs;
   }
 
@@ -241,14 +243,14 @@ public class TestClientRollback extends HoodieClientTestBase {
        * Write 1 (only inserts)
        */
       String newCommitTime = "001";
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
       JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
 
-      List<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime).collect();
-      assertNoWriteErrors(statuses);
-
+      List<WriteStatus> statusList = client.upsert(writeRecords, newCommitTime).collect();
+      client.commit(newCommitTime, jsc.parallelize(statusList), Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+      assertNoWriteErrors(statusList);
       records = updateRecords(client, records, "002");
 
       client.savepoint("hoodie-unit-test", "test");
@@ -286,24 +288,25 @@ public class TestClientRollback extends HoodieClientTestBase {
        * Write 1 (only inserts)
        */
       String newCommitTime = "001";
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
       JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
 
-      List<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime).collect();
-      assertNoWriteErrors(statuses);
+      List<WriteStatus> statusList = client.upsert(writeRecords, newCommitTime).collect();
+      client.commit(newCommitTime, jsc.parallelize(statusList), Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+      assertNoWriteErrors(statusList);
 
       /**
        * Write 2 (updates)
        */
       newCommitTime = "002";
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
       records = dataGen.generateUpdates(newCommitTime, records);
-      statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
-      // Verify there are no errors
-      assertNoWriteErrors(statuses);
+      statusList = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
+      client.commit(newCommitTime, jsc.parallelize(statusList), Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+      assertNoWriteErrors(statusList);
 
       client.savepoint("hoodie-unit-test", "test");
 
@@ -311,12 +314,13 @@ public class TestClientRollback extends HoodieClientTestBase {
        * Write 3 (updates)
        */
       newCommitTime = "003";
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
       records = dataGen.generateUpdates(newCommitTime, records);
-      statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
-      // Verify there are no errors
-      assertNoWriteErrors(statuses);
+      statusList =  client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
+      client.commit(newCommitTime, jsc.parallelize(statusList), Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+      assertNoWriteErrors(statusList);
+
       HoodieWriteConfig config = getConfig();
       List<String> partitionPaths =
           FSUtils.getAllPartitionPaths(context, storage, config.getMetadataConfig(), cfg.getBasePath());
@@ -338,12 +342,12 @@ public class TestClientRollback extends HoodieClientTestBase {
        * Write 4 (updates)
        */
       newCommitTime = "004";
-      client.startCommitWithTime(newCommitTime);
+      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
       records = dataGen.generateUpdates(newCommitTime, records);
-      statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
-      // Verify there are no errors
-      assertNoWriteErrors(statuses);
+      statusList = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
+      client.commit(newCommitTime, jsc.parallelize(statusList), Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+      assertNoWriteErrors(statusList);
 
       metaClient = HoodieTableMetaClient.reload(metaClient);
       table = HoodieSparkTable.create(getConfig(), context, metaClient);
@@ -657,7 +661,7 @@ public class TestClientRollback extends HoodieClientTestBase {
 
       final String commitTime4 = "20160506030621";
       try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
-        client.startCommitWithTime(commitTime4);
+        WriteClientTestUtils.startCommitWithTime(client, commitTime4);
         // Check results, nothing changed
         assertTrue(testTable.commitExists(commitTime1));
         assertTrue(testTable.inflightCommitExists(commitTime2));
@@ -674,7 +678,7 @@ public class TestClientRollback extends HoodieClientTestBase {
           .withMetadataConfig(HoodieMetadataConfig.newBuilder().withMetadataIndexColumnStats(false).build()).build();
       final String commitTime5 = "20160506030631";
       try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
-        client.startCommitWithTime(commitTime5);
+        WriteClientTestUtils.startCommitWithTime(client, commitTime5);
         assertTrue(testTable.commitExists(commitTime1));
         assertFalse(testTable.inflightCommitExists(commitTime2));
         assertFalse(testTable.inflightCommitExists(commitTime3));

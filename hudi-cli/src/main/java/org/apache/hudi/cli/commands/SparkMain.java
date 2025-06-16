@@ -40,6 +40,7 @@ import org.apache.hudi.config.HoodieBootstrapConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.exception.HoodieSavepointException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
@@ -50,8 +51,6 @@ import org.apache.hudi.table.action.compact.strategy.UnBoundedCompactionStrategy
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.table.upgrade.SparkUpgradeDowngradeHelper;
 import org.apache.hudi.table.upgrade.UpgradeDowngrade;
-import org.apache.hudi.utilities.HDFSParquetImporter;
-import org.apache.hudi.utilities.HDFSParquetImporter.Config;
 import org.apache.hudi.utilities.HoodieCleaner;
 import org.apache.hudi.utilities.HoodieClusteringJob;
 import org.apache.hudi.utilities.HoodieCompactionAdminTool;
@@ -101,9 +100,9 @@ public class SparkMain {
    */
   enum SparkCommand {
     BOOTSTRAP(21), ROLLBACK(6), DEDUPLICATE(8), ROLLBACK_TO_SAVEPOINT(6), SAVEPOINT(7),
-    IMPORT(13), UPSERT(13), COMPACT_SCHEDULE(7), COMPACT_RUN(10), COMPACT_SCHEDULE_AND_EXECUTE(9),
+    IMPORT(13), UPSERT(13), COMPACT_SCHEDULE(6), COMPACT_RUN(10), COMPACT_SCHEDULE_AND_EXECUTE(9),
     COMPACT_UNSCHEDULE_PLAN(9), COMPACT_UNSCHEDULE_FILE(10), COMPACT_VALIDATE(7), COMPACT_REPAIR(8),
-    CLUSTERING_SCHEDULE(7), CLUSTERING_RUN(9), CLUSTERING_SCHEDULE_AND_EXECUTE(8), CLEAN(5),
+    CLUSTERING_SCHEDULE(6), CLUSTERING_RUN(9), CLUSTERING_SCHEDULE_AND_EXECUTE(8), CLEAN(5),
     DELETE_MARKER(5), DELETE_SAVEPOINT(5), UPGRADE(5), DOWNGRADE(5),
     REPAIR_DEPRECATED_PARTITION(4), RENAME_PARTITION(6), ARCHIVE(8);
 
@@ -171,9 +170,7 @@ public class SparkMain {
           break;
         case IMPORT:
         case UPSERT:
-          returnCode = dataLoad(jsc, commandString, args[3], args[4], args[5], args[6], args[7], args[8],
-              Integer.parseInt(args[9]), args[10], Integer.parseInt(args[11]), propsFilePath, configs);
-          break;
+          throw new HoodieNotSupportedException("This command is no longer supported. Use HoodieStreamer utility instead.");
         case COMPACT_RUN:
           returnCode = compact(jsc, args[3], args[4], args[5], Integer.parseInt(args[6]), args[7],
               Integer.parseInt(args[8]), HoodieCompactor.EXECUTE, propsFilePath, configs);
@@ -183,7 +180,7 @@ public class SparkMain {
               Integer.parseInt(args[7]), HoodieCompactor.SCHEDULE_AND_EXECUTE, propsFilePath, configs);
           break;
         case COMPACT_SCHEDULE:
-          returnCode = compact(jsc, args[3], args[4], args[5], 1, "", 0, HoodieCompactor.SCHEDULE, propsFilePath, configs);
+          returnCode = compact(jsc, args[3], args[4], null, 1, "", 0, HoodieCompactor.SCHEDULE, propsFilePath, configs);
           break;
         case COMPACT_VALIDATE:
           cmd.assertEq(args.length);
@@ -216,7 +213,7 @@ public class SparkMain {
               Integer.parseInt(args[6]), SCHEDULE_AND_EXECUTE, propsFilePath, configs);
           break;
         case CLUSTERING_SCHEDULE:
-          returnCode = cluster(jsc, args[3], args[4], args[5], 1, args[2], 0, SCHEDULE, propsFilePath, configs);
+          returnCode = cluster(jsc, args[3], args[4], null, 1, args[2], 0, SCHEDULE, propsFilePath, configs);
           break;
         case CLEAN:
           clean(jsc, args[3], propsFilePath, configs);
@@ -288,24 +285,6 @@ public class SparkMain {
       LOG.warn(String.format("Failed: Could not clean marker instantTime: \"%s\".", instantTime), e);
       return -1;
     }
-  }
-
-  private static int dataLoad(JavaSparkContext jsc, String command, String srcPath, String targetPath, String tableName,
-                              String tableType, String rowKey, String partitionKey, int parallelism, String schemaFile,
-                              int retry, String propsFilePath, List<String> configs) {
-    Config cfg = new Config();
-    cfg.command = command;
-    cfg.srcPath = srcPath;
-    cfg.targetPath = targetPath;
-    cfg.tableName = tableName;
-    cfg.tableType = tableType;
-    cfg.rowKey = rowKey;
-    cfg.partitionKey = partitionKey;
-    cfg.parallelism = parallelism;
-    cfg.schemaFile = schemaFile;
-    cfg.propsFilePath = propsFilePath;
-    cfg.configs = configs;
-    return new HDFSParquetImporter(cfg).dataImport(jsc, retry);
   }
 
   private static void doCompactValidate(JavaSparkContext jsc, String basePath, String compactionInstant,

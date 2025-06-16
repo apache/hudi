@@ -20,6 +20,7 @@
 
 package org.apache.hudi.index.bloom;
 
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.functional.TestHoodieMetadataBase;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -46,8 +47,10 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Properties;
 
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -150,8 +153,9 @@ public class TestBloomIndexTagWithColStats extends TestHoodieMetadataBase {
     // Should not find any files
     assertFalse(taggedRecordRDD.first().isCurrentLocationKnown());
 
-    writeClient.startCommitWithTime("001");
+    WriteClientTestUtils.startCommitWithTime(writeClient, "001");
     JavaRDD<WriteStatus> status = writeClient.upsert(taggedRecordRDD, "001");
+    writeClient.commit("001", status, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
     String fileId = status.first().getFileId();
 
     metaClient = HoodieTableMetaClient.reload(metaClient);

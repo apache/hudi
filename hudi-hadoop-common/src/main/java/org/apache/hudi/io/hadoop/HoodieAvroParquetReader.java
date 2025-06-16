@@ -213,4 +213,16 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReader {
       }
     };
   }
+
+  @Override
+  public ClosableIterator<IndexedRecord> getIndexedRecordsByKeysIterator(List<String> sortedKeys,
+                                                                         Schema readerSchema) {
+    throw new UnsupportedOperationException("Not supported operation: getIndexedRecordsByKeysIterator");
+  }
+
+  @Override
+  public ClosableIterator<IndexedRecord> getIndexedRecordsByKeyPrefixIterator(List<String> sortedKeyPrefixes,
+                                                                              Schema readerSchema) {
+    throw new UnsupportedOperationException("Not supported operation: getIndexedRecordsByKeyPrefixIterator");
+  }
 }

@@ -28,8 +28,8 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
@@ -237,46 +237,21 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
   @Override
   public Map<Pair<String, String>, HoodieMetadataColumnStats> getColumnStats(final List<Pair<String, String>> partitionNameFileNameList, final String columnName)
       throws HoodieMetadataException {
+    Map<Pair<String, String>, List<HoodieMetadataColumnStats>> partitionNameFileToColStats = getColumnStats(partitionNameFileNameList, Collections.singletonList(columnName));
+    ValidationUtils.checkArgument(partitionNameFileToColStats.isEmpty() || partitionNameFileToColStats.values().stream().anyMatch(stats -> stats.size() == 1));
+    return partitionNameFileToColStats.entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().get(0)));
+  }
+
+  @Override
+  public Map<Pair<String, String>, List<HoodieMetadataColumnStats>> getColumnStats(List<Pair<String, String>> partitionNameFileNameList, List<String> columnNames)
+      throws HoodieMetadataException {
     if (!dataMetaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.COLUMN_STATS)) {
       LOG.error("Metadata column stats index is disabled!");
       return Collections.emptyMap();
     }
 
-    Map<String, Pair<String, String>> columnStatKeyToFileNameMap = new HashMap<>();
-    Set<String> columnStatKeyset = new HashSet<>();
-    final ColumnIndexID columnIndexID = new ColumnIndexID(columnName);
-    for (Pair<String, String> partitionNameFileNamePair : partitionNameFileNameList) {
-      final String columnStatsIndexKey = HoodieMetadataPayload.getColumnStatsIndexKey(
-          new PartitionIndexID(HoodieTableMetadataUtil.getColumnStatsIndexPartitionIdentifier(partitionNameFileNamePair.getLeft())),
-          new FileIndexID(partitionNameFileNamePair.getRight()),
-          columnIndexID);
-      columnStatKeyset.add(columnStatsIndexKey);
-      columnStatKeyToFileNameMap.put(columnStatsIndexKey, partitionNameFileNamePair);
-    }
-
-    List<String> columnStatKeylist = new ArrayList<>(columnStatKeyset);
-    HoodieTimer timer = HoodieTimer.start();
-    Map<String, HoodieRecord<HoodieMetadataPayload>> hoodieRecords =
-        getRecordsByKeys(columnStatKeylist, MetadataPartitionType.COLUMN_STATS.getPartitionPath());
-    metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_COLUMN_STATS_METADATA_STR, timer.endTimer()));
-    metrics.ifPresent(m -> m.setMetric(HoodieMetadataMetrics.LOOKUP_COLUMN_STATS_FILE_COUNT_STR, columnStatKeylist.size()));
-
-    Map<Pair<String, String>, HoodieMetadataColumnStats> fileToColumnStatMap = new HashMap<>();
-    for (final Map.Entry<String, HoodieRecord<HoodieMetadataPayload>> entry : hoodieRecords.entrySet()) {
-      final Option<HoodieMetadataColumnStats> columnStatMetadata =
-          entry.getValue().getData().getColumnStatMetadata();
-      if (columnStatMetadata.isPresent()) {
-        if (!columnStatMetadata.get().getIsDeleted()) {
-          ValidationUtils.checkState(columnStatKeyToFileNameMap.containsKey(entry.getKey()));
-          final Pair<String, String> partitionFileNamePair = columnStatKeyToFileNameMap.get(entry.getKey());
-          ValidationUtils.checkState(!fileToColumnStatMap.containsKey(partitionFileNamePair));
-          fileToColumnStatMap.put(partitionFileNamePair, columnStatMetadata.get());
-        }
-      } else {
-        LOG.error("Meta index column stats missing for: {}", entry.getKey());
-      }
-    }
-    return fileToColumnStatMap;
+    Map<String, Pair<String, String>> columnStatKeyToFileNameMap = computeColStatKeyToFileName(partitionNameFileNameList, columnNames);
+    return computeFileToColumnStatsMap(columnStatKeyToFileNameMap);
   }
 
   /**
@@ -287,7 +262,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
    * @param recordKeys The list of record keys to read
    */
   @Override
-  public Map<String, List<HoodieRecordGlobalLocation>> readRecordIndex(List<String> recordKeys) {
+  public Map<String, HoodieRecordGlobalLocation> readRecordIndex(List<String> recordKeys) {
     // If record index is not initialized yet, we cannot return an empty result here unlike the code for reading from other
     // indexes. This is because results from this function are used for upserts and returning an empty result here would lead
     // to existing records being inserted again causing duplicates.
@@ -296,15 +271,13 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
         "Record index is not initialized in MDT");
 
     HoodieTimer timer = HoodieTimer.start();
-    Map<String, List<HoodieRecord<HoodieMetadataPayload>>> result = getAllRecordsByKeys(recordKeys, MetadataPartitionType.RECORD_INDEX.getPartitionPath());
-    Map<String, List<HoodieRecordGlobalLocation>> recordKeyToLocation = new HashMap<>(result.size());
-    result.forEach((key, records) -> records.forEach(record -> {
+    Map<String, HoodieRecord<HoodieMetadataPayload>> result = getRecordsByKeys(recordKeys, MetadataPartitionType.RECORD_INDEX.getPartitionPath());
+    Map<String, HoodieRecordGlobalLocation> recordKeyToLocation = new HashMap<>(result.size());
+    result.forEach((key, record) -> {
       if (!record.getData().isDeleted()) {
-        List<HoodieRecordGlobalLocation> locations = recordKeyToLocation.getOrDefault(key, new ArrayList<>());
-        locations.add(record.getData().getRecordGlobalLocation());
-        recordKeyToLocation.put(key, locations);
+        recordKeyToLocation.put(key, record.getData().getRecordGlobalLocation());
       }
-    }));
+    });
 
     metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_RECORD_INDEX_TIME_STR, timer.endTimer()));
     metrics.ifPresent(m -> m.setMetric(HoodieMetadataMetrics.LOOKUP_RECORD_INDEX_KEYS_COUNT_STR, recordKeys.size()));
@@ -321,7 +294,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
    * @param secondaryKeys The list of secondary keys to read
    */
   @Override
-  public Map<String, List<HoodieRecordGlobalLocation>> readSecondaryIndex(List<String> secondaryKeys, String partitionName) {
+  public Map<String, HoodieRecordGlobalLocation> readSecondaryIndex(List<String> secondaryKeys, String partitionName) {
     ValidationUtils.checkState(dataMetaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX),
         "Record index is not initialized in MDT");
     ValidationUtils.checkState(
@@ -430,7 +403,56 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
   }
 
   /**
-   * Handle spurious deletes. Depending on config, throw an exception or log warn msg.
+   * Computes a map from col-stats key to partition and file name pair.
+   *
+   * @param partitionNameFileNameList - List of partition and file name pair for which bloom filters need to be retrieved.
+   * @param columnNames - List of column name for which stats are needed.
+   */
+  private Map<String, Pair<String, String>> computeColStatKeyToFileName(
+      final List<Pair<String, String>> partitionNameFileNameList,
+      final List<String> columnNames) {
+    Map<String, Pair<String, String>> columnStatKeyToFileNameMap = new HashMap<>();
+    for (String columnName : columnNames) {
+      final ColumnIndexID columnIndexID = new ColumnIndexID(columnName);
+      for (Pair<String, String> partitionNameFileNamePair : partitionNameFileNameList) {
+        final String columnStatsIndexKey = HoodieMetadataPayload.getColumnStatsIndexKey(
+            new PartitionIndexID(HoodieTableMetadataUtil.getColumnStatsIndexPartitionIdentifier(partitionNameFileNamePair.getLeft())),
+            new FileIndexID(partitionNameFileNamePair.getRight()),
+            columnIndexID);
+        columnStatKeyToFileNameMap.put(columnStatsIndexKey, partitionNameFileNamePair);
+      }
+    }
+    return columnStatKeyToFileNameMap;
+  }
+
+  /**
+   * Computes the map from partition and file name pair to HoodieMetadataColumnStats record.
+   *
+   * @param columnStatKeyToFileNameMap - A map from col-stats key to partition and file name pair.
+   */
+  private Map<Pair<String, String>, List<HoodieMetadataColumnStats>> computeFileToColumnStatsMap(Map<String, Pair<String, String>> columnStatKeyToFileNameMap) {
+    List<String> columnStatKeylist = new ArrayList<>(columnStatKeyToFileNameMap.keySet());
+    HoodieTimer timer = HoodieTimer.start();
+    Map<String, HoodieRecord<HoodieMetadataPayload>> hoodieRecords =
+        getRecordsByKeys(columnStatKeylist, MetadataPartitionType.COLUMN_STATS.getPartitionPath());
+    metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_COLUMN_STATS_METADATA_STR, timer.endTimer()));
+    Map<Pair<String, String>, List<HoodieMetadataColumnStats>> fileToColumnStatMap = new HashMap<>();
+    for (final Map.Entry<String, HoodieRecord<HoodieMetadataPayload>> entry : hoodieRecords.entrySet()) {
+      final Option<HoodieMetadataColumnStats> columnStatMetadata =
+          entry.getValue().getData().getColumnStatMetadata();
+      if (columnStatMetadata.isPresent() && !columnStatMetadata.get().getIsDeleted()) {
+        ValidationUtils.checkState(columnStatKeyToFileNameMap.containsKey(entry.getKey()));
+        final Pair<String, String> partitionFileNamePair = columnStatKeyToFileNameMap.get(entry.getKey());
+        fileToColumnStatMap.computeIfAbsent(partitionFileNamePair, k -> new ArrayList<>()).add(columnStatMetadata.get());
+      } else {
+        LOG.error("Meta index column stats missing for {}", entry.getKey());
+      }
+    }
+    return fileToColumnStatMap;
+  }
+
+  /**
+   * Handle spurious deletes. Depending on config, throw an exception or log a warn msg.
    */
   private void checkForSpuriousDeletes(HoodieMetadataPayload metadataPayload, String partitionName) {
     if (!metadataPayload.getDeletions().isEmpty()) {

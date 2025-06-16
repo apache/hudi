@@ -243,11 +243,10 @@
       </exclusions>
     </dependency>
 
-    <!-- Hoodie Spark 3.x common  -->
     <dependency>
-      <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-spark3-common</artifactId>
-      <version>${project.version}</version>
+      <groupId>org.apache.hadoop</groupId>
+      <artifactId>hadoop-common</artifactId>
+      <scope>provided</scope>
     </dependency>
 
     <!-- Hoodie - Test -->

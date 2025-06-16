@@ -37,7 +37,7 @@ import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
-import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
+import org.apache.hudi.metadata.SparkMetadataWriterFactory;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
@@ -116,7 +116,7 @@ public class MetadataCommand {
   public String create(
       @ShellOption(value = "--sparkMaster", defaultValue = SparkUtil.DEFAULT_SPARK_MASTER, help = "Spark master") final String master
   ) throws Exception {
-    HoodieCLI.getTableMetaClient();
+    HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
     StoragePath metadataPath = new StoragePath(getMetadataTableBasePath(HoodieCLI.basePath));
     try {
       List<StoragePathInfo> pathInfoList = HoodieCLI.storage.listDirectEntries(metadataPath);
@@ -131,7 +131,7 @@ public class MetadataCommand {
     HoodieTimer timer = HoodieTimer.start();
     HoodieWriteConfig writeConfig = getWriteConfig();
     initJavaSparkContext(Option.of(master));
-    try (HoodieTableMetadataWriter writer = SparkHoodieBackedTableMetadataWriter.create(HoodieCLI.conf, writeConfig, new HoodieSparkEngineContext(jsc))) {
+    try (HoodieTableMetadataWriter writer = SparkMetadataWriterFactory.create(HoodieCLI.conf, writeConfig, new HoodieSparkEngineContext(jsc), metaClient.getTableConfig())) {
       return String.format("Created Metadata Table in %s (duration=%.2f secs)", metadataPath, timer.endTimer() / 1000.0);
     }
   }
@@ -163,7 +163,7 @@ public class MetadataCommand {
   public String init(@ShellOption(value = "--sparkMaster", defaultValue = SparkUtil.DEFAULT_SPARK_MASTER, help = "Spark master") final String master,
                      @ShellOption(value = {"--readonly"}, defaultValue = "false",
                          help = "Open in read-only mode") final boolean readOnly) throws Exception {
-    HoodieCLI.getTableMetaClient();
+    HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
     StoragePath metadataPath = new StoragePath(getMetadataTableBasePath(HoodieCLI.basePath));
     try {
       HoodieCLI.storage.listDirectEntries(metadataPath);
@@ -176,7 +176,7 @@ public class MetadataCommand {
     if (!readOnly) {
       HoodieWriteConfig writeConfig = getWriteConfig();
       initJavaSparkContext(Option.of(master));
-      try (HoodieTableMetadataWriter writer = SparkHoodieBackedTableMetadataWriter.create(HoodieCLI.conf, writeConfig, new HoodieSparkEngineContext(jsc))) {
+      try (HoodieTableMetadataWriter writer = SparkMetadataWriterFactory.create(HoodieCLI.conf, writeConfig, new HoodieSparkEngineContext(jsc), metaClient.getTableConfig())) {
         // Empty
       }
     }
@@ -224,7 +224,7 @@ public class MetadataCommand {
 
       HoodieTimer timer = HoodieTimer.start();
       List<String> partitions = metadata.getAllPartitionPaths();
-      LOG.debug("Metadata Partition listing took " + timer.endTimer() + " ms");
+      LOG.debug("Metadata Partition listing took {} ms", timer.endTimer());
 
       final List<Comparable[]> rows = new ArrayList<>();
       partitions.stream().sorted(Comparator.reverseOrder()).forEach(p -> {
@@ -257,7 +257,7 @@ public class MetadataCommand {
 
       HoodieTimer timer = HoodieTimer.start();
       List<StoragePathInfo> pathInfoList = metaReader.getAllFilesInPartition(partitionPath);
-      LOG.debug("Took " + timer.endTimer() + " ms");
+      LOG.debug("Took {} ms", timer.endTimer());
 
       final List<Comparable[]> rows = new ArrayList<>();
       pathInfoList.stream()
@@ -293,7 +293,7 @@ public class MetadataCommand {
 
     HoodieTimer timer = HoodieTimer.start();
     List<String> metadataPartitions = metadataReader.getAllPartitionPaths();
-    LOG.debug("Metadata Listing partitions Took " + timer.endTimer() + " ms");
+    LOG.debug("Metadata Listing partitions Took {} ms", timer.endTimer());
     List<String> fsPartitions = fsMetaReader.getAllPartitionPaths();
     Collections.sort(fsPartitions);
     Collections.sort(metadataPartitions);

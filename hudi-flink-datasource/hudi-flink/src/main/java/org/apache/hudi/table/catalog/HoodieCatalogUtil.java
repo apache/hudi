@@ -20,10 +20,10 @@ package org.apache.hudi.table.catalog;
 
 import org.apache.hudi.adapter.Utils;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
+import org.apache.hudi.common.model.PartitionBucketIndexHashingConfig;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieCatalogException;
@@ -257,8 +257,6 @@ public class HoodieCatalogUtil {
       String tablePathStr,
       ObjectPath tablePath,
       org.apache.hadoop.conf.Configuration hadoopConf) {
-    // enable auto-commit though ~
-    options.put(HoodieWriteConfig.AUTO_COMMIT_ENABLE.key(), "true");
     return FlinkWriteClients.createWriteClientV2(
         org.apache.flink.configuration.Configuration.fromMap(options)
             .set(FlinkOptions.TABLE_NAME, tablePath.getObjectName())
@@ -300,5 +298,15 @@ public class HoodieCatalogUtil {
       throw new HoodieCatalogException("Hoodie catalog does not support to alter table type and index type");
     }
     return true;
+  }
+
+  public static boolean initPartitionBucketIndexMeta(HoodieTableMetaClient metaClient, CatalogBaseTable catalogTable) {
+    Map<String, String> options = catalogTable.getOptions();
+    String expressions = options.getOrDefault(FlinkOptions.BUCKET_INDEX_PARTITION_EXPRESSIONS.key(), "");
+    String rule = options.getOrDefault(FlinkOptions.BUCKET_INDEX_PARTITION_RULE.key(), FlinkOptions.BUCKET_INDEX_PARTITION_RULE.defaultValue());
+    int bucketNumber = options.containsKey(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS.key())
+        ? Integer.valueOf(options.get(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS.key())) : FlinkOptions.BUCKET_INDEX_NUM_BUCKETS.defaultValue();
+
+    return PartitionBucketIndexHashingConfig.saveHashingConfig(metaClient, expressions, rule, bucketNumber, null);
   }
 }

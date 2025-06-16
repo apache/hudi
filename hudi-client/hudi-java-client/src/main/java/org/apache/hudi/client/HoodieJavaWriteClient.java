@@ -18,7 +18,7 @@
 
 package org.apache.hudi.client;
 
-import org.apache.hudi.client.common.HoodieJavaEngineContext;
+import org.apache.hudi.callback.common.WriteStatusValidator;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -73,7 +73,7 @@ public class HoodieJavaWriteClient<T> extends
   @Override
   public List<HoodieRecord<T>> filterExists(List<HoodieRecord<T>> hoodieRecords) {
     // Create a Hoodie table which encapsulated the commits and files visible
-    HoodieJavaTable<T> table = HoodieJavaTable.create(config, (HoodieJavaEngineContext) context);
+    HoodieJavaTable<T> table = HoodieJavaTable.create(config, context);
     Timer.Context indexTimer = metrics.getIndexCtx();
     List<HoodieRecord<T>> recordsWithLocation = getIndex().tagLocation(HoodieListData.eager(hoodieRecords), context, table).collectAsList();
     metrics.updateIndexMetrics(LOOKUP_STR, metrics.getDurationInMs(indexTimer == null ? 0L : indexTimer.stop()));
@@ -91,10 +91,10 @@ public class HoodieJavaWriteClient<T> extends
                         Option<Map<String, String>> extraMetadata,
                         String commitActionType,
                         Map<String, List<String>> partitionToReplacedFileIds,
-                        Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc) {
+                        Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc,
+                        Option<WriteStatusValidator> writeStatusValidatorOpt) {
     List<HoodieWriteStat> writeStats = writeStatuses.stream().map(WriteStatus::getStat).collect(Collectors.toList());
-    return commitStats(instantTime, writeStats, extraMetadata, commitActionType, partitionToReplacedFileIds,
-        extraPreCommitFunc);
+    return commitStats(instantTime, writeStats, extraMetadata, commitActionType, partitionToReplacedFileIds, extraPreCommitFunc);
   }
 
   @Override

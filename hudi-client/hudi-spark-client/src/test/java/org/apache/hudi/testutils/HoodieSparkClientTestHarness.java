@@ -25,6 +25,7 @@ import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.SparkTaskContextSupplier;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.HoodieCleanStat;
@@ -404,7 +405,11 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
 
   @Override
   public SparkRDDWriteClient getHoodieWriteClient(HoodieWriteConfig cfg) {
-    if (null != writeClient) {
+    return getHoodieWriteClient(cfg, true);
+  }
+
+  public SparkRDDWriteClient getHoodieWriteClient(HoodieWriteConfig cfg, boolean shouldCloseOlderClient) {
+    if (null != writeClient && shouldCloseOlderClient) {
       writeClient.close();
       writeClient = null;
     }
@@ -443,7 +448,7 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
     return HoodieJavaRDD.getJavaRDD(index.tagLocation(HoodieJavaRDD.of(records), context, table));
   }
 
-  public static Pair<HashMap<String, WorkloadStat>, WorkloadStat> buildProfile(JavaRDD<HoodieRecord> inputRecordsRDD) {
+  public static Pair<Map<String, WorkloadStat>, WorkloadStat> buildProfile(JavaRDD<HoodieRecord> inputRecordsRDD) {
     HashMap<String, WorkloadStat> partitionPathStatMap = new HashMap<>();
     WorkloadStat globalStat = new WorkloadStat();
 
@@ -479,18 +484,14 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
 
   @Override
   protected List<WriteStatus> writeAndVerifyBatch(BaseHoodieWriteClient client, List<HoodieRecord> inserts, String commitTime, boolean populateMetaFields, boolean autoCommitOff) {
-    client.startCommitWithTime(commitTime);
+    WriteClientTestUtils.startCommitWithTime(client, commitTime);
     JavaRDD<HoodieRecord> insertRecordsRDD1 = jsc.parallelize(inserts, 2);
-    JavaRDD<WriteStatus> statusRDD = ((SparkRDDWriteClient) client).upsert(insertRecordsRDD1, commitTime);
-    if (autoCommitOff) {
-      client.commit(commitTime, statusRDD);
-    }
-    List<WriteStatus> statuses = statusRDD.collect();
-    assertNoWriteErrors(statuses);
-    verifyRecordsWritten(commitTime, populateMetaFields, inserts, statuses, client.getConfig(),
+    List<WriteStatus> statusList = ((SparkRDDWriteClient) client).upsert(insertRecordsRDD1, commitTime).collect();
+    client.commit(commitTime, jsc.parallelize(statusList, 1));
+    assertNoWriteErrors(statusList);
+    verifyRecordsWritten(commitTime, populateMetaFields, inserts, statusList, client.getConfig(),
         HoodieSparkKeyGeneratorFactory.createKeyGenerator(client.getConfig().getProps()));
-
-    return statuses;
+    return statusList;
   }
 
   /**
@@ -551,7 +552,7 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
       runFullValidation(table.getConfig().getMetadataConfig(), writeConfig, metadataTableBasePath, engineContext);
     }
 
-    LOG.info("Validation time=" + timer.endTimer());
+    LOG.info("Validation time={}", timer.endTimer());
   }
 
   public void syncTableMetadata(HoodieWriteConfig writeConfig) {

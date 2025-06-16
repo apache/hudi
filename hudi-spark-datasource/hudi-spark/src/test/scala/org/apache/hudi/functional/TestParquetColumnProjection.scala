@@ -263,8 +263,6 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
     val targetRecordsCount = 100
 
     bootstrapMORTableWithDeltaLog(tablePath, targetRecordsCount, defaultWriteOpts, populateMetaFields = true)
-
-    println(s"Running test for $tablePath / incremental")
     /**
      * State of timeline and updated data
      * +--------------+--------------+--------------+--------------+--------------------+--------------+--------------+--------------+

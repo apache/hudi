@@ -20,6 +20,7 @@
 package org.apache.hudi.functional;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
@@ -35,8 +36,11 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
+
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 
 @Tag("functional")
 public class TestSparkClusteringCornerCases extends HoodieClientTestBase {
@@ -57,10 +61,8 @@ public class TestSparkClusteringCornerCases extends HoodieClientTestBase {
       client.cluster(clusteringInstantTime);
       metaClient.reloadActiveTimeline();
       HoodieInstant lastClusteringInstant = metaClient.getActiveTimeline().getLastClusteringInstant().get();
-      HoodieReplaceCommitMetadata replaceCommitMetadata = HoodieReplaceCommitMetadata.fromBytes(
-          metaClient.getActiveTimeline().getInstantDetails(lastClusteringInstant).get(),
-          HoodieReplaceCommitMetadata.class
-      );
+      HoodieReplaceCommitMetadata replaceCommitMetadata =
+          metaClient.getActiveTimeline().readReplaceCommitMetadata(lastClusteringInstant);
       Assertions.assertTrue(replaceCommitMetadata.getPartitionToWriteStats().isEmpty());
       Assertions.assertEquals(3, replaceCommitMetadata.getPartitionToReplaceFileIds().size());
     }
@@ -73,8 +75,9 @@ public class TestSparkClusteringCornerCases extends HoodieClientTestBase {
 
   private List<HoodieRecord> writeData(SparkRDDWriteClient client, String instant, List<HoodieRecord> recordList) {
     JavaRDD records = jsc.parallelize(recordList, 2);
-    client.startCommitWithTime(instant);
+    WriteClientTestUtils.startCommitWithTime(client, instant);
     List<WriteStatus> writeStatuses = client.upsert(records, instant).collect();
+    client.commit(instant, jsc.parallelize(writeStatuses), Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap(), Option.empty());
     org.apache.hudi.testutils.Assertions.assertNoWriteErrors(writeStatuses);
     return recordList;
   }

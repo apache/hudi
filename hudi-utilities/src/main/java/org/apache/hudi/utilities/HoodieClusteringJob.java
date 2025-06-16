@@ -95,7 +95,7 @@ public class HoodieClusteringJob {
     @Parameter(names = {"--skip-clean", "-sc"}, description = "do not trigger clean after clustering", required = false)
     public Boolean skipClean = true;
 
-    @Parameter(names = {"--schedule", "-sc"}, description = "Schedule clustering @desperate soon please use \"--mode schedule\" instead")
+    @Parameter(names = {"--schedule", "-sch"}, description = "Schedule clustering @desperate soon please use \"--mode schedule\" instead")
     public Boolean runSchedule = false;
 
     @Parameter(names = {"--retry-last-failed-clustering-job", "-rc"}, description = "Take effect when using --mode/-m scheduleAndExecute. Set true means "
@@ -245,10 +245,6 @@ public class HoodieClusteringJob {
   }
 
   private Option<String> doSchedule(SparkRDDWriteClient<HoodieRecordPayload> client) {
-    if (cfg.clusteringInstantTime != null) {
-      client.scheduleClusteringAtInstant(cfg.clusteringInstantTime, Option.empty());
-      return Option.of(cfg.clusteringInstantTime);
-    }
     return client.scheduleClustering(Option.empty());
   }
 

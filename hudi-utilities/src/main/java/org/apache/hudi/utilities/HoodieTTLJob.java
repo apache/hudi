@@ -19,13 +19,14 @@
 package org.apache.hudi.utilities;
 
 import org.apache.hudi.SparkAdapterSupport$;
+import org.apache.hudi.client.HoodieWriteResult;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCleanConfig;
-import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 
 import com.beust.jcommander.JCommander;
@@ -48,7 +49,7 @@ public class HoodieTTLJob {
   private final Config cfg;
   private final TypedProperties props;
   private final JavaSparkContext jsc;
-  private HoodieTableMetaClient metaClient;
+  private final HoodieTableMetaClient metaClient;
 
   public HoodieTTLJob(JavaSparkContext jsc, Config cfg) {
     this(jsc, cfg, UtilHelpers.buildProperties(jsc.hadoopConfiguration(), cfg.propsFilePath, cfg.configs),
@@ -71,16 +72,13 @@ public class HoodieTTLJob {
 
   public void run() {
     // need to do commit in SparkDeletePartitionCommitActionExecutor#execute
-    this.props.put(HoodieWriteConfig.AUTO_COMMIT_ENABLE.key(), "true");
     try (SparkRDDWriteClient<HoodieRecordPayload> client =
              UtilHelpers.createHoodieClient(jsc, cfg.basePath, "", cfg.parallelism, Option.empty(), props)) {
-      client.managePartitionTTL(client.createNewInstantTime());
+      String instantTime = client.startDeletePartitionCommit(metaClient);
+      HoodieWriteResult result = client.managePartitionTTL(instantTime);
+      client.commit(instantTime, result.getWriteStatuses(), Option.empty(), HoodieTimeline.REPLACE_COMMIT_ACTION,
+          result.getPartitionToReplaceFileIds(), Option.empty());
     }
-  }
-
-  private HoodieWriteConfig getHoodieClientConfig() {
-    return HoodieWriteConfig.newBuilder().combineInput(true, true).withPath(cfg.basePath).withAutoCommit(true)
-        .withProps(props).build();
   }
 
   public static class Config implements Serializable {

@@ -23,7 +23,7 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.client.transaction.PreferWriterConflictResolutionStrategy
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model._
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, InProcessTimeGenerator}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
@@ -40,7 +40,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, CsvSource, EnumSource, MethodSource}
 import org.junit.jupiter.params.provider.Arguments.arguments
 
-import java.util.Collections
+import java.util.{Collections, Properties}
 import java.util.concurrent.Executors
 
 import scala.collection.JavaConverters._
@@ -49,7 +49,7 @@ import scala.concurrent.duration.Duration
 import scala.language.postfixOps
 import scala.util.Using
 
-@Tag("functional")
+@Tag("functional-b")
 class TestRecordLevelIndex extends RecordLevelIndexTestBase {
   @ParameterizedTest
   @EnumSource(classOf[HoodieTableType])
@@ -123,6 +123,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
       .save(basePath)
     val deletedDf3 = calculateMergedDf(latestBatchDf, operation, true)
     deletedDf3.cache()
+    metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
     validateDataAndRecordIndices(hudiOpts, deletedDf3)
   }
 
@@ -231,6 +232,12 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
   @EnumSource(classOf[HoodieTableType])
   def testRLIWithDelete(tableType: HoodieTableType): Unit = {
     val hudiOpts = commonOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name())
+    val props = new Properties()
+    for ((k, v) <- hudiOpts) {
+      props.put(k, v)
+    }
+    initMetaClient(tableType, props)
+
     val insertDf = doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite)
@@ -297,11 +304,12 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
       saveMode = SaveMode.Overwrite)
 
     Using(getHoodieWriteClient(getWriteConfig(hudiOpts))) { client =>
-      val commitTime = client.startCommit
-      client.startCommitWithTime(commitTime, HoodieTimeline.REPLACE_COMMIT_ACTION)
+      val commitTime = client.startCommit(HoodieTimeline.REPLACE_COMMIT_ACTION)
       val deletingPartition = dataGen.getPartitionPaths.last
       val partitionList = Collections.singletonList(deletingPartition)
-      client.deletePartitions(partitionList, commitTime)
+      val result = client.deletePartitions(partitionList, commitTime)
+      client.commit(commitTime, result.getWriteStatuses, org.apache.hudi.common.util.Option.empty(), HoodieTimeline.REPLACE_COMMIT_ACTION,
+        result.getPartitionToReplaceFileIds, org.apache.hudi.common.util.Option.empty());
 
       val deletedDf = latestSnapshot.filter(s"partition = $deletingPartition")
       validateDataAndRecordIndices(hudiOpts, deletedDf)
@@ -311,7 +319,8 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
   @ParameterizedTest
   @EnumSource(classOf[HoodieTableType])
   def testRLIUpsertAndDropIndex(tableType: HoodieTableType): Unit = {
-    val hudiOpts = commonOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name())
+    val hudiOpts = commonOpts ++ Map(DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true")
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite)
@@ -415,6 +424,11 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
       HoodieClusteringConfig.INLINE_CLUSTERING.key() -> "true",
       HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key() -> "2"
     )
+    val props = new Properties()
+    for ((k, v) <- hudiOpts) {
+      props.put(k, v)
+    }
+    initMetaClient(tableType, props)
 
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
@@ -435,6 +449,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
 
     assertTrue(getLatestClusteringInstant().get().requestedTime.compareTo(lastClusteringInstant.get().requestedTime) > 0)
     assertEquals(getLatestClusteringInstant(), metaClient.getActiveTimeline.lastInstant())
+    validateDataAndRecordIndices(hudiOpts)
     // We are validating rollback of a DT clustering instant here
     rollbackLastInstant(hudiOpts)
     validateDataAndRecordIndices(hudiOpts)
@@ -525,12 +540,15 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append)
+    doWriteAndValidateDataAndRecordIndex(hudiOpts,
+      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append)
     val metadataTableFSView = getHoodieTable(metaClient, getWriteConfig(hudiOpts)).getMetadataTable
       .asInstanceOf[HoodieBackedTableMetadata].getMetadataFileSystemView
     val compactionTimeline = metadataTableFSView.getVisibleCommitsAndCompactionTimeline.filterCompletedAndCompactionInstants()
     val lastCompactionInstant = compactionTimeline
       .filter(JavaConversions.getPredicate((instant: HoodieInstant) =>
-        metaClient.getTimelineLayout.getCommitMetadataSerDe.deserialize(instant, compactionTimeline.getInstantDetails(instant).get, classOf[HoodieCommitMetadata])
+        compactionTimeline.readCommitMetadata(instant)
           .getOperationType == WriteOperationType.COMPACT))
       .lastInstant()
     val compactionBaseFile = metadataTableFSView.getAllBaseFiles(MetadataPartitionType.RECORD_INDEX.getPartitionPath)

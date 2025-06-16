@@ -28,7 +28,6 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
@@ -108,7 +107,7 @@ public abstract class AbstractIndexingCatchupTask implements IndexingCatchupTask
         }
         try {
           // we need take a lock here as inflight writer could also try to update the timeline
-          transactionManager.beginTransaction(Option.of(instant), Option.empty());
+          transactionManager.beginStateChange(Option.of(instant), Option.empty());
           LOG.info("Updating metadata table for instant: " + instant);
           switch (instant.getAction()) {
             case HoodieTimeline.COMMIT_ACTION:
@@ -121,13 +120,11 @@ public abstract class AbstractIndexingCatchupTask implements IndexingCatchupTask
               metadataWriter.update(cleanMetadata, instant.requestedTime());
               break;
             case RESTORE_ACTION:
-              HoodieRestoreMetadata restoreMetadata = TimelineMetadataUtils.deserializeHoodieRestoreMetadata(
-                  metaClient.getActiveTimeline().getInstantDetails(instant).get());
+              HoodieRestoreMetadata restoreMetadata = metaClient.getActiveTimeline().readRestoreMetadata(instant);
               metadataWriter.update(restoreMetadata, instant.requestedTime());
               break;
             case ROLLBACK_ACTION:
-              HoodieRollbackMetadata rollbackMetadata = TimelineMetadataUtils.deserializeHoodieRollbackMetadata(
-                  metaClient.getActiveTimeline().getInstantDetails(instant).get());
+              HoodieRollbackMetadata rollbackMetadata = metaClient.getActiveTimeline().readRollbackMetadata(instant);
               metadataWriter.update(rollbackMetadata, instant.requestedTime());
               break;
             default:
@@ -136,7 +133,7 @@ public abstract class AbstractIndexingCatchupTask implements IndexingCatchupTask
         } catch (IOException e) {
           throw new HoodieIndexException(String.format("Could not update metadata partition for instant: %s", instant), e);
         } finally {
-          transactionManager.endTransaction(Option.of(instant));
+          transactionManager.endStateChange(Option.of(instant));
         }
       }
     }

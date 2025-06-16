@@ -23,7 +23,6 @@ import org.apache.hudi.avro.HoodieAvroUtils.{createFullName, toJavaDate}
 import org.apache.hudi.exception.HoodieException
 
 import org.apache.avro.Schema
-import org.apache.hbase.thirdparty.com.google.common.base.Supplier
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.HoodieUnsafeRowUtils.{NestedFieldPath, composeNestedFieldPath}
 import org.apache.spark.sql.catalyst.expressions.{SpecificInternalRow, UnsafeArrayData, UnsafeProjection, UnsafeRow}
@@ -34,7 +33,7 @@ import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
 
 import java.util.concurrent.ConcurrentHashMap
-import java.util.function.{Function => JFunction}
+import java.util.function.{Supplier, Function => JFunction}
 import java.util.{ArrayDeque => JArrayDeque, Collections => JCollections, Deque => JDeque, Map => JMap}
 
 import scala.collection.JavaConverters._
@@ -44,13 +43,14 @@ import scala.collection.mutable.ArrayBuffer
 object HoodieInternalRowUtils {
 
   private type RenamedColumnMap = JMap[String, String]
+  private type UpdatedColumnMap = JMap[Integer, Object]
   private type UnsafeRowWriter = InternalRow => UnsafeRow
 
   // NOTE: [[UnsafeProjection]] objects cache have to stay [[ThreadLocal]] since these are not thread-safe
-  private val unsafeWriterThreadLocal: ThreadLocal[mutable.HashMap[(StructType, StructType, RenamedColumnMap), UnsafeRowWriter]] =
-    ThreadLocal.withInitial(new Supplier[mutable.HashMap[(StructType, StructType, RenamedColumnMap), UnsafeRowWriter]] {
-      override def get(): mutable.HashMap[(StructType, StructType, RenamedColumnMap), UnsafeRowWriter] =
-        new mutable.HashMap[(StructType, StructType, RenamedColumnMap), UnsafeRowWriter]
+  private val unsafeWriterThreadLocal: ThreadLocal[mutable.HashMap[(StructType, StructType, RenamedColumnMap, UpdatedColumnMap), UnsafeRowWriter]] =
+    ThreadLocal.withInitial(new Supplier[mutable.HashMap[(StructType, StructType, RenamedColumnMap, UpdatedColumnMap), UnsafeRowWriter]] {
+      override def get(): mutable.HashMap[(StructType, StructType, RenamedColumnMap, UpdatedColumnMap), UnsafeRowWriter] =
+        new mutable.HashMap[(StructType, StructType, RenamedColumnMap, UpdatedColumnMap), UnsafeRowWriter]
     })
 
   // NOTE: [[UnsafeRowWriter]] objects cache have to stay [[ThreadLocal]] since these are not thread-safe
@@ -58,6 +58,12 @@ object HoodieInternalRowUtils {
     ThreadLocal.withInitial(new Supplier[mutable.HashMap[(StructType, StructType), UnsafeProjection]] {
       override def get(): mutable.HashMap[(StructType, StructType), UnsafeProjection] =
         new mutable.HashMap[(StructType, StructType), UnsafeProjection]
+    })
+
+  private val identicalUnsafeProjectionThreadLocal: ThreadLocal[mutable.HashMap[Schema, UnsafeProjection]] =
+    ThreadLocal.withInitial(new Supplier[mutable.HashMap[Schema, UnsafeProjection]] {
+      override def get(): mutable.HashMap[Schema, UnsafeProjection] =
+        new mutable.HashMap[Schema, UnsafeProjection]
     })
 
   private val schemaMap = new ConcurrentHashMap[Schema, StructType]
@@ -76,6 +82,14 @@ object HoodieInternalRowUtils {
   }
 
   /**
+   * Provides cached instance of [[UnsafeProjection]] to project Java object based [[InternalRow]] to [[UnsafeRow]].
+   */
+  def getCachedUnsafeProjection(schema: Schema): UnsafeProjection = {
+    identicalUnsafeProjectionThreadLocal.get()
+      .getOrElseUpdate(schema, UnsafeProjection.create(getCachedSchema(schema)))
+  }
+
+  /**
    * Provides cached instance of [[UnsafeRowWriter]] transforming provided [[InternalRow]]s from
    * one [[StructType]] and into another [[StructType]]
    *
@@ -88,9 +102,11 @@ object HoodieInternalRowUtils {
    *   <li>Handling (field) renames</li>
    * </ul>
    */
-  def getCachedUnsafeRowWriter(from: StructType, to: StructType, renamedColumnsMap: JMap[String, String] = JCollections.emptyMap()): UnsafeRowWriter = {
+  def getCachedUnsafeRowWriter(from: StructType, to: StructType,
+                               renamedColumnsMap: JMap[String, String] = JCollections.emptyMap(),
+                               updatedValuesMap: JMap[Integer, Object] = JCollections.emptyMap()): UnsafeRowWriter = {
     unsafeWriterThreadLocal.get()
-      .getOrElseUpdate((from, to, renamedColumnsMap), genUnsafeRowWriter(from, to, renamedColumnsMap))
+      .getOrElseUpdate((from, to, renamedColumnsMap, updatedValuesMap), genUnsafeRowWriter(from, to, renamedColumnsMap, updatedValuesMap))
   }
 
   def getCachedPosList(structType: StructType, field: String): Option[NestedFieldPath] = {
@@ -107,6 +123,11 @@ object HoodieInternalRowUtils {
     }
   }
 
+  /**
+   * Get or create [[StructType]] for provided [[Schema]]
+   * @param schema [[Schema]] to convert to [[StructType]], NOTE: It is best that the schema passed in is cached through [[org.apache.hudi.avro.AvroSchemaCache]], so that we can reduce the overhead of schema lookup in the map
+   * @return [[StructType]] for provided [[Schema]]
+   */
   def getCachedSchema(schema: Schema): StructType = {
     val structType = schemaMap.get(schema)
     // NOTE: This specifically designed to do 2 lookups (in case of cache-miss) to avoid
@@ -123,9 +144,18 @@ object HoodieInternalRowUtils {
 
   private[sql] def genUnsafeRowWriter(prevSchema: StructType,
                                       newSchema: StructType,
-                                      renamedColumnsMap: JMap[String, String]): UnsafeRowWriter = {
-    val writer = newWriterRenaming(prevSchema, newSchema, renamedColumnsMap, new JArrayDeque[String]())
+                                      renamedColumnsMap: JMap[String, String],
+                                      updatedValuesMap: JMap[Integer, Object]): UnsafeRowWriter = {
     val unsafeProjection = generateUnsafeProjection(newSchema, newSchema)
+    if (prevSchema.equals(newSchema) && renamedColumnsMap.isEmpty && updatedValuesMap.isEmpty) {
+      return oldRow => unsafeProjection(oldRow)
+    }
+    val writer = if (newSchema.equals(prevSchema)) {
+      // Force a modifiable row to be generated so the updated values can be set
+      modifiableRowWriter(prevSchema, newSchema, renamedColumnsMap, new JArrayDeque[String]())
+    } else {
+      newWriterRenaming(prevSchema, newSchema, renamedColumnsMap, new JArrayDeque[String]())
+    }
     val phonyUpdater = new CatalystDataUpdater {
       var value: InternalRow = _
 
@@ -135,6 +165,11 @@ object HoodieInternalRowUtils {
 
     oldRow => {
       writer(phonyUpdater, 0, oldRow)
+      updatedValuesMap.forEach((index, value) => {
+        if (phonyUpdater.value.isNullAt(index)) {
+          phonyUpdater.value.update(index, value)
+        }
+      })
       unsafeProjection(phonyUpdater.value)
     }
   }
@@ -199,6 +234,26 @@ object HoodieInternalRowUtils {
     }
   }
 
+  private def modifiableRowWriter(prevStructType: StructType,
+                                  newStructType: StructType,
+                                  renamedColumnsMap: JMap[String, String],
+                                  fieldNameStack: JDeque[String]): RowFieldUpdater = {
+    val writer = genUnsafeStructWriter(prevStructType, newStructType, renamedColumnsMap, fieldNameStack)
+
+    val newRow = new SpecificInternalRow(newStructType.fields.map(_.dataType))
+    val rowUpdater = new RowUpdater(newRow)
+
+    (fieldUpdater, ordinal, value) => {
+      // Here new row is built in 2 stages:
+      //    - First, we pass mutable row (used as buffer/scratchpad) created above wrapped into [[RowUpdater]]
+      //      into generated row-writer
+      //    - Upon returning from row-writer, we call back into parent row's [[fieldUpdater]] to set returned
+      //      row as a value in it
+      writer(rowUpdater, value)
+      fieldUpdater.set(ordinal, newRow)
+    }
+  }
+
   private def newWriterRenaming(prevDataType: DataType,
                                 newDataType: DataType,
                                 renamedColumnsMap: JMap[String, String],
@@ -208,20 +263,7 @@ object HoodieInternalRowUtils {
         (fieldUpdater, ordinal, value) => fieldUpdater.set(ordinal, value)
 
       case (newStructType: StructType, prevStructType: StructType) =>
-        val writer = genUnsafeStructWriter(prevStructType, newStructType, renamedColumnsMap, fieldNameStack)
-
-        val newRow = new SpecificInternalRow(newStructType.fields.map(_.dataType))
-        val rowUpdater = new RowUpdater(newRow)
-
-        (fieldUpdater, ordinal, value) => {
-          // Here new row is built in 2 stages:
-          //    - First, we pass mutable row (used as buffer/scratchpad) created above wrapped into [[RowUpdater]]
-          //      into generated row-writer
-          //    - Upon returning from row-writer, we call back into parent row's [[fieldUpdater]] to set returned
-          //      row as a value in it
-          writer(rowUpdater, value)
-          fieldUpdater.set(ordinal, newRow)
-        }
+        modifiableRowWriter(prevStructType, newStructType, renamedColumnsMap, fieldNameStack)
 
       case (ArrayType(newElementType, _), ArrayType(prevElementType, containsNull)) =>
         fieldNameStack.push("element")

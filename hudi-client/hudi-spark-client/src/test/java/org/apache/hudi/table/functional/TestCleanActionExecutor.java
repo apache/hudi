@@ -34,7 +34,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -58,9 +57,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_PARSER;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.convertMetadataToByteArray;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -137,8 +137,8 @@ public class TestCleanActionExecutor {
     HoodieActiveTimeline cleanTimeline = mock(HoodieActiveTimeline.class);
     when(activeTimeline.getCleanerTimeline()).thenReturn(cleanTimeline);
     when(cleanTimeline.getInstants()).thenReturn(Collections.singletonList(cleanInstant));
-    when(activeTimeline.getInstantDetails(cleanInstant)).thenReturn(TimelineMetadataUtils.serializeCleanerPlan(cleanerPlan));
-    when(activeTimeline.readCleanerInfoAsBytes(cleanInstant)).thenReturn(TimelineMetadataUtils.serializeCleanerPlan(cleanerPlan));
+    when(activeTimeline.readCleanerPlan(cleanInstant)).thenReturn(cleanerPlan);
+    when(activeTimeline.readCleanerInfoAsBytes(cleanInstant)).thenReturn(Option.of(convertMetadataToByteArray(cleanerPlan)));
 
     when(mockHoodieTable.getCleanTimeline()).thenReturn(cleanTimeline);
     when(mockHoodieTable.getInstantGenerator()).thenReturn(INSTANT_GENERATOR);
@@ -147,7 +147,7 @@ public class TestCleanActionExecutor {
     HoodieTimeline inflightsAndRequestedTimeline = mock(HoodieTimeline.class);
     when(cleanTimeline.filterInflightsAndRequested()).thenReturn(inflightsAndRequestedTimeline);
     when(inflightsAndRequestedTimeline.getInstants()).thenReturn(Collections.singletonList(cleanInstant));
-    when(activeTimeline.transitionCleanRequestedToInflight(any(), any())).thenReturn(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.CLEAN_ACTION, "002"));
+    when(activeTimeline.transitionCleanRequestedToInflight(any())).thenReturn(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.CLEAN_ACTION, "002"));
     when(mockHoodieTable.getMetadataWriter("002")).thenReturn(Option.empty());
 
     CleanActionExecutor cleanActionExecutor = new CleanActionExecutor(context, config, mockHoodieTable, "002");

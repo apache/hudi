@@ -36,7 +36,7 @@ import org.apache.hudi.index.SparkHoodieIndexFactory;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
-import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
+import org.apache.hudi.metadata.SparkMetadataWriterFactory;
 import org.apache.hudi.table.action.commit.HoodieMergeHelper;
 
 import org.apache.hadoop.conf.Configuration;
@@ -75,7 +75,11 @@ public abstract class HoodieSparkTable<T>
         hoodieSparkTable = new HoodieSparkCopyOnWriteTable<>(config, context, metaClient);
         break;
       case MERGE_ON_READ:
-        hoodieSparkTable = new HoodieSparkMergeOnReadTable<>(config, context, metaClient);
+        if (metaClient.isMetadataTable()) {
+          hoodieSparkTable = new HoodieSparkMergeOnReadMetadataTable<>(config, context, metaClient);
+        } else {
+          hoodieSparkTable = new HoodieSparkMergeOnReadTable<>(config, context, metaClient);
+        }
         break;
       default:
         throw new HoodieException("Unsupported table type :" + metaClient.getTableType());
@@ -97,6 +101,9 @@ public abstract class HoodieSparkTable<T>
   protected Option<HoodieTableMetadataWriter> getMetadataWriter(
       String triggeringInstantTimestamp,
       HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy) {
+    if (isMetadataTable()) {
+      return Option.empty();
+    }
     if (config.isMetadataTableEnabled()) {
       // if any partition is deleted, we need to reload the metadata table writer so that new table configs are picked up
       // to reflect the delete mdt partitions.
@@ -105,9 +112,9 @@ public abstract class HoodieSparkTable<T>
       // Create the metadata table writer. First time after the upgrade this creation might trigger
       // metadata table bootstrapping. Bootstrapping process could fail and checking the table
       // existence after the creation is needed.
-      HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(
+      HoodieTableMetadataWriter metadataWriter = SparkMetadataWriterFactory.create(
           getContext().getStorageConf(), config, failedWritesCleaningPolicy, getContext(),
-          Option.of(triggeringInstantTimestamp));
+          Option.of(triggeringInstantTimestamp), metaClient.getTableConfig());
       try {
         if (isMetadataTableExists || metaClient.getStorage().exists(
             HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath()))) {

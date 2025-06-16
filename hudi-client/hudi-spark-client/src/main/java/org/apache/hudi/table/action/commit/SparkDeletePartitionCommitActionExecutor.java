@@ -18,14 +18,12 @@
 
 package org.apache.hudi.table.action.commit;
 
-import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.utils.DeletePartitionUtils;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -38,7 +36,6 @@ import org.apache.hudi.table.WorkloadStat;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import java.time.Duration;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -49,7 +46,7 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMI
 public class SparkDeletePartitionCommitActionExecutor<T>
     extends SparkInsertOverwriteCommitActionExecutor<T> {
 
-  private List<String> partitions;
+  private final List<String> partitions;
   public SparkDeletePartitionCommitActionExecutor(HoodieEngineContext context,
                                                   HoodieWriteConfig config, HoodieTable table,
                                                   String instantTime, List<String> partitions) {
@@ -80,19 +77,13 @@ public class SparkDeletePartitionCommitActionExecutor<T>
       if (!table.getStorage().exists(
           new StoragePath(table.getMetaClient().getTimelinePath(),
               instantFileNameGenerator.getFileName(dropPartitionsInstant)))) {
-        HoodieRequestedReplaceMetadata requestedReplaceMetadata =
-            HoodieRequestedReplaceMetadata.newBuilder()
-                .setOperationType(WriteOperationType.DELETE_PARTITION.name())
-                .setExtraMetadata(extraMetadata.orElse(Collections.emptyMap()))
-                .build();
-        table.getMetaClient().getActiveTimeline().saveToPendingReplaceCommit(dropPartitionsInstant,
-            TimelineMetadataUtils.serializeRequestedReplaceMetadata(requestedReplaceMetadata));
+        throw new HoodieDeletePartitionException("Commit instant was not created for instant " + instantTime);
       }
 
       this.saveWorkloadProfileMetadataToInflight(
           new WorkloadProfile(Pair.of(new HashMap<>(), new WorkloadStat())),
           instantTime);
-      this.commitOnAutoCommit(result);
+      runPrecommitValidators(result);
       return result;
     } catch (Exception e) {
       throw new HoodieDeletePartitionException("Failed to drop partitions for commit time " + instantTime, e);

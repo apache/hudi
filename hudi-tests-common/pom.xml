@@ -119,21 +119,12 @@
         </dependency>
         <dependency>
             <groupId>org.junit.platform</groupId>
-            <artifactId>junit-platform-suite-api</artifactId>
-            <scope>compile</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.junit.platform</groupId>
             <artifactId>junit-platform-commons</artifactId>
             <scope>compile</scope>
         </dependency>
-        <!-- This is to support @RunWith(JUnitPlatform.class),
-             which should be replaced by @ExtendWith in JUnit 5
-             TODO remove this junit4 lib HUDI-2516 -->
         <dependency>
-            <groupId>junit</groupId>
-            <artifactId>junit</artifactId>
-            <version>4.13.2</version>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-inline</artifactId>
             <scope>compile</scope>
         </dependency>
 
@@ -164,6 +155,10 @@
                 <exclusion>
                     <groupId>org.slf4j</groupId>
                     <artifactId>slf4j-reload4j</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>io.netty</groupId>
+                    <artifactId>*</artifactId>
                 </exclusion>
             </exclusions>
         </dependency>
@@ -199,6 +194,18 @@
             <classifier>tests</classifier>
             <scope>compile</scope>
         </dependency>
+        <dependency>
+            <groupId>org.apache.hadoop</groupId>
+            <artifactId>hadoop-mapreduce-client-core</artifactId>
+            <version>${hadoop.version}</version>
+            <scope>compile</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>io.netty</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
 
         <!-- scala -->
         <dependency>
@@ -226,6 +233,17 @@
                     <artifactId>objenesis</artifactId>
                 </exclusion>
             </exclusions>
+        </dependency>
+
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers</artifactId>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>localstack</artifactId>
+            <scope>compile</scope>
         </dependency>
     </dependencies>
 </project>

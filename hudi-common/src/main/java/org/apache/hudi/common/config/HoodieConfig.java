@@ -55,12 +55,12 @@ public class HoodieConfig implements Serializable {
     this.props = new TypedProperties();
   }
 
-  public HoodieConfig(Properties props) {
-    this.props = new TypedProperties(props);
-  }
-
   public HoodieConfig(TypedProperties props) {
     this.props = props;
+  }
+
+  protected HoodieConfig(Properties props) {
+    this.props = TypedProperties.copy(props);
   }
 
   public <T> void setValue(ConfigProperty<T> cfg, String val) {
@@ -113,7 +113,7 @@ public class HoodieConfig implements Serializable {
     }
   }
 
-  public Boolean contains(String key) {
+  public boolean contains(String key) {
     return props.containsKey(key);
   }
 
@@ -242,6 +242,10 @@ public class HoodieConfig implements Serializable {
     return rawValue.map(Object::toString).orElse(defaultVal);
   }
 
+  public String getStringOrDefault(String key, String defaultVal) {
+    return Option.ofNullable(props.getProperty(key)).orElse(defaultVal);
+  }
+
   public TypedProperties getProps() {
     return props;
   }
@@ -273,5 +277,9 @@ public class HoodieConfig implements Serializable {
     } else {
       throw new HoodieException(errorMessage);
     }
+  }
+
+  public static HoodieConfig copy(Properties props) {
+    return new HoodieConfig(props);
   }
 }

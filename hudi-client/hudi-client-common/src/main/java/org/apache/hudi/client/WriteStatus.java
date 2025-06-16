@@ -61,6 +61,8 @@ public class WriteStatus implements Serializable {
 
   private final List<Pair<HoodieRecordDelegate, Throwable>> failedRecords = new ArrayList<>();
 
+  // true if this WriteStatus refers to a write happening in metadata table.
+  private final boolean isMetadataTable;
   private Throwable globalError = null;
 
   private String fileId = null;
@@ -76,16 +78,22 @@ public class WriteStatus implements Serializable {
   private final boolean trackSuccessRecords;
   private final transient Random random;
 
-  public WriteStatus(Boolean trackSuccessRecords, Double failureFraction) {
+  public WriteStatus(Boolean trackSuccessRecords, Double failureFraction, Boolean isMetadataTable) {
     this.trackSuccessRecords = trackSuccessRecords;
     this.failureFraction = failureFraction;
     this.random = new Random(RANDOM_SEED);
+    this.isMetadataTable = isMetadataTable;
+  }
+
+  public WriteStatus(Boolean trackSuccessRecords, Double failureFraction) {
+    this(trackSuccessRecords, failureFraction, false);
   }
 
   public WriteStatus() {
     this.failureFraction = 0.0d;
     this.trackSuccessRecords = false;
     this.random = null;
+    this.isMetadataTable = false;
   }
 
   /**
@@ -140,7 +148,7 @@ public class WriteStatus implements Serializable {
       stat.setMinEventTime(eventTime);
       stat.setMaxEventTime(eventTime);
     } catch (DateTimeException | IllegalArgumentException e) {
-      LOG.debug(String.format("Fail to parse event time value: %s", eventTimeVal), e);
+      LOG.debug("Fail to parse event time value: {}", eventTimeVal, e);
     }
   }
 
@@ -179,6 +187,21 @@ public class WriteStatus implements Serializable {
   private void updateStatsForFailure() {
     totalRecords++;
     totalErrorRecords++;
+  }
+
+  public WriteStatus removeMetadataIndexStatsAndErrorRecordsTracking() {
+    removeMetadataStats();
+    dropGranularErrorRecordsTracking();
+    return this;
+  }
+
+  public WriteStatus removeMetadataStats() {
+    this.writtenRecordDelegates.clear();
+    return this;
+  }
+
+  public void dropGranularErrorRecordsTracking() {
+    failedRecords.clear();
   }
 
   public String getFileId() {
@@ -257,16 +280,20 @@ public class WriteStatus implements Serializable {
     return trackSuccessRecords;
   }
 
+  public boolean isMetadataTable() {
+    return isMetadataTable;
+  }
+
   @Override
   public String toString() {
-    final StringBuilder sb = new StringBuilder("WriteStatus {");
-    sb.append("fileId=").append(fileId);
-    sb.append(", writeStat=").append(stat);
-    sb.append(", globalError='").append(globalError).append('\'');
-    sb.append(", hasErrors='").append(hasErrors()).append('\'');
-    sb.append(", errorCount='").append(totalErrorRecords).append('\'');
-    sb.append(", errorPct='").append((100.0 * totalErrorRecords) / totalRecords).append('\'');
-    sb.append('}');
-    return sb.toString();
+    return "WriteStatus {"
+        + "isMetadataTable=" + isMetadataTable
+        + ", fileId=" + fileId
+        + ", writeStat=" + stat
+        + ", globalError='" + globalError + '\''
+        + ", hasErrors='" + hasErrors() + '\''
+        + ", errorCount='" + totalErrorRecords + '\''
+        + ", errorPct='" + (100.0 * totalErrorRecords) / totalRecords + '\''
+        + '}';
   }
 }

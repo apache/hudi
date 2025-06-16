@@ -17,7 +17,8 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.hudi.{HoodieCLIUtils, SparkAdapterSupport}
+import org.apache.hudi.HoodieCLIUtils
+import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.model.HoodieCommitMetadata
 import org.apache.hudi.common.table.timeline.HoodieTimeline
@@ -105,10 +106,10 @@ class RunCompactionProcedure extends BaseProcedure with ProcedureBuilder with Sp
       }
 
       if (operation.isSchedule) {
-        val instantTime = client.createNewInstantTime()
-        if (client.scheduleCompactionAtInstant(instantTime, HOption.empty[java.util.Map[String, String]])) {
-          filteredPendingCompactionInstants = Seq(instantTime)
-        }
+        val instantTime = client.scheduleCompaction(HOption.empty[java.util.Map[String, String]])
+        instantTime.ifPresent(instant => {
+          filteredPendingCompactionInstants = Seq(instant)
+        })
       }
 
       logInfo(s"Compaction instants to run: ${filteredPendingCompactionInstants.mkString(",")}.")
@@ -117,8 +118,8 @@ class RunCompactionProcedure extends BaseProcedure with ProcedureBuilder with Sp
         val timer = HoodieTimer.start
         filteredPendingCompactionInstants.foreach { compactionInstant =>
           val writeResponse = client.compact(compactionInstant)
+          client.commitCompaction(compactionInstant, writeResponse, HOption.empty())
           handleResponse(writeResponse.getCommitMetadata.get())
-          client.commitCompaction(compactionInstant, writeResponse.getCommitMetadata.get(), HOption.empty())
         }
         logInfo(s"Finish Run compaction at instants: [${filteredPendingCompactionInstants.mkString(",")}]," +
           s" spend: ${timer.endTimer()}ms")

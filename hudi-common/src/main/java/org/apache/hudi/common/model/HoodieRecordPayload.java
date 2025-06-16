@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
@@ -150,6 +151,10 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
     switch (mergeMode) {
       //TODO: After we have merge mode working for writing, we should have a dummy payload that will throw exception when used
       case EVENT_TIME_ORDERING:
+        if (!StringUtils.isNullOrEmpty(payloadClassName)
+            && payloadClassName.contains(EventTimeAvroPayload.class.getName())) {
+          return EventTimeAvroPayload.class.getName();
+        }
         return DefaultHoodieRecordPayload.class.getName();
       case COMMIT_TIME_ORDERING:
         return OverwriteWithLatestAvroPayload.class.getName();
@@ -160,11 +165,15 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
   }
 
   static String getPayloadClassName(HoodieConfig config) {
+    return getPayloadClassName(config.getProps());
+  }
+
+  static String getPayloadClassName(Properties props) {
     String payloadClassName;
-    if (config.contains(PAYLOAD_CLASS_NAME)) {
-      payloadClassName = config.getString(PAYLOAD_CLASS_NAME);
-    } else if (config.contains("hoodie.datasource.write.payload.class")) {
-      payloadClassName = config.getString("hoodie.datasource.write.payload.class");
+    if (props.containsKey(PAYLOAD_CLASS_NAME.key())) {
+      payloadClassName = props.getProperty(PAYLOAD_CLASS_NAME.key());
+    } else if (props.containsKey("hoodie.datasource.write.payload.class")) {
+      payloadClassName = props.getProperty("hoodie.datasource.write.payload.class");
     } else {
       return HoodieTableConfig.DEFAULT_PAYLOAD_CLASS_NAME;
     }

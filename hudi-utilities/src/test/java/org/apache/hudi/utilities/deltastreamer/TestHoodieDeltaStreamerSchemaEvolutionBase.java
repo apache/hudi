@@ -24,6 +24,7 @@ import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.TestHoodieSparkUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.TypedProperties;
@@ -70,6 +71,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -104,6 +106,9 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
   protected boolean withErrorTable;
   protected boolean useTransformer;
   protected boolean userProvidedSchema;
+  protected boolean writeErrorTableInParallelWithBaseTable;
+  protected int dfsSourceLimitBytes = 100000;
+  protected WriteOperationType writeOperationType = WriteOperationType.UPSERT;
 
   @BeforeAll
   public static void initKafka() {
@@ -194,6 +199,9 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
       extraProps.setProperty(HoodieErrorTableConfig.ERROR_TABLE_BASE_PATH.key(), basePath + tableName + "ERROR");
       extraProps.setProperty(HoodieErrorTableConfig.ERROR_TABLE_WRITE_CLASS.key(), TestErrorTable.class.getName());
       extraProps.setProperty("hoodie.base.path", tableBasePath);
+      if (writeErrorTableInParallelWithBaseTable) {
+        extraProps.setProperty(HoodieErrorTableConfig.ENABLE_ERROR_TABLE_WRITE_UNIFICATION.key(), "true");
+      }
     }
 
     List<String> transformerClassNames = new ArrayList<>();
@@ -209,7 +217,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
           PARQUET_SOURCE_ROOT, false, "partition_path", "", extraProps, false);
       cfg = TestHoodieDeltaStreamer.TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, ParquetDFSSource.class.getName(),
           transformerClassNames, PROPS_FILENAME_TEST_PARQUET, false,
-          useSchemaProvider, 100000, false, null, tableType, "timestamp", null);
+          useSchemaProvider, dfsSourceLimitBytes, false, null, tableType, "timestamp", null);
     }
     cfg.forceDisableCompaction = !shouldCompact;
     return cfg;
@@ -353,6 +361,44 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
     @Override
     public void addErrorEvents(JavaRDD errorEvent) {
       errorEvents.add(errorEvent);
+    }
+
+    @Override
+    public boolean commit(String errorTableInstantTime, JavaRDD writeStatuses) {
+      if (writeStatuses == null) {
+        throw new IllegalArgumentException("writeStatuses cannot be null");
+      }
+      commited.clear();
+      commited.put(errorTableInstantTime, Option.of(writeStatuses));
+      return true;
+    }
+
+    @Override
+    public JavaRDD<WriteStatus> upsert(String errorTableInstantTime, String baseTableInstantTime, Option commitedInstantTime) {
+      if (errorEvents.size() > 0) {
+        JavaRDD errorsCombined = errorEvents.get(0);
+        for (int i = 1; i < errorEvents.size(); i++) {
+          errorsCombined = errorsCombined.union(errorEvents.get(i));
+        }
+        JavaRDD writeStatus = errorsCombined.mapPartitions(partition -> {
+          Iterator itr = (Iterator) partition;
+          long count = 0;
+          while (itr.hasNext()) {
+            itr.next();
+            count++;
+          }
+          List<WriteStatus> result = new ArrayList<>();
+          if (count > 0) {
+            WriteStatus status = new WriteStatus();
+            status.setTotalRecords(count);
+            result.add(status);
+          }
+          return result.iterator();
+        });
+        errorEvents = new ArrayList<>();
+        return writeStatus;
+      }
+      return null;
     }
 
     @Override

@@ -28,8 +28,6 @@ import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
-import org.apache.hudi.common.table.timeline.versioning.v1.InstantComparatorV1;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -54,16 +52,14 @@ import static org.apache.hudi.common.util.CleanerUtils.SAVEPOINTED_TIMESTAMPS;
 import static org.apache.hudi.common.util.MapUtils.nonEmpty;
 
 public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieCleanerPlan>> {
-
   private static final Logger LOG = LoggerFactory.getLogger(CleanPlanActionExecutor.class);
   private final Option<Map<String, String>> extraMetadata;
 
   public CleanPlanActionExecutor(HoodieEngineContext context,
                                  HoodieWriteConfig config,
                                  HoodieTable<T, I, K, O> table,
-                                 String instantTime,
                                  Option<Map<String, String>> extraMetadata) {
-    super(context, config, table, instantTime);
+    super(context, config, table, null);
     this.extraMetadata = extraMetadata;
   }
 
@@ -74,8 +70,7 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
     int numCommits;
     if (lastCleanInstant.isPresent() && !table.getActiveTimeline().isEmpty(lastCleanInstant.get())) {
       try {
-        HoodieCleanMetadata cleanMetadata = TimelineMetadataUtils
-            .deserializeHoodieCleanMetadata(table.getActiveTimeline().getInstantDetails(lastCleanInstant.get()).get());
+        HoodieCleanMetadata cleanMetadata = table.getActiveTimeline().readCleanMetadata(lastCleanInstant.get());
         String lastCompletedCommitTimestamp = cleanMetadata.getLastCompletedCommitTimestamp();
         numCommits = commitTimeline.findInstantsAfter(lastCompletedCommitTimestamp).countInstants();
       } catch (IOException e) {
@@ -168,11 +163,11 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
 
   private Map<String, String> prepareExtraMetadata(List<String> savepointedTimestamps) {
     if (savepointedTimestamps.isEmpty()) {
-      return Collections.emptyMap();
+      return extraMetadata.orElse(Collections.emptyMap());
     } else {
-      Map<String, String> extraMetadata = new HashMap<>();
-      extraMetadata.put(SAVEPOINTED_TIMESTAMPS, savepointedTimestamps.stream().collect(Collectors.joining(",")));
-      return extraMetadata;
+      Map<String, String> metadataWithSavepoints = extraMetadata.orElseGet(() -> new HashMap<>());
+      metadataWithSavepoints.put(SAVEPOINTED_TIMESTAMPS, savepointedTimestamps.stream().collect(Collectors.joining(",")));
+      return metadataWithSavepoints;
     }
   }
 
@@ -180,45 +175,37 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
    * Creates a Cleaner plan if there are files to be cleaned and stores them in instant file.
    * Cleaner Plan contains absolute file paths.
    *
-   * @param startCleanTime Cleaner Instant Time
    * @return Cleaner Plan if generated
    */
-  protected Option<HoodieCleanerPlan> requestClean(String startCleanTime) {
+  protected Option<HoodieCleanerPlan> requestClean() {
     // Check if the last clean completed successfully and wrote out its metadata. If not, it should be retried.
     Option<HoodieInstant> lastClean = table.getCleanTimeline().filterCompletedInstants().lastInstant();
-    if (lastClean.isPresent()) {
+    while (lastClean.map(table.getActiveTimeline()::isEmpty).orElse(false)) {
       HoodieInstant cleanInstant = lastClean.get();
       HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
-      if (activeTimeline.isEmpty(cleanInstant)) {
-        activeTimeline.deleteEmptyInstantIfExists(cleanInstant);
-        HoodieInstant cleanPlanInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, cleanInstant.getAction(), cleanInstant.requestedTime(), InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
-        try {
-          Option<byte[]> content = activeTimeline.getInstantDetails(cleanPlanInstant);
-          // Deserialize plan if it is non-empty
-          if (content.map(bytes -> bytes.length > 0).orElse(false)) {
-            return Option.of(TimelineMetadataUtils.deserializeCleanerPlan(content.get()));
-          } else {
-            return Option.of(new HoodieCleanerPlan());
-          }
-        } catch (IOException ex) {
+      activeTimeline.deleteEmptyInstantIfExists(cleanInstant);
+      HoodieInstant cleanPlanInstant = instantGenerator.getCleanRequestedInstant(cleanInstant.requestedTime());
+      try {
+        // Deserialize plan.
+        return Option.of(activeTimeline.readCleanerPlan(cleanPlanInstant));
+      } catch (IOException ex) {
+        // If it is empty we catch error and repair by deleting the empty plan and inflight instant.
+        if (activeTimeline.isEmpty(cleanPlanInstant)) {
+          activeTimeline.deleteEmptyInstantIfExists(instantGenerator.getCleanInflightInstant(cleanInstant.requestedTime()));
+          activeTimeline.deleteEmptyInstantIfExists(cleanPlanInstant);
+        } else {
           throw new HoodieIOException("Failed to parse cleaner plan", ex);
         }
       }
+      table.getMetaClient().reloadActiveTimeline();
+      lastClean = table.getCleanTimeline().filterCompletedInstants().lastInstant();
     }
+
     final HoodieCleanerPlan cleanerPlan = requestClean(context);
     Option<HoodieCleanerPlan> option = Option.empty();
     if (nonEmpty(cleanerPlan.getFilePathsToBeDeletedPerPartition())
         && cleanerPlan.getFilePathsToBeDeletedPerPartition().values().stream().mapToInt(List::size).sum() > 0) {
       // Only create cleaner plan which does some work
-      final HoodieInstant cleanInstant = instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, startCleanTime);
-      // Save to both aux and timeline folder
-      try {
-        table.getActiveTimeline().saveToCleanRequested(cleanInstant, TimelineMetadataUtils.serializeCleanerPlan(cleanerPlan));
-        LOG.info("Requesting Cleaning with instant time " + cleanInstant);
-      } catch (IOException e) {
-        LOG.error("Got exception when saving cleaner requested file", e);
-        throw new HoodieIOException(e.getMessage(), e);
-      }
       option = Option.of(cleanerPlan);
     }
 
@@ -231,7 +218,7 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
       return Option.empty();
     }
     // Plan a new clean action
-    return requestClean(instantTime);
+    return requestClean();
   }
 
 }

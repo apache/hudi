@@ -28,7 +28,6 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
@@ -112,7 +111,7 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
     // read HoodieIndexPlan
     HoodieIndexPlan indexPlan;
     try {
-      indexPlan = TimelineMetadataUtils.deserializeIndexPlan(table.getActiveTimeline().readIndexPlanAsBytes(indexInstant).get());
+      indexPlan = table.getActiveTimeline().readIndexPlan(indexInstant);
     } catch (IOException e) {
       throw new HoodieIndexException("Failed to read the index plan for instant: " + indexInstant);
     }
@@ -137,7 +136,7 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
       }
 
       // transition requested indexInstant to inflight
-      table.getActiveTimeline().transitionIndexRequestedToInflight(indexInstant, Option.empty());
+      table.getActiveTimeline().transitionIndexRequestedToInflight(indexInstant);
       List<HoodieIndexPartitionInfo> finalIndexPartitionInfos;
       if (!firstTimeInitializingMetadataTable) {
         // start indexing for each partition
@@ -267,13 +266,13 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
                                             HoodieIndexCommitMetadata indexCommitMetadata) throws IOException {
     try {
       // update the table config and timeline in a lock as there could be another indexer running
-      txnManager.beginTransaction(Option.of(indexInstant), Option.empty());
+      txnManager.beginStateChange(Option.of(indexInstant), Option.empty());
       updateMetadataPartitionsTableConfig(table.getMetaClient(),
           finalIndexPartitionInfos.stream().map(HoodieIndexPartitionInfo::getMetadataPartitionPath).collect(Collectors.toSet()));
       table.getActiveTimeline().saveAsComplete(false, instantGenerator.createNewInstant(HoodieInstant.State.INFLIGHT, INDEXING_ACTION, indexInstant.requestedTime()),
-          TimelineMetadataUtils.serializeIndexCommitMetadata(indexCommitMetadata));
+          Option.of(indexCommitMetadata));
     } finally {
-      txnManager.endTransaction(Option.of(indexInstant));
+      txnManager.endStateChange(Option.of(indexInstant));
     }
   }
 

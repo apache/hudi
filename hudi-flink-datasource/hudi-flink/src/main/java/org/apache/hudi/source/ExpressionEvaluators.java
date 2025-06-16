@@ -33,7 +33,7 @@ import org.apache.flink.table.types.logical.LogicalType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.validation.constraints.NotNull;
+import org.jetbrains.annotations.NotNull;
 
 import java.io.Serializable;
 import java.math.BigDecimal;
@@ -571,9 +571,9 @@ public class ExpressionEvaluators {
     } else if (value instanceof Double) {
       // new BigDecimal() are used instead of BigDecimal.valueOf() due to
       // receive exact decimal representation of the double's binary floating-point value
-      return new BigDecimal((Double) value);
+      return BigDecimal.valueOf((Double) value);
     } else if (value instanceof Float) {
-      return new BigDecimal(((Float) value).doubleValue());
+      return BigDecimal.valueOf(((Float) value).doubleValue());
     } else if (value instanceof Long) {
       return new BigDecimal((Long) value);
     } else if (value instanceof Integer) {

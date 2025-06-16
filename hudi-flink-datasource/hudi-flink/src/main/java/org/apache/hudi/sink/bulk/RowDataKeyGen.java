@@ -24,12 +24,14 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieKeyException;
+import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator;
 import org.apache.hudi.util.RowDataProjection;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
@@ -50,10 +52,6 @@ public class RowDataKeyGen implements Serializable {
 
   // reference: NonpartitionedAvroKeyGenerator
   private static final String EMPTY_PARTITION = "";
-
-  // reference: org.apache.hudi.keygen.KeyGenUtils
-  private static final String NULL_RECORDKEY_PLACEHOLDER = "__null__";
-  private static final String EMPTY_RECORDKEY_PLACEHOLDER = "__empty__";
 
   private static final String DEFAULT_PARTITION_PATH_SEPARATOR = "/";
   private static final String DEFAULT_FIELD_SEPARATOR = ",";
@@ -167,32 +165,9 @@ public class RowDataKeyGen implements Serializable {
     }
   }
 
-  // reference: org.apache.hudi.keygen.KeyGenUtils.getRecordKey
   private static String getRecordKey(Object[] keyValues, String[] keyFields, boolean consistentLogicalTimestampEnabled) {
-    boolean keyIsNullEmpty = true;
-    StringBuilder recordKey = new StringBuilder();
-    for (int i = 0; i < keyValues.length; i++) {
-      String recordKeyField = keyFields[i];
-      Object value = keyValues[i];
-      value = getTimestampValue(consistentLogicalTimestampEnabled, value);
-      String recordKeyValue = StringUtils.objToString(value);
-      if (recordKeyValue == null) {
-        recordKey.append(recordKeyField).append(":").append(NULL_RECORDKEY_PLACEHOLDER);
-      } else if (recordKeyValue.isEmpty()) {
-        recordKey.append(recordKeyField).append(":").append(EMPTY_RECORDKEY_PLACEHOLDER);
-      } else {
-        recordKey.append(recordKeyField).append(":").append(recordKeyValue);
-        keyIsNullEmpty = false;
-      }
-      if (i != keyValues.length - 1) {
-        recordKey.append(DEFAULT_FIELD_SEPARATOR);
-      }
-    }
-    if (keyIsNullEmpty) {
-      throw new HoodieKeyException(String.format("recordKey values: \"%s\" for fields: %s cannot be entirely null or empty.",
-          recordKey, Arrays.toString(keyFields)));
-    }
-    return recordKey.toString();
+    return KeyGenerator.constructRecordKey(keyFields,
+        (key, index) -> StringUtils.objToString(getTimestampValue(consistentLogicalTimestampEnabled, keyValues[index])));
   }
 
   private static Object getTimestampValue(boolean consistentLogicalTimestampEnabled, Object value) {
@@ -270,6 +245,10 @@ public class RowDataKeyGen implements Serializable {
     if (val == null) {
       // should match the default partition path when STRING partition path re-format is supported
       return keyGenerator.getDefaultPartitionVal();
+    }
+    if (val instanceof StringData) {
+      // case of `TimestampType.DATE_STRING`, need to convert to string for consequent processing in `hudi-client-common` module
+      return val.toString();
     }
     return val;
   }

@@ -38,7 +38,7 @@ import java.util.regex.Pattern;
  * Documentation: https://docs.confluent.io/current/connect/kafka-connect-hdfs/index.html
  */
 public class KafkaConnectHdfsProvider extends InitialCheckPointProvider {
-  private static String FILENAME_SEPARATOR = "[\\+\\.]";
+  private static final String FILENAME_SEPARATOR = "[\\+\\.]";
 
   public KafkaConnectHdfsProvider(TypedProperties props) {
     super(props);

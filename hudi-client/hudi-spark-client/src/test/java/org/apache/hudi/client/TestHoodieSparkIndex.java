@@ -59,7 +59,7 @@ public class TestHoodieSparkIndex extends HoodieClientTestBase {
 
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
       String commitTime1 = "001";
-      client.startCommitWithTime(commitTime1);
+      WriteClientTestUtils.startCommitWithTime(client, commitTime1);
       List<HoodieRecord> records1 = dataGen.generateInserts(commitTime1, 200);
       JavaRDD<HoodieRecord> writeRecords1 = jsc.parallelize(records1, 1);
       List<WriteStatus> statuses1 = client.upsert(writeRecords1, commitTime1).collect();

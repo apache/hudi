@@ -51,10 +51,6 @@ import java.util.function.Supplier;
 import scala.Function1;
 
 import static org.apache.hudi.common.util.CollectionUtils.tail;
-import static org.apache.hudi.keygen.KeyGenUtils.DEFAULT_COLUMN_VALUE_SEPARATOR;
-import static org.apache.hudi.keygen.KeyGenUtils.DEFAULT_RECORD_KEY_PARTS_SEPARATOR;
-import static org.apache.hudi.keygen.KeyGenUtils.EMPTY_RECORDKEY_PLACEHOLDER;
-import static org.apache.hudi.keygen.KeyGenUtils.NULL_RECORDKEY_PLACEHOLDER;
 
 /**
  * Base class for all built-in key generators.

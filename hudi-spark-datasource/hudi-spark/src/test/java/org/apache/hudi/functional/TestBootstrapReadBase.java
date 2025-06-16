@@ -41,7 +41,6 @@ import org.apache.spark.sql.SaveMode;
 import org.apache.spark.sql.functions;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
@@ -54,7 +53,6 @@ import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
 import static org.apache.hudi.common.testutils.RawTripTestPayload.recordToString;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-@Tag("functional")
 public abstract class TestBootstrapReadBase extends HoodieSparkClientTestBase {
 
   @TempDir
@@ -96,6 +94,7 @@ public abstract class TestBootstrapReadBase extends HoodieSparkClientTestBase {
     options.put(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING().key(), "true");
     options.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
     options.put(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "false");
+    options.put(HoodieWriteConfig.MARKERS_TIMELINE_SERVER_BASED_BATCH_INTERVAL_MS.key(), "10");
     if (nPartitions == 0) {
       options.put(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), NonpartitionedKeyGenerator.class.getName());
     } else {

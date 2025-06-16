@@ -22,11 +22,13 @@ import org.apache.hudi.client.timeline.HoodieTimelineArchiver;
 import org.apache.hudi.client.timeline.versioning.v2.TimelineArchiverV2;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
 import org.apache.hudi.common.testutils.HoodieTestTable;
@@ -103,7 +105,7 @@ public class TestHoodieMetadataBase extends HoodieSparkClientTestHarness {
     initHoodieStorage();
     storage.createDirectory(new StoragePath(basePath));
     initTimelineService();
-    initMetaClient(tableType);
+    initMetaClient(tableType, writeConfig.map(conf -> conf.getProps()).orElse(new TypedProperties()));
     initTestDataGenerator();
     metadataTableBasePath = HoodieTableMetadata.getMetadataTableBasePath(basePath);
     this.writeConfig = writeConfig.isPresent()
@@ -330,7 +332,6 @@ public class TestHoodieMetadataBase extends HoodieSparkClientTestHarness {
     Properties properties = new Properties();
     return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(TRIP_EXAMPLE_SCHEMA)
         .withParallelism(2, 2).withDeleteParallelism(2).withRollbackParallelism(2).withFinalizeWriteParallelism(2)
-        .withAutoCommit(autoCommit)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(0)
             .withInlineCompaction(false).withMaxNumDeltaCommitsBeforeCompaction(1).build())
         .withCleanConfig(HoodieCleanConfig.newBuilder()
@@ -354,6 +355,7 @@ public class TestHoodieMetadataBase extends HoodieSparkClientTestHarness {
   }
 
   protected HoodieWriteConfig getMetadataWriteConfig(HoodieWriteConfig writeConfig) {
-    return HoodieMetadataWriteUtils.createMetadataWriteConfig(writeConfig, HoodieFailedWritesCleaningPolicy.LAZY);
+    return HoodieMetadataWriteUtils.createMetadataWriteConfig(writeConfig,
+        HoodieFailedWritesCleaningPolicy.LAZY, HoodieTableVersion.EIGHT);
   }
 }

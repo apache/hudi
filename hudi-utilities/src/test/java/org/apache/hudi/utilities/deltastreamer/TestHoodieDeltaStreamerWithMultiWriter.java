@@ -27,7 +27,6 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.checkpoint.CheckpointUtils;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineLayout;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
@@ -147,9 +146,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
     cfgBackfillJob.continuousMode = false;
     HoodieTableMetaClient meta = createMetaClient(new HadoopStorageConfiguration(hadoopConf), tableBasePath);
     HoodieTimeline timeline = meta.reloadActiveTimeline().getCommitsTimeline().filterCompletedInstants();
-    TimelineLayout layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion());
-    HoodieCommitMetadata commitMetadata = layout.getCommitMetadataSerDe()
-        .deserialize(timeline.firstInstant().get(), timeline.getInstantDetails(timeline.firstInstant().get()).get(), HoodieCommitMetadata.class);
+    HoodieCommitMetadata commitMetadata = timeline.readCommitMetadata(timeline.firstInstant().get());
     cfgBackfillJob.checkpoint = commitMetadata.getMetadata(CHECKPOINT_KEY);
     cfgBackfillJob.configs.add(String.format("%s=%d", SourceTestConfig.MAX_UNIQUE_RECORDS_PROP.key(), totalRecords));
     cfgBackfillJob.configs.add(String.format("%s=false", HoodieCleanConfig.AUTO_CLEAN.key()));
@@ -216,8 +213,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
     cfgBackfillJob2.continuousMode = false;
     HoodieTableMetaClient meta = createMetaClient(new HadoopStorageConfiguration(hadoopConf), tableBasePath);
     HoodieTimeline timeline = meta.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
-    HoodieCommitMetadata commitMetadata = meta.getCommitMetadataSerDe().deserialize(
-        timeline.firstInstant().get(), timeline.getInstantDetails(timeline.firstInstant().get()).get(), HoodieCommitMetadata.class);
+    HoodieCommitMetadata commitMetadata = timeline.readCommitMetadata(timeline.firstInstant().get());
     cfgBackfillJob2.checkpoint = commitMetadata.getMetadata(CHECKPOINT_KEY);
     cfgBackfillJob2.configs.add(String.format("%s=%d", SourceTestConfig.MAX_UNIQUE_RECORDS_PROP.key(), totalRecords));
     cfgBackfillJob2.configs.add(String.format("%s=false", HoodieCleanConfig.AUTO_CLEAN.key()));
@@ -327,8 +323,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
       throws IOException {
     HoodieTimeline timeline =
         meta.getActiveTimeline().reload().getCommitsTimeline().filterCompletedInstants();
-    return meta.getCommitMetadataSerDe().deserialize(
-        timeline.firstInstant().get(), timeline.getInstantDetails(timeline.lastInstant().get()).get(), HoodieCommitMetadata.class);
+    return timeline.readCommitMetadata(timeline.lastInstant().get());
   }
 
   private static TypedProperties prepareMultiWriterProps(HoodieStorage storage, String basePath,

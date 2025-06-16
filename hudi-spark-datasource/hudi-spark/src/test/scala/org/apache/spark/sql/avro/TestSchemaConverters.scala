@@ -20,8 +20,8 @@ package org.apache.spark.sql.avro
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats
 
 import org.apache.spark.sql.avro.SchemaConverters.SchemaType
-import org.junit.Test
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Test
 
 class TestSchemaConverters {
 

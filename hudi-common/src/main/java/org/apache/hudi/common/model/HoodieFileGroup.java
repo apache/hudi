@@ -183,7 +183,7 @@ public class HoodieFileGroup implements Serializable {
   }
 
   public Stream<FileSlice> getAllFileSlicesBeforeOn(String maxInstantTime) {
-    return fileSlices.values().stream().filter(slice -> compareTimestamps(slice.getBaseInstantTime(), LESSER_THAN_OR_EQUALS, maxInstantTime));
+    return getAllFileSlices().filter(slice -> compareTimestamps(slice.getBaseInstantTime(), LESSER_THAN_OR_EQUALS, maxInstantTime));
   }
 
   /**
@@ -236,12 +236,10 @@ public class HoodieFileGroup implements Serializable {
 
   @Override
   public String toString() {
-    final StringBuilder sb = new StringBuilder("HoodieFileGroup {");
-    sb.append("id=").append(fileGroupId);
-    sb.append(", fileSlices='").append(fileSlices).append('\'');
-    sb.append(", lastInstant='").append(lastInstant).append('\'');
-    sb.append('}');
-    return sb.toString();
+    return "HoodieFileGroup {" + "id=" + fileGroupId
+        + ", fileSlices='" + fileSlices + '\''
+        + ", lastInstant='" + lastInstant + '\''
+        + '}';
   }
 
   public void addFileSlice(FileSlice slice) {

@@ -88,12 +88,11 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
   }
 
   @Override
-  public byte[] getContentBytes(HoodieStorage storage) throws IOException {
-    Option<byte[]> content = getContent();
-
+  public ByteArrayOutputStream getContentBytes(HoodieStorage storage) throws IOException {
     // In case this method is called before realizing keys from content
-    if (content.isPresent()) {
-      return content.get();
+    Option<ByteArrayOutputStream> baosOpt = getContentAsByteStream();
+    if (baosOpt.isPresent()) {
+      return baosOpt.get();
     } else if (readBlockLazily && recordsToDelete == null) {
       // read block lazily
       getRecordsToDelete();
@@ -105,7 +104,7 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
     byte[] bytesToWrite = (version <= 2) ? serializeV2() : serializeV3();
     output.writeInt(bytesToWrite.length);
     output.write(bytesToWrite);
-    return baos.toByteArray();
+    return baos;
   }
 
   public DeleteRecord[] getRecordsToDelete() {
@@ -159,10 +158,10 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
   private static DeleteRecord[] deserialize(int version, byte[] data) throws IOException {
     if (version == 1) {
       // legacy version
-      HoodieKey[] keys = SerializationUtils.<HoodieKey[]>deserialize(data);
+      HoodieKey[] keys = SerializationUtils.deserialize(data);
       return Arrays.stream(keys).map(DeleteRecord::create).toArray(DeleteRecord[]::new);
     } else if (version == 2) {
-      return SerializationUtils.<DeleteRecord[]>deserialize(data);
+      return SerializationUtils.deserialize(data);
     } else {
       DatumReader<HoodieDeleteRecordList> reader = new SpecificDatumReader<>(HoodieDeleteRecordList.class);
       BinaryDecoder decoder = DecoderFactory.get().binaryDecoder(data, 0, data.length, null);

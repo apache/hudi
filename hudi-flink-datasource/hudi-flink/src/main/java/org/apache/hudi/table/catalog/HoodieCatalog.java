@@ -352,12 +352,13 @@ public class HoodieCatalog extends AbstractCatalog {
     }
     conf.setString(FlinkOptions.TABLE_NAME, tablePath.getObjectName());
     try {
-      StreamerUtil.initTableIfNotExists(conf);
+      HoodieTableMetaClient metaClient = StreamerUtil.initTableIfNotExists(conf);
       // prepare the non-table-options properties
       if (!StringUtils.isNullOrEmpty(resolvedTable.getComment())) {
         options.put(TableOptionProperties.COMMENT, resolvedTable.getComment());
       }
       TableOptionProperties.createProperties(tablePathStr, hadoopConf, options);
+      HoodieCatalogUtil.initPartitionBucketIndexMeta(metaClient, catalogTable);
     } catch (IOException e) {
       throw new CatalogException(String.format("Initialize table path %s exception.", tablePathStr), e);
     }
@@ -479,8 +480,8 @@ public class HoodieCatalog extends AbstractCatalog {
     }
 
     try (HoodieFlinkWriteClient<?> writeClient = HoodieCatalogUtil.createWriteClient(options, tablePathStr, tablePath, hadoopConf)) {
-      writeClient.deletePartitions(Collections.singletonList(partitionPathStr),
-              writeClient.createNewInstantTime())
+      String instantTime = writeClient.startDeletePartitionCommit();
+      writeClient.deletePartitions(Collections.singletonList(partitionPathStr), instantTime)
           .forEach(writeStatus -> {
             if (writeStatus.hasErrors()) {
               throw new HoodieMetadataException(String.format("Failed to commit metadata table records at file id %s.", writeStatus.getFileId()));

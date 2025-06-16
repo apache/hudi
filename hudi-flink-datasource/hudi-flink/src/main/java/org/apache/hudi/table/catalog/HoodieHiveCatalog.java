@@ -27,6 +27,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -102,6 +103,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static org.apache.flink.table.factories.FactoryUtil.CONNECTOR;
 import static org.apache.flink.util.Preconditions.checkArgument;
@@ -474,7 +476,8 @@ public class HoodieHiveCatalog extends AbstractCatalog {
       //create hive table
       client.createTable(hiveTable);
       //init hoodie metaClient
-      initTableIfNotExists(tablePath, (CatalogTable) table);
+      HoodieTableMetaClient metaClient = initTableIfNotExists(tablePath, (CatalogTable) table);
+      HoodieCatalogUtil.initPartitionBucketIndexMeta(metaClient, table);
     } catch (AlreadyExistsException e) {
       if (!ignoreIfExists) {
         throw new TableAlreadyExistException(getName(), tablePath, e);
@@ -485,7 +488,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     }
   }
 
-  private void initTableIfNotExists(ObjectPath tablePath, CatalogTable catalogTable) {
+  private HoodieTableMetaClient initTableIfNotExists(ObjectPath tablePath, CatalogTable catalogTable) {
     Configuration flinkConf = Configuration.fromMap(catalogTable.getOptions());
     final String avroSchema = AvroSchemaConverter.convertToSchema(
         catalogTable.getSchema().toPersistedRowDataType().getLogicalType(),
@@ -527,7 +530,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     StreamerUtil.checkPreCombineKey(flinkConf, fields);
 
     try {
-      StreamerUtil.initTableIfNotExists(flinkConf, hiveConf);
+      return StreamerUtil.initTableIfNotExists(flinkConf, hiveConf);
     } catch (IOException e) {
       throw new HoodieCatalogException("Initialize table exception.", e);
     }
@@ -603,6 +606,10 @@ public class HoodieHiveCatalog extends AbstractCatalog {
       Pair<List<FieldSchema>, List<FieldSchema>> splitSchemas = HiveSchemaUtils.splitSchemaByPartitionKeys(allColumns, partitionKeys);
       List<FieldSchema> regularColumns = splitSchemas.getLeft();
       List<FieldSchema> partitionColumns = splitSchemas.getRight();
+
+      String hivePartitionKeys = partitionColumns.stream().map(FieldSchema::getName).collect(Collectors.joining(","));
+      ValidationUtils.checkArgument(hivePartitionKeys.equals(String.join(",", partitionKeys)),
+          String.format("The order of regular fields(%s) and partition fields(%s) needs to be consistent", hivePartitionKeys, String.join(",", partitionKeys)));
 
       sd.setCols(regularColumns);
       hiveTable.setPartitionKeys(partitionColumns);
@@ -815,9 +822,8 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     }
     try (HoodieFlinkWriteClient<?> writeClient = HoodieCatalogUtil.createWriteClient(tablePath, table, hiveConf, this::inferTablePath)) {
       boolean hiveStylePartitioning = Boolean.parseBoolean(table.getOptions().get(FlinkOptions.HIVE_STYLE_PARTITIONING.key()));
-      writeClient.deletePartitions(
-              Collections.singletonList(HoodieCatalogUtil.inferPartitionPath(hiveStylePartitioning, partitionSpec)),
-              writeClient.createNewInstantTime())
+      String instantTime = writeClient.startDeletePartitionCommit();
+      writeClient.deletePartitions(Collections.singletonList(HoodieCatalogUtil.inferPartitionPath(hiveStylePartitioning, partitionSpec)), instantTime)
           .forEach(writeStatus -> {
             if (writeStatus.hasErrors()) {
               throw new HoodieMetadataException(String.format("Failed to commit metadata table records at file id %s.", writeStatus.getFileId()));

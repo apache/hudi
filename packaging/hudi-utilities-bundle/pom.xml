@@ -99,7 +99,6 @@
                   <include>org.apache.hudi:hudi-spark-common_${scala.binary.version}</include>
                   <include>org.apache.hudi:hudi-spark_${scala.binary.version}</include>
                   <include>org.apache.hudi:${hudi.spark.module}_${scala.binary.version}</include>
-                  <include>org.apache.hudi:${hudi.spark.common.module}</include>
                   <include>org.apache.hudi:hudi-hive-sync</include>
                   <include>org.apache.hudi:hudi-sync-common</include>
                   <include>org.apache.hudi:hudi-hadoop-mr</include>
@@ -129,10 +128,13 @@
                   <include>com.twitter:chill-protobuf</include>
                   <include>io.confluent:kafka-avro-serializer</include>
                   <include>io.confluent:kafka-schema-serializer</include>
+                  <include>io.confluent:kafka-json-schema-serializer</include>
+                  <include>io.confluent:kafka-json-schema-provider</include>
                   <include>io.confluent:common-config</include>
                   <include>io.confluent:common-utils</include>
                   <include>io.confluent:kafka-schema-registry-client</include>
                   <include>io.confluent:kafka-protobuf-serializer</include>
+                  <include>io.confluent:kafka-protobuf-provider</include>
                   <include>io.dropwizard.metrics:metrics-core</include>
                   <include>io.dropwizard.metrics:metrics-graphite</include>
                   <include>io.dropwizard.metrics:metrics-jmx</include>
@@ -249,7 +251,6 @@
                     <exclude>META-INF/*.RSA</exclude>
                     <exclude>META-INF/services/javax.*</exclude>
                     <exclude>**/*.proto</exclude>
-                    <exclude>hbase-webapps/**</exclude>
                   </excludes>
                 </filter>
               </filters>

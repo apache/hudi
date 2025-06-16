@@ -20,14 +20,11 @@ package org.apache.hudi.timeline.service;
 
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
-import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import com.beust.jcommander.JCommander;
@@ -55,8 +52,6 @@ public class TimelineService {
   private int serverPort;
   private final Config timelineServerConf;
   private final StorageConfiguration<?> storageConf;
-  private transient HoodieEngineContext context;
-  private transient HoodieStorage storage;
   private transient Javalin app = null;
   private transient FileSystemViewManager fsViewsManager;
   private transient RequestHandler requestHandler;
@@ -65,13 +60,11 @@ public class TimelineService {
     return serverPort;
   }
 
-  public TimelineService(HoodieEngineContext context, StorageConfiguration<?> storageConf, Config timelineServerConf,
-                         HoodieStorage storage, FileSystemViewManager globalFileSystemViewManager) throws IOException {
+  public TimelineService(StorageConfiguration<?> storageConf, Config timelineServerConf,
+                         FileSystemViewManager globalFileSystemViewManager) {
     this.storageConf = storageConf;
     this.timelineServerConf = timelineServerConf;
     this.serverPort = timelineServerConf.serverPort;
-    this.context = context;
-    this.storage = storage;
     this.fsViewsManager = globalFileSystemViewManager;
   }
 
@@ -115,8 +108,8 @@ public class TimelineService {
     @Parameter(names = {"--enable-marker-requests", "-em"}, description = "Enable handling of marker-related requests")
     public boolean enableMarkerRequests = false;
 
-    @Parameter(names = {"--enable-instant-state-requests"}, description = "Enable handling of instant state requests")
-    public boolean enableInstantStateRequests = false;
+    @Parameter(names = {"--enable-remote-partitioner"}, description = "Enable remote partitioner")
+    public boolean enableRemotePartitioner = false;
 
     @Parameter(names = {"--marker-batch-threads", "-mbt"}, description = "Number of threads to use for batch processing marker creation requests")
     public int markerBatchNumThreads = 20;
@@ -136,13 +129,13 @@ public class TimelineService {
     @Parameter(names = {"--early-conflict-detection-check-commit-conflict"}, description =
         "Whether to enable commit conflict checking or not during early "
             + "conflict detection.")
-    public Boolean checkCommitConflict = false;
+    public boolean checkCommitConflict = false;
 
     @Parameter(names = {"--early-conflict-detection-enable"}, description =
         "Whether to enable early conflict detection based on markers. "
             + "It eagerly detects writing conflict before create markers and fails fast if a "
             + "conflict is detected, to release cluster compute resources as soon as possible.")
-    public Boolean earlyConflictDetectionEnable = false;
+    public boolean earlyConflictDetectionEnable = false;
 
     @Parameter(names = {"--async-conflict-detector-initial-delay-ms"}, description =
         "Used for timeline-server-based markers with "
@@ -161,10 +154,6 @@ public class TimelineService {
             + "`AsyncTimelineServerBasedDetectionStrategy`. "
             + "Instants whose heartbeat is greater than the current value will not be used in early conflict detection.")
     public Long maxAllowableHeartbeatIntervalInMs = 120000L;
-
-    @Parameter(names = {"--instant-state-force-refresh-request-number"}, description =
-        "Used for timeline-server-based instant state requests, every N read requests will trigger instant state refreshing")
-    public Integer instantStateForceRefreshRequestNumber = 100;
 
     @Parameter(names = {"--help", "-h"})
     public Boolean help = false;
@@ -187,7 +176,6 @@ public class TimelineService {
       private boolean async = false;
       private boolean compress = true;
       private boolean enableMarkerRequests = false;
-      private boolean enableInstantStateRequests = false;
       private int markerBatchNumThreads = 20;
       private long markerBatchIntervalMs = 50L;
       private int markerParallelism = 100;
@@ -197,8 +185,7 @@ public class TimelineService {
       private Long asyncConflictDetectorInitialDelayMs = 0L;
       private Long asyncConflictDetectorPeriodMs = 30000L;
       private Long maxAllowableHeartbeatIntervalInMs = 120000L;
-
-      private int instantStateForceRefreshRequestNumber = 100;
+      private boolean enableRemotePartitioner = false;
 
       public Builder() {
       }
@@ -253,6 +240,11 @@ public class TimelineService {
         return this;
       }
 
+      public Builder enableRemotePartitioner(boolean enableRemotePartitioner) {
+        this.enableRemotePartitioner = enableRemotePartitioner;
+        return this;
+      }
+
       public Builder markerBatchNumThreads(int markerBatchNumThreads) {
         this.markerBatchNumThreads = markerBatchNumThreads;
         return this;
@@ -298,16 +290,6 @@ public class TimelineService {
         return this;
       }
 
-      public Builder enableInstantStateRequests(boolean enableCkpInstantStateRequests) {
-        this.enableInstantStateRequests = enableCkpInstantStateRequests;
-        return this;
-      }
-
-      public Builder instantStateForceRefreshRequestNumber(int instantStateForceRefreshRequestNumber) {
-        this.instantStateForceRefreshRequestNumber = instantStateForceRefreshRequestNumber;
-        return this;
-      }
-
       public Config build() {
         Config config = new Config();
         config.serverPort = this.serverPort;
@@ -320,6 +302,7 @@ public class TimelineService {
         config.async = this.async;
         config.compress = this.compress;
         config.enableMarkerRequests = this.enableMarkerRequests;
+        config.enableRemotePartitioner = this.enableRemotePartitioner;
         config.markerBatchNumThreads = this.markerBatchNumThreads;
         config.markerBatchIntervalMs = this.markerBatchIntervalMs;
         config.markerParallelism = this.markerParallelism;
@@ -329,8 +312,6 @@ public class TimelineService {
         config.asyncConflictDetectorInitialDelayMs = this.asyncConflictDetectorInitialDelayMs;
         config.asyncConflictDetectorPeriodMs = this.asyncConflictDetectorPeriodMs;
         config.maxAllowableHeartbeatIntervalInMs = this.maxAllowableHeartbeatIntervalInMs;
-        config.enableInstantStateRequests = this.enableInstantStateRequests;
-        config.instantStateForceRefreshRequestNumber = this.instantStateForceRefreshRequestNumber;
         return config;
       }
     }
@@ -370,7 +351,7 @@ public class TimelineService {
     return realServerPort;
   }
 
-  private void createApp() throws IOException {
+  private void createApp() {
     // if app needs to be recreated, stop the existing one
     if (app != null) {
       app.stop();
@@ -390,7 +371,7 @@ public class TimelineService {
     });
 
     requestHandler = new RequestHandler(
-        app, storageConf, timelineServerConf, context, storage, fsViewsManager);
+        app, storageConf, timelineServerConf, fsViewsManager);
     app.get("/", ctx -> ctx.result("Hello Hudi"));
     requestHandler.register();
   }
@@ -430,7 +411,7 @@ public class TimelineService {
   }
 
   public void close() {
-    LOG.info("Closing Timeline Service");
+    LOG.info("Closing Timeline Service with port " + serverPort);
     if (requestHandler != null) {
       this.requestHandler.stop();
     }
@@ -439,7 +420,7 @@ public class TimelineService {
       this.app = null;
     }
     this.fsViewsManager.close();
-    LOG.info("Closed Timeline Service");
+    LOG.info("Closed Timeline Service with port " + serverPort);
   }
 
   public void unregisterBasePath(String basePath) {
@@ -448,10 +429,6 @@ public class TimelineService {
 
   public StorageConfiguration<?> getStorageConf() {
     return storageConf;
-  }
-
-  public HoodieStorage getStorage() {
-    return storage;
   }
 
   public static void main(String[] args) throws Exception {
@@ -466,10 +443,8 @@ public class TimelineService {
     FileSystemViewManager viewManager =
         buildFileSystemViewManager(cfg, storageConf.newInstance());
     TimelineService service = new TimelineService(
-        new HoodieLocalEngineContext(storageConf.newInstance()),
         storageConf.newInstance(),
         cfg,
-        HoodieStorageUtils.getStorage(storageConf),
         viewManager);
     service.run();
   }

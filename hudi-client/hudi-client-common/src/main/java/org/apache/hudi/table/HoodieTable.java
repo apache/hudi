@@ -32,6 +32,7 @@ import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.HoodieColumnStatsIndexUtils;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -90,11 +91,13 @@ import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.table.storage.HoodieLayoutFactory;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
+import org.apache.hudi.util.CommonClientUtils;
 
 import org.apache.avro.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -148,13 +151,26 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   protected HoodieTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
     this.config = config;
     this.context = context;
-    this.isMetadataTable = HoodieTableMetadata.isMetadataTable(config.getBasePath());
+    this.isMetadataTable = metaClient.isMetadataTable();
     this.instantGenerator = metaClient.getInstantGenerator();
     this.instantFileNameGenerator = metaClient.getInstantFileNameGenerator();
     this.instantFileNameParser = metaClient.getInstantFileNameParser();
     this.viewManager = getViewManager();
     this.metaClient = metaClient;
     this.taskContextSupplier = context.getTaskContextSupplier();
+  }
+
+  protected HoodieTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient, FileSystemViewManager viewManager, TaskContextSupplier supplier) {
+    // TODO clean up constructors
+    this.config = config;
+    this.context = context;
+    this.isMetadataTable = HoodieTableMetadata.isMetadataTable(config.getBasePath());
+    this.instantGenerator = metaClient.getInstantGenerator();
+    this.instantFileNameGenerator = metaClient.getInstantFileNameGenerator();
+    this.instantFileNameParser = metaClient.getInstantFileNameParser();
+    this.viewManager = viewManager;
+    this.metaClient = metaClient;
+    this.taskContextSupplier = supplier;
   }
 
   public boolean isMetadataTable() {
@@ -529,16 +545,14 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   public abstract void rollbackBootstrap(HoodieEngineContext context, String instantTime);
 
   /**
-   * Schedule cleaning for the instant time.
+   * Generates a cleaner plan if required.
    *
-   * @param context HoodieEngineContext
-   * @param instantTime Instant Time for scheduling cleaning
+   * @param context       HoodieEngineContext
    * @param extraMetadata additional metadata to write into plan
    * @return HoodieCleanerPlan, if there is anything to clean.
    */
-  public abstract Option<HoodieCleanerPlan> scheduleCleaning(HoodieEngineContext context,
-                                                             String instantTime,
-                                                             Option<Map<String, String>> extraMetadata);
+  public abstract Option<HoodieCleanerPlan> createCleanerPlan(HoodieEngineContext context,
+                                                              Option<Map<String, String>> extraMetadata);
 
   /**
    * Executes a new clean action.
@@ -633,12 +647,12 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
                                                     String restoreInstantTimestamp,
                                                     String savepointToRestoreTimestamp);
 
-  public void rollbackInflightCompaction(HoodieInstant inflightInstant) {
-    rollbackInflightCompaction(inflightInstant, s -> Option.empty());
+  public void rollbackInflightCompaction(HoodieInstant inflightInstant, TransactionManager transactionManager) {
+    rollbackInflightCompaction(inflightInstant, s -> Option.empty(), transactionManager);
   }
 
-  public void rollbackInflightLogCompaction(HoodieInstant inflightInstant) {
-    rollbackInflightLogCompaction(inflightInstant, s -> Option.empty());
+  public void rollbackInflightLogCompaction(HoodieInstant inflightInstant, TransactionManager transactionManager) {
+    rollbackInflightLogCompaction(inflightInstant, s -> Option.empty(), transactionManager);
   }
 
   /**
@@ -648,9 +662,10 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @param inflightInstant Inflight Compaction Instant
    */
   public void rollbackInflightCompaction(HoodieInstant inflightInstant,
-                                         Function<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInstantFunc) {
+                                         Function<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInstantFunc,
+                                         TransactionManager transactionManager) {
     ValidationUtils.checkArgument(inflightInstant.getAction().equals(HoodieTimeline.COMPACTION_ACTION));
-    rollbackInflightInstant(inflightInstant, getPendingRollbackInstantFunc);
+    rollbackInflightInstant(inflightInstant, getPendingRollbackInstantFunc, transactionManager);
   }
 
   /**
@@ -660,8 +675,9 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @param getPendingRollbackInstantFunc Function to get rollback instant
    */
   public void rollbackInflightClustering(HoodieInstant inflightInstant,
-                                         Function<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInstantFunc) {
-    rollbackInflightClustering(inflightInstant, getPendingRollbackInstantFunc, false);
+                                         Function<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInstantFunc,
+                                         TransactionManager transactionManager) {
+    rollbackInflightClustering(inflightInstant, getPendingRollbackInstantFunc, false, transactionManager);
   }
 
   /**
@@ -671,11 +687,12 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @param getPendingRollbackInstantFunc Function to get rollback instant
    */
   public void rollbackInflightClustering(HoodieInstant inflightInstant,
-                                         Function<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInstantFunc, boolean deleteInstants) {
+                                         Function<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInstantFunc, boolean deleteInstants,
+                                         TransactionManager transactionManager) {
     ValidationUtils.checkArgument(inflightInstant.getAction().equals(HoodieTimeline.CLUSTERING_ACTION)
         || inflightInstant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION),
         String.format("Expected replace or clustering action instant but got %s", inflightInstant));
-    rollbackInflightInstant(inflightInstant, getPendingRollbackInstantFunc);
+    rollbackInflightInstant(inflightInstant, getPendingRollbackInstantFunc, transactionManager);
     if (deleteInstants) {
       // above rollback would still keep requested in the timeline. so, lets delete it if if are looking to purge the pending clustering fully.
       getActiveTimeline().deletePending(instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED, inflightInstant.getAction(), inflightInstant.requestedTime()));
@@ -689,17 +706,25 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @param getPendingRollbackInstantFunc Function to get rollback instant
    */
   void rollbackInflightInstant(HoodieInstant inflightInstant,
-                               Function<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInstantFunc) {
+                               Function<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInstantFunc,
+                               TransactionManager transactionManager) {
     // Retrieve the rollback information using the provided function.
-    final Pair<String, Boolean> rollbackInfo = getPendingRollbackInstantFunc.apply(inflightInstant.requestedTime())
-        .map(entry -> Pair.of(entry.getRollbackInstant().requestedTime(), false))
-        .orElseGet(() -> Pair.of(getMetaClient().createNewInstantTime(), true));
-    // If a rollback has not scheduled (rollbackInfo.getRight() is true), schedule it.
-    if (rollbackInfo.getRight()) {
-      scheduleRollback(context, rollbackInfo.getLeft(), inflightInstant, false, config.shouldRollbackUsingMarkers(), false);
+    final Option<HoodiePendingRollbackInfo> rollbackInfo = getPendingRollbackInstantFunc.apply(inflightInstant.requestedTime());
+    // If a rollback has not scheduled, schedule it.
+    String instantTime;
+    if (rollbackInfo.isEmpty()) {
+      transactionManager.beginStateChange(Option.empty(), Option.empty());
+      try {
+        instantTime = getMetaClient().createNewInstantTime(false);
+        scheduleRollback(context, instantTime, inflightInstant, false, config.shouldRollbackUsingMarkers(), false);
+      } finally {
+        transactionManager.endStateChange(Option.empty());
+      }
+    } else {
+      instantTime = rollbackInfo.get().getRollbackInstant().requestedTime();
     }
     // Perform the rollback.
-    rollback(context, rollbackInfo.getLeft(), inflightInstant, false, false);
+    rollback(context, instantTime, inflightInstant, false, false);
     // Revert the inflight instant to requested state in the timeline.
     getActiveTimeline().revertInstantFromInflightToRequested(inflightInstant);
   }
@@ -710,12 +735,19 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    *
    * @param inflightInstant Inflight Compaction Instant
    */
-  public void rollbackInflightLogCompaction(HoodieInstant inflightInstant, Function<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInstantFunc) {
-    final String commitTime = getPendingRollbackInstantFunc.apply(inflightInstant.requestedTime()).map(entry
-        -> entry.getRollbackInstant().requestedTime())
-        .orElseGet(() -> getMetaClient().createNewInstantTime());
-    scheduleRollback(context, commitTime, inflightInstant, false, config.shouldRollbackUsingMarkers(),
-        false);
+  public void rollbackInflightLogCompaction(HoodieInstant inflightInstant, Function<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInstantFunc,
+                                            TransactionManager transactionManager) {
+    transactionManager.beginStateChange(Option.empty(), Option.empty());
+    final String commitTime;
+    try {
+      commitTime = getPendingRollbackInstantFunc.apply(inflightInstant.requestedTime()).map(entry
+              -> entry.getRollbackInstant().requestedTime())
+          .orElseGet(() -> getMetaClient().createNewInstantTime(false));
+      scheduleRollback(context, commitTime, inflightInstant, false, config.shouldRollbackUsingMarkers(),
+          false);
+    } finally {
+      transactionManager.endStateChange(Option.empty());
+    }
     rollback(context, commitTime, inflightInstant, true, false);
   }
 
@@ -727,7 +759,8 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @throws HoodieIOException if some paths can't be finalized on storage
    */
   public void finalizeWrite(HoodieEngineContext context, String instantTs, List<HoodieWriteStat> stats) throws HoodieIOException {
-    reconcileAgainstMarkers(context, instantTs, stats, config.getConsistencyGuardConfig().isConsistencyCheckEnabled(), config.shouldFailOnDuplicateDataFileDetection());
+    reconcileAgainstMarkers(context, instantTs, stats, config.getConsistencyGuardConfig().isConsistencyCheckEnabled(), config.shouldFailOnDuplicateDataFileDetection(),
+        WriteMarkersFactory.get(config.getMarkersType(), this, instantTs));
   }
 
   private void deleteInvalidFilesByPartitions(HoodieEngineContext context, Map<String, List<Pair<String, String>>> invalidFilesByPartition) {
@@ -741,7 +774,13 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
           LOG.info("Deleting invalid data file=" + partitionFilePair);
           // Delete
           try {
-            storage.deleteFile(new StoragePath(partitionFilePair.getValue()));
+            StoragePath pathToDelete = new StoragePath(partitionFilePair.getValue());
+            boolean deletionSuccess = storage.deleteFile(pathToDelete);
+            if (!deletionSuccess && storage.exists(pathToDelete)) {
+              throw new HoodieIOException("Failed to delete invalid path during marker reconciliaton " + pathToDelete);
+            }
+          } catch (FileNotFoundException fnfe) {
+            // no op
           } catch (IOException e) {
             throw new HoodieIOException(e.getMessage(), e);
           }
@@ -766,16 +805,16 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @param consistencyCheckEnabled Consistency Check Enabled
    * @throws HoodieIOException
    */
-  protected void reconcileAgainstMarkers(HoodieEngineContext context,
+  void reconcileAgainstMarkers(HoodieEngineContext context,
                                          String instantTs,
                                          List<HoodieWriteStat> stats,
                                          boolean consistencyCheckEnabled,
-                                         boolean shouldFailOnDuplicateDataFileDetection) throws HoodieIOException {
+                                         boolean shouldFailOnDuplicateDataFileDetection,
+                               WriteMarkers markers) throws HoodieIOException {
     try {
       // Reconcile marker and data files with WriteStats so that partially written data-files due to failed
       // (but succeeded on retry) tasks are removed.
       String basePath = getMetaClient().getBasePath().toString();
-      WriteMarkers markers = WriteMarkersFactory.get(config.getMarkersType(), this, instantTs);
 
       if (!markers.doesMarkerDirExist()) {
         // can happen if it was an empty write say.
@@ -944,11 +983,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   }
 
   public HoodieFileFormat getBaseFileFormat() {
-    HoodieTableConfig tableConfig = metaClient.getTableConfig();
-    if (tableConfig.isMultipleBaseFileFormatsEnabled() && config.contains(HoodieWriteConfig.BASE_FILE_FORMAT)) {
-      return config.getBaseFileFormat();
-    }
-    return metaClient.getTableConfig().getBaseFileFormat();
+    return CommonClientUtils.getBaseFileFormat(config, metaClient.getTableConfig());
   }
 
   public Option<HoodieFileFormat> getPartitionMetafileFormat() {
@@ -1092,7 +1127,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
         metadataIndexDisabled = !partitionType.isMetadataPartitionAvailable(metaClient);
         break;
       default:
-        LOG.debug("Not a valid metadata partition type: " + partitionType.name());
+        LOG.debug("Not a valid metadata partition type: {}", partitionType.name());
         return false;
     }
     return metadataIndexDisabled;

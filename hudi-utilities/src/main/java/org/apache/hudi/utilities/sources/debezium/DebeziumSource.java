@@ -26,6 +26,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.config.HoodieSchemaProviderConfig;
 import org.apache.hudi.utilities.config.KafkaSourceConfig;
+import org.apache.hudi.utilities.deser.KafkaAvroSchemaDeserializer;
 import org.apache.hudi.utilities.exception.HoodieReadFromSourceException;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
@@ -34,6 +35,7 @@ import org.apache.hudi.utilities.sources.RowSource;
 import org.apache.hudi.utilities.sources.helpers.AvroConvertor;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.CheckpointUtils;
+import org.apache.hudi.utilities.sources.helpers.KafkaSourceUtil;
 
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
@@ -105,6 +107,10 @@ public abstract class DebeziumSource extends RowSource {
       schemaRegistryProvider = (SchemaRegistryProvider) schemaProvider;
     }
 
+    if (deserializerClassName.equals(KafkaAvroSchemaDeserializer.class.getName())) {
+      KafkaSourceUtil.configureSchemaDeserializer(schemaRegistryProvider, props);
+    }
+
     offsetGen = new KafkaOffsetGen(props);
     this.metrics = metrics;
   }
@@ -120,8 +126,8 @@ public abstract class DebeziumSource extends RowSource {
     try {
       String schemaStr = schemaRegistryProvider.fetchSchemaFromRegistry(getStringWithAltKeys(props, HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL));
       Dataset<Row> dataset = toDataset(offsetRanges, offsetGen, schemaStr);
-      LOG.info(String.format("Spark schema of Kafka Payload for topic %s:\n%s", offsetGen.getTopicName(), dataset.schema().treeString()));
-      LOG.info(String.format("New checkpoint string: %s", CheckpointUtils.offsetsToStr(offsetRanges)));
+      LOG.info("Spark schema of Kafka Payload for topic {}:\n{}", offsetGen.getTopicName(), dataset.schema().treeString());
+      LOG.info("New checkpoint string: {}", CheckpointUtils.offsetsToStr(offsetRanges));
       return Pair.of(Option.of(dataset),
               new StreamerCheckpointV2(overrideCheckpointStr.isEmpty() ? CheckpointUtils.offsetsToStr(offsetRanges) : overrideCheckpointStr));
     } catch (Exception e) {
@@ -192,7 +198,7 @@ public abstract class DebeziumSource extends RowSource {
             }
           }).map(Field::name).collect(Collectors.toList());
 
-      LOG.info("Date fields: " + dateFields.toString());
+      LOG.info("Date fields: {}", dateFields);
 
       for (String dateCol : dateFields) {
         dataset = dataset.withColumn(dateCol, functions.col(dateCol).cast(DataTypes.DateType));

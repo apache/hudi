@@ -22,6 +22,7 @@ import org.apache.hudi.HoodieBaseRelation.BaseFileReader
 import org.apache.hudi.HoodieConversionUtils.{toJavaOption, toScalaOption}
 import org.apache.hudi.HoodieDataSourceHelper.AvroDeserializerSupport
 import org.apache.hudi.LogFileIterator.{getPartitionPath, scanLog}
+import org.apache.hudi.avro.AvroSchemaCache
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMemoryConfig, HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.engine.{EngineType, HoodieLocalEngineContext}
 import org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath
@@ -97,7 +98,7 @@ class LogFileIterator(logFiles: List[HoodieLogFile],
   protected override val avroSchema: Schema = requiredAvroSchema
   protected override val structTypeSchema: StructType = requiredStructTypeSchema
 
-  protected val logFileReaderAvroSchema: Schema = new Schema.Parser().parse(tableSchema.avroSchemaStr)
+  protected val logFileReaderAvroSchema: Schema = AvroSchemaCache.intern(new Schema.Parser().parse(tableSchema.avroSchemaStr))
   protected val logFileReaderStructType: StructType = tableSchema.structTypeSchema
 
   private val requiredSchemaAvroProjection: AvroProjection = AvroProjection.create(avroSchema)
@@ -255,7 +256,7 @@ class RecordMergingFileIterator(logFiles: List[HoodieLogFile],
   //        - Projected schema
   //       As such, no particular schema could be assumed, and therefore we rely on the caller
   //       to correspondingly set the schema of the expected output of base-file reader
-  private val baseFileReaderAvroSchema = sparkAdapter.getAvroSchemaConverters.toAvroType(readerSchema, nullable = false, "record")
+  private val baseFileReaderAvroSchema = AvroSchemaCache.intern(sparkAdapter.getAvroSchemaConverters.toAvroType(readerSchema, nullable = false, "record"))
 
   private val serializer = sparkAdapter.createAvroSerializer(readerSchema, baseFileReaderAvroSchema, nullable = false)
 

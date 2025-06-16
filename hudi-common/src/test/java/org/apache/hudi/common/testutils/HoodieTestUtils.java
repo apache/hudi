@@ -35,6 +35,7 @@ import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
 import org.apache.hudi.common.table.timeline.InstantFileNameParser;
 import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.table.timeline.TimelineFactory;
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.DefaultCommitMetadataSerDe;
 import org.apache.hudi.common.table.timeline.versioning.DefaultInstantComparator;
 import org.apache.hudi.common.table.timeline.versioning.DefaultInstantFileNameGenerator;
@@ -196,7 +197,7 @@ public class HoodieTestUtils {
       throws IOException {
     Properties properties = new Properties();
     properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), baseFileFormat.toString());
-    return init(storageConf, basePath, tableType, properties, databaseName);
+    return getMetaClientBuilder(tableType, properties, databaseName).initTable(storageConf.newInstance(), basePath);
   }
 
   public static HoodieTableMetaClient init(StorageConfiguration<?> storageConf, String basePath, HoodieTableType tableType,
@@ -218,12 +219,10 @@ public class HoodieTestUtils {
 
   public static HoodieTableMetaClient init(StorageConfiguration<?> storageConf, String basePath, HoodieTableType tableType,
                                            Properties properties) throws IOException {
-    return init(storageConf, basePath, tableType, properties, null);
+    return getMetaClientBuilder(tableType, properties, null).initTable(storageConf.newInstance(), basePath);
   }
 
-  public static HoodieTableMetaClient init(StorageConfiguration<?> storageConf, String basePath, HoodieTableType tableType,
-                                           Properties properties, String databaseName)
-      throws IOException {
+  public static HoodieTableMetaClient.TableBuilder getMetaClientBuilder(HoodieTableType tableType, Properties properties, String databaseName) {
     HoodieTableMetaClient.TableBuilder builder =
         HoodieTableMetaClient.newTableBuilder()
             .setDatabaseName(databaseName)
@@ -234,14 +233,17 @@ public class HoodieTestUtils {
       builder.setKeyGeneratorType(properties.getProperty(HoodieTableConfig.KEY_GENERATOR_TYPE.key()));
     }
 
+    if (properties.containsKey("hoodie.write.table.version")) {
+      builder.setTableVersion(Integer.parseInt(properties.getProperty("hoodie.write.table.version")));
+    }
+
     String keyGen = properties.getProperty("hoodie.datasource.write.keygenerator.class");
     if (!Objects.equals(keyGen, "org.apache.hudi.keygen.NonpartitionedKeyGenerator")
         && !properties.containsKey("hoodie.datasource.write.partitionpath.field")) {
       builder.setPartitionFields("some_nonexistent_field");
     }
-
-    return builder.fromProperties(properties)
-        .initTable(storageConf.newInstance(), basePath);
+    builder.fromProperties(properties);
+    return builder;
   }
 
   public static HoodieTableMetaClient init(String basePath, HoodieTableType tableType, String bootstrapBasePath, HoodieFileFormat baseFileFormat, String keyGenerator) throws IOException {
@@ -389,15 +391,31 @@ public class HoodieTestUtils {
 
   public static StoragePath getCompleteInstantPath(HoodieStorage storage, StoragePath parent,
                                                    String instantTime, String action) {
-    return getCompleteInstantFileInfo(storage, parent, instantTime, action).getPath();
+    return getCompleteInstantPath(storage, parent, instantTime, action, HoodieTableVersion.current());
+  }
+
+  public static StoragePath getCompleteInstantPath(HoodieStorage storage, StoragePath parent,
+                                                   String instantTime, String action, HoodieTableVersion tableVersion) {
+    return getCompleteInstantFileInfo(storage, parent, instantTime, action, tableVersion).getPath();
+  }
+
+  public static <T> byte[] convertMetadataToByteArray(T metadata) {
+    return TimelineMetadataUtils.convertMetadataToByteArray(metadata, COMMIT_METADATA_SER_DE);
   }
 
   private static StoragePathInfo getCompleteInstantFileInfo(HoodieStorage storage,
                                                             StoragePath parent,
                                                             String instantTime, String action) {
+    return getCompleteInstantFileInfo(storage, parent, instantTime, action, HoodieTableVersion.current());
+  }
+
+  private static StoragePathInfo getCompleteInstantFileInfo(HoodieStorage storage,
+                                                            StoragePath parent,
+                                                            String instantTime, String action,
+                                                            HoodieTableVersion tableVersion) {
     try {
       String actionSuffix = "." + action;
-      StoragePath wildcardPath = new StoragePath(parent, instantTime + "_*" + actionSuffix);
+      StoragePath wildcardPath = new StoragePath(parent, tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT) ? instantTime + "_*" + actionSuffix :  instantTime + actionSuffix);
       List<StoragePathInfo> pathInfoList = storage.globEntries(wildcardPath);
       if (pathInfoList.size() != 1) {
         throw new IOException("Error occur when finding path " + wildcardPath);

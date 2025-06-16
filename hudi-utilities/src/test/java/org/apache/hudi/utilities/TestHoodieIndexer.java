@@ -24,6 +24,7 @@ import org.apache.hudi.avro.model.HoodieIndexPartitionInfo;
 import org.apache.hudi.avro.model.HoodieIndexPlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -33,7 +34,6 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
@@ -45,7 +45,6 @@ import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.testutils.providers.SparkProvider;
 
-import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -232,8 +231,8 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     assertTrue(reload(metaClient).getTableConfig().getMetadataPartitions().contains(RECORD_INDEX.getPartitionPath()));
     assertTrue(metadataPartitionExists(basePath(), context(), RECORD_INDEX.getPartitionPath()));
 
-    // Step 3: upsert with metadata enabled with default configs (RECORD_INDEX is disabled by default)
-    upsertToTable(metadataConfigBuilder.build(), tableName);
+    // Step 3: writer upsert with metadata enabled with RECORD_INDEX enabled
+    upsertToTable(metadataConfigBuilder.withEnableRecordIndex(true).build(), tableName);
 
     // Step 4: validate RECORD_INDEX partition is not deleted
     assertTrue(reload(metaClient).getTableConfig().getMetadataPartitions().contains(RECORD_INDEX.getPartitionPath()));
@@ -292,9 +291,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     HoodieInstant indexingInstant = metaClient.getActiveTimeline()
         .filter(i -> HoodieTimeline.INDEXING_ACTION.equals(i.getAction()))
         .getInstants().get(0);
-    HoodieIndexPlan indexPlan = TimelineMetadataUtils.deserializeIndexPlan(
-        metaClient.getActiveTimeline().readIndexPlanAsBytes(indexingInstant).get());
-    String indexUptoInstantTime = indexPlan.getIndexPartitionInfos().get(0).getIndexUptoInstant();
+    HoodieIndexPlan indexPlan = metaClient.getActiveTimeline().readIndexPlan(indexingInstant);
     HoodieBackedTableMetadata metadata = new HoodieBackedTableMetadata(
         context(), metaClient.getStorage(), metadataConfig, metaClient.getBasePath().toString());
     HoodieTableMetaClient metadataMetaClient = metadata.getMetadataMetaClient();
@@ -335,8 +332,8 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     assertEquals(1, metadataMetaClient.getActiveTimeline().getRollbackTimeline().countInstants());
     HoodieInstant rollbackInstant = metadataMetaClient.getActiveTimeline()
         .getRollbackTimeline().firstInstant().get();
-    HoodieRollbackMetadata rollbackMetadata = TimelineMetadataUtils.deserializeHoodieRollbackMetadata(
-        metadataMetaClient.getActiveTimeline().readRollbackInfoAsBytes(rollbackInstant).get());
+    HoodieRollbackMetadata rollbackMetadata =
+        metadataMetaClient.getActiveTimeline().readRollbackMetadata(rollbackInstant);
     assertEquals(mdtCommitTime, rollbackMetadata.getInstantsRollback()
         .stream().findFirst().get().getCommitTime());
   }
@@ -497,11 +494,11 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     // do one upsert with synchronous metadata update
     try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(context(), writeConfig)) {
       String instant = writeClient.createNewInstantTime();
-      writeClient.startCommitWithTime(instant);
+      WriteClientTestUtils.startCommitWithTime(writeClient, instant);
       List<HoodieRecord> records = DATA_GENERATOR.generateInserts(instant, 100);
-      JavaRDD<WriteStatus> result = writeClient.upsert(jsc().parallelize(records, 1), instant);
-      List<WriteStatus> statuses = result.collect();
-      assertNoWriteErrors(statuses);
+      List<WriteStatus> statusList = writeClient.upsert(jsc().parallelize(records, 1), instant).collect();
+      writeClient.commit(instant, jsc().parallelize(statusList));
+      assertNoWriteErrors(statusList);
     }
   }
 
@@ -550,11 +547,11 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     // do one upsert with synchronous metadata update
     try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(context(), writeConfig)) {
       String instant = writeClient.createNewInstantTime();
-      writeClient.startCommitWithTime(instant);
+      WriteClientTestUtils.startCommitWithTime(writeClient, instant);
       List<HoodieRecord> records = DATA_GENERATOR.generateInserts(instant, 100);
-      JavaRDD<WriteStatus> result = writeClient.upsert(jsc().parallelize(records, 1), instant);
-      List<WriteStatus> statuses = result.collect();
-      assertNoWriteErrors(statuses);
+      List<WriteStatus> statusList = writeClient.upsert(jsc().parallelize(records, 1), instant).collect();
+      writeClient.commit(instant, jsc().parallelize(statusList));
+      assertNoWriteErrors(statusList);
     }
 
     // validate partitions built successfully
@@ -604,11 +601,11 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     // do one upsert with synchronous metadata update
     try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(context(), writeConfig)) {
       String instant = writeClient.createNewInstantTime();
-      writeClient.startCommitWithTime(instant);
+      WriteClientTestUtils.startCommitWithTime(writeClient, instant);
       List<HoodieRecord> records = DATA_GENERATOR.generateInserts(instant, 100);
-      JavaRDD<WriteStatus> result = writeClient.upsert(jsc().parallelize(records, 1), instant);
-      List<WriteStatus> statuses = result.collect();
-      assertNoWriteErrors(statuses);
+      List<WriteStatus> statusList = writeClient.upsert(jsc().parallelize(records, 1), instant).collect();
+      writeClient.commit(instant, jsc().parallelize(statusList));
+      assertNoWriteErrors(statusList);
     }
 
     // validate files partition built successfully

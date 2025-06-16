@@ -20,6 +20,8 @@
 package org.apache.hudi.functional;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
@@ -111,42 +113,54 @@ public class TestGlobalIndexEnableUpdatePartitions extends SparkClientFunctional
       // 1st batch: inserts
       String commitTimeAtEpoch0 = getCommitTimeAtUTC(0);
       List<HoodieRecord> insertsAtEpoch0 = getInserts(totalRecords, p1, 0, payloadClass);
-      client.startCommitWithTime(commitTimeAtEpoch0);
-      assertNoWriteErrors(client.upsert(jsc().parallelize(insertsAtEpoch0, 2), commitTimeAtEpoch0).collect());
+      WriteClientTestUtils.startCommitWithTime(client, commitTimeAtEpoch0);
+      List<WriteStatus> writeStatusesList = client.upsert(jsc().parallelize(insertsAtEpoch0, 2), commitTimeAtEpoch0).collect();
+      client.commit(commitTimeAtEpoch0, jsc().parallelize(writeStatusesList));
+      assertNoWriteErrors(writeStatusesList);
 
       // 2nd batch: normal updates same partition
       String commitTimeAtEpoch5 = getCommitTimeAtUTC(5);
       List<HoodieRecord> updatesAtEpoch5 = getUpdates(insertsAtEpoch0, 5, payloadClass);
-      client.startCommitWithTime(commitTimeAtEpoch5);
-      assertNoWriteErrors(client.upsert(jsc().parallelize(updatesAtEpoch5, 2), commitTimeAtEpoch5).collect());
+      WriteClientTestUtils.startCommitWithTime(client, commitTimeAtEpoch5);
+      writeStatusesList = client.upsert(jsc().parallelize(updatesAtEpoch5, 2), commitTimeAtEpoch5).collect();
+      client.commit(commitTimeAtEpoch5, jsc().parallelize(writeStatusesList));
+      assertNoWriteErrors(writeStatusesList);
       readTableAndValidate(metaClient, new int[] {0, 1, 2, 3}, p1, 5);
 
       // 3rd batch: update all from p1 to p2
       String commitTimeAtEpoch6 = getCommitTimeAtUTC(6);
       List<HoodieRecord> updatesAtEpoch6 = getUpdates(updatesAtEpoch5, p2, 6, payloadClass);
-      client.startCommitWithTime(commitTimeAtEpoch6);
-      assertNoWriteErrors(client.upsert(jsc().parallelize(updatesAtEpoch6, 2), commitTimeAtEpoch6).collect());
+      WriteClientTestUtils.startCommitWithTime(client, commitTimeAtEpoch6);
+      writeStatusesList = client.upsert(jsc().parallelize(updatesAtEpoch6, 2), commitTimeAtEpoch6).collect();
+      client.commit(commitTimeAtEpoch6, jsc().parallelize(writeStatusesList));
+      assertNoWriteErrors(writeStatusesList);
       readTableAndValidate(metaClient, new int[] {0, 1, 2, 3}, p2, 6);
 
       // 4th batch: update all from p2 to p3
       String commitTimeAtEpoch7 = getCommitTimeAtUTC(7);
       List<HoodieRecord> updatesAtEpoch7 = getUpdates(updatesAtEpoch6, p3, 7, payloadClass);
-      client.startCommitWithTime(commitTimeAtEpoch7);
-      assertNoWriteErrors(client.upsert(jsc().parallelize(updatesAtEpoch7, 2), commitTimeAtEpoch7).collect());
+      WriteClientTestUtils.startCommitWithTime(client, commitTimeAtEpoch7);
+      writeStatusesList = client.upsert(jsc().parallelize(updatesAtEpoch7, 2), commitTimeAtEpoch7).collect();
+      client.commit(commitTimeAtEpoch7, jsc().parallelize(writeStatusesList));
+      assertNoWriteErrors(writeStatusesList);
       readTableAndValidate(metaClient, new int[] {0, 1, 2, 3}, p3, 7);
 
       // 5th batch: late update all to p4; discarded
       String commitTimeAtEpoch8 = getCommitTimeAtUTC(8);
       List<HoodieRecord> updatesAtEpoch2 = getUpdates(insertsAtEpoch0, p4, 2, payloadClass);
-      client.startCommitWithTime(commitTimeAtEpoch8);
-      assertNoWriteErrors(client.upsert(jsc().parallelize(updatesAtEpoch2, 2), commitTimeAtEpoch8).collect());
+      WriteClientTestUtils.startCommitWithTime(client, commitTimeAtEpoch8);
+      writeStatusesList = client.upsert(jsc().parallelize(updatesAtEpoch2, 2), commitTimeAtEpoch8).collect();
+      client.commit(commitTimeAtEpoch8, jsc().parallelize(writeStatusesList));
+      assertNoWriteErrors(writeStatusesList);
       readTableAndValidate(metaClient, new int[] {0, 1, 2, 3}, p3, 7);
 
       // 6th batch: update all from p3 to p1
       String commitTimeAtEpoch9 = getCommitTimeAtUTC(9);
       List<HoodieRecord> updatesAtEpoch9 = getUpdates(updatesAtEpoch7, p1, 9, payloadClass);
-      client.startCommitWithTime(commitTimeAtEpoch9);
-      assertNoWriteErrors(client.upsert(jsc().parallelize(updatesAtEpoch9, 2), commitTimeAtEpoch9).collect());
+      WriteClientTestUtils.startCommitWithTime(client, commitTimeAtEpoch9);
+      writeStatusesList = client.upsert(jsc().parallelize(updatesAtEpoch9, 2), commitTimeAtEpoch9).collect();
+      client.commit(commitTimeAtEpoch9, jsc().parallelize(writeStatusesList));
+      assertNoWriteErrors(writeStatusesList);
       readTableAndValidate(metaClient, new int[] {0, 1, 2, 3}, p1, 9);
     }
   }
@@ -172,18 +186,20 @@ public class TestGlobalIndexEnableUpdatePartitions extends SparkClientFunctional
     try (SparkRDDWriteClient client = getHoodieWriteClient(writeConfig)) {
       // 1st batch: inserts
       String commitTimeAtEpoch0 = TimelineUtils.generateInstantTime(false, timeGenerator);
-      client.startCommitWithTime(commitTimeAtEpoch0);
-      assertNoWriteErrors(client.upsert(jsc().parallelize(insertsAtEpoch0, 2), commitTimeAtEpoch0).collect());
+      WriteClientTestUtils.startCommitWithTime(client, commitTimeAtEpoch0);
+      List<WriteStatus> writeStatusList = client.upsert(jsc().parallelize(insertsAtEpoch0, 2), commitTimeAtEpoch0).collect();
+      client.commit(commitTimeAtEpoch0, jsc().parallelize(writeStatusList));
+      assertNoWriteErrors(writeStatusList);
 
       // 2nd batch: update 4 records from p1 to p2
       String commitTimeAtEpoch5 = TimelineUtils.generateInstantTime(false, timeGenerator);
-      client.startCommitWithTime(commitTimeAtEpoch5);
+      WriteClientTestUtils.startCommitWithTime(client, commitTimeAtEpoch5);
       if (isUpsert) {
-        assertNoWriteErrors(client.upsert(jsc().parallelize(updatesAtEpoch5, 2), commitTimeAtEpoch5).collect());
+        client.commit(commitTimeAtEpoch5, client.upsert(jsc().parallelize(updatesAtEpoch5, 2), commitTimeAtEpoch5));
         readTableAndValidate(metaClient, new int[] {4, 5, 6, 7}, p1, 0);
         readTableAndValidate(metaClient, new int[] {0, 1, 2, 3}, p2, 5);
       } else {
-        assertNoWriteErrors(client.delete(jsc().parallelize(updatesAtEpoch5.stream().map(hoodieRecord -> hoodieRecord.getKey()).collect(Collectors.toList()), 2), commitTimeAtEpoch5).collect());
+        client.commit(commitTimeAtEpoch5, client.delete(jsc().parallelize(updatesAtEpoch5.stream().map(hoodieRecord -> hoodieRecord.getKey()).collect(Collectors.toList()), 2), commitTimeAtEpoch5));
         readTableAndValidate(metaClient, new int[] {4, 5, 6, 7}, p1, 0);
         readTableAndValidate(metaClient, new int[] {}, p2, 0);
       }
@@ -195,14 +211,14 @@ public class TestGlobalIndexEnableUpdatePartitions extends SparkClientFunctional
     try (SparkRDDWriteClient client = getHoodieWriteClient(writeConfig)) {
       // re-ingest same batch
       String commitTimeAtEpoch10 = TimelineUtils.generateInstantTime(false, timeGenerator);
-      client.startCommitWithTime(commitTimeAtEpoch10);
+      WriteClientTestUtils.startCommitWithTime(client, commitTimeAtEpoch10);
       if (isUpsert) {
-        assertNoWriteErrors(client.upsert(jsc().parallelize(updatesAtEpoch5, 2), commitTimeAtEpoch10).collect());
+        client.commit(commitTimeAtEpoch10, client.upsert(jsc().parallelize(updatesAtEpoch5, 2), commitTimeAtEpoch10));
         // this also tests snapshot query. We had a bug where MOR snapshot was ignoring rollbacks while determining last instant while reading log records.
         readTableAndValidate(metaClient, new int[] {4, 5, 6, 7}, p1, 0);
         readTableAndValidate(metaClient, new int[] {0, 1, 2, 3}, p2, 5);
       } else {
-        assertNoWriteErrors(client.delete(jsc().parallelize(updatesAtEpoch5.stream().map(hoodieRecord -> hoodieRecord.getKey()).collect(Collectors.toList()), 2), commitTimeAtEpoch10).collect());
+        client.commit(commitTimeAtEpoch10, client.delete(jsc().parallelize(updatesAtEpoch5.stream().map(hoodieRecord -> hoodieRecord.getKey()).collect(Collectors.toList()), 2), commitTimeAtEpoch10));
         readTableAndValidate(metaClient, new int[] {4, 5, 6, 7}, p1, 0);
         readTableAndValidate(metaClient, new int[] {}, p2, 0);
       }
@@ -213,18 +229,18 @@ public class TestGlobalIndexEnableUpdatePartitions extends SparkClientFunctional
       // update 4 of them to p3. these are treated as new inserts since they are deleted. no changes should be seen wrt p2.
       String commitTimeAtEpoch15 = TimelineUtils.generateInstantTime(false, timeGenerator);
       List<HoodieRecord> updatesAtEpoch15 = getUpdates(updatesAtEpoch5, p3, 15, payloadClass);
-      client.startCommitWithTime(commitTimeAtEpoch15);
-      assertNoWriteErrors(client.upsert(jsc().parallelize(updatesAtEpoch15, 2), commitTimeAtEpoch15).collect());
-      // for the same bug pointed out earlier, (ignoring rollbacks while determining last instant while reading log records), this tests the HoodieMergedReadHandle.
+      WriteClientTestUtils.startCommitWithTime(client, commitTimeAtEpoch15);
+      client.commit(commitTimeAtEpoch15, client.upsert(jsc().parallelize(updatesAtEpoch15, 2), commitTimeAtEpoch15));
+      // for the same bug pointed out earlier, (ignoring rollbacks while determining last instant while reading log records), this tests the HoodieFileGroupReader.
       readTableAndValidate(metaClient, new int[] {4, 5, 6, 7}, p1, 0);
       readTableAndValidate(metaClient, new int[] {0, 1, 2, 3}, p3, 15);
 
       // lets move 2 of them back to p1
       String commitTimeAtEpoch20 = TimelineUtils.generateInstantTime(false, timeGenerator);
       List<HoodieRecord> updatesAtEpoch20 = getUpdates(updatesAtEpoch5.subList(0, 2), p1, 20, payloadClass);
-      client.startCommitWithTime(commitTimeAtEpoch20);
-      assertNoWriteErrors(client.upsert(jsc().parallelize(updatesAtEpoch20, 1), commitTimeAtEpoch20).collect());
-      // for the same bug pointed out earlier, (ignoring rollbacks while determining last instant while reading log records), this tests the HoodieMergedReadHandle.
+      WriteClientTestUtils.startCommitWithTime(client, commitTimeAtEpoch20);
+      client.commit(commitTimeAtEpoch20, client.upsert(jsc().parallelize(updatesAtEpoch20, 1), commitTimeAtEpoch20));
+      // for the same bug pointed out earlier, (ignoring rollbacks while determining last instant while reading log records), this tests the HoodieFileGroupReader.
       Map<String, Long> expectedTsMap = new HashMap<>();
       Arrays.stream(new int[] {0, 1}).forEach(entry -> expectedTsMap.put(String.valueOf(entry), 20L));
       Arrays.stream(new int[] {4, 5, 6, 7}).forEach(entry -> expectedTsMap.put(String.valueOf(entry), 0L));
@@ -247,42 +263,42 @@ public class TestGlobalIndexEnableUpdatePartitions extends SparkClientFunctional
       // 1st batch: inserts
       String commitTimeAtEpoch0 = getCommitTimeAtUTC(0);
       List<HoodieRecord> insertsAtEpoch0 = getInserts(totalRecords, p1, 0, payloadClass);
-      client.startCommitWithTime(commitTimeAtEpoch0);
-      assertNoWriteErrors(client.upsert(jsc().parallelize(insertsAtEpoch0, 2), commitTimeAtEpoch0).collect());
+      WriteClientTestUtils.startCommitWithTime(client, commitTimeAtEpoch0);
+      client.commit(commitTimeAtEpoch0, client.upsert(jsc().parallelize(insertsAtEpoch0, 2), commitTimeAtEpoch0));
 
       // 2nd batch: normal updates same partition
       String commitTimeAtEpoch5 = getCommitTimeAtUTC(5);
       List<HoodieRecord> updatesAtEpoch5 = getUpdates(insertsAtEpoch0, 5, payloadClass);
-      client.startCommitWithTime(commitTimeAtEpoch5);
-      assertNoWriteErrors(client.upsert(jsc().parallelize(updatesAtEpoch5, 2), commitTimeAtEpoch5).collect());
+      WriteClientTestUtils.startCommitWithTime(client, commitTimeAtEpoch5);
+      client.commit(commitTimeAtEpoch5, client.upsert(jsc().parallelize(updatesAtEpoch5, 2), commitTimeAtEpoch5));
       readTableAndValidate(metaClient, new int[] {0, 1, 2, 3}, p1, 5);
 
       // 3rd batch: update all from p1 to p2
       String commitTimeAtEpoch6 = getCommitTimeAtUTC(6);
       List<HoodieRecord> updatesAtEpoch6 = getUpdates(updatesAtEpoch5, p2, 6, payloadClass);
-      client.startCommitWithTime(commitTimeAtEpoch6);
-      assertNoWriteErrors(client.upsert(jsc().parallelize(updatesAtEpoch6, 2), commitTimeAtEpoch6).collect());
+      WriteClientTestUtils.startCommitWithTime(client, commitTimeAtEpoch6);
+      client.commit(commitTimeAtEpoch6, client.upsert(jsc().parallelize(updatesAtEpoch6, 2), commitTimeAtEpoch6));
       readTableAndValidate(metaClient, new int[] {0, 1, 2, 3}, p2, 6);
 
       // 4th batch: delete records with id=0,1
       String commitTimeAtEpoch7 = getCommitTimeAtUTC(7);
       List<HoodieRecord> deletesAtEpoch7 = getDeletesWithNewPartition(insertsAtEpoch0.subList(0, 2), p2, 7, payloadClass);
-      client.startCommitWithTime(commitTimeAtEpoch7);
-      assertNoWriteErrors(client.upsert(jsc().parallelize(deletesAtEpoch7, 2), commitTimeAtEpoch7).collect());
+      WriteClientTestUtils.startCommitWithTime(client, commitTimeAtEpoch7);
+      client.commit(commitTimeAtEpoch7, client.upsert(jsc().parallelize(deletesAtEpoch7, 2), commitTimeAtEpoch7));
       readTableAndValidate(metaClient, new int[] {2, 3}, p2, 6);
 
       // 5th batch: delete records with id=2 (set to unknown partition but still matched)
       String commitTimeAtEpoch8 = getCommitTimeAtUTC(8);
       List<HoodieRecord> deletesAtEpoch8 = getDeletesWithEmptyPayloadAndNewPartition(insertsAtEpoch0.subList(2, 3), "unknown_pt");
-      client.startCommitWithTime(commitTimeAtEpoch8);
-      assertNoWriteErrors(client.upsert(jsc().parallelize(deletesAtEpoch8, 1), commitTimeAtEpoch8).collect());
+      WriteClientTestUtils.startCommitWithTime(client, commitTimeAtEpoch8);
+      client.commit(commitTimeAtEpoch8, client.upsert(jsc().parallelize(deletesAtEpoch8, 1), commitTimeAtEpoch8));
       readTableAndValidate(metaClient, new int[] {3}, p2, 6);
 
       // 6th batch: update all to p1
       String commitTimeAtEpoch9 = getCommitTimeAtUTC(9);
       List<HoodieRecord> updatesAtEpoch9 = getUpdates(insertsAtEpoch0, p1, 9, payloadClass);
-      client.startCommitWithTime(commitTimeAtEpoch9);
-      assertNoWriteErrors(client.upsert(jsc().parallelize(updatesAtEpoch9, 2), commitTimeAtEpoch9).collect());
+      WriteClientTestUtils.startCommitWithTime(client, commitTimeAtEpoch9);
+      client.commit(commitTimeAtEpoch9, client.upsert(jsc().parallelize(updatesAtEpoch9, 2), commitTimeAtEpoch9));
       readTableAndValidate(metaClient, new int[] {0, 1, 2, 3}, p1, 9);
     }
   }
@@ -302,29 +318,29 @@ public class TestGlobalIndexEnableUpdatePartitions extends SparkClientFunctional
 
       // 1st batch: insert 1,2
       String commitTimeAtEpoch0 = getCommitTimeAtUTC(0);
-      client.startCommitWithTime(commitTimeAtEpoch0);
-      assertNoWriteErrors(client.upsert(jsc().parallelize(allInserts.subList(0,2), 2), commitTimeAtEpoch0).collect());
+      WriteClientTestUtils.startCommitWithTime(client, commitTimeAtEpoch0);
+      client.commit(commitTimeAtEpoch0, client.upsert(jsc().parallelize(allInserts.subList(0,2), 2), commitTimeAtEpoch0));
       readTableAndValidate(metaClient, new int[] {0, 1}, p1, 0L);
 
       // 2nd batch: update records 1,2 and insert 3
       String commitTimeAtEpoch5 = getCommitTimeAtUTC(5);
       List<HoodieRecord> updatesAtEpoch5 = getUpdates(allInserts.subList(0,3), 5, payloadClass);
-      client.startCommitWithTime(commitTimeAtEpoch5);
-      assertNoWriteErrors(client.upsert(jsc().parallelize(updatesAtEpoch5, 2), commitTimeAtEpoch5).collect());
+      WriteClientTestUtils.startCommitWithTime(client, commitTimeAtEpoch5);
+      client.commit(commitTimeAtEpoch5, client.upsert(jsc().parallelize(updatesAtEpoch5, 2), commitTimeAtEpoch5));
       readTableAndValidate(metaClient, new int[] {0, 1, 2}, p1, getExpectedTsMap(new int[] {0, 1, 2}, new Long[] {5L, 5L, 5L}));
 
       // 3rd batch: update records 1,2,3 and insert 4
       String commitTimeAtEpoch10 = getCommitTimeAtUTC(10);
       List<HoodieRecord> updatesAtEpoch10 = getUpdates(allInserts, 10, payloadClass);
-      client.startCommitWithTime(commitTimeAtEpoch10);
-      assertNoWriteErrors(client.upsert(jsc().parallelize(updatesAtEpoch10, 2), commitTimeAtEpoch10).collect());
+      WriteClientTestUtils.startCommitWithTime(client, commitTimeAtEpoch10);
+      client.commit(commitTimeAtEpoch10, client.upsert(jsc().parallelize(updatesAtEpoch10, 2), commitTimeAtEpoch10));
       readTableAndValidate(metaClient, new int[] {0, 1, 2, 3}, p1, getExpectedTsMap(new int[] {0, 1, 2, 3}, new Long[] {10L, 10L, 10L, 10L}));
 
       // 4th batch: update all from p1 to p2
       String commitTimeAtEpoch20 = getCommitTimeAtUTC(20);
       List<HoodieRecord> updatesAtEpoch20 = getUpdates(allInserts, p2, 20, payloadClass);
-      client.startCommitWithTime(commitTimeAtEpoch20);
-      assertNoWriteErrors(client.upsert(jsc().parallelize(updatesAtEpoch20, 2), commitTimeAtEpoch20).collect());
+      WriteClientTestUtils.startCommitWithTime(client, commitTimeAtEpoch20);
+      client.commit(commitTimeAtEpoch20, client.upsert(jsc().parallelize(updatesAtEpoch20, 2), commitTimeAtEpoch20));
       readTableAndValidate(metaClient, new int[] {0, 1, 2, 3}, p2, 20);
     }
   }
@@ -371,7 +387,7 @@ public class TestGlobalIndexEnableUpdatePartitions extends SparkClientFunctional
     } else {
       metadataConfigBuilder.enable(false);
     }
-    return getConfigBuilder(true)
+    return getConfigBuilder(false)
         .withProperties(getKeyGenProps(payloadClass))
         .withParallelism(2, 2)
         .withBulkInsertParallelism(2)

@@ -22,6 +22,7 @@ import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.commands.TableCommand;
 import org.apache.hudi.cli.testutils.HoodieCLIIntegrationTestBase;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.model.HoodieAvroPayload;
@@ -204,15 +205,16 @@ public class ITTestTableCommand extends HoodieCLIIntegrationTestBase {
 
   private void upsert(JavaSparkContext jsc, SparkRDDWriteClient<HoodieAvroPayload> client,
                       List<HoodieRecord> records, String newCommitTime) throws IOException {
-    client.startCommitWithTime(newCommitTime);
+    WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
-    operateFunc(SparkRDDWriteClient::upsert, client, writeRecords, newCommitTime);
+    JavaRDD<WriteStatus> result = operateFunc(SparkRDDWriteClient::upsert, client, writeRecords, newCommitTime);
+    client.commit(newCommitTime, result);
   }
 
-  private void operateFunc(
+  private JavaRDD<WriteStatus> operateFunc(
       Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieRecord>, String> writeFn,
       SparkRDDWriteClient<HoodieAvroPayload> client, JavaRDD<HoodieRecord> writeRecords, String commitTime)
       throws IOException {
-    writeFn.apply(client, writeRecords, commitTime);
+    return writeFn.apply(client, writeRecords, commitTime);
   }
 }

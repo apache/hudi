@@ -20,6 +20,7 @@
 package org.apache.hudi.table.functional;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.transaction.BucketIndexConcurrentFileWritesConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
@@ -53,6 +54,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.commit.SparkBucketIndexPartitioner;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
@@ -85,6 +87,7 @@ import java.util.Properties;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.TYPE;
+import static org.apache.hudi.config.HoodieWriteConfig.ENABLE_SCHEMA_CONFLICT_RESOLUTION;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -157,11 +160,15 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
 
     // do compaction
     String compactionTime = (String) client1.scheduleCompaction(Option.empty()).get();
-    client1.compact(compactionTime);
+    HoodieWriteMetadata writeMetadata = client1.compact(compactionTime);
+    client1.commitCompaction(compactionTime, writeMetadata, Option.empty());
+    assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(compactionTime));
 
     // result is [(id1,Danny,23,2,par1)]
     Map<String, String> result = Collections.singletonMap("par1", "[id1,par1,id1,Danny,23,2,par1]");
     checkWrittenData(result, 1);
+    client1.close();
+    client2.close();
   }
 
   @Test
@@ -202,13 +209,17 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
         metaClient.getCommitActionType());
 
     // do compaction
-    client1.compact(compactionTime);
+    HoodieWriteMetadata writeMetadata = client1.compact(compactionTime);
+    client1.commitCompaction(compactionTime, writeMetadata, Option.empty());
+    assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(compactionTime));
 
     // read optimized result is [(id1,Danny,23,1,par1)]
     // because 2nd commit is in inflight state and
     // the data files belongs 3rd commit is not included in the last compaction.
     Map<String, String> result = Collections.singletonMap("par1", "[id1,par1,id1,Danny,null,1,par1]");
     checkWrittenData(result, 1);
+    client1.close();
+    client2.close();
   }
 
   // Validate that multiple writers will only produce base files for bulk insert
@@ -331,11 +342,15 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
 
     // do compaction
     String compactionTime = (String) client1.scheduleCompaction(Option.empty()).get();
-    client1.compact(compactionTime);
+    HoodieWriteMetadata writeMetadata = client1.compact(compactionTime);
+    client1.commitCompaction(compactionTime, writeMetadata, Option.empty());
+    assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(compactionTime));
 
     // result is [(id1,Danny,23,2,par1)]
     Map<String, String> result = Collections.singletonMap("par1", "[id1,par1,id1,Danny,23,2,par1]");
     checkWrittenData(result, 1);
+    client1.close();
+    client2.close();
   }
 
   /**
@@ -382,6 +397,8 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
           Option.empty(),
           metaClient.getCommitActionType());
     });
+    client1.close();
+    client2.close();
   }
 
   /**
@@ -428,6 +445,8 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
           Option.empty(),
           metaClient.getCommitActionType());
     });
+    client1.close();
+    client2.close();
   }
 
   /**
@@ -475,11 +494,15 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
 
     // do compaction
     String compactionTime = (String) client1.scheduleCompaction(Option.empty()).get();
-    client1.compact(compactionTime);
+    HoodieWriteMetadata writeMetadata = client1.compact(compactionTime);
+    client1.commitCompaction(compactionTime, writeMetadata, Option.empty());
+    assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(compactionTime));
 
     // result is [(id1,Danny,23,2,par1)]
     Map<String, String> result = Collections.singletonMap("par1", "[id1,par1,id1,Danny,23,2,par1]");
     checkWrittenData(result, 1);
+    client1.close();
+    client2.close();
   }
 
   /**
@@ -527,11 +550,15 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
 
     // do compaction
     String compactionTime = (String) client1.scheduleCompaction(Option.empty()).get();
-    client1.compact(compactionTime);
+    HoodieWriteMetadata writeMetadata = client1.compact(compactionTime);
+    client1.commitCompaction(compactionTime, writeMetadata, Option.empty());
+    assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(compactionTime));
 
     // result is [(id1,Danny,23,2,par1)]
     Map<String, String> result = Collections.singletonMap("par1", "[id1,par1,id1,Danny,23,2,par1]");
     checkWrittenData(result, 1);
+    client1.close();
+    client2.close();
   }
 
   /**
@@ -565,11 +592,15 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
 
     // do compaction
     String compactionTime = (String) client1.scheduleCompaction(Option.empty()).get();
-    client1.compact(compactionTime);
+    HoodieWriteMetadata writeMetadata = client1.compact(compactionTime);
+    client1.commitCompaction(compactionTime, writeMetadata, Option.empty());
+    assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(compactionTime));
 
     // result is [(id1,Danny,23,2,par1)]
     Map<String, String> result = Collections.singletonMap("par1", "[id1,par1,id1,Danny,23,2,par1]");
     checkWrittenData(result, 1);
+    client1.close();
+    client2.close();
   }
 
   private HoodieWriteConfig createHoodieWriteConfig() {
@@ -583,6 +614,7 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
     }
     Properties props = getPropertiesForKeyGen(true);
     props.put(TYPE.key(), HoodieTableType.MERGE_ON_READ.name());
+    props.put(ENABLE_SCHEMA_CONFLICT_RESOLUTION.key(), "false");
     String basePath = basePath();
     return HoodieWriteConfig.newBuilder()
         .withProps(Collections.singletonMap(HoodieTableConfig.PRECOMBINE_FIELD.key(), "ts"))
@@ -590,7 +622,6 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
         .withPath(basePath)
         .withSchema(jsonSchema)
         .withParallelism(2, 2)
-        .withAutoCommit(false)
         .withRecordMergeMode(RecordMergeMode.CUSTOM)
         .withPayloadConfig(
             HoodiePayloadConfig.newBuilder()
@@ -730,7 +761,7 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
     List<HoodieRecord> recordList = str2HoodieRecord(records, fullUpdate);
     JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(recordList, 2);
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    client.startCommitWithTime(instant);
+    WriteClientTestUtils.startCommitWithTime(client, instant);
     List<WriteStatus> writeStatuses;
     switch (operationType) {
       case INSERT:

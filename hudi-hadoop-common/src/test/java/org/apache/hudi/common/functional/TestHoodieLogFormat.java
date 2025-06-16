@@ -82,7 +82,6 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.io.TempDir;
@@ -473,7 +472,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
-    byte[] dataBlockContentBytes = getDataBlock(DEFAULT_DATA_BLOCK_TYPE, records, header).getContentBytes(storage);
+    byte[] dataBlockContentBytes = getDataBlock(DEFAULT_DATA_BLOCK_TYPE, records, header).getContentBytes(storage).toByteArray();
     HoodieLogBlock.HoodieLogBlockContentLocation logBlockContentLoc = new HoodieLogBlock.HoodieLogBlockContentLocation(
         HoodieTestUtils.getStorage(basePath), null, 0, dataBlockContentBytes.length, 0);
     HoodieDataBlock reusableDataBlock = new HoodieAvroDataBlock(null, Option.ofNullable(dataBlockContentBytes), false,
@@ -1918,12 +1917,11 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         0, 0, Option.empty());
   }
 
-  @Disabled("HUDI-7375")
   @ParameterizedTest
   @MethodSource("testArguments")
-  public void testLogReaderWithDifferentVersionsOfDeleteBlocks(ExternalSpillableMap.DiskMapType diskMapType,
-                                                               boolean isCompressionEnabled,
-                                                               boolean enableOptimizedLogBlocksScan)
+  void testLogReaderWithDifferentVersionsOfDeleteBlocks(ExternalSpillableMap.DiskMapType diskMapType,
+                                                        boolean isCompressionEnabled,
+                                                        boolean enableOptimizedLogBlocksScan)
       throws IOException, URISyntaxException, InterruptedException {
     Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
     // Set a small threshold so that every block is a new version

@@ -26,8 +26,6 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.util.NetworkUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.timeline.service.TimelineService;
 
@@ -172,32 +170,29 @@ public class EmbeddedTimelineService {
                   * writeConfig.getHoodieClientHeartbeatTolerableMisses());
     }
 
-    if (writeConfig.isTimelineServerBasedInstantStateEnabled()) {
-      timelineServiceConfBuilder
-          .instantStateForceRefreshRequestNumber(writeConfig.getTimelineServerBasedInstantStateForceRefreshRequestNumber())
-          .enableInstantStateRequests(true);
+    if (writeConfig.isUsingRemotePartitioner()) {
+      timelineServiceConfBuilder.enableRemotePartitioner(true);
     }
 
     this.serviceConfig = timelineServiceConfBuilder.build();
 
-    server = timelineServiceCreator.create(context, storageConf.newInstance(), serviceConfig,
-        HoodieStorageUtils.getStorage(writeConfig.getBasePath(), storageConf.newInstance()), viewManager);
+    server = timelineServiceCreator.create(storageConf.newInstance(), serviceConfig, viewManager);
     serverPort = server.startService();
-    LOG.info("Started embedded timeline server at " + hostAddr + ":" + serverPort);
+    LOG.info("Started embedded timeline server at {}:{}", hostAddr, serverPort);
   }
 
   @FunctionalInterface
   interface TimelineServiceCreator {
-    TimelineService create(HoodieEngineContext context, StorageConfiguration<?> storageConf, TimelineService.Config timelineServerConf,
-                           HoodieStorage storage, FileSystemViewManager globalFileSystemViewManager) throws IOException;
+    TimelineService create(StorageConfiguration<?> storageConf, TimelineService.Config timelineServerConf,
+                           FileSystemViewManager globalFileSystemViewManager) throws IOException;
   }
 
   private void setHostAddr(String embeddedTimelineServiceHostAddr) {
     if (embeddedTimelineServiceHostAddr != null) {
-      LOG.info("Overriding hostIp to (" + embeddedTimelineServiceHostAddr + ") found in spark-conf. It was " + this.hostAddr);
+      LOG.info("Overriding hostIp to ({}) found in write conf. It was {}", embeddedTimelineServiceHostAddr, this.hostAddr);
       this.hostAddr = embeddedTimelineServiceHostAddr;
     } else {
-      LOG.warn("Unable to find driver bind address from spark config");
+      LOG.warn("Unable to find driver bind address from write config, use current host name");
       this.hostAddr = NetworkUtils.getHostname();
     }
   }
@@ -261,7 +256,7 @@ public class EmbeddedTimelineService {
 
   private static TimelineServiceIdentifier getTimelineServiceIdentifier(String hostAddr, HoodieWriteConfig writeConfig) {
     return new TimelineServiceIdentifier(hostAddr, writeConfig.getMarkersType(), writeConfig.isMetadataTableEnabled(),
-        writeConfig.isEarlyConflictDetectionEnable(), writeConfig.isTimelineServerBasedInstantStateEnabled());
+        writeConfig.isEarlyConflictDetectionEnable());
   }
 
   static class TimelineServiceIdentifier {
@@ -269,15 +264,15 @@ public class EmbeddedTimelineService {
     private final MarkerType markerType;
     private final boolean isMetadataEnabled;
     private final boolean isEarlyConflictDetectionEnable;
-    private final boolean isTimelineServerBasedInstantStateEnabled;
 
-    public TimelineServiceIdentifier(String hostAddr, MarkerType markerType, boolean isMetadataEnabled, boolean isEarlyConflictDetectionEnable,
-                                     boolean isTimelineServerBasedInstantStateEnabled) {
+    public TimelineServiceIdentifier(String hostAddr,
+                                     MarkerType markerType,
+                                     boolean isMetadataEnabled,
+                                     boolean isEarlyConflictDetectionEnable) {
       this.hostAddr = hostAddr;
       this.markerType = markerType;
       this.isMetadataEnabled = isMetadataEnabled;
       this.isEarlyConflictDetectionEnable = isEarlyConflictDetectionEnable;
-      this.isTimelineServerBasedInstantStateEnabled = isTimelineServerBasedInstantStateEnabled;
     }
 
     @Override
@@ -291,7 +286,7 @@ public class EmbeddedTimelineService {
       TimelineServiceIdentifier that = (TimelineServiceIdentifier) o;
       if (this.hostAddr != null && that.hostAddr != null) {
         return isMetadataEnabled == that.isMetadataEnabled && isEarlyConflictDetectionEnable == that.isEarlyConflictDetectionEnable
-            && isTimelineServerBasedInstantStateEnabled == that.isTimelineServerBasedInstantStateEnabled && hostAddr.equals(that.hostAddr) && markerType == that.markerType;
+            && hostAddr.equals(that.hostAddr) && markerType == that.markerType;
       } else {
         return (hostAddr == null && that.hostAddr == null);
       }
@@ -299,7 +294,7 @@ public class EmbeddedTimelineService {
 
     @Override
     public int hashCode() {
-      return Objects.hash(hostAddr, markerType, isMetadataEnabled, isEarlyConflictDetectionEnable, isTimelineServerBasedInstantStateEnabled);
+      return Objects.hash(hostAddr, markerType, isMetadataEnabled, isEarlyConflictDetectionEnable);
     }
   }
 }

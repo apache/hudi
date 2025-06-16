@@ -76,7 +76,6 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadata;
-import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.metrics.datadog.DatadogHttpClient.ApiSite;
 import org.apache.hudi.storage.StoragePath;
@@ -300,6 +299,13 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Schema string representing the latest schema of the table. Hudi passes this to "
           + "implementations of evolution of schema");
 
+  public static final ConfigProperty<Boolean> ENABLE_SCHEMA_CONFLICT_RESOLUTION = ConfigProperty
+      .key(CONCURRENCY_PREFIX + "schema.conflict.resolution.enable")
+      .defaultValue(true)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("If turned on, we detect and abort incompatible concurrent schema evolution.");
+
   public static final ConfigProperty<String> AVRO_SCHEMA_VALIDATE_ENABLE = ConfigProperty
       .key("hoodie.avro.schema.validate")
       .defaultValue("false")
@@ -471,13 +477,6 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Write status objects hold metadata about a write (stats, errors), that is not yet committed to storage. "
           + "This controls the how that information is cached for inspection by clients. We rarely expect this to be changed.");
 
-  public static final ConfigProperty<String> AUTO_COMMIT_ENABLE = ConfigProperty
-      .key("hoodie.auto.commit")
-      .defaultValue("true")
-      .markAdvanced()
-      .withDocumentation("Controls whether a write operation should auto commit. This can be turned off to perform inspection"
-          + " of the uncommitted write before deciding to commit.");
-
   public static final ConfigProperty<String> WRITE_STATUS_CLASS_NAME = ConfigProperty
       .key("hoodie.writestatus.class")
       .defaultValue(WriteStatus.class.getName())
@@ -499,18 +498,6 @@ public class HoodieWriteConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion("0.9.0")
       .withDocumentation(MarkerType.class);
-
-  public static final ConfigProperty<Boolean> INSTANT_STATE_TIMELINE_SERVER_BASED = ConfigProperty
-      .key("hoodie.instant_state.timeline_server_based.enabled")
-      .defaultValue(false)
-      .sinceVersion("1.0.0")
-      .withDocumentation("If enabled, writers get instant state from timeline server rather than requesting DFS directly");
-
-  public static final ConfigProperty<Integer> INSTANT_STATE_TIMELINE_SERVER_BASED_FORCE_REFRESH_REQUEST_NUMBER = ConfigProperty
-      .key("hoodie.instant_state.timeline_server_based.force_refresh.request.number")
-      .defaultValue(100)
-      .sinceVersion("1.0.0")
-      .withDocumentation("Number of requests to trigger instant state cache refreshing");
 
   public static final ConfigProperty<Integer> MARKERS_TIMELINE_SERVER_BASED_BATCH_NUM_THREADS = ConfigProperty
       .key("hoodie.markers.timeline_server_based.batch.num_threads")
@@ -881,7 +868,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   private HoodieStorageConfig storageConfig;
   private HoodieTimeGeneratorConfig timeGeneratorConfig;
   private HoodieIndexingConfig indexingConfig;
-  private EngineType engineType;
+  private final EngineType engineType;
 
   /**
    * @deprecated Use {@link #TBL_NAME} and its methods instead
@@ -1035,16 +1022,6 @@ public class HoodieWriteConfig extends HoodieConfig {
    */
   @Deprecated
   public static final String DEFAULT_WRITE_STATUS_STORAGE_LEVEL = WRITE_STATUS_STORAGE_LEVEL_VALUE.defaultValue();
-  /**
-   * @deprecated Use {@link #AUTO_COMMIT_ENABLE} and its methods instead
-   */
-  @Deprecated
-  public static final String HOODIE_AUTO_COMMIT_PROP = AUTO_COMMIT_ENABLE.key();
-  /**
-   * @deprecated Use {@link #AUTO_COMMIT_ENABLE} and its methods instead
-   */
-  @Deprecated
-  public static final String DEFAULT_HOODIE_AUTO_COMMIT = AUTO_COMMIT_ENABLE.defaultValue();
   /**
    * @deprecated Use {@link #WRITE_STATUS_CLASS_NAME} and its methods instead
    */
@@ -1312,8 +1289,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     setValue(AVRO_SCHEMA_STRING, schemaStr);
   }
 
-  public void setRecordMergerClass(String recordMergerStrategy) {
-    setValue(RECORD_MERGE_STRATEGY_ID, recordMergerStrategy);
+  public void setRecordMergerClass(String recordMergerClass) {
+    setValue(RECORD_MERGE_IMPL_CLASSES, recordMergerClass);
   }
 
   /**
@@ -1420,10 +1397,6 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBooleanOrDefault(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED);
   }
 
-  public Boolean shouldAutoCommit() {
-    return getBoolean(AUTO_COMMIT_ENABLE);
-  }
-
   public boolean shouldUseExternalSchemaTransformation() {
     return getBoolean(AVRO_EXTERNAL_SCHEMA_TRANSFORMATION_ENABLE);
   }
@@ -1518,14 +1491,6 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public int getFinalizeWriteParallelism() {
     return getInt(FINALIZE_WRITE_PARALLELISM_VALUE);
-  }
-
-  public boolean isTimelineServerBasedInstantStateEnabled() {
-    return getBoolean(INSTANT_STATE_TIMELINE_SERVER_BASED);
-  }
-
-  public int getTimelineServerBasedInstantStateForceRefreshRequestNumber() {
-    return getInt(INSTANT_STATE_TIMELINE_SERVER_BASED_FORCE_REFRESH_REQUEST_NUMBER);
   }
 
   public MarkerType getMarkersType() {
@@ -1948,6 +1913,14 @@ public class HoodieWriteConfig extends HoodieConfig {
     return HoodieIndex.IndexType.valueOf(getString(HoodieIndexConfig.INDEX_TYPE));
   }
 
+  public String getBucketIndexPartitionExpression() {
+    return getString(HoodieIndexConfig.BUCKET_INDEX_PARTITION_EXPRESSIONS);
+  }
+
+  public String getBucketIndexPartitionRuleType() {
+    return getString(HoodieIndexConfig.BUCKET_INDEX_PARTITION_RULE_TYPE);
+  }
+
   public String getIndexClass() {
     return getString(HoodieIndexConfig.INDEX_CLASS_NAME);
   }
@@ -1964,121 +1937,12 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getDouble(HoodieStorageConfig.BLOOM_FILTER_FPP_VALUE);
   }
 
-  public String getHbaseZkQuorum() {
-    return getString(HoodieHBaseIndexConfig.ZKQUORUM);
-  }
-
-  public int getHbaseZkPort() {
-    return getInt(HoodieHBaseIndexConfig.ZKPORT);
-  }
-
-  public String getHBaseZkZnodeParent() {
-    return getString(HoodieHBaseIndexConfig.ZK_NODE_PATH);
-  }
-
-  public String getHbaseTableName() {
-    return getString(HoodieHBaseIndexConfig.TABLENAME);
-  }
-
-  public int getHbaseIndexGetBatchSize() {
-    return getInt(HoodieHBaseIndexConfig.GET_BATCH_SIZE);
-  }
-
-  public Boolean getHBaseIndexRollbackSync() {
-    return getBoolean(HoodieHBaseIndexConfig.ROLLBACK_SYNC_ENABLE);
-  }
-
-  public int getHbaseIndexPutBatchSize() {
-    return getInt(HoodieHBaseIndexConfig.PUT_BATCH_SIZE);
-  }
-
-  public boolean getHbaseIndexPutBatchSizeAutoCompute() {
-    return getBooleanOrDefault(HoodieHBaseIndexConfig.PUT_BATCH_SIZE_AUTO_COMPUTE);
-  }
-
-  public String getHBaseQPSResourceAllocatorClass() {
-    return getString(HoodieHBaseIndexConfig.QPS_ALLOCATOR_CLASS_NAME);
-  }
-
-  public String getHBaseQPSZKnodePath() {
-    return getString(HoodieHBaseIndexConfig.ZKPATH_QPS_ROOT);
-  }
-
-  public String getHBaseZkZnodeSessionTimeout() {
-    return getString(HoodieHBaseIndexConfig.ZK_SESSION_TIMEOUT_MS);
-  }
-
-  public String getHBaseZkZnodeConnectionTimeout() {
-    return getString(HoodieHBaseIndexConfig.ZK_CONNECTION_TIMEOUT_MS);
-  }
-
-  public boolean getHBaseIndexShouldComputeQPSDynamically() {
-    return getBoolean(HoodieHBaseIndexConfig.COMPUTE_QPS_DYNAMICALLY);
-  }
-
-  public String getHBaseIndexSecurityAuthentication() {
-    return getString(HoodieHBaseIndexConfig.SECURITY_AUTHENTICATION);
-  }
-
-  public String getHBaseIndexKerberosUserKeytab() {
-    return getString(HoodieHBaseIndexConfig.KERBEROS_USER_KEYTAB);
-  }
-
-  public String getHBaseIndexKerberosUserPrincipal() {
-    return getString(HoodieHBaseIndexConfig.KERBEROS_USER_PRINCIPAL);
-  }
-
-  public String getHBaseIndexRegionserverPrincipal() {
-    return getString(HoodieHBaseIndexConfig.REGIONSERVER_PRINCIPAL);
-  }
-
-  public String getHBaseIndexMasterPrincipal() {
-    return getString(HoodieHBaseIndexConfig.MASTER_PRINCIPAL);
-  }
-
-  public int getHBaseIndexDesiredPutsTime() {
-    return getInt(HoodieHBaseIndexConfig.DESIRED_PUTS_TIME_IN_SECONDS);
-  }
-
   public String getBloomFilterType() {
-    return getString(HoodieStorageConfig.BLOOM_FILTER_TYPE);
+    return getStorageConfig().getBloomFilterType();
   }
 
   public int getDynamicBloomFilterMaxNumEntries() {
     return getInt(HoodieStorageConfig.BLOOM_FILTER_DYNAMIC_MAX_ENTRIES);
-  }
-
-  /**
-   * Fraction of the global share of QPS that should be allocated to this job. Let's say there are 3 jobs which have
-   * input size in terms of number of rows required for HbaseIndexing as x, 2x, 3x respectively. Then this fraction for
-   * the jobs would be (0.17) 1/6, 0.33 (2/6) and 0.5 (3/6) respectively.
-   */
-  public float getHbaseIndexQPSFraction() {
-    return getFloat(HoodieHBaseIndexConfig.QPS_FRACTION);
-  }
-
-  public float getHBaseIndexMinQPSFraction() {
-    return getFloat(HoodieHBaseIndexConfig.MIN_QPS_FRACTION);
-  }
-
-  public float getHBaseIndexMaxQPSFraction() {
-    return getFloat(HoodieHBaseIndexConfig.MAX_QPS_FRACTION);
-  }
-
-  /**
-   * This should be same across various jobs. This is intended to limit the aggregate QPS generated across various
-   * Hoodie jobs to an Hbase Region Server
-   */
-  public int getHbaseIndexMaxQPSPerRegionServer() {
-    return getInt(HoodieHBaseIndexConfig.MAX_QPS_PER_REGION_SERVER);
-  }
-
-  public boolean getHbaseIndexUpdatePartitionPath() {
-    return getBooleanOrDefault(HoodieHBaseIndexConfig.UPDATE_PARTITION_PATH_ENABLE);
-  }
-
-  public int getHBaseIndexRegionCount() {
-    return getInt(HoodieHBaseIndexConfig.BUCKET_NUMBER);
   }
 
   public int getBloomIndexParallelism() {
@@ -2097,6 +1961,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBooleanOrDefault(HoodieIndexConfig.BLOOM_INDEX_USE_METADATA);
   }
 
+  public String getBloomIndexInputStorageLevel() {
+    return getStringOrDefault(HoodieIndexConfig.BLOOM_INDEX_INPUT_STORAGE_LEVEL_VALUE);
+  }
+
   public boolean useBloomIndexTreebasedFilter() {
     return getBoolean(HoodieIndexConfig.BLOOM_INDEX_TREE_BASED_FILTER);
   }
@@ -2105,34 +1973,40 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieIndexConfig.BLOOM_INDEX_BUCKETIZED_CHECKING);
   }
 
+  public boolean useBloomIndexBucketizedCheckingWithDynamicParallelism() {
+    return getBoolean(HoodieIndexConfig.BLOOM_INDEX_BUCKETIZED_CHECKING_ENABLE_DYNAMIC_PARALLELISM);
+  }
+
+  public boolean isBloomIndexFileGroupIdKeySortingEnabled() {
+    return getBoolean(HoodieIndexConfig.BLOOM_INDEX_FILE_GROUP_ID_KEY_SORTING);
+  }
+
   /**
    * Determines if the metadata bloom filter index is enabled.
    *
-   * <p>The bloom filter index is enabled if:
-   * <ul>
-   *   <li>The metadata table is enabled and bloom filter index is enabled in the metadata configuration, or</li>
-   *   <li>The bloom filter index is not explicitly marked for dropping in the metadata configuration.</li>
-   * </ul>
+   * <p>The bloom filter index is enabled if the metadata table is enabled and bloom filter index is enabled in the metadata configuration.
+   *
+   * <p>IMPORTANT: Make sure the logic is consistent with {@code MetadataPartitionType.isMetadataPartitionEnabled}
+   * which is the only truth that defines whether the index is enabled(through table config {@link HoodieTableConfig#TABLE_METADATA_PARTITIONS}).
    *
    * @return {@code true} if the metadata bloom filter index is enabled, {@code false} otherwise.
    */
   public boolean isMetadataBloomFilterIndexEnabled() {
-    return isMetadataTableEnabled() && getMetadataConfig().isBloomFilterIndexEnabled() || !isDropMetadataIndex(MetadataPartitionType.BLOOM_FILTERS.getPartitionPath());
+    return isMetadataTableEnabled() && getMetadataConfig().isBloomFilterIndexEnabled();
   }
 
   /**
    * Determines if the metadata column stats index is enabled.
    *
-   * <p>The column stats index is enabled if:
-   * <ul>
-   *   <li>The metadata table is enabled and column stats index is enabled in the metadata configuration, or</li>
-   *   <li>The column stats index is not explicitly marked for dropping in the metadata configuration.</li>
-   * </ul>
+   * <p>The column stats index is enabled if metadata table is enabled and column stats index is enabled in the metadata configuration.
+   *
+   * <p>IMPORTANT: Make sure the logic is consistent with {@code MetadataPartitionType.isMetadataPartitionEnabled}
+   * which is the only truth that defines whether the index is enabled(through table config {@link HoodieTableConfig#TABLE_METADATA_PARTITIONS}).
    *
    * @return {@code true} if the metadata column stats index is enabled, {@code false} otherwise.
    */
   public boolean isMetadataColumnStatsIndexEnabled() {
-    return isMetadataTableEnabled() && getMetadataConfig().isColumnStatsIndexEnabled() || !isDropMetadataIndex(MetadataPartitionType.COLUMN_STATS.getPartitionPath());
+    return isMetadataTableEnabled() && getMetadataConfig().isColumnStatsIndexEnabled();
   }
 
   /**
@@ -2140,16 +2014,18 @@ public class HoodieWriteConfig extends HoodieConfig {
    *
    * <p>The partition stats index is enabled if:
    * <ul>
-   *   <li>The column stats is enabled. Partition stats cannot be created without column stats.</li>
-   *   <li>The metadata table is enabled and partition stats index is enabled in the metadata configuration, or</li>
-   *   <li>The partition stats index is not explicitly marked for dropping in the metadata configuration.</li>
+   *   <li>The column stats is enabled. Partition stats cannot be created without column stats;</li>
+   *   <li>The metadata table is enabled and partition stats index is enabled in the metadata configuration.</li>
    * </ul>
+   *
+   * <p>IMPORTANT: Make sure the logic is consistent with {@code MetadataPartitionType.isMetadataPartitionEnabled}
+   * which is the only truth that defines whether the index is enabled(through table config {@link HoodieTableConfig#TABLE_METADATA_PARTITIONS}).
    *
    * @return {@code true} if the partition stats index is enabled, {@code false} otherwise.
    */
   public boolean isPartitionStatsIndexEnabled() {
     if (isMetadataColumnStatsIndexEnabled()) {
-      return isMetadataTableEnabled() && getMetadataConfig().isPartitionStatsIndexEnabled() || !isDropMetadataIndex(MetadataPartitionType.PARTITION_STATS.getPartitionPath());
+      return isMetadataTableEnabled() && getMetadataConfig().isPartitionStatsIndexEnabled();
     }
     return false;
   }
@@ -2157,32 +2033,15 @@ public class HoodieWriteConfig extends HoodieConfig {
   /**
    * Determines if the record index is enabled.
    *
-   * <p>The record index is enabled if:
-   * <ul>
-   *   <li>The record index is enabled in the metadata configuration, or</li>
-   *   <li>The record index is not explicitly marked for dropping in the metadata configuration.</li>
-   * </ul>
+   * <p>The record index is enabled if the record index is enabled in the metadata configuration.
+   *
+   * <p>IMPORTANT: Make sure the logic is consistent with {@code MetadataPartitionType.isMetadataPartitionEnabled}
+   * which is the only truth that defines whether the index is enabled(through table config {@link HoodieTableConfig#TABLE_METADATA_PARTITIONS}).
    *
    * @return {@code true} if the record index is enabled, {@code false} otherwise.
    */
   public boolean isRecordIndexEnabled() {
-    return metadataConfig.isRecordIndexEnabled() || !isDropMetadataIndex(MetadataPartitionType.RECORD_INDEX.getPartitionPath());
-  }
-
-  /**
-   * Checks if a specific metadata index is marked for dropping based on the metadata configuration.
-   *
-   * <p>An index is considered marked for dropping if:
-   * <ul>
-   *   <li>The metadata configuration specifies a non-empty index to drop, and</li>
-   *   <li>The specified index matches the given index name.</li>
-   * </ul>
-   *
-   * @param indexName the name of the metadata index to check
-   * @return {@code true} if the specified metadata index is marked for dropping, {@code false} otherwise.
-   */
-  public boolean isDropMetadataIndex(String indexName) {
-    return StringUtils.nonEmpty(getMetadataConfig().getMetadataIndexToDrop()) && getMetadataConfig().getMetadataIndexToDrop().equals(indexName);
+    return metadataConfig.isRecordIndexEnabled();
   }
 
   public int getPartitionStatsIndexParallelism() {
@@ -2215,6 +2074,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public int getSimpleIndexParallelism() {
     return getInt(HoodieIndexConfig.SIMPLE_INDEX_PARALLELISM);
+  }
+
+  public String getSimpleIndexInputStorageLevel() {
+    return getStringOrDefault(HoodieIndexConfig.SIMPLE_INDEX_INPUT_STORAGE_LEVEL_VALUE);
   }
 
   public boolean getSimpleIndexUseCaching() {
@@ -2267,6 +2130,14 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean getRecordIndexUpdatePartitionPath() {
     return getBoolean(HoodieIndexConfig.RECORD_INDEX_UPDATE_PARTITION_PATH_ENABLE);
+  }
+
+  public String getRecordIndexInputStorageLevel() {
+    return getStringOrDefault(HoodieIndexConfig.RECORD_INDEX_INPUT_STORAGE_LEVEL_VALUE);
+  }
+  
+  public boolean isUsingRemotePartitioner() {
+    return getBoolean(HoodieIndexConfig.BUCKET_PARTITIONER);
   }
 
   /**
@@ -2875,16 +2746,24 @@ public class HoodieWriteConfig extends HoodieConfig {
     return props.getInteger(WRITES_FILEID_ENCODING, HoodieMetadataPayload.RECORD_INDEX_FIELD_FILEID_ENCODING_UUID);
   }
 
-  public boolean needResolveWriteConflict(WriteOperationType operationType) {
+  public boolean needResolveWriteConflict(WriteOperationType operationType, boolean isMetadataTable, HoodieWriteConfig config,
+                                          HoodieTableConfig tableConfig) {
     WriteConcurrencyMode mode = getWriteConcurrencyMode();
     switch (mode) {
       case SINGLE_WRITER:
         return false;
       case OPTIMISTIC_CONCURRENCY_CONTROL:
         return true;
-      case NON_BLOCKING_CONCURRENCY_CONTROL:
-        // NB-CC don't need to resolve write conflict except bulk insert operation
-        return WriteOperationType.BULK_INSERT == operationType;
+      case NON_BLOCKING_CONCURRENCY_CONTROL: {
+        if (isMetadataTable) {
+          // datatable NB-CC is still evolving and might go through evolution compared to its current state.
+          // But in case of metadata table, when streaming writes are enabled, no two writes can conflict and hence.
+          return false;
+        } else {
+          // NB-CC don't need to resolve write conflict except bulk insert operation
+          return WriteOperationType.BULK_INSERT == operationType;
+        }
+      }
       default:
         throw new IllegalArgumentException("Invalid WriteConcurrencyMode " + mode);
     }
@@ -2921,8 +2800,35 @@ public class HoodieWriteConfig extends HoodieConfig {
     return metadataConfig.isSecondaryIndexEnabled();
   }
 
+  public boolean isExpressionIndexEnabled() {
+    return metadataConfig.isExpressionIndexEnabled();
+  }
+
   public int getSecondaryIndexParallelism() {
     return metadataConfig.getSecondaryIndexParallelism();
+  }
+
+  /**
+   * Whether to enable streaming writes to metadata table or not.
+   * We have support for streaming writes only in SPARK engine (due to spark task retries intricacies) and for table version >= 8 due to the
+   * pre-requisite of NBCC.
+   *
+   * <p>To support streaming writes, we need NBCC support for metadata table, since there could have an ingestion and a table service from data table
+   * concurrently trying to write to metadata table.
+   *
+   * <p>In Spark, when streaming writes are enabled, incremental operations from data table like insert, upsert, delete and table services
+   * (compaction and clustering) will take the streaming writes flow, while all other operations (like delete_partition, insert_overwrite, etc.) go through
+   * legacy metadata write paths (since these might involve reading entire partition and not purely rely on incremental data written).
+   *
+   * @param tableVersion {@link HoodieTableVersion} of interest.
+   * @return true if streaming writes are enabled. false otherwise.
+   */
+  public boolean isMetadataStreamingWritesEnabled(HoodieTableVersion tableVersion) {
+    if (tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
+      return metadataConfig.isStreamingWriteEnabled();
+    } else {
+      return false;
+    }
   }
 
   public static class Builder {
@@ -2935,7 +2841,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     private boolean isCleanConfigSet = false;
     private boolean isArchivalConfigSet = false;
     private boolean isClusteringConfigSet = false;
-    private boolean isOptimizeConfigSet = false;
+    private final boolean isOptimizeConfigSet = false;
     private boolean isMetricsConfigSet = false;
     private boolean isBootstrapConfigSet = false;
     private boolean isMemoryConfigSet = false;
@@ -3271,11 +3177,6 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withAutoCommit(boolean autoCommit) {
-      writeConfig.setValue(AUTO_COMMIT_ENABLE, String.valueOf(autoCommit));
-      return this;
-    }
-
     public Builder withWriteStatusClass(Class<? extends WriteStatus> writeStatusClass) {
       writeConfig.setValue(WRITE_STATUS_CLASS_NAME, writeStatusClass.getName());
       return this;
@@ -3342,11 +3243,6 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withEmbeddedTimelineServerPort(int port) {
       writeConfig.setValue(EMBEDDED_TIMELINE_SERVER_PORT_NUM, String.valueOf(port));
-      return this;
-    }
-
-    public Builder withTimelineServerBasedInstantStateEnable(boolean enable) {
-      writeConfig.setValue(INSTANT_STATE_TIMELINE_SERVER_BASED, String.valueOf(enable));
       return this;
     }
 
@@ -3499,8 +3395,6 @@ public class HoodieWriteConfig extends HoodieConfig {
       writeConfig.setDefaultValue(MARKERS_TYPE, getDefaultMarkersType(engineType));
       // Check for mandatory properties
       writeConfig.setDefaults(HoodieWriteConfig.class.getName());
-      // Set default values of HoodieHBaseIndexConfig
-      writeConfig.setDefaults(HoodieHBaseIndexConfig.class.getName());
       // Make sure the props is propagated
       writeConfig.setDefaultOnCondition(
           !isIndexConfigSet, HoodieIndexConfig.newBuilder().withEngineType(engineType).fromProperties(
@@ -3578,9 +3472,9 @@ public class HoodieWriteConfig extends HoodieConfig {
         // Override the configs for metadata table
         writeConfig.setValue(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(),
             InProcessLockProvider.class.getName());
-        LOG.info(String.format("Automatically set %s=%s since user has not set the "
+        LOG.info("Automatically set {}={} since user has not set the "
                 + "lock provider for single writer with async table services",
-            HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(), InProcessLockProvider.class.getName()));
+            HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(), InProcessLockProvider.class.getName());
       }
 
       // We check if "hoodie.clean.failed.writes.policy"
@@ -3590,19 +3484,14 @@ public class HoodieWriteConfig extends HoodieConfig {
         // In this case, we assume that the user takes care of setting the lock provider used
         writeConfig.setValue(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key(),
             HoodieFailedWritesCleaningPolicy.LAZY.name());
-        LOG.info(String.format("Automatically set %s=%s since %s is used",
+        LOG.info("Automatically set {}={} since {} is used",
             HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key(),
             HoodieFailedWritesCleaningPolicy.LAZY.name(),
-            writeConcurrencyMode.name()));
+            writeConcurrencyMode.name());
       }
     }
 
     private void validate() {
-      if (HoodieTableVersion.SIX.equals(writeConfig.getWriteVersion())) {
-        LOG.warn("HoodieTableVersion.SIX is not yet fully supported by the writer. "
-            + "Please expect some unexpected behavior, until its fully implemented.");
-      }
-
       String layoutVersion = writeConfig.getString(TIMELINE_LAYOUT_VERSION_NUM);
       // Ensure Layout Version is good
       new TimelineLayoutVersion(Integer.parseInt(layoutVersion));
@@ -3620,9 +3509,10 @@ public class HoodieWriteConfig extends HoodieConfig {
                 writeConcurrencyMode.name()));
       }
       if (writeConcurrencyMode == WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL) {
+        boolean isMetadataTable = HoodieTableMetadata.isMetadataTable(writeConfig.getBasePath());
         checkArgument(
-            writeConfig.getTableType().equals(HoodieTableType.MERGE_ON_READ) && writeConfig.isSimpleBucketIndex(),
-            "Non-blocking concurrency control requires the MOR table with simple bucket index");
+            writeConfig.getTableType().equals(HoodieTableType.MERGE_ON_READ) && (isMetadataTable || writeConfig.isSimpleBucketIndex()),
+            "Non-blocking concurrency control requires the MOR table with simple bucket index or it has to be Metadata table");
       }
 
       HoodieCleaningPolicy cleaningPolicy = HoodieCleaningPolicy.valueOf(writeConfig.getString(CLEANER_POLICY));

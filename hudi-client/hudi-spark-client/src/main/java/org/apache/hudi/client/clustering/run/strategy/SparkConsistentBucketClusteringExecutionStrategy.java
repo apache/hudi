@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.ConsistentHashingNode;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
@@ -68,7 +69,7 @@ public class SparkConsistentBucketClusteringExecutionStrategy<T extends HoodieRe
                                                                    List<HoodieFileGroupId> fileGroupIdList,
                                                                    boolean shouldPreserveHoodieMetadata,
                                                                    Map<String, String> extraMetadata) {
-    LOG.info("Starting clustering for a group, parallelism:" + numOutputGroups + " commit:" + instantTime);
+    LOG.info("Starting clustering for a group, parallelism:{} commit:{}", numOutputGroups, instantTime);
     Properties props = getWriteConfig().getProps();
 
     HoodieWriteConfig newConfig = HoodieWriteConfig.newBuilder().withProps(props).build();
@@ -80,7 +81,7 @@ public class SparkConsistentBucketClusteringExecutionStrategy<T extends HoodieRe
     Dataset<Row> repartitionedRecords = partitioner.repartitionRecords(inputRecords, numOutputGroups);
 
     return HoodieDatasetBulkInsertHelper.bulkInsert(repartitionedRecords, instantTime, getHoodieTable(), newConfig,
-        partitioner.arePartitionRecordsSorted(), shouldPreserveHoodieMetadata);
+        partitioner.arePartitionRecordsSorted(), shouldPreserveHoodieMetadata, WriteOperationType.CLUSTER);
   }
 
   @Override
@@ -88,10 +89,8 @@ public class SparkConsistentBucketClusteringExecutionStrategy<T extends HoodieRe
                                                                  Map<String, String> strategyParams, Schema schema, List<HoodieFileGroupId> fileGroupIdList,
                                                                  boolean preserveHoodieMetadata, Map<String, String> extraMetadata) {
 
-    LOG.info("Starting clustering for a group, parallelism:" + numOutputGroups + " commit:" + instantTime);
+    LOG.info("Starting clustering for a group, parallelism:{} commit:{}", numOutputGroups, instantTime);
     Properties props = getWriteConfig().getProps();
-    // We are calling another action executor - disable auto commit. Strategy is only expected to write data in new files.
-    props.put(HoodieWriteConfig.AUTO_COMMIT_ENABLE.key(), Boolean.FALSE.toString());
     HoodieWriteConfig newConfig = HoodieWriteConfig.newBuilder().withProps(props).build();
 
     Pair<String, List<ConsistentHashingNode>> childNodesPair = extractChildNodes(extraMetadata);

@@ -55,7 +55,7 @@ public class DataSourceInternalWriterHelper {
   private final SparkRDDWriteClient writeClient;
   private final HoodieTable hoodieTable;
   private final WriteOperationType operationType;
-  private Map<String, String> extraMetadata;
+  private final Map<String, String> extraMetadata;
 
   public DataSourceInternalWriterHelper(String instantTime, HoodieWriteConfig writeConfig, StructType structType,
                                         SparkSession sparkSession, StorageConfiguration<?> storageConf, Map<String, String> extraMetadata) {
@@ -64,7 +64,6 @@ public class DataSourceInternalWriterHelper {
     this.extraMetadata = extraMetadata;
     this.writeClient = new SparkRDDWriteClient<>(new HoodieSparkEngineContext(new JavaSparkContext(sparkSession.sparkContext())), writeConfig);
     this.writeClient.setOperationType(operationType);
-    this.writeClient.startCommitWithTime(instantTime);
     this.hoodieTable = this.writeClient.initTable(operationType, Option.of(instantTime));
 
     this.metaClient = HoodieTableMetaClient.builder()
@@ -78,7 +77,7 @@ public class DataSourceInternalWriterHelper {
   }
 
   public void onDataWriterCommit(String message) {
-    LOG.info("Received commit of a data writer = " + message);
+    LOG.info("Received commit of a data writer = {}", message);
   }
 
   public void commit(List<WriteStatus> writeStatuses) {
@@ -98,10 +97,11 @@ public class DataSourceInternalWriterHelper {
     writeClient.close();
   }
 
-  public void createInflightCommit() {
+  public String createInflightCommit() {
     metaClient.getActiveTimeline().transitionRequestedToInflight(
         metaClient.createNewInstant(State.REQUESTED,
             CommitUtils.getCommitActionType(operationType, metaClient.getTableType()), instantTime), Option.empty());
+    return instantTime;
   }
 
   public HoodieTable getHoodieTable() {

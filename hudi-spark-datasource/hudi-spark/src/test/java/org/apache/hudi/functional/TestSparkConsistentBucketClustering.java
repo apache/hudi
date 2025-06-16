@@ -19,6 +19,7 @@
 package org.apache.hudi.functional;
 
 import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.clustering.plan.strategy.SparkConsistentBucketClusteringPlanStrategy;
 import org.apache.hudi.client.clustering.update.strategy.SparkConsistentBucketDuplicateUpdateStrategy;
@@ -84,7 +85,7 @@ import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SKIP_P
 import static org.apache.hudi.config.HoodieClusteringConfig.SINGLE_SPARK_JOB_CONSISTENT_HASHING_EXECUTION_STRATEGY;
 import static org.apache.hudi.config.HoodieClusteringConfig.SPARK_CONSISTENT_BUCKET_EXECUTION_STRATEGY;
 
-@Tag("functional")
+@Tag("functional-c")
 public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHarness {
 
   private HoodieWriteConfig config;
@@ -108,7 +109,6 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
     props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
     metaClient = HoodieTestUtils.init(storageConf, basePath, HoodieTableType.MERGE_ON_READ, props);
     config = getConfigBuilder().withProps(props)
-        .withAutoCommit(false)
         .withIndexConfig(HoodieIndexConfig.newBuilder().fromProperties(props)
             .withIndexType(HoodieIndex.IndexType.BUCKET).withBucketIndexEngineType(HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING)
             .withBucketNum("8").withBucketMaxNum(14).withBucketMinNum(4).build())
@@ -342,7 +342,7 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 2);
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
-    writeClient.startCommitWithTime(commitTime);
+    WriteClientTestUtils.startCommitWithTime(writeClient, commitTime);
     List<WriteStatus> writeStatues = writeClient.upsert(writeRecords, commitTime).collect();
     org.apache.hudi.testutils.Assertions.assertNoWriteErrors(writeStatues);
     if (doCommit) {
@@ -361,6 +361,7 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024).build())
         .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(1024 * 1024).parquetMaxFileSize(1024 * 1024).build())
         .forTable("test-trip-table")
+        .withMarkersTimelineServerBasedBatchIntervalMs(10)
         .withEmbeddedTimelineServerEnabled(true);
   }
 

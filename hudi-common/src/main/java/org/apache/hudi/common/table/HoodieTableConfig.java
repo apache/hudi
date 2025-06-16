@@ -28,6 +28,7 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.BootstrapIndexType;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
+import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
@@ -318,6 +319,11 @@ public class HoodieTableConfig extends HoodieConfig {
       DATE_TIME_PARSER
   );
 
+  private static final Set<String> CONFIGS_REQUIRED_FOR_OLDER_VERSIONED_TABLES = new HashSet<>(Arrays.asList(
+      KEY_GENERATOR_CLASS_NAME.key(),
+      KEY_GENERATOR_TYPE.key()
+  ));
+
   public static final ConfigProperty<String> TABLE_CHECKSUM = ConfigProperty
       .key("hoodie.table.checksum")
       .noDefaultValue()
@@ -564,7 +570,7 @@ public class HoodieTableConfig extends HoodieConfig {
     if (!storage.exists(metadataFolder)) {
       storage.createDirectory(metadataFolder);
     }
-    HoodieConfig hoodieConfig = new HoodieConfig(properties);
+    HoodieConfig hoodieConfig = HoodieConfig.copy(properties);
     StoragePath propertyPath = new StoragePath(metadataFolder, HOODIE_PROPERTIES_FILE);
     HoodieTableVersion tableVersion = getTableVersion(hoodieConfig);
     try (OutputStream outputStream = storage.create(propertyPath)) {
@@ -632,6 +638,7 @@ public class HoodieTableConfig extends HoodieConfig {
     // validate that the table version is greater than or equal to the config version
     HoodieTableVersion firstVersion = HoodieTableVersion.fromReleaseVersion(configProperty.getSinceVersion().get());
     boolean valid = tableVersion.greaterThan(firstVersion) || tableVersion.equals(firstVersion);
+    valid = valid || CONFIGS_REQUIRED_FOR_OLDER_VERSIONED_TABLES.contains(configProperty.key());
     if (!valid) {
       LOG.warn("Table version {} is lower than or equal to config's first version {}. Config {} will be ignored.",
           tableVersion, firstVersion, configProperty.key());
@@ -821,7 +828,7 @@ public class HoodieTableConfig extends HoodieConfig {
         inferredRecordMergeMode, payloadClassName);
     // Inferring record merge strategy ID
     inferredRecordMergeStrategyId = HoodieRecordMerger.getRecordMergeStrategyId(
-        inferredRecordMergeMode, inferredPayloadClassName, recordMergeStrategyId);
+        inferredRecordMergeMode, inferredPayloadClassName, recordMergeStrategyId, tableVersion);
 
     // For custom merge mode, either payload class name or record merge strategy ID must be configured
     if (inferredRecordMergeMode == CUSTOM) {
@@ -842,12 +849,13 @@ public class HoodieTableConfig extends HoodieConfig {
     return Triple.of(inferredRecordMergeMode, inferredPayloadClassName, inferredRecordMergeStrategyId);
   }
 
-  static RecordMergeMode inferRecordMergeModeFromPayloadClass(String payloadClassName) {
+  public static RecordMergeMode inferRecordMergeModeFromPayloadClass(String payloadClassName) {
     if (isNullOrEmpty(payloadClassName)) {
       return null;
     }
-    if (DefaultHoodieRecordPayload.class.getName().equals(payloadClassName)) {
-      // DefaultHoodieRecordPayload matches with EVENT_TIME_ORDERING.
+    if (DefaultHoodieRecordPayload.class.getName().equals(payloadClassName)
+        || EventTimeAvroPayload.class.getName().equals(payloadClassName)) {
+      // DefaultHoodieRecordPayload and EventTimeAvroPayload match with EVENT_TIME_ORDERING.
       return EVENT_TIME_ORDERING;
     } else if (payloadClassName.equals(OverwriteWithLatestAvroPayload.class.getName())) {
       // OverwriteWithLatestAvroPayload matches with COMMIT_TIME_ORDERING.
@@ -1091,7 +1099,7 @@ public class HoodieTableConfig extends HoodieConfig {
     setValue(TABLE_METADATA_PARTITIONS, partitions.stream().sorted().collect(Collectors.joining(CONFIG_VALUES_DELIMITER)));
     setValue(TABLE_METADATA_PARTITIONS_INFLIGHT, partitionsInflight.stream().sorted().collect(Collectors.joining(CONFIG_VALUES_DELIMITER)));
     update(metaClient.getStorage(), metaClient.getMetaPath(), getProps());
-    LOG.info(String.format("MDT %s partition %s has been %s", metaClient.getBasePath(), partitionPath, enabled ? "enabled" : "disabled"));
+    LOG.info("MDT {} partition {} has been {}", metaClient.getBasePath(), partitionPath, enabled ? "enabled" : "disabled");
   }
 
   /**
@@ -1109,7 +1117,7 @@ public class HoodieTableConfig extends HoodieConfig {
 
     setValue(TABLE_METADATA_PARTITIONS_INFLIGHT, partitionsInflight.stream().sorted().collect(Collectors.joining(CONFIG_VALUES_DELIMITER)));
     update(metaClient.getStorage(), metaClient.getMetaPath(), getProps());
-    LOG.info(String.format("MDT %s partitions %s have been set to inflight", metaClient.getBasePath(), partitionPaths));
+    LOG.info("MDT {} partitions {} have been set to inflight", metaClient.getBasePath(), partitionPaths);
   }
 
   public void setMetadataPartitionsInflight(HoodieTableMetaClient metaClient, MetadataPartitionType... partitionTypes) {

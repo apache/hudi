@@ -25,7 +25,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieIndexException;
@@ -53,7 +52,6 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.model.HoodieConsistentHashingMetadata.HASHING_METADATA_COMMIT_FILE_SUFFIX;
 import static org.apache.hudi.common.model.HoodieConsistentHashingMetadata.HASHING_METADATA_FILE_SUFFIX;
 import static org.apache.hudi.common.model.HoodieConsistentHashingMetadata.getTimestampFromFile;
-import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
  * Utilities class for consistent bucket index metadata management.
@@ -236,7 +234,7 @@ public class ConsistentBucketIndexUtils {
     //prevent exception from race condition. We are ok with the file being created in another thread, so we should
     // check for the marker after catching the exception and we don't need to fail if the file exists
     try {
-      FileIOUtils.createFileInPath(storage, fullPath, Option.of(getUTF8Bytes(StringUtils.EMPTY_STRING)));
+      FileIOUtils.createFileInPath(storage, fullPath, Option.empty());
     } catch (HoodieIOException e) {
       if (!storage.exists(fullPath)) {
         throw e;

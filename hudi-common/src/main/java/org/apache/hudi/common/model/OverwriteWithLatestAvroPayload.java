@@ -64,7 +64,7 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
       return Option.empty();
     }
 
-    return Option.of((IndexedRecord) HoodieAvroUtils.bytesToAvro(recordBytes, schema));
+    return Option.of(HoodieAvroUtils.bytesToAvro(recordBytes, schema));
   }
 
   /**

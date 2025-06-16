@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io;
 
+import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
@@ -95,8 +96,8 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     super(config, Option.of(instantTime), hoodieTable);
     this.partitionPath = partitionPath;
     this.fileId = fileId;
-    this.writeSchema = overriddenSchema.orElseGet(() -> getWriteSchema(config));
-    this.writeSchemaWithMetaFields = HoodieAvroUtils.addMetadataFields(writeSchema, config.allowOperationMetadataField());
+    this.writeSchema = AvroSchemaCache.intern(overriddenSchema.orElseGet(() -> getWriteSchema(config)));
+    this.writeSchemaWithMetaFields = AvroSchemaCache.intern(HoodieAvroUtils.addMetadataFields(writeSchema, config.allowOperationMetadataField()));
     this.timer = HoodieTimer.start();
     this.newRecordLocation = new HoodieRecordLocation(instantTime, fileId);
     this.taskContextSupplier = taskContextSupplier;
@@ -104,7 +105,7 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     this.schemaOnReadEnabled = !isNullOrEmpty(hoodieTable.getConfig().getInternalSchema());
     this.recordMerger = config.getRecordMerger();
     this.writeStatus = (WriteStatus) ReflectionUtils.loadClass(config.getWriteStatusClassName(),
-        hoodieTable.shouldTrackSuccessRecords(), config.getWriteStatusFailureFraction());
+        hoodieTable.shouldTrackSuccessRecords(), config.getWriteStatusFailureFraction(), hoodieTable.isMetadataTable());
   }
 
   /**
@@ -289,8 +290,9 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
       @Override
       public boolean preFileCreation(HoodieLogFile logFile) {
         WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), hoodieTable, instantTime);
-        return writeMarkers.createIfNotExists(partitionPath, logFile.getFileName(), IOType.CREATE,
-            config, fileId, hoodieTable.getMetaClient().getActiveTimeline()).isPresent();
+        return writeMarkers.createLogMarkerIfNotExists(
+            partitionPath, logFile.getFileName(), config, fileId,
+            hoodieTable.getMetaClient().getActiveTimeline()).isPresent();
       }
     };
   }

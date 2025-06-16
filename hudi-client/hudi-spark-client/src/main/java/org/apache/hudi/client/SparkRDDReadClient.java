@@ -67,7 +67,7 @@ public class SparkRDDReadClient<T> implements Serializable {
    * base path pointing to the table. Until, then just always assume a BloomIndex
    */
   private final transient HoodieIndex<?, ?> index;
-  private HoodieTable hoodieTable;
+  private final HoodieTable hoodieTable;
   private transient Option<SQLContext> sqlContextOpt;
   private final transient HoodieSparkEngineContext context;
   private final transient StorageConfiguration<?> storageConf;
@@ -111,11 +111,7 @@ public class SparkRDDReadClient<T> implements Serializable {
   public SparkRDDReadClient(HoodieSparkEngineContext context, HoodieWriteConfig clientConfig) {
     this.context = context;
     this.storageConf = context.getStorageConf();
-    final String basePath = clientConfig.getBasePath();
-    // Create a Hoodie table which encapsulated the commits and files visible
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-        .setConf(storageConf.newInstance()).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
-    this.hoodieTable = HoodieSparkTable.create(clientConfig, context, metaClient);
+    this.hoodieTable = HoodieSparkTable.create(clientConfig, context);
     this.index = SparkHoodieIndexFactory.createIndex(clientConfig);
     this.sqlContextOpt = Option.empty();
   }

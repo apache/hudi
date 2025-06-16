@@ -47,6 +47,7 @@ import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -56,6 +57,7 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.convertMetadataToByteArray;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
@@ -98,15 +100,18 @@ public class LegacyArchivedMetaEntryReader {
       Object actionData = record.get(key);
       if (actionData != null) {
         if (actionData instanceof IndexedRecord) {
-          return HoodieAvroUtils.indexedRecordToBytes((IndexedRecord) actionData);
+          return HoodieAvroUtils.avroToBytes((IndexedRecord) actionData);
         } else {
           // should be json bytes.
           try {
             HoodieInstant instant = metaClient.getInstantGenerator().createNewInstant(HoodieInstant.State.COMPLETED, action, instantTime, stateTransitionTime);
-            org.apache.hudi.common.model.HoodieCommitMetadata commitMetadata = new CommitMetadataSerDeV1().deserialize(instant, getUTF8Bytes(actionData.toString()),
+            byte[] instantBytes = getUTF8Bytes(actionData.toString());
+            org.apache.hudi.common.model.HoodieCommitMetadata commitMetadata = new CommitMetadataSerDeV1().deserialize(
+                instant, new ByteArrayInputStream(instantBytes),
+                () -> instantBytes.length == 0,
                 org.apache.hudi.common.model.HoodieCommitMetadata.class);
             // convert to avro bytes.
-            return metaClient.getCommitMetadataSerDe().serialize(commitMetadata).get();
+            return convertMetadataToByteArray(commitMetadata, metaClient.getCommitMetadataSerDe());
           } catch (IOException e) {
             throw new RuntimeException(e);
           }

@@ -50,7 +50,7 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
   public static final String DELETE_KEY = "hoodie.payload.delete.field";
   public static final String DELETE_MARKER = "hoodie.payload.delete.marker";
   private Option<Object> eventTime = Option.empty();
-  private AtomicBoolean isDeleteComputed = new AtomicBoolean(false);
+  private final AtomicBoolean isDeleteComputed = new AtomicBoolean(false);
   private boolean isDefaultRecordPayloadDeleted = false;
 
   public DefaultHoodieRecordPayload(GenericRecord record, Comparable orderingVal) {

@@ -27,6 +27,7 @@ import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import org.apache.avro.Schema;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Map;
 import java.util.Properties;
@@ -39,7 +40,10 @@ public class HoodieEmptyRecord<T> extends HoodieRecord<T> {
   public HoodieEmptyRecord(HoodieKey key, HoodieRecordType type) {
     super(key, null);
     this.type = type;
-    this.orderingVal = null;
+    // IMPORTANT:
+    // This should be kept in line with EmptyHoodieRecordPayload
+    // default natural order
+    this.orderingVal = 0;
   }
 
   public HoodieEmptyRecord(HoodieKey key, HoodieOperation operation, Comparable<?> orderingVal, HoodieRecordType type) {
@@ -54,7 +58,7 @@ public class HoodieEmptyRecord<T> extends HoodieRecord<T> {
   }
 
   @Override
-  public Comparable<?> getOrderingValue(Schema recordSchema, Properties props) {
+  public Comparable<?> doGetOrderingValue(Schema recordSchema, Properties props) {
     return orderingVal;
   }
 
@@ -92,6 +96,11 @@ public class HoodieEmptyRecord<T> extends HoodieRecord<T> {
   @Override
   public Object[] getColumnValues(Schema recordSchema, String[] columns, boolean consistentLogicalTimestampEnabled) {
     throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public Object getColumnValueAsJava(Schema recordSchema, String column, Properties props) {
+    throw new UnsupportedOperationException("Unsupported yet for " + this.getClass().getSimpleName());
   }
 
   @Override
@@ -144,6 +153,11 @@ public class HoodieEmptyRecord<T> extends HoodieRecord<T> {
   @Override
   public Option<HoodieAvroIndexedRecord> toIndexedRecord(Schema recordSchema, Properties props) throws IOException {
     return Option.empty();
+  }
+
+  @Override
+  public ByteArrayOutputStream getAvroBytes(Schema recordSchema, Properties props) {
+    return new ByteArrayOutputStream(0);
   }
 
   @Override

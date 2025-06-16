@@ -34,6 +34,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Map;
 import java.util.Properties;
@@ -56,6 +57,10 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
 
   public HoodieAvroIndexedRecord(HoodieKey key, IndexedRecord data, HoodieRecordLocation currentLocation) {
     super(key, data, null, currentLocation, null);
+  }
+
+  public HoodieAvroIndexedRecord(HoodieKey key, IndexedRecord data, HoodieOperation operation, HoodieRecordLocation currentLocation, HoodieRecordLocation newLocation) {
+    super(key, data, operation, currentLocation, newLocation);
   }
 
   public HoodieAvroIndexedRecord(IndexedRecord data, HoodieRecordLocation currentLocation) {
@@ -112,6 +117,11 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   @Override
   public Object[] getColumnValues(Schema recordSchema, String[] columns, boolean consistentLogicalTimestampEnabled) {
     throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public Object getColumnValueAsJava(Schema recordSchema, String column, Properties props) {
+    throw new UnsupportedOperationException("Unsupported yet for " + this.getClass().getSimpleName());
   }
 
   @Override
@@ -184,9 +194,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
     }
     HoodieKey hoodieKey = new HoodieKey(key, partition);
 
-    HoodieRecordPayload avroPayload = new RewriteAvroPayload(record);
-    HoodieRecord hoodieRecord = new HoodieAvroRecord(hoodieKey, avroPayload);
-    return hoodieRecord;
+    return new HoodieAvroIndexedRecord(hoodieKey, record);
   }
 
   @Override
@@ -195,7 +203,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   }
 
   @Override
-  public Comparable<?> getOrderingValue(Schema recordSchema, Properties props) {
+  public Comparable<?> doGetOrderingValue(Schema recordSchema, Properties props) {
     String orderingField = ConfigUtils.getOrderingField(props);
     if (isNullOrEmpty(orderingField)) {
       return DEFAULT_ORDERING_VALUE;
@@ -210,6 +218,11 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   @Override
   public Option<HoodieAvroIndexedRecord> toIndexedRecord(Schema recordSchema, Properties props) {
     return Option.of(this);
+  }
+
+  @Override
+  public ByteArrayOutputStream getAvroBytes(Schema recordSchema, Properties props) {
+    return HoodieAvroUtils.avroToBytesStream(data);
   }
 
   /**

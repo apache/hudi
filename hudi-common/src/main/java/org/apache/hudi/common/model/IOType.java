@@ -25,5 +25,6 @@ package org.apache.hudi.common.model;
 public enum IOType {
   MERGE,
   CREATE,
+  // APPEND is only used by table version 6 and below
   APPEND
 }

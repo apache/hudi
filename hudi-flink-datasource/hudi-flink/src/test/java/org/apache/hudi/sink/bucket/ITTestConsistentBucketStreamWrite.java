@@ -18,9 +18,8 @@
 
 package org.apache.hudi.sink.bucket;
 
-import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.client.model.HoodieFlinkInternalRow;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -28,7 +27,6 @@ import org.apache.hudi.configuration.OptionsInference;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.utils.Pipelines;
-import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.JsonDeserializationFunction;
 import org.apache.hudi.util.StreamerUtil;
@@ -185,12 +183,12 @@ public class ITTestConsistentBucketStreamWrite extends TestLogger {
     }
 
     OptionsInference.setupSinkTasks(conf, execEnv.getParallelism());
-    DataStream<HoodieRecord> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, dataStream);
     // bulk_insert mode
     if (OptionsResolver.isBulkInsertOperation(conf)) {
       Pipelines.bulkInsert(conf, rowType, dataStream);
     } else {
-      DataStream<Object> pipeline = Pipelines.hoodieStreamWrite(conf, hoodieRecordDataStream);
+      DataStream<HoodieFlinkInternalRow> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, dataStream);
+      DataStream<Object> pipeline = Pipelines.hoodieStreamWrite(conf, rowType, hoodieRecordDataStream);
       execEnv.addOperator(pipeline.getTransformation());
     }
     JobClient client = execEnv.executeAsync(jobName);
@@ -202,7 +200,6 @@ public class ITTestConsistentBucketStreamWrite extends TestLogger {
         // ignored
       }
     }
-    HoodieStorage storage = HoodieTestUtils.getStorage(tempFile.getAbsolutePath());
-    TestData.checkWrittenDataMOR(storage, tempFile, expected, 4);
+    TestData.checkWrittenDataMOR(tempFile, expected, 4);
   }
 }

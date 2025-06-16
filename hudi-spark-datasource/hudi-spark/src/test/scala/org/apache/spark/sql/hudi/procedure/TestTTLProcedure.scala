@@ -20,7 +20,7 @@
 package org.apache.spark.sql.hudi.procedure
 
 import org.apache.hudi.SparkDatasetMixin
-import org.apache.hudi.client.SparkRDDWriteClient
+import org.apache.hudi.client.{SparkRDDWriteClient, WriteClientTestUtils}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType}
 import org.apache.hudi.common.table.HoodieTableConfig
@@ -75,6 +75,7 @@ class TestTTLProcedure extends HoodieSparkProcedureTestBase with SparkDatasetMix
           Seq(partitionPath0),
           Seq(partitionPath1)
         )
+        client.close()
       }
       }
     }
@@ -87,8 +88,9 @@ class TestTTLProcedure extends HoodieSparkProcedureTestBase with SparkDatasetMix
       dataGen.generateInsertsForPartition(instantTime, 10, partition)
         .asInstanceOf[java.util.List[HoodieRecord[Nothing]]]
     // Use this JavaRDD to call the insert method
-    client.startCommitWithTime(instantTime, HoodieTimeline.COMMIT_ACTION)
-    client.insert(spark.sparkContext.parallelize(records.asScala.toSeq).toJavaRDD(), instantTime)
+    WriteClientTestUtils.startCommitWithTime(client, instantTime, HoodieTimeline.COMMIT_ACTION)
+    val statuses = client.insert(spark.sparkContext.parallelize(records.asScala.toSeq).toJavaRDD(), instantTime)
+    client.commit(instantTime, statuses)
   }
 
   private def getHoodieWriteClient(cfg: HoodieWriteConfig): SparkRDDWriteClient[Nothing] = {
@@ -112,7 +114,6 @@ class TestTTLProcedure extends HoodieSparkProcedureTestBase with SparkDatasetMix
       .newBuilder
       .withPath(basePath)
       .withSchema(TRIP_EXAMPLE_SCHEMA)
-      .withAutoCommit(autoCommit)
       .withPreCombineField("_row_key")
       .forTable(tableName)
 

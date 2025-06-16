@@ -455,10 +455,10 @@ object ColumnStatsIndexSupport {
       case w: LongWrapper => w.getValue
       case w: FloatWrapper => w.getValue
       case w: DoubleWrapper => w.getValue
+      case w: DecimalWrapper => w.getValue  // Moved above BytesWrapper to ensure proper matching
       case w: BytesWrapper => w.getValue
       case w: StringWrapper => w.getValue
       case w: DateWrapper => w.getValue
-      case w: DecimalWrapper => w.getValue
       case w: TimeMicrosWrapper => w.getValue
       case w: TimestampMicrosWrapper => w.getValue
 
@@ -490,13 +490,18 @@ object ColumnStatsIndexSupport {
       case ShortType => value.asInstanceOf[Int].toShort
       case ByteType => value.asInstanceOf[Int].toByte
 
-      // TODO fix
-      case _: DecimalType =>
+      case dt: DecimalType =>
         value match {
           case buffer: ByteBuffer =>
             val logicalType = DecimalWrapper.SCHEMA$.getField("value").schema().getLogicalType
-            decConv.fromBytes(buffer, null, logicalType)
-          case _ => value
+            decConv.fromBytes(buffer, null, logicalType).setScale(dt.scale, java.math.RoundingMode.UNNECESSARY)
+          case bd: BigDecimal =>
+            // Scala BigDecimal: convert to java.math.BigDecimal and enforce the scale
+            bd.bigDecimal.setScale(dt.scale, java.math.RoundingMode.UNNECESSARY)
+          case bd: java.math.BigDecimal =>
+            bd.setScale(dt.scale, java.math.RoundingMode.UNNECESSARY)
+          case other =>
+            throw new UnsupportedOperationException(s"Cannot deserialize value for DecimalType: unexpected type ${other.getClass.getName}")
         }
       case BinaryType =>
         value match {

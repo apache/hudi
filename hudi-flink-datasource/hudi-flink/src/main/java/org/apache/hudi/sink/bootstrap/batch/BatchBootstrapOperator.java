@@ -18,7 +18,7 @@
 
 package org.apache.hudi.sink.bootstrap.batch;
 
-import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.client.model.HoodieFlinkInternalRow;
 import org.apache.hudi.sink.bootstrap.BootstrapOperator;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -39,8 +39,7 @@ import java.util.Set;
  *
  * <p>The input records should shuffle by the partition path to avoid repeated loading.
  */
-public class BatchBootstrapOperator<I, O extends HoodieRecord<?>>
-    extends BootstrapOperator<I, O> {
+public class BatchBootstrapOperator extends BootstrapOperator {
 
   private Set<String> partitionPathSet;
   private boolean haveSuccessfulCommits;
@@ -62,10 +61,8 @@ public class BatchBootstrapOperator<I, O extends HoodieRecord<?>>
   }
 
   @Override
-  @SuppressWarnings("unchecked")
-  public void processElement(StreamRecord<I> element) throws Exception {
-    final HoodieRecord<?> record = (HoodieRecord<?>) element.getValue();
-    final String partitionPath = record.getKey().getPartitionPath();
+  public void processElement(StreamRecord<HoodieFlinkInternalRow> element) throws Exception {
+    final String partitionPath = element.getValue().getPartitionPath();
 
     if (haveSuccessfulCommits && !partitionPathSet.contains(partitionPath)) {
       loadRecords(partitionPath);
@@ -73,7 +70,7 @@ public class BatchBootstrapOperator<I, O extends HoodieRecord<?>>
     }
 
     // send the trigger record
-    output.collect((StreamRecord<O>) element);
+    output.collect(element);
   }
 
   @Override

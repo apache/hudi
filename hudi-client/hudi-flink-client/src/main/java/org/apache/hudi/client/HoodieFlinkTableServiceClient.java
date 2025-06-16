@@ -36,6 +36,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.metadata.FlinkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.metadata.HoodieBackedTableMetadataWriter;
@@ -50,12 +51,9 @@ import org.apache.hudi.util.FlinkClientUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.text.ParseException;
 import java.util.List;
 import java.util.stream.Collectors;
-
-import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 
 public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClient<List<HoodieRecord<T>>, List<WriteStatus>, List<WriteStatus>> {
 
@@ -71,8 +69,13 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
   protected HoodieWriteMetadata<List<WriteStatus>> compact(String compactionInstantTime, boolean shouldComplete) {
     // only used for metadata table, the compaction happens in single thread
     HoodieWriteMetadata<List<WriteStatus>> compactionMetadata = createTable(config, storageConf).compact(context, compactionInstantTime);
-    commitCompaction(compactionInstantTime, compactionMetadata.getCommitMetadata().get(), Option.empty());
+    commitCompaction(compactionInstantTime, compactionMetadata, Option.empty());
     return compactionMetadata;
+  }
+
+  @Override
+  protected List<HoodieWriteStat> triggerWritesAndFetchWriteStats(HoodieWriteMetadata<List<WriteStatus>> writeMetadata) {
+    return writeMetadata.getWriteStatuses().stream().map(writeStatus -> writeStatus.getStat()).collect(Collectors.toList());
   }
 
   @Override
@@ -81,7 +84,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
     List<HoodieWriteStat> writeStats = metadata.getWriteStats();
     final HoodieInstant compactionInstant = table.getInstantGenerator().getCompactionInflightInstant(compactionCommitTime);
     try {
-      this.txnManager.beginTransaction(Option.of(compactionInstant), Option.empty());
+      this.txnManager.beginStateChange(Option.of(compactionInstant), Option.empty());
       finalizeWrite(table, compactionCommitTime, writeStats);
       // commit to data table after committing to metadata table.
       // Do not do any conflict resolution here as we do with regular writes. We take the lock here to ensure all writes to metadata table happens within a
@@ -90,7 +93,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
       LOG.info("Committing Compaction {} finished with result {}.", compactionCommitTime, metadata);
       CompactHelpers.getInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
     } finally {
-      this.txnManager.endTransaction(Option.of(compactionInstant));
+      this.txnManager.endStateChange(Option.of(compactionInstant));
     }
     WriteMarkersFactory
         .get(config.getMarkersType(), table, compactionCommitTime)
@@ -122,7 +125,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
     }
 
     try {
-      this.txnManager.beginTransaction(Option.of(clusteringInstant), Option.empty());
+      this.txnManager.beginStateChange(Option.of(clusteringInstant), Option.empty());
       finalizeWrite(table, clusteringCommitTime, writeStats);
       // Only in some cases conflict resolution needs to be performed.
       // So, check if preCommit method that does conflict resolution needs to be triggered.
@@ -138,13 +141,13 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
       ClusteringUtils.transitionClusteringOrReplaceInflightToComplete(
           false,
           clusteringInstant,
-          serializeCommitMetadata(table.getMetaClient().getCommitMetadataSerDe(), metadata),
+          metadata,
           table.getActiveTimeline());
-    } catch (IOException e) {
+    } catch (HoodieIOException e) {
       throw new HoodieClusteringException(
           "Failed to commit " + table.getMetaClient().getBasePath() + " at time " + clusteringCommitTime, e);
     } finally {
-      this.txnManager.endTransaction(Option.of(clusteringInstant));
+      this.txnManager.endStateChange(Option.of(clusteringInstant));
     }
 
     WriteMarkersFactory.get(config.getMarkersType(), table, clusteringCommitTime)

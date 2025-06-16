@@ -24,7 +24,7 @@ import org.apache.hudi.common.util.ReflectionUtils.loadClass
 import org.apache.spark.sql.{AnalysisException, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
-import org.apache.spark.sql.catalyst.catalog.{CatalogStorageFormat, CatalogTable}
+import org.apache.spark.sql.catalyst.catalog.{CatalogStorageFormat, CatalogTable, HoodieCatalogTable}
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeSeq, Expression, GenericInternalRow}
 import org.apache.spark.sql.catalyst.optimizer.ReplaceExpressions
 import org.apache.spark.sql.catalyst.plans.logical._
@@ -34,6 +34,8 @@ import org.apache.spark.sql.execution.datasources.{CreateTable, LogicalRelation}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{isMetaField, removeMetaFields}
 import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.{sparkAdapter, MatchCreateIndex, MatchCreateTableLike, MatchDropIndex, MatchInsertIntoStatement, MatchMergeIntoTable, MatchRefreshIndex, MatchShowIndexes, ResolvesToHudiTable}
 import org.apache.spark.sql.hudi.command._
+import org.apache.spark.sql.hudi.command.HoodieLeafRunnableCommand.stripMetaFieldAttributes
+import org.apache.spark.sql.hudi.command.InsertIntoHoodieTableCommand.alignQueryOutput
 import org.apache.spark.sql.hudi.command.procedures.{HoodieProcedures, Procedure, ProcedureArgs}
 
 import java.util
@@ -99,7 +101,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
     // NOTE: Some of the conversions (for [[CreateTable]], [[InsertIntoStatement]] have to happen
     //       early to preempt execution of [[DataSourceAnalysis]] rule from Spark
     //       Please check rule's scala-doc for more details
-    rules += (_ => ResolveImplementationsEarly())
+    rules += (session => ResolveImplementationsEarly(session))
 
     rules.toSeq
   }
@@ -108,7 +110,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
     val rules: ListBuffer[RuleBuilder] = ListBuffer(
       // NOTE: By default all commands are converted into corresponding Hudi implementations during
       //       "post-hoc resolution" phase
-      session => ResolveImplementations(),
+      session => ResolveImplementations(session),
       session => HoodiePostAnalysisRule(session)
     )
 
@@ -362,7 +364,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
  *       execution of the [[DataSourceAnalysis]] stage from Spark which would otherwise convert same commands
  *       into native Spark implementations (which are not compatible w/ Hudi)
  */
-case class ResolveImplementationsEarly() extends Rule[LogicalPlan] {
+case class ResolveImplementationsEarly(spark: SparkSession) extends Rule[LogicalPlan] {
 
   override def apply(plan: LogicalPlan): LogicalPlan = {
     plan match {
@@ -380,14 +382,17 @@ case class ResolveImplementationsEarly() extends Rule[LogicalPlan] {
             } else {
               None
             }
-            new InsertIntoHoodieTableCommand(lr, projectByUserSpecified.getOrElse(query), partition, overwrite)
+            val hoodieCatalogTable = new HoodieCatalogTable(spark, lr.catalogTable.get)
+            val alignedQuery = alignQueryOutput(projectByUserSpecified.getOrElse(query), hoodieCatalogTable, partition, spark.sqlContext.conf)
+            new InsertIntoHoodieTableCommand(lr, alignedQuery, partition, overwrite)
           case _ => iis
         }
 
       // Convert to CreateHoodieTableAsSelectCommand
       case ct @ CreateTable(table, mode, Some(query))
         if sparkAdapter.isHoodieTable(table) && ct.query.forall(_.resolved) =>
-        CreateHoodieTableAsSelectCommand(table, mode, query)
+        val alignedQuery = stripMetaFieldAttributes(query)
+        CreateHoodieTableAsSelectCommand(table, mode, alignedQuery)
 
       case ct: CreateTable =>
         try {
@@ -416,22 +421,29 @@ case class ResolveImplementationsEarly() extends Rule[LogicalPlan] {
  * NOTE: This is executed in "post-hoc resolution" phase to make sure all of the commands have
  *       been resolved prior to that
  */
-case class ResolveImplementations() extends Rule[LogicalPlan] {
+case class ResolveImplementations(sparkSession: SparkSession) extends Rule[LogicalPlan] {
 
   override def apply(plan: LogicalPlan): LogicalPlan = {
     AnalysisHelper.allowInvokingTransformsInAnalyzer {
       plan match {
         // Convert to MergeIntoHoodieTableCommand
-        case mit@MatchMergeIntoTable(target@ResolvesToHudiTable(_), _, _) if mit.resolved =>
-          MergeIntoHoodieTableCommand(ReplaceExpressions(mit).asInstanceOf[MergeIntoTable])
+        case mit@MatchMergeIntoTable(target@ResolvesToHudiTable(table), _, _) if mit.resolved =>
+          val catalogTable = HoodieCatalogTable(sparkSession, table)
+          val command = MergeIntoHoodieTableCommand(ReplaceExpressions(mit).asInstanceOf[MergeIntoTable], catalogTable, sparkSession, null)
+          val inputPlan = command.getProcessedInputPlan
+          command.copy(query = inputPlan)
 
         // Convert to UpdateHoodieTableCommand
         case ut@UpdateTable(plan@ResolvesToHudiTable(_), _, _) if ut.resolved =>
-          UpdateHoodieTableCommand(ut)
+          val inputPlan = UpdateHoodieTableCommand.inputPlan(sparkSession, ut)
+          UpdateHoodieTableCommand(ut, inputPlan)
+
 
         // Convert to DeleteHoodieTableCommand
-        case dft@DeleteFromTable(plan@ResolvesToHudiTable(_), _) if dft.resolved =>
-          DeleteHoodieTableCommand(dft)
+        case dft@DeleteFromTable(ResolvesToHudiTable(table), _) if dft.resolved =>
+          val catalogTable = new HoodieCatalogTable(sparkSession, table)
+          val (plan, config) = DeleteHoodieTableCommand.inputPlan(sparkSession, dft, catalogTable)
+          DeleteHoodieTableCommand(catalogTable, plan, config)
 
         // Convert to CompactionHoodieTableCommand
         case ct @ CompactionTable(plan @ ResolvesToHudiTable(table), operation, options) if ct.resolved =>

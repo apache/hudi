@@ -111,7 +111,7 @@ public class HoodieRowDataCreateHandle implements Serializable {
               table.getPartitionMetafileFormat());
       partitionMetadata.trySave();
       createMarkerFile(partitionPath, FSUtils.makeBaseFileName(this.instantTime, getWriteToken(), this.fileId, table.getBaseFileExtension()));
-      this.fileWriter = createNewFileWriter(path, table, writeConfig, rowType);
+      this.fileWriter = createNewFileWriter(path, table, writeConfig, rowType, this.instantTime);
     } catch (IOException e) {
       throw new HoodieInsertException("Failed to initialize file writer for path " + path, e);
     }
@@ -227,9 +227,10 @@ public class HoodieRowDataCreateHandle implements Serializable {
   }
 
   protected HoodieRowDataFileWriter createNewFileWriter(
-      Path path, HoodieTable hoodieTable, HoodieWriteConfig config, RowType rowType)
+      Path path, HoodieTable hoodieTable, HoodieWriteConfig config, RowType rowType, String instantTime)
       throws IOException {
-    return HoodieRowDataFileWriterFactory.getRowDataFileWriter(
-        path, hoodieTable, config, rowType);
+    StoragePath storagePath = new StoragePath(path.toUri());
+    return (HoodieRowDataFileWriter) new HoodieRowDataFileWriterFactory(hoodieTable.getStorage())
+        .newParquetFileWriter(instantTime, storagePath, config, rowType, hoodieTable.getTaskContextSupplier());
   }
 }

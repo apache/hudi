@@ -25,12 +25,14 @@ import org.apache.hudi.avro.AvroSchemaUtils.isNullable
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord
-import org.apache.hudi.common.table.read.HoodiePositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME
+import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.common.table.read.PositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME
 import org.apache.hudi.common.util.ValidationUtils.checkState
-import org.apache.hudi.common.util.collection.{CachingIterator, ClosableIterator}
+import org.apache.hudi.common.util.collection.{CachingIterator, ClosableIterator, Pair => HPair}
 import org.apache.hudi.io.storage.{HoodieSparkFileReaderFactory, HoodieSparkParquetReader}
 import org.apache.hudi.storage.{HoodieStorage, StorageConfiguration, StoragePath}
 import org.apache.hudi.util.CloseableInternalRowIterator
+
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericRecord, IndexedRecord}
 import org.apache.hadoop.conf.Configuration
@@ -61,7 +63,10 @@ import scala.collection.mutable
  */
 class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetReader,
                                               filters: Seq[Filter],
-                                              requiredFilters: Seq[Filter]) extends BaseSparkInternalRowReaderContext {
+                                              requiredFilters: Seq[Filter],
+                                              storageConfiguration: StorageConfiguration[_],
+                                              tableConfig: HoodieTableConfig)
+  extends BaseSparkInternalRowReaderContext(storageConfiguration, tableConfig) {
   lazy val sparkAdapter: SparkAdapter = SparkAdapterSupport.sparkAdapter
   private lazy val bootstrapSafeFilters: Seq[Filter] = filters.filter(filterIsSafeForBootstrap) ++ requiredFilters
   private val deserializerMap: mutable.Map[Schema, HoodieAvroDeserializer] = mutable.Map()
@@ -143,15 +148,17 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
   override def mergeBootstrapReaders(skeletonFileIterator: ClosableIterator[InternalRow],
                                      skeletonRequiredSchema: Schema,
                                      dataFileIterator: ClosableIterator[InternalRow],
-                                     dataRequiredSchema: Schema): ClosableIterator[InternalRow] = {
+                                     dataRequiredSchema: Schema,
+                                     partitionFieldAndValues: java.util.List[HPair[String, Object]]): ClosableIterator[InternalRow] = {
     doBootstrapMerge(skeletonFileIterator.asInstanceOf[ClosableIterator[Any]], skeletonRequiredSchema,
-      dataFileIterator.asInstanceOf[ClosableIterator[Any]], dataRequiredSchema)
+      dataFileIterator.asInstanceOf[ClosableIterator[Any]], dataRequiredSchema, partitionFieldAndValues)
   }
 
   private def doBootstrapMerge(skeletonFileIterator: ClosableIterator[Any],
                                skeletonRequiredSchema: Schema,
                                dataFileIterator: ClosableIterator[Any],
-                               dataRequiredSchema: Schema): ClosableIterator[InternalRow] = {
+                               dataRequiredSchema: Schema,
+                               partitionFieldAndValues: java.util.List[HPair[String, Object]]): ClosableIterator[InternalRow] = {
     if (supportsParquetRowIndex()) {
       assert(AvroSchemaUtils.containsFieldInSchema(skeletonRequiredSchema, ROW_INDEX_TEMPORARY_COLUMN_NAME))
       assert(AvroSchemaUtils.containsFieldInSchema(dataRequiredSchema, ROW_INDEX_TEMPORARY_COLUMN_NAME))
@@ -163,10 +170,10 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
 
       //If we need to do position based merging with log files we will leave the row index column at the end
       val dataProjection = if (getHasLogFiles && getShouldMergeUseRecordPosition) {
-        getIdentityProjection
+        getBootstrapProjection(dataRequiredSchema, dataRequiredSchema, partitionFieldAndValues)
       } else {
-        projectRecord(dataRequiredSchema,
-          HoodieAvroUtils.removeFields(dataRequiredSchema, rowIndexColumn))
+        getBootstrapProjection(dataRequiredSchema,
+          HoodieAvroUtils.removeFields(dataRequiredSchema, rowIndexColumn), partitionFieldAndValues)
       }
 
       //row index will always be the last column
@@ -220,6 +227,7 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
         }
       }
     } else {
+      val dataProjection = getBootstrapProjection(dataRequiredSchema, dataRequiredSchema, partitionFieldAndValues)
       new ClosableIterator[Any] {
         val combinedRow = new JoinedRow()
 
@@ -247,7 +255,7 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
               sparkAdapter.makeColumnarBatch(vecs, s.numRows())
             case (_: ColumnarBatch, _: InternalRow) => throw new IllegalStateException("InternalRow ColumnVector mismatch")
             case (_: InternalRow, _: ColumnarBatch) => throw new IllegalStateException("InternalRow ColumnVector mismatch")
-            case (s: InternalRow, d: InternalRow) => combinedRow(s, d)
+            case (s: InternalRow, d: InternalRow) => combinedRow(s, dataProjection.apply(d))
           }
         }
 

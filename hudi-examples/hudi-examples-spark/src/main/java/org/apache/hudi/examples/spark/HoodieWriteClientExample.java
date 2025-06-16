@@ -46,6 +46,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -66,7 +67,7 @@ public class HoodieWriteClientExample {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieWriteClientExample.class);
 
-  private static String tableType = HoodieTableType.COPY_ON_WRITE.name();
+  private static String tableType = HoodieTableType.MERGE_ON_READ.name();
 
   public static void main(String[] args) throws Exception {
     if (args.length < 2) {
@@ -129,8 +130,7 @@ public class HoodieWriteClientExample {
         client.delete(deleteRecords, newCommitTime);
 
         // Delete by partition
-        newCommitTime = client.startCommit();
-        client.startCommitWithTime(newCommitTime, HoodieTimeline.REPLACE_COMMIT_ACTION);
+        newCommitTime = client.startCommit(HoodieTimeline.REPLACE_COMMIT_ACTION);
         LOG.info("Starting commit " + newCommitTime);
         // The partition where the data needs to be deleted
         List<String> partitionList = toBeDeleted.stream().map(s -> s.getPartitionPath()).distinct().collect(Collectors.toList());
@@ -142,7 +142,7 @@ public class HoodieWriteClientExample {
         if (HoodieTableType.valueOf(tableType) == HoodieTableType.MERGE_ON_READ) {
           Option<String> instant = client.scheduleCompaction(Option.empty());
           HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client.compact(instant.get());
-          client.commitCompaction(instant.get(), compactionMetadata.getCommitMetadata().get(), Option.empty());
+          client.commitCompaction(instant.get(), compactionMetadata, Option.empty());
         }
       }
     }

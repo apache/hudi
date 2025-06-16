@@ -19,23 +19,23 @@
 package org.apache.hudi.client.functional;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
-import org.apache.hudi.common.table.log.HoodieUnMergedLogRecordScanner;
+import org.apache.hudi.common.table.log.HoodieLogBlockMetadataScanner;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
-import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
+import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -47,8 +47,11 @@ import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.hudi.testutils.HoodieSparkWriteableTestTable;
 
 import org.apache.avro.generic.GenericRecord;
+import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -57,16 +60,14 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.TIMELINE_FACTORY;
 import static org.apache.hudi.testutils.GenericRecordValidationTestUtils.assertDataInMORTable;
-import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
-
-  private HoodieTestTable testTable;
 
   @BeforeEach
   public void setUpTestTable() {
@@ -76,7 +77,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
   @Test
   public void testReadingMORTableWithoutBaseFile() throws Exception {
     HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA,
-        HoodieIndex.IndexType.INMEMORY).withAutoCommit(true)
+        HoodieIndex.IndexType.INMEMORY)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(2).build())
         .build();
     SparkRDDWriteClient client = getHoodieWriteClient(config);
@@ -106,10 +107,48 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
     assertEquals(75, recordMap.size());
   }
 
+  @ParameterizedTest
+  @EnumSource(value = HoodieIndex.IndexType.class, names = {"INMEMORY", "SIMPLE"})
+  public void testClusteringOnMORTable(HoodieIndex.IndexType indexType) throws Exception {
+    // INMEMORY index will only generate log files, SIMPLE will generate a base file and log files.
+    HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, indexType)
+        .withClusteringConfig(HoodieClusteringConfig.newBuilder().withInlineClusteringNumCommits(3).build())
+        .build();
+    SparkRDDWriteClient client = getHoodieWriteClient(config);
+
+    // Insert
+    String commitTime = client.createNewInstantTime();
+    insertBatch(config, client, commitTime, "000", 100, SparkRDDWriteClient::insert,
+        false, false, 100, 100, 1, Option.empty(), INSTANT_GENERATOR);
+
+    // Update
+    String commitTimeBetweenPrevAndNew = commitTime;
+    commitTime = client.createNewInstantTime();
+    updateBatch(config, client, commitTime, commitTimeBetweenPrevAndNew,
+        Option.of(Arrays.asList(commitTimeBetweenPrevAndNew)), "000", 50, SparkRDDWriteClient::upsert,
+        false, false, 5, 100, 2, config.populateMetaFields(), INSTANT_GENERATOR);
+
+    // Delete 5 records
+    String prevCommitTime = commitTime;
+    commitTime = client.createNewInstantTime();
+    deleteBatch(config, client, commitTime, prevCommitTime, "000", 25, false, false,
+        0, 100, TIMELINE_FACTORY, INSTANT_GENERATOR);
+
+    // Schedule and execute compaction.
+    Option<String> timeStamp = client.scheduleClustering(Option.empty());
+    assertTrue(timeStamp.isPresent());
+    client.cluster(timeStamp.get());
+    assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(timeStamp.get()));
+
+    // Verify all the records.
+    metaClient.reloadActiveTimeline();
+    assertDataInMORTable(config, commitTime, timeStamp.get(), storageConf, Arrays.asList(dataGen.getPartitionPaths()));
+  }
+
   @Test
   public void testCompactionOnMORTable() throws Exception {
     HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA,
-        HoodieIndex.IndexType.INMEMORY).withAutoCommit(true)
+        HoodieIndex.IndexType.INMEMORY)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(2).build())
         .build();
     SparkRDDWriteClient client = getHoodieWriteClient(config);
@@ -130,7 +169,9 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
     // Schedule and execute compaction.
     Option<String> timeStamp = client.scheduleCompaction(Option.empty());
     assertTrue(timeStamp.isPresent());
-    client.compact(timeStamp.get());
+    HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionWriteMetadata = client.compact(timeStamp.get());
+    client.commitCompaction(timeStamp.get(), compactionWriteMetadata, Option.empty());
+    assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(timeStamp.get()));
 
     // Verify all the records.
     metaClient.reloadActiveTimeline();
@@ -144,7 +185,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
         .withLogCompactionBlocksThreshold(1)
         .build();
     HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA,
-        HoodieIndex.IndexType.INMEMORY).withAutoCommit(true).withCompactionConfig(compactionConfig).build();
+        HoodieIndex.IndexType.INMEMORY).withCompactionConfig(compactionConfig).build();
     SparkRDDWriteClient client = getHoodieWriteClient(config);
 
     // First insert
@@ -168,7 +209,9 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
     // Schedule and execute compaction.
     Option<String> compactionTimeStamp = client.scheduleCompaction(Option.empty());
     assertTrue(compactionTimeStamp.isPresent());
-    client.compact(compactionTimeStamp.get());
+    HoodieWriteMetadata result = client.compact(compactionTimeStamp.get());
+    client.commitCompaction(compactionTimeStamp.get(), result, Option.empty());
+    assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(compactionTimeStamp.get()));
 
     prevCommitTime = compactionTimeStamp.get();
     for (int i = 0; i < 2; i++) {
@@ -185,8 +228,8 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
     // Schedule and execute compaction.
     Option<String> logCompactionTimeStamp = client.scheduleLogCompaction(Option.empty());
     assertTrue(logCompactionTimeStamp.isPresent());
-    client.logCompact(logCompactionTimeStamp.get());
-
+    result = client.logCompact(logCompactionTimeStamp.get());
+    client.commitLogCompaction(logCompactionTimeStamp.get(), result, Option.empty());
     // Verify all the records.
     assertDataInMORTable(config, lastCommitBeforeLogCompaction, logCompactionTimeStamp.get(),
         storageConf, Arrays.asList(dataGen.getPartitionPaths()));
@@ -203,7 +246,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
         .withLogCompactionBlocksThreshold(1)
         .build();
     HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA,
-        HoodieIndex.IndexType.INMEMORY).withAutoCommit(true).withCompactionConfig(compactionConfig).build();
+        HoodieIndex.IndexType.INMEMORY).withCompactionConfig(compactionConfig).build();
     SparkRDDWriteClient client = getHoodieWriteClient(config);
 
     // First insert 10 records
@@ -229,7 +272,8 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
     // Schedule and execute compaction.
     Option<String> timeStamp = client.scheduleLogCompaction(Option.empty());
     assertTrue(timeStamp.isPresent());
-    client.logCompact(timeStamp.get());
+    HoodieWriteMetadata result = client.logCompact(timeStamp.get());
+    client.commitLogCompaction(timeStamp.get(), result, Option.empty());
     // Verify all the records.
     assertDataInMORTable(config, lastCommitBeforeLogCompaction, timeStamp.get(),
         storageConf, Arrays.asList(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH));
@@ -245,7 +289,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
         .withLogCompactionBlocksThreshold(1)
         .build();
     HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA,
-        HoodieIndex.IndexType.INMEMORY).withAutoCommit(true).withCompactionConfig(compactionConfig).build();
+        HoodieIndex.IndexType.INMEMORY).withCompactionConfig(compactionConfig).build();
     SparkRDDWriteClient client = getHoodieWriteClient(config);
 
     // First insert
@@ -280,7 +324,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
         .withLogCompactionBlocksThreshold(1)
         .build();
     HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA,
-        HoodieIndex.IndexType.INMEMORY).withAutoCommit(true)
+        HoodieIndex.IndexType.INMEMORY)
         .withCompactionConfig(compactionConfig)
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
@@ -317,7 +361,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
   @Test
   public void testCleanFunctionalityWhenCompactionRequestedInstantIsPresent() throws Exception {
     HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA,
-        HoodieIndex.IndexType.INMEMORY).withAutoCommit(true)
+        HoodieIndex.IndexType.INMEMORY)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withMaxNumDeltaCommitsBeforeCompaction(1)
             .build())
@@ -334,7 +378,9 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
     // Schedule and execute compaction. Here, second file slice gets added.
     Option<String> compactionTimeStamp = client.scheduleCompaction(Option.empty());
     assertTrue(compactionTimeStamp.isPresent());
-    client.compact(compactionTimeStamp.get());
+    HoodieWriteMetadata result = client.compact(compactionTimeStamp.get());
+    client.commitCompaction(compactionTimeStamp.get(), result, Option.empty());
+    assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(compactionTimeStamp.get()));
     String prevCommitTime = compactionTimeStamp.get();
 
     // First upsert on  second file slice.
@@ -375,9 +421,9 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
         .withLogCompactionBlocksThreshold(1)
         .build();
     HoodieWriteConfig lcConfig = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.INMEMORY)
-        .withAutoCommit(false).withCompactionConfig(compactionConfig).build();
+        .withCompactionConfig(compactionConfig).build();
     HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.INMEMORY)
-        .withAutoCommit(true).build();
+        .build();
     try (SparkRDDWriteClient lcClient = new SparkRDDWriteClient(context, lcConfig);
          SparkRDDWriteClient client = new SparkRDDWriteClient(context, config)) {
 
@@ -402,7 +448,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
 
       // Rollback the log compaction commit.
       HoodieInstant instant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.LOG_COMPACTION_ACTION, logCompactionTimeStamp.get());
-      getHoodieTable(metaClient, config).rollbackInflightLogCompaction(instant);
+      getHoodieTable(metaClient, config).rollbackInflightLogCompaction(instant, client.getTransactionManager());
 
       // Validate timeline.
       HoodieTimeline activeTimeline = metaClient.reloadActiveTimeline();
@@ -425,7 +471,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
       logCompactionTimeStamp = lcClient.scheduleLogCompaction(Option.empty());
       assertTrue(logCompactionTimeStamp.isPresent());
       HoodieWriteMetadata metadata = lcClient.logCompact(logCompactionTimeStamp.get());
-      lcClient.commitLogCompaction(logCompactionTimeStamp.get(), (HoodieCommitMetadata) metadata.getCommitMetadata().get(), Option.empty());
+      lcClient.commitLogCompaction(logCompactionTimeStamp.get(), metadata, Option.empty());
       assertDataInMORTable(config, prevCommitTime, logCompactionTimeStamp.get(), storageConf, Arrays.asList(dataGen.getPartitionPaths()));
     }
   }
@@ -436,33 +482,25 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
     List<String> partitionPaths = Stream.of(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS).collect(Collectors.toList());
     for (String partitionPath: partitionPaths) {
       fileSystemView.getLatestFileSlices(partitionPath).forEach(slice -> {
-        HoodieUnMergedLogRecordScanner scanner = HoodieUnMergedLogRecordScanner.newBuilder()
-            .withStorage(metaClient.getStorage())
-            .withBasePath(table.getMetaClient().getBasePath())
-            .withLogFilePaths(slice.getLogFiles()
+        HoodieLogBlockMetadataScanner scanner = new HoodieLogBlockMetadataScanner(
+            table.getMetaClient(),
+            slice.getLogFiles()
                 .sorted(HoodieLogFile.getLogFileComparator())
                 .map(file -> file.getPath().toString())
-                .collect(Collectors.toList()))
-            .withLatestInstantTime(instant)
-            .withBufferSize(config.getMaxDFSStreamBufferSize())
-            .withOptimizedLogBlocksScan(true)
-            .withTableMetaClient(metaClient)
-            .build();
-        scanner.scan(true);
+                .collect(Collectors.toList()),
+            config.getMaxDFSStreamBufferSize(),
+            instant,
+            Option.empty());
         List<String> prevInstants = scanner.getValidBlockInstants();
-        HoodieUnMergedLogRecordScanner scanner2 = HoodieUnMergedLogRecordScanner.newBuilder()
-            .withStorage(metaClient.getStorage())
-            .withBasePath(table.getMetaClient().getBasePath())
-            .withLogFilePaths(slice.getLogFiles()
+        HoodieLogBlockMetadataScanner scanner2 = new HoodieLogBlockMetadataScanner(
+            table.getMetaClient(),
+            slice.getLogFiles()
                 .sorted(HoodieLogFile.getLogFileComparator())
                 .map(file -> file.getPath().toString())
-                .collect(Collectors.toList()))
-            .withLatestInstantTime(currentInstant)
-            .withBufferSize(config.getMaxDFSStreamBufferSize())
-            .withOptimizedLogBlocksScan(true)
-            .withTableMetaClient(table.getMetaClient())
-            .build();
-        scanner2.scan(true);
+                .collect(Collectors.toList()),
+            config.getMaxDFSStreamBufferSize(),
+            currentInstant,
+            Option.empty());
         List<String> currentInstants = scanner2.getValidBlockInstants();
         assertEquals(prevInstants, currentInstants);
       });
@@ -476,13 +514,13 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
         .withLogCompactionBlocksThreshold(1)
         .build();
     HoodieWriteConfig lcWriteConfig = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA,
-        HoodieIndex.IndexType.INMEMORY).withAutoCommit(true).withCompactionConfig(logCompactionConfig).build();
+        HoodieIndex.IndexType.INMEMORY).withCompactionConfig(logCompactionConfig).build();
 
     HoodieCompactionConfig compactionConfig = HoodieCompactionConfig.newBuilder()
         .withMaxNumDeltaCommitsBeforeCompaction(1)
         .build();
     HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.INMEMORY)
-        .withAutoCommit(true).withCompactionConfig(compactionConfig)
+        .withCompactionConfig(compactionConfig)
         .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(2).build())
         .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(4, 5).build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(2).build())
@@ -504,7 +542,9 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
           // Schedule compaction.
           Option<String> compactionTimeStamp = client.scheduleCompaction(Option.empty());
           assertTrue(compactionTimeStamp.isPresent());
-          client.compact(compactionTimeStamp.get());
+          HoodieWriteMetadata result = client.compact(compactionTimeStamp.get());
+          client.commitCompaction(compactionTimeStamp.get(), result, Option.empty());
+          assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(compactionTimeStamp.get()));
           prevCommitTime = compactionTimeStamp.get();
         }
 
@@ -517,7 +557,8 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
         Option<String> logCompactionTimeStamp = lcWriteClient.scheduleLogCompaction(Option.empty());
         if (logCompactionTimeStamp.isPresent()) {
           logCompactionInstantTimes.add(logCompactionTimeStamp.get());
-          lcWriteClient.logCompact(logCompactionTimeStamp.get());
+          HoodieWriteMetadata result = lcWriteClient.logCompact(logCompactionTimeStamp.get());
+          lcWriteClient.commitLogCompaction(logCompactionTimeStamp.get(), result, Option.empty());
           prevCommitTime = logCompactionTimeStamp.get();
         }
       }

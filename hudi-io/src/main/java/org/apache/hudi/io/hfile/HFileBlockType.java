@@ -108,7 +108,7 @@ public enum HFileBlockType {
   INDEX_V1("IDXBLK)+", BlockCategory.INDEX);
 
   public enum BlockCategory {
-    DATA, META, INDEX, BLOOM, ALL_CATEGORIES, UNKNOWN;
+    DATA, META, INDEX, BLOOM, ALL_CATEGORIES, UNKNOWN
   }
 
   private final byte[] magic;
@@ -167,5 +167,9 @@ public enum HFileBlockType {
       throw new IOException("Invalid magic: expected "
           + new String(magic) + ", got " + new String(buf));
     }
+  }
+
+  public byte[] getMagic() {
+    return magic;
   }
 }

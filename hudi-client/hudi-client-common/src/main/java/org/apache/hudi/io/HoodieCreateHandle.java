@@ -48,6 +48,7 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 
 @NotThreadSafe
 public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O> {
@@ -140,14 +141,13 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
           return;
         }
 
-        MetadataValues metadataValues = new MetadataValues().setFileName(path.getName());
-        HoodieRecord populatedRecord =
-            record.prependMetaFields(schema, writeSchemaWithMetaFields, metadataValues, config.getProps());
-
         if (preserveMetadata) {
+          HoodieRecord populatedRecord = updateFileName(record, schema, writeSchemaWithMetaFields, path.getName(), config.getProps());
           fileWriter.write(record.getRecordKey(), populatedRecord, writeSchemaWithMetaFields);
         } else {
-          fileWriter.writeWithMetadata(record.getKey(), populatedRecord, writeSchemaWithMetaFields);
+          // rewrite the record to include metadata fields in schema, and the values will be set later.
+          record = record.prependMetaFields(schema, writeSchemaWithMetaFields, new MetadataValues(), config.getProps());
+          fileWriter.writeWithMetadata(record.getKey(), record, writeSchemaWithMetaFields);
         }
 
         // Update the new location of record, so we know where to find it next
@@ -171,6 +171,11 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       writeStatus.markFailure(record, t, recordMetadata);
       LOG.error("Error writing record " + record, t);
     }
+  }
+
+  protected HoodieRecord<T> updateFileName(HoodieRecord<T> record, Schema schema, Schema targetSchema, String fileName, Properties prop) {
+    MetadataValues metadataValues = new MetadataValues().setFileName(fileName);
+    return record.prependMetaFields(schema, targetSchema, metadataValues, prop);
   }
 
   /**
@@ -217,9 +222,9 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
 
       setupWriteStatus();
 
-      LOG.info(String.format("CreateHandle for partitionPath %s fileID %s, took %d ms.",
+      LOG.info("CreateHandle for partitionPath {} fileID {}, took {} ms.",
           writeStatus.getStat().getPartitionPath(), writeStatus.getStat().getFileId(),
-          writeStatus.getStat().getRuntimeStats().getTotalCreateTime()));
+          writeStatus.getStat().getRuntimeStats().getTotalCreateTime());
 
       return Collections.singletonList(writeStatus);
     } catch (IOException e) {

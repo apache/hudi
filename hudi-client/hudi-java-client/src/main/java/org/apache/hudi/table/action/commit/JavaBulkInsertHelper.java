@@ -19,7 +19,6 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -84,7 +83,7 @@ public class JavaBulkInsertHelper<T, R> extends BaseBulkInsertHelper<T, List<Hoo
     List<WriteStatus> writeStatuses = bulkInsert(inputRecords, instantTime, table, config, performDedupe, partitioner, false,
         config.getBulkInsertShuffleParallelism(), new CreateHandleFactory(false));
     //update index
-    ((BaseJavaCommitActionExecutor) executor).updateIndexAndCommitIfNeeded(writeStatuses, result);
+    ((BaseJavaCommitActionExecutor) executor).updateIndexAndMaybeRunPreCommitValidations(writeStatuses, result);
     return result;
   }
 
@@ -118,7 +117,7 @@ public class JavaBulkInsertHelper<T, R> extends BaseBulkInsertHelper<T, List<Hoo
     } else {
       FileIdPrefixProvider fileIdPrefixProvider = (FileIdPrefixProvider) ReflectionUtils.loadClass(
           config.getFileIdPrefixProviderClassName(),
-          new TypedProperties(config.getProps()));
+          config.getProps());
       fileIdPrefix = fileIdPrefixProvider.createFilePrefix("");
     }
 

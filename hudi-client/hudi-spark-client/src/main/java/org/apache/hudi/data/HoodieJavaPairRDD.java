@@ -131,7 +131,7 @@ public class HoodieJavaPairRDD<K, V> implements HoodiePairData<K, V> {
   }
 
   public <W> HoodiePairData<K, W> flatMapValues(SerializableFunction<V, Iterator<W>> func) {
-    return HoodieJavaPairRDD.of(pairRDDData.flatMapValues(func::apply));
+    return HoodieJavaPairRDD.of(pairRDDData.flatMapValues(iter -> CloseableIteratorListener.addListener(func.apply(iter))));
   }
 
   @Override
@@ -153,6 +153,14 @@ public class HoodieJavaPairRDD<K, V> implements HoodiePairData<K, V> {
   @Override
   public HoodiePairData<K, V> union(HoodiePairData<K, V> other) {
     return HoodieJavaPairRDD.of(pairRDDData.union(HoodieJavaPairRDD.getJavaPairRDD(other)));
+  }
+
+  @Override
+  public <W> HoodiePairData<K, Pair<V, W>> join(HoodiePairData<K, W> other) {
+    return HoodieJavaPairRDD.of(JavaPairRDD.fromJavaRDD(
+        pairRDDData.join(HoodieJavaPairRDD.getJavaPairRDD(other))
+            .map(tuple -> new Tuple2<>(tuple._1,
+                new ImmutablePair<>(tuple._2._1, tuple._2._2)))));
   }
 
   @Override

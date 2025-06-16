@@ -52,6 +52,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.apache.hudi.common.config.LockConfiguration.FILESYSTEM_LOCK_EXPIRE_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.FILESYSTEM_LOCK_PATH_PROP_KEY;
+import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY;
 import static org.apache.hudi.common.table.HoodieTableMetaClient.AUXILIARYFOLDER_NAME;
 
 /**
@@ -67,8 +68,8 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
   private final transient HoodieStorage storage;
   private final transient StoragePath lockFile;
   protected LockConfiguration lockConfiguration;
-  private SimpleDateFormat sdf;
-  private LockInfo lockInfo;
+  private final SimpleDateFormat sdf;
+  private final LockInfo lockInfo;
   private String currentOwnerLockInfo;
 
   public FileSystemBasedLockProvider(final LockConfiguration lockConfiguration, final StorageConfiguration<?> configuration) {
@@ -208,6 +209,7 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
     TypedProperties props = new TypedProperties();
     props.put(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(), FileSystemBasedLockProvider.class.getName());
     props.put(HoodieLockConfig.LOCK_ACQUIRE_WAIT_TIMEOUT_MS.key(), "2000");
+    props.put(LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY, "200");
     props.put(HoodieLockConfig.FILESYSTEM_LOCK_EXPIRE.key(), "1");
     props.put(HoodieLockConfig.LOCK_ACQUIRE_CLIENT_NUM_RETRIES.key(), "30");
     props.put(HoodieLockConfig.FILESYSTEM_LOCK_PATH.key(), defaultLockPath(tablePath));
