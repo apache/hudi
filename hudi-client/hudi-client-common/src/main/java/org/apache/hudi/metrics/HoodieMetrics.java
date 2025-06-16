@@ -39,6 +39,8 @@ import java.util.Set;
 
 import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.MILLIS_INSTANT_TIMESTAMP_FORMAT_LENGTH;
 
+import java.util.Map;
+
 /**
  * Wrapper for metrics-related operations.
  */
@@ -357,6 +359,19 @@ public class HoodieMetrics {
               DELETE_INSTANTS_NUM_STR, numInstantsArchived));
       metrics.registerGauge(getMetricsName(ARCHIVE_ACTION, DURATION_STR), durationInMs);
       metrics.registerGauge(getMetricsName(ARCHIVE_ACTION, DELETE_INSTANTS_NUM_STR), numInstantsArchived);
+    }
+  }
+
+  public void updateArchivalMetrics(Map<String, Long> archivalMetrics) {
+    if (config.isMetricsOn()) {
+      log.info(String.format("Sending archival metrics %s", archivalMetrics));
+      archivalMetrics.forEach((metricName, metricValue) -> metrics.registerGauge(getMetricsName("archival", metricName), metricValue));
+    }
+  }
+
+  public void emitCleanFailure() {
+    if (config.isMetricsOn()) {
+      metrics.registerGauge(getMetricsName("clean", "failure"), 1);
     }
   }
 
