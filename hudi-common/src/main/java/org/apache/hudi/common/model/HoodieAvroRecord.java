@@ -26,6 +26,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.hudi.metadata.HoodieMetadataPayload;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
@@ -181,6 +182,8 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
     }
     if (this.data instanceof BaseAvroPayload) {
       return ((BaseAvroPayload) this.data).isDeleted(recordSchema, props);
+    } else if (this.data instanceof HoodieMetadataPayload) {
+      return ((HoodieMetadataPayload) this.data).isDeleted();
     } else {
       return !this.data.getInsertValue(recordSchema, props).isPresent();
     }
