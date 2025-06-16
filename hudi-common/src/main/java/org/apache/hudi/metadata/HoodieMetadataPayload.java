@@ -18,6 +18,7 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.avro.model.HoodieMetadataBloomFilter;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.avro.model.HoodieMetadataFileInfo;
@@ -67,7 +68,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.avro.HoodieAvroUtils.wrapValueIntoAvro;
-import static org.apache.hudi.common.model.HoodieRecord.HOODIE_META_COLUMNS;
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
@@ -103,6 +103,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartitionStats
  * During compaction on the table, the deletions are merged with additions and hence records are pruned.
  */
 public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadataPayload> {
+  private static final Schema HOODIE_METADATA_SCHEMA = AvroSchemaCache.intern(HoodieMetadataRecord.getClassSchema());
   /**
    * HoodieMetadata schema field ids
    */
@@ -384,7 +385,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       return Option.empty();
     }
 
-    if (schema == null || HoodieMetadataRecord.getClassSchema().equals(schema)) {
+    if (schema == null || HOODIE_METADATA_SCHEMA == schema) {
       // If the schema is same or none is provided, we can return the record directly
       HoodieMetadataRecord record = new HoodieMetadataRecord(key, type, filesystemMetadata, bloomFilterMetadata,
           columnStatMetadata, recordIndexMetadata, secondaryIndexMetadata);
@@ -392,7 +393,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     } else {
       // Otherwise, the assumption is that the schema required contains the metadata fields so we construct a new GenericRecord with these fields
       GenericData.Record record = new GenericData.Record(schema);
-      int offset = HOODIE_META_COLUMNS.size();
+      int offset = schema.getField("key").pos();
       record.put(offset, key);
       record.put(offset + 1, type);
       if (filesystemMetadata != null) {
