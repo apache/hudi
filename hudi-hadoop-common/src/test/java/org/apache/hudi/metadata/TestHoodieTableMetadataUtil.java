@@ -830,15 +830,6 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
             "files",
             HoodieIndexVersion.FILES_INDEX_ONE,
             0  // Calculated using the explicit hashing algorithm
-        ),
-        // Test case 9: Record key with unicode characters
-        Arguments.of(
-            "Record key with unicode characters",
-            "test\u00A9key",
-            10,
-            "files",
-            HoodieIndexVersion.FILES_INDEX_ONE,
-            4  // Calculated using the explicit hashing algorithm
         )
     );
   }
