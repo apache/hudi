@@ -96,7 +96,7 @@ public class TestPositionBasedFileGroupRecordBuffer extends TestHoodieFileGroupR
       writeConfigs.put(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key(), getCustomPayload());
       writeConfigs.put(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key(), HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID);
     }
-    commitToTable(dataGen.generateInserts("001", 100), INSERT.value(), writeConfigs);
+    commitToTable(dataGen.generateInserts("001", 100), INSERT.value(), writeConfigs, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA);
 
     String[] partitionPaths = dataGen.getPartitionPaths();
     String[] partitionValues = new String[1];
