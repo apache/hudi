@@ -31,13 +31,14 @@ import org.apache.flink.streaming.api.operators.OneInputStreamOperatorFactory;
 import org.apache.flink.streaming.api.operators.SimpleUdfStreamOperatorFactory;
 import org.apache.flink.streaming.api.operators.StreamOperator;
 import org.apache.flink.streaming.api.operators.StreamOperatorParameters;
+import org.apache.flink.table.data.RowData;
 
 /**
  * Factory class for {@link StreamWriteOperator}.
  */
 public class WriteOperatorFactory<I>
-    extends SimpleUdfStreamOperatorFactory<Object>
-    implements CoordinatedOperatorFactory<Object>, OneInputStreamOperatorFactory<I, Object> {
+    extends SimpleUdfStreamOperatorFactory<RowData>
+    implements CoordinatedOperatorFactory<RowData>, OneInputStreamOperatorFactory<I, RowData> {
   private static final long serialVersionUID = 1L;
 
   private final AbstractWriteOperator<I> operator;
@@ -55,7 +56,7 @@ public class WriteOperatorFactory<I>
 
   @Override
   @SuppressWarnings("unchecked")
-  public <T extends StreamOperator<Object>> T createStreamOperator(StreamOperatorParameters<Object> parameters) {
+  public <T extends StreamOperator<RowData>> T createStreamOperator(StreamOperatorParameters<RowData> parameters) {
     final OperatorID operatorID = parameters.getStreamConfig().getOperatorID();
     final OperatorEventDispatcher eventDispatcher = parameters.getOperatorEventDispatcher();
 
