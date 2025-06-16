@@ -975,32 +975,36 @@ public class HoodieTableMetadataUtil {
   private static <T> Pair<Set<String>, Set<String>> getRevivedAndDeletedKeys(HoodieTableMetaClient dataTableMetaClient, String instantTime, String partitionPath, HoodieReaderContext<T> readerContext,
                                                                              List<String> logFilePaths, Option<Schema> finalWriterSchemaOpt, List<String> logFilePathsWithoutCurrentLogFiles) {
     // Partition valid (non-deleted) and deleted keys from all log files, including current, in a single pass
-    Map<Boolean, Set<String>> partitionedKeysForAllLogs = new HashMap<>();
+    Set<String> validKeysForAllLogs = new HashSet<>();
+    Set<String> deletedKeysForAllLogs = new HashSet<>();
     // Fetch log records for all log files
     try (ClosableIterator<HoodieRecord<T>> allLogRecords =
              getLogRecords(logFilePaths, dataTableMetaClient, finalWriterSchemaOpt, instantTime, partitionPath, readerContext)) {
       allLogRecords.forEachRemaining(record -> {
         boolean isDelete = isDeleteRecord(dataTableMetaClient, finalWriterSchemaOpt, record);
-        partitionedKeysForAllLogs.computeIfAbsent(!isDelete, k -> new HashSet<>()).add(record.getRecordKey());
+        if (isDelete) {
+          deletedKeysForAllLogs.add(record.getRecordKey());
+        } else {
+          validKeysForAllLogs.add(record.getRecordKey());
+        }
       });
     }
 
     // Partition valid (non-deleted) and deleted keys from previous log files in a single pass
-    Map<Boolean, Set<String>> partitionedKeysForPreviousLogs = new HashMap<>();
+    Set<String> validKeysForPreviousLogs = new HashSet<>();
+    Set<String> deletedKeysForPreviousLogs = new HashSet<>();
     // Fetch log records for previous log files (excluding the current log files)
     try (ClosableIterator<HoodieRecord<T>> previousLogRecords =
              getLogRecords(logFilePathsWithoutCurrentLogFiles, dataTableMetaClient, finalWriterSchemaOpt, instantTime, partitionPath, readerContext)) {
       previousLogRecords.forEachRemaining(record -> {
         boolean isDelete = isDeleteRecord(dataTableMetaClient, finalWriterSchemaOpt, record);
-        partitionedKeysForPreviousLogs.computeIfAbsent(!isDelete, k -> new HashSet<>()).add(record.getRecordKey());
+        if (isDelete) {
+          deletedKeysForPreviousLogs.add(record.getRecordKey());
+        } else {
+          validKeysForPreviousLogs.add(record.getRecordKey());
+        }
       });
     }
-
-    Set<String> validKeysForPreviousLogs = partitionedKeysForPreviousLogs.get(true);
-    Set<String> deletedKeysForPreviousLogs = partitionedKeysForPreviousLogs.get(false);
-
-    Set<String> validKeysForAllLogs = partitionedKeysForAllLogs.get(true);
-    Set<String> deletedKeysForAllLogs = partitionedKeysForAllLogs.get(false);
 
     return computeRevivedAndDeletedKeys(validKeysForPreviousLogs, deletedKeysForPreviousLogs, validKeysForAllLogs, deletedKeysForAllLogs);
   }
