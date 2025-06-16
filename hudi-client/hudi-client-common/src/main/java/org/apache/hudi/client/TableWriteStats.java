@@ -28,27 +28,27 @@ import java.util.List;
  */
 public class TableWriteStats {
 
-  private final List<HoodieWriteStat> dataTableHoodieWriteStats;
-  private final List<HoodieWriteStat> metadataTableHoodieWriteStats;
+  private final List<HoodieWriteStat> dataTableWriteStats;
+  private final List<HoodieWriteStat> metadataTableWriteStats;
 
-  public TableWriteStats(List<HoodieWriteStat> dataTableHoodieWriteStats) {
-    this(dataTableHoodieWriteStats, Collections.emptyList());
+  public TableWriteStats(List<HoodieWriteStat> dataTableWriteStats) {
+    this(dataTableWriteStats, Collections.emptyList());
   }
 
-  public TableWriteStats(List<HoodieWriteStat> dataTableHoodieWriteStats, List<HoodieWriteStat> metadataTableHoodieWriteStats) {
-    this.dataTableHoodieWriteStats = dataTableHoodieWriteStats;
-    this.metadataTableHoodieWriteStats = metadataTableHoodieWriteStats;
+  public TableWriteStats(List<HoodieWriteStat> dataTableWriteStats, List<HoodieWriteStat> metadataTableWriteStats) {
+    this.dataTableWriteStats = dataTableWriteStats;
+    this.metadataTableWriteStats = metadataTableWriteStats;
   }
 
-  public List<HoodieWriteStat> getDataTableHoodieWriteStats() {
-    return dataTableHoodieWriteStats;
+  public List<HoodieWriteStat> getDataTableWriteStats() {
+    return dataTableWriteStats;
   }
 
-  public List<HoodieWriteStat> getMetadataTableHoodieWriteStats() {
-    return metadataTableHoodieWriteStats;
+  public List<HoodieWriteStat> getMetadataTableWriteStats() {
+    return metadataTableWriteStats;
   }
 
   public boolean isEmptyDataTableWriteStats() {
-    return dataTableHoodieWriteStats.isEmpty();
+    return dataTableWriteStats.isEmpty();
   }
 }
