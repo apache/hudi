@@ -29,8 +29,6 @@ import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.heartbeat.HeartbeatUtils;
-import org.apache.hudi.client.timeline.HoodieTimelineArchiver;
-import org.apache.hudi.client.timeline.TimelineArchivers;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.ActionType;
@@ -890,9 +888,10 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     }
     final Timer.Context timerContext = metrics.getArchiveCtx();
     int instantsToArchive = 0;
+    HoodieTimelineArchiver archiver = null;
     try {
       // We cannot have unbounded commit files. Archive commits if we have to archive.
-      HoodieTimelineArchiver archiver = TimelineArchivers.getInstance(table.getMetaClient().getTimelineLayoutVersion(), config, table);
+      archiver = TimelineArchivers.getInstance(table.getMetaClient().getTimelineLayoutVersion(), config, table);
       instantsToArchive = archiver.archiveIfRequired(context, true);
     } catch (IOException ioe) {
       throw new HoodieIOException("Failed to archive", ioe);
@@ -900,6 +899,9 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       if (timerContext != null) {
         long durationMs = metrics.getDurationInMs(timerContext.stop());
         this.metrics.updateArchiveMetrics(durationMs, instantsToArchive);
+      }
+      if (archiver != null) {
+        metrics.updateArchivalMetrics(archiver.getMetrics());
       }
     }
   }
