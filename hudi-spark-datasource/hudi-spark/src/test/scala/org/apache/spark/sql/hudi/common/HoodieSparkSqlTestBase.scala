@@ -71,23 +71,18 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
   //       is consistent with the fixtures
   DateTimeZone.setDefault(DateTimeZone.UTC)
   TimeZone.setDefault(DateTimeUtils.getTimeZone("UTC"))
-  private var extraConf = Map[String, String]()
-  protected val spark: SparkSession = getOrCreateSparkSession()
+  protected lazy val spark: SparkSession = SparkSession.builder()
+    .config("spark.sql.warehouse.dir", sparkWareHouse.getCanonicalPath)
+    .config("spark.sql.session.timeZone", "UTC")
+    .config("hoodie.insert.shuffle.parallelism", "4")
+    .config("hoodie.upsert.shuffle.parallelism", "4")
+    .config("hoodie.delete.shuffle.parallelism", "4")
+    .config(sparkConf())
+    .getOrCreate()
 
   private var tableId = new AtomicInteger(0)
 
-  protected def getOrCreateSparkSession(): SparkSession = {
-    val activeSession = SparkSession.builder()
-      .config("spark.sql.warehouse.dir", sparkWareHouse.getCanonicalPath)
-      .config("spark.sql.session.timeZone", "UTC")
-      .config("hoodie.insert.shuffle.parallelism", "4")
-      .config("hoodie.upsert.shuffle.parallelism", "4")
-      .config("hoodie.delete.shuffle.parallelism", "4")
-      .config(sparkConf())
-      .getOrCreate()
-    SparkSession.setActiveSession(activeSession)
-    activeSession
-  }
+  private var extraConf = Map[String, String]()
 
   def sparkConf(): SparkConf = {
     val conf = getSparkConfForTest("Hoodie SQL Test")
