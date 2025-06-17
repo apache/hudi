@@ -393,7 +393,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     } else {
       // Otherwise, the assumption is that the schema required contains the metadata fields so we construct a new GenericRecord with these fields
       GenericData.Record record = new GenericData.Record(schema);
-      int offset = schema.getField("key").pos();
+      int offset = HoodieRecord.HOODIE_META_COLUMNS.size();
       record.put(offset, key);
       record.put(offset + 1, type);
       if (filesystemMetadata != null) {

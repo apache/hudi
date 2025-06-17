@@ -60,20 +60,26 @@ public class SortedKeyBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupRec
   @Override
   protected boolean hasNextBaseRecord(T baseRecord) throws IOException {
     String recordKey = readerContext.getRecordKey(baseRecord, readerSchema);
-    int comparison;
+    int comparison = 0;
     while (!getLogRecordKeysSorted().isEmpty() && (comparison = getLogRecordKeysSorted().peek().compareTo(recordKey)) <= 0) {
       String nextLogRecordKey = getLogRecordKeysSorted().poll();
-      if (comparison < 0) {
-        BufferedRecord<T> nextLogRecord = records.remove(nextLogRecordKey);
-        if (!nextLogRecord.isDelete() || emitDelete) {
-          nextRecord = nextLogRecord.getRecord();
-          queuedBaseFileRecord = Option.of(baseRecord);
-          readStats.incrementNumInserts();
-          return true;
-        }
+      if (comparison == 0) {
+        break; // Log record key matches the base record key, exit loop after removing the key from the queue of log record keys
       }
+      // Handle the case where the next record is only present in the log records
+      BufferedRecord<T> nextLogRecord = records.remove(nextLogRecordKey);
+      if (!nextLogRecord.isDelete() || emitDelete) {
+        // If the next log record does not result in a deletion, or we are emitting deletes, we can return it
+        // and queue the base record, which is already read from the iterator, for the next iteration
+        nextRecord = nextLogRecord.getRecord();
+        queuedBaseFileRecord = Option.of(baseRecord);
+        readStats.incrementNumInserts();
+        return true;
+      }
+      // Iterate until the next log record key is greater than or equal to the base record key
     }
-    BufferedRecord<T> logRecordInfo = records.remove(recordKey);
+    // if last comparison shows the keys are equal, we remove the log record info, otherwise we can just assume there is no log record for this key
+    BufferedRecord<T> logRecordInfo = comparison == 0 ? records.remove(recordKey) : null;
     return hasNextBaseRecord(baseRecord, logRecordInfo);
   }
 
