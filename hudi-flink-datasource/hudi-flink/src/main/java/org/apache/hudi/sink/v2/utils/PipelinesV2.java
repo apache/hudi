@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.sink.utils;
+package org.apache.hudi.sink.v2.utils;
 
 import org.apache.hudi.client.model.HoodieFlinkInternalRow;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -30,9 +30,10 @@ import org.apache.hudi.sink.compact.CompactOperator;
 import org.apache.hudi.sink.compact.CompactionCommitEvent;
 import org.apache.hudi.sink.compact.CompactionPlanEvent;
 import org.apache.hudi.sink.compact.CompactionPlanOperator;
+import org.apache.hudi.sink.utils.Pipelines;
 import org.apache.hudi.sink.v2.CleanFunctionV2;
-import org.apache.hudi.sink.v2.ClusteringCommitSinkV2;
-import org.apache.hudi.sink.v2.CompactionCommitSinkV2;
+import org.apache.hudi.sink.v2.clustering.ClusteringCommitSinkV2;
+import org.apache.hudi.sink.v2.compact.CompactionCommitSinkV2;
 import org.apache.hudi.sink.v2.HoodieSink;
 
 import org.apache.flink.api.common.typeinfo.TypeInformation;

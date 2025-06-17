@@ -21,7 +21,7 @@ package org.apache.hudi.sink;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsInference;
-import org.apache.hudi.sink.utils.PipelinesV2;
+import org.apache.hudi.sink.v2.utils.PipelinesV2;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.JsonDeserializationFunction;
 import org.apache.hudi.util.StreamerUtil;

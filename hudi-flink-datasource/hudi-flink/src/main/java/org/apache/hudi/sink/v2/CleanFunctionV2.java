@@ -41,7 +41,7 @@ import org.slf4j.LoggerFactory;
  * at a time, a new task can not be scheduled until the last task finished(fails or normally succeed).
  * The cleaning task never expects to throw but only log.
  *
- * Note: The difference with {@code CleanFunction} is {@code CleanFunctionV2} extends {@code ProcessFunction},
+ * <p>Note: The difference with {@code CleanFunction} is {@code CleanFunctionV2} extends {@code ProcessFunction},
  * while {@code CleanFunction} is a {@code SinkFunction}.
  */
 public class CleanFunctionV2<T> extends ProcessFunction<T, RowData>

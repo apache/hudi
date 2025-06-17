@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.sink.v2;
+package org.apache.hudi.sink.v2.compact;
 
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.WriteStatus;
@@ -27,6 +27,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metrics.FlinkCompactionMetrics;
 import org.apache.hudi.sink.compact.CompactionCommitEvent;
+import org.apache.hudi.sink.v2.CleanFunctionV2;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.action.compact.CompactHelpers;
 import org.apache.hudi.util.CompactionUtil;
@@ -58,7 +59,7 @@ import java.util.stream.Collectors;
  * <p>It also inherits the {@link CleanFunctionV2} cleaning ability. This is needed because
  * the SQL API does not allow multiple sinks in one table sink provider.
  *
- * Note: The difference with {@code CompactionCommitSink} is {@code CompactionCommitSinkV2}
+ * <p>Note: The difference with {@code CompactionCommitSink} is {@code CompactionCommitSinkV2}
  * extends {@code ProcessFunction}, while {@code CompactionCommitSink} is a {@code SinkFunction}.
  */
 public class CompactionCommitSinkV2 extends CleanFunctionV2<CompactionCommitEvent> {

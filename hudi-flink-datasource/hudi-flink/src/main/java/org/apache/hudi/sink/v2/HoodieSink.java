@@ -18,7 +18,7 @@
 
 package org.apache.hudi.sink.v2;
 
-import org.apache.hudi.sink.utils.PipelinesV2;
+import org.apache.hudi.sink.v2.utils.PipelinesV2;
 
 import org.apache.flink.api.connector.sink2.Sink;
 import org.apache.flink.api.connector.sink2.SinkWriter;

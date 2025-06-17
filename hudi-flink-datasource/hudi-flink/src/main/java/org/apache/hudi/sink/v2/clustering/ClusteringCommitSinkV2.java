@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.sink.v2;
+package org.apache.hudi.sink.v2.clustering;
 
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
@@ -36,6 +36,7 @@ import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metrics.FlinkClusteringMetrics;
 import org.apache.hudi.sink.clustering.ClusteringCommitEvent;
+import org.apache.hudi.sink.v2.CleanFunctionV2;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.util.ClusteringUtil;
@@ -67,7 +68,7 @@ import java.util.stream.Collectors;
  * <p>It also inherits the {@link CleanFunctionV2} cleaning ability. This is needed because
  * the SQL API does not allow multiple sinks in one table sink provider.
  *
- * Note: The difference with {@code ClusteringCommitSink} is {@code ClusteringCommitSinkV2}
+ * <p>Note: The difference with {@code ClusteringCommitSink} is {@code ClusteringCommitSinkV2}
  * extends {@code ProcessFunction}, while {@code ClusteringCommitSink} is a {@code SinkFunction}.
  */
 public class ClusteringCommitSinkV2 extends CleanFunctionV2<ClusteringCommitEvent> {
