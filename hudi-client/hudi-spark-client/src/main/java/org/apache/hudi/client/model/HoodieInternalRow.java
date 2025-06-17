@@ -73,45 +73,34 @@ public class HoodieInternalRow extends InternalRow {
                            UTF8String fileName,
                            InternalRow sourceRow,
                            boolean sourceContainsMetaFields) {
-    this.metaFields = new UTF8String[] {
-        commitTime,
-        commitSeqNumber,
-        recordKey,
-        partitionPath,
-        fileName
-    };
-
-    this.sourceRow = sourceRow;
-    this.sourceContainsMetaFields = sourceContainsMetaFields;
-    this.isDeleteOperation = false;
+    this(new UTF8String[] {commitTime, commitSeqNumber, recordKey, partitionPath, fileName}, sourceRow, sourceContainsMetaFields, false);
   }
 
   public HoodieInternalRow(UTF8String[] metaFields,
                            InternalRow sourceRow,
                            boolean sourceContainsMetaFields) {
+    this(metaFields, sourceRow, sourceContainsMetaFields, false);
+  }
+
+  private HoodieInternalRow(UTF8String[] metaFields,
+                            InternalRow sourceRow,
+                            boolean sourceContainsMetaFields,
+                            boolean isDeleteOperation) {
     this.metaFields = metaFields;
     this.sourceRow = sourceRow;
     this.sourceContainsMetaFields = sourceContainsMetaFields;
-    this.isDeleteOperation = false;
+    this.isDeleteOperation = isDeleteOperation;
   }
 
-  private HoodieInternalRow(UTF8String recordKey,
-                            UTF8String partitionPath,
-                            InternalRow sourceRow) {
-    this.metaFields = new UTF8String[] {
+  public static HoodieInternalRow createDeleteRow(UTF8String recordKey, UTF8String partitionPath, InternalRow sourceRow) {
+    UTF8String[] metaFields = new UTF8String[] {
         null,
         null,
         recordKey,
         partitionPath,
         null
     };
-    this.sourceRow = sourceRow;
-    this.sourceContainsMetaFields = false;
-    this.isDeleteOperation = true;
-  }
-
-  public static HoodieInternalRow createDeleteRow(UTF8String recordKey, UTF8String partitionPath, InternalRow sourceRow) {
-    return new HoodieInternalRow(recordKey, partitionPath, sourceRow);
+    return new HoodieInternalRow(metaFields, sourceRow, false, true);
   }
 
   @Override

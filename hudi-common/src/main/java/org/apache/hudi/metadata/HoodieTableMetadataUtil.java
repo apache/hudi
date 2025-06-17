@@ -2390,6 +2390,7 @@ public class HoodieTableMetadataUtil {
       throw new HoodieException("Unable to resolve table schema for table", e);
     }
     ReaderContextFactory<T> readerContextFactory = engineContext.getReaderContextFactory(metaClient);
+    String latestCommitTime = metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().map(HoodieInstant::requestedTime).orElse("");
     return engineContext.parallelize(partitionFileSlicePairs, parallelism).flatMap(partitionAndBaseFile -> {
       final String partition = partitionAndBaseFile.getKey();
       final FileSlice fileSlice = partitionAndBaseFile.getValue();
@@ -2400,7 +2401,7 @@ public class HoodieTableMetadataUtil {
             .withFileSlice(fileSlice)
             .withDataSchema(tableSchema)
             .withRequestedSchema(HoodieAvroUtils.getRecordKeySchema())
-            .withLatestCommitTime(metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().map(HoodieInstant::requestedTime).orElse(""))
+            .withLatestCommitTime(latestCommitTime)
             .withProps(getFileGroupReaderPropertiesFromStorageConf(storageConf))
             .withEmitDelete(forDelete)
             .build();
