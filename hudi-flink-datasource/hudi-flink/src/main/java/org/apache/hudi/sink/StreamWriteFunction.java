@@ -49,6 +49,7 @@ import org.apache.hudi.util.StreamerUtil;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
+import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.binary.BinaryRowData;
 import org.apache.flink.table.runtime.util.MemorySegmentPool;
 import org.apache.flink.table.types.logical.RowType;
@@ -167,8 +168,8 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
 
   @Override
   public void processElement(HoodieFlinkInternalRow record,
-                             ProcessFunction<HoodieFlinkInternalRow, Object>.Context ctx,
-                             Collector<Object> out) throws Exception {
+                             ProcessFunction<HoodieFlinkInternalRow, RowData>.Context ctx,
+                             Collector<RowData> out) throws Exception {
     bufferRecord(record);
   }
 

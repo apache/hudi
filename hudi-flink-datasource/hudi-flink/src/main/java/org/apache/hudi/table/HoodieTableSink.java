@@ -40,6 +40,7 @@ import org.apache.flink.table.connector.ChangelogMode;
 import org.apache.flink.table.connector.sink.DynamicTableSink;
 import org.apache.flink.table.connector.sink.abilities.SupportsOverwrite;
 import org.apache.flink.table.connector.sink.abilities.SupportsPartitioning;
+import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
 
 import java.util.List;
@@ -93,14 +94,14 @@ public class HoodieTableSink implements
           throw new HoodieException(
               "The bulk insert should be run in batch execution mode.");
         }
-        return Pipelines.bulkInsert(conf, rowType, dataStream);
+        return Pipelines.dummySink(Pipelines.bulkInsert(conf, rowType, dataStream));
       }
 
       // Append mode
       if (OptionsResolver.isAppendMode(conf)) {
         // close compaction for append mode
         conf.set(FlinkOptions.COMPACTION_SCHEDULE_ENABLED, false);
-        DataStream<Object> pipeline = Pipelines.append(conf, rowType, dataStream);
+        DataStream<RowData> pipeline = Pipelines.append(conf, rowType, dataStream);
         if (OptionsResolver.needsAsyncClustering(conf)) {
           return Pipelines.cluster(conf, rowType, pipeline);
         } else if (OptionsResolver.isLazyFailedWritesCleanPolicy(conf)) {
@@ -112,7 +113,7 @@ public class HoodieTableSink implements
       }
 
       // process dataStream and write corresponding files
-      DataStream<Object> pipeline;
+      DataStream<RowData> pipeline;
       final DataStream<HoodieFlinkInternalRow> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, dataStream, context.isBounded(), overwrite);
       pipeline = Pipelines.hoodieStreamWrite(conf, rowType, hoodieRecordDataStream);
       // compaction
