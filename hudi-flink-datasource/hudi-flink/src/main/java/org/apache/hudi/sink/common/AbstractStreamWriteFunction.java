@@ -29,6 +29,7 @@ import org.apache.hudi.sink.event.Correspondent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.utils.RuntimeContextUtils;
 
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.common.state.ListState;
@@ -131,7 +132,7 @@ public abstract class AbstractStreamWriteFunction<I>
 
   @Override
   public void initializeState(FunctionInitializationContext context) throws Exception {
-    this.taskID = getRuntimeContext().getIndexOfThisSubtask();
+    this.taskID = RuntimeContextUtils.getIndexOfThisSubtask(getRuntimeContext());
     this.metaClient = StreamerUtil.createMetaClient(this.config);
     this.writeClient = FlinkWriteClients.createWriteClient(this.config, getRuntimeContext());
     this.writeStatuses = new ArrayList<>();
@@ -146,7 +147,7 @@ public abstract class AbstractStreamWriteFunction<I>
             TypeInformation.of(JobID.class)
         ));
 
-    int attemptId = getRuntimeContext().getAttemptNumber();
+    int attemptId = RuntimeContextUtils.getAttemptNumber(getRuntimeContext());
     if (context.isRestored()) {
       initCheckpointId(attemptId, context.getRestoredCheckpointId().orElse(-1L));
     }
@@ -195,7 +196,7 @@ public abstract class AbstractStreamWriteFunction<I>
       // returns early if the job/task is initially started.
       return;
     }
-    JobID currentJobId = getRuntimeContext().getJobId();
+    JobID currentJobId = RuntimeContextUtils.getJobId(getRuntimeContext());
     if (StreamSupport.stream(this.jobIdState.get().spliterator(), false)
         .noneMatch(currentJobId::equals)) {
       // do not set up the checkpoint id if the state comes from the old job.
@@ -253,7 +254,7 @@ public abstract class AbstractStreamWriteFunction<I>
    */
   private void reloadJobIdState() throws Exception {
     this.jobIdState.clear();
-    this.jobIdState.add(getRuntimeContext().getJobId());
+    this.jobIdState.add(RuntimeContextUtils.getJobId(getRuntimeContext()));
   }
 
   public void handleOperatorEvent(OperatorEvent event) {

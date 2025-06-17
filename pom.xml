@@ -140,20 +140,20 @@
     <spark.version>${spark3.version}</spark.version>
     <spark3.version>3.5.1</spark3.version>
     <sparkbundle.version></sparkbundle.version>
+    <flink2.0.version>2.0.0</flink2.0.version>
     <flink1.20.version>1.20.1</flink1.20.version>
     <flink1.19.version>1.19.2</flink1.19.version>
     <flink1.18.version>1.18.1</flink1.18.version>
     <flink1.17.version>1.17.1</flink1.17.version>
-    <flink1.16.version>1.16.2</flink1.16.version>
-    <flink1.15.version>1.15.1</flink1.15.version>
-    <flink.version>${flink1.20.version}</flink.version>
-    <hudi.flink.module>hudi-flink1.20.x</hudi.flink.module>
-    <flink.bundle.version>1.20</flink.bundle.version>
+    <flink.version>${flink2.0.version}</flink.version>
+    <hudi.flink.module>hudi-flink2.0.x</hudi.flink.module>
+    <hudi.flink.common.module>hudi-flink2-common</hudi.flink.common.module>
+    <flink.bundle.version>2.0</flink.bundle.version>
     <!-- This is fixed to match with version from flink-avro -->
     <flink.avro.version>1.11.4</flink.avro.version>
-    <flink.format.parquet.version>1.13.1</flink.format.parquet.version>
+    <flink.format.parquet.version>1.14.4</flink.format.parquet.version>
     <!-- check kafka version -->
-    <flink.connector.kafka.version>3.2.0-1.19</flink.connector.kafka.version> 
+    <flink.connector.kafka.version>4.0.0-2.0</flink.connector.kafka.version>
     <flink.runtime.artifactId>flink-runtime</flink.runtime.artifactId>
     <flink.table.runtime.artifactId>flink-table-runtime</flink.table.runtime.artifactId>
     <flink.table.planner.artifactId>flink-table-planner_2.12</flink.table.planner.artifactId>
@@ -163,7 +163,7 @@
     <flink.streaming.java.artifactId>flink-streaming-java</flink.streaming.java.artifactId>
     <flink.clients.artifactId>flink-clients</flink.clients.artifactId>
     <flink.connector.kafka.artifactId>flink-connector-kafka</flink.connector.kafka.artifactId>
-    <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility_2.12</flink.hadoop.compatibility.artifactId>
+    <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility</flink.hadoop.compatibility.artifactId>
     <rocksdbjni.version>7.5.3</rocksdbjni.version>
     <spark33.version>3.3.4</spark33.version>
     <spark34.version>3.4.3</spark34.version>
@@ -1687,7 +1687,7 @@
       <!-- Other Utils -->
       <dependency>
         <groupId>org.apache.flink</groupId>
-        <artifactId>flink-test-utils_${scala.binary.version}</artifactId>
+        <artifactId>${flink.test.utils.artifactId}</artifactId>
         <version>${flink.version}</version>
         <scope>test</scope>
         <exclusions>
@@ -2557,12 +2557,47 @@
     </profile>
 
     <profile>
+      <id>flink2.0</id>
+      <properties>
+        <flink.version>${flink2.0.version}</flink.version>
+        <hudi.flink.module>hudi-flink2.0.x</hudi.flink.module>
+        <hudi.flink.common.module>hudi-flink2-common</hudi.flink.common.module>
+        <flink.bundle.version>2.0</flink.bundle.version>
+        <!-- check kafka version -->
+        <flink.connector.kafka.version>4.0.0-2.0</flink.connector.kafka.version>
+        <orc.flink.version>1.5.6</orc.flink.version>
+        <flink.avro.version>1.11.4</flink.avro.version>
+        <flink.format.parquet.version>1.14.4</flink.format.parquet.version>
+        <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility</flink.hadoop.compatibility.artifactId>
+      </properties>
+      <modules>
+        <module>hudi-flink-datasource/hudi-flink2-common</module>
+        <module>hudi-flink-datasource/hudi-flink2.0.x</module>
+      </modules>
+      <activation>
+        <activeByDefault>true</activeByDefault>
+        <property>
+          <name>flink2.0</name>
+        </property>
+      </activation>
+    </profile>
+    <profile>
       <id>flink1.20</id>
       <properties>
+        <flink.version>${flink1.20.version}</flink.version>
+        <hudi.flink.module>hudi-flink1.20.x</hudi.flink.module>
+        <hudi.flink.common.module>hudi-flink1-common</hudi.flink.common.module>
+        <flink.bundle.version>1.20</flink.bundle.version>
         <orc.flink.version>1.5.6</orc.flink.version>
         <flink.avro.version>1.11.4</flink.avro.version>
         <flink.format.parquet.version>1.13.1</flink.format.parquet.version>
+        <flink.connector.kafka.version>3.3.0-1.20</flink.connector.kafka.version>
+        <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility_2.12</flink.hadoop.compatibility.artifactId>
       </properties>
+      <modules>
+        <module>hudi-flink-datasource/hudi-flink1.20.x</module>
+        <module>hudi-flink-datasource/hudi-flink1-common</module>
+      </modules>
       <activation>
         <property>
           <name>flink1.20</name>
@@ -2574,12 +2609,18 @@
       <properties>
         <flink.version>${flink1.19.version}</flink.version>
         <hudi.flink.module>hudi-flink1.19.x</hudi.flink.module>
+        <hudi.flink.common.module>hudi-flink1-common</hudi.flink.common.module>
         <flink.bundle.version>1.19</flink.bundle.version>
         <orc.flink.version>1.5.6</orc.flink.version>
         <flink.avro.version>1.11.4</flink.avro.version>
         <flink.format.parquet.version>1.13.1</flink.format.parquet.version>
         <flink.connector.kafka.version>3.2.0-1.19</flink.connector.kafka.version>
+        <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility_2.12</flink.hadoop.compatibility.artifactId>
       </properties>
+      <modules>
+        <module>hudi-flink-datasource/hudi-flink1.19.x</module>
+        <module>hudi-flink-datasource/hudi-flink1-common</module>
+      </modules>
       <activation>
         <property>
           <name>flink1.19</name>
@@ -2591,12 +2632,18 @@
       <properties>
         <flink.version>${flink1.18.version}</flink.version>
         <hudi.flink.module>hudi-flink1.18.x</hudi.flink.module>
+        <hudi.flink.common.module>hudi-flink1-common</hudi.flink.common.module>
         <flink.bundle.version>1.18</flink.bundle.version>
         <orc.flink.version>1.5.6</orc.flink.version>
         <flink.avro.version>1.11.4</flink.avro.version>
         <flink.format.parquet.version>1.13.1</flink.format.parquet.version>
         <flink.connector.kafka.version>3.2.0-1.18</flink.connector.kafka.version>
+        <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility_2.12</flink.hadoop.compatibility.artifactId>
       </properties>
+      <modules>
+        <module>hudi-flink-datasource/hudi-flink1.18.x</module>
+        <module>hudi-flink-datasource/hudi-flink1-common</module>
+      </modules>
       <activation>
         <property>
           <name>flink1.18</name>
@@ -2608,49 +2655,21 @@
       <properties>
         <flink.version>${flink1.17.version}</flink.version>
         <hudi.flink.module>hudi-flink1.17.x</hudi.flink.module>
+        <hudi.flink.common.module>hudi-flink1-common</hudi.flink.common.module>
         <flink.bundle.version>1.17</flink.bundle.version>
         <orc.flink.version>1.5.6</orc.flink.version>
         <flink.avro.version>1.11.4</flink.avro.version>
         <flink.format.parquet.version>1.12.3</flink.format.parquet.version>
         <flink.connector.kafka.version>${flink1.17.version}</flink.connector.kafka.version>
+        <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility_2.12</flink.hadoop.compatibility.artifactId>
       </properties>
+      <modules>
+        <module>hudi-flink-datasource/hudi-flink1.17.x</module>
+        <module>hudi-flink-datasource/hudi-flink1-common</module>
+      </modules>
       <activation>
         <property>
           <name>flink1.17</name>
-        </property>
-      </activation>
-    </profile>
-    <profile>
-      <id>flink1.16</id>
-      <properties>
-        <flink.version>${flink1.16.version}</flink.version>
-        <hudi.flink.module>hudi-flink1.16.x</hudi.flink.module>
-        <flink.bundle.version>1.16</flink.bundle.version>
-        <orc.flink.version>1.5.6</orc.flink.version>
-        <flink.avro.version>1.11.4</flink.avro.version>
-        <flink.format.parquet.version>1.12.3</flink.format.parquet.version>
-        <flink.connector.kafka.version>${flink1.16.version}</flink.connector.kafka.version>
-      </properties>
-      <activation>
-        <property>
-          <name>flink1.16</name>
-        </property>
-      </activation>
-    </profile>
-    <profile>
-    <id>flink1.15</id>
-      <properties>
-        <flink.version>${flink1.15.version}</flink.version>
-        <hudi.flink.module>hudi-flink1.15.x</hudi.flink.module>
-        <flink.bundle.version>1.15</flink.bundle.version>
-        <orc.flink.version>1.5.6</orc.flink.version>
-        <flink.avro.version>1.11.4</flink.avro.version>
-        <flink.format.parquet.version>1.12.3</flink.format.parquet.version>
-        <flink.connector.kafka.version>${flink1.15.version}</flink.connector.kafka.version>
-      </properties>
-      <activation>
-        <property>
-          <name>flink1.15</name>
         </property>
       </activation>
     </profile>

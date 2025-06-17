@@ -45,10 +45,10 @@ public class TestOptionsResolver {
   void testGetIndexType() {
     Configuration conf = getConf();
     // set uppercase index
-    conf.setString(FlinkOptions.INDEX_TYPE, "BLOOM");
+    conf.set(FlinkOptions.INDEX_TYPE, "BLOOM");
     assertEquals(HoodieIndex.IndexType.BLOOM, OptionsResolver.getIndexType(conf));
     // set lowercase index
-    conf.setString(FlinkOptions.INDEX_TYPE, "bloom");
+    conf.set(FlinkOptions.INDEX_TYPE, "bloom");
     assertEquals(HoodieIndex.IndexType.BLOOM, OptionsResolver.getIndexType(conf));
   }
 
@@ -74,7 +74,7 @@ public class TestOptionsResolver {
   private Configuration getConf() {
     Configuration conf = new Configuration();
     conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
-    conf.setString(FlinkOptions.PATH, tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.PATH, tempFile.getAbsolutePath());
     return conf;
   }
 }

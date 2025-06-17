@@ -18,8 +18,9 @@
 
 package org.apache.hudi.util;
 
+import org.apache.hudi.adapter.CollectionInputFormatAdapter;
+
 import org.apache.flink.api.common.io.InputFormat;
-import org.apache.flink.api.java.io.CollectionInputFormat;
 import org.apache.flink.table.data.RowData;
 
 import java.util.Collections;
@@ -29,5 +30,5 @@ import java.util.Collections;
  */
 public class InputFormats {
   public static final InputFormat<RowData, ?> EMPTY_INPUT_FORMAT =
-      new CollectionInputFormat<>(Collections.emptyList(), null);
+      new CollectionInputFormatAdapter(Collections.emptyList(), null);
 }

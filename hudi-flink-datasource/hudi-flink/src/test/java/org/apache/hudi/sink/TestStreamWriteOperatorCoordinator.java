@@ -186,7 +186,7 @@ public class TestStreamWriteOperatorCoordinator {
     reset();
     // override the default configuration
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
-    conf.setBoolean(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), false);
+    conf.setString(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), "false");
 
     OperatorCoordinator.Context context = new MockOperatorCoordinatorContext(new OperatorID(), 2);
     coordinator = createCoordinator(conf, 2);
@@ -280,7 +280,7 @@ public class TestStreamWriteOperatorCoordinator {
     reset();
     // override the default configuration
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
-    conf.setBoolean(FlinkOptions.HIVE_SYNC_ENABLED, true);
+    conf.set(FlinkOptions.HIVE_SYNC_ENABLED, true);
     coordinator = createCoordinator(conf, 1);
 
     String instant = mockWriteWithMetadata(0);
@@ -297,8 +297,8 @@ public class TestStreamWriteOperatorCoordinator {
     // override the default configuration
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     int metadataCompactionDeltaCommits = 5;
-    conf.setBoolean(FlinkOptions.METADATA_ENABLED, true);
-    conf.setInteger(FlinkOptions.METADATA_COMPACTION_DELTA_COMMITS, metadataCompactionDeltaCommits);
+    conf.set(FlinkOptions.METADATA_ENABLED, true);
+    conf.set(FlinkOptions.METADATA_COMPACTION_DELTA_COMMITS, metadataCompactionDeltaCommits);
     coordinator = createCoordinator(conf, 1);
 
     String instant = coordinator.getInstant();
@@ -363,8 +363,8 @@ public class TestStreamWriteOperatorCoordinator {
     reset();
     // override the default configuration
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
-    conf.setBoolean(FlinkOptions.METADATA_ENABLED, true);
-    conf.setInteger(FlinkOptions.METADATA_COMPACTION_DELTA_COMMITS, 20);
+    conf.set(FlinkOptions.METADATA_ENABLED, true);
+    conf.set(FlinkOptions.METADATA_COMPACTION_DELTA_COMMITS, 20);
     conf.setString("hoodie.metadata.log.compaction.enable", "true");
     coordinator = createCoordinator(conf, 1);
 
@@ -409,7 +409,7 @@ public class TestStreamWriteOperatorCoordinator {
     reset();
     // override the default configuration
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
-    conf.setBoolean(FlinkOptions.METADATA_ENABLED, true);
+    conf.set(FlinkOptions.METADATA_ENABLED, true);
     coordinator = createCoordinator(conf, 1);
 
     String instant = coordinator.getInstant();
@@ -486,10 +486,10 @@ public class TestStreamWriteOperatorCoordinator {
     reset();
     // override the default configuration
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
-    conf.setBoolean(FlinkOptions.METADATA_ENABLED, true);
+    conf.set(FlinkOptions.METADATA_ENABLED, true);
 
     conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
-    conf.setInteger("hoodie.write.lock.client.num_retries", 1);
+    conf.setString("hoodie.write.lock.client.num_retries", "1");
 
     coordinator = createCoordinator(conf, 1);
 
@@ -515,7 +515,7 @@ public class TestStreamWriteOperatorCoordinator {
   @Test
   public void testCommitOnEmptyBatch() throws Exception {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
-    conf.setBoolean(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), true);
+    conf.setString(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), "true");
     try (StreamWriteOperatorCoordinator coordinator = createCoordinator(conf, 2)) {
       // Coordinator start the instant
       String instant = requestInstantTime(coordinator, -1);

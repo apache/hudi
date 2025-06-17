@@ -33,12 +33,6 @@
     </properties>
 
     <modules>
-        <module>hudi-flink1.15.x</module>
-        <module>hudi-flink1.16.x</module>
-        <module>hudi-flink1.17.x</module>
-        <module>hudi-flink1.18.x</module>
-        <module>hudi-flink1.19.x</module>
-        <module>hudi-flink1.20.x</module>
         <module>hudi-flink</module>
     </modules>
 

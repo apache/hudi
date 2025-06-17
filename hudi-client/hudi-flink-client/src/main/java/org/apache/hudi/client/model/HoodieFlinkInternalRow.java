@@ -29,7 +29,7 @@ import java.io.Serializable;
 
 /**
  * Flink {@link RowData} with added Hudi metadata.
- * For serialization/deserialization {@link HoodieFlinkInternalRowTypeInfo} and {@link HoodieFlinkInternalRowSerializer} are used
+ * For serialization/deserialization {@code HoodieFlinkInternalRowTypeInfo} and {@link HoodieFlinkInternalRowSerializer} are used
  * to optimize serialization/deserialization costs.
  */
 public class HoodieFlinkInternalRow implements Serializable {
@@ -37,7 +37,7 @@ public class HoodieFlinkInternalRow implements Serializable {
   private static final long serialVersionUID = 1L;
 
   // the number of fields without nesting
-  protected static final int ARITY = 7;
+  public static final int ARITY = 7;
 
   private final StringData recordKey;
 

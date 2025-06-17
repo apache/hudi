@@ -84,7 +84,7 @@ class TestExpressionUtils {
     CallExpression callExpression;
     for (int i = 0; i < fields.size(); i++) {
       // 1. Build all types
-      callExpression = new CallExpression(
+      callExpression = CallExpression.permanent(
           BuiltInFunctionDefinitions.IS_NOT_NULL,
           Arrays.asList(new FieldReferenceExpression(fields.get(i).getName(),
               dataTypes.get(i),
@@ -125,7 +125,7 @@ class TestExpressionUtils {
     CallExpression callExpression;
     for (int i = 0; i < fields.size(); i++) {
       // 1. Build all types
-      callExpression = new CallExpression(
+      callExpression = CallExpression.permanent(
           BuiltInFunctionDefinitions.IS_NOT_NULL,
           Arrays.asList(
               new FieldReferenceExpression(
