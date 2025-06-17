@@ -63,7 +63,7 @@ public class PipelinesV2 {
    * @param overwrite  Whether it is insert overwrite
    * @param isBounded  Whether the source is bounded
    *
-   * @return A write pipeline for Sink V2.
+   * @return A write pipeline for Sink V2
    */
   public static DataStreamSink<RowData> sink(
       DataStream<RowData> dataStream,
@@ -89,7 +89,7 @@ public class PipelinesV2 {
    * @param overwrite  Whether it is insert overwrite
    * @param isBounded  Whether the source is bounded
    *
-   * @return A write pipeline for Sink V2.
+   * @return A write pipeline for Sink V2
    */
   public static DataStream<RowData> composePipeline(
       DataStream<RowData> dataStream,
@@ -138,7 +138,13 @@ public class PipelinesV2 {
   }
 
   /**
-   * Get parallelism for Sink V2 writer to make sure the dummy writer operator can be chained with upstream operators.
+   * Get the parallelism for {@code SinkWriter} in Sink V2, the value is same with the parallelism of the last
+   * operator in the write pipeline, so that the sink writer can be chained with write pipeline, which is
+   * important for the partial task failover for some writing modes, e.g., append writing.
+   *
+   * @param conf The configuration
+   *
+   * @return The parallelism for the {@code SinkWriter} in Sink V2
    */
   private static int getParallelismForSinkV2(Configuration conf) {
     if (OptionsResolver.isBulkInsertOperation(conf)) {
@@ -152,8 +158,20 @@ public class PipelinesV2 {
   }
 
   /**
-   * The difference with {@code Pipelines#clean} is {@code cleanV2} uses {@code CleanFunctionV2} which is a {@code ProcessFunction}
-   * instead of {@code SinkFunction}, and the return value is a {@code DataStream} instead of {@code DataStreamSink}.
+   * The cleaning task pipeline.
+   *
+   * <p>It starts a cleaning task on new checkpoints, there is only one cleaning task at a time,
+   * a new task can not be scheduled until the last task finished(fails or normally succeed).
+   * The cleaning task never expects to throw but only log.
+   *
+   * <p>The difference with {@code Pipelines#clean} is {@code cleanV2} uses {@code CleanFunctionV2}
+   * which is a {@code ProcessFunction} instead of {@code SinkFunction}, and the return value is a
+   * {@code DataStream} instead of {@code DataStreamSink}.
+   *
+   * @param conf       The configuration
+   * @param dataStream The input data stream
+   *
+   * @return The cleaning pipeline
    */
   public static DataStream<RowData> cleanV2(Configuration conf, DataStream<RowData> dataStream) {
     return dataStream.transform(
@@ -165,8 +183,29 @@ public class PipelinesV2 {
   }
 
   /**
-   * The difference with {@code Pipelines#cluster} is {@code clusterV2} uses {@code ClusteringCommitSinkV2} which
-   * is a {@code ProcessFunction}, and the return value is a {@code DataStream} instead of {@code DataStreamSink}.
+   * The clustering tasks pipeline.
+   *
+   * <p>The clustering plan operator monitors the new clustering plan on the timeline
+   * then distributes the sub-plans to the clustering tasks. The clustering task then
+   * handle over the metadata to commit task for clustering transaction commit.
+   * The whole pipeline looks like the following:
+   *
+   * <pre>
+   *                                     /=== | task1 | ===\
+   *      | plan generation | ===> hash                      | commit |
+   *                                     \=== | task2 | ===/
+   *
+   *      Note: both the clustering plan generation task and commission task are singleton.
+   * </pre>
+   *
+   * <p>The difference with {@code Pipelines#cluster} is {@code clusterV2} uses {@code ClusteringCommitSinkV2}
+   * which is a {@code ProcessFunction}, and the return value is a {@code DataStream} instead of {@code DataStreamSink}.
+   *
+   * @param conf       The configuration
+   * @param rowType    The input row type
+   * @param dataStream The input data stream
+   *
+   * @return the clustering pipeline
    */
   public static DataStream<RowData> clusterV2(Configuration conf, RowType rowType, DataStream<RowData> dataStream) {
     DataStream<ClusteringCommitEvent> clusteringStream = dataStream.transform("cluster_plan_generate",
@@ -192,8 +231,28 @@ public class PipelinesV2 {
   }
 
   /**
-   * The difference with {@code Pipelines#compact} is {@code compactV2} uses {@code CompactionCommitSinkV2} which
-   * is a {@code ProcessFunction}, and the return value is a {@code DataStream} instead of {@code DataStreamSink}.
+   * The compaction tasks pipeline.
+   *
+   * <p>The compaction plan operator monitors the new compaction plan on the timeline
+   * then distributes the sub-plans to the compaction tasks. The compaction task then
+   * handle over the metadata to commit task for compaction transaction commit.
+   * The whole pipeline looks like the following:
+   *
+   * <pre>
+   *                                     /=== | task1 | ===\
+   *      | plan generation | ===> hash                      | commit |
+   *                                     \=== | task2 | ===/
+   *
+   *      Note: both the compaction plan generation task and commission task are singleton.
+   * </pre>
+   *
+   * <p>The difference with {@code Pipelines#compact} is {@code compactV2} uses {@code CompactionCommitSinkV2}
+   * which is a {@code ProcessFunction}, and the return value is a {@code DataStream} instead of {@code DataStreamSink}.
+   *
+   * @param conf       The configuration
+   * @param dataStream The input data stream
+   *
+   * @return the compaction pipeline
    */
   public static DataStream<RowData> compactV2(Configuration conf, DataStream<RowData> dataStream) {
     // plan generate must be singleton
