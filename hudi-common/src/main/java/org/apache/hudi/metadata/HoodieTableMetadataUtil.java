@@ -1018,11 +1018,11 @@ public class HoodieTableMetadataUtil {
   }
 
   private static <T> ClosableIterator<HoodieRecord<T>> getLogRecords(List<String> logFilePaths,
-                                                         HoodieTableMetaClient datasetMetaClient,
-                                                         Option<Schema> writerSchemaOpt,
-                                                         String latestCommitTimestamp,
-                                                         String partitionPath,
-                                                         HoodieReaderContext<T> readerContext) {
+                                                                     HoodieTableMetaClient datasetMetaClient,
+                                                                     Option<Schema> writerSchemaOpt,
+                                                                     String latestCommitTimestamp,
+                                                                     String partitionPath,
+                                                                     HoodieReaderContext<T> readerContext) {
     if (writerSchemaOpt.isPresent() && !logFilePaths.isEmpty()) {
       List<HoodieLogFile> logFiles = logFilePaths.stream().map(HoodieLogFile::new).collect(Collectors.toList());
       FileSlice fileSlice = new FileSlice(partitionPath, logFiles.get(0).getFileId(), logFiles.get(0).getDeltaCommitTime());
