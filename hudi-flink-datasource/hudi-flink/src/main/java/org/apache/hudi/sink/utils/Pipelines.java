@@ -107,7 +107,7 @@ public class Pipelines {
    * @param dataStream The input data stream
    * @return the bulk insert data stream sink
    */
-  public static DataStreamSink<Object> bulkInsert(Configuration conf, RowType rowType, DataStream<RowData> dataStream) {
+  public static DataStream<RowData> bulkInsert(Configuration conf, RowType rowType, DataStream<RowData> dataStream) {
     // we need same parallelism for all operators,
     // which is equal to write tasks number, to avoid shuffles
     final int PARALLELISM_VALUE = conf.getInteger(FlinkOptions.WRITE_TASKS);
@@ -172,11 +172,9 @@ public class Pipelines {
     // main write operator with following dummy sink in the end
     return dataStream
         .transform(opName(isBucketIndexType ? "bucket_bulk_insert" : "hoodie_bulk_insert_write", conf),
-            TypeInformation.of(Object.class), BulkInsertWriteOperator.getFactory(conf, rowType))
+            TypeInformation.of(RowData.class), BulkInsertWriteOperator.getFactory(conf, rowType))
         .uid(opUID("bucket_bulk_insert", conf))
-        .setParallelism(PARALLELISM_VALUE)
-        .addSink(DummySink.INSTANCE)
-        .name("dummy");
+        .setParallelism(PARALLELISM_VALUE);
   }
 
   /**
@@ -200,7 +198,7 @@ public class Pipelines {
    * @param dataStream The input data stream
    * @return the appending data stream sink
    */
-  public static DataStream<Object> append(
+  public static DataStream<RowData> append(
       Configuration conf,
       RowType rowType,
       DataStream<RowData> dataStream) {
@@ -211,9 +209,9 @@ public class Pipelines {
     WriteOperatorFactory<RowData> operatorFactory = AppendWriteOperator.getFactory(conf, rowType);
 
     return dataStream
-        .transform(opName("hoodie_append_write", conf), TypeInformation.of(Object.class), operatorFactory)
+        .transform(opName("hoodie_append_write", conf), TypeInformation.of(RowData.class), operatorFactory)
         .uid(opUID("hoodie_stream_write", conf))
-        .setParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS));
+        .setParallelism(conf.get(FlinkOptions.WRITE_TASKS));
   }
 
   /**
@@ -332,7 +330,7 @@ public class Pipelines {
    * @param dataStream The input data stream
    * @return the stream write data stream pipeline
    */
-  public static DataStream<Object> hoodieStreamWrite(Configuration conf,
+  public static DataStream<RowData> hoodieStreamWrite(Configuration conf,
                                                      RowType rowType,
                                                      DataStream<HoodieFlinkInternalRow> dataStream) {
     if (OptionsResolver.isBucketIndexType(conf)) {
@@ -349,7 +347,7 @@ public class Pipelines {
                   record -> new HoodieKey(record.getRecordKey(), record.getPartitionPath()))
               .transform(
                   opName("bucket_write", conf),
-                  TypeInformation.of(Object.class),
+                  TypeInformation.of(RowData.class),
                   BucketStreamWriteOperator.getFactory(conf, rowType))
               .uid(opUID("bucket_write", conf))
               .setParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS));
@@ -368,7 +366,7 @@ public class Pipelines {
               .keyBy(HoodieFlinkInternalRow::getFileId)
               .transform(
                   opName("consistent_bucket_write", conf),
-                  TypeInformation.of(Object.class),
+                  TypeInformation.of(RowData.class),
                   BucketStreamWriteOperator.getFactory(conf, rowType))
               .uid(opUID("consistent_bucket_write", conf))
               .setParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS));
@@ -389,7 +387,7 @@ public class Pipelines {
           .keyBy(HoodieFlinkInternalRow::getFileId)
           .transform(
               opName("stream_write", conf),
-              TypeInformation.of(Object.class),
+              TypeInformation.of(RowData.class),
               StreamWriteOperator.getFactory(conf, rowType))
           .uid(opUID("stream_write", conf))
           .setParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS));
@@ -416,7 +414,7 @@ public class Pipelines {
    * @param dataStream The input data stream
    * @return the compaction pipeline
    */
-  public static DataStreamSink<CompactionCommitEvent> compact(Configuration conf, DataStream<Object> dataStream) {
+  public static DataStreamSink<CompactionCommitEvent> compact(Configuration conf, DataStream<RowData> dataStream) {
     DataStreamSink<CompactionCommitEvent> compactionCommitEventDataStream = dataStream.transform("compact_plan_generate",
             TypeInformation.of(CompactionPlanEvent.class),
             new CompactionPlanOperator(conf))
@@ -455,7 +453,7 @@ public class Pipelines {
    * @param dataStream The input data stream
    * @return the clustering pipeline
    */
-  public static DataStreamSink<ClusteringCommitEvent> cluster(Configuration conf, RowType rowType, DataStream<Object> dataStream) {
+  public static DataStreamSink<ClusteringCommitEvent> cluster(Configuration conf, RowType rowType, DataStream<RowData> dataStream) {
     DataStream<ClusteringCommitEvent> clusteringStream = dataStream.transform("cluster_plan_generate",
             TypeInformation.of(ClusteringPlanEvent.class),
             new ClusteringPlanOperator(conf))
@@ -465,10 +463,10 @@ public class Pipelines {
         .transform("clustering_task",
             TypeInformation.of(ClusteringCommitEvent.class),
             new ClusteringOperator(conf, rowType))
-        .setParallelism(conf.getInteger(FlinkOptions.CLUSTERING_TASKS));
+        .setParallelism(conf.get(FlinkOptions.CLUSTERING_TASKS));
     if (OptionsResolver.sortClusteringEnabled(conf)) {
       ExecNodeUtil.setManagedMemoryWeight(clusteringStream.getTransformation(),
-          conf.getInteger(FlinkOptions.WRITE_SORT_MEMORY) * 1024L * 1024L);
+          conf.get(FlinkOptions.WRITE_SORT_MEMORY) * 1024L * 1024L);
     }
     DataStreamSink<ClusteringCommitEvent> clusteringCommitEventDataStream = clusteringStream.addSink(new ClusteringCommitSink(conf))
         .name("clustering_commit")
@@ -477,17 +475,19 @@ public class Pipelines {
     return clusteringCommitEventDataStream;
   }
 
-  public static DataStreamSink<Object> clean(Configuration conf, DataStream<Object> dataStream) {
-    DataStreamSink<Object> cleanCommitDataStream = dataStream.addSink(new CleanFunction<>(conf))
+  public static DataStreamSink<RowData> clean(Configuration conf, DataStream<RowData> dataStream) {
+    DataStreamSink<RowData> cleanCommitDataStream = dataStream.addSink(new CleanFunction<>(conf))
         .setParallelism(1)
         .name("clean_commits");
     cleanCommitDataStream.getTransformation().setMaxParallelism(1);
     return cleanCommitDataStream;
   }
 
-  public static DataStreamSink<Object> dummySink(DataStream<Object> dataStream) {
+  public static DataStreamSink<RowData> dummySink(DataStream<RowData> dataStream) {
+    int upstreamParallelism = dataStream.getParallelism();
     return dataStream.addSink(Pipelines.DummySink.INSTANCE)
         // keeps the same parallelism to upstream operators to enable partial failover.
+        .setParallelism(upstreamParallelism)
         .name("dummy");
   }
 
@@ -509,7 +509,7 @@ public class Pipelines {
   /**
    * Dummy sink that does nothing.
    */
-  public static class DummySink implements SinkFunction<Object> {
+  public static class DummySink implements SinkFunction<RowData> {
     private static final long serialVersionUID = 1L;
     public static DummySink INSTANCE = new DummySink();
   }

@@ -22,6 +22,7 @@ import org.apache.hudi.common.util.RateLimiter;
 import org.apache.hudi.configuration.FlinkOptions;
 
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.Collector;
 
@@ -55,7 +56,7 @@ public class AppendWriteFunctionWithRateLimit<I>
   }
 
   @Override
-  public void processElement(I value, Context ctx, Collector<Object> out) throws Exception {
+  public void processElement(I value, Context ctx, Collector<RowData> out) throws Exception {
     rateLimiter.acquire(1);
     super.processElement(value, ctx, out);
   }
