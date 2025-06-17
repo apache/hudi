@@ -30,16 +30,15 @@ import java.math.BigDecimal
 import scala.collection.JavaConverters
 
 class TestCallCommandParser extends HoodieSparkSqlTestBase {
-  private val parser = spark.sessionState.sqlParser
 
   test("Test Call Produce with Positional Arguments") {
-    val call = parser.parsePlan(s"CALL c.n.${HelpProcedure.NAME}(1, '2', 3L, true, 1.0D, 9.0e1, 900e-1BD)").asInstanceOf[CallCommand]
+    val call = spark.sql(s"CALL c.n.${HelpProcedure.NAME}('help', 2, 3L, true, 1.0D, 9.0e1, 900e-1BD)").queryExecution.logical.asInstanceOf[CallCommand]
     assertResult(createImmutableList("c", "n", HelpProcedure.NAME))(JavaConverters.seqAsJavaListConverter(call.name).asJava)
 
     assertResult(7)(call.args.size)
 
-    checkArg(call, 0, 1, DataTypes.IntegerType)
-    checkArg(call, 1, "2", DataTypes.StringType)
+    checkArg(call, 0, "help", DataTypes.StringType)
+    checkArg(call, 1, 2, DataTypes.IntegerType)
     checkArg(call, 2, 3L, DataTypes.LongType)
     checkArg(call, 3, true, DataTypes.BooleanType)
     checkArg(call, 4, 1.0D, DataTypes.DoubleType)
@@ -48,33 +47,36 @@ class TestCallCommandParser extends HoodieSparkSqlTestBase {
   }
 
   test("Test Call Produce with Named Arguments") {
-    val call = parser.parsePlan(s"CALL system.${HelpProcedure.NAME}(c1 => 1, c2 => '2', c3 => true)").asInstanceOf[CallCommand]
+    val call = spark.sql(s"CALL system.${HelpProcedure.NAME}(cmd => 'help', c1 => 1, c2 => '2', c3 => true)").queryExecution.logical.asInstanceOf[CallCommand]
     assertResult(createImmutableList("system", HelpProcedure.NAME))(JavaConverters.seqAsJavaListConverter(call.name).asJava)
 
-    assertResult(3)(call.args.size)
+    assertResult(4)(call.args.size)
 
-    checkArg(call, 0, "c1", 1, DataTypes.IntegerType)
-    checkArg(call, 1, "c2", "2", DataTypes.StringType)
-    checkArg(call, 2, "c3", true, DataTypes.BooleanType)
+    checkArg(call, 0, "cmd","help", DataTypes.StringType)
+    checkArg(call, 1, "c1", 1, DataTypes.IntegerType)
+    checkArg(call, 2, "c2", "2", DataTypes.StringType)
+    checkArg(call, 3, "c3", true, DataTypes.BooleanType)
   }
 
   test("Test Call Produce with Var Substitution") {
-    val call = parser.parsePlan(s"CALL system.${HelpProcedure.NAME}('$${spark.extra.prop}')").asInstanceOf[CallCommand]
-    assertResult(createImmutableList("system", HelpProcedure.NAME))(JavaConverters.seqAsJavaListConverter(call.name).asJava)
-
-    assertResult(1)(call.args.size)
-
-    checkArg(call, 0, "value", DataTypes.StringType)
-  }
-
-  test("Test Call Produce with Mixed Arguments") {
-    val call = parser.parsePlan(s"CALL system.${HelpProcedure.NAME}(c1 => 1, '2')").asInstanceOf[CallCommand]
+    val call = spark.sql(s"CALL system.${HelpProcedure.NAME}('help', '$${spark.extra.prop}')").queryExecution.logical.asInstanceOf[CallCommand]
     assertResult(createImmutableList("system", HelpProcedure.NAME))(JavaConverters.seqAsJavaListConverter(call.name).asJava)
 
     assertResult(2)(call.args.size)
 
-    checkArg(call, 0, "c1", 1, DataTypes.IntegerType)
-    checkArg(call, 1, "2", DataTypes.StringType)
+    checkArg(call, 0, "help", DataTypes.StringType)
+    checkArg(call, 1, "value", DataTypes.StringType)
+  }
+
+  test("Test Call Produce with Mixed Arguments") {
+    val call = spark.sql(s"CALL system.${HelpProcedure.NAME}('help', c1 => 1, '2')").queryExecution.logical.asInstanceOf[CallCommand]
+    assertResult(createImmutableList("system", HelpProcedure.NAME))(JavaConverters.seqAsJavaListConverter(call.name).asJava)
+
+    assertResult(3)(call.args.size)
+
+    checkArg(call, 0, "help", DataTypes.StringType)
+    checkArg(call, 1, "c1", 1, DataTypes.IntegerType)
+    checkArg(call, 2, "2", DataTypes.StringType)
   }
 
   test("Test Call Parse Error") {
@@ -82,29 +84,20 @@ class TestCallCommandParser extends HoodieSparkSqlTestBase {
   }
 
   test("Test Call Produce with semicolon") {
-    val call = parser.parsePlan(s"CALL system.${HelpProcedure.NAME}(c1 => 1, c2 => '2', c3 => true)").asInstanceOf[CallCommand]
+    val call = spark.sql(s"CALL system.${HelpProcedure.NAME}('help', c1 => 1, '2');").queryExecution.logical.asInstanceOf[CallCommand]
     assertResult(createImmutableList("system", HelpProcedure.NAME))(JavaConverters.seqAsJavaListConverter(call.name).asJava)
 
     assertResult(3)(call.args.size)
 
-    checkArg(call, 0, "c1", 1, DataTypes.IntegerType)
-    checkArg(call, 1, "c2", "2", DataTypes.StringType)
-    checkArg(call, 2, "c3", true, DataTypes.BooleanType)
-
-    val call2 = parser.parsePlan(s"CALL system.${HelpProcedure.NAME}(c1 => 1, c2 => '2', c3 => true);").asInstanceOf[CallCommand]
-    assertResult(createImmutableList("system", HelpProcedure.NAME))(JavaConverters.seqAsJavaListConverter(call2.name).asJava)
-
-    assertResult(3)(call2.args.size)
-
-    checkArg(call2, 0, "c1", 1, DataTypes.IntegerType)
-    checkArg(call2, 1, "c2", "2", DataTypes.StringType)
-    checkArg(call2, 2, "c3", true, DataTypes.BooleanType)
+    checkArg(call, 0, "help", DataTypes.StringType)
+    checkArg(call, 1, "c1", 1, DataTypes.IntegerType)
+    checkArg(call, 2, "2", DataTypes.StringType)
   }
 
   protected def checkParseExceptionContain(sql: String)(errorMsg: String): Unit = {
     var hasException = false
     try {
-      parser.parsePlan(sql)
+      spark.sql(sql)
     } catch {
       case e: Throwable if e.getMessage.contains(errorMsg) => hasException = true
       case f: Throwable => fail("Exception should contain: " + errorMsg + ", error message: " + f.getMessage, f)
