@@ -18,11 +18,12 @@
 
 package org.apache.hudi.sink.transform;
 
+import org.apache.hudi.adapter.AbstractRichFunctionAdapter;
 import org.apache.hudi.client.model.HoodieFlinkInternalRow;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.sink.bulk.RowDataKeyGen;
 
-import org.apache.flink.api.common.functions.RichMapFunction;
+import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
@@ -31,7 +32,7 @@ import org.apache.flink.table.types.logical.RowType;
  * Function that converts Flink {@link RowData} into {@link HoodieFlinkInternalRow}.
  */
 public class RowDataToHoodieFunction<I extends RowData, O extends HoodieFlinkInternalRow>
-    extends RichMapFunction<I, O> {
+    extends AbstractRichFunctionAdapter implements MapFunction<I, O> {
   RowDataKeyGen keyGen;
 
   public RowDataToHoodieFunction(RowType rowType, Configuration config) {

@@ -34,7 +34,6 @@ import org.apache.hudi.utils.TestUtils;
 import org.apache.avro.Schema;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.checkpoint.OperatorSubtaskState;
-import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperatorFactory;
 import org.apache.flink.streaming.runtime.tasks.StreamTaskActionExecutor;
 import org.apache.flink.streaming.runtime.tasks.mailbox.MailboxDefaultAction;
@@ -85,7 +84,7 @@ public class TestStreamReadOperator {
   public void before() throws Exception {
     final String basePath = tempFile.getAbsolutePath();
     conf = TestConfigurations.getDefaultConf(basePath);
-    conf.setString(TABLE_TYPE, TABLE_TYPE_MERGE_ON_READ);
+    conf.set(TABLE_TYPE, TABLE_TYPE_MERGE_ON_READ);
 
     StreamerUtil.initTableIfNotExists(conf);
   }
@@ -271,11 +270,9 @@ public class TestStreamReadOperator {
         .build();
 
     OneInputStreamOperatorFactory<MergeOnReadInputSplit, RowData> factory = StreamReadOperator.factory(inputFormat);
-    OneInputStreamOperatorTestHarness<MergeOnReadInputSplit, RowData> harness = new OneInputStreamOperatorTestHarness<>(
-        factory, 1, 1, 0);
-    harness.getStreamConfig().setTimeCharacteristic(TimeCharacteristic.ProcessingTime);
 
-    return harness;
+    return new OneInputStreamOperatorTestHarness<>(
+        factory, 1, 1, 0);
   }
 
   private SteppingMailboxProcessor createLocalMailbox(

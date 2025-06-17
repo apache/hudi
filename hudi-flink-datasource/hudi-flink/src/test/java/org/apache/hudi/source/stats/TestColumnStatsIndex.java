@@ -93,8 +93,8 @@ public class TestColumnStatsIndex {
   void testTransposeColumnStatsIndex() throws Exception {
     final String path = tempFile.getAbsolutePath();
     Configuration conf = TestConfigurations.getDefaultConf(path);
-    conf.setBoolean(FlinkOptions.METADATA_ENABLED, true);
-    conf.setBoolean(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true);
+    conf.set(FlinkOptions.METADATA_ENABLED, true);
+    conf.set(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true);
     conf.setString("hoodie.metadata.index.column.stats.enable", "true");
 
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()

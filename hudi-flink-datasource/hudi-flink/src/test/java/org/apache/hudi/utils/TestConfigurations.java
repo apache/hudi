@@ -27,7 +27,6 @@ import org.apache.hudi.utils.factory.ContinuousFileSourceFactory;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.api.DataTypes;
-import org.apache.flink.table.api.TableSchema;
 import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
 import org.apache.flink.table.types.DataType;
@@ -276,14 +275,14 @@ public class TestConfigurations {
         + ")";
   }
 
-  public static String getCollectSinkDDL(String tableName, TableSchema tableSchema) {
-    return getCollectSinkDDLWithExpectedNum(tableName, tableSchema, -1);
+  public static String getCollectSinkDDL(String tableName, TableSchemaWrapper schemaWrapper) {
+    return getCollectSinkDDLWithExpectedNum(tableName, schemaWrapper, -1);
   }
 
-  public static String getCollectSinkDDLWithExpectedNum(String tableName, TableSchema tableSchema, int expectRowNum) {
+  public static String getCollectSinkDDLWithExpectedNum(String tableName, TableSchemaWrapper schemaWrapper, int expectRowNum) {
     final StringBuilder builder = new StringBuilder("create table " + tableName + "(\n");
-    String[] fieldNames = tableSchema.getFieldNames();
-    DataType[] fieldTypes = tableSchema.getFieldDataTypes();
+    String[] fieldNames = schemaWrapper.getSchema().getFieldNames();
+    DataType[] fieldTypes = schemaWrapper.getSchema().getFieldDataTypes();
     for (int i = 0; i < fieldNames.length; i++) {
       builder.append("  `")
           .append(fieldNames[i])
@@ -325,21 +324,21 @@ public class TestConfigurations {
 
   public static Configuration getDefaultConf(String tablePath) {
     Configuration conf = new Configuration();
-    conf.setString(FlinkOptions.PATH, tablePath);
-    conf.setString(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH,
+    conf.set(FlinkOptions.PATH, tablePath);
+    conf.set(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH,
         Objects.requireNonNull(Thread.currentThread()
             .getContextClassLoader().getResource("test_read_schema.avsc")).toString());
-    conf.setString(FlinkOptions.TABLE_NAME, "TestHoodieTable");
-    conf.setString(FlinkOptions.PARTITION_PATH_FIELD, "partition");
+    conf.set(FlinkOptions.TABLE_NAME, "TestHoodieTable");
+    conf.set(FlinkOptions.PARTITION_PATH_FIELD, "partition");
     return conf;
   }
 
   public static Configuration getDefaultConf(String tablePath, DataType dataType) {
     Configuration conf = new Configuration();
-    conf.setString(FlinkOptions.PATH, tablePath);
-    conf.setString(FlinkOptions.SOURCE_AVRO_SCHEMA, AvroSchemaConverter.convertToSchema(dataType.getLogicalType()).toString());
-    conf.setString(FlinkOptions.TABLE_NAME, "TestHoodieTable");
-    conf.setString(FlinkOptions.PARTITION_PATH_FIELD, "partition");
+    conf.set(FlinkOptions.PATH, tablePath);
+    conf.set(FlinkOptions.SOURCE_AVRO_SCHEMA, AvroSchemaConverter.convertToSchema(dataType.getLogicalType()).toString());
+    conf.set(FlinkOptions.TABLE_NAME, "TestHoodieTable");
+    conf.set(FlinkOptions.PARTITION_PATH_FIELD, "partition");
     return conf;
   }
 

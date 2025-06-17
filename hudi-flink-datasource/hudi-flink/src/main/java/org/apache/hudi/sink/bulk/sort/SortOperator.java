@@ -23,9 +23,13 @@ import org.apache.hudi.adapter.Utils;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.metrics.Gauge;
 import org.apache.flink.runtime.memory.MemoryManager;
+import org.apache.flink.streaming.api.graph.StreamConfig;
 import org.apache.flink.streaming.api.operators.BoundedOneInput;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
+import org.apache.flink.streaming.api.operators.Output;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
+import org.apache.flink.streaming.runtime.tasks.ProcessingTimeService;
+import org.apache.flink.streaming.runtime.tasks.StreamTask;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.binary.BinaryRowData;
 import org.apache.flink.table.runtime.generated.GeneratedNormalizedKeyComputer;
@@ -105,6 +109,16 @@ public class SortOperator extends TableStreamOperator<RowData>
     getMetricGroup().gauge("memoryUsedSizeInBytes", (Gauge<Long>) sorter::getUsedMemoryInBytes);
     getMetricGroup().gauge("numSpillFiles", (Gauge<Long>) sorter::getNumSpillFiles);
     getMetricGroup().gauge("spillInBytes", (Gauge<Long>) sorter::getSpillInBytes);
+  }
+
+  @Override
+  public void setup(StreamTask<?, ?> containingTask, StreamConfig config, Output<StreamRecord<RowData>> output) {
+    super.setup(containingTask, config, output);
+  }
+
+  @Override
+  public void setProcessingTimeService(ProcessingTimeService processingTimeService) {
+    super.setProcessingTimeService(processingTimeService);
   }
 
   @Override

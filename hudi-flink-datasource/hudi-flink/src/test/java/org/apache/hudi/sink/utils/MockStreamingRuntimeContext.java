@@ -42,10 +42,7 @@ public class MockStreamingRuntimeContext extends StreamingRuntimeContext {
 
   private final boolean isCheckpointingEnabled;
 
-  private final int numParallelSubtasks;
-  private final int subtaskIndex;
-
-  private int attemptNumber;
+  private final MockTaskInfo taskInfo;
 
   public MockStreamingRuntimeContext(
       boolean isCheckpointingEnabled,
@@ -67,9 +64,11 @@ public class MockStreamingRuntimeContext extends StreamingRuntimeContext {
     super(new MockStreamOperator(), environment, new HashMap<>());
 
     this.isCheckpointingEnabled = isCheckpointingEnabled;
-    this.numParallelSubtasks = numParallelSubtasks;
-    this.subtaskIndex = subtaskIndex;
-    this.attemptNumber = 0;
+    this.taskInfo = new MockTaskInfo(numParallelSubtasks, subtaskIndex, 0);
+  }
+
+  public MockTaskInfo getTaskInfo() {
+    return taskInfo;
   }
 
   @Override
@@ -77,23 +76,8 @@ public class MockStreamingRuntimeContext extends StreamingRuntimeContext {
     return isCheckpointingEnabled;
   }
 
-  @Override
-  public int getIndexOfThisSubtask() {
-    return subtaskIndex;
-  }
-
-  @Override
-  public int getNumberOfParallelSubtasks() {
-    return numParallelSubtasks;
-  }
-
-  @Override
-  public int getAttemptNumber() {
-    return this.attemptNumber;
-  }
-
   public void setAttemptNumber(int attemptNumber) {
-    this.attemptNumber = attemptNumber;
+    this.taskInfo.setAttemptNumber(attemptNumber);
   }
 
   private static class MockStreamOperator extends AbstractStreamOperator<Integer> {
