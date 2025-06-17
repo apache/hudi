@@ -104,6 +104,8 @@ public class HoodieSparkFileGroupReaderBasedMergeHandle<T, I, K, O> extends Base
               row.getString(HoodieRecord.RECORD_KEY_META_FIELD_ORD),
               row.getString(HoodieRecord.PARTITION_PATH_META_FIELD_ORD));
           HoodieSparkRecord record = new HoodieSparkRecord(recordKey, row, sparkSchema, false);
+          record.setCurrentLocation(newRecordLocation);
+          record.setNewLocation(newRecordLocation);
           Option recordMetadata = record.getMetadata();
           if (!partitionPath.equals(record.getPartitionPath())) {
             HoodieUpsertException failureEx = new HoodieUpsertException("mismatched partition path, record partition: "

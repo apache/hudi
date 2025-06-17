@@ -27,7 +27,6 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.model.IOType;
@@ -130,7 +129,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
                            Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
                            TaskContextSupplier taskContextSupplier, HoodieBaseFile baseFile, Option<BaseKeyGenerator> keyGeneratorOpt) {
     super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier);
-    init(fileId, recordItr);
+    init(recordItr);
     init(fileId, partitionPath, baseFile);
     validateAndSetAndKeyGenProps(keyGeneratorOpt, config.populateMetaFields());
   }
@@ -263,14 +262,14 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
   /**
    * Load the new incoming records in a map and return partitionPath.
    */
-  protected void init(String fileId, Iterator<HoodieRecord<T>> newRecordsItr) {
+  protected void init(Iterator<HoodieRecord<T>> newRecordsItr) {
     initializeIncomingRecordsMap();
     while (newRecordsItr.hasNext()) {
       HoodieRecord<T> record = newRecordsItr.next();
       // update the new location of the record, so we know where to find it next
       if (needsUpdateLocation()) {
         record.unseal();
-        record.setNewLocation(new HoodieRecordLocation(instantTime, fileId));
+        record.setNewLocation(newRecordLocation);
         record.seal();
       }
       // NOTE: Once Records are added to map (spillable-map), DO NOT change it as they won't persist
