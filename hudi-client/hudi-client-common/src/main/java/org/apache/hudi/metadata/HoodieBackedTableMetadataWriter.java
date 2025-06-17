@@ -1138,6 +1138,28 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
 
   @Override
   public HoodieData<WriteStatus> streamWriteToMetadataPartitions(HoodieData<WriteStatus> writeStatus, String instantTime) {
+    Pair<List<MetadataPartitionType>, Set<String>> streamingMDTPartitionsPair = getStreamingMetadataPartitionsToUpdate();
+    List<MetadataPartitionType> mdtPartitionsToTag = streamingMDTPartitionsPair.getLeft();
+    Set<String> mdtPartitionPathsToTag = streamingMDTPartitionsPair.getRight();
+
+    if (mdtPartitionPathsToTag.isEmpty()) {
+      return engineContext.emptyHoodieData();
+    }
+
+    HoodieData<HoodieRecord> untaggedRecords = writeStatus.flatMap(
+        new MetadataIndexGenerator.WriteStatusBasedMetadataIndexMapper(mdtPartitionsToTag, dataWriteConfig));
+
+    // tag records w/ location
+    Pair<List<HoodieFileGroupId>, HoodieData<HoodieRecord>> hoodieFileGroupsToUpdateAndTaggedMdtRecords = tagRecordsWithLocationForStreamingWrites(untaggedRecords,
+        mdtPartitionPathsToTag);
+
+    // write partial writes to MDT table (for those partitions where streaming writes are enabled)
+    HoodieData<WriteStatus> writeStatusCollection = convertEngineSpecificDataToHoodieData(streamWriteToMetadataTable(hoodieFileGroupsToUpdateAndTaggedMdtRecords, instantTime));
+    // dag not yet de-referenced. do not invoke any action on writeStatusCollection yet.
+    return writeStatusCollection;
+  }
+
+  private Pair<List<MetadataPartitionType>, Set<String>> getStreamingMetadataPartitionsToUpdate() {
     List<MetadataPartitionType> mdtPartitionsToTag = new ArrayList<>(enabledPartitionTypes);
     mdtPartitionsToTag.remove(FILES);
     mdtPartitionsToTag.remove(SECONDARY_INDEX); // mdt partition path will have additional suffixes which will be added below.
@@ -1155,22 +1177,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
         mdtPartitionsToTag.add(SECONDARY_INDEX);
       }
     }
-
-    if (mdtPartitionPathsToTag.isEmpty()) {
-      return engineContext.emptyHoodieData();
-    }
-
-    HoodieData<HoodieRecord> untaggedRecords = writeStatus.flatMap(
-        new MetadataIndexGenerator.WriteStatusBasedMetadataIndexMapper(mdtPartitionsToTag, dataWriteConfig));
-
-    // tag records w/ location
-    Pair<List<HoodieFileGroupId>, HoodieData<HoodieRecord>> hoodieFileGroupsToUpdateAndTaggedMdtRecords = tagRecordsWithLocationForStreamingWrites(untaggedRecords,
-        mdtPartitionPathsToTag);
-
-    // write partial writes to MDT table (for those partitions where streaming writes are enabled)
-    HoodieData<WriteStatus> writeStatusCollection = convertEngineSpecificDataToHoodieData(streamWriteToMetadataTable(hoodieFileGroupsToUpdateAndTaggedMdtRecords, instantTime));
-    // dag not yet de-referenced. do not invoke any action on writeStatusCollection yet.
-    return writeStatusCollection;
+    return Pair.of(mdtPartitionsToTag, mdtPartitionPathsToTag);
   }
 
   /**
@@ -1221,6 +1228,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   private Set<String> getNonStreamingMetadataPartitionsToUpdate() {
     Set<String> toReturn = enabledPartitionTypes.stream().map(MetadataPartitionType::getPartitionPath).collect(Collectors.toSet());
     STREAMING_WRITES_SUPPORTED_PARTITIONS.forEach(metadataPartitionType -> toReturn.remove(metadataPartitionType.getPartitionPath()));
+    STREAMING_WRITES_SUPPORTED_PARTITION_PREFIXES.forEach(metadataPartitionType -> toReturn.remove(metadataPartitionType.getPartitionPath()));
     return toReturn;
   }
 
@@ -1307,8 +1315,12 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
         HoodieData<HoodieRecord> additionalUpdates = getRecordIndexAdditionalUpserts(partitionToRecordMap.get(RECORD_INDEX.getPartitionPath()), commitMetadata);
         partitionToRecordMap.put(RECORD_INDEX.getPartitionPath(), partitionToRecordMap.get(RECORD_INDEX.getPartitionPath()).union(additionalUpdates));
       }
-      updateExpressionIndexIfPresent(commitMetadata, instantTime, partitionToRecordMap);
-      updateSecondaryIndexIfPresent(commitMetadata, partitionToRecordMap, instantTime);
+      if (partitionsToUpdate.contains(EXPRESSION_INDEX.getPartitionPath())) {
+        updateExpressionIndexIfPresent(commitMetadata, instantTime, partitionToRecordMap);
+      }
+      if (partitionsToUpdate.contains(SECONDARY_INDEX.getPartitionPath())) {
+        updateSecondaryIndexIfPresent(commitMetadata, partitionToRecordMap, instantTime);
+      }
       return partitionToRecordMap;
     }
   }
