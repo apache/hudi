@@ -135,10 +135,10 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
   }
 
   /**
-   * Returns true if streaming is enabled and secondary index is configured for the table.
+   * Returns true if secondary index streaming is disabled for the table.
    */
   boolean isSecondaryIndexStreamingDisabled() {
-    return !config.isSecondaryIndexEnabled() || secondaryIndexDefns.isEmpty() || !config.isMetadataStreamingWritesEnabled(hoodieTable.getMetaClient().getTableConfig().getTableVersion());
+    return !config.isSecondaryIndexEnabled() || secondaryIndexDefns.isEmpty() || !isStreamingWriteToMetadataEnabled;
   }
 
   /**

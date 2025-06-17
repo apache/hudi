@@ -560,11 +560,11 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       }
 
       // generate Secondary index stats if streaming is enabled.
-      if (!isSecondaryIndexStreamingDisabled() && config.populateMetaFields()) {
+      if (!isSecondaryIndexStreamingDisabled()) {
         // Adds secondary index only for the last log file write status. We do not need to add secondary index stats
         // for every log file written as part of the append handle write. The last write status would update the
         // secondary index considering all the log files.
-        trackMetadataIndexStatsForStreamingMetadataWrites(fileSliceOpt.or(getFileSlice()), statuses.stream().map(status -> status.getStat().getPath()).collect(Collectors.toList()),
+        trackMetadataIndexStatsForStreamingMetadataWrites(fileSliceOpt.or(this::getFileSlice), statuses.stream().map(status -> status.getStat().getPath()).collect(Collectors.toList()),
             statuses.get(statuses.size() - 1));
       }
 
