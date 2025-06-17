@@ -18,6 +18,8 @@
 
 package org.apache.hudi.source;
 
+import org.apache.hudi.adapter.RichSourceFunctionAdapter;
+import org.apache.hudi.adapter.SourceFunctionAdapter;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -38,8 +40,6 @@ import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.runtime.state.FunctionSnapshotContext;
 import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
-import org.apache.flink.streaming.api.functions.source.RichSourceFunction;
-import org.apache.flink.streaming.api.functions.source.SourceFunction;
 import org.apache.flink.table.types.logical.RowType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -69,7 +69,7 @@ import java.util.concurrent.TimeUnit;
  * among the downstream tasks.
  */
 public class StreamReadMonitoringFunction
-    extends RichSourceFunction<MergeOnReadInputSplit> implements CheckpointedFunction {
+    extends RichSourceFunctionAdapter<MergeOnReadInputSplit> implements CheckpointedFunction {
   private static final Logger LOG = LoggerFactory.getLogger(StreamReadMonitoringFunction.class);
 
   private static final long serialVersionUID = 1L;
@@ -115,17 +115,17 @@ public class StreamReadMonitoringFunction
       @Nullable PartitionPruners.PartitionPruner partitionPruner) {
     this.conf = conf;
     this.path = path;
-    this.interval = conf.getInteger(FlinkOptions.READ_STREAMING_CHECK_INTERVAL);
-    this.cdcEnabled = conf.getBoolean(FlinkOptions.CDC_ENABLED);
+    this.interval = conf.get(FlinkOptions.READ_STREAMING_CHECK_INTERVAL);
+    this.cdcEnabled = conf.get(FlinkOptions.CDC_ENABLED);
     this.incrementalInputSplits = IncrementalInputSplits.builder()
         .conf(conf)
         .path(path)
         .rowType(rowType)
         .maxCompactionMemoryInBytes(maxCompactionMemoryInBytes)
         .partitionPruner(partitionPruner)
-        .skipCompaction(conf.getBoolean(FlinkOptions.READ_STREAMING_SKIP_COMPACT))
-        .skipClustering(conf.getBoolean(FlinkOptions.READ_STREAMING_SKIP_CLUSTERING))
-        .skipInsertOverwrite(conf.getBoolean(FlinkOptions.READ_STREAMING_SKIP_INSERT_OVERWRITE))
+        .skipCompaction(conf.get(FlinkOptions.READ_STREAMING_SKIP_COMPACT))
+        .skipClustering(conf.get(FlinkOptions.READ_STREAMING_SKIP_CLUSTERING))
+        .skipInsertOverwrite(conf.get(FlinkOptions.READ_STREAMING_SKIP_INSERT_OVERWRITE))
         .build();
   }
 
@@ -146,7 +146,7 @@ public class StreamReadMonitoringFunction
 
     if (context.isRestored()) {
       LOG.info("Restoring state for the class {} with table {} and base path {}.",
-          getClass().getSimpleName(), conf.getString(FlinkOptions.TABLE_NAME), path);
+          getClass().getSimpleName(), conf.get(FlinkOptions.TABLE_NAME), path);
 
       List<String> retrievedStates = new ArrayList<>();
       for (String entry : this.instantState.get()) {
@@ -182,7 +182,7 @@ public class StreamReadMonitoringFunction
   }
 
   @Override
-  public void run(SourceFunction.SourceContext<MergeOnReadInputSplit> context) throws Exception {
+  public void run(SourceFunctionAdapter.SourceContext<MergeOnReadInputSplit> context) throws Exception {
     checkpointLock = context.getCheckpointLock();
     while (isRunning) {
       synchronized (checkpointLock) {
@@ -207,7 +207,7 @@ public class StreamReadMonitoringFunction
   }
 
   @VisibleForTesting
-  public void monitorDirAndForwardSplits(SourceContext<MergeOnReadInputSplit> context) {
+  public void monitorDirAndForwardSplits(SourceFunctionAdapter.SourceContext<MergeOnReadInputSplit> context) {
     HoodieTableMetaClient metaClient = getOrCreateMetaClient();
     if (metaClient == null) {
       // table does not exist
@@ -234,7 +234,7 @@ public class StreamReadMonitoringFunction
             + "---------- table: {}\n"
             + "---------- consumed to instant: {}\n"
             + "------------------------------------------------------------",
-        conf.getString(FlinkOptions.TABLE_NAME), this.issuedInstant);
+        conf.get(FlinkOptions.TABLE_NAME), this.issuedInstant);
     if (result.isEmpty()) {
       LOG.warn("No new files to read for current run.");
     }

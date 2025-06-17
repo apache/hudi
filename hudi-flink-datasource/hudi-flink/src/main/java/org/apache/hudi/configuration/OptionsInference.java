@@ -42,7 +42,7 @@ public class OptionsInference {
    */
   public static void setupSourceTasks(Configuration conf, int envTasks) {
     if (!conf.contains(FlinkOptions.READ_TASKS)) {
-      conf.setInteger(FlinkOptions.READ_TASKS, envTasks);
+      conf.set(FlinkOptions.READ_TASKS, envTasks);
     }
   }
 
@@ -55,20 +55,20 @@ public class OptionsInference {
   public static void setupSinkTasks(Configuration conf, int envTasks) {
     // write task number, default same as execution env tasks
     if (!conf.contains(FlinkOptions.WRITE_TASKS)) {
-      conf.setInteger(FlinkOptions.WRITE_TASKS, envTasks);
+      conf.set(FlinkOptions.WRITE_TASKS, envTasks);
     }
-    int writeTasks = conf.getInteger(FlinkOptions.WRITE_TASKS);
+    int writeTasks = conf.get(FlinkOptions.WRITE_TASKS);
     // bucket assign tasks, default same as write tasks
     if (!conf.contains(FlinkOptions.BUCKET_ASSIGN_TASKS)) {
-      conf.setInteger(FlinkOptions.BUCKET_ASSIGN_TASKS, writeTasks);
+      conf.set(FlinkOptions.BUCKET_ASSIGN_TASKS, writeTasks);
     }
     // compaction tasks, default same as write tasks
     if (!conf.contains(FlinkOptions.COMPACTION_TASKS)) {
-      conf.setInteger(FlinkOptions.COMPACTION_TASKS, writeTasks);
+      conf.set(FlinkOptions.COMPACTION_TASKS, writeTasks);
     }
     // clustering tasks, default same as write tasks
     if (!conf.contains(FlinkOptions.CLUSTERING_TASKS)) {
-      conf.setInteger(FlinkOptions.CLUSTERING_TASKS, writeTasks);
+      conf.set(FlinkOptions.CLUSTERING_TASKS, writeTasks);
     }
   }
 
@@ -89,7 +89,7 @@ public class OptionsInference {
       if (!conf.contains(FlinkOptions.WRITE_CLIENT_ID)) {
         try (ClientIds clientIds = ClientIds.builder().conf(conf).build()) {
           String clientId = clientIds.nextId(conf);
-          conf.setString(FlinkOptions.WRITE_CLIENT_ID, clientId);
+          conf.set(FlinkOptions.WRITE_CLIENT_ID, clientId);
         }
       }
     }

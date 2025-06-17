@@ -26,6 +26,7 @@ import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.index.bucket.BucketIdentifier;
 import org.apache.hudi.index.bucket.partition.NumBucketsFunction;
 import org.apache.hudi.sink.StreamWriteFunction;
+import org.apache.hudi.utils.RuntimeContextUtils;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
@@ -100,8 +101,8 @@ public class BucketStreamWriteFunction extends StreamWriteFunction {
     super.open(parameters);
     this.indexKeyFields = OptionsResolver.getIndexKeyField(config);
     this.isNonBlockingConcurrencyControl = OptionsResolver.isNonBlockingConcurrencyControl(config);
-    this.taskID = getRuntimeContext().getIndexOfThisSubtask();
-    this.parallelism = getRuntimeContext().getNumberOfParallelSubtasks();
+    this.taskID = RuntimeContextUtils.getIndexOfThisSubtask(getRuntimeContext());
+    this.parallelism = RuntimeContextUtils.getNumberOfParallelSubtasks(getRuntimeContext());
     this.bucketIndex = new HashMap<>();
     this.incBucketIndex = new HashSet<>();
     this.partitionIndexFunc = BucketIndexUtil.getPartitionIndexFunc(parallelism);

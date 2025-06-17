@@ -339,6 +339,17 @@ test_cli_bundle() {
 # Execute tests
 ############################
 
+# run flink bundle test only for flink2.0 case, since there is problem for java 11 and spark3.5 bundle (HUDI-8608).
+if [[ "${FLINK_HOME}" == *"2.0"* ]]; then
+    echo "::warning::validate.sh validating flink 2.0 bundle"
+    test_flink_bundle
+    if [ "$?" -ne 0 ]; then
+        exit 1
+    fi
+    echo "::warning::validate.sh done validating flink 2.0 bundle"
+    exit 0
+fi
+
 echo "::warning::validate.sh validating spark & hadoop-mr bundle"
 test_spark_hadoop_mr_bundles
 if [ "$?" -ne 0 ]; then

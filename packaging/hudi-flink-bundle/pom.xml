@@ -81,6 +81,7 @@
                   <include>org.apache.hudi:hudi-flink-client</include>
                   <include>org.apache.hudi:hudi-flink</include>
                   <include>org.apache.hudi:${hudi.flink.module}</include>
+                  <include>org.apache.hudi:${hudi.flink.common.module}</include>
                   <include>org.apache.hudi:hudi-hive-sync</include>
                   <include>org.apache.hudi:hudi-sync-common</include>
                   <include>org.apache.hudi:hudi-hadoop-mr</include>

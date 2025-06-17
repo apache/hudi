@@ -18,7 +18,6 @@
 
 package org.apache.hudi.client.common;
 
-import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 
 import org.junit.jupiter.api.Assertions;
@@ -39,7 +38,7 @@ public class TestHoodieFlinkEngineContext {
 
   @BeforeEach
   public void init() {
-    context = new HoodieFlinkEngineContext(new FlinkTaskContextSupplier(null));
+    context = HoodieFlinkEngineContext.DEFAULT;
   }
 
   @Test

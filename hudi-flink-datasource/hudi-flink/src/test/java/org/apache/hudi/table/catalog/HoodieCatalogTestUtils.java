@@ -52,7 +52,7 @@ public class HoodieCatalogTestUtils {
   public static HoodieHiveCatalog createHiveCatalog(String name, boolean external) {
     Configuration options = new Configuration();
     options.setString("hadoop.dfs.client.block.write.replace-datanode-on-failure.enable", "true");
-    options.setBoolean(CatalogOptions.TABLE_EXTERNAL, external);
+    options.set(CatalogOptions.TABLE_EXTERNAL, external);
     return new HoodieHiveCatalog(
         name,
         options,

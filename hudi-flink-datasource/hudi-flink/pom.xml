@@ -89,6 +89,14 @@
             <artifactId>slf4j-api</artifactId>
         </dependency>
 
+        <dependency>
+            <groupId>org.apache.hudi</groupId>
+            <artifactId>${hudi.flink.common.module}</artifactId>
+            <version>${project.version}</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
+
         <!-- Hoodie -->
         <dependency>
             <groupId>org.apache.hudi</groupId>
