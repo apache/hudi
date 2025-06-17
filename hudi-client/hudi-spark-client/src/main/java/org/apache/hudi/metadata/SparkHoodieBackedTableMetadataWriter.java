@@ -165,9 +165,16 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   public JavaRDD<WriteStatus> streamWriteToMetadataTable(Pair<List<HoodieFileGroupId>, HoodieData<HoodieRecord>> fileGroupIdToTaggedRecords, String instantTime) {
     JavaRDD<HoodieRecord> mdtRecords = HoodieJavaRDD.getJavaRDD(fileGroupIdToTaggedRecords.getValue());
     engineContext.setJobStatus(this.getClass().getSimpleName(), String.format("Upserting with instant %s into metadata table %s", instantTime, metadataWriteConfig.getTableName()));
-    JavaRDD<WriteStatus> metadataWriteStatusesSoFar = getSparkWriteClient(Option.empty()).upsertPreppedRecords(mdtRecords, instantTime, Option.of(
+    JavaRDD<WriteStatus> partialMetadataWriteStatuses = getSparkWriteClient(Option.empty()).upsertPreppedRecords(mdtRecords, instantTime, Option.of(
         fileGroupIdToTaggedRecords.getKey()));
-    return metadataWriteStatusesSoFar;
+    return partialMetadataWriteStatuses;
+  }
+
+  @Override
+  public JavaRDD<WriteStatus> secondaryWriteToMetadataTablePartitions(JavaRDD<HoodieRecord> preppedRecords, String instantTime) {
+    engineContext.setJobStatus(this.getClass().getSimpleName(), String.format("Upserting at %s into metadata table %s", instantTime, metadataWriteConfig.getTableName()));
+    JavaRDD<WriteStatus> partialMetadataWriteStatuses = getWriteClient().upsertPreppedRecords(preppedRecords, instantTime);
+    return partialMetadataWriteStatuses;
   }
 
   @Override

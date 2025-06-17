@@ -170,9 +170,9 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
 
   // Is the MDT bootstrapped and ready to be read from
   boolean initialized = false;
-  boolean streamingWritesEnabled = false;
   private HoodieTableFileSystemView metadataView;
-  private Option<MetadataIndexGenerator> metadataIndexGenerator;
+  private final boolean streamingWritesEnabled;
+  private final Option<MetadataIndexGenerator> metadataIndexGenerator;
 
   protected HoodieBackedTableMetadataWriter(StorageConfiguration<?> storageConf,
                                             HoodieWriteConfig writeConfig,
@@ -190,15 +190,14 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
    * @param failedWritesCleaningPolicy Cleaning policy on failed writes
    * @param engineContext              Engine context
    * @param inflightInstantTimestamp   Timestamp of any instant in progress
-   * @param streamingWrites            For streaming writes, a long-living write client is needed instead of been closed for each write.
-   *                                   This flag will help to decide the lifecycle of write client.
+   * @param streamingWritesEnabled     True when streaming writes to metadata table is enabled
    */
   protected HoodieBackedTableMetadataWriter(StorageConfiguration<?> storageConf,
                                             HoodieWriteConfig writeConfig,
                                             HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                             HoodieEngineContext engineContext,
                                             Option<String> inflightInstantTimestamp,
-                                            boolean streamingWrites) {
+                                            boolean streamingWritesEnabled) {
     this.dataWriteConfig = writeConfig;
     this.engineContext = engineContext;
     this.storageConf = storageConf;
@@ -217,9 +216,8 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       }
     }
     ValidationUtils.checkArgument(!initialized || this.metadata != null, "MDT Reader should have been opened post initialization");
-
-    this.metadataIndexGenerator = streamingWrites ? Option.of(initializeMetadataIndexGenerator()) : Option.empty();
-    this.streamingWritesEnabled = streamingWrites;
+    this.streamingWritesEnabled = streamingWritesEnabled;
+    this.metadataIndexGenerator = streamingWritesEnabled ? Option.of(initializeMetadataIndexGenerator()) : Option.empty();
   }
 
   List<MetadataPartitionType> getEnabledPartitions(HoodieMetadataConfig metadataConfig, HoodieTableMetaClient metaClient) {
@@ -1124,9 +1122,10 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
 
     if (!metadataMetaClient.getActiveTimeline().getCommitsTimeline().containsInstant(instantTime)) {
       // if this is a new commit being applied to metadata for the first time
-      LOG.info("New commit at {} being applied to MDT.", instantTime);
+      LOG.info("New commit at {} being applied to metadata table", instantTime);
     } else {
-      throw new HoodieMetadataException("Starting the same commit in Metadata table more than once w/o rolling back : " + instantTime);
+      LOG.error("Rolling back already inflight commit in Metadata table {} ", instantTime);
+      getWriteClient().rollback(instantTime);
     }
 
     // this is where we might instantiate the write client to metadata table for the first time.
@@ -1165,29 +1164,39 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     throw new UnsupportedOperationException("Not yet implemented");
   }
 
+  /**
+   * Secondary writes to the metadata table.
+   *
+   * <p>This is expected to be invoked only when streaming writes to metadata table is enabled.
+   * When enabled, first call has to be made to {@link #streamWriteToMetadataTable(Pair, String)} and second call will be made to this method
+   * for non-streaming metadata partitions.
+   *
+   * @param preppedRecords Prepped records that needs to be ingested.
+   * @param instantTime    Instant time of interest.
+   * @return Engine specific HoodieData of {@link WriteStatus} for the writes to metadata table.
+   */
+  public O secondaryWriteToMetadataTablePartitions(I preppedRecords, String instantTime) {
+    throw new UnsupportedOperationException("Not yet implemented");
+  }
+
   @Override
   public void completeStreamingCommit(String instantTime, HoodieEngineContext context, List<HoodieWriteStat> partialWriteStats, HoodieCommitMetadata metadata) {
     List<HoodieWriteStat> allWriteStats = new ArrayList<>(partialWriteStats);
     // update metadata for left over partitions which does not have streaming writes support.
-    allWriteStats.addAll(prepareAndWriteToNonStreamingPartitions(context, metadata, instantTime).map(WriteStatus::getStat).collectAsList());
+    allWriteStats.addAll(prepareAndWriteToNonStreamingPartitions(metadata, instantTime).map(WriteStatus::getStat).collectAsList());
     getWriteClient().commitStats(instantTime, allWriteStats, Option.empty(), HoodieTimeline.DELTA_COMMIT_ACTION,
         Collections.emptyMap(), Option.empty());
   }
 
-  private HoodieData<WriteStatus> prepareAndWriteToNonStreamingPartitions(HoodieEngineContext context, HoodieCommitMetadata commitMetadata, String instantTime) {
+  private HoodieData<WriteStatus> prepareAndWriteToNonStreamingPartitions(HoodieCommitMetadata commitMetadata, String instantTime) {
     Set<String> partitionsToUpdate = getNonStreamingMetadataPartitionsToUpdate();
     Map<String, HoodieData<HoodieRecord>> mdtPartitionsAndUnTaggedRecords = new BatchMetadataConversionFunction(instantTime, commitMetadata, partitionsToUpdate)
         .convertMetadata();
 
-    HoodieData<HoodieRecord> untaggedMdtRecords = context.emptyHoodieData();
-    for (Map.Entry<String, HoodieData<HoodieRecord>> entry: mdtPartitionsAndUnTaggedRecords.entrySet()) {
-      untaggedMdtRecords = untaggedMdtRecords.union(entry.getValue());
-    }
-
     // write to mdt table for non-streaming mdt partitions
-    Pair<List<HoodieFileGroupId>, HoodieData<HoodieRecord>> taggedRecords = tagRecordsWithLocationForStreamingWrites(untaggedMdtRecords, partitionsToUpdate);
-    HoodieData<WriteStatus> writeStatusHoodieData = convertEngineSpecificDataToHoodieData(streamWriteToMetadataTable(taggedRecords, instantTime));
-    return writeStatusHoodieData;
+    Pair<HoodieData<HoodieRecord>, List<HoodieFileGroupId>> taggedRecords = tagRecordsWithLocation(mdtPartitionsAndUnTaggedRecords, false);
+    I preppedRecords = convertHoodieDataToEngineSpecificData(taggedRecords.getKey());
+    return convertEngineSpecificDataToHoodieData(secondaryWriteToMetadataTablePartitions(preppedRecords, instantTime));
   }
 
   private Set<String> getNonStreamingMetadataPartitionsToUpdate() {
@@ -1233,7 +1242,6 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       mdtRecord.seal();
       return mdtRecord;
     });
-
     return Pair.of(updatedFileGroupIds, taggedRecords);
   }
 
@@ -1462,7 +1470,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       // The deltacommit that will be rolled back
       HoodieInstant deltaCommitInstant = metadataMetaClient.createNewInstant(HoodieInstant.State.COMPLETED,
           HoodieTimeline.DELTA_COMMIT_ACTION, commitToRollbackInstantTime);
-      if (metadataMetaClient.getActiveTimeline().getDeltaCommitTimeline().containsInstant(deltaCommitInstant)) {
+      if (metadataMetaClient.getActiveTimeline().getDeltaCommitTimeline().containsInstant(deltaCommitInstant.requestedTime())) {
         validateRollback(commitToRollbackInstantTime);
         LOG.info("Rolling back MDT deltacommit {}", commitToRollbackInstantTime);
         if (!getWriteClient().rollback(commitToRollbackInstantTime, instantTime)) {

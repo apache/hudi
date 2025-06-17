@@ -320,4 +320,9 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
   public TransactionManager getTransactionManager() {
     return txnManager;
   }
+
+  protected boolean isStreamingWriteToMetadataEnabled(HoodieTable table) {
+    return config.isMetadataTableEnabled()
+        && config.isMetadataStreamingWritesEnabled(table.getMetaClient().getTableConfig().getTableVersion());
+  }
 }
