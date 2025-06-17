@@ -21,7 +21,6 @@ package org.apache.hudi.index.bloom;
 import org.apache.hudi.client.utils.LazyIterableIterator;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.model.HoodieFileGroupId;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -56,12 +55,13 @@ public class HoodieBloomIndexCheckFunction<I>
   public HoodieBloomIndexCheckFunction(HoodieTable hoodieTable,
                                        HoodieWriteConfig config,
                                        SerializableFunction<I, HoodieFileGroupId> fileGroupIdExtractor,
-                                       SerializableFunction<I, String> recordKeyExtractor) {
+                                       SerializableFunction<I, String> recordKeyExtractor,
+                                       Option<String> lastInstant) {
     this.hoodieTable = hoodieTable;
     this.config = config;
     this.fileGroupIdExtractor = fileGroupIdExtractor;
     this.recordKeyExtractor = recordKeyExtractor;
-    this.lastInstant = hoodieTable.getMetaClient().getCommitsTimeline().filterCompletedInstants().lastInstant().map(HoodieInstant::requestedTime);
+    this.lastInstant = lastInstant;
   }
 
   @Override
