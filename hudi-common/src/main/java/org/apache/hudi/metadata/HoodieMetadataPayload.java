@@ -105,6 +105,17 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartitionStats
 public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadataPayload> {
   private static final Schema HOODIE_METADATA_SCHEMA = AvroSchemaCache.intern(HoodieMetadataRecord.getClassSchema());
   /**
+   * Field offsets when metadata fields are present
+   */
+  private static final int KEY_FIELD_OFFSET = HoodieRecord.HOODIE_META_COLUMNS.size();
+  private static final int TYPE_FIELD_OFFSET = KEY_FIELD_OFFSET + 1;
+  private static final int FILESYSTEM_METADATA_FIELD_OFFSET = TYPE_FIELD_OFFSET + 1;
+  private static final int BLOOM_FILTER_METADATA_FIELD_OFFSET = FILESYSTEM_METADATA_FIELD_OFFSET + 1;
+  private static final int COLUMN_STATS_METADATA_FIELD_OFFSET = BLOOM_FILTER_METADATA_FIELD_OFFSET + 1;
+  private static final int RECORD_INDEX_METADATA_FIELD_OFFSET = COLUMN_STATS_METADATA_FIELD_OFFSET + 1;
+  private static final int SECONDARY_INDEX_METADATA_FIELD_OFFSET = RECORD_INDEX_METADATA_FIELD_OFFSET + 1;
+
+  /**
    * HoodieMetadata schema field ids
    */
   public static final String KEY_FIELD_NAME = HoodieAvroHFileReaderImplBase.KEY_FIELD_NAME;
@@ -393,23 +404,22 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     } else {
       // Otherwise, the assumption is that the schema required contains the metadata fields so we construct a new GenericRecord with these fields
       GenericData.Record record = new GenericData.Record(schema);
-      int offset = HoodieRecord.HOODIE_META_COLUMNS.size();
-      record.put(offset, key);
-      record.put(offset + 1, type);
+      record.put(KEY_FIELD_OFFSET, key);
+      record.put(TYPE_FIELD_OFFSET, type);
       if (filesystemMetadata != null) {
-        record.put(offset + 2, filesystemMetadata);
+        record.put(FILESYSTEM_METADATA_FIELD_OFFSET, filesystemMetadata);
       }
       if (bloomFilterMetadata != null) {
-        record.put(offset + 3, bloomFilterMetadata);
+        record.put(BLOOM_FILTER_METADATA_FIELD_OFFSET, bloomFilterMetadata);
       }
       if (columnStatMetadata != null) {
-        record.put(offset + 4, columnStatMetadata);
+        record.put(COLUMN_STATS_METADATA_FIELD_OFFSET, columnStatMetadata);
       }
       if (recordIndexMetadata != null) {
-        record.put(offset + 5, recordIndexMetadata);
+        record.put(RECORD_INDEX_METADATA_FIELD_OFFSET, recordIndexMetadata);
       }
       if (secondaryIndexMetadata != null) {
-        record.put(offset + 6, secondaryIndexMetadata);
+        record.put(SECONDARY_INDEX_METADATA_FIELD_OFFSET, secondaryIndexMetadata);
       }
       return Option.of(record);
     }
