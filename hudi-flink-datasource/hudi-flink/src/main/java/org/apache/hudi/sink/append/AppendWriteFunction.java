@@ -92,7 +92,7 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
   }
 
   @Override
-  public void processElement(I value, Context ctx, Collector<Object> out) throws Exception {
+  public void processElement(I value, Context ctx, Collector<RowData> out) throws Exception {
     if (this.writerHelper == null) {
       initWriterHelper();
     }

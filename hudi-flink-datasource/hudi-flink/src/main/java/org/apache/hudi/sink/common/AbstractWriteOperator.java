@@ -25,6 +25,7 @@ import org.apache.flink.runtime.operators.coordination.OperatorEventGateway;
 import org.apache.flink.runtime.operators.coordination.OperatorEventHandler;
 import org.apache.flink.streaming.api.operators.BoundedOneInput;
 import org.apache.flink.streaming.api.operators.ProcessOperator;
+import org.apache.flink.table.data.RowData;
 
 /**
  * Base class for write operator.
@@ -32,7 +33,7 @@ import org.apache.flink.streaming.api.operators.ProcessOperator;
  * @param <I> the input type
  */
 public abstract class AbstractWriteOperator<I>
-    extends ProcessOperator<I, Object>
+    extends ProcessOperator<I, RowData>
     implements OperatorEventHandler, BoundedOneInput {
   private final AbstractWriteFunction<I> function;
 

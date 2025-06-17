@@ -280,7 +280,7 @@ public class ITTestDataStreamWrite extends TestLogger {
 
     OptionsInference.setupSinkTasks(conf, execEnv.getParallelism());
     DataStream<HoodieFlinkInternalRow> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, dataStream);
-    DataStream<Object> pipeline = Pipelines.hoodieStreamWrite(conf, rowType, hoodieRecordDataStream);
+    DataStream<RowData> pipeline = Pipelines.hoodieStreamWrite(conf, rowType, hoodieRecordDataStream);
     execEnv.addOperator(pipeline.getTransformation());
 
     if (isMor) {
@@ -321,7 +321,7 @@ public class ITTestDataStreamWrite extends TestLogger {
         .setParallelism(4);
 
     OptionsInference.setupSinkTasks(conf, execEnv.getParallelism());
-    DataStream<Object> pipeline = Pipelines.append(conf, rowType, dataStream);
+    DataStream<RowData> pipeline = Pipelines.append(conf, rowType, dataStream);
     execEnv.addOperator(pipeline.getTransformation());
 
     Pipelines.cluster(conf, rowType, pipeline);
