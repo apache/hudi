@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.table;
 
-import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.HoodieSchemaNotFoundException;
 import org.apache.hudi.common.fs.FSUtils;
@@ -217,7 +216,7 @@ public class TableSchemaResolver {
       } else {
         schema = HoodieAvroUtils.removeMetadataFields(schema);
       }
-      return Option.of(AvroSchemaCache.intern(schema));
+      return Option.of(schema);
     } else {
       return Option.empty();
     }
@@ -238,7 +237,7 @@ public class TableSchemaResolver {
       } else {
         schema = HoodieAvroUtils.removeMetadataFields(schema);
       }
-      return Option.of(AvroSchemaCache.intern(schema));
+      return Option.of(schema);
     } catch (Exception e) {
       throw new HoodieException("Failed to read schema from commit metadata", e);
     }
