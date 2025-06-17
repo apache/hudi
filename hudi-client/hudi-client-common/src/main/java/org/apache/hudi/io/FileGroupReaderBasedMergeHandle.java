@@ -167,6 +167,8 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieMergeHand
       try (ClosableIterator<HoodieRecord<T>> recordIterator = fileGroupReader.getClosableHoodieRecordIterator()) {
         while (recordIterator.hasNext()) {
           HoodieRecord<T> record = recordIterator.next();
+          record.setCurrentLocation(newRecordLocation);
+          record.setNewLocation(newRecordLocation);
           Option<Map<String, String>> recordMetadata = record.getMetadata();
           if (!partitionPath.equals(record.getPartitionPath())) {
             HoodieUpsertException failureEx = new HoodieUpsertException("mismatched partition path, record partition: "
