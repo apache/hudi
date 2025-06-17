@@ -148,15 +148,12 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieMergeHand
 
   /**
    * Reads the file slice of a compaction operation using a file group reader,
-   * by getting an iterator of the records; then writes the records to a new base file
-   * using parquet writer.
+   * by getting an iterator of the records; then writes the records to a new base file.
    */
   public void write() {
     boolean usePosition = config.getBooleanOrDefault(MERGE_USE_RECORD_POSITIONS);
     Option<InternalSchema> internalSchemaOption = SerDeHelper.fromJson(config.getInternalSchema());
-    TypedProperties props = new TypedProperties();
-    hoodieTable.getMetaClient().getTableConfig().getProps().forEach(props::putIfAbsent);
-    config.getProps().forEach(props::putIfAbsent);
+    TypedProperties props = TypedProperties.copy(config.getProps());
     long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(taskContextSupplier, config);
     props.put(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(), String.valueOf(maxMemoryPerCompaction));
     // Initializes file group reader
