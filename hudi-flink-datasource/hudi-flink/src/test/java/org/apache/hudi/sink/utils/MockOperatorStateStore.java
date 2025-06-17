@@ -17,6 +17,8 @@
 
 package org.apache.hudi.sink.utils;
 
+import org.apache.hudi.adapter.OperatorStateStoreAdapter;
+
 import org.apache.flink.api.common.state.BroadcastState;
 import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ListStateDescriptor;
@@ -33,7 +35,7 @@ import java.util.Set;
  * An {@link OperatorStateStore} for testing purpose.
  */
 @SuppressWarnings("rawtypes")
-public class MockOperatorStateStore implements OperatorStateStore {
+public class MockOperatorStateStore implements OperatorStateStoreAdapter {
   private Map<String, TestUtils.MockListState> listStateMap;
 
   private final Map<Long, Map<String, TestUtils.MockListState>> historyStateMap;

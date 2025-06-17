@@ -26,6 +26,7 @@ import org.apache.hudi.sink.common.AbstractWriteFunction;
 import org.apache.hudi.sink.event.Correspondent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.util.FlinkWriteClients;
+import org.apache.hudi.utils.RuntimeContextUtils;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
@@ -103,7 +104,7 @@ public class BulkInsertWriteFunction<I>
 
   @Override
   public void open(Configuration parameters) throws IOException {
-    this.taskID = getRuntimeContext().getIndexOfThisSubtask();
+    this.taskID = RuntimeContextUtils.getIndexOfThisSubtask(getRuntimeContext());
     this.writeClient = FlinkWriteClients.createWriteClient(this.config, getRuntimeContext());
   }
 
@@ -163,7 +164,7 @@ public class BulkInsertWriteFunction<I>
     if (writerHelper == null) {
       String instant = instantToWrite();
       this.writerHelper = WriterHelpers.getWriterHelper(this.config, this.writeClient.getHoodieTable(), this.writeClient.getConfig(),
-          instant, this.taskID, getRuntimeContext().getNumberOfParallelSubtasks(), getRuntimeContext().getAttemptNumber(),
+          instant, this.taskID, RuntimeContextUtils.getNumberOfParallelSubtasks(getRuntimeContext()), RuntimeContextUtils.getAttemptNumber(getRuntimeContext()),
           this.rowType);
     }
   }

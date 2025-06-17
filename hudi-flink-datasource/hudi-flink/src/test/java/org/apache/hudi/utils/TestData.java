@@ -532,7 +532,7 @@ public class TestData {
   public static void writeData(
       List<RowData> dataBuffer,
       Configuration conf) throws Exception {
-    final TestFunctionWrapper<RowData> funcWrapper = getWritePipeline(conf.getString(FlinkOptions.PATH), conf);
+    final TestFunctionWrapper<RowData> funcWrapper = getWritePipeline(conf.get(FlinkOptions.PATH), conf);
     funcWrapper.openFunction();
 
     for (RowData rowData : dataBuffer) {
@@ -562,7 +562,7 @@ public class TestData {
   public static void writeDataAsBatch(
       List<RowData> dataBuffer,
       Configuration conf) throws Exception {
-    TestFunctionWrapper<RowData> funcWrapper = getWritePipeline(conf.getString(FlinkOptions.PATH), conf);
+    TestFunctionWrapper<RowData> funcWrapper = getWritePipeline(conf.get(FlinkOptions.PATH), conf);
     funcWrapper.openFunction();
 
     for (RowData rowData : dataBuffer) {

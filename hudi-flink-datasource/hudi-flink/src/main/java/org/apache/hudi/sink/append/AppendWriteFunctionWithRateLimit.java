@@ -20,6 +20,7 @@ package org.apache.hudi.sink.append;
 
 import org.apache.hudi.common.util.RateLimiter;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.utils.RuntimeContextUtils;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.RowData;
@@ -45,14 +46,14 @@ public class AppendWriteFunctionWithRateLimit<I>
 
   public AppendWriteFunctionWithRateLimit(RowType rowType, Configuration config) {
     super(config, rowType);
-    this.totalLimit = config.getLong(FlinkOptions.WRITE_RATE_LIMIT);
+    this.totalLimit = config.get(FlinkOptions.WRITE_RATE_LIMIT);
   }
 
   @Override
   public void open(Configuration parameters) throws Exception {
     super.open(parameters);
     this.rateLimiter =
-        RateLimiter.create((int) totalLimit / getRuntimeContext().getNumberOfParallelSubtasks(), TimeUnit.SECONDS);
+        RateLimiter.create((int) totalLimit / RuntimeContextUtils.getNumberOfParallelSubtasks(getRuntimeContext()), TimeUnit.SECONDS);
   }
 
   @Override
