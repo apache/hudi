@@ -107,7 +107,7 @@ public class DeleteRecord implements Serializable {
 
   @Override
   public String toString() {
-    return "DeleteRecord {"
+    return "DeleteIndexedRecord {"
             + " key=" + hoodieKey
             + " orderingVal=" + this.orderingVal
             + '}';

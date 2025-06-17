@@ -22,26 +22,31 @@ package org.apache.hudi.avro;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 
-public class DeleteRecord implements IndexedRecord {
-  private final String key;
+public class DeleteIndexedRecord implements IndexedRecord {
+  private final String[] metaFields;
   private final IndexedRecord record;
 
-  public DeleteRecord(String key, IndexedRecord record) {
-    this.key = key;
+  public DeleteIndexedRecord(String recordKey, String partitionPath, IndexedRecord record) {
+    this.metaFields = new String[] {
+        null,
+        null,
+        recordKey,
+        partitionPath,
+        null
+    };
     this.record = record;
-  }
-
-  public String getRecordKey() {
-    return key;
   }
 
   @Override
   public void put(int i, Object v) {
-    throw new UnsupportedOperationException("DeleteRecord does not support put operation");
+    throw new UnsupportedOperationException("DeleteIndexedRecord does not support put operation");
   }
 
   @Override
   public Object get(int i) {
+    if (i < metaFields.length) {
+      return metaFields[i];
+    }
     return record == null ? null : record.get(i);
   }
 

@@ -118,7 +118,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
 
   @Override
   public IndexedRecord getDeleteRow(IndexedRecord record, String recordKey) {
-    return new DeleteRecord(recordKey, record);
+    return new DeleteIndexedRecord(recordKey, partitionPath, record);
   }
 
   @Override
@@ -160,9 +160,9 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
 
   @Override
   public HoodieRecord<IndexedRecord> constructHoodieRecord(IndexedRecord record, Schema schema, Option<String> orderingFieldName) {
-    if (record instanceof DeleteRecord) {
+    if (record instanceof DeleteIndexedRecord) {
       return new HoodieEmptyRecord<>(
-          new HoodieKey(((DeleteRecord) record).getRecordKey(), partitionPath),
+          new HoodieKey(record.get(HoodieRecord.RECORD_KEY_META_FIELD_ORD).toString(), partitionPath),
           HoodieRecord.HoodieRecordType.AVRO);
     }
     HoodieKey hoodieKey = new HoodieKey(getRecordKey(record, schema), partitionPath);
