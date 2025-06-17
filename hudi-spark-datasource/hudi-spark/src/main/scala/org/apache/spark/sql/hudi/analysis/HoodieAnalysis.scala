@@ -176,9 +176,15 @@ object HoodieAnalysis extends SparkAdapterSupport {
     //       To work this around, we injecting this as the rule that trails pre-CBO, ie it's
     //          - Triggered before CBO, therefore have access to the same stats as CBO
     //          - Precedes actual [[customEarlyScanPushDownRules]] invocation
-    rules += (spark => HoodiePruneFileSourcePartitions(spark))
-
-    rules
+    val partitionPruningClassName =
+      if (HoodieSparkUtils.gteqSpark3_4) {
+        "org.apache.spark.sql.hudi.analysis.Spark34HoodiePruneFileSourcePartitions"
+      } else {
+        "org.apache.spark.sql.hudi.analysis.HoodiePruneFileSourcePartitions"
+      }
+    val partitionPruningRule: RuleBuilder =
+      session => instantiateKlass(partitionPruningClassName, session)
+    rules += partitionPruningRule
   }
 
   /**
