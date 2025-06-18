@@ -119,7 +119,8 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
 
   private void initMetadataPartitionsToCollectStats(boolean preserveMetadata) {
     if (isStreamingWriteToMetadataEnabled) {
-      // secondary index.
+      // Secondary index should not be updated for clustering and compaction
+      // Since for clustering and compaction preserveMetadata is true, we are checking for it before enabling secondary index update
       if (config.isSecondaryIndexEnabled() && !preserveMetadata) {
         ValidationUtils.checkArgument(recordMerger.getRecordType() == HoodieRecord.HoodieRecordType.AVRO,
             "Only Avro record type is supported for streaming writes to metadata table with write handles");

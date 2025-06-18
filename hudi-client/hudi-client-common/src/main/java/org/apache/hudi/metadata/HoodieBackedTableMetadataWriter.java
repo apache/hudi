@@ -1315,10 +1315,10 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
         HoodieData<HoodieRecord> additionalUpdates = getRecordIndexAdditionalUpserts(partitionToRecordMap.get(RECORD_INDEX.getPartitionPath()), commitMetadata);
         partitionToRecordMap.put(RECORD_INDEX.getPartitionPath(), partitionToRecordMap.get(RECORD_INDEX.getPartitionPath()).union(additionalUpdates));
       }
-      if (partitionsToUpdate.contains(EXPRESSION_INDEX.getPartitionPath())) {
+      if (partitionsToUpdate.stream().anyMatch(partition -> partition.startsWith(EXPRESSION_INDEX.getPartitionPath()))) {
         updateExpressionIndexIfPresent(commitMetadata, instantTime, partitionToRecordMap);
       }
-      if (partitionsToUpdate.contains(SECONDARY_INDEX.getPartitionPath())) {
+      if (partitionsToUpdate.stream().anyMatch(partition -> partition.startsWith(SECONDARY_INDEX.getPartitionPath()))) {
         updateSecondaryIndexIfPresent(commitMetadata, partitionToRecordMap, instantTime);
       }
       return partitionToRecordMap;
