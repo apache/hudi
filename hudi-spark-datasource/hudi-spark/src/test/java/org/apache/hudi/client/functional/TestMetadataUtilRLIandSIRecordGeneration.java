@@ -531,7 +531,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
             HoodieWriteStat writeStat = writeStatus.getStat();
             StoragePath fullFilePath = new StoragePath(basePath, writeStat.getPath());
             // used for RLI
-            HoodieReaderContext<InternalRow> readerContext = context.getReaderContextFactory(metaClient).getContext();
+            HoodieReaderContext<?> readerContext = context.getReaderContextFactory(metaClient).getContext();
             finalActualDeletes.addAll(getRevivedAndDeletedKeysFromMergedLogs(metaClient, latestCommitTimestamp, Collections.singletonList(fullFilePath.toString()), writerSchemaOpt,
                 Collections.singletonList(fullFilePath.toString()), writeStat.getPartitionPath(), readerContext).getValue());
 
