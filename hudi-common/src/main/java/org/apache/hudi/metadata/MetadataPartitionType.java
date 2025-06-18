@@ -457,9 +457,17 @@ public enum MetadataPartitionType {
         .collect(Collectors.toList());
   }
 
+  private static boolean isPartitionType(String partitionPath, String typePartition) {
+    return partitionPath.equals(typePartition) || partitionPath.startsWith(typePartition);
+  }
+
+  public boolean isPartitionType(String partitionPath) {
+    return isPartitionType(partitionPath, getPartitionPath());
+  }
+
   public static MetadataPartitionType fromPartitionPath(String partitionPath) {
     for (MetadataPartitionType partitionType : getValidValues()) {
-      if (partitionPath.equals(partitionType.getPartitionPath()) || partitionPath.startsWith(partitionType.getPartitionPath())) {
+      if (partitionType.isPartitionType(partitionPath)) {
         return partitionType;
       }
     }

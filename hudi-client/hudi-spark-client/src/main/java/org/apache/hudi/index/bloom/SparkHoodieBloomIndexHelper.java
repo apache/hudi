@@ -36,6 +36,7 @@ import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.HoodieKeyLookupResult;
+import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -317,7 +318,10 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
 
       // NOTE: It's crucial that [[targetPartitions]] be congruent w/ the number of
       //       actual file-groups in the Bloom Index in MT
-      return mapRecordKeyToFileGroupIndex(bloomIndexEncodedKey, targetPartitions);
+      String bloomPartitionPath = BLOOM_FILTERS.getPartitionPath();
+      return mapRecordKeyToFileGroupIndex(bloomIndexEncodedKey, targetPartitions, bloomPartitionPath,
+          // TODO[HUDI-9530] The version should come from the index def json file instead of a hard code value.
+          HoodieIndexVersion.getCurrentVersion(bloomPartitionPath));
     }
   }
 

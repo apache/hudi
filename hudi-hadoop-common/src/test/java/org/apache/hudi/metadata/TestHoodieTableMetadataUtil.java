@@ -51,6 +51,9 @@ import org.apache.avro.SchemaBuilder;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.net.URI;
@@ -63,6 +66,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
 import static org.apache.hudi.avro.TestHoodieAvroUtils.SCHEMA_WITH_AVRO_TYPES_STR;
@@ -743,5 +747,99 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     assertNotNull(result);
     assertTrue(result.isEmpty());
     verify(metaClient, atLeastOnce()).buildIndexDefinition(any());
+  }
+
+  @ParameterizedTest(name = "{0}")
+  @MethodSource("mapRecordKeyToFileGroupIndexTestCases")
+  public void testMapRecordKeyToFileGroupIndex(String testName, String recordKey, int numFileGroups, String partitionName, 
+      HoodieIndexVersion version, int expectedIndex) {
+    int index = HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(recordKey, numFileGroups, partitionName, version);
+    assertEquals(expectedIndex, index, "File group index should match expected value");
+  }
+
+  private static Stream<Arguments> mapRecordKeyToFileGroupIndexTestCases() {
+    return Stream.of(
+        // Test case 1: Regular record key (no secondary index)
+        Arguments.of(
+            "Regular record key",
+            "test_key",
+            10,
+            "files",
+            HoodieIndexVersion.FILES_INDEX_ONE,
+            8  // Calculated using the explicit hashing algorithm
+        ),
+        // Test case 2: Secondary index record key with version >= 2
+        Arguments.of(
+            "Secondary index record key with version >= 2",
+            "primary_key$secondary_key",
+            10,
+            "secondary_index_idx_ts",
+            HoodieIndexVersion.SECONDARY_INDEX_TWO,
+            6  // Uses secondary key portion for hashing
+        ),
+        // Test case 3: Secondary index record key but version < 2
+        Arguments.of(
+            "Secondary index record key but version < 2",
+            "primary_key$secondary_key",
+            10,
+            "secondary_index_idx_ts",
+            HoodieIndexVersion.SECONDARY_INDEX_ONE,
+            4  // Uses full key for hashing
+        ),
+        // Test case 4: Secondary index record key but not in secondary index partition
+        Arguments.of(
+            "Secondary index record key but not in secondary index partition",
+            "primary_key$secondary_key",
+            10,
+            "files",
+            HoodieIndexVersion.FILES_INDEX_ONE,
+            4  // Uses full key for hashing since not in secondary index partition
+        ),
+        // Test case 5: Secondary index record key but no separator
+        Arguments.of(
+            "Secondary index record key but no separator",
+            "primary_key_secondary_key",
+            10,
+            "secondary_index_idx_ts",
+            HoodieIndexVersion.SECONDARY_INDEX_TWO,
+            7  // Uses full key for hashing since no separator found
+        ),
+        // Test case 6: Empty record key
+        Arguments.of(
+            "Empty record key",
+            "",
+            10,
+            "secondary_index_idx_ts",
+            HoodieIndexVersion.SECONDARY_INDEX_TWO,
+            0  // Empty string hashes to 0
+        ),
+        // Test case 7: Single file group
+        Arguments.of(
+            "Single file group",
+            "test_key$record_key",
+            1,
+            "secondary_index_idx_ts",
+            HoodieIndexVersion.SECONDARY_INDEX_TWO,
+            0  // Any key with numFileGroups=1 should return 0
+        ),
+        // Test case 8: Record key with special characters
+        Arguments.of(
+            "Record key with special characters",
+            "test@key#123",
+            10,
+            "files",
+            HoodieIndexVersion.FILES_INDEX_ONE,
+            0  // Calculated using the explicit hashing algorithm
+        ),
+        // Test case 9: Record key with unicode characters
+        Arguments.of(
+            "Record key with unicode characters",
+            "test\u00A9key",
+            10,
+            "files",
+            HoodieIndexVersion.FILES_INDEX_ONE,
+            4  // Calculated using the explicit hashing algorithm
+        )
+    );
   }
 }

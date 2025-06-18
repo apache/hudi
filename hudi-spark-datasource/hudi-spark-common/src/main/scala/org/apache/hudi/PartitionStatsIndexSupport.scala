@@ -23,7 +23,7 @@ import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.HoodieFileIndex.collectReferencedColumns
 import org.apache.hudi.avro.model.{HoodieMetadataColumnStats, HoodieMetadataRecord}
 import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.data.HoodieData
+import org.apache.hudi.common.data.{HoodieData, HoodieListData}
 import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.ValidationUtils.checkState
@@ -70,7 +70,8 @@ class PartitionStatsIndexSupport(spark: SparkSession,
     val encodedTargetColumnNames = targetColumns.map(colName => new ColumnIndexID(colName).asBase64EncodedString())
     logDebug(s"Loading column stats for columns: ${targetColumns.mkString(", ")},  Encoded column names: ${encodedTargetColumnNames.mkString(", ")}")
     val metadataRecords: HoodieData[HoodieRecord[HoodieMetadataPayload]] =
-      metadataTable.getRecordsByKeyPrefixes(encodedTargetColumnNames.asJava, HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS, shouldReadInMemory)
+      metadataTable.getRecordsByKeyPrefixes(
+        HoodieListData.eager(encodedTargetColumnNames.asJava), HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS, shouldReadInMemory)
     val columnStatsRecords: HoodieData[HoodieMetadataColumnStats] =
       //TODO: [HUDI-8303] Explicit conversion might not be required for Scala 2.12+
       metadataRecords.map(JFunction.toJavaSerializableFunction(record => {

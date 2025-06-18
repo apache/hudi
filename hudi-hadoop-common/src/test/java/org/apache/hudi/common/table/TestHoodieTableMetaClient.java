@@ -30,6 +30,7 @@ import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.StoragePath;
 
@@ -40,19 +41,23 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Properties;
 
+import static org.apache.hudi.common.table.HoodieTableMetaClient.loadIndexDefFromDisk;
 import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.MILLIS_INSTANT_TIME_FORMATTER;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -303,6 +308,7 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
         .withIndexName(indexName)
         .withIndexType("column_stats")
         .withIndexFunction("identity")
+        .withVersion(HoodieIndexVersion.getCurrentVersion("column_stats"))
         .withSourceFields(new ArrayList<>(columnsMap.keySet()))
         .withIndexOptions(Collections.emptyMap())
         .build();
@@ -316,5 +322,55 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     HoodieIndexMetadata indexMetadata = HoodieIndexMetadata.fromJson(
         new String(FileIOUtils.readDataFromPath(metaClient.getStorage(), new StoragePath(metaClient.getIndexDefinitionPath())).get()));
     assertTrue(indexMetadata.getIndexDefinitions().isEmpty());
+  }
+
+  @Test
+  public void testpopulateIndexVersionIfMissing() {
+    HoodieIndexMetadata loadedDef = loadIndexDefFromDisk(
+        new StoragePath(Objects.requireNonNull(getClass().getClassLoader().getResource("index.json")).toString()), "",
+        metaClient.getStorage()).get();
+    assertEquals(1, loadedDef.getIndexDefinitions().size());
+    HoodieIndexDefinition def = loadedDef.getIndexDefinitions().get("column_stats");
+  }
+
+  @Test
+  public void testIndexJsonFileMissingVersionField() {
+    // Json file with no version attribute
+    HoodieIndexMetadata loadedDef = loadIndexDefFromDisk(
+        new StoragePath(Objects.requireNonNull(getClass().getClassLoader().getResource("index.json")).toString()), "",
+        metaClient.getStorage()).get();
+    assertEquals(1, loadedDef.getIndexDefinitions().size());
+    HoodieIndexDefinition def = loadedDef.getIndexDefinitions().get("column_stats");
+    validateAllFieldsExcludingVersion(def);
+    assertTrue(def.getIndexOptions().isEmpty());
+    // The populated definition object should use null.
+    assertNull(def.getVersion());
+    // Apply the function fixing the missing version field
+    HoodieTableMetaClient.populateIndexVersionIfMissing(Option.of(loadedDef));
+    def = loadedDef.getIndexDefinitions().get("column_stats");
+    assertEquals(def.getVersion(), HoodieIndexVersion.COLUMN_STATS_ONE);
+    validateAllFieldsExcludingVersion(def);
+  }
+
+  private static void validateAllFieldsExcludingVersion(HoodieIndexDefinition def) {
+    assertEquals("column_stats", def.getIndexName());
+    assertEquals("column_stats", def.getIndexType());
+    assertEquals(Arrays.asList(
+        "_hoodie_commit_time",
+        "_hoodie_partition_path",
+        "_hoodie_record_key",
+        "key",
+        "secKey",
+        "partition",
+        "intField",
+        "city",
+        "textField1",
+        "textField2",
+        "textField3",
+        "textField4",
+        "decimalField",
+        "longField",
+        "incrLongField",
+        "round"), def.getSourceFields());
   }
 }

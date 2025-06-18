@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.engine;
 
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.data.HoodieAccumulator;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
@@ -135,4 +136,6 @@ public abstract class HoodieEngineContext {
   public <T> ReaderContextFactory<T> getReaderContextFactory(HoodieTableMetaClient metaClient) {
     throw new UnsupportedOperationException("Reader context factory is not yet supported");
   }
+
+  public abstract void dropIndex(HoodieConfig config, List<String> metadataPartitions);
 }

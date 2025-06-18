@@ -29,6 +29,7 @@ import java.io.Serializable;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * An abstraction for pairs of key in type K and value in type V to store the reference
@@ -152,6 +153,30 @@ public interface HoodiePairData<K, V> extends Serializable {
    * This is a terminal operation
    */
   List<Pair<K, V>> collectAsList();
+
+  /**
+   * Collects results of the underlying collection into a {@link Map<Pair<K, V>>}
+   * If there are multiple pairs sharing the same key, the resulting map randomly picks one among them.
+   *
+   * This is a terminal operation
+   */
+  default Map<K, V> collectAsMapWithOverwriteStrategy() {
+    // If there are multiple entries sharing the same key, use the incoming one
+    return collectAsList()
+        .stream()
+        .collect(Collectors.toMap(
+            Pair::getKey,
+            Pair::getValue,
+            (existing, incoming) -> incoming
+        ));
+  }
+
+  // HoodiePairData does not have a notion of partition, so it cannot do map partitions or work
+  // with anything that requires partition like logic.
+  default HoodiePairData<Integer, String> rangeBasedRepartitionForEachKey(
+      int keyRange, double sampleFraction, int maxKeyPerBucket, long seed) {
+    throw new UnsupportedOperationException("No implementation provided");
+  }
 
   /**
    * @return the deduce number of shuffle partitions

@@ -93,6 +93,7 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
+import static org.apache.hudi.metadata.HoodieIndexVersion.getInitialVersion;
 
 /**
  * <code>HoodieTableMetaClient</code> allows to access meta-data about a hoodie table It returns meta-data about
@@ -287,21 +288,37 @@ public class HoodieTableMetaClient implements Serializable {
     if (indexMetadataOpt.isPresent() && !indexMetadataOpt.get().getIndexDefinitions().isEmpty()) {
       return indexMetadataOpt;
     }
+    Option<HoodieIndexMetadata> indexDefOption = Option.empty();
     if (tableConfig.getRelativeIndexDefinitionPath().isPresent() && StringUtils.nonEmpty(tableConfig.getRelativeIndexDefinitionPath().get())) {
-      StoragePath indexDefinitionPath =
-          new StoragePath(basePath, tableConfig.getRelativeIndexDefinitionPath().get());
-      try {
-        Option<byte[]> bytesOpt = FileIOUtils.readDataFromPath(storage, indexDefinitionPath, true);
-        if (bytesOpt.isPresent()) {
-          return Option.of(HoodieIndexMetadata.fromJson(new String(bytesOpt.get())));
-        } else {
-          return Option.of(new HoodieIndexMetadata());
-        }
-      } catch (IOException e) {
-        throw new HoodieIOException("Could not load index definition at path: " + tableConfig.getRelativeIndexDefinitionPath().get(), e);
-      }
+      indexDefOption = loadIndexDefFromDisk(basePath, tableConfig.getRelativeIndexDefinitionPath().get(), storage);
     }
-    return Option.empty();
+    populateIndexVersionIfMissing(indexDefOption);
+    return indexDefOption;
+  }
+
+  public static void populateIndexVersionIfMissing(Option<HoodieIndexMetadata> indexDefOption) {
+    // If version field is missing, we should add them with initial version as the value for backward compatibility.
+    indexDefOption.ifPresent(idxDefs ->
+        idxDefs.getIndexDefinitions().replaceAll((indexType, idxDef) ->
+          idxDef.getVersion() == null
+              ? idxDef.toBuilder().withVersion(getInitialVersion(indexType)).build()
+              : idxDef));
+  }
+
+  public static Option<HoodieIndexMetadata> loadIndexDefFromDisk(
+      StoragePath basePath, String relativeIndexDefinitionPath, HoodieStorage storage) {
+    StoragePath indexDefinitionPath =
+        new StoragePath(basePath, relativeIndexDefinitionPath);
+    try {
+      Option<byte[]> bytesOpt = FileIOUtils.readDataFromPath(storage, indexDefinitionPath, true);
+      if (bytesOpt.isPresent()) {
+        return Option.of(HoodieIndexMetadata.fromJson(new String(bytesOpt.get())));
+      } else {
+        return Option.of(new HoodieIndexMetadata());
+      }
+    } catch (IOException e) {
+      throw new HoodieIOException("Could not load index definition at path: " + relativeIndexDefinitionPath, e);
+    }
   }
 
   public static HoodieTableMetaClient reload(HoodieTableMetaClient oldMetaClient) {
