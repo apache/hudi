@@ -18,9 +18,15 @@
 
 package org.apache.hudi.sink;
 
+import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.model.HoodieFlinkInternalRow;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsInference;
@@ -29,6 +35,7 @@ import org.apache.hudi.sink.transform.ChainedTransformer;
 import org.apache.hudi.sink.transform.Transformer;
 import org.apache.hudi.sink.utils.Pipelines;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.table.catalog.HoodieCatalog;
 import org.apache.hudi.table.catalog.TableOptionProperties;
 import org.apache.hudi.util.AvroSchemaConverter;
@@ -74,10 +81,12 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
+import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS;
 import static org.apache.hudi.config.HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE;
 import static org.apache.hudi.config.HoodieWriteConfig.SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP;
 import static org.apache.hudi.table.catalog.CatalogOptions.CATALOG_PATH;
 import static org.apache.hudi.table.catalog.CatalogOptions.DEFAULT_DATABASE;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Integration test for Flink Hoodie stream sink.
@@ -171,7 +180,8 @@ public class ITTestDataStreamWrite extends TestLogger {
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testWriteCopyOnWriteWithClustering(boolean sortClusteringEnabled) throws Exception {
-    Configuration conf = TestConfigurations.getDefaultConf(tempFile.toURI().toString());
+    String basePath = tempFile.toURI().toString();
+    Configuration conf = TestConfigurations.getDefaultConf(basePath);
     conf.setBoolean(FlinkOptions.CLUSTERING_SCHEDULE_ENABLED, true);
     conf.setInteger(FlinkOptions.CLUSTERING_DELTA_COMMITS, 1);
     conf.setString(FlinkOptions.OPERATION, "insert");
@@ -180,6 +190,23 @@ public class ITTestDataStreamWrite extends TestLogger {
     }
 
     writeWithClusterAndCheckExpected(conf, "cow_write_with_cluster", 1, EXPECTED);
+    if (sortClusteringEnabled) {
+      HadoopStorageConfiguration storageConf = new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(conf));
+      HoodieTableMetaClient metaClient =
+          HoodieTestUtils.createMetaClient(storageConf, basePath);
+      HoodieInstant clusteringInstant = metaClient.getActiveTimeline().getLastClusteringInstant().get();
+      Option<Pair<HoodieInstant, HoodieClusteringPlan>> clusteringPlanOption = ClusteringUtils.getClusteringPlan(
+          metaClient, clusteringInstant);
+      assertTrue(clusteringPlanOption.isPresent());
+      HoodieClusteringPlan clusteringPlan = clusteringPlanOption.get().getRight();
+      Map<String, String> strategyParams = clusteringPlan.getStrategy().getStrategyParams();
+      // could be used in spark MultipleSparkJobExecutionStrategy
+      Option<String[]> orderByColumnsOpt =
+          Option.ofNullable(strategyParams.get(PLAN_STRATEGY_SORT_COLUMNS.key()))
+              .map(listStr -> listStr.split(","));
+      assertTrue(orderByColumnsOpt.isPresent());
+      assertTrue(orderByColumnsOpt.get()[0].equalsIgnoreCase("uuid"));
+    }
   }
 
   @ParameterizedTest
