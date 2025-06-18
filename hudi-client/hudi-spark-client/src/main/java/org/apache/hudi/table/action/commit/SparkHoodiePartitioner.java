@@ -46,5 +46,13 @@ public abstract class SparkHoodiePartitioner<T> extends Partitioner
     return numPartitions();
   }
 
-  public abstract BucketInfo getBucketInfo(int bucketNumber);
+  /**
+   * You should probably not override this method.
+   * Make sure you have a good understanding of what you are doing.
+   */
+  public BucketInfo getBucketInfo(int bucketNumber) {
+    return getSparkBucketInfoGetter().getBucketInfo(bucketNumber);
+  }
+
+  public abstract SparkBucketInfoGetter getSparkBucketInfoGetter();
 }
