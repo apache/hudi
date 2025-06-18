@@ -298,25 +298,60 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     final int numFileSlices = partitionFileSlices.size();
     checkState(numFileSlices > 0, "Number of file slices for partition " + partitionName + " should be > 0");
 
-    // Lookup keys from each file slice
+    HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> res;
+    HoodieIndexVersion indexVersion = getExistingHoodieIndexVersionOrDefault(partitionName, metadataMetaClient);
     if (numFileSlices == 1) {
       // Optimization for a single slice for smaller metadata table partitions
       result = lookupKeys(partitionName, keyList, partitionFileSlices.get(0));
     } else {
       // Parallel lookup for large sized partitions with many file slices
       // Partition the keys by the file slice which contains it
-      ArrayList<ArrayList<String>> partitionedKeys = partitionKeysByFileSlices(keyList, numFileSlices, partitionName,
-          getExistingHoodieIndexVersionOrDefault(partitionName, metadataMetaClient));
+      ArrayList<ArrayList<String>> partitionedKeys = partitionKeysByFileSlices(keyList, numFileSlices, partitionName, indexVersion);
       result = new HashMap<>(keyList.size());
       getEngineContext().setJobStatus(this.getClass().getSimpleName(), "Reading keys from metadata table partition " + partitionName);
-      getEngineContext().map(partitionedKeys, keysList -> {
-        if (keysList.isEmpty()) {
-          return Collections.<String, HoodieRecord<HoodieMetadataPayload>>emptyMap();
-        }
-        int shardIndex = HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(keysList.get(0), numFileSlices, partitionName,
-            getExistingHoodieIndexVersionOrDefault(partitionName, metadataMetaClient));
-        return lookupKeys(partitionName, keysList, partitionFileSlices.get(shardIndex));
-      }, partitionedKeys.size()).forEach(result::putAll);
+      keys = repartitioningIfNeeded(keys, partitionName, numFileSlices, indexVersion);
+      if (keys instanceof HoodieListData) {
+        List<String> keyList = keys.collectAsList();
+        Map<String, HoodieRecord<HoodieMetadataPayload>> result = new HashMap<>(keyList.size());
+        ArrayList<ArrayList<String>> partitionedKeys = partitionKeysByFileSlices(keyList, numFileSlices, partitionName, indexVersion);
+        getEngineContext().map(partitionedKeys, keysList -> {
+          if (keysList.isEmpty()) {
+            return Collections.<String, HoodieRecord<HoodieMetadataPayload>>emptyMap();
+          }
+          int shardIndex = HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(keysList.get(0), numFileSlices, partitionName, indexVersion);
+          return lookupRecordsWithMapping(partitionName, keysList, partitionFileSlices.get(shardIndex), isSecondaryIndex).collectAsList();
+        }, partitionedKeys.size());
+        res = getEngineContext().emptyHoodiePairData();
+      } else {
+        keys = adaptiveSortDedupRepartition(keys, partitionName, numFileSlices, indexVersion);
+        res = keys.mapPartitions(distinctSortedKeyIter -> {
+          if (!distinctSortedKeyIter.hasNext()) {
+            return Collections.emptyIterator();
+          }
+          // Collect to list as this is what HfileIndexGroupReader is able to consume.
+          List<String> sortedKeys = new ArrayList<>();
+          distinctSortedKeyIter.forEachRemaining(sortedKeys::add);
+
+          // TODO: use broadcast variable
+          FileSlice fileSlice = partitionFileSlices.get(HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(
+              sortedKeys.get(0), numFileSlices, partitionName, indexVersion));
+          try {
+            // Perform the actual lookup
+            return lookupRecordsWithMappingIter(partitionName, sortedKeys, fileSlice, !isSecondaryIndex);
+          } catch (Exception e) {
+            LOG.error("Failed to lookup keys from file slice " + fileSlice.getFileId(), e);
+            throw new HoodieMetadataException("Failed to lookup keys from metadata table", e);
+          }
+        }, false)
+        .mapToPair(e -> new ImmutablePair<>(e.getKey(), e.getValue()));
+      }
+    }
+    return res;
+  }
+
+  protected HoodieData<HoodieRecord<HoodieMetadataPayload>> readIndexWithoutMapping(HoodieData<String> keys, String partitionName) {
+    if (keys instanceof HoodieListData && keys.isEmpty()) {
+      return getEngineContext().emptyHoodieData();
     }
 
     return HoodieListPairData.eagerMapKV(result);
