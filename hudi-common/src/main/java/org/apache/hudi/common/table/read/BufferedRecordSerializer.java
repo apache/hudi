@@ -21,6 +21,7 @@ package org.apache.hudi.common.table.read;
 import org.apache.hudi.common.serialization.CustomSerializer;
 import org.apache.hudi.common.serialization.RecordSerializer;
 import org.apache.hudi.common.util.SerializationUtils;
+import org.apache.hudi.util.Lazy;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
@@ -58,9 +59,9 @@ public class BufferedRecordSerializer<T> implements CustomSerializer<BufferedRec
       output.writeBoolean(record.isDelete());
       kryo.writeClassAndObject(output, record.getOrderingValue());
 
-      byte[] avroBytes = recordSerializer.serialize(record.getRecord());
-      output.writeInt(avroBytes.length);
-      output.writeBytes(avroBytes);
+      byte[] recordBytes = recordSerializer.serialize(record.getRecord());
+      output.writeInt(recordBytes.length);
+      output.writeBytes(recordBytes);
     }
     return baos.toByteArray();
   }
@@ -76,7 +77,7 @@ public class BufferedRecordSerializer<T> implements CustomSerializer<BufferedRec
       int recordLength = input.readInt();
       byte[] recordBytes = input.readBytes(recordLength);
       T record = recordSerializer.deserialize(recordBytes, schemaId);
-      return new BufferedRecord<>(recordKey, orderingValue, record, schemaId, isDelete);
+      return new BufferedRecord<>(recordKey, Lazy.eagerly(orderingValue), record, schemaId, isDelete);
     }
   }
 }

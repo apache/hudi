@@ -142,7 +142,7 @@ public class HoodieInternalRow extends InternalRow {
     if (ordinal < metaFields.length) {
       return metaFields[ordinal] == null;
     }
-    return sourceRow.isNullAt(rebaseOrdinal(ordinal));
+    return sourceRow == null || sourceRow.isNullAt(rebaseOrdinal(ordinal));
   }
 
   @Override

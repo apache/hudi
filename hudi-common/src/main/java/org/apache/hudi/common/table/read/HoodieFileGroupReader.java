@@ -393,8 +393,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   public ClosableIterator<HoodieRecord<T>> getClosableHoodieRecordIterator() throws IOException {
     return new CloseableMappingIterator<>(getClosableIterator(), nextRecord -> {
       boolean isDelete = emitDelete && readerContext.isDeleteOperation(nextRecord);
-      // Supply empty ordering field name since records are already merged at this point
-      BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(nextRecord, readerContext.getSchemaHandler().getRequestedSchema(), readerContext, Option.empty(), isDelete);
+      BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(nextRecord, readerContext.getSchemaHandler().getRequestedSchema(), readerContext, orderingFieldName, isDelete);
       return readerContext.constructHoodieRecord(bufferedRecord);
     });
   }

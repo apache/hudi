@@ -110,7 +110,7 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
     Option<DeleteRecord> recordOpt = doProcessNextDeletedRecord(deleteRecord, existingRecord);
     if (recordOpt.isPresent()) {
       Comparable orderingValue = getOrderingValue(readerContext, recordOpt.get());
-      records.put(recordKey, BufferedRecord.forDeleteRecord(deleteRecord, orderingValue));
+      records.put(recordKey, BufferedRecord.forDeleteRecord(deleteRecord, orderingValue, readerSchemaId));
     }
   }
 

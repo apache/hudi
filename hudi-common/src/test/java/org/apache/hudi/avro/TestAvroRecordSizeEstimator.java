@@ -22,6 +22,7 @@ import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.SizeEstimator;
+import org.apache.hudi.util.Lazy;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -43,14 +44,14 @@ public class TestAvroRecordSizeEstimator {
     record.put("favorite_number", 100);
     record.put("favorite_color", "red");
     SizeEstimator<BufferedRecord<IndexedRecord>> estimator = new AvroRecordSizeEstimator(schema);
-    BufferedRecord<IndexedRecord> bufferedRecord = new BufferedRecord<>("id", 100, record, 1, false);
+    BufferedRecord<IndexedRecord> bufferedRecord = new BufferedRecord<>("id", Lazy.eagerly(100), record, 1, false);
     long size = estimator.sizeEstimate(bufferedRecord);
     // size can be various for different OS / JVM version
     Assertions.assertTrue(size < 400 && size > 0);
 
     // testing generated IndexedRecord
     HoodieMetadataRecord metadataRecord = new HoodieMetadataRecord("__all_partitions__", 1, new HashMap<>(), null, null, null, null);
-    bufferedRecord = new BufferedRecord<>("__all_partitions__", 0, metadataRecord, 1, false);
+    bufferedRecord = new BufferedRecord<>("__all_partitions__", Lazy.eagerly(0), metadataRecord, 1, false);
     size = estimator.sizeEstimate(bufferedRecord);
     // size can be various for different OS / JVM version
     Assertions.assertTrue(size < 400 && size > 0);

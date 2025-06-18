@@ -24,10 +24,11 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.serialization.CustomSerializer;
-import org.apache.hudi.common.serialization.DefaultSerializer;
+import org.apache.hudi.common.serialization.DefaultRecordSerializer;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.BufferedRecordSerializer;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.LocalAvroSchemaCache;
@@ -192,7 +193,7 @@ public abstract class HoodieReaderContext<T> {
   }
 
   public CustomSerializer<BufferedRecord<T>> getRecordSerializer() {
-    return new DefaultSerializer<>();
+    return new BufferedRecordSerializer<>(new DefaultRecordSerializer<>());
   }
 
   /**
