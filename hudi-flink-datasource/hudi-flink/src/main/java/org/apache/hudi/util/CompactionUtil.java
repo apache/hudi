@@ -192,7 +192,7 @@ public class CompactionUtil {
             instant.getState() == HoodieInstant.State.INFLIGHT).firstInstant();
     if (earliestInflight.isPresent()) {
       HoodieInstant instant = earliestInflight.get();
-      String currentTime = HoodieInstantTimeGenerator.getCurrentInstantTimeStr();
+      String currentTime = HoodieInstantTimeGenerator.getCurrentTimeAsString();
       int timeout = conf.getInteger(FlinkOptions.COMPACTION_TIMEOUT_SECONDS);
       if (StreamerUtil.instantTimeDiffSeconds(currentTime, instant.requestedTime()) >= timeout) {
         LOG.info("Rollback the inflight compaction instant: " + instant + " for timeout(" + timeout + "s)");

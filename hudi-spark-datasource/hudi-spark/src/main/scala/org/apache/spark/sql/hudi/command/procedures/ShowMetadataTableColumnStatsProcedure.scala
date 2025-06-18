@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieInstantTimeGe
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.metadata.HoodieTableMetadata
+
 import org.apache.avro.generic.IndexedRecord
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
@@ -36,6 +37,7 @@ import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util
 import java.util.function.Supplier
+
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 

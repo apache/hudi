@@ -17,7 +17,6 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.client.WriteClientTestUtils
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.HoodieTableType
@@ -27,6 +26,7 @@ import org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
+
 import org.apache.spark.SparkException
 import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
@@ -37,6 +37,7 @@ import org.junit.jupiter.params.provider.EnumSource
 
 import java.time.Instant
 import java.util.Date
+
 import scala.collection.JavaConverters._
 
 class TestIncrementalReadWithFullTableScan extends HoodieSparkClientTestBase {
