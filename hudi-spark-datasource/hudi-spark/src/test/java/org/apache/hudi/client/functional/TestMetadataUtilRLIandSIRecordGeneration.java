@@ -52,8 +52,10 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metadata.BaseFileRecordParsingUtils;
+import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.testutils.HoodieClientTestBase;
@@ -328,7 +330,8 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       String firstCommitTime = commitTime;
       HoodieIndexDefinition indexDefinition = HoodieIndexDefinition.newBuilder()
           .withIndexName("secondary_index_idx_rider")
-          .withIndexType("")
+          .withIndexType(MetadataPartitionType.COLUMN_STATS.name())
+          .withVersion(HoodieIndexVersion.getCurrentVersion(MetadataPartitionType.COLUMN_STATS))
           .withIndexFunction("")
           .withSourceFields(Collections.singletonList("rider"))
           .withIndexOptions(Collections.emptyMap())

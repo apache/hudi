@@ -207,12 +207,14 @@ public class TestMetadataPartitionType {
         .withIndexName(expressionIndexName)
         .withIndexType("column_stats")
         .withIndexFunction("lower")
+        .withVersion(HoodieIndexVersion.getCurrentVersion("column_stats"))
         .withSourceFields(Collections.singletonList("name"))
         .build();
     indexDefinitions.put(expressionIndexName, expressionIndexDefinition);
     HoodieIndexDefinition secondaryIndexDefinition = HoodieIndexDefinition.newBuilder()
         .withIndexName(secondaryIndexName)
-        .withIndexType(null)
+        .withIndexType(MetadataPartitionType.COLUMN_STATS.name())
+        .withVersion(HoodieIndexVersion.getCurrentVersion(MetadataPartitionType.COLUMN_STATS))
         .withIndexFunction(null)
         .withSourceFields(Collections.singletonList("name"))
         .build();
@@ -253,6 +255,7 @@ public class TestMetadataPartitionType {
         .withIndexFunction(indexFunction)
         .withSourceFields(sourceFields)
         .withIndexOptions(indexOptions)
+        .withVersion(HoodieIndexVersion.getCurrentVersion(indexType))
         .build();
   }
 

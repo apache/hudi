@@ -129,6 +129,7 @@ class RecordLevelIndexTestBase extends HoodieStatsIndexTestBase {
     val recordIndexMap = metadata.readRecordIndex(
       HoodieListData.eager(JavaConverters.seqAsJavaListConverter(
         rowArr.map(row => row.getAs("_hoodie_record_key").toString).toList).asJava))
+      .collectAsMapWithOverwriteStrategy()
 
     assertTrue(rowArr.length > 0)
     for (row <- rowArr) {
@@ -144,6 +145,7 @@ class RecordLevelIndexTestBase extends HoodieStatsIndexTestBase {
     val recordIndexMapForDeletedRows = metadata.readRecordIndex(
       HoodieListData.eager(JavaConverters.seqAsJavaListConverter(
         deletedRows.map(row => row.getAs("_row_key").toString).toList).asJava))
+      .collectAsMapWithOverwriteStrategy()
     assertEquals(0, recordIndexMapForDeletedRows.size(), "deleted records should not present in RLI")
 
     assertEquals(rowArr.length, recordIndexMap.keySet.size)
