@@ -20,6 +20,8 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.InvalidHoodiePathException;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -46,6 +48,7 @@ public class HoodieLogFile implements Serializable {
 
   private static final Comparator<HoodieLogFile> LOG_FILE_COMPARATOR = new LogFileComparator();
   private static final Comparator<HoodieLogFile> LOG_FILE_COMPARATOR_REVERSED = new LogFileComparator().reversed();
+  private static final Comparator<HoodieLogFile> COMPLETION_TIME_LOG_FILE_COMPARATOR = new CompletionTimeLogFileComparator();
 
   private transient StoragePathInfo pathInfo;
   private transient StoragePath path;
@@ -57,6 +60,7 @@ public class HoodieLogFile implements Serializable {
   private String fileExtension;
   private String suffix;
   private long fileLen;
+  private Option<String> completionTimeOpt = Option.empty();
 
   public HoodieLogFile(HoodieLogFile logFile) {
     this.pathInfo = logFile.getPathInfo();
@@ -69,6 +73,7 @@ public class HoodieLogFile implements Serializable {
     this.fileExtension = logFile.getFileExtension();
     this.suffix = logFile.getSuffix();
     this.fileLen = logFile.getFileSize();
+    this.completionTimeOpt = logFile.completionTimeOpt;
   }
 
   public HoodieLogFile(StoragePathInfo pathInfo) {
@@ -93,6 +98,10 @@ public class HoodieLogFile implements Serializable {
     this.fileLen = fileLen;
     this.logVersion = -1; // mark version as uninitialized
     this.path = logPath;
+  }
+
+  public static Comparator<HoodieLogFile> getCompletionTimeLogFileComparator() {
+    return COMPLETION_TIME_LOG_FILE_COMPARATOR;
   }
 
   private void parseFieldsFromPath() {
@@ -181,6 +190,14 @@ public class HoodieLogFile implements Serializable {
     this.pathInfo = pathInfo;
   }
 
+  public Option<String> getCompletionTime() {
+    return completionTimeOpt;
+  }
+
+  public void setCompletionTime(Option<String> completionTimeOpt) {
+    this.completionTimeOpt = completionTimeOpt;
+  }
+
   public HoodieLogFile rollOver(String logWriteToken) {
     String fileId = getFileId();
     String deltaCommitTime = getDeltaCommitTime();
@@ -196,6 +213,31 @@ public class HoodieLogFile implements Serializable {
 
   public static Comparator<HoodieLogFile> getReverseLogFileComparator() {
     return LOG_FILE_COMPARATOR_REVERSED;
+  }
+
+  /**
+   * Comparator to order log-files based on completion time.
+   */
+  public static class CompletionTimeLogFileComparator implements Comparator<HoodieLogFile>, Serializable {
+
+    @Override
+    public int compare(HoodieLogFile o1, HoodieLogFile o2) {
+      // For inflight log files, completion time would not be present.
+      if (o1.getCompletionTime().isPresent() && o2.getCompletionTime().isPresent()) {
+        String completionTime1 = o1.getCompletionTime().get();
+        String completionTime2 = o2.getCompletionTime().get();
+        int comparisonResult = completionTime1.compareTo(completionTime2);
+        return comparisonResult != 0 ? comparisonResult : HoodieLogFile.getReverseLogFileComparator().compare(o1, o2);
+      } else if (o1.getCompletionTime().isPresent()) {
+        // o1 is completed and o2 is inflight
+        return -1;
+      } else if (o2.getCompletionTime().isPresent()) {
+        // o1 is inflight and o2 is completed
+        return 1;
+      } else {
+        return HoodieLogFile.getReverseLogFileComparator().compare(o1, o2);
+      }
+    }
   }
 
   /**

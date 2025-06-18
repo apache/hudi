@@ -275,7 +275,7 @@ public class HoodieCDCExtractor {
           ).orElseThrow(() ->
               new HoodieIOException("Can not get the previous version of the base file")
           );
-          FileSlice beforeFileSlice = new FileSlice(fileGroupId, writeStat.getPrevCommit(), beforeBaseFile, Collections.emptyList());
+          FileSlice beforeFileSlice = new FileSlice(fileGroupId, writeStat.getPrevCommit(), beforeBaseFile, Collections.emptyList(), metaClient);
           cdcFileSplit = new HoodieCDCFileSplit(instantTs, BASE_FILE_DELETE, new ArrayList<>(), Option.of(beforeFileSlice), Option.empty());
         } else if ((writeStat.getNumUpdateWrites() == 0L && writeStat.getNumWrites() == writeStat.getNumInserts())) {
           // all the records in this file are new.
@@ -303,9 +303,9 @@ public class HoodieCDCExtractor {
           FileSlice currentFileSlice = new FileSlice(fileGroupId, instant.requestedTime(),
               new HoodieBaseFile(
                   storage.getPathInfo(new StoragePath(basePath, writeStat.getPath()))),
-              new ArrayList<>());
+              new ArrayList<>(), metaClient);
           if (supplementalLoggingMode == HoodieCDCSupplementalLoggingMode.OP_KEY_ONLY) {
-            beforeFileSlice = new FileSlice(fileGroupId, writeStat.getPrevCommit(), beforeBaseFile, new ArrayList<>());
+            beforeFileSlice = new FileSlice(fileGroupId, writeStat.getPrevCommit(), beforeBaseFile, new ArrayList<>(), metaClient);
           }
           cdcFileSplit = new HoodieCDCFileSplit(instantTs, AS_IS, writeStat.getCdcStats().keySet(),
               Option.ofNullable(beforeFileSlice), Option.ofNullable(currentFileSlice));
@@ -343,7 +343,7 @@ public class HoodieCDCExtractor {
               .collect(Collectors.toList());
           List<HoodieLogFile> logFiles = storage.listDirectEntries(logFilePaths).stream()
               .map(HoodieLogFile::new).collect(Collectors.toList());
-          return Option.of(new FileSlice(fgId, instant.requestedTime(), baseFile, logFiles));
+          return Option.of(new FileSlice(fgId, instant.requestedTime(), baseFile, logFiles, metaClient));
         } catch (Exception e) {
           throw new HoodieException("Fail to get the dependent file slice for a log file", e);
         }

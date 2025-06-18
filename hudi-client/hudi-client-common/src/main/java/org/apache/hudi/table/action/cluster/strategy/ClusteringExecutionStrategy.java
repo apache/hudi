@@ -33,6 +33,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
+import org.apache.hudi.common.table.timeline.CompletionTimeQueryView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -101,7 +102,7 @@ public abstract class ClusteringExecutionStrategy<T, I, K, O> implements Seriali
 
     HoodieTable table = getHoodieTable();
 
-    FileSlice fileSlice = clusteringOperationToFileSlice(table.getMetaClient().getBasePath().toString(), operation);
+    FileSlice fileSlice = clusteringOperationToFileSlice(table.getMetaClient(), operation);
     final boolean usePosition = getWriteConfig().getBooleanOrDefault(MERGE_USE_RECORD_POSITIONS);
     Option<InternalSchema> internalSchema = SerDeHelper.fromJson(getWriteConfig().getInternalSchema());
     try {
@@ -124,7 +125,8 @@ public abstract class ClusteringExecutionStrategy<T, I, K, O> implements Seriali
   /**
    * Construct FileSlice from a given clustering operation {@code clusteringOperation}.
    */
-  protected FileSlice clusteringOperationToFileSlice(String basePath, ClusteringOperation clusteringOperation) {
+  protected FileSlice clusteringOperationToFileSlice(HoodieTableMetaClient metaClient, ClusteringOperation clusteringOperation) {
+    String basePath = metaClient.getBasePath().toString();
     String partitionPath = clusteringOperation.getPartitionPath();
     Option<HoodieBaseFile> baseFile;
     if (!StringUtils.isNullOrEmpty(clusteringOperation.getDataFilePath())) {
@@ -140,7 +142,8 @@ public abstract class ClusteringExecutionStrategy<T, I, K, O> implements Seriali
     String baseInstantTime = baseFile.map(HoodieBaseFile::getCommitTime).orElseGet(() -> logFiles.get(0).getDeltaCommitTime());
     FileSlice fileSlice = new FileSlice(partitionPath, baseInstantTime, clusteringOperation.getFileId());
     baseFile.ifPresent(fileSlice::setBaseFile);
-    logFiles.forEach(fileSlice::addLogFile);
+    CompletionTimeQueryView completionTimeQueryView = metaClient.getTimelineLayout().getTimelineFactory().createCompletionTimeQueryView(metaClient);
+    logFiles.forEach(lf -> fileSlice.addLogFile(lf, completionTimeQueryView.getCompletionTime(baseInstantTime, lf.getDeltaCommitTime())));
     return fileSlice;
   }
 

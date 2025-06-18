@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieConsistentHashingMetadata;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -201,7 +202,7 @@ public class TestSparkConsistentBucketClusteringPlanStrategy extends HoodieSpark
     for (int i = 0; i < numLogFiles; ++i) {
       HoodieLogFile f = new HoodieLogFile(String.format(".%s_%s.log.%d", fileId, "12345678", i));
       f.setFileLen(logFileSize);
-      fs.addLogFile(f);
+      fs.addLogFile(f, Option.empty());
     }
 
     return fs;
