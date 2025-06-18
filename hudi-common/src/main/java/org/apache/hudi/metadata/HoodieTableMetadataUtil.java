@@ -2770,7 +2770,7 @@ public class HoodieTableMetadataUtil {
   public static HoodieIndexVersion getExistingHoodieIndexVersionOrDefault(String metadataPartitionPath, HoodieTableMetaClient dataMetaClient) {
     String indexType = fromPartitionPath(metadataPartitionPath).name();
     return getHoodieIndexVersionOption(indexType, dataMetaClient).orElseGet(
-        () -> HoodieIndexVersion.getCurrentVersion(indexType));
+        () -> HoodieIndexVersion.getCurrentVersion(dataMetaClient.getTableConfig().getTableVersion(), indexType));
   }
 
   /**

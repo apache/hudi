@@ -53,12 +53,14 @@ import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
+import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.HoodieStorage;
@@ -93,7 +95,7 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
-import static org.apache.hudi.metadata.HoodieIndexVersion.getInitialVersion;
+import static org.apache.hudi.metadata.HoodieIndexVersion.getCurrentVersion;
 
 /**
  * <code>HoodieTableMetaClient</code> allows to access meta-data about a hoodie table It returns meta-data about
@@ -292,17 +294,24 @@ public class HoodieTableMetaClient implements Serializable {
     if (tableConfig.getRelativeIndexDefinitionPath().isPresent() && StringUtils.nonEmpty(tableConfig.getRelativeIndexDefinitionPath().get())) {
       indexDefOption = loadIndexDefFromDisk(basePath, tableConfig.getRelativeIndexDefinitionPath().get(), storage);
     }
-    populateIndexVersionIfMissing(indexDefOption);
+    populateIndexVersionIfMissing(tableConfig.getTableVersion(), indexDefOption);
     return indexDefOption;
   }
 
-  public static void populateIndexVersionIfMissing(Option<HoodieIndexMetadata> indexDefOption) {
-    // If version field is missing, we should add them with initial version as the value for backward compatibility.
+  public static void populateIndexVersionIfMissing(HoodieTableVersion tableVersion, Option<HoodieIndexMetadata> indexDefOption) {
     indexDefOption.ifPresent(idxDefs ->
-        idxDefs.getIndexDefinitions().replaceAll((indexType, idxDef) ->
-          idxDef.getVersion() == null
-              ? idxDef.toBuilder().withVersion(getInitialVersion(indexType)).build()
-              : idxDef));
+        idxDefs.getIndexDefinitions().replaceAll((indexName, idxDef) -> {
+          ValidationUtils.checkArgument(HoodieIndexVersion.isValidIndexDefinition(tableVersion, idxDef),
+              String.format("Table version %s, index definition %s", tableVersion, idxDef));
+          if (idxDef.getVersion() == null) {
+            // If version field is missing, it implies either of the cases (validated by isValidIndexDefinition):
+            // - It is table version 8, because we don't write version attributes in some hudi releases
+            // - It is table version 9, and it is not secondary index. Since we drop SI on upgrade and we always write version attributes.
+            return idxDef.toBuilder().withVersion(getCurrentVersion(tableVersion, idxDef.getIndexType())).build();
+          } else {
+            return idxDef;
+          }
+        }));
   }
 
   public static Option<HoodieIndexMetadata> loadIndexDefFromDisk(
@@ -893,7 +902,7 @@ public class HoodieTableMetaClient implements Serializable {
     private ConsistencyGuardConfig consistencyGuardConfig = ConsistencyGuardConfig.newBuilder().build();
     private FileSystemRetryConfig fileSystemRetryConfig = FileSystemRetryConfig.newBuilder().build();
     private HoodieMetaserverConfig metaserverConfig = HoodieMetaserverConfig.newBuilder().build();
-    private Option<TimelineLayoutVersion> layoutVersion = Option.empty();
+    private Option<TimelineLayoutVersion> layoutVersion = org.apache.hudi.common.util.Option.empty();
 
     public Builder setConf(StorageConfiguration<?> conf) {
       this.conf = conf;

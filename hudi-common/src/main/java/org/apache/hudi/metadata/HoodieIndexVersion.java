@@ -18,20 +18,13 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.common.model.HoodieIndexDefinition;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 
 import java.util.Arrays;
 import java.util.List;
-
-import static org.apache.hudi.common.config.HoodieIndexingConfig.HOODIE_ALL_PARTITIONS_INDEX_VERSION;
-import static org.apache.hudi.common.config.HoodieIndexingConfig.HOODIE_BLOOM_FILTERS_INDEX_VERSION;
-import static org.apache.hudi.common.config.HoodieIndexingConfig.HOODIE_COLUMN_STATS_INDEX_VERSION;
-import static org.apache.hudi.common.config.HoodieIndexingConfig.HOODIE_EXPRESSION_INDEX_VERSION;
-import static org.apache.hudi.common.config.HoodieIndexingConfig.HOODIE_FILES_INDEX_VERSION;
-import static org.apache.hudi.common.config.HoodieIndexingConfig.HOODIE_PARTITION_STATS_VERSION;
-import static org.apache.hudi.common.config.HoodieIndexingConfig.HOODIE_RECORD_INDEX_VERSION;
-import static org.apache.hudi.common.config.HoodieIndexingConfig.HOODIE_SECONDARY_INDEX_VERSION;
 
 public enum HoodieIndexVersion {
   ALL_PARTITIONS_ONE(MetadataPartitionType.ALL_PARTITIONS, 1, Arrays.asList("0.14.0")),
@@ -73,40 +66,11 @@ public enum HoodieIndexVersion {
     return releaseVersions;
   }
 
-  public static HoodieIndexVersion getCurrentVersion(String partitionType) {
-    return getCurrentVersion(MetadataPartitionType.valueOf(partitionType.toUpperCase()));
+  public static HoodieIndexVersion getCurrentVersion(HoodieTableVersion tableVersion, String partitionType) {
+    return getCurrentVersion(tableVersion, MetadataPartitionType.valueOf(partitionType.toUpperCase()));
   }
 
-  public static HoodieIndexVersion getInitialVersion(String partitionType) {
-    return getInitialVersion(MetadataPartitionType.valueOf(partitionType.toUpperCase()));
-  }
-
-  public static HoodieIndexVersion getCurrentVersion(MetadataPartitionType partitionType) {
-    String configDefault;
-    if (partitionType == MetadataPartitionType.RECORD_INDEX) {
-      configDefault = HOODIE_RECORD_INDEX_VERSION.defaultValue();
-    } else if (partitionType == MetadataPartitionType.COLUMN_STATS) {
-      configDefault = HOODIE_COLUMN_STATS_INDEX_VERSION.defaultValue();
-    } else if (partitionType == MetadataPartitionType.BLOOM_FILTERS) {
-      configDefault = HOODIE_BLOOM_FILTERS_INDEX_VERSION.defaultValue();
-    } else if (partitionType == MetadataPartitionType.EXPRESSION_INDEX) {
-      configDefault = HOODIE_EXPRESSION_INDEX_VERSION.defaultValue();
-    } else if (partitionType == MetadataPartitionType.SECONDARY_INDEX) {
-      configDefault = HOODIE_SECONDARY_INDEX_VERSION.defaultValue();
-    } else if (partitionType == MetadataPartitionType.FILES) {
-      configDefault = HOODIE_FILES_INDEX_VERSION.defaultValue();
-    } else if (partitionType == MetadataPartitionType.PARTITION_STATS) {
-      configDefault = HOODIE_PARTITION_STATS_VERSION.defaultValue();
-    } else if (partitionType == MetadataPartitionType.ALL_PARTITIONS) {
-      configDefault = HOODIE_ALL_PARTITIONS_INDEX_VERSION.defaultValue();
-    } else {
-      throw new HoodieException("Unknown metadata partition type: " + partitionType);
-    }
-
-    return HoodieIndexVersion.valueOf(configDefault);
-  }
-
-  public static HoodieIndexVersion getInitialVersion(MetadataPartitionType partitionType) {
+  public static HoodieIndexVersion getCurrentVersion(HoodieTableVersion tableVersion, MetadataPartitionType partitionType) {
     if (partitionType == MetadataPartitionType.RECORD_INDEX) {
       return RECORD_INDEX_ONE;
     } else if (partitionType == MetadataPartitionType.COLUMN_STATS) {
@@ -116,16 +80,41 @@ public enum HoodieIndexVersion {
     } else if (partitionType == MetadataPartitionType.EXPRESSION_INDEX) {
       return EXPRESSION_INDEX_ONE;
     } else if (partitionType == MetadataPartitionType.SECONDARY_INDEX) {
+      if (tableVersion.greaterThanOrEquals(HoodieTableVersion.NINE)) {
+        return SECONDARY_INDEX_TWO;
+      }
       return SECONDARY_INDEX_ONE;
     } else if (partitionType == MetadataPartitionType.FILES) {
       return FILES_INDEX_ONE;
-    } else if (partitionType == MetadataPartitionType.ALL_PARTITIONS) {
-      return ALL_PARTITIONS_ONE;
     } else if (partitionType == MetadataPartitionType.PARTITION_STATS) {
       return PARTITION_STATS_ONE;
+    } else if (partitionType == MetadataPartitionType.ALL_PARTITIONS) {
+      return ALL_PARTITIONS_ONE;
     } else {
       throw new HoodieException("Unknown metadata partition type: " + partitionType);
     }
+  }
+
+  public static boolean isValidIndexDefinition(HoodieTableVersion tv, HoodieIndexDefinition idxDef) {
+    HoodieIndexVersion iv = idxDef.getVersion();
+    MetadataPartitionType metadataPartitionType = MetadataPartitionType.fromPartitionPath(idxDef.getIndexName());
+    // Table version 8, missing version attribute is allowed.
+    if (tv == HoodieTableVersion.EIGHT && iv == null) {
+      return true;
+    }
+    // Table version eight, SI only v1 is allowed.
+    if (tv == HoodieTableVersion.EIGHT && MetadataPartitionType.SECONDARY_INDEX.equals(metadataPartitionType) && iv != HoodieIndexVersion.SECONDARY_INDEX_ONE) {
+      return false;
+    }
+    // Table version 9, SI must have none null version.
+    if (tv == HoodieTableVersion.NINE && MetadataPartitionType.SECONDARY_INDEX.equals(metadataPartitionType) && iv == null) {
+      return false;
+    }
+    // Table version 9, SI must be v2 or above.
+    if (tv == HoodieTableVersion.NINE && MetadataPartitionType.SECONDARY_INDEX.equals(metadataPartitionType) && !iv.greaterThanOrEquals(HoodieIndexVersion.SECONDARY_INDEX_TWO)) {
+      return false;
+    }
+    return true;
   }
 
   public boolean greaterThan(HoodieIndexVersion other) {

@@ -106,7 +106,7 @@ public class HoodieIndexingConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> HOODIE_PARTITION_STATS_VERSION = ConfigProperty
       .key("_hoodie.index.partition_stats.version")
-      .defaultValue("SECONDARY_INDEX_ONE")
+      .defaultValue("PARTITION_STATS_ONE")
       .withDocumentation("Default version of SECONDARY_INDEX partition.");
 
   public static final ConfigProperty<String> HOODIE_ALL_PARTITIONS_INDEX_VERSION = ConfigProperty

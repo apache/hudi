@@ -49,6 +49,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
+import java.util.function.Function;
 
 import static org.apache.hudi.common.table.HoodieTableMetaClient.loadIndexDefFromDisk;
 import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.MILLIS_INSTANT_TIME_FORMATTER;
@@ -287,7 +288,7 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
         .setTableType(HoodieTableType.COPY_ON_WRITE.name())
         .setTableName("table")
         .initTable(this.metaClient.getStorageConf(), basePath);
-    assertEquals(metaClient.getMetaPath() + "/.index_defs/index.json", metaClient.getIndexDefinitionPath());
+    assertEquals(metaClient.getMetaPath() + "/.index_defs/indexMissingVersion1.json", metaClient.getIndexDefinitionPath());
 
     String randomDefinitionPath = "/a/b/c";
     metaClient.getTableConfig().setValue(HoodieTableConfig.RELATIVE_INDEX_DEFINITION_PATH.key(), "/a/b/c");
@@ -308,7 +309,7 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
         .withIndexName(indexName)
         .withIndexType("column_stats")
         .withIndexFunction("identity")
-        .withVersion(HoodieIndexVersion.getCurrentVersion("column_stats"))
+        .withVersion(HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.current(), "column_stats"))
         .withSourceFields(new ArrayList<>(columnsMap.keySet()))
         .withIndexOptions(Collections.emptyMap())
         .build();
@@ -325,36 +326,53 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testpopulateIndexVersionIfMissing() {
-    HoodieIndexMetadata loadedDef = loadIndexDefFromDisk(
-        new StoragePath(Objects.requireNonNull(getClass().getClassLoader().getResource("index.json")).toString()), "",
-        metaClient.getStorage()).get();
-    assertEquals(1, loadedDef.getIndexDefinitions().size());
-    HoodieIndexDefinition def = loadedDef.getIndexDefinitions().get("column_stats");
-  }
-
-  @Test
   public void testIndexJsonFileMissingVersionField() {
     // Json file with no version attribute
     HoodieIndexMetadata loadedDef = loadIndexDefFromDisk(
-        new StoragePath(Objects.requireNonNull(getClass().getClassLoader().getResource("index.json")).toString()), "",
+        new StoragePath(Objects.requireNonNull(getClass().getClassLoader().getResource("indexMissingVersion1.json")).toString()), "",
         metaClient.getStorage()).get();
-    assertEquals(1, loadedDef.getIndexDefinitions().size());
-    HoodieIndexDefinition def = loadedDef.getIndexDefinitions().get("column_stats");
-    validateAllFieldsExcludingVersion(def);
-    assertTrue(def.getIndexOptions().isEmpty());
+    assertEquals(2, loadedDef.getIndexDefinitions().size());
+    validateAllFieldsExcludingVersion(loadedDef);
     // The populated definition object should use null.
-    assertNull(def.getVersion());
-    // Apply the function fixing the missing version field
-    HoodieTableMetaClient.populateIndexVersionIfMissing(Option.of(loadedDef));
-    def = loadedDef.getIndexDefinitions().get("column_stats");
-    assertEquals(def.getVersion(), HoodieIndexVersion.COLUMN_STATS_ONE);
-    validateAllFieldsExcludingVersion(def);
+    assertNull(loadedDef.getIndexDefinitions().get("column_stats").getVersion());
+    assertNull(loadedDef.getIndexDefinitions().get("secondary_index_idx_price").getVersion());
   }
 
-  private static void validateAllFieldsExcludingVersion(HoodieIndexDefinition def) {
-    assertEquals("column_stats", def.getIndexName());
-    assertEquals("column_stats", def.getIndexType());
+  @Test
+  public void testPopulateVersionFieldIfMissing() {
+    Function<String, HoodieIndexMetadata> getIndexDef = (idxFileName) ->
+        loadIndexDefFromDisk(
+           new StoragePath(Objects.requireNonNull(getClass().getClassLoader().getResource(idxFileName)).toString()), "",
+           metaClient.getStorage()).get();
+    HoodieIndexMetadata loadedDef = getIndexDef.apply("indexMissingVersion1.json");
+    assertEquals(2, loadedDef.getIndexDefinitions().size());
+    // Apply the function fixing the missing version field
+    // Table version 9 with missing version field is not acceptable for secondary index as it should always write the version field.
+    assertThrows(IllegalArgumentException.class, () -> HoodieTableMetaClient.populateIndexVersionIfMissing(HoodieTableVersion.NINE,
+        Option.of(getIndexDef.apply("indexMissingVersion1.json"))));
+
+    // If it is table version 8, secondary index def missing version field will be fixed.
+    HoodieIndexMetadata loadedDef2 = getIndexDef.apply("indexMissingVersion1.json");
+    HoodieTableMetaClient.populateIndexVersionIfMissing(HoodieTableVersion.EIGHT, Option.of(loadedDef2));
+
+    assertEquals(HoodieIndexVersion.COLUMN_STATS_ONE, loadedDef2.getIndexDefinitions().get("column_stats").getVersion());
+    assertEquals(HoodieIndexVersion.SECONDARY_INDEX_ONE, loadedDef2.getIndexDefinitions().get("secondary_index_idx_price").getVersion());
+    validateAllFieldsExcludingVersion(loadedDef2);
+
+    // If it is table version 9 and only non secondary index index missing version attribute
+    HoodieIndexMetadata loadedDef3 = getIndexDef.apply("indexMissingVersion2.json");
+    HoodieTableMetaClient.populateIndexVersionIfMissing(HoodieTableVersion.NINE, Option.of(loadedDef3));
+
+    assertEquals(HoodieIndexVersion.COLUMN_STATS_ONE, loadedDef3.getIndexDefinitions().get("column_stats").getVersion());
+    assertEquals(HoodieIndexVersion.SECONDARY_INDEX_TWO, loadedDef3.getIndexDefinitions().get("secondary_index_idx_price").getVersion());
+    validateAllFieldsExcludingVersion(loadedDef3);
+  }
+
+  private static void validateAllFieldsExcludingVersion(HoodieIndexMetadata loadedDef) {
+    HoodieIndexDefinition colStatsDef = loadedDef.getIndexDefinitions().get("column_stats");
+    assertEquals("column_stats", colStatsDef.getIndexName());
+    assertEquals("column_stats", colStatsDef.getIndexType());
+    assertEquals(Collections.emptyMap(), colStatsDef.getIndexOptions());
     assertEquals(Arrays.asList(
         "_hoodie_commit_time",
         "_hoodie_partition_path",
@@ -371,6 +389,13 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
         "decimalField",
         "longField",
         "incrLongField",
-        "round"), def.getSourceFields());
+        "round"), colStatsDef.getSourceFields());
+
+    HoodieIndexDefinition secIdxDef = loadedDef.getIndexDefinitions().get("secondary_index_idx_price");
+    assertEquals("secondary_index_idx_price", secIdxDef.getIndexName());
+    assertEquals("secondary_index", secIdxDef.getIndexType());
+    assertEquals("identity", secIdxDef.getIndexFunction());
+    assertEquals(Collections.singletonList("price"), secIdxDef.getSourceFields());
+    assertEquals(Collections.emptyMap(), secIdxDef.getIndexOptions());
   }
 }
