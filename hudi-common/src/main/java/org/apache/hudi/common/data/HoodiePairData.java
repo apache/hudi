@@ -177,6 +177,7 @@ public interface HoodiePairData<K, V> extends Serializable {
       int keyRange, double sampleFraction, int maxKeyPerBucket, long seed) {
     throw new UnsupportedOperationException("No implementation provided");
   }
+
   /**
    * @return the deduce number of shuffle partitions
    */

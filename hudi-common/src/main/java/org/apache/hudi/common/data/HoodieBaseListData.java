@@ -1,22 +1,3 @@
-/*
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
- */
-
 package org.apache.hudi.common.data;
 
 import org.apache.hudi.common.util.Either;
@@ -24,67 +5,137 @@ import org.apache.hudi.common.util.Either;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * Data representation of either a stream or a list of objects with Type T.
+ * Data representation of either a stream or a list of objects, partitioned into one or more chunks.
  *
- * @param <T> Object value type.
+ * @param <T> object value type.
  */
 public abstract class HoodieBaseListData<T> {
 
-  protected final Either<Stream<T>, List<T>> data;
+  // Either a list of Stream<T> (lazy) or a list of List<T> (eager), one entry per partition.
+  protected final Either<List<Stream<T>>, List<List<T>>> partitions;
   protected final boolean lazy;
 
+  // ——— Single-partition constructors ———
+
   protected HoodieBaseListData(List<T> data, boolean lazy) {
-    this.data = lazy ? Either.left(data.stream().parallel()) : Either.right(data);
     this.lazy = lazy;
+    if (lazy) {
+      // one partition backed by a parallel stream
+      this.partitions = Either.left(
+          Collections.singletonList(data.stream().parallel())
+      );
+    } else {
+      // one partition backed by the list itself
+      this.partitions = Either.right(
+          Collections.singletonList(data)
+      );
+    }
   }
 
   protected HoodieBaseListData(Stream<T> dataStream, boolean lazy) {
-    // NOTE: In case this container is being instantiated by an eager parent, we have to
-    //       pre-materialize the stream
-    if (lazy) {
-      this.data = Either.left(dataStream);
-    } else {
-      this.data = Either.right(dataStream.collect(Collectors.toList()));
-      dataStream.close();
-    }
     this.lazy = lazy;
+    if (lazy) {
+      // one partition, keep the stream as-is
+      this.partitions = Either.left(
+          Collections.singletonList(dataStream)
+      );
+    } else {
+      // eagerly collect into a list, close the stream, then store
+      List<T> collected = dataStream.collect(Collectors.toList());
+      dataStream.close();
+      this.partitions = Either.right(
+          Collections.singletonList(collected)
+      );
+    }
   }
 
+  // ——— Multi-partition constructors (differ by dummy parameter to avoid erasure clash) ———
+
+  /** Partitioned by sub-lists; private to avoid erasure clash with the single-list ctor. */
+  @SuppressWarnings("unused")
+  protected HoodieBaseListData(List<List<T>> listPartitions, boolean lazy, int dummy) {
+    this.lazy = lazy;
+    if (lazy) {
+      List<Stream<T>> streams = listPartitions.stream()
+          .map(List::stream)
+          .collect(Collectors.toList());
+      this.partitions = Either.left(streams);
+    } else {
+      this.partitions = Either.right(listPartitions);
+    }
+  }
+
+  /** Partitioned by sub-streams; private to avoid erasure clash with the single-stream ctor. */
+  @SuppressWarnings("unused")
+  protected HoodieBaseListData(List<Stream<T>> streamPartitions, boolean lazy, String dummy) {
+    this.lazy = lazy;
+    if (lazy) {
+      this.partitions = Either.left(streamPartitions);
+    } else {
+      List<List<T>> lists = streamPartitions.stream()
+          .map(stream -> {
+            try (Stream<T> s = stream) {
+              return s.collect(Collectors.toList());
+            }
+          })
+          .collect(Collectors.toList());
+      this.partitions = Either.right(lists);
+    }
+  }
+
+  // ——— Core APIs ———
+
+  /** Flatten across all partitions in order. */
   protected Stream<T> asStream() {
-    return lazy ? data.asLeft() : data.asRight().parallelStream();
+    if (lazy) {
+      return partitions
+          .asLeft()
+          .stream()
+          .flatMap(Function.identity());
+    } else {
+      return partitions
+          .asRight()
+          .stream()
+          .flatMap(List::stream)
+          .parallel();
+    }
   }
 
+  /** Number of partitions currently held. */
+  protected int partitionCount() {
+    return lazy
+        ? partitions.asLeft().size()
+        : partitions.asRight().size();
+  }
+
+  /** Test if *all* partitions are empty. */
   protected boolean isEmpty() {
-    if (lazy) {
-      return !data.asLeft().findAny().isPresent();
-    } else {
-      return data.asRight().isEmpty();
-    }
+    return (lazy
+        ? partitions.asLeft().stream().allMatch(s -> !s.findAny().isPresent())
+        : partitions.asRight().stream().allMatch(List::isEmpty));
   }
 
+  /** Total element count across all partitions. */
   protected long count() {
-    if (lazy) {
-      return data.asLeft().count();
-    } else {
-      return data.asRight().size();
-    }
+    return (lazy
+        ? partitions.asLeft().stream().mapToLong(s -> s.count()).sum()
+        : partitions.asRight().stream().mapToLong(List::size).sum());
   }
 
+  /** Collect everything into a single List<T>. */
   protected List<T> collectAsList() {
-    if (lazy) {
-      try (Stream<T> stream = data.asLeft()) {
-        return stream.collect(Collectors.toList());
-      }
-    } else {
-      return data.asRight();
-    }
+    return asStream().collect(Collectors.toList());
   }
+
+  // ——— Utility to close iterators created from Streams ———
 
   static class IteratorCloser implements Runnable {
     private static final Logger LOG = LoggerFactory.getLogger(IteratorCloser.class);
