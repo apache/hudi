@@ -19,7 +19,7 @@
 
 package org.apache.hudi.client.functional;
 
-import org.apache.hudi.avro.model.HoodieSecondaryIndexInfo;
+import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
@@ -60,7 +60,6 @@ import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.sql.catalyst.InternalRow;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -487,7 +486,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
 
   private static void populateValidAndDeletedSecondaryIndexRecords(HoodieRecord record, List<HoodieRecord> deletedSecondaryIndexRecords, List<HoodieRecord> validSecondaryIndexRecords) {
     try {
-      if (record.isDelete(HoodieSecondaryIndexInfo.getClassSchema(), new Properties())) {
+      if (record.isDelete(HoodieMetadataRecord.getClassSchema(), new Properties())) {
         deletedSecondaryIndexRecords.add(record);
       } else {
         validSecondaryIndexRecords.add(record);
@@ -719,8 +718,8 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       });
       TypedProperties properties = new TypedProperties();
       // configure un-merged log file reader
-      HoodieReaderContext<InternalRow> readerContext = context.getReaderContextFactory(metaClient).getContext();
-      HoodieFileGroupReader<InternalRow> reader = HoodieFileGroupReader.<InternalRow>newBuilder()
+      HoodieReaderContext readerContext = context.getReaderContextFactory(metaClient).getContext();
+      HoodieFileGroupReader reader = HoodieFileGroupReader.newBuilder()
           .withReaderContext(readerContext)
           .withDataSchema(writerSchemaOpt.get())
           .withRequestedSchema(writerSchemaOpt.get())

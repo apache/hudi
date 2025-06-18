@@ -449,7 +449,7 @@ public class HoodieTableMetaClient implements Serializable {
     return timelineLayout;
   }
 
-  public Boolean isMetadataTable() {
+  public boolean isMetadataTable() {
     return HoodieTableMetadata.isMetadataTable(getBasePath());
   }
 

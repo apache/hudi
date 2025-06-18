@@ -296,7 +296,8 @@ class TestFileGroupRecordBuffer {
             props,
             readStats,
             Option.empty(),
-            false);
+            false
+        );
     when(readerContext.getValue(any(), any(), any())).thenReturn(null);
     assertFalse(keyBasedBuffer.isCustomDeleteRecord(record));
 
@@ -309,7 +310,8 @@ class TestFileGroupRecordBuffer {
             props,
             readStats,
             Option.empty(),
-            false);
+            false
+    );
     when(readerContext.getValue(any(), any(), any())).thenReturn("i");
     assertFalse(keyBasedBuffer.isCustomDeleteRecord(record));
     when(readerContext.getValue(any(), any(), any())).thenReturn("d");
@@ -331,7 +333,8 @@ class TestFileGroupRecordBuffer {
             props,
             readStats,
             Option.empty(),
-            false);
+            false
+        );
 
     // CASE 1: With custom delete marker.
     GenericRecord record = new GenericData.Record(schema);

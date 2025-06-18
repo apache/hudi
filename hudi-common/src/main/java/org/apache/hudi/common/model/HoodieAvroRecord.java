@@ -26,6 +26,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.hudi.metadata.HoodieMetadataPayload;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
@@ -144,6 +145,19 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   }
 
   @Override
+  public HoodieRecord updateMetaField(Schema recordSchema, int ordinal, String value) {
+    try {
+      Option<IndexedRecord> avroRecordOpt = getData().getInsertValue(recordSchema);
+      // value should always be present if the meta fields are being updated since the record is being written
+      IndexedRecord avroRecord = avroRecordOpt.orElseThrow(() -> new HoodieIOException("Failed to get insert value for record schema: " + recordSchema));
+      avroRecord.put(ordinal, value);
+      return new HoodieAvroIndexedRecord(getKey(), avroRecord, getOperation(), this.currentLocation, this.newLocation);
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to deserialize record!", e);
+    }
+  }
+
+  @Override
   public HoodieRecord rewriteRecordWithNewSchema(Schema recordSchema, Properties props, Schema newSchema, Map<String, String> renameCols) {
     try {
       GenericRecord oldRecord = (GenericRecord) getData().getInsertValue(recordSchema, props).get();
@@ -168,6 +182,8 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
     }
     if (this.data instanceof BaseAvroPayload) {
       return ((BaseAvroPayload) this.data).isDeleted(recordSchema, props);
+    } else if (this.data instanceof HoodieMetadataPayload) {
+      return ((HoodieMetadataPayload) this.data).isDeleted();
     } else {
       return !this.data.getInsertValue(recordSchema, props).isPresent();
     }

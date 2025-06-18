@@ -18,6 +18,7 @@
 
 package org.apache.hudi.execution;
 
+import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -63,7 +64,7 @@ public class JavaLazyInsertIterable<T> extends HoodieLazyInsertIterable<T> {
     HoodieExecutor<List<WriteStatus>> executor =
         null;
     try {
-      final Schema schema = new Schema.Parser().parse(hoodieConfig.getSchema());
+      final Schema schema = AvroSchemaCache.intern(new Schema.Parser().parse(hoodieConfig.getSchema()));
       executor = ExecutorFactory.create(hoodieConfig, inputItr, getInsertHandler(), getTransformer(schema, hoodieConfig));
       final List<WriteStatus> result = executor.execute();
       checkState(result != null && !result.isEmpty());

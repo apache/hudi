@@ -138,6 +138,12 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   }
 
   @Override
+  public HoodieRecord updateMetaField(Schema recordSchema, int ordinal, String value) {
+    data.put(ordinal, value);
+    return new HoodieAvroIndexedRecord(key, data, operation, metaData);
+  }
+
+  @Override
   public HoodieRecord rewriteRecordWithNewSchema(Schema recordSchema, Properties props, Schema newSchema, Map<String, String> renameCols) {
     GenericRecord record = HoodieAvroUtils.rewriteRecordWithNewSchema(data, newSchema, renameCols);
     return new HoodieAvroIndexedRecord(key, record, operation, metaData);

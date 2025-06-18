@@ -143,7 +143,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
 
   @Override
   public Object getValue(IndexedRecord record, Schema schema, String fieldName) {
-    return getFieldValueFromIndexedRecord(record, schema, fieldName);
+    return getFieldValueFromIndexedRecord(record, fieldName);
   }
 
   @Override
@@ -237,9 +237,8 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
 
   private Object getFieldValueFromIndexedRecord(
       IndexedRecord record,
-      Schema recordSchema,
       String fieldName) {
-    Schema currentSchema = recordSchema;
+    Schema currentSchema = record.getSchema();
     IndexedRecord currentRecord = record;
     String[] path = fieldName.split("\\.");
     for (int i = 0; i < path.length; i++) {

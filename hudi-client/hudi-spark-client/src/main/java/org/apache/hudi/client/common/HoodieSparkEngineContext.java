@@ -23,6 +23,7 @@ import org.apache.hudi.common.data.HoodieAccumulator;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
 import org.apache.hudi.common.data.HoodiePairData;
+import org.apache.hudi.common.engine.AvroReaderContextFactory;
 import org.apache.hudi.common.engine.EngineProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.ReaderContextFactory;
@@ -50,7 +51,6 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function2;
 import org.apache.spark.api.java.function.PairFlatMapFunction;
 import org.apache.spark.sql.SQLContext;
-import org.apache.spark.sql.catalyst.InternalRow;
 
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -117,10 +117,6 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
   @Override
   public <K, V> HoodiePairData<K, V> emptyHoodiePairData() {
     return HoodieJavaPairRDD.of(JavaPairRDD.fromJavaRDD(javaSparkContext.emptyRDD()));
-  }
-
-  public boolean supportsFileGroupReader() {
-    return true;
   }
 
   @Override
@@ -254,7 +250,11 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
   }
 
   @Override
-  public ReaderContextFactory<InternalRow> getReaderContextFactory(HoodieTableMetaClient metaClient) {
+  public ReaderContextFactory<?> getReaderContextFactory(HoodieTableMetaClient metaClient) {
+    // metadata table are only supported by the AvroReaderContext.
+    if (metaClient.isMetadataTable()) {
+      return new AvroReaderContextFactory(metaClient);
+    }
     return new SparkReaderContextFactory(this, metaClient);
   }
 

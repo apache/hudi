@@ -25,12 +25,12 @@ import org.apache.hudi.exception.InvalidUnionTypeException;
 import org.apache.hudi.exception.MissingSchemaFieldException;
 import org.apache.hudi.exception.SchemaBackwardsCompatibilityException;
 import org.apache.hudi.exception.SchemaCompatibilityException;
-
-import org.apache.avro.Schema;
-import org.apache.avro.SchemaCompatibility;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.action.TableChanges;
 import org.apache.hudi.internal.schema.utils.SchemaChangeUtils;
+
+import org.apache.avro.Schema;
+import org.apache.avro.SchemaCompatibility;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

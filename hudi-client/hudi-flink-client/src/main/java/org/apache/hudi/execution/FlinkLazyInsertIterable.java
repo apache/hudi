@@ -18,6 +18,7 @@
 
 package org.apache.hudi.execution;
 
+import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -59,7 +60,7 @@ public class FlinkLazyInsertIterable<T> extends HoodieLazyInsertIterable<T> {
     // Executor service used for launching writer thread.
     HoodieExecutor<List<WriteStatus>> executor = null;
     try {
-      Schema schema = new Schema.Parser().parse(hoodieConfig.getSchema());
+      Schema schema = AvroSchemaCache.intern(new Schema.Parser().parse(hoodieConfig.getSchema()));
       executor = ExecutorFactory.create(hoodieConfig, inputItr, getExplicitInsertHandler(),
           getTransformer(schema, hoodieConfig));
       final List<WriteStatus> result = executor.execute();

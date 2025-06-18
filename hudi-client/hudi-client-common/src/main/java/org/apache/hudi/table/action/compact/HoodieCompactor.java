@@ -18,10 +18,10 @@
 
 package org.apache.hudi.table.action.compact;
 
+import org.apache.hudi.avro.HoodieAvroReaderContext;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
@@ -29,7 +29,10 @@ import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.CompactionOperation;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -45,6 +48,8 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
+import org.apache.hudi.io.FileGroupReaderBasedAppendHandle;
+import org.apache.hudi.io.FileGroupReaderBasedMergeHandle;
 import org.apache.hudi.io.IOUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -53,6 +58,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.IndexedRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -62,6 +68,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
+import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
 import static java.util.stream.Collectors.toList;
@@ -126,7 +133,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     // Compacting is very similar to applying updates to existing file
     List<CompactionOperation> operations = compactionPlan.getOperations().stream()
         .map(CompactionOperation::convertFromAvroRecordInstance).collect(toList());
-    LOG.info("Compactor compacting " + operations + " files");
+    LOG.info("Compactor compacting {} fileGroups", operations.size());
 
     String maxInstantTime = getMaxInstantTime(metaClient);
 
@@ -135,22 +142,14 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     // if this is a MDT, set up the instant range of log reader just like regular MDT snapshot reader.
     Option<InstantRange> instantRange = CompactHelpers.getInstance().getInstantRange(metaClient);
 
-    boolean useFileGroupReaderBasedCompaction = context.supportsFileGroupReader()   // the engine needs to support fg reader first
-        && !metaClient.isMetadataTable()
-        && config.getBooleanOrDefault(HoodieReaderConfig.FILE_GROUP_READER_ENABLED)
-        && operationType == WriteOperationType.COMPACT
-        && !hasBootstrapFile(operations)                                            // bootstrap file read for fg reader is not ready
-        && config.populateMetaFields();                                             // Virtual key support by fg reader is not ready
-
-    if (useFileGroupReaderBasedCompaction) {
-      ReaderContextFactory<T> readerContextFactory = context.getReaderContextFactory(metaClient);
+    if (operationType == WriteOperationType.LOG_COMPACT) {
       return context.parallelize(operations).map(
-              operation -> compact(compactionHandler, config, operation, compactionInstantTime, readerContextFactory.getContext()))
+              operation -> logCompact(config, operation, compactionInstantTime, instantRange, table, taskContextSupplier))
           .flatMap(List::iterator);
     } else {
+      ReaderContextFactory<T> readerContextFactory = context.getReaderContextFactory(metaClient);
       return context.parallelize(operations).map(
-              operation -> compact(compactionHandler, metaClient, config, operation, compactionInstantTime, maxInstantTime,
-                  instantRange, taskContextSupplier, executionHelper))
+              operation -> compact(config, operation, compactionInstantTime, readerContextFactory.getContext(), table, maxInstantTime, taskContextSupplier))
           .flatMap(List::iterator);
     }
   }
@@ -284,12 +283,44 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
   /**
    * Execute a single compaction operation and report back status.
    */
-  public List<WriteStatus> compact(HoodieCompactionHandler compactionHandler,
-                                   HoodieWriteConfig writeConfig,
+  public List<WriteStatus> compact(HoodieWriteConfig writeConfig,
                                    CompactionOperation operation,
                                    String instantTime,
-                                   HoodieReaderContext hoodieReaderContext) throws IOException {
-    return compactionHandler.compactUsingFileGroupReader(instantTime, operation, writeConfig, hoodieReaderContext);
+                                   HoodieReaderContext hoodieReaderContext,
+                                   HoodieTable table,
+                                   String maxInstantTime,
+                                   TaskContextSupplier taskContextSupplier) throws IOException {
+    FileGroupReaderBasedMergeHandle<T, ?, ?, ?> mergeHandle = new FileGroupReaderBasedMergeHandle<>(writeConfig,
+        instantTime, table, getFileSliceFromOperation(operation, writeConfig.getBasePath()), operation, taskContextSupplier, hoodieReaderContext, maxInstantTime, getEngineRecordType());
+    mergeHandle.write();
+    return mergeHandle.close();
+  }
+
+  public List<WriteStatus> logCompact(HoodieWriteConfig writeConfig,
+                                      CompactionOperation operation,
+                                      String instantTime,
+                                      Option<InstantRange> instantRange,
+                                      HoodieTable table,
+                                      TaskContextSupplier taskContextSupplier) throws IOException {
+    HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(table.getStorageConf(), table.getMetaClient().getTableConfig(), instantRange, Option.empty());
+    FileGroupReaderBasedAppendHandle<IndexedRecord, ?, ?, ?> appendHandle = new FileGroupReaderBasedAppendHandle<>(writeConfig, instantTime, table, getFileSliceFromOperation(operation,
+        writeConfig.getBasePath()), operation,  taskContextSupplier, readerContext);
+    appendHandle.doAppend();
+    return appendHandle.close();
+  }
+
+  private FileSlice getFileSliceFromOperation(CompactionOperation operation, String basePath) {
+    Option<HoodieBaseFile> baseFileOpt =
+        operation.getBaseFile(basePath, operation.getPartitionPath());
+    List<HoodieLogFile> logFiles = operation.getDeltaFileNames().stream().map(p ->
+            new HoodieLogFile(new StoragePath(FSUtils.constructAbsolutePath(
+                basePath, operation.getPartitionPath()), p)))
+        .collect(Collectors.toList());
+    return new FileSlice(
+        operation.getFileGroupId(),
+        operation.getBaseInstantTime(),
+        baseFileOpt.isPresent() ? baseFileOpt.get() : null,
+        logFiles);
   }
 
   public String getMaxInstantTime(HoodieTableMetaClient metaClient) {
@@ -309,7 +340,5 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     }
   }
 
-  private boolean hasBootstrapFile(List<CompactionOperation> operationList) {
-    return operationList.stream().anyMatch(operation -> operation.getBootstrapFilePath().isPresent());
-  }
+  protected abstract HoodieRecord.HoodieRecordType getEngineRecordType();
 }
