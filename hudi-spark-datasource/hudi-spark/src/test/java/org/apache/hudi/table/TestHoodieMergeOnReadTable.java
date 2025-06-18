@@ -446,6 +446,8 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
         assertEquals(updatedRecords.size(), rows.size());
         for (Row row : rows) {
           assertEquals(row.getAs(HoodieRecord.COMMIT_TIME_METADATA_FIELD), newCommitTime);
+          // check that file names metadata is updated
+          assertTrue(row.getString(HoodieRecord.FILENAME_META_FIELD_ORD).contains(compactionInstantTime));
         }
       }
     }

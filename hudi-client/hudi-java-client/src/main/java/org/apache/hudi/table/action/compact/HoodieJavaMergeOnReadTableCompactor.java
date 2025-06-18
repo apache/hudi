@@ -60,4 +60,9 @@ public class HoodieJavaMergeOnReadTableCompactor<T>
   public void maybePersist(HoodieData<WriteStatus> writeStatus, HoodieEngineContext context, HoodieWriteConfig config, String instantTime) {
     // No OP
   }
+
+  @Override
+  protected HoodieRecord.HoodieRecordType getEngineRecordType() {
+    return HoodieRecord.HoodieRecordType.AVRO;
+  }
 }

@@ -28,7 +28,6 @@ import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantGenerator;
@@ -71,18 +70,18 @@ public class HoodieFlinkMergeOnReadTableCompactor<T>
   }
 
   public List<WriteStatus> compact(HoodieCompactionHandler compactionHandler,
-                                   HoodieTableMetaClient metaClient,
                                    HoodieWriteConfig writeConfig,
                                    CompactionOperation operation,
                                    String instantTime,
                                    TaskContextSupplier taskContextSupplier,
-                                   Option<HoodieReaderContext<?>> readerContextOpt) throws IOException {
+                                   Option<HoodieReaderContext<?>> readerContextOpt,
+                                   HoodieTable table) throws IOException {
+    String maxInstantTime = getMaxInstantTime(table.getMetaClient());
     if (readerContextOpt.isEmpty()) {
       LOG.info("Compact using legacy compaction, operation: {}.", operation);
-      String maxInstantTime = getMaxInstantTime(metaClient);
       return compact(
           compactionHandler,
-          metaClient,
+          table.getMetaClient(),
           writeConfig,
           operation,
           instantTime,
@@ -91,16 +90,23 @@ public class HoodieFlinkMergeOnReadTableCompactor<T>
     } else {
       LOG.info("Compact using file group reader based compaction, operation: {}.", operation);
       return compact(
-          compactionHandler,
           writeConfig,
           operation,
           instantTime,
-          readerContextOpt.get());
+          readerContextOpt.get(),
+          table,
+          maxInstantTime,
+          taskContextSupplier);
     }
   }
 
   @Override
   public void maybePersist(HoodieData<WriteStatus> writeStatus, HoodieEngineContext context, HoodieWriteConfig config, String instantTime) {
     // No OP
+  }
+
+  @Override
+  protected HoodieRecord.HoodieRecordType getEngineRecordType() {
+    return HoodieRecord.HoodieRecordType.FLINK;
   }
 }

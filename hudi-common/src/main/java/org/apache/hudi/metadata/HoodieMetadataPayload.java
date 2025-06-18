@@ -18,6 +18,7 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.avro.model.HoodieMetadataBloomFilter;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.avro.model.HoodieMetadataFileInfo;
@@ -33,6 +34,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.hash.ColumnIndexID;
 import org.apache.hudi.common.util.hash.FileIndexID;
@@ -46,6 +48,7 @@ import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.util.Lazy;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
@@ -100,6 +103,18 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartitionStats
  * During compaction on the table, the deletions are merged with additions and hence records are pruned.
  */
 public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadataPayload> {
+  private static final Schema HOODIE_METADATA_SCHEMA = AvroSchemaCache.intern(HoodieMetadataRecord.getClassSchema());
+  /**
+   * Field offsets when metadata fields are present
+   */
+  private static final int KEY_FIELD_OFFSET = HoodieRecord.HOODIE_META_COLUMNS.size();
+  private static final int TYPE_FIELD_OFFSET = KEY_FIELD_OFFSET + 1;
+  private static final int FILESYSTEM_METADATA_FIELD_OFFSET = TYPE_FIELD_OFFSET + 1;
+  private static final int BLOOM_FILTER_METADATA_FIELD_OFFSET = FILESYSTEM_METADATA_FIELD_OFFSET + 1;
+  private static final int COLUMN_STATS_METADATA_FIELD_OFFSET = BLOOM_FILTER_METADATA_FIELD_OFFSET + 1;
+  private static final int RECORD_INDEX_METADATA_FIELD_OFFSET = COLUMN_STATS_METADATA_FIELD_OFFSET + 1;
+  private static final int SECONDARY_INDEX_METADATA_FIELD_OFFSET = RECORD_INDEX_METADATA_FIELD_OFFSET + 1;
+
   /**
    * HoodieMetadata schema field ids
    */
@@ -376,19 +391,43 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   }
 
   @Override
-  public Option<IndexedRecord> getInsertValue(Schema schemaIgnored, Properties propertiesIgnored) throws IOException {
+  public Option<IndexedRecord> getInsertValue(Schema schema, Properties propertiesIgnored) throws IOException {
     if (key == null || this.isDeletedRecord) {
       return Option.empty();
     }
 
-    HoodieMetadataRecord record = new HoodieMetadataRecord(key, type, filesystemMetadata, bloomFilterMetadata,
-        columnStatMetadata, recordIndexMetadata, secondaryIndexMetadata);
-    return Option.of(record);
+    if (schema == null || HOODIE_METADATA_SCHEMA == schema) {
+      // If the schema is same or none is provided, we can return the record directly
+      HoodieMetadataRecord record = new HoodieMetadataRecord(key, type, filesystemMetadata, bloomFilterMetadata,
+          columnStatMetadata, recordIndexMetadata, secondaryIndexMetadata);
+      return Option.of(record);
+    } else {
+      // Otherwise, the assumption is that the schema required contains the metadata fields so we construct a new GenericRecord with these fields
+      GenericData.Record record = new GenericData.Record(schema);
+      record.put(KEY_FIELD_OFFSET, key);
+      record.put(TYPE_FIELD_OFFSET, type);
+      if (filesystemMetadata != null) {
+        record.put(FILESYSTEM_METADATA_FIELD_OFFSET, filesystemMetadata);
+      }
+      if (bloomFilterMetadata != null) {
+        record.put(BLOOM_FILTER_METADATA_FIELD_OFFSET, bloomFilterMetadata);
+      }
+      if (columnStatMetadata != null) {
+        record.put(COLUMN_STATS_METADATA_FIELD_OFFSET, columnStatMetadata);
+      }
+      if (recordIndexMetadata != null) {
+        record.put(RECORD_INDEX_METADATA_FIELD_OFFSET, recordIndexMetadata);
+      }
+      if (secondaryIndexMetadata != null) {
+        record.put(SECONDARY_INDEX_METADATA_FIELD_OFFSET, secondaryIndexMetadata);
+      }
+      return Option.of(record);
+    }
   }
 
   @Override
   public Option<IndexedRecord> getInsertValue(Schema schema) throws IOException {
-    return getInsertValue(schema, new Properties());
+    return getInsertValue(schema, CollectionUtils.emptyProps());
   }
 
   /**
