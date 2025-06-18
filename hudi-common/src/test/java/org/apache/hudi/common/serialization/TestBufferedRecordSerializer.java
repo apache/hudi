@@ -23,6 +23,7 @@ import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecordSerializer;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
+import org.apache.hudi.util.Lazy;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -63,7 +64,7 @@ public class TestBufferedRecordSerializer {
     record.put("name", "lily");
     record.put("favorite_number", 100);
     record.put("favorite_color", "red");
-    BufferedRecord<IndexedRecord> bufferedRecord = new BufferedRecord<>("id", 100, record, 1, false);
+    BufferedRecord<IndexedRecord> bufferedRecord = new BufferedRecord<>("id", Lazy.eagerly(100), record, 1, false);
 
     AvroRecordSerializer avroRecordSerializer = new AvroRecordSerializer(integer -> schema);
     BufferedRecordSerializer<IndexedRecord> bufferedRecordSerializer = new BufferedRecordSerializer<>(avroRecordSerializer);
@@ -75,7 +76,7 @@ public class TestBufferedRecordSerializer {
     avroRecordSerializer = new AvroRecordSerializer(integer -> HoodieMetadataRecord.SCHEMA$);
     bufferedRecordSerializer = new BufferedRecordSerializer<>(avroRecordSerializer);
     HoodieMetadataRecord metadataRecord = new HoodieMetadataRecord("__all_partitions__", 1, new HashMap<>(), null, null, null, null);
-    bufferedRecord = new BufferedRecord<>("__all_partitions__", 0, metadataRecord, 1, false);
+    bufferedRecord = new BufferedRecord<>("__all_partitions__", Lazy.eagerly(0), metadataRecord, 1, false);
     bytes = bufferedRecordSerializer.serialize(bufferedRecord);
     result = bufferedRecordSerializer.deserialize(bytes);
 
