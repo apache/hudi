@@ -59,7 +59,7 @@ public class HoodieInternalRow extends InternalRow {
   private final UTF8String[] metaFields;
   private final InternalRow sourceRow;
   // indicates whether this row represents a delete operation. Used in the CDC read.
-  private final boolean isDeleteOperation;
+  private boolean isDeleteOperation;
 
   /**
    * Specifies whether source {@link #sourceRow} contains meta-fields
@@ -93,6 +93,11 @@ public class HoodieInternalRow extends InternalRow {
   }
 
   public static HoodieInternalRow createDeleteRow(UTF8String recordKey, UTF8String partitionPath, InternalRow sourceRow) {
+    if (sourceRow instanceof HoodieInternalRow) {
+      HoodieInternalRow hoodieInternalRow = (HoodieInternalRow) sourceRow;
+      hoodieInternalRow.isDeleteOperation = true;
+      return hoodieInternalRow;
+    }
     UTF8String[] metaFields = sourceRow != null ? new UTF8String[0] : new UTF8String[] {
         null,
         null,
