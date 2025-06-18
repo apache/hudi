@@ -179,6 +179,10 @@ module.exports = {
           position: "left",
           items: [
             {
+              label: "Tutorial Series",
+              to: "/learn/tutorial-series",
+            },
+            {
               label: "Talks",
               to: "talks",
             },
