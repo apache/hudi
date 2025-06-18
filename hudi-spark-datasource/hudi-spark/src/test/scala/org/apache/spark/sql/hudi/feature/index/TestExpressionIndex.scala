@@ -29,7 +29,7 @@ import org.apache.hudi.client.utils.SparkMetadataWriterUtils
 import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{FileSlice, HoodieIndexDefinition}
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.{HoodieTableMetaClient, HoodieTableVersion}
 import org.apache.hudi.common.table.view.{FileSystemViewManager, HoodieTableFileSystemView}
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.util.Option
@@ -2195,7 +2195,8 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
         HoodieIndexDefinition.newBuilder()
           .withIndexName("random")
           .withIndexType(MetadataPartitionType.COLUMN_STATS.name())
-          .withVersion(HoodieIndexVersion.getCurrentVersion(MetadataPartitionType.COLUMN_STATS))
+          .withVersion(HoodieIndexVersion.getCurrentVersion(
+            HoodieTableVersion.current(), MetadataPartitionType.COLUMN_STATS))
           .withIndexOptions(JavaConverters.mapAsJavaMapConverter(indexOptions).asJava).build())
       .getExpressionIndexRecords
     // Since there is only one partition file pair there is only one bloom filter record

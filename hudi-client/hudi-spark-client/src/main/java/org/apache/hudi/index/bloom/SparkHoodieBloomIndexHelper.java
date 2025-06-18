@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.hash.FileIndexID;
 import org.apache.hudi.common.util.hash.PartitionIndexID;
@@ -321,7 +322,7 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
       String bloomPartitionPath = BLOOM_FILTERS.getPartitionPath();
       return mapRecordKeyToFileGroupIndex(bloomIndexEncodedKey, targetPartitions, bloomPartitionPath,
           // TODO[HUDI-9530] The version should come from the index def json file instead of a hard code value.
-          HoodieIndexVersion.getCurrentVersion(bloomPartitionPath));
+          HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.current(), bloomPartitionPath));
     }
   }
 

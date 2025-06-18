@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 
@@ -207,14 +208,14 @@ public class TestMetadataPartitionType {
         .withIndexName(expressionIndexName)
         .withIndexType("column_stats")
         .withIndexFunction("lower")
-        .withVersion(HoodieIndexVersion.getCurrentVersion("column_stats"))
+        .withVersion(HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.current(), "column_stats"))
         .withSourceFields(Collections.singletonList("name"))
         .build();
     indexDefinitions.put(expressionIndexName, expressionIndexDefinition);
     HoodieIndexDefinition secondaryIndexDefinition = HoodieIndexDefinition.newBuilder()
         .withIndexName(secondaryIndexName)
         .withIndexType(MetadataPartitionType.COLUMN_STATS.name())
-        .withVersion(HoodieIndexVersion.getCurrentVersion(MetadataPartitionType.COLUMN_STATS))
+        .withVersion(HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.current(), MetadataPartitionType.COLUMN_STATS))
         .withIndexFunction(null)
         .withSourceFields(Collections.singletonList("name"))
         .build();
@@ -236,12 +237,12 @@ public class TestMetadataPartitionType {
   public void testIndexNameWithoutPrefix() {
     for (MetadataPartitionType partitionType : MetadataPartitionType.getValidValues()) {
       String userIndexName = MetadataPartitionType.isExpressionOrSecondaryIndex(partitionType.getPartitionPath()) ? "idx" : "";
-      HoodieIndexDefinition indexDefinition = createIndexDefinition(partitionType, userIndexName, null, null, null, null);
+      HoodieIndexDefinition indexDefinition = createIndexDefinition(partitionType, userIndexName, partitionType.name(), null, null, null);
       assertEquals(partitionType.getIndexNameWithoutPrefix(indexDefinition), userIndexName);
     }
 
     assertThrows(IllegalArgumentException.class, () -> {
-      HoodieIndexDefinition indexDefinition = createIndexDefinition(MetadataPartitionType.RECORD_INDEX, "", null, null, null, null);
+      HoodieIndexDefinition indexDefinition = createIndexDefinition(MetadataPartitionType.RECORD_INDEX, "", MetadataPartitionType.RECORD_INDEX.name(), null, null, null);
       MetadataPartitionType.EXPRESSION_INDEX.getIndexNameWithoutPrefix(indexDefinition);
     });
   }
@@ -255,7 +256,7 @@ public class TestMetadataPartitionType {
         .withIndexFunction(indexFunction)
         .withSourceFields(sourceFields)
         .withIndexOptions(indexOptions)
-        .withVersion(HoodieIndexVersion.getCurrentVersion(indexType))
+        .withVersion(HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.current(), indexType))
         .build();
   }
 
