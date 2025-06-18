@@ -94,7 +94,7 @@ public class TestMergeHandle extends BaseTestHandle {
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
     table = (HoodieSparkCopyOnWriteTable) HoodieSparkCopyOnWriteTable.create(config, context, metaClient);
-    HoodieFileGroup fileGroup = table.getFileSystemView().getAllFileGroups(partitionPath).collect(Collectors.toList()).get(0);;
+    HoodieFileGroup fileGroup = table.getFileSystemView().getAllFileGroups(partitionPath).collect(Collectors.toList()).get(0);
     String fileId = fileGroup.getFileGroupId().getFileId();
 
     instantTime = "001";
