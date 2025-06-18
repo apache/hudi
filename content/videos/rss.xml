@@ -4,10 +4,26 @@
         <title>Apache Hudi Blog</title>
         <link>https://hudi.apache.org/videos</link>
         <description>Apache Hudi Blog</description>
-        <lastBuildDate>Fri, 14 Mar 2025 00:00:00 GMT</lastBuildDate>
+        <lastBuildDate>Mon, 16 Jun 2025 00:00:00 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
         <language>en</language>
+        <item>
+            <title><![CDATA[Apache Hudi does XYZ (1/10): File pruning with multi-modal index]]></title>
+            <link>https://hudi.apache.org/videos/2025/06/16/apache-hudi-does-xyz-110</link>
+            <guid>https://hudi.apache.org/videos/2025/06/16/apache-hudi-does-xyz-110</guid>
+            <pubDate>Mon, 16 Jun 2025 00:00:00 GMT</pubDate>
+            <category>hudi</category>
+            <category>spark</category>
+            <category>blog</category>
+            <category>course</category>
+            <category>tutorial</category>
+            <category>datumagic</category>
+            <category>data lake</category>
+            <category>lakehouse</category>
+            <category>apache hudi</category>
+            <category>apache spark</category>
+        </item>
         <item>
             <title><![CDATA[Metadata and Schema of Hudi Table]]></title>
             <link>https://hudi.apache.org/videos/2025/03/14/metadata-and-schema-of-hudi-table</link>
@@ -224,19 +240,6 @@
             <category>hudi streamer</category>
             <category>deltastreamer</category>
             <category>trino</category>
-        </item>
-        <item>
-            <title><![CDATA[DeltaStreamer with incremental ETL and Broadcast Joins for Faster ETL]]></title>
-            <link>https://hudi.apache.org/videos/2024/05/20/deltastreamer-with-incremental-etl-and-broadcast-joins-for-faster-etl</link>
-            <guid>https://hudi.apache.org/videos/2024/05/20/deltastreamer-with-incremental-etl-and-broadcast-joins-for-faster-etl</guid>
-            <pubDate>Mon, 20 May 2024 00:00:00 GMT</pubDate>
-            <category>guide</category>
-            <category>beginner</category>
-            <category>apache hudi</category>
-            <category>incremental etl</category>
-            <category>deltastreamer</category>
-            <category>hudi streamer</category>
-            <category>joins</category>
         </item>
     </channel>
 </rss>

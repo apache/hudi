@@ -2,11 +2,30 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <id>https://hudi.apache.org/cn/videos</id>
     <title>Apache Hudi Blog</title>
-    <updated>2025-03-14T00:00:00.000Z</updated>
+    <updated>2025-06-16T00:00:00.000Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="https://hudi.apache.org/cn/videos"/>
     <subtitle>Apache Hudi Blog</subtitle>
     <icon>https://hudi.apache.org/cn/assets/images/favicon.ico</icon>
+    <entry>
+        <title type="html"><![CDATA[Apache Hudi does XYZ (1/10): File pruning with multi-modal index]]></title>
+        <id>https://hudi.apache.org/cn/videos/2025/06/16/apache-hudi-does-xyz-110</id>
+        <link href="https://hudi.apache.org/cn/videos/2025/06/16/apache-hudi-does-xyz-110"/>
+        <updated>2025-06-16T00:00:00.000Z</updated>
+        <author>
+            <name>Shiyan Xu</name>
+        </author>
+        <category label="hudi" term="hudi"/>
+        <category label="spark" term="spark"/>
+        <category label="blog" term="blog"/>
+        <category label="course" term="course"/>
+        <category label="tutorial" term="tutorial"/>
+        <category label="datumagic" term="datumagic"/>
+        <category label="data lake" term="data lake"/>
+        <category label="lakehouse" term="lakehouse"/>
+        <category label="apache hudi" term="apache hudi"/>
+        <category label="apache spark" term="apache spark"/>
+    </entry>
     <entry>
         <title type="html"><![CDATA[Metadata and Schema of Hudi Table]]></title>
         <id>https://hudi.apache.org/cn/videos/2025/03/14/metadata-and-schema-of-hudi-table</id>
@@ -280,21 +299,5 @@
         <category label="hudi streamer" term="hudi streamer"/>
         <category label="deltastreamer" term="deltastreamer"/>
         <category label="trino" term="trino"/>
-    </entry>
-    <entry>
-        <title type="html"><![CDATA[DeltaStreamer with incremental ETL and Broadcast Joins for Faster ETL]]></title>
-        <id>https://hudi.apache.org/cn/videos/2024/05/20/deltastreamer-with-incremental-etl-and-broadcast-joins-for-faster-etl</id>
-        <link href="https://hudi.apache.org/cn/videos/2024/05/20/deltastreamer-with-incremental-etl-and-broadcast-joins-for-faster-etl"/>
-        <updated>2024-05-20T00:00:00.000Z</updated>
-        <author>
-            <name>Soumil Shah</name>
-        </author>
-        <category label="guide" term="guide"/>
-        <category label="beginner" term="beginner"/>
-        <category label="apache hudi" term="apache hudi"/>
-        <category label="incremental etl" term="incremental etl"/>
-        <category label="deltastreamer" term="deltastreamer"/>
-        <category label="hudi streamer" term="hudi streamer"/>
-        <category label="joins" term="joins"/>
     </entry>
 </feed>
