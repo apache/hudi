@@ -67,6 +67,11 @@ public class FlinkStreamWriteMetrics extends HoodieFlinkMetrics {
   private long numOfFilesWritten;
 
   /**
+   * Number of record write failure during a checkpoint window.
+   */
+  private long numOfRecordWriteFailures;
+
+  /**
    * Number of records written per seconds.
    */
   protected final Meter recordWrittenPerSecond;
@@ -132,6 +137,14 @@ public class FlinkStreamWriteMetrics extends HoodieFlinkMetrics {
     numOfFilesWritten += 1;
   }
 
+  public void addNumOfRecordWriteFailure(long recordWriteFailures) {
+    numOfRecordWriteFailures += recordWriteFailures;
+  }
+
+  public long getNumOfRecordWriteFailures() {
+    return numOfRecordWriteFailures;
+  }
+
   public void increaseNumOfOpenHandle() {
     numOfOpenHandle += 1;
     increaseNumOfFilesWritten();
@@ -165,6 +178,7 @@ public class FlinkStreamWriteMetrics extends HoodieFlinkMetrics {
     this.numOfOpenHandle = 0;
     this.writeBufferedSize = 0;
     this.fileFlushTotalCosts = 0;
+    this.numOfRecordWriteFailures = 0;
   }
 
 }
