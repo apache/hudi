@@ -288,7 +288,7 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
         .setTableType(HoodieTableType.COPY_ON_WRITE.name())
         .setTableName("table")
         .initTable(this.metaClient.getStorageConf(), basePath);
-    assertEquals(metaClient.getMetaPath() + "/.index_defs/indexMissingVersion1.json", metaClient.getIndexDefinitionPath());
+    assertEquals(metaClient.getMetaPath() + "/.index_defs/index.json", metaClient.getIndexDefinitionPath());
 
     String randomDefinitionPath = "/a/b/c";
     metaClient.getTableConfig().setValue(HoodieTableConfig.RELATIVE_INDEX_DEFINITION_PATH.key(), "/a/b/c");
