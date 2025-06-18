@@ -214,7 +214,7 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
         .config(jsc.getConf())
         .getOrCreate();
 
-    sqlContext = new org.apache.spark.sql.classic.SQLContext((org.apache.spark.sql.classic.SparkSession) sparkSession);
+    sqlContext = SQLContext.getOrCreate(sparkContext);
     context = new HoodieSparkEngineContext(jsc, sqlContext);
 
     // NOTE: It's important to set Spark's `Tests.IS_TESTING` so that our tests are recognized
