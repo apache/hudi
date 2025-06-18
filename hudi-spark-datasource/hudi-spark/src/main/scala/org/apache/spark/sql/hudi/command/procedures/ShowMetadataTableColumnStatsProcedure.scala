@@ -136,14 +136,7 @@ class ShowMetadataTableColumnStatsProcedure extends BaseProcedure with Procedure
     val metaClient = createMetaClient(jsc, basePath)
 
     val timeline = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants()
-
-    val maxInstant = HoodieInstantTimeGenerator.getCurrentInstantTimeStr
-    val instants = timeline.getInstants.iterator().asScala.filter(_.requestedTime < maxInstant)
-
-    val filteredTimeline = metaClient.getTimelineLayout.getTimelineFactory.createDefaultTimeline(
-      new java.util.ArrayList[HoodieInstant](instants.toList.asJava).stream(), metaClient.getActiveTimeline.getInstantReader)
-
-    HoodieTableFileSystemView.fileListingBasedFileSystemView(engineContext, metaClient, filteredTimeline)
+    HoodieTableFileSystemView.fileListingBasedFileSystemView(engineContext, metaClient, timeline)
   }
 
   override def build: Procedure = new ShowMetadataTableColumnStatsProcedure()
