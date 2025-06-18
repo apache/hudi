@@ -41,7 +41,7 @@ public class BaseTestHandle extends HoodieSparkClientTestHarness {
 
   @BeforeEach
   public void setUp() throws Exception {
-    initSparkContexts("TestHoodieRowCreateHandle");
+    initSparkContexts("BaseTestHandle");
     initPath();
     initHoodieStorage();
     initTestDataGenerator();
