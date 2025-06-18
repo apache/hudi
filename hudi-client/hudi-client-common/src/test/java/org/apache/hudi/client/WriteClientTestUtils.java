@@ -46,6 +46,6 @@ public class WriteClientTestUtils {
    * Returns next instant time in the correct format. Lock is enabled by default.
    */
   public static String createNewInstantTime() {
-    return HoodieInstantTimeGenerator.getCurrentTimeAsString();
+    return HoodieInstantTimeGenerator.getCurrentInstantTimeStr();
   }
 }
