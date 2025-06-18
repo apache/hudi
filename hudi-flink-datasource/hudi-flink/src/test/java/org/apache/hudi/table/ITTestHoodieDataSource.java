@@ -760,24 +760,17 @@ public class ITTestHoodieDataSource {
         .end();
     tableEnv.executeSql(hoodieTableDDL);
 
-    String hoodieTableDDL2 = sql("t2")
-        .option(FlinkOptions.PATH, tempFile.getAbsolutePath() + "/t2")
-        .option(FlinkOptions.TABLE_TYPE, tableType)
-        .end();
-    tableEnv.executeSql(hoodieTableDDL2);
-
     execInsertSql(tableEnv, TestSQL.INSERT_T1);
 
     tableEnv.executeSql("create view t1_view as select *,"
         + "PROCTIME() as proc_time from t1");
 
     // Join two hudi tables with the same data
-    String sql = "insert into t2 select b.* from t1_view o "
+    String sql = "select b.* from t1_view o "
         + "       join t1/*+ OPTIONS('lookup.join.cache.ttl'= '2 day') */  "
         + "       FOR SYSTEM_TIME AS OF o.proc_time AS b on o.uuid = b.uuid";
-    execInsertSql(tableEnv, sql);
     List<Row> result = CollectionUtil.iterableToList(
-        () -> tableEnv.sqlQuery("select * from t2").execute().collect());
+        () -> tableEnv.sqlQuery(sql).execute().collect());
 
     assertRowsEquals(result, TestData.DATA_SET_SOURCE_INSERT);
   }
