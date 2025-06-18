@@ -94,6 +94,7 @@ import static org.apache.hudi.metadata.HoodieMetadataPayload.KEY_FIELD_NAME;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_FILES;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getExistingHoodieIndexVersionOrDefault;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getFileSystemViewForMetadataTable;
 
 /**
@@ -166,11 +167,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   @Override
   protected Option<HoodieRecord<HoodieMetadataPayload>> getRecordByKey(String key, String partitionName) {
     Map<String, HoodieRecord<HoodieMetadataPayload>> recordsByKeys = getRecordsByKeys(
-        HoodieListData.eager(Collections.singletonList(key)), partitionName).collectAsList().stream()
-        .collect(Collectors.toMap(
-            Pair::getKey,
-            Pair::getValue
-        ));
+        HoodieListData.eager(Collections.singletonList(key)), partitionName).collectAsMapWithOverwriteStrategy();
     return Option.ofNullable(recordsByKeys.get(key));
   }
 
@@ -215,7 +212,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
                                                                                  boolean shouldLoadInMemory) {
     ValidationUtils.checkState(keyPrefixes instanceof HoodieListData, "getRecordsByKeyPrefixes only support HoodieListData at the moment");
     // Sort the prefixes so that keys are looked up in order
-    List<String> sortedKeyPrefixes = keyPrefixes.collectAsList();
+    List<String> sortedKeyPrefixes = new ArrayList<>(keyPrefixes.collectAsList());
     Collections.sort(sortedKeyPrefixes);
 
     // NOTE: Since we partition records to a particular file-group by full key, we will have
@@ -293,7 +290,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     if (keys.isEmpty()) {
       return HoodieListPairData.eager(Collections.emptyList());
     }
-
     Map<String, HoodieRecord<HoodieMetadataPayload>> result;
 
     // Load the file slices for the partition. Each file slice is a shard which saves a portion of the keys.
@@ -309,34 +305,30 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     } else {
       // Parallel lookup for large sized partitions with many file slices
       // Partition the keys by the file slice which contains it
-      ArrayList<ArrayList<String>> partitionedKeys = partitionKeysByFileSlices(keyList, numFileSlices);
+      ArrayList<ArrayList<String>> partitionedKeys = partitionKeysByFileSlices(keyList, numFileSlices, partitionName,
+          getExistingHoodieIndexVersionOrDefault(partitionName, metadataMetaClient));
       result = new HashMap<>(keyList.size());
       getEngineContext().setJobStatus(this.getClass().getSimpleName(), "Reading keys from metadata table partition " + partitionName);
       getEngineContext().map(partitionedKeys, keysList -> {
         if (keysList.isEmpty()) {
           return Collections.<String, HoodieRecord<HoodieMetadataPayload>>emptyMap();
         }
-        int shardIndex = HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(keysList.get(0), numFileSlices);
+        int shardIndex = HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(keysList.get(0), numFileSlices, partitionName,
+            getExistingHoodieIndexVersionOrDefault(partitionName, metadataMetaClient));
         return lookupKeys(partitionName, keysList, partitionFileSlices.get(shardIndex));
       }, partitionedKeys.size()).forEach(result::putAll);
     }
 
-    return HoodieListPairData.eager(
-        result.entrySet()
-            .stream().collect(Collectors.toMap(
-              Map.Entry::getKey,
-              entry -> Collections.singletonList(entry.getValue())
-        ))
-    );
+    return HoodieListPairData.eagerMapKV(result);
   }
 
-  private static ArrayList<ArrayList<String>> partitionKeysByFileSlices(List<String> keys, int numFileSlices) {
+  private static ArrayList<ArrayList<String>> partitionKeysByFileSlices(List<String> keys, int numFileSlices, String partitionName, HoodieIndexVersion version) {
     ArrayList<ArrayList<String>> partitionedKeys = new ArrayList<>(numFileSlices);
     for (int i = 0; i < numFileSlices; ++i) {
       partitionedKeys.add(new ArrayList<>());
     }
     keys.forEach(key -> {
-      int shardIndex = HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(key, numFileSlices);
+      int shardIndex = HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(key, numFileSlices, partitionName, version);
       partitionedKeys.get(shardIndex).add(key);
     });
     return partitionedKeys;
@@ -613,13 +605,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         .collectAsList()
         .stream()
         .collect(Collectors.groupingBy(Pair::getKey, Collectors.mapping(Pair::getValue, Collectors.toSet())));
-    return HoodieListPairData.eager(
-        res.entrySet().stream()
-            .collect(Collectors.toMap(
-                Map.Entry::getKey,
-                entry -> Collections.singletonList(entry.getValue())
-            ))
-    );
+    return HoodieListPairData.eagerMapKV(res);
   }
 
   /**
