@@ -21,7 +21,6 @@ package org.apache.hudi.table.action.compact;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
@@ -137,10 +136,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
 
     boolean useFileGroupReaderBasedCompaction = context.supportsFileGroupReader()   // the engine needs to support fg reader first
         && !metaClient.isMetadataTable()
-        && config.getBooleanOrDefault(HoodieReaderConfig.FILE_GROUP_READER_ENABLED)
-        && operationType == WriteOperationType.COMPACT
-        && !hasBootstrapFile(operations)                                            // bootstrap file read for fg reader is not ready
-        && config.populateMetaFields();                                             // Virtual key support by fg reader is not ready
+        && operationType == WriteOperationType.COMPACT;
 
     if (useFileGroupReaderBasedCompaction) {
       ReaderContextFactory<T> readerContextFactory = context.getReaderContextFactory(metaClient);
