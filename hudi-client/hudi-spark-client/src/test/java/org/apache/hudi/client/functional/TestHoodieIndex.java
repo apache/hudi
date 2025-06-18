@@ -53,6 +53,9 @@ import org.apache.hudi.keygen.RawTripTestPayloadKeyGenerator;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.commit.BucketInfo;
+import org.apache.hudi.table.action.commit.BucketType;
+import org.apache.hudi.table.action.commit.SparkBucketIndexBucketInfoGetter;
 import org.apache.hudi.table.action.commit.SparkBucketIndexPartitioner;
 import org.apache.hudi.testutils.HoodieSparkWriteableTestTable;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
@@ -73,9 +76,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -655,5 +660,56 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
         ? Option.of(Pair.of(hr.getPartitionPath(), hr.getCurrentLocation().getFileId()))
         : Option.empty())
     );
+  }
+
+  @Test
+  public void testSparkBucketIndexBucketInfoGetter() {
+    int numBuckets = 2;
+    List<String> partitions = Arrays.asList("part1", "part2", "part3");
+
+    // isOverwrite = true
+    SparkBucketIndexBucketInfoGetter overwriteGetter = new SparkBucketIndexBucketInfoGetter(
+        numBuckets,
+        partitions,
+        Collections.emptyMap(),
+        true
+    );
+
+    BucketInfo overwriteInfo = overwriteGetter.getBucketInfo(1);
+    assertEquals(BucketType.INSERT, overwriteInfo.getBucketType());
+    assertEquals("part1", overwriteInfo.getPartitionPath());
+    assertTrue(overwriteInfo.getFileIdPrefix().startsWith("00000001-"));
+    overwriteInfo = overwriteGetter.getBucketInfo(2);
+    assertEquals(BucketType.INSERT, overwriteInfo.getBucketType());
+    assertEquals("part2", overwriteInfo.getPartitionPath());
+    assertTrue(overwriteInfo.getFileIdPrefix().startsWith("00000000-"));
+    overwriteInfo = overwriteGetter.getBucketInfo(5);
+    assertEquals(BucketType.INSERT, overwriteInfo.getBucketType());
+    assertEquals("part3", overwriteInfo.getPartitionPath());
+    assertTrue(overwriteInfo.getFileIdPrefix().startsWith("00000001-"));
+
+    // isOverwrite = false
+    Map<String, Set<String>> updateMap = new HashMap<>();
+    updateMap.put("part1", new HashSet<>(Arrays.asList("00000000-fileA", "00000001-fileB")));
+    updateMap.put("part2", new HashSet<>(Arrays.asList("00000000-fileC", "00000001-fileD")));
+    SparkBucketIndexBucketInfoGetter updateGetter = new SparkBucketIndexBucketInfoGetter(
+        numBuckets,
+        partitions,
+        updateMap,
+        false
+    );
+
+    BucketInfo updateInfo = updateGetter.getBucketInfo(0);
+    assertEquals(BucketType.UPDATE, updateInfo.getBucketType());
+    assertEquals("part1", updateInfo.getPartitionPath());
+    assertEquals("00000000-fileA", updateInfo.getFileIdPrefix());
+    updateInfo = updateGetter.getBucketInfo(3);
+    assertEquals(BucketType.UPDATE, updateInfo.getBucketType());
+    assertEquals("part2", updateInfo.getPartitionPath());
+    assertEquals("00000001-fileD", updateInfo.getFileIdPrefix());
+    updateInfo = updateGetter.getBucketInfo(4);
+    assertEquals(BucketType.INSERT, updateInfo.getBucketType());
+    assertEquals("part3", updateInfo.getPartitionPath());
+    assertTrue(updateInfo.getFileIdPrefix().startsWith("00000000-"));
   }
 }

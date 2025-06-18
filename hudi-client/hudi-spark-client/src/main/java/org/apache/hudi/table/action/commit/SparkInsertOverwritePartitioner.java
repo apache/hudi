@@ -19,7 +19,6 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
@@ -44,17 +43,8 @@ public class SparkInsertOverwritePartitioner extends UpsertPartitioner {
   }
 
   @Override
-  public BucketInfo getBucketInfo(int bucketNumber) {
-    BucketInfo bucketInfo = super.getBucketInfo(bucketNumber);
-    switch (bucketInfo.bucketType) {
-      case INSERT:
-        return bucketInfo;
-      case UPDATE:
-        // Insert overwrite always generates new bucket file id
-        return new BucketInfo(BucketType.INSERT, FSUtils.createNewFileIdPfx(), bucketInfo.partitionPath);
-      default:
-        throw new AssertionError();
-    }
+  public SparkBucketInfoGetter getSparkBucketInfoGetter() {
+    return new InsertOverwriteBucketInfoGetter(bucketInfoMap);
   }
 
   /**
