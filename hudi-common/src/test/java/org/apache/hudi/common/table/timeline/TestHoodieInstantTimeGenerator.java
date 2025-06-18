@@ -22,10 +22,9 @@ package org.apache.hudi.common.table.timeline;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 
 import org.junit.jupiter.api.Test;
-
 import java.util.Date;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class TestHoodieInstantTimeGenerator {
 
