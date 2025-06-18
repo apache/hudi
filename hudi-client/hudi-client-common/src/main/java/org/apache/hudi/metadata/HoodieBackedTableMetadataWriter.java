@@ -118,6 +118,7 @@ import static org.apache.hudi.metadata.HoodieMetadataWriteUtils.createMetadataWr
 import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_NAME_SUFFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getExistingHoodieIndexVersionOrDefault;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getExpressionIndexPartitionsToInit;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightMetadataPartitions;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartitionLatestFileSlicesIncludingInflight;
@@ -1260,7 +1261,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       String mdtPartition = mdtRecord.getPartitionPath();
       List<FileSlice> latestFileSlices = partitionToLatestFileSlices.get(mdtPartition);
       FileSlice slice = latestFileSlices.get(HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(mdtRecord.getRecordKey(),
-          latestFileSlices.size()));
+          latestFileSlices.size(), mdtPartition, getExistingHoodieIndexVersionOrDefault(mdtPartition, metadataMetaClient)));
       mdtRecord.unseal();
       mdtRecord.setCurrentLocation(new HoodieRecordLocation(slice.getBaseInstantTime(), slice.getFileId()));
       mdtRecord.seal();
@@ -1694,7 +1695,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
         List<FileSlice> finalFileSlices = fileSlices;
         HoodieData<HoodieRecord> rddSinglePartitionRecords = records.map(r -> {
           FileSlice slice = finalFileSlices.get(HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(r.getRecordKey(),
-              fileGroupCount));
+              fileGroupCount, partitionName, getExistingHoodieIndexVersionOrDefault(partitionName, metadataMetaClient)));
           r.unseal();
           r.setCurrentLocation(new HoodieRecordLocation(slice.getBaseInstantTime(), slice.getFileId()));
           r.seal();

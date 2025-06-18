@@ -263,6 +263,17 @@ public class HoodieListPairData<K, V> extends HoodieBaseListData<Pair<K, V>> imp
     return new HoodieListPairData<>(explode(data), true);
   }
 
+  public static <K, V> HoodieListPairData<K, V> eagerMapKV(Map<K, V> data) {
+    return HoodieListPairData.eager(
+        data.entrySet()
+        .stream()
+        .collect(Collectors.toMap(
+            Map.Entry::getKey,
+            entry -> Collections.singletonList(entry.getValue())
+        ))
+    );
+  }
+
   public static <K, V> HoodieListPairData<K, V> eager(Map<K, List<V>> data) {
     return new HoodieListPairData<>(explode(data), false);
   }
