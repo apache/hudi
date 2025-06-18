@@ -38,7 +38,7 @@ import org.apache.hudi.hive.{HiveSyncTool, HoodieHiveSyncClient}
 import org.apache.hudi.hive.testutils.HiveTestUtil
 import org.apache.hudi.index.HoodieIndex
 import org.apache.hudi.index.expression.HoodieExpressionIndex
-import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieMetadataPayload, MetadataPartitionType}
+import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieIndexVersion, HoodieMetadataPayload, MetadataPartitionType}
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartitionStatsIndexKey
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.sync.common.HoodieSyncConfig.{META_SYNC_BASE_PATH, META_SYNC_DATABASE_NAME, META_SYNC_NO_PARTITION_METADATA, META_SYNC_TABLE_NAME}
@@ -2192,7 +2192,11 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
     )
     val bloomFilterRecords = SparkMetadataWriterUtils.getExpressionIndexRecordsUsingBloomFilter(df, "c5",
         HoodieStorageConfig.newBuilder().build(), "",
-        HoodieIndexDefinition.newBuilder().withIndexName("random").withIndexOptions(JavaConverters.mapAsJavaMapConverter(indexOptions).asJava).build())
+        HoodieIndexDefinition.newBuilder()
+          .withIndexName("random")
+          .withIndexType(MetadataPartitionType.COLUMN_STATS.name())
+          .withVersion(HoodieIndexVersion.getCurrentVersion(MetadataPartitionType.COLUMN_STATS))
+          .withIndexOptions(JavaConverters.mapAsJavaMapConverter(indexOptions).asJava).build())
       .getExpressionIndexRecords
     // Since there is only one partition file pair there is only one bloom filter record
     assertEquals(1, bloomFilterRecords.count())
