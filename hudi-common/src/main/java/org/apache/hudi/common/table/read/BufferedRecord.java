@@ -44,7 +44,7 @@ public class BufferedRecord<T> implements Serializable {
   private final String recordKey;
   private final Lazy<Comparable> orderingValue;
   private T record;
-  private final int schemaId;
+  private final Integer schemaId;
   private final boolean isDelete;
 
   public BufferedRecord(String recordKey, Lazy<Comparable> orderingValue, T record, Integer schemaId, boolean isDelete) {
@@ -75,7 +75,7 @@ public class BufferedRecord<T> implements Serializable {
     return new BufferedRecord<>(recordKey, orderingValue, record, schemaId, isDelete);
   }
 
-  public static <T> BufferedRecord<T> forDeleteRecord(DeleteRecord deleteRecord, Comparable orderingValue, int schemaId) {
+  public static <T> BufferedRecord<T> forDeleteRecord(DeleteRecord deleteRecord, Comparable orderingValue, Integer schemaId) {
     return new BufferedRecord<>(deleteRecord.getRecordKey(), Lazy.eagerly(orderingValue), null, schemaId, true);
   }
 
