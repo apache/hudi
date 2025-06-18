@@ -67,7 +67,6 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   private Map<String, HoodieRecord<T>> recordMap;
   private boolean useWriterSchema = false;
   private final boolean preserveMetadata;
-  private boolean isSecondaryIndexStreamingDisabled = false;
 
   public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                             String partitionPath, String fileId, TaskContextSupplier taskContextSupplier) {
@@ -80,14 +79,6 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
                             boolean preserveMetadata) {
     this(config, instantTime, hoodieTable, partitionPath, fileId, Option.empty(),
         taskContextSupplier, preserveMetadata);
-  }
-
-  public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                            String partitionPath, String fileId, TaskContextSupplier taskContextSupplier,
-                            boolean preserveMetadata, boolean isSecondaryIndexStreamingDisabled) {
-    this(config, instantTime, hoodieTable, partitionPath, fileId, Option.empty(),
-        taskContextSupplier, preserveMetadata);
-    this.isSecondaryIndexStreamingDisabled = isSecondaryIndexStreamingDisabled;
   }
 
   public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
@@ -234,11 +225,6 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   @Override
   public IOType getIOType() {
     return IOType.CREATE;
-  }
-
-  @Override
-  boolean isSecondaryIndexStreamingDisabled() {
-    return isSecondaryIndexStreamingDisabled || super.isSecondaryIndexStreamingDisabled();
   }
 
   /**

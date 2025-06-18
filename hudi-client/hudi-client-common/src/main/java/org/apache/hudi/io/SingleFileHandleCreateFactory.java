@@ -36,17 +36,11 @@ public class SingleFileHandleCreateFactory<T, I, K, O> extends CreateHandleFacto
   private final AtomicBoolean isHandleCreated = new AtomicBoolean(false);
   private final String fileId;
   private final boolean preserveHoodieMetadata;
-  private final boolean isSecondaryIndexStreamingDisabled;
 
   public SingleFileHandleCreateFactory(String fileId, boolean preserveHoodieMetadata) {
-    this(fileId, preserveHoodieMetadata, false);
-  }
-
-  public SingleFileHandleCreateFactory(String fileId, boolean preserveHoodieMetadata, boolean isSecondaryIndexStreamingDisabled) {
     super();
     this.fileId = fileId;
     this.preserveHoodieMetadata = preserveHoodieMetadata;
-    this.isSecondaryIndexStreamingDisabled = isSecondaryIndexStreamingDisabled;
   }
 
   @Override
@@ -57,7 +51,7 @@ public class SingleFileHandleCreateFactory<T, I, K, O> extends CreateHandleFacto
     if (isHandleCreated.compareAndSet(false, true)) {
       return new HoodieUnboundedCreateHandle(hoodieConfig, commitTime, hoodieTable, partitionPath,
           fileId, // ignore idPfx, always use same fileId
-          taskContextSupplier, preserveHoodieMetadata, isSecondaryIndexStreamingDisabled);
+          taskContextSupplier, preserveHoodieMetadata);
     }
 
     throw new HoodieIOException("Fixed handle create is only expected to be invoked once");

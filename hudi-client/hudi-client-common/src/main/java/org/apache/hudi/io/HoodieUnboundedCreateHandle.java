@@ -39,23 +39,15 @@ public class HoodieUnboundedCreateHandle<T, I, K, O> extends HoodieCreateHandle<
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieUnboundedCreateHandle.class);
 
-  private final boolean isSecondaryIndexStreamingDisabled;
-
   public HoodieUnboundedCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                      String partitionPath, String fileId, TaskContextSupplier taskContextSupplier,
-                                     boolean preserveHoodieMetadata, boolean isSecondaryIndexStreamingDisabled) {
+                                     boolean preserveHoodieMetadata) {
     super(config, instantTime, hoodieTable, partitionPath, fileId, Option.empty(),
         taskContextSupplier, preserveHoodieMetadata);
-    this.isSecondaryIndexStreamingDisabled = isSecondaryIndexStreamingDisabled;
   }
 
   @Override
   public boolean canWrite(HoodieRecord record) {
     return true;
-  }
-
-  @Override
-  boolean isSecondaryIndexStreamingDisabled() {
-    return isSecondaryIndexStreamingDisabled || super.isSecondaryIndexStreamingDisabled();
   }
 }

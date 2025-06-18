@@ -27,19 +27,13 @@ import java.io.Serializable;
 public class CreateHandleFactory<T, I, K, O> extends WriteHandleFactory<T, I, K, O> implements Serializable {
 
   private boolean preserveMetadata = false;
-  private final boolean isSecondaryIndexStreamingDisabled;
 
   public CreateHandleFactory() {
     this(false);
   }
 
   public CreateHandleFactory(boolean preserveMetadata) {
-    this(preserveMetadata, false);
-  }
-
-  public CreateHandleFactory(boolean preserveMetadata, boolean isSecondaryIndexStreamingDisabled) {
     this.preserveMetadata = preserveMetadata;
-    this.isSecondaryIndexStreamingDisabled = isSecondaryIndexStreamingDisabled;
   }
 
   @Override
@@ -48,6 +42,6 @@ public class CreateHandleFactory<T, I, K, O> extends WriteHandleFactory<T, I, K,
                                               final String fileIdPrefix, TaskContextSupplier taskContextSupplier) {
 
     return new HoodieCreateHandle(hoodieConfig, commitTime, hoodieTable, partitionPath,
-        getNextFileId(fileIdPrefix), taskContextSupplier, preserveMetadata, isSecondaryIndexStreamingDisabled);
+        getNextFileId(fileIdPrefix), taskContextSupplier, preserveMetadata);
   }
 }
