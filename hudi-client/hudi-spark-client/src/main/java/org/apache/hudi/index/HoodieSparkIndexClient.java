@@ -95,12 +95,13 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
   @Override
   public void create(HoodieTableMetaClient metaClient, String userIndexName, String indexType, Map<String, Map<String, String>> columns, Map<String, String> options,
                      Map<String, String> tableProperties) throws Exception {
+    HoodieIndexVersion currentVersion = HoodieIndexVersion.getCurrentVersion(metaClient.getTableConfig().getTableVersion(), indexType);
     if (indexType.equals(PARTITION_NAME_SECONDARY_INDEX) || indexType.equals(PARTITION_NAME_BLOOM_FILTERS)
         || indexType.equals(PARTITION_NAME_COLUMN_STATS)) {
       createExpressionOrSecondaryIndex(metaClient, userIndexName, indexType, columns, options, tableProperties,
-          HoodieIndexVersion.getCurrentVersion(indexType));
+          currentVersion);
     } else {
-      createRecordIndex(metaClient, userIndexName, indexType, HoodieIndexVersion.getCurrentVersion(indexType));
+      createRecordIndex(metaClient, userIndexName, indexType, currentVersion);
     }
   }
 
@@ -117,9 +118,9 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
     LOG.info("Creating index {} version {} of using {}", fullIndexName, version, indexType);
     try (SparkRDDWriteClient writeClient = getWriteClient(metaClient, Option.empty(), Option.of(indexType))) {
       // generate index plan
+      HoodieIndexVersion currentVersion = HoodieIndexVersion.getCurrentVersion(metaClient.getTableConfig().getTableVersion(), MetadataPartitionType.RECORD_INDEX);
       Option<String> indexInstantTime = doSchedule(
-          writeClient, metaClient, fullIndexName, MetadataPartitionType.RECORD_INDEX,
-          HoodieIndexVersion.getCurrentVersion(MetadataPartitionType.RECORD_INDEX));
+          writeClient, metaClient, fullIndexName, MetadataPartitionType.RECORD_INDEX, currentVersion);
       if (indexInstantTime.isPresent()) {
         // build index
         writeClient.index(indexInstantTime.get());
@@ -166,9 +167,10 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
     try (SparkRDDWriteClient writeClient = getWriteClient(metaClient, expressionIndexDefinitionOpt, Option.of(indexType))) {
       MetadataPartitionType partitionType = indexType.equals(PARTITION_NAME_SECONDARY_INDEX) ? MetadataPartitionType.SECONDARY_INDEX : MetadataPartitionType.EXPRESSION_INDEX;
       // generate index plan
+      HoodieIndexVersion currentVersion = HoodieIndexVersion.getCurrentVersion(metaClient.getTableConfig().getTableVersion(), MetadataPartitionType.RECORD_INDEX);
+
       Option<String> indexInstantTime = doSchedule(
-          writeClient, metaClient, indexDefinition.getIndexName(), partitionType,
-          HoodieIndexVersion.getCurrentVersion(partitionType));
+          writeClient, metaClient, indexDefinition.getIndexName(), partitionType, currentVersion);
       if (indexInstantTime.isPresent()) {
         // build index
         writeClient.index(indexInstantTime.get());

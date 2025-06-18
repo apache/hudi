@@ -21,6 +21,7 @@ package org.apache.hudi.index.expression;
 
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 
@@ -79,7 +80,7 @@ public class TestHoodieSparkExpressionIndex extends HoodieSparkClientTestHarness
         .withIndexName("yearIndex")
         .withIndexFunction("year")
         .withIndexType(PARTITION_NAME_COLUMN_STATS)
-        .withVersion(HoodieIndexVersion.getCurrentVersion(PARTITION_NAME_COLUMN_STATS))
+        .withVersion(HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.current(), PARTITION_NAME_COLUMN_STATS))
         .withSourceFields(Arrays.asList("timestampColumn"))
         .withIndexOptions(new HashMap<>())
         .build();
@@ -116,7 +117,7 @@ public class TestHoodieSparkExpressionIndex extends HoodieSparkClientTestHarness
         .withIndexName("hourIndex")
         .withIndexFunction("hour")
         .withIndexType(PARTITION_NAME_COLUMN_STATS)
-        .withVersion(HoodieIndexVersion.getCurrentVersion(PARTITION_NAME_COLUMN_STATS))
+        .withVersion(HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.current(), PARTITION_NAME_COLUMN_STATS))
         .withSourceFields(Arrays.asList("timestampColumn"))
         .withIndexOptions(new HashMap<>())
         .build();
@@ -143,7 +144,7 @@ public class TestHoodieSparkExpressionIndex extends HoodieSparkClientTestHarness
         .withIndexName("yearIndex")
         .withIndexFunction("year")
         .withIndexType(PARTITION_NAME_COLUMN_STATS)
-        .withVersion(HoodieIndexVersion.getCurrentVersion(PARTITION_NAME_COLUMN_STATS))
+        .withVersion(HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.current(), PARTITION_NAME_COLUMN_STATS))
         .withSourceFields(Arrays.asList("timestampColumn", "extraColumn"))
         .withIndexOptions(Collections.emptyMap())
         .build();

@@ -22,6 +22,7 @@ import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndexUtils;
@@ -144,7 +145,7 @@ public class TestHoodieSparkIndex extends HoodieClientTestBase {
     return HoodieIndexDefinition.newBuilder()
         .withIndexName(fullIndexName)
         .withIndexType(indexType)
-        .withVersion(HoodieIndexVersion.getCurrentVersion(indexType))
+        .withVersion(HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.current(), indexType))
         .withIndexFunction(indexFunc)
         .withSourceFields(sourceFields)
         .withIndexOptions(indexOptions)
