@@ -153,12 +153,7 @@ public class HoodieInstantTimeGenerator {
   }
 
   public static String formatDateBasedOnTimeZone(Date timestamp) {
-    if (HoodieTimelineTimeZone.UTC.equals(commitTimeZone)) {
-      return timestamp.toInstant().atZone(HoodieTimelineTimeZone.UTC.getZoneId())
-          .toLocalDateTime().format(MILLIS_INSTANT_TIME_FORMATTER);
-    } else {
-      return MILLIS_INSTANT_TIME_FORMATTER.format(convertDateToTemporalAccessor(timestamp));
-    }
+    return timestamp.toInstant().atZone(commitTimeZone.getZoneId()).toLocalDateTime().format(MILLIS_INSTANT_TIME_FORMATTER);
   }
 
   public static String getInstantFromTemporalAccessor(TemporalAccessor temporalAccessor) {
