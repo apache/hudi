@@ -20,6 +20,7 @@ package org.apache.hudi.util;
 
 import javax.annotation.concurrent.ThreadSafe;
 
+import java.util.Objects;
 import java.util.function.Supplier;
 
 /**
@@ -76,5 +77,22 @@ public class Lazy<T> {
    */
   public static <T> Lazy<T> eagerly(T ref) {
     return new Lazy<>(ref);
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    Lazy<?> other = (Lazy<?>) o;
+    return Objects.equals(get(), other.get());
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(get());
   }
 }

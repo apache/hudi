@@ -35,7 +35,7 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.util.HashMap;
 
-public class TestBufferedRecordSerializer {
+class TestBufferedRecordSerializer {
   @Test
   void testAvroRecordSerAndDe() throws IOException {
     Schema schema = SchemaTestUtil.getSimpleSchema();
@@ -87,5 +87,18 @@ public class TestBufferedRecordSerializer {
     for (int i = 0; i < metadataRecord.getSchema().getFields().size(); i++) {
       Assertions.assertEquals(metadataRecord.get(i), result.getRecord().get(i));
     }
+  }
+
+  @Test
+  void testEmptyBufferedRecordSerAndDe() throws IOException {
+    Schema schema = SchemaTestUtil.getSimpleSchema();
+    BufferedRecord<IndexedRecord> bufferedRecord = new BufferedRecord<>("id", Lazy.lazily(() -> 100), null, 1, true);
+
+    AvroRecordSerializer avroRecordSerializer = new AvroRecordSerializer(integer -> schema);
+    BufferedRecordSerializer<IndexedRecord> bufferedRecordSerializer = new BufferedRecordSerializer<>(avroRecordSerializer);
+
+    byte[] bytes = bufferedRecordSerializer.serialize(bufferedRecord);
+    BufferedRecord<IndexedRecord> result = bufferedRecordSerializer.deserialize(bytes);
+    Assertions.assertEquals(bufferedRecord, result);
   }
 }

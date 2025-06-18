@@ -59,7 +59,7 @@ public class BufferedRecordSerializer<T> implements CustomSerializer<BufferedRec
       output.writeBoolean(record.isDelete());
       kryo.writeClassAndObject(output, record.getOrderingValue());
 
-      byte[] recordBytes = recordSerializer.serialize(record.getRecord());
+      byte[] recordBytes = record.getRecord() == null ? new byte[0] : recordSerializer.serialize(record.getRecord());
       output.writeInt(recordBytes.length);
       output.writeBytes(recordBytes);
     }
@@ -75,8 +75,7 @@ public class BufferedRecordSerializer<T> implements CustomSerializer<BufferedRec
       Comparable orderingValue = (Comparable) kryo.readClassAndObject(input);
 
       int recordLength = input.readInt();
-      byte[] recordBytes = input.readBytes(recordLength);
-      T record = recordSerializer.deserialize(recordBytes, schemaId);
+      T record = recordLength == 0 ? null : recordSerializer.deserialize(input.readBytes(recordLength), schemaId);
       return new BufferedRecord<>(recordKey, Lazy.eagerly(orderingValue), record, schemaId, isDelete);
     }
   }
