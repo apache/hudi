@@ -24,7 +24,6 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.serialization.CustomSerializer;
-import org.apache.hudi.common.serialization.DefaultRecordSerializer;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.BufferedRecord;
@@ -193,7 +192,7 @@ public abstract class HoodieReaderContext<T> {
   }
 
   public CustomSerializer<BufferedRecord<T>> getRecordSerializer() {
-    return new BufferedRecordSerializer<>(new DefaultRecordSerializer<>());
+    return new BufferedRecordSerializer<>();
   }
 
   /**

@@ -44,6 +44,7 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -228,7 +229,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       HoodieReaderContext<T> readerContext = getHoodieReaderContext(getBasePath(), avroSchema, getStorageConf(), metaClient);
       for (Boolean isCompressionEnabled : new boolean[] {true, false}) {
         try (ExternalSpillableMap<Serializable, BufferedRecord<T>> spillableMap =
-                 new ExternalSpillableMap<>(16L, baseMapPath, readerContext.getRecordSizeEstimator(),
+                 new ExternalSpillableMap<>(16L, baseMapPath, new DefaultSizeEstimator<>(),
                      new HoodieRecordSizeEstimator(avroSchema), diskMapType, readerContext.getRecordSerializer(), isCompressionEnabled, getClass().getSimpleName())) {
           Long position = 0L;
           for (T record : records) {
