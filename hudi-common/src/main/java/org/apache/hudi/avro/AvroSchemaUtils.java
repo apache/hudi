@@ -373,7 +373,7 @@ public class AvroSchemaUtils {
       newSchema.addProp(prop.getKey(), prop.getValue());
     }
     newSchema.setFields(fields);
-    return AvroSchemaCache.intern(newSchema);
+    return newSchema;
   }
 
   /**
