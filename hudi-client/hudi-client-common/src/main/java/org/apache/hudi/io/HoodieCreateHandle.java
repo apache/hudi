@@ -91,7 +91,7 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
                             String partitionPath, String fileId, Option<Schema> overriddenSchema,
                             TaskContextSupplier taskContextSupplier, boolean preserveMetadata) {
     super(config, instantTime, partitionPath, fileId, hoodieTable, overriddenSchema,
-        taskContextSupplier);
+        taskContextSupplier, preserveMetadata);
     this.preserveMetadata = preserveMetadata;
     writeStatus.setFileId(fileId);
     writeStatus.setPartitionPath(partitionPath);

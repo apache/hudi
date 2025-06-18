@@ -162,7 +162,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
             // schema containing the updated fields only
             ? Option.of(new Schema.Parser().parse(config.getPartialUpdateSchema()))
             : Option.empty(),
-        taskContextSupplier);
+        taskContextSupplier, false);
     this.recordItr = recordItr;
     this.sizeEstimator = getSizeEstimator();
     this.statuses = new ArrayList<>();

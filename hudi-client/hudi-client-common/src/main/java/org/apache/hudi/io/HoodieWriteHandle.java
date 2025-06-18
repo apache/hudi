@@ -93,14 +93,14 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
   private boolean closed = false;
 
   public HoodieWriteHandle(HoodieWriteConfig config, String instantTime, String partitionPath,
-                           String fileId, HoodieTable<T, I, K, O> hoodieTable, TaskContextSupplier taskContextSupplier) {
+                           String fileId, HoodieTable<T, I, K, O> hoodieTable, TaskContextSupplier taskContextSupplier, boolean preserveMetadata) {
     this(config, instantTime, partitionPath, fileId, hoodieTable,
-        Option.empty(), taskContextSupplier);
+        Option.empty(), taskContextSupplier, preserveMetadata);
   }
 
   protected HoodieWriteHandle(HoodieWriteConfig config, String instantTime, String partitionPath, String fileId,
                               HoodieTable<T, I, K, O> hoodieTable, Option<Schema> overriddenSchema,
-                              TaskContextSupplier taskContextSupplier) {
+                              TaskContextSupplier taskContextSupplier, boolean preserveMetadata) {
     super(config, Option.of(instantTime), hoodieTable);
     this.partitionPath = partitionPath;
     this.fileId = fileId;
@@ -115,13 +115,13 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     this.writeStatus = (WriteStatus) ReflectionUtils.loadClass(config.getWriteStatusClassName(),
         hoodieTable.shouldTrackSuccessRecords(), config.getWriteStatusFailureFraction(), hoodieTable.isMetadataTable());
     this.isStreamingWriteToMetadataEnabled = config.isMetadataStreamingWritesEnabled(hoodieTable.getMetaClient().getTableConfig().getTableVersion());
-    initMetadataPartitionsToCollectStats();
+    initMetadataPartitionsToCollectStats(preserveMetadata);
   }
 
-  private void initMetadataPartitionsToCollectStats() {
+  private void initMetadataPartitionsToCollectStats(boolean preserveMetadata) {
     if (isStreamingWriteToMetadataEnabled) {
       // secondary index.
-      if (config.isSecondaryIndexEnabled()) {
+      if (config.isSecondaryIndexEnabled() && !preserveMetadata) {
         ValidationUtils.checkArgument(recordMerger.getRecordType() == HoodieRecord.HoodieRecordType.AVRO,
             "Only Avro record type is supported for streaming writes to metadata table with write handles");
         secondaryIndexDefns = hoodieTable.getMetaClient().getTableConfig().getMetadataPartitions()
