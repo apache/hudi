@@ -331,6 +331,20 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     return writeRecord(newRecord, Option.empty(), combineRecord, schema, prop, false);
   }
 
+  /**
+   * The function takes the different versions of the record - old record, new incoming record and combined record
+   * created by merging the old record with the new incoming record. It decides whether the combined record needs to be
+   * written to the file and writes the record accordingly.
+   *
+   * @param newRecord The new incoming record
+   * @param oldRecordOpt Optianal value of old record
+   * @param combineRecord Record created by merging the old record with the new incoming record
+   * @param schema Record schema
+   * @param prop Properties
+   * @param isDelete Whether the new record is a delete record
+   * @return true if the record was written successfully
+   * @throws IOException
+   */
   private boolean writeRecord(HoodieRecord<T> newRecord, Option<HoodieRecord<T>> oldRecordOpt, Option<HoodieRecord> combineRecord, Schema schema, Properties prop,
                               boolean isDelete) throws IOException {
     Option recordMetadata = newRecord.getMetadata();
@@ -341,7 +355,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       return false;
     }
     try {
-      Option<HoodieKey> hoodieKeyOpt = Option.of(newRecord.getKey());
+      Option<HoodieKey> hoodieKeyOpt = Option.ofNullable(newRecord.getKey());
       if (combineRecord.isPresent() && !combineRecord.get().isDelete(schema, config.getProps()) && !isDelete) {
         // Last-minute check.
         boolean decision = recordMerger.shouldFlush(combineRecord.get(), schema, config.getProps());
@@ -467,7 +481,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     HoodieReaderContext readerContext = engineContext.getReaderContextFactory(hoodieTable.getMetaClient()).getContext();
 
     secondaryIndexDefns.forEach(secondaryIndexPartitionPathFieldPair -> {
-      String secondaryIndexSourceField = String.join(".",secondaryIndexPartitionPathFieldPair.getValue().getSourceFields());
+      String secondaryIndexSourceField = String.join(".", secondaryIndexPartitionPathFieldPair.getValue().getSourceFields());
       Option<Object> oldSecondaryKeyOpt = Option.empty();
       Option<Object> newSecondaryKeyOpt = Option.empty();
       if (oldRecordOpt.isPresent() && oldRecordOpt.get() instanceof HoodieAvroIndexedRecord) {

@@ -189,7 +189,7 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
 
     // Add secondary index records for all the inserted records
     secondaryIndexDefns.forEach(secondaryIndexPartitionPathFieldPair -> {
-      String secondaryIndexSourceField = String.join(".",secondaryIndexPartitionPathFieldPair.getValue().getSourceFields());
+      String secondaryIndexSourceField = String.join(".", secondaryIndexPartitionPathFieldPair.getValue().getSourceFields());
       if (record instanceof HoodieAvroIndexedRecord) {
         Object secondaryKey = readerContext.getValue(record.getData(), writeSchemaWithMetaFields, secondaryIndexSourceField);
         if (secondaryKey != null) {

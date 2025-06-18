@@ -30,9 +30,8 @@ import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 
-import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Unit tests {@link HoodieCreateHandle}.
@@ -57,13 +56,25 @@ public class BaseTestHandle extends HoodieSparkClientTestHarness {
   Pair<WriteStatus, List<HoodieRecord>> createParquetFile(HoodieWriteConfig config, HoodieTable table, String partitionPath,
                                                           String fileId, String instantTime, HoodieTestDataGenerator dataGenerator) {
     List<HoodieRecord> records = dataGenerator.generateInserts(instantTime, 100);
-    Map<String, HoodieRecord> recordMap = new HashMap<>();
+    HoodieCreateHandle handle = new HoodieCreateHandle(config, instantTime, table, partitionPath, fileId, new LocalTaskContextSupplier(), false);
     for (int i = 0; i < records.size(); i++) {
-      recordMap.put(String.valueOf(i), records.get(i));
+      handle.write(records.get(i), handle.getWriterSchemaWithMetaFields(), handle.getConfig().getProps());
     }
-    HoodieCreateHandle handle = new HoodieCreateHandle(config, instantTime, table, partitionPath, fileId, recordMap, new LocalTaskContextSupplier());
-    handle.write();
     handle.close();
     return Pair.of(handle.writeStatus, records);
+  }
+
+  protected int generateDeleteRecords(List<HoodieRecord> existingRecords, HoodieTestDataGenerator dataGenerator, String instantTime) {
+    List<HoodieRecord> deletes = dataGenerator.generateUniqueDeleteRecords(instantTime, 10);
+    for (Iterator<HoodieRecord> it = deletes.iterator(); it.hasNext(); ) {
+      HoodieRecord deleteRecord = it.next();
+      for (HoodieRecord existingRecord : existingRecords) {
+        if (deleteRecord.getKey().equals(existingRecord.getKey())) {
+          it.remove();
+        }
+      }
+    }
+    existingRecords.addAll(deletes);
+    return deletes.size();
   }
 }

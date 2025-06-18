@@ -62,7 +62,6 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX;
 
 /**
  * Base class for all write operations logically performed at the file group level.
@@ -124,10 +123,12 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
       if (config.isSecondaryIndexEnabled() && !preserveMetadata) {
         ValidationUtils.checkArgument(recordMerger.getRecordType() == HoodieRecord.HoodieRecordType.AVRO,
             "Only Avro record type is supported for streaming writes to metadata table with write handles");
-        secondaryIndexDefns = hoodieTable.getMetaClient().getTableConfig().getMetadataPartitions()
+        secondaryIndexDefns = hoodieTable.getMetaClient().getIndexMetadata()
+            .map(indexMetadata -> indexMetadata.getIndexDefinitions().values())
+            .orElse(Collections.emptyList())
             .stream()
-            .filter(mdtPartition -> mdtPartition.startsWith(PARTITION_NAME_SECONDARY_INDEX_PREFIX))
-            .map(mdtPartitionPath -> Pair.of(mdtPartitionPath, HoodieTableMetadataUtil.getHoodieIndexDefinition(mdtPartitionPath, hoodieTable.getMetaClient())))
+            .filter(indexDef -> indexDef.getIndexName().startsWith(HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX))
+            .map(indexDef -> Pair.of(indexDef.getIndexName(), indexDef))
             .collect(Collectors.toList());
         secondaryIndexDefns.forEach(pair -> writeStatus.getIndexStats().instantiateSecondaryIndexStatsForIndex(pair.getKey()));
       }

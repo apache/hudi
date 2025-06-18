@@ -189,7 +189,6 @@ public class WriteStatus implements Serializable {
   }
 
   public WriteStatus removeMetadataStats() {
-    this.indexStats.clear();
     this.indexStats = null;
     return this;
   }

@@ -56,9 +56,4 @@ public class IndexStats implements Serializable {
   public Map<String, List<SecondaryIndexStats>> getSecondaryIndexStats() {
     return secondaryIndexStats;
   }
-
-  void clear() {
-    this.writtenRecordDelegates.clear();
-    this.secondaryIndexStats.clear();
-  }
 }

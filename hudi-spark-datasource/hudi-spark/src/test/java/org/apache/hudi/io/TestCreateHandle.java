@@ -52,41 +52,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class TestCreateHandle extends BaseTestHandle {
 
   @Test
-  public void testCreateHandleRLIStats() {
-    // init config and table
-    HoodieWriteConfig config = getConfigBuilder(basePath)
-        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder().withRemoteServerPort(timelineServicePort).build())
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).withEnableRecordIndex(true).withStreamingWriteEnabled(true).build())
-        .build();
-
-    HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
-
-    // one round per partition
-    String partitionPath = HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[0];
-
-    // init some args
-    String fileId = UUID.randomUUID().toString();
-    String instantTime = "000";
-
-    config.setSchema(TRIP_EXAMPLE_SCHEMA);
-    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[] {partitionPath});
-    Pair<WriteStatus, List<HoodieRecord>> statusListPair = createParquetFile(config, table, partitionPath, fileId, instantTime, dataGenerator);
-    WriteStatus writeStatus = statusListPair.getLeft();
-    List<HoodieRecord> records = statusListPair.getRight();
-
-    assertEquals(records.size(), writeStatus.getTotalRecords());
-    assertEquals(0, writeStatus.getTotalErrorRecords());
-    // validate write status has all record delegates
-    assertEquals(records.size(), writeStatus.getIndexStats().getWrittenRecordDelegates().size());
-    for (HoodieRecordDelegate recordDelegate : writeStatus.getIndexStats().getWrittenRecordDelegates()) {
-      assertTrue(recordDelegate.getNewLocation().isPresent());
-      assertEquals(fileId, recordDelegate.getNewLocation().get().getFileId());
-      assertEquals(instantTime, recordDelegate.getNewLocation().get().getInstantTime());
-    }
-  }
-
-  @Test
-  public void testCreateHandleSecondaryIndexStats() throws Exception {
+  public void testCreateHandleRLIAndSIStats() throws Exception {
     // init config and table
     HoodieWriteConfig config = getConfigBuilder(basePath)
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder().withRemoteServerPort(timelineServicePort).build())
@@ -122,10 +88,17 @@ public class TestCreateHandle extends BaseTestHandle {
     assertEquals(records.size(), writeStatus.getTotalRecords());
     assertEquals(0, writeStatus.getTotalErrorRecords());
     // validate write status has all record delegates
+    assertEquals(records.size(), writeStatus.getIndexStats().getWrittenRecordDelegates().size());
+    for (HoodieRecordDelegate recordDelegate : writeStatus.getIndexStats().getWrittenRecordDelegates()) {
+      assertTrue(recordDelegate.getNewLocation().isPresent());
+      assertEquals(fileId, recordDelegate.getNewLocation().get().getFileId());
+      assertEquals(instantTime, recordDelegate.getNewLocation().get().getInstantTime());
+    }
+
+    // Validate the secondary index stats returned
     assertEquals(1, writeStatus.getIndexStats().getSecondaryIndexStats().size());
     assertEquals(100, writeStatus.getIndexStats().getSecondaryIndexStats().values().stream().findFirst().get().size());
 
-    // Validate the secondary index stats returned
     Set<String> returnedRecordKeys = new HashSet<>();
     for (SecondaryIndexStats stat : writeStatus.getIndexStats().getSecondaryIndexStats().values().stream().findFirst().get()) {
       // verify si stat marks record as not deleted

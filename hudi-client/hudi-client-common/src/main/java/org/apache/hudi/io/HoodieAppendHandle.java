@@ -232,10 +232,8 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   }
 
   private Option<FileSlice> getFileSlice() {
-    Option<FileSlice> fileSlice;
     TableFileSystemView.SliceView rtView = hoodieTable.getSliceView();
-    fileSlice = rtView.getLatestFileSlice(partitionPath, fileId);
-    return fileSlice;
+    return rtView.getLatestFileSlice(partitionPath, fileId);
   }
 
   private void init(HoodieRecord record) {
@@ -575,10 +573,13 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   }
 
   private void trackMetadataIndexStatsForStreamingMetadataWrites(Option<FileSlice> fileSliceOpt, List<String> newLogFiles, WriteStatus status) {
-    // TODO: Optimise the computation for multiple secondary indexes
+    // TODO: @see <a href="https://issues.apache.org/jira/browse/HUDI-9533">HUDI-9533</a> Optimise the computation for multiple secondary indexes
     HoodieEngineContext engineContext = new HoodieLocalEngineContext(hoodieTable.getStorageConf(), taskContextSupplier);
     HoodieReaderContext readerContext = engineContext.getReaderContextFactory(hoodieTable.getMetaClient()).getContext();
 
+    // For Append handle, we need to merge the records written by new log files with the existing file slice to check
+    // the corresponding updates for secondary index. It is possible the records written in the new log files are ignored
+    // by record merger.
     secondaryIndexDefns.forEach(secondaryIndexDefnPair -> {
       // fetch primary key -> secondary index for prev file slice.
       Map<String, String> recordKeyToSecondaryKeyForPreviousFileSlice = fileSliceOpt.map(fileSlice -> {
