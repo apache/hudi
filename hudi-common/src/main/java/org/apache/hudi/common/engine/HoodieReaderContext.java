@@ -379,16 +379,6 @@ public abstract class HoodieReaderContext<T> {
   public abstract HoodieRecord<T> constructHoodieRecord(BufferedRecord<T> bufferedRecord);
 
   /**
-   * Constructs a new {@link HoodieRecord} based on the given record and schema.
-   *
-   * @param record            The engine-specific row.
-   * @param schema            The Avro schema of the record.
-   * @param orderingFieldName The name of the ordering field, if any.
-   * @return A new instance of {@link HoodieRecord}.
-   */
-  public abstract HoodieRecord<T> constructHoodieRecord(T record, Schema schema, Option<String> orderingFieldName);
-
-  /**
    * Seals the engine-specific record to make sure the data referenced in memory do not change.
    *
    * @param record The record.
@@ -501,4 +491,12 @@ public abstract class HoodieReaderContext<T> {
   protected Schema decodeAvroSchema(Object versionId) {
     return this.localAvroSchemaCache.getSchema((Integer) versionId).orElse(null);
   }
+
+  /**
+   * Checks if the record is a delete operation.
+   *
+   * @param record The record to check.
+   * @return true if the record is a delete operation, false otherwise.
+   */
+  public abstract boolean isDeleteOperation(T record);
 }

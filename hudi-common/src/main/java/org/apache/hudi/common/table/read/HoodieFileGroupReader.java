@@ -99,6 +99,8 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   // the allowInflightInstants flag would need to be set to true. This would ensure the HoodieMergedLogRecordReader
   // considers the log records which are inflight.
   private final boolean allowInflightInstants;
+  // Whether to emit delete records or not.
+  private final boolean emitDelete;
 
   /**
    * Constructs an instance of the HoodieFileGroupReader.
@@ -128,6 +130,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     this.props = props;
     this.start = start;
     this.length = length;
+    this.emitDelete = emitDelete;
     HoodieTableConfig tableConfig = hoodieTableMetaClient.getTableConfig();
     this.partitionPath = fileSlice.getPartitionPath();
     this.partitionPathFields = tableConfig.getPartitionFields();
@@ -388,8 +391,12 @@ public final class HoodieFileGroupReader<T> implements Closeable {
    * @return An iterator over the records that wraps the engine-specific record in a HoodieRecord.
    */
   public ClosableIterator<HoodieRecord<T>> getClosableHoodieRecordIterator() throws IOException {
-    return new CloseableMappingIterator<>(getClosableIterator(),
-        nextRecord -> readerContext.constructHoodieRecord(nextRecord, readerContext.getSchemaHandler().getRequestedSchema(), orderingFieldName));
+    return new CloseableMappingIterator<>(getClosableIterator(), nextRecord -> {
+      boolean isDelete = emitDelete && readerContext.isDeleteOperation(nextRecord);
+      // Supply empty ordering field name since records are already merged at this point
+      BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(nextRecord, readerContext.getSchemaHandler().getRequestedSchema(), readerContext, Option.empty(), isDelete);
+      return readerContext.constructHoodieRecord(bufferedRecord);
+    });
   }
 
   /**

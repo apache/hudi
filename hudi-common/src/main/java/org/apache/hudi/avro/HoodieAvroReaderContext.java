@@ -23,9 +23,10 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
-import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
@@ -153,20 +154,14 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
   public HoodieRecord<IndexedRecord> constructHoodieRecord(BufferedRecord<IndexedRecord> bufferedRecord) {
     HoodieKey hoodieKey = new HoodieKey(bufferedRecord.getRecordKey(), partitionPath);
     if (bufferedRecord.isDelete()) {
-      return new HoodieEmptyRecord<>(hoodieKey, HoodieRecord.HoodieRecordType.AVRO);
+      return new HoodieAvroRecord(hoodieKey, new EmptyHoodieRecordPayload());
     }
     return new HoodieAvroIndexedRecord(hoodieKey, bufferedRecord.getRecord());
   }
 
   @Override
-  public HoodieRecord<IndexedRecord> constructHoodieRecord(IndexedRecord record, Schema schema, Option<String> orderingFieldName) {
-    if (record instanceof IndexedDeleteRecord) {
-      return new HoodieEmptyRecord<>(
-          new HoodieKey(record.get(HoodieRecord.RECORD_KEY_META_FIELD_ORD).toString(), partitionPath),
-          HoodieRecord.HoodieRecordType.AVRO);
-    }
-    HoodieKey hoodieKey = new HoodieKey(getRecordKey(record, schema), partitionPath);
-    return new HoodieAvroIndexedRecord(hoodieKey, record);
+  public boolean isDeleteOperation(IndexedRecord record) {
+    return record instanceof IndexedDeleteRecord;
   }
 
   @Override

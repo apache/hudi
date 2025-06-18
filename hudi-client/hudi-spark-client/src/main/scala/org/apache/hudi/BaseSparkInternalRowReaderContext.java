@@ -111,15 +111,8 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
   }
 
   @Override
-  public HoodieRecord<InternalRow> constructHoodieRecord(InternalRow row, Schema schema, Option<String> orderingFieldName) {
-    if (row instanceof HoodieInternalRow && ((HoodieInternalRow) row).isDeleteOperation()) {
-      return new HoodieEmptyRecord<>(
-          new HoodieKey(row.getUTF8String(HoodieRecord.RECORD_KEY_META_FIELD_ORD).toString(), partitionPath),
-          HoodieRecord.HoodieRecordType.SPARK);
-    }
-
-    HoodieKey hoodieKey = new HoodieKey(getRecordKey(row, schema), partitionPath);
-    return new HoodieSparkRecord(hoodieKey, row, HoodieInternalRowUtils.getCachedSchema(schema), false);
+  public boolean isDeleteOperation(InternalRow record) {
+    return record instanceof HoodieInternalRow && ((HoodieInternalRow) record).isDeleteOperation();
   }
 
   @Override

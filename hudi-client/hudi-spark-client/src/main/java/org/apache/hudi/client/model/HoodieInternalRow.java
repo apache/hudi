@@ -93,7 +93,7 @@ public class HoodieInternalRow extends InternalRow {
   }
 
   public static HoodieInternalRow createDeleteRow(UTF8String recordKey, UTF8String partitionPath, InternalRow sourceRow) {
-    UTF8String[] metaFields = new UTF8String[] {
+    UTF8String[] metaFields = sourceRow != null ? new UTF8String[0] : new UTF8String[] {
         null,
         null,
         recordKey,

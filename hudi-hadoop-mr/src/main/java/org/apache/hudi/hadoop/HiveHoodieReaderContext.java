@@ -182,6 +182,11 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   }
 
   @Override
+  public boolean isDeleteOperation(ArrayWritable record) {
+    throw new UnsupportedOperationException("Not supported for " + this.getClass().getSimpleName());
+  }
+
+  @Override
   public Option<HoodieRecordMerger> getRecordMerger(RecordMergeMode mergeMode, String mergeStrategyId, String mergeImplClasses) {
     // TODO(HUDI-7843):
     // get rid of event time and commit time ordering. Just return Option.empty
@@ -232,12 +237,6 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     Schema schema = getSchemaFromBufferRecord(bufferedRecord);
     ArrayWritable writable = bufferedRecord.getRecord();
     return new HoodieHiveRecord(key, writable, schema, objectInspectorCache);
-  }
-
-  @Override
-  public HoodieRecord<ArrayWritable> constructHoodieRecord(ArrayWritable record, Schema schema, Option<String> orderingFieldName) {
-    HoodieKey key = new HoodieKey(getRecordKey(record, schema), partitionPath);
-    return new HoodieHiveRecord(key, record, schema, objectInspectorCache);
   }
 
   @Override

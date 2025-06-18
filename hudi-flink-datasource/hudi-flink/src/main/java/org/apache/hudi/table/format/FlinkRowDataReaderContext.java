@@ -196,13 +196,9 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
   }
 
   @Override
-  public HoodieRecord<RowData> constructHoodieRecord(RowData rowData, Schema schema, Option<String> orderingFieldName) {
-    HoodieOperation operation = HoodieOperation.fromValue(rowData.getRowKind().toByteValue());
-    HoodieKey hoodieKey = new HoodieKey(getRecordKey(rowData, schema), partitionPath);
-    if (operation == HoodieOperation.DELETE) {
-      return new HoodieEmptyRecord<>(hoodieKey, HoodieOperation.DELETE, getOrderingValue(rowData, schema, orderingFieldName), HoodieRecord.HoodieRecordType.FLINK);
-    }
-    return new HoodieFlinkRecord(hoodieKey, operation, getOrderingValue(rowData, schema, orderingFieldName), rowData);
+  public boolean isDeleteOperation(RowData record) {
+    HoodieOperation operation = HoodieOperation.fromValue(record.getRowKind().toByteValue());
+    return operation == HoodieOperation.DELETE;
   }
 
   @Override
