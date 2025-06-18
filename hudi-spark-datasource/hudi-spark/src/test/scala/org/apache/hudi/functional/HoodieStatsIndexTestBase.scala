@@ -118,7 +118,7 @@ class HoodieStatsIndexTestBase extends HoodieSparkClientTestBase {
   }
 
   protected def rollbackLastInstant(hudiOpts: Map[String, String]): HoodieInstant = {
-    val lastInstant = getLatestMetaClient(false).getActiveTimeline
+    val lastInstant = getLatestMetaClient(true).getActiveTimeline
       .filter(JavaConversions.getPredicate(instant => instant.getAction != ActionType.rollback.name()))
       .lastInstant().get()
     if (getLatestCompactionInstant != getLatestMetaClient(false).getActiveTimeline.lastInstant()
