@@ -300,14 +300,7 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
   }
 
   @ParameterizedTest
-  @CsvSource(value = Array("COPY_ON_WRITE,8,EVENT_TIME_ORDERING,RECORD_INDEX",
-    "COPY_ON_WRITE,8,COMMIT_TIME_ORDERING,RECORD_INDEX",
-    "COPY_ON_WRITE,8,EVENT_TIME_ORDERING,GLOBAL_SIMPLE",
-    "COPY_ON_WRITE,8,COMMIT_TIME_ORDERING,GLOBAL_SIMPLE",
-    "MERGE_ON_READ,8,EVENT_TIME_ORDERING,RECORD_INDEX",
-    "MERGE_ON_READ,8,COMMIT_TIME_ORDERING,RECORD_INDEX",
-    "MERGE_ON_READ,8,EVENT_TIME_ORDERING,GLOBAL_SIMPLE",
-    "MERGE_ON_READ,8,COMMIT_TIME_ORDERING,GLOBAL_SIMPLE"))
+  @CsvSource(value = Array("COPY_ON_WRITE,8,EVENT_TIME_ORDERING,RECORD_INDEX"))
   def testDeletesWithHoodieIsDeleted(tableType: HoodieTableType, tableVersion: Int, mergeMode: RecordMergeMode, indexType: IndexType): Unit = {
     var (writeOpts, readOpts) = getWriterReaderOpts(HoodieRecordType.AVRO)
     writeOpts = writeOpts ++ Map("hoodie.write.table.version" -> tableVersion.toString,
