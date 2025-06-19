@@ -65,7 +65,7 @@ public class BaseTestHandle extends HoodieSparkClientTestHarness {
   }
 
   protected int generateDeleteRecords(List<HoodieRecord> existingRecords, HoodieTestDataGenerator dataGenerator, String instantTime) {
-    List<HoodieRecord> deletes = dataGenerator.generateUniqueDeleteRecords(instantTime, 10);
+    List<HoodieRecord> deletes = dataGenerator.generateUniqueDeleteRecords(instantTime, 30);
     for (Iterator<HoodieRecord> it = deletes.iterator(); it.hasNext(); ) {
       HoodieRecord deleteRecord = it.next();
       for (HoodieRecord existingRecord : existingRecords) {

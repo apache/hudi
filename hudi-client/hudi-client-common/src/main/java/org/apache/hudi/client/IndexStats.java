@@ -33,8 +33,8 @@ import java.util.Map;
 public class IndexStats implements Serializable {
   private static final long serialVersionUID = 1L;
 
-  private final List<HoodieRecordDelegate> writtenRecordDelegates = new ArrayList<>();
-  private final Map<String, List<SecondaryIndexStats>> secondaryIndexStats = new HashMap<>();
+  private List<HoodieRecordDelegate> writtenRecordDelegates = new ArrayList<>();
+  private Map<String, List<SecondaryIndexStats>> secondaryIndexStats = new HashMap<>();
 
   void addHoodieRecordDelegate(HoodieRecordDelegate hoodieRecordDelegate) {
     this.writtenRecordDelegates.add(hoodieRecordDelegate);
@@ -55,5 +55,13 @@ public class IndexStats implements Serializable {
 
   public Map<String, List<SecondaryIndexStats>> getSecondaryIndexStats() {
     return secondaryIndexStats;
+  }
+
+  public void setWrittenRecordDelegates(List<HoodieRecordDelegate> writtenRecordDelegates) {
+    this.writtenRecordDelegates = writtenRecordDelegates;
+  }
+
+  public void setSecondaryIndexStats(Map<String, List<SecondaryIndexStats>> secondaryIndexStats) {
+    this.secondaryIndexStats = secondaryIndexStats;
   }
 }

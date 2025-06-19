@@ -95,6 +95,7 @@ public class TestAppendHandle extends BaseTestHandle {
     int numUpdates = 20;
     List<HoodieRecord> records = dataGenerator.generateUniqueUpdates(instantTime, numUpdates);
     int numDeletes = generateDeleteRecords(records, dataGenerator, instantTime);
+    assertTrue(numDeletes > 0);
     metaClient = HoodieTableMetaClient.reload(metaClient);
     table = HoodieSparkTable.create(config, context, metaClient);
     HoodieAppendHandle handle = new HoodieAppendHandle(config, instantTime, table, partitionPath, fileId, records.iterator(), new LocalTaskContextSupplier());

@@ -93,7 +93,6 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -150,10 +149,6 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   // Virtual keys support for metadata table. This Field is
   // from the metadata payload schema.
   private static final String RECORD_KEY_FIELD_NAME = HoodieMetadataPayload.KEY_FIELD_NAME;
-
-  // tracks the list of MDT partitions which can write to metadata table in a streaming manner.
-  private static final List<MetadataPartitionType> STREAMING_WRITES_SUPPORTED_PARTITIONS = Arrays.asList(RECORD_INDEX, SECONDARY_INDEX);
-  private static final List<MetadataPartitionType> STREAMING_WRITES_SUPPORTED_PARTITION_PREFIXES = Arrays.asList(SECONDARY_INDEX);
 
   // Average size of a record saved within the record index.
   // Record index has a fixed size schema. This has been calculated based on experiments with default settings
@@ -1160,22 +1155,18 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   }
 
   private Pair<List<MetadataPartitionType>, Set<String>> getStreamingMetadataPartitionsToUpdate() {
-    List<MetadataPartitionType> mdtPartitionsToTag = new ArrayList<>(enabledPartitionTypes);
-    mdtPartitionsToTag.remove(FILES);
-    mdtPartitionsToTag.remove(SECONDARY_INDEX); // mdt partition path will have additional suffixes which will be added below.
-    mdtPartitionsToTag.remove(EXPRESSION_INDEX); // mdt partition path will have additional suffixes which will be added below.
-    mdtPartitionsToTag.retainAll(STREAMING_WRITES_SUPPORTED_PARTITIONS);
-
+    List<MetadataPartitionType> mdtPartitionsToTag = new ArrayList<>();
+    // Add record index
+    mdtPartitionsToTag.add(RECORD_INDEX);
+    // Add secondary indexes
     Set<String> mdtPartitionPathsToTag = new HashSet<>(mdtPartitionsToTag.stream().map(mdtPartitionToTag -> mdtPartitionToTag.getPartitionPath()).collect(Collectors.toSet()));
-    if (STREAMING_WRITES_SUPPORTED_PARTITION_PREFIXES.contains(SECONDARY_INDEX)) {
-      List<String> secondaryIndexPartitionPaths = dataMetaClient.getTableConfig().getMetadataPartitions()
-          .stream()
-          .filter(partition -> partition.startsWith(PARTITION_NAME_SECONDARY_INDEX_PREFIX))
-          .collect(Collectors.toList());
-      if (!secondaryIndexPartitionPaths.isEmpty()) {
-        mdtPartitionPathsToTag.addAll(secondaryIndexPartitionPaths);
-        mdtPartitionsToTag.add(SECONDARY_INDEX);
-      }
+    List<String> secondaryIndexPartitionPaths = dataMetaClient.getTableConfig().getMetadataPartitions()
+        .stream()
+        .filter(partition -> partition.startsWith(PARTITION_NAME_SECONDARY_INDEX_PREFIX))
+        .collect(Collectors.toList());
+    if (!secondaryIndexPartitionPaths.isEmpty()) {
+      mdtPartitionPathsToTag.addAll(secondaryIndexPartitionPaths);
+      mdtPartitionsToTag.add(SECONDARY_INDEX);
     }
     return Pair.of(mdtPartitionsToTag, mdtPartitionPathsToTag);
   }
@@ -1226,9 +1217,13 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   }
 
   private Set<String> getNonStreamingMetadataPartitionsToUpdate() {
-    Set<String> toReturn = enabledPartitionTypes.stream().map(MetadataPartitionType::getPartitionPath).collect(Collectors.toSet());
-    STREAMING_WRITES_SUPPORTED_PARTITIONS.forEach(metadataPartitionType -> toReturn.remove(metadataPartitionType.getPartitionPath()));
-    STREAMING_WRITES_SUPPORTED_PARTITION_PREFIXES.forEach(metadataPartitionType -> toReturn.remove(metadataPartitionType.getPartitionPath()));
+    Set<String> toReturn = new HashSet<>();
+    Set<MetadataPartitionType> streamingMDTPartitions = new HashSet<>(getStreamingMetadataPartitionsToUpdate().getLeft());
+    for (MetadataPartitionType partitionType: enabledPartitionTypes) {
+      if (!streamingMDTPartitions.contains(partitionType)) {
+        toReturn.add(partitionType.getPartitionPath());
+      }
+    }
     return toReturn;
   }
 

@@ -18,15 +18,17 @@
 
 package org.apache.hudi.client;
 
+import java.io.Serializable;
+
 /**
  * Class is used to hold secondary index metadata updates. These updates are generated from
  * various write handles during write.
  */
-public class SecondaryIndexStats {
+public class SecondaryIndexStats implements Serializable {
 
-  private final String recordKey;
-  private final String secondaryKeyValue;
-  private final boolean isDeleted;
+  private String recordKey;
+  private String secondaryKeyValue;
+  private boolean isDeleted;
 
   public SecondaryIndexStats(String recordKey, String secondaryKeyValue, boolean isDeleted) {
     this.recordKey = recordKey;
@@ -44,5 +46,17 @@ public class SecondaryIndexStats {
 
   public boolean isDeleted() {
     return isDeleted;
+  }
+
+  public void setRecordKey(String recordKey) {
+    this.recordKey = recordKey;
+  }
+
+  public void setSecondaryKeyValue(String secondaryKeyValue) {
+    this.secondaryKeyValue = secondaryKeyValue;
+  }
+
+  public void setIsDeleted(boolean deleted) {
+    isDeleted = deleted;
   }
 }
