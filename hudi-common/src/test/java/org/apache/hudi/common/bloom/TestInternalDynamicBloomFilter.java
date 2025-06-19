@@ -62,7 +62,7 @@ public class TestInternalDynamicBloomFilter {
   }
 
   @Test
-  public void testInternalDynamicBloomFilterAddRows() {
+  public void testInternalDynamicBloomFilterRescale() {
     HoodieDynamicBoundedBloomFilter filter = new HoodieDynamicBoundedBloomFilter(1000,
         0.000001, Hash.MURMUR_HASH, 10000);
     assertEquals(1, filter.getMatrixLength());
