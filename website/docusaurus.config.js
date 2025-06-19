@@ -359,8 +359,8 @@ module.exports = {
               to: "/docs/quick-start-guide",
             },
             {
-              label: "Docker Demo",
-              to: "/docs/docker_demo",
+              label: "Tutorial Series",
+              to: "/learn/tutorial-series",
             },
             {
               label: "Blog",
@@ -377,10 +377,6 @@ module.exports = {
             {
               label: "FAQ",
               href: "/docs/faq",
-            },
-            {
-              label: "Technical Wiki",
-              href: "https://cwiki.apache.org/confluence/display/HUDI",
             },
           ],
         },
