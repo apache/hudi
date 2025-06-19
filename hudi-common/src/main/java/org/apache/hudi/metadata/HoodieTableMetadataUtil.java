@@ -2778,22 +2778,21 @@ public class HoodieTableMetadataUtil {
     }
   }
 
-  public static Option<HoodieIndexVersion> getHoodieIndexVersionOption(String indexName, HoodieTableMetaClient metaClient) {
+  public static Option<HoodieIndexVersion> getHoodieIndexVersionOption(String metadataPartitionPath, HoodieTableMetaClient metaClient) {
     Option<HoodieIndexMetadata> expressionIndexMetadata = metaClient.getIndexMetadata();
     if (expressionIndexMetadata.isEmpty()) {
       return Option.empty();
     }
     Map<String, HoodieIndexDefinition> indexDefs = expressionIndexMetadata.get().getIndexDefinitions();
-    if (!indexDefs.containsKey(indexName)) {
+    if (!indexDefs.containsKey(metadataPartitionPath)) {
       return Option.empty();
     }
-    return Option.of(indexDefs.get(indexName).getVersion());
+    return Option.of(indexDefs.get(metadataPartitionPath).getVersion());
   }
 
   public static HoodieIndexVersion getExistingHoodieIndexVersionOrDefault(String metadataPartitionPath, HoodieTableMetaClient dataMetaClient) {
-    String indexType = fromPartitionPath(metadataPartitionPath).name();
-    return getHoodieIndexVersionOption(indexType, dataMetaClient).orElseGet(
-        () -> HoodieIndexVersion.getCurrentVersion(dataMetaClient.getTableConfig().getTableVersion(), indexType));
+    return getHoodieIndexVersionOption(metadataPartitionPath, dataMetaClient).orElseGet(
+        () -> HoodieIndexVersion.getCurrentVersion(dataMetaClient.getTableConfig().getTableVersion(), metadataPartitionPath));
   }
 
   /**

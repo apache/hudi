@@ -76,19 +76,29 @@ public class TestHoodieIndexVersion {
   @ParameterizedTest(name = "{0}")
   @MethodSource("getCurrentVersionTestCases")
   public void testGetCurrentVersionWithString(String testName, HoodieTableVersion tableVersion, 
-                                             String partitionType, HoodieIndexVersion expectedVersion) {
-    HoodieIndexVersion result = HoodieIndexVersion.getCurrentVersion(tableVersion, partitionType);
+                                             String partitionPath, HoodieIndexVersion expectedVersion) {
+    HoodieIndexVersion result = HoodieIndexVersion.getCurrentVersion(tableVersion, partitionPath);
     assertEquals(expectedVersion, result);
   }
 
   private static Stream<Arguments> getCurrentVersionTestCases() {
     return Stream.of(
         Arguments.of("RECORD_INDEX", HoodieTableVersion.EIGHT, "record_index", HoodieIndexVersion.RECORD_INDEX_ONE),
+        Arguments.of("RECORD_INDEX", HoodieTableVersion.NINE, "record_index", HoodieIndexVersion.RECORD_INDEX_ONE),
         Arguments.of("COLUMN_STATS", HoodieTableVersion.EIGHT, "column_stats", HoodieIndexVersion.COLUMN_STATS_ONE),
+        Arguments.of("COLUMN_STATS", HoodieTableVersion.NINE, "column_stats", HoodieIndexVersion.COLUMN_STATS_ONE),
         Arguments.of("BLOOM_FILTERS", HoodieTableVersion.EIGHT, "bloom_filters", HoodieIndexVersion.BLOOM_FILTERS_ONE),
+        Arguments.of("BLOOM_FILTERS", HoodieTableVersion.NINE, "bloom_filters", HoodieIndexVersion.BLOOM_FILTERS_ONE),
+        Arguments.of("BLOOM_FILTERS", HoodieTableVersion.EIGHT, "expr_index_idx1", HoodieIndexVersion.EXPRESSION_INDEX_ONE),
+        Arguments.of("BLOOM_FILTERS", HoodieTableVersion.NINE, "expr_index_idx1", HoodieIndexVersion.EXPRESSION_INDEX_ONE),
+        Arguments.of("BLOOM_FILTERS", HoodieTableVersion.EIGHT, "secondary_index_idx1", HoodieIndexVersion.SECONDARY_INDEX_ONE),
+        Arguments.of("BLOOM_FILTERS", HoodieTableVersion.NINE, "secondary_index_idx1", HoodieIndexVersion.SECONDARY_INDEX_TWO),
         Arguments.of("FILES", HoodieTableVersion.EIGHT, "files", HoodieIndexVersion.FILES_INDEX_ONE),
+        Arguments.of("FILES", HoodieTableVersion.NINE, "files", HoodieIndexVersion.FILES_INDEX_ONE),
+        Arguments.of("EXPRESSION INDEX", HoodieTableVersion.EIGHT, "files", HoodieIndexVersion.FILES_INDEX_ONE),
+        Arguments.of("EXPRESSION INDEX", HoodieTableVersion.NINE, "files", HoodieIndexVersion.FILES_INDEX_ONE),
         Arguments.of("PARTITION_STATS", HoodieTableVersion.EIGHT, "partition_stats", HoodieIndexVersion.PARTITION_STATS_ONE),
-        Arguments.of("ALL_PARTITIONS", HoodieTableVersion.EIGHT, "all_partitions", HoodieIndexVersion.ALL_PARTITIONS_ONE)
+        Arguments.of("PARTITION_STATS", HoodieTableVersion.NINE, "partition_stats", HoodieIndexVersion.PARTITION_STATS_ONE)
     );
   }
 
@@ -109,11 +119,6 @@ public class TestHoodieIndexVersion {
         Arguments.of("PARTITION_STATS", HoodieTableVersion.EIGHT, MetadataPartitionType.PARTITION_STATS, HoodieIndexVersion.PARTITION_STATS_ONE),
         Arguments.of("ALL_PARTITIONS", HoodieTableVersion.EIGHT, MetadataPartitionType.ALL_PARTITIONS, HoodieIndexVersion.ALL_PARTITIONS_ONE)
     );
-  }
-
-  @Test
-  public void testGetCurrentVersionForExpressionIndexThrows() {
-    assertThrows(IllegalArgumentException.class, () -> HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.EIGHT, MetadataPartitionType.EXPRESSION_INDEX));
   }
 
   @Test
@@ -257,13 +262,14 @@ public class TestHoodieIndexVersion {
   @Test
   public void testVersionCanBeAssignedToPartitionType() {
     // Test valid partition type
-    HoodieIndexVersion.SECONDARY_INDEX_ONE.ensureVersionCanBeAssignedToPartitionType(MetadataPartitionType.SECONDARY_INDEX);
+    HoodieIndexVersion.SECONDARY_INDEX_ONE.ensureVersionCanBeAssignedToIndexType(MetadataPartitionType.SECONDARY_INDEX);
     // Test invalid partition type
     assertThrows(IllegalArgumentException.class, () -> {
-      HoodieIndexVersion.SECONDARY_INDEX_ONE.ensureVersionCanBeAssignedToPartitionType(MetadataPartitionType.COLUMN_STATS);
+      HoodieIndexVersion.SECONDARY_INDEX_ONE.ensureVersionCanBeAssignedToIndexType(MetadataPartitionType.COLUMN_STATS);
     });
-    HoodieIndexVersion.COLUMN_STATS_ONE.ensureVersionCanBeAssignedToPartitionType(MetadataPartitionType.EXPRESSION_INDEX);
-    HoodieIndexVersion.BLOOM_FILTERS_ONE.ensureVersionCanBeAssignedToPartitionType(MetadataPartitionType.EXPRESSION_INDEX);
+    assertThrows(IllegalArgumentException.class, () -> {
+      HoodieIndexVersion.COLUMN_STATS_ONE.ensureVersionCanBeAssignedToIndexType(MetadataPartitionType.EXPRESSION_INDEX);
+    });
   }
 
   @Test
@@ -272,18 +278,5 @@ public class TestHoodieIndexVersion {
     assertEquals("SECONDARY_INDEX_TWO", HoodieIndexVersion.SECONDARY_INDEX_TWO.toString());
     assertEquals("COLUMN_STATS_ONE", HoodieIndexVersion.COLUMN_STATS_ONE.toString());
     assertEquals("RECORD_INDEX_ONE", HoodieIndexVersion.RECORD_INDEX_ONE.toString());
-  }
-
-  @Test
-  public void testGetCurrentVersionWithStringCaseInsensitive() {
-    // Test that string parameter is converted to uppercase
-    HoodieIndexVersion result = HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.EIGHT, "record_index");
-    assertEquals(HoodieIndexVersion.RECORD_INDEX_ONE, result);
-
-    result = HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.EIGHT, "RECORD_INDEX");
-    assertEquals(HoodieIndexVersion.RECORD_INDEX_ONE, result);
-
-    result = HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.EIGHT, "Record_Index");
-    assertEquals(HoodieIndexVersion.RECORD_INDEX_ONE, result);
   }
 } 

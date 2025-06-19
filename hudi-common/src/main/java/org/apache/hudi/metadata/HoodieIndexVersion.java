@@ -66,8 +66,8 @@ public enum HoodieIndexVersion {
     return releaseVersions;
   }
 
-  public static HoodieIndexVersion getCurrentVersion(HoodieTableVersion tableVersion, String partitionType) {
-    return getCurrentVersion(tableVersion, MetadataPartitionType.valueOf(partitionType.toUpperCase()));
+  public static HoodieIndexVersion getCurrentVersion(HoodieTableVersion tableVersion, String partitionPath) {
+    return getCurrentVersion(tableVersion, MetadataPartitionType.fromPartitionPath(partitionPath));
   }
 
   public static HoodieIndexVersion getCurrentVersion(HoodieTableVersion tableVersion, MetadataPartitionType partitionType) {
@@ -143,7 +143,7 @@ public enum HoodieIndexVersion {
             + "one: Expected" + this.partitionType + ", got " + other.partitionType);
   }
 
-  public void ensureVersionCanBeAssignedToPartitionType(MetadataPartitionType partitionType) {
+  public void ensureVersionCanBeAssignedToIndexType(MetadataPartitionType partitionType) {
     ValidationUtils.checkArgument(this.partitionType.equals(partitionType)
         || this.partitionType.equals(MetadataPartitionType.EXPRESSION_INDEX),
         String.format("Hoodie index version %s is not allowed to be assigned to partition type %s",

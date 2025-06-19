@@ -307,7 +307,7 @@ public class HoodieTableMetaClient implements Serializable {
             // If version field is missing, it implies either of the cases (validated by isValidIndexDefinition):
             // - It is table version 8, because we don't write version attributes in some hudi releases
             // - It is table version 9, and it is not secondary index. Since we drop SI on upgrade and we always write version attributes.
-            return idxDef.toBuilder().withVersion(getCurrentVersion(tableVersion, idxDef.getIndexType())).build();
+            return idxDef.toBuilder().withVersion(getCurrentVersion(tableVersion, idxDef.getIndexName())).build();
           } else {
             return idxDef;
           }
