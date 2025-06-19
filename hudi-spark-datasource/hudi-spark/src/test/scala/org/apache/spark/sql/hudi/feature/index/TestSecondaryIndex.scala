@@ -262,6 +262,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
              |  preCombineField = 'ts',
              |  hoodie.metadata.enable = 'true',
              |  hoodie.metadata.record.index.enable = 'true',
+             |  hoodie.metadata.index.column.stats.enable = 'true',
              |  hoodie.metadata.index.secondary.enable = 'true',
              |  hoodie.write.table.version = '8',
              |  hoodie.datasource.write.payload.class = 'org.apache.hudi.common.model.OverwriteWithLatestAvroPayload'
