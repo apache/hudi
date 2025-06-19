@@ -42,17 +42,17 @@ public class BinaryCopyHandleFactory<T, I, K, O>
   @Override
   public HoodieBinaryCopyHandle<T, I, K, O> create(
       HoodieWriteConfig config,
-      String commitTime,
-      HoodieTable<T, I, K, O> hoodieTable,
+      String instantTime,
+      HoodieTable<T, I, K, O> table,
       String partitionPath,
       String fileIdPrefix,
       TaskContextSupplier taskContextSupplier) {
     return new HoodieBinaryCopyHandle(
         config,
-        commitTime,
+        instantTime,
         partitionPath,
         getNextFileId(fileIdPrefix),
-        hoodieTable,
+        table,
         taskContextSupplier,
         inputFilePaths);
   }
