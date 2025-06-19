@@ -62,7 +62,7 @@ class TestDataHubSyncConfig {
 
     DataHubSyncConfig.DataHubSyncConfigParams params = new DataHubSyncConfig.DataHubSyncConfigParams();
     params.databaseName = db;
-    params.hoodieSyncConfigParams.tableName = table;
+    params.tableName = table;
 
     assertEquals(db, params.toProps().get(META_SYNC_DATAHUB_DATABASE_NAME.key()));
     assertEquals(table, params.toProps().get(META_SYNC_DATAHUB_TABLE_NAME.key()));
