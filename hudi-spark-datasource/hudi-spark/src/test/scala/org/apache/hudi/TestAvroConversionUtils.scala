@@ -19,6 +19,7 @@
 package org.apache.hudi
 
 import org.apache.hudi.internal.schema.HoodieSchemaException
+
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericData
 import org.apache.spark.sql.catalyst.InternalRow
