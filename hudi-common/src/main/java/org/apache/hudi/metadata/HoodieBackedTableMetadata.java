@@ -28,11 +28,9 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroRecord;
-import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -49,7 +47,6 @@ import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.expression.BindVisitor;
 import org.apache.hudi.expression.Expression;
 import org.apache.hudi.internal.schema.Types;
-import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.io.storage.HoodieSeekingFileReader;
 import org.apache.hudi.util.Transient;
 
@@ -432,7 +429,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     try {
       HoodieTimer timer = HoodieTimer.start();
       // Open base file reader
-      Pair<HoodieSeekingFileReader<?>, Long> baseFileReaderOpenTimePair = getBaseFileReader(slice, timer);
+      Pair<HoodieSeekingFileReader<?>, Long> baseFileReaderOpenTimePair = HoodieTableMetadataUtil.getBaseFileReader(slice, timer, metadataConfig.getProps(), getHadoopConf());
       HoodieSeekingFileReader<?> baseFileReader = baseFileReaderOpenTimePair.getKey();
       final long baseFileOpenMs = baseFileReaderOpenTimePair.getValue();
 
@@ -449,26 +446,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     } catch (IOException e) {
       throw new HoodieIOException("Error opening readers for metadata table partition " + partitionName, e);
     }
-  }
-
-  private Pair<HoodieSeekingFileReader<?>, Long> getBaseFileReader(FileSlice slice, HoodieTimer timer) throws IOException {
-    HoodieSeekingFileReader<?> baseFileReader;
-    long baseFileOpenMs;
-    // If the base file is present then create a reader
-    Option<HoodieBaseFile> basefile = slice.getBaseFile();
-    if (basefile.isPresent()) {
-      String baseFilePath = basefile.get().getPath();
-      baseFileReader = (HoodieSeekingFileReader<?>) HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO)
-          .getFileReader(getHadoopConf(), new Path(baseFilePath));
-      baseFileOpenMs = timer.endTimer();
-      LOG.info(String.format("Opened metadata base file from %s at instant %s in %d ms", baseFilePath,
-          basefile.get().getCommitTime(), baseFileOpenMs));
-    } else {
-      baseFileReader = null;
-      baseFileOpenMs = 0L;
-      timer.endTimer();
-    }
-    return Pair.of(baseFileReader, baseFileOpenMs);
   }
 
   private Set<String> getValidInstantTimestamps() {

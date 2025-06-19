@@ -19,6 +19,7 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField.RECORD_KEY_METADATA_FIELD
 import org.apache.hudi.client.common.HoodieSparkEngineContext
+import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.{FileSlice, HoodieTableType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
@@ -41,13 +42,24 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
   // dummy record key field
   val defaultRecordKeyField = "_row_key"
 
+  // Only testing caching of HFile for CoW
   @ParameterizedTest
-  @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
-  def testRLIWithSQL(tableType: String): Unit = {
+  @ValueSource(strings = Array("COPY_ON_WRITE,false", "MERGE_ON_READ,false", "COPY_ON_WRITE,true"))
+  def testRLIWithSQL(params: String): Unit = {
+    val paramArray = params.split(",")
+    val tableType = paramArray(0)
+    val useFilePreFetcherForMetadataBaseFileReads = paramArray(1).toBoolean
+
     var hudiOpts = commonOpts
     hudiOpts = hudiOpts + (
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
       DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true")
+
+    if (useFilePreFetcherForMetadataBaseFileReads) {
+      // compaction ensures that base file gets created and then tested for caching.
+      hudiOpts = hudiOpts + (HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "1")
+      hudiOpts = hudiOpts + (HoodieMetadataConfig.METADATA_FILE_PRE_FETCHER_THRESHOLD_SIZE_MB.key -> "128")
+    }
 
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,

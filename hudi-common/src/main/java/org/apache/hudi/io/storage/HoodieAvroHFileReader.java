@@ -264,6 +264,10 @@ public class HoodieAvroHFileReader extends HoodieAvroFileReaderBase implements H
     }
   }
 
+  public Option<byte[]> getContent() {
+    return content;
+  }
+
   /**
    * Instantiates the shared HFile reader if not instantiated
    * @return the shared HFile reader

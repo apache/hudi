@@ -23,6 +23,7 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.io.storage.FilePreFetcher;
 
 import javax.annotation.concurrent.Immutable;
 import java.io.File;
@@ -342,6 +343,18 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("Initializes the metadata table by reading from the file system when the table is first created. Enabled by default. "
           + "Warning: This should only be disabled when manually constructing the metadata table outside of typical Hudi writer flows.");
+
+  public static final ConfigProperty<Integer> METADATA_FILE_PRE_FETCHER_THRESHOLD_SIZE_MB = ConfigProperty
+      .key(METADATA_PREFIX + ".file.pre.fetcher.max.size.mb")
+      .defaultValue(0)
+      .sinceVersion("0.14.2")
+      .withDocumentation("Max size below which metadata file (HFile) will be downloaded entirely");
+
+  public static final ConfigProperty<String> METADATA_FILE_PRE_FETCHER_IMPLEMENTATION = ConfigProperty
+      .key(METADATA_PREFIX + ".file.pre.fetcher.class")
+      .defaultValue(FilePreFetcher.class.getName())
+      .sinceVersion("0.14.2")
+      .withDocumentation("An implementation of the FilePreFetcher to use to download the metadata files if size is below METADATA_FILE_PRE_FETCHER_THRESHOLD_SIZE_MB.");
 
   public long getMaxLogFileSize() {
     return getLong(MAX_LOG_FILE_SIZE_BYTES_PROP);

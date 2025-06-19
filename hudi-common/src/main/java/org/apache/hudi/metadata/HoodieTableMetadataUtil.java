@@ -29,6 +29,7 @@ import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieAccumulator;
 import org.apache.hudi.common.data.HoodieAtomicLongAccumulator;
 import org.apache.hudi.common.data.HoodieData;
@@ -57,11 +58,14 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
+import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -70,8 +74,11 @@ import org.apache.hudi.common.util.collection.Tuple3;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.io.storage.FilePreFetcher;
+import org.apache.hudi.io.storage.HoodieAvroHFileReader;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
+import org.apache.hudi.io.storage.HoodieSeekingFileReader;
 import org.apache.hudi.util.Lazy;
 
 import org.apache.avro.AvroTypeException;
@@ -80,8 +87,10 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -121,6 +130,8 @@ import static org.apache.hudi.common.config.HoodieCommonConfig.DEFAULT_MAX_MEMOR
 import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED;
 import static org.apache.hudi.common.config.HoodieCommonConfig.MAX_MEMORY_FOR_COMPACTION;
 import static org.apache.hudi.common.config.HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE;
+import static org.apache.hudi.common.config.HoodieMetadataConfig.METADATA_FILE_PRE_FETCHER_IMPLEMENTATION;
+import static org.apache.hudi.common.config.HoodieMetadataConfig.METADATA_FILE_PRE_FETCHER_THRESHOLD_SIZE_MB;
 import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.MILLIS_INSTANT_ID_LENGTH;
 import static org.apache.hudi.common.fs.FSUtils.getFileNameFromPath;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
@@ -1387,6 +1398,58 @@ public class HoodieTableMetadataUtil {
   public static boolean isIndexingCommit(String instantTime) {
     return instantTime.length() == MILLIS_INSTANT_ID_LENGTH + OperationSuffix.METADATA_INDEXER.getSuffix().length()
         && instantTime.endsWith(OperationSuffix.METADATA_INDEXER.getSuffix());
+  }
+
+  /**
+   * Instantiate the reader for the base file for {@link HoodieBackedTableMetadata}.
+   * @param slice
+   * @param timer
+   * @param hoodieProps
+   * @param hadoopConf
+   * @return
+   * @throws IOException
+   */
+  public static Pair<HoodieSeekingFileReader<?>, Long> getBaseFileReader(FileSlice slice,
+                                                                         HoodieTimer timer,
+                                                                         TypedProperties hoodieProps,
+                                                                         Configuration hadoopConf) throws IOException {
+    HoodieSeekingFileReader<?> baseFileReader = null;
+    long baseFileOpenMs;
+    // If the base file is present then create a reader
+    Option<HoodieBaseFile> basefile = slice.getBaseFile();
+    if (basefile.isPresent()) {
+      Path basePath = new Path(basefile.get().getPath());
+      FileSystem fs = FSUtils.getFs(basePath, hadoopConf);
+      FileStatus fileStatus = fs.getFileStatus(basePath);
+      long fileLen = fileStatus.getLen();
+
+      if (fileLen <= (ConfigUtils.getIntWithAltKeys(hoodieProps, METADATA_FILE_PRE_FETCHER_THRESHOLD_SIZE_MB) * 1024L * 1024L)) {
+        String fileFetcherClass = ConfigUtils.getStringWithAltKeys(hoodieProps, METADATA_FILE_PRE_FETCHER_IMPLEMENTATION, true);
+        if (!StringUtils.isNullOrEmpty(fileFetcherClass)) {
+          try {
+            FilePreFetcher filePreFetcher = (FilePreFetcher) ReflectionUtils.loadClass(fileFetcherClass, hoodieProps, hadoopConf);
+            byte[] content = filePreFetcher.fetchFileContents(basePath, fileLen);
+            LOG.debug("Fetching the Metadata table's base file contents using the FilePreFetcher implementation {}", fileFetcherClass);
+            CacheConfig cacheConfig = new CacheConfig(hadoopConf);
+            baseFileReader = new HoodieAvroHFileReader(hadoopConf, basePath, cacheConfig, fs, content, Option.empty());
+          } catch (Throwable e) {
+            // Ignore the exception and fallback to regular baseFileReader that fetches the file contents on-demand.
+            LOG.warn("Could not load file fetcher class {}", fileFetcherClass, e);
+          }
+        }
+      }
+
+      // Fallback to the regular reader in case no custom class is configured or it failed to instantiate.
+      if (null == baseFileReader) {
+        baseFileReader = (HoodieSeekingFileReader<?>) HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO).getFileReader(hadoopConf, basePath);
+      }
+      baseFileOpenMs = timer.endTimer();
+      LOG.info(String.format("Opened metadata base file from %s at instant %s in %d ms", basePath, basefile.get().getCommitTime(), baseFileOpenMs));
+    } else {
+      baseFileOpenMs = 0L;
+      timer.endTimer();
+    }
+    return Pair.of(baseFileReader, baseFileOpenMs);
   }
 
   /**

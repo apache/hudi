@@ -756,8 +756,16 @@ public class HoodieTestTable implements AutoCloseable {
     return new Path(Paths.get(basePath, partition, getBaseFileNameById(fileId)).toUri());
   }
 
+  public Path getBaseFilePath(String partition, String fileId, String fileExtension) {
+    return new Path(Paths.get(basePath, partition, getBaseFileNameById(fileId, fileExtension)).toUri());
+  }
+
   public String getBaseFileNameById(String fileId) {
     return baseFileName(currentInstantTime, fileId);
+  }
+
+  public String getBaseFileNameById(String fileId, String fileExtension) {
+    return baseFileName(currentInstantTime, fileId, fileExtension);
   }
 
   public Path getLogFilePath(String partition, String fileId, int version) {
