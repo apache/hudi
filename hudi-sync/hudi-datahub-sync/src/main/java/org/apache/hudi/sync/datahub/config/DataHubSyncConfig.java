@@ -234,7 +234,7 @@ public class DataHubSyncConfig extends HoodieSyncConfig {
         props.setProperty(META_SYNC_DATAHUB_SYNC_SUPPRESS_EXCEPTIONS.key(), String.valueOf(suppressExceptions));
       }
       props.setPropertyIfNonNull(META_SYNC_DATAHUB_DATABASE_NAME.key(), databaseName);
-      props.setPropertyIfNonNull(META_SYNC_DATAHUB_TABLE_NAME.key(), hoodieSyncConfigParams.tableName);
+      props.setPropertyIfNonNull(META_SYNC_DATAHUB_TABLE_NAME.key(), tableName);
       return props;
     }
   }
