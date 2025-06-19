@@ -209,7 +209,7 @@ public class HoodieIndexDefinition implements Serializable {
 
     public Builder withVersion(HoodieIndexVersion version) {
       // Make sure the version enum matching the metadata partition is used.
-      version.ensureVersionCanBeAssignedToIndexType(MetadataPartitionType.valueOf(indexType.toUpperCase()));
+      version.ensureVersionCanBeAssignedToIndexType(MetadataPartitionType.fromPartitionPath(indexName));
       this.version = version;
       return this;
     }

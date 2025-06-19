@@ -145,7 +145,7 @@ public class TestHoodieSparkIndex extends HoodieClientTestBase {
     return HoodieIndexDefinition.newBuilder()
         .withIndexName(fullIndexName)
         .withIndexType(indexType)
-        .withVersion(HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.current(), indexType))
+        .withVersion(HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.current(), fullIndexName))
         .withIndexFunction(indexFunc)
         .withSourceFields(sourceFields)
         .withIndexOptions(indexOptions)

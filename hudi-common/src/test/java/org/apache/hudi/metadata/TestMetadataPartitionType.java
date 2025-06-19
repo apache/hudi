@@ -256,7 +256,7 @@ public class TestMetadataPartitionType {
         .withIndexFunction(indexFunction)
         .withSourceFields(sourceFields)
         .withIndexOptions(indexOptions)
-        .withVersion(HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.current(), indexType))
+        .withVersion(HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.current(), partitionType.getPartitionPath()))
         .build();
   }
 
