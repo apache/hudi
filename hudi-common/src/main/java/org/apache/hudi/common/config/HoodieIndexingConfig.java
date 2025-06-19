@@ -23,7 +23,6 @@ import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.util.BinaryUtil;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -72,47 +71,6 @@ public class HoodieIndexingConfig extends HoodieConfig {
       .withDocumentation("Type of the expression index. Default is `column_stats` if there are no functions and expressions in the command. "
           + "Valid options could be BITMAP, COLUMN_STATS, LUCENE, etc. If index_type is not provided, "
           + "and there are functions or expressions in the command then a expression index using column stats will be created.");
-
-  /** Added version configs for each metadata partition type */
-  public static final ConfigProperty<String> HOODIE_RECORD_INDEX_VERSION = ConfigProperty
-      .key("_hoodie.index.record_index.version")
-      .defaultValue("RECORD_INDEX_ONE")
-      .withDocumentation("Default version of RECORD_INDEX partition.");
-
-  public static final ConfigProperty<String> HOODIE_COLUMN_STATS_INDEX_VERSION = ConfigProperty
-      .key("_hoodie.index.column_stats.version")
-      .defaultValue("COLUMN_STATS_ONE")
-      .withDocumentation("Default version of COLUMN_STATS partition.");
-
-  public static final ConfigProperty<String> HOODIE_BLOOM_FILTERS_INDEX_VERSION = ConfigProperty
-      .key("_hoodie.index.bloom_filters.version")
-      .defaultValue("BLOOM_FILTERS_ONE")
-      .withDocumentation("Default version of BLOOM_FILTERS partition.");
-
-  public static final ConfigProperty<String> HOODIE_EXPRESSION_INDEX_VERSION = ConfigProperty
-      .key("_hoodie.index.expression_index.version")
-      .defaultValue("EXPRESSION_INDEX_ONE")
-      .withDocumentation("Default version of EXPRESSION_INDEX partition.");
-
-  public static final ConfigProperty<String> HOODIE_SECONDARY_INDEX_VERSION = ConfigProperty
-      .key("_hoodie.index.secondary_index.version")
-      .defaultValue("SECONDARY_INDEX_ONE")
-      .withDocumentation("Default version of SECONDARY_INDEX partition.");
-
-  public static final ConfigProperty<String> HOODIE_FILES_INDEX_VERSION = ConfigProperty
-      .key("_hoodie.index.files_index.version")
-      .defaultValue("FILES_INDEX_ONE")
-      .withDocumentation("Default version of FILES partition.");
-
-  public static final ConfigProperty<String> HOODIE_PARTITION_STATS_VERSION = ConfigProperty
-      .key("_hoodie.index.partition_stats.version")
-      .defaultValue("PARTITION_STATS_ONE")
-      .withDocumentation("Default version of SECONDARY_INDEX partition.");
-
-  public static final ConfigProperty<String> HOODIE_ALL_PARTITIONS_INDEX_VERSION = ConfigProperty
-      .key("_hoodie.index.all_partitions.version")
-      .defaultValue("FILES_INDEX_ONE")
-      .withDocumentation("Default version of FILES partition.");
 
   public static final ConfigProperty<String> INDEX_FUNCTION = ConfigProperty
       .key("hoodie.expression.index.function")
@@ -329,27 +287,4 @@ public class HoodieIndexingConfig extends HoodieConfig {
     return getIndexType().equalsIgnoreCase(MetadataPartitionType.RECORD_INDEX.name());
   }
 
-  public HoodieIndexVersion getVersionFor(MetadataPartitionType partitionType) {
-    String v;
-    switch (partitionType) {
-      case RECORD_INDEX:
-        v = getString(HOODIE_RECORD_INDEX_VERSION);
-        break;
-      case COLUMN_STATS:
-        v = getString(HOODIE_COLUMN_STATS_INDEX_VERSION);
-        break;
-      case BLOOM_FILTERS:
-        v = getString(HOODIE_BLOOM_FILTERS_INDEX_VERSION);
-        break;
-      case EXPRESSION_INDEX:
-        v = getString(HOODIE_EXPRESSION_INDEX_VERSION);
-        break;
-      case SECONDARY_INDEX:
-        v = getString(HOODIE_SECONDARY_INDEX_VERSION);
-        break;
-      default:
-        throw new IllegalArgumentException("Unsupported MetadataPartitionType: " + partitionType);
-    }
-    return HoodieIndexVersion.valueOf(v);
-  }
 }

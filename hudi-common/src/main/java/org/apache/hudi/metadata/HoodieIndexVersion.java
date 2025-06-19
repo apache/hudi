@@ -138,13 +138,16 @@ public enum HoodieIndexVersion {
   }
 
   private void checkSamePartitionType(HoodieIndexVersion other) {
-    checkIsOfPartitionType(other.getPartitionType());
+    ValidationUtils.checkArgument(this.partitionType.equals(other.partitionType),
+        "Hoodie index version partition type mismatches with the incoming "
+            + "one: Expected" + this.partitionType + ", got " + other.partitionType);
   }
 
-  public void checkIsOfPartitionType(MetadataPartitionType partitionType) {
-    ValidationUtils.checkArgument(this.partitionType.equals(partitionType),
-        "Hoodie index version partition type mismatches with the incoming "
-          + "one: Expected" + this.partitionType + ", got " + partitionType);
+  public void ensureVersionCanBeAssignedToPartitionType(MetadataPartitionType partitionType) {
+    ValidationUtils.checkArgument(this.partitionType.equals(partitionType)
+        || this.partitionType.equals(MetadataPartitionType.EXPRESSION_INDEX),
+        String.format("Hoodie index version %s is not allowed to be assigned to partition type %s",
+          this, partitionType));
   }
 
   @Override
