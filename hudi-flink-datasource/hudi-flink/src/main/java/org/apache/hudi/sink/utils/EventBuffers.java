@@ -117,4 +117,8 @@ public class EventBuffers implements Serializable {
   public void reset(long checkpointId) {
     this.eventBuffers.remove(checkpointId);
   }
+
+  public boolean isEmpty() {
+    return this.eventBuffers.isEmpty();
+  }
 }

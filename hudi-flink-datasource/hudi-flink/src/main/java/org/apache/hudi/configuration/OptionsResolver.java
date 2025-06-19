@@ -480,6 +480,13 @@ public class OptionsResolver {
     return HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.defaultValue().equalsIgnoreCase(HoodieFailedWritesCleaningPolicy.LAZY.name());
   }
 
+  /**
+   * Returns whether the writers support async instant generation.
+   */
+  public static boolean isBlockingInstantGeneration(Configuration conf) {
+    return isCowTable(conf) && !isAppendMode(conf);
+  }
+
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------

@@ -29,6 +29,7 @@ import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.sink.utils.TestWriteBase;
@@ -77,6 +78,52 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .assertEmptyEvent()
         .emptyCheckpoint(2)
         .end();
+  }
+
+  @Test
+  public void testSlowCheckpointWithNewEagerFlush() throws Exception {
+    conf.set(FlinkOptions.WRITE_BATCH_SIZE, BATCH_SIZE_MB);
+    conf.set(FlinkOptions.PRE_COMBINE, true);
+    conf.set(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 10_000L);
+
+    Map<String, String> expected = new HashMap<>();
+    expected.put("par1", "[id1,par1,id1,Danny,23,1,par1]");
+
+    TestHarness testHarness = preparePipeline()
+        .consume(TestData.DATA_SET_INSERT_DUPLICATES)
+        .assertDataBuffer(1, 2)
+        .checkpoint(1)
+        .allDataFlushed()
+        .handleEvents(2);
+
+    Thread t1 = new Thread(new Runnable() {
+      @Override
+      public void run() {
+        try {
+          Thread.sleep(3000);
+          testHarness.checkpointComplete(1);
+          testHarness.checkWrittenData(expected, 1);
+        } catch (Exception e) {
+          throw new HoodieException(e);
+        }
+      }
+    });
+    t1.start();
+
+    testHarness
+        // new records coming and flushing while cp1 is not completed yet,
+        // bucket assign function will upsert(U) new records to previous fg stored in state.
+        // If async instant generation is used , HoodieMergedHandle will throw exception
+        // during getLatestBaseFile for the fg, since cp1 is not committed yet.
+        .consume(TestData.DATA_SET_INSERT_DUPLICATES)
+        .consume(TestData.DATA_SET_INSERT)
+        .checkpoint(2)
+        .allDataFlushed()
+        .handleEvents(3)
+        .checkpointComplete(2)
+        .checkWrittenData(EXPECTED1, 4)
+        .end();
+    t1.join();
   }
 
   @Test

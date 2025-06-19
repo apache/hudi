@@ -75,6 +75,10 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN_OR_EQUALS;
@@ -359,6 +363,10 @@ public class StreamWriteOperatorCoordinator
       Pair<String, WriteMetadataEvent[]> instantTimeAndEventBuffer = this.eventBuffers.getInstantAndEventBuffer(checkpointId);
       final String instantTime;
       if (instantTimeAndEventBuffer == null) {
+        // wait until previous instant is committed.
+        if (tableState.isBlockingInstantGeneration && !eventBuffers.isEmpty()) {
+          tableState.wait(instant);
+        }
         instantTime = startInstant();
         this.eventBuffers.initNewEventBuffer(checkpointId, instantTime, this.parallelism);
       } else {
@@ -513,29 +521,35 @@ public class StreamWriteOperatorCoordinator
    * @return true if the write statuses are committed successfully.
    */
   private boolean commitInstant(long checkpointId, String instant, WriteMetadataEvent[] eventBuffer) {
-    if (Arrays.stream(eventBuffer).allMatch(Objects::isNull)) {
-      // all the tasks are reset by failover, reset the while buffer and returns early.
-      this.eventBuffers.reset(checkpointId);
-      // stop the heart beat for lazy cleaning
-      writeClient.getHeartbeatClient().stop(instant);
-      return false;
-    }
+    try {
+      if (Arrays.stream(eventBuffer).allMatch(Objects::isNull)) {
+        // all the tasks are reset by failover, reset the while buffer and returns early.
+        this.eventBuffers.reset(checkpointId);
+        // stop the heart beat for lazy cleaning
+        writeClient.getHeartbeatClient().stop(instant);
+        return false;
+      }
 
-    List<WriteStatus> writeResults = Arrays.stream(eventBuffer)
-        .filter(Objects::nonNull)
-        .map(WriteMetadataEvent::getWriteStatuses)
-        .flatMap(Collection::stream)
-        .collect(Collectors.toList());
+      List<WriteStatus> writeResults = Arrays.stream(eventBuffer)
+          .filter(Objects::nonNull)
+          .map(WriteMetadataEvent::getWriteStatuses)
+          .flatMap(Collection::stream)
+          .collect(Collectors.toList());
 
-    if (writeResults.isEmpty() && !OptionsResolver.allowCommitOnEmptyBatch(conf)) {
-      // No data has written, reset the buffer and returns early
-      this.eventBuffers.reset(checkpointId);
-      // stop the heart beat for lazy cleaning
-      writeClient.getHeartbeatClient().stop(instant);
-      return false;
+      if (writeResults.isEmpty() && !OptionsResolver.allowCommitOnEmptyBatch(conf)) {
+        // No data has written, reset the buffer and returns early
+        this.eventBuffers.reset(checkpointId);
+        // stop the heart beat for lazy cleaning
+        writeClient.getHeartbeatClient().stop(instant);
+        return false;
+      }
+      doCommit(checkpointId, instant, writeResults);
+      return true;
+    } finally {
+      if (tableState.isBlockingInstantGeneration) {
+        tableState.signalAll();
+      }
     }
-    doCommit(checkpointId, instant, writeResults);
-    return true;
   }
 
   /**
@@ -663,6 +677,19 @@ public class StreamWriteOperatorCoordinator
     final boolean syncHive;
     final boolean syncMetadata;
     final boolean isDeltaTimeCompaction;
+    /**
+     * Whether the writer for the table employs blocking instant generation.
+     */
+    final boolean isBlockingInstantGeneration;
+    /**
+     * Timeout limit for a writer task after it finishes a checkpoint and waits for the instant commit success.
+     */
+    final long commitAckTimeout;
+    /**
+     * A lock used to block instant generation until being signaled after pending instant is committed.
+     */
+    final Lock lock = new ReentrantLock();
+    final Condition blockingCondition = lock.newCondition();
 
     private TableState(Configuration conf) {
       this.operationType = WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION));
@@ -674,10 +701,42 @@ public class StreamWriteOperatorCoordinator
       this.syncHive = conf.getBoolean(FlinkOptions.HIVE_SYNC_ENABLED);
       this.syncMetadata = conf.getBoolean(FlinkOptions.METADATA_ENABLED);
       this.isDeltaTimeCompaction = OptionsResolver.isDeltaTimeCompaction(conf);
+      this.isBlockingInstantGeneration = OptionsResolver.isBlockingInstantGeneration(conf);
+      this.commitAckTimeout = conf.get(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT);
     }
 
     public static TableState create(Configuration conf) {
       return new TableState(conf);
+    }
+
+    /**
+     * Wait until previous instant is committed.
+     *
+     * @param instant Current instant to be committed
+     */
+    private void wait(String instant) {
+      lock.lock();
+      try {
+        if (!blockingCondition.await(commitAckTimeout, TimeUnit.MILLISECONDS)) {
+          throw new HoodieException("Timeout while waiting committing instant: " + instant);
+        }
+      } catch (InterruptedException e) {
+        throw new HoodieException("Blocking instant generation is interrupted.", e);
+      } finally {
+        lock.unlock();
+      }
+    }
+
+    /**
+     * Signal all waited threads which are waiting on the condition.
+     */
+    private void signalAll() {
+      lock.lock();
+      try {
+        blockingCondition.signalAll();
+      } finally {
+        lock.unlock();
+      }
     }
   }
 }
