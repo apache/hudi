@@ -189,8 +189,8 @@ public class TestMetadataPartitionType {
   @EnumSource(MetadataPartitionType.class)
   public void testGetNonExpressionIndexPath(MetadataPartitionType partitionType) {
     HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
-    String expressionIndexName = "dummyExpressionIndex";
-    String secondaryIndexName = "dummySecondaryIndex";
+    String expressionIndexName = "expr_index_dummyExpressionIndex";
+    String secondaryIndexName = "secondary_index_dummySecondaryIndex";
     HoodieIndexMetadata indexMetadata = getIndexMetadata(expressionIndexName, secondaryIndexName);
     when(metaClient.getIndexMetadata()).thenReturn(Option.of(indexMetadata));
     if (partitionType == MetadataPartitionType.EXPRESSION_INDEX) {
@@ -208,14 +208,14 @@ public class TestMetadataPartitionType {
         .withIndexName(expressionIndexName)
         .withIndexType("column_stats")
         .withIndexFunction("lower")
-        .withVersion(HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.current(), "column_stats"))
+        .withVersion(HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.current(), expressionIndexName))
         .withSourceFields(Collections.singletonList("name"))
         .build();
     indexDefinitions.put(expressionIndexName, expressionIndexDefinition);
     HoodieIndexDefinition secondaryIndexDefinition = HoodieIndexDefinition.newBuilder()
         .withIndexName(secondaryIndexName)
         .withIndexType(MetadataPartitionType.COLUMN_STATS.name())
-        .withVersion(HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.current(), MetadataPartitionType.COLUMN_STATS))
+        .withVersion(HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.current(), secondaryIndexName))
         .withIndexFunction(null)
         .withSourceFields(Collections.singletonList("name"))
         .build();
@@ -250,13 +250,14 @@ public class TestMetadataPartitionType {
   private HoodieIndexDefinition createIndexDefinition(MetadataPartitionType partitionType, String userIndexName, String indexType, String indexFunction, List<String> sourceFields,
                                                       Map<String, String> indexOptions) {
     String indexSuffix = StringUtils.nonEmpty(userIndexName) ? userIndexName : "";
+    String indexName = partitionType.getPartitionPath() + indexSuffix;
     return HoodieIndexDefinition.newBuilder()
-        .withIndexName(partitionType.getPartitionPath() + indexSuffix)
+        .withIndexName(indexName)
         .withIndexType(indexType)
         .withIndexFunction(indexFunction)
         .withSourceFields(sourceFields)
         .withIndexOptions(indexOptions)
-        .withVersion(HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.current(), partitionType.getPartitionPath()))
+        .withVersion(HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.current(), indexName))
         .build();
   }
 
