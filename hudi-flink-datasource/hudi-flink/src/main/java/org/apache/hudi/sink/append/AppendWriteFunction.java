@@ -26,6 +26,7 @@ import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.bulk.BulkInsertWriterHelper;
 import org.apache.hudi.sink.common.AbstractStreamWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
+import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
@@ -141,6 +142,9 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
       this.currentInstant = instantToWrite(false);
       LOG.info("No data to write in subtask [{}] for instant [{}]", taskID, this.currentInstant);
     }
+
+    StreamerUtil.validateWriteStatus(config, currentInstant, writeStatus);
+
     final WriteMetadataEvent event = WriteMetadataEvent.builder()
         .taskID(taskID)
         .checkpointId(this.checkpointId)

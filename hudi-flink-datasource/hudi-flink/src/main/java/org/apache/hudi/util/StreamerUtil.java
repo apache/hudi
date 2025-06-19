@@ -18,6 +18,7 @@
 
 package org.apache.hudi.util;
 
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.model.CommitTimeFlinkRecordMerger;
 import org.apache.hudi.client.model.EventTimeFlinkRecordMerger;
 import org.apache.hudi.client.model.PartialUpdateFlinkRecordMerger;
@@ -30,6 +31,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
@@ -88,6 +90,7 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 
 import static org.apache.hudi.common.model.HoodieFileFormat.HOODIE_LOG;
@@ -97,6 +100,7 @@ import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_HISTORY_PA
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
+import static org.apache.hudi.configuration.FlinkOptions.WRITE_FAIL_FAST;
 
 /**
  * Utilities for Flink stream read and write.
@@ -672,5 +676,28 @@ public class StreamerUtil {
     properties.put(HoodieMetadataConfig.ENABLE.key(), conf.getBoolean(FlinkOptions.METADATA_ENABLED));
 
     return HoodieMetadataConfig.newBuilder().fromProperties(properties).build();
+  }
+
+  /**
+   * Validate against the given list of write statuses.
+   *
+   * @param config          The Flink conf
+   * @param currentInstant  The current instant
+   * @param writeStatusList The write status list
+   *
+   * @throws HoodieException if the {code WRITE_FAIL_FAST} is set up as true and there are writing errors
+   */
+  public static void validateWriteStatus(
+      Configuration config,
+      String currentInstant,
+      List<WriteStatus> writeStatusList) throws HoodieException {
+    if (config.get(WRITE_FAIL_FAST)) {
+      // It will early detect the write failures in each of task to prevent data loss caused by commit failure
+      // after a checkpoint has been triggered.
+      writeStatusList.stream().filter(ws -> !ws.getErrors().isEmpty()).findFirst().map(writeStatus -> {
+        Map.Entry<HoodieKey, Throwable> entry = writeStatus.getErrors().entrySet().iterator().next();
+        throw new HoodieException(String.format("Write failure occurs with hoodie key %s at Instant [%s] in append write function", entry.getKey(), currentInstant), entry.getValue());
+      });
+    }
   }
 }

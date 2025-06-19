@@ -459,6 +459,14 @@ public class FlinkOptions extends HoodieConfig {
           + "By default false. Turning this on, could hide the write status errors while the flink checkpoint moves ahead. \n"
           + "So, would recommend users to use this with caution.");
 
+  @AdvancedConfig
+  public static final ConfigOption<Boolean> WRITE_FAIL_FAST = ConfigOptions
+          .key("write.fail.fast")
+          .booleanType()
+          .defaultValue(false)
+          .withDescription("Flag to indicate whether to fail job immediately when an error record is detected. \n"
+                  + "Currently, this option is only applied to Flink append write functions.");
+
   public static final ConfigOption<String> RECORD_KEY_FIELD = ConfigOptions
       .key(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())
       .stringType()
