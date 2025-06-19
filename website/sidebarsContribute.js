@@ -8,7 +8,6 @@
 
  Create as many sidebars as you want.
  */
-const { slackUrl } = require('./constants');
 
 module.exports = {
   contribute: [
@@ -18,8 +17,8 @@ module.exports = {
     },
     {
       type: 'link',
-      label: 'Join our Slack',
-      href: slackUrl
+      label: "Report Issues",
+      href: "https://issues.apache.org/jira/projects/HUDI/summary",
     },
   ],
 };
