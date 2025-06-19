@@ -828,3 +828,10 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 [ENG-28375][INTERNAL] Implement mechanism to pre download Hfiles in metadata table (#1409)
 [ENG-28443][HUDI-9535] Prevent Unnecessary data transfer b/w driver and executor in Spark Partitioner (#1141)
 [AUDIT-1071]: Changelog for release-v1.133.0 (#1406)
+
+--- [2025-06-19 16:04:13] [release-v1.134.0] ---
+[AUDIT-1071]: Changelog for release-v1.133.2 (#1411)
+[AUDIT-1071]: Changelog for release-vv1.133.1 (#1410)
+[ENG-28375][INTERNAL] Implement mechanism to pre download Hfiles in metadata table (#1409)
+[ENG-28443][HUDI-9535] Prevent Unnecessary data transfer b/w driver and executor in Spark Partitioner (#1141)
+[AUDIT-1071]: Changelog for release-v1.133.0 (#1406)
