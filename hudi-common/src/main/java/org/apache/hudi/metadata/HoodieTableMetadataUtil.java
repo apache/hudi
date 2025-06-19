@@ -2778,12 +2778,6 @@ public class HoodieTableMetadataUtil {
     }
   }
 
-  public static HoodieIndexVersion getHoodieIndexVersion(String partitionName, HoodieTableMetaClient metaClient) {
-    String indexType = fromPartitionPath(partitionName).toString();
-    return getHoodieIndexVersionOption(indexType, metaClient).orElseThrow(
-        () -> new HoodieIndexException("Expression Index definition is not present"));
-  }
-
   public static Option<HoodieIndexVersion> getHoodieIndexVersionOption(String indexName, HoodieTableMetaClient metaClient) {
     Option<HoodieIndexMetadata> expressionIndexMetadata = metaClient.getIndexMetadata();
     if (expressionIndexMetadata.isEmpty()) {
