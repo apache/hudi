@@ -302,7 +302,9 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     HoodieIndexVersion indexVersion = getExistingHoodieIndexVersionOrDefault(partitionName, metadataMetaClient);
     if (numFileSlices == 1) {
       // Optimization for a single slice for smaller metadata table partitions
-      result = lookupKeys(partitionName, keyList, partitionFileSlices.get(0));
+      TreeSet<String> distinctSortedKeys = new TreeSet<>(keys.collectAsList());
+      res = lookupRecordsWithMapping(
+          partitionName, new ArrayList<>(distinctSortedKeys), partitionFileSlices.get(0), !isSecondaryIndex);
     } else {
       // Parallel lookup for large sized partitions with many file slices
       // Partition the keys by the file slice which contains it
@@ -316,12 +318,14 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         ArrayList<ArrayList<String>> partitionedKeys = partitionKeysByFileSlices(keyList, numFileSlices, partitionName, indexVersion);
         getEngineContext().map(partitionedKeys, keysList -> {
           if (keysList.isEmpty()) {
-            return Collections.<String, HoodieRecord<HoodieMetadataPayload>>emptyMap();
+            return HoodieListPairData.eager(Collections.<Pair<String, HoodieRecord<HoodieMetadataPayload>>>emptyList());
           }
           int shardIndex = HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(keysList.get(0), numFileSlices, partitionName, indexVersion);
-          return lookupRecordsWithMapping(partitionName, keysList, partitionFileSlices.get(shardIndex), isSecondaryIndex).collectAsList();
-        }, partitionedKeys.size());
-        res = getEngineContext().emptyHoodiePairData();
+          Collections.sort(keysList);
+          return lookupRecordsWithMapping(partitionName, keysList, partitionFileSlices.get(shardIndex), !isSecondaryIndex);
+        }, partitionedKeys.size())
+            .stream().flatMap(a -> a.collectAsList().stream()).forEach(kv -> result.put(kv.getKey(), kv.getValue()));
+        res = HoodieListPairData.eagerMapKV(result);
       } else {
         keys = adaptiveSortDedupRepartition(keys, partitionName, numFileSlices, indexVersion);
         res = keys.mapPartitions(distinctSortedKeyIter -> {
@@ -347,6 +351,10 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       }
     }
     return res;
+  }
+
+  static void dd(Pair<String, HoodieRecord<HoodieMetadataPayload>> a) {
+    System.out.println(a);
   }
 
   protected HoodieData<HoodieRecord<HoodieMetadataPayload>> readIndexWithoutMapping(HoodieData<String> keys, String partitionName) {
