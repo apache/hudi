@@ -481,10 +481,10 @@ public class OptionsResolver {
   }
 
   /**
-   * Returns whether the writers support async instant generation.
+   * Returns whether the writers should use blocking instant time generation.
    */
   public static boolean isBlockingInstantGeneration(Configuration conf) {
-    return isCowTable(conf) && !isAppendMode(conf);
+    return isCowTable(conf) && isUpsertOperation(conf);
   }
 
   // -------------------------------------------------------------------------

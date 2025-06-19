@@ -184,6 +184,11 @@ public class TestWriteBase {
     }
 
     public TestHarness assertConsumeThrows(List<RowData> inputs, String message) {
+      try {
+        consume(inputs);
+      } catch (Throwable throwable) {
+        int a = 0;
+      }
       assertThrows(HoodieException.class, () -> consume(inputs), message);
       return this;
     }

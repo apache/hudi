@@ -96,16 +96,13 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .allDataFlushed()
         .handleEvents(2);
 
-    Thread t1 = new Thread(new Runnable() {
-      @Override
-      public void run() {
-        try {
-          Thread.sleep(3000);
-          testHarness.checkpointComplete(1);
-          testHarness.checkWrittenData(expected, 1);
-        } catch (Exception e) {
-          throw new HoodieException(e);
-        }
+    Thread t1 = new Thread(() -> {
+      try {
+        Thread.sleep(3000);
+        testHarness.checkpointComplete(1);
+        testHarness.checkWrittenData(expected, 1);
+      } catch (Exception e) {
+        throw new HoodieException(e);
       }
     });
     t1.start();
@@ -113,8 +110,8 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
     testHarness
         // new records coming and flushing while cp1 is not completed yet,
         // bucket assign function will upsert(U) new records to previous fg stored in state.
-        // If async instant generation is used , HoodieMergedHandle will throw exception
-        // during getLatestBaseFile for the fg, since cp1 is not committed yet.
+        // If async instant generation is used , HoodieMergedHandle will either throw exception
+        // or get the wrong base file in the file group, since cp1 is not committed yet.
         .consume(TestData.DATA_SET_INSERT_DUPLICATES)
         .consume(TestData.DATA_SET_INSERT)
         .checkpoint(2)
