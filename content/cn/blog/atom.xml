@@ -8,7 +8,7 @@
     <subtitle>Apache Hudi Blog</subtitle>
     <icon>https://hudi.apache.org/cn/assets/images/favicon.ico</icon>
     <entry>
-        <title type="html"><![CDATA[Apache Hudi does XYZ (1/10)]]></title>
+        <title type="html"><![CDATA[Apache Hudi does XYZ (1/10): File pruning with multi-modal index]]></title>
         <id>https://hudi.apache.org/cn/blog/2025/06/16/Apache-Hudi-does-XYZ-110</id>
         <link href="https://hudi.apache.org/cn/blog/2025/06/16/Apache-Hudi-does-XYZ-110"/>
         <updated>2025-06-16T00:00:00.000Z</updated>

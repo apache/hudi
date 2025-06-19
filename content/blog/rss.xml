@@ -9,7 +9,7 @@
         <generator>https://github.com/jpmonette/feed</generator>
         <language>en</language>
         <item>
-            <title><![CDATA[Apache Hudi does XYZ (1/10)]]></title>
+            <title><![CDATA[Apache Hudi does XYZ (1/10): File pruning with multi-modal index]]></title>
             <link>https://hudi.apache.org/blog/2025/06/16/Apache-Hudi-does-XYZ-110</link>
             <guid>https://hudi.apache.org/blog/2025/06/16/Apache-Hudi-does-XYZ-110</guid>
             <pubDate>Mon, 16 Jun 2025 00:00:00 GMT</pubDate>
