@@ -258,6 +258,10 @@ module.exports = {
               label: "Team",
               to: "/community/team",
             },
+            {
+              label: 'Join Our Slack Space',
+              href: slackUrl,
+            },
           ],
         },
         { to: "/ecosystem", label: "Ecosystem", position: "left" },

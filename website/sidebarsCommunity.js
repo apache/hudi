@@ -18,7 +18,7 @@ module.exports = {
     },
     {
       type: 'link',
-      label: 'Join Our Slack',
+      label: 'Join Our Slack Space',
       href: slackUrl,
     },
   ],
