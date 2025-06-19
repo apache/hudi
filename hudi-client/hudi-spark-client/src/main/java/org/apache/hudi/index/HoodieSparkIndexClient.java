@@ -95,17 +95,15 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
   @Override
   public void create(HoodieTableMetaClient metaClient, String userIndexName, String indexType, Map<String, Map<String, String>> columns, Map<String, String> options,
                      Map<String, String> tableProperties) throws Exception {
-    HoodieIndexVersion currentVersion = HoodieIndexVersion.getCurrentVersion(metaClient.getTableConfig().getTableVersion(), indexType);
     if (indexType.equals(PARTITION_NAME_SECONDARY_INDEX) || indexType.equals(PARTITION_NAME_BLOOM_FILTERS)
         || indexType.equals(PARTITION_NAME_COLUMN_STATS)) {
-      createExpressionOrSecondaryIndex(metaClient, userIndexName, indexType, columns, options, tableProperties,
-          currentVersion);
+      createExpressionOrSecondaryIndex(metaClient, userIndexName, indexType, columns, options, tableProperties);
     } else {
-      createRecordIndex(metaClient, userIndexName, indexType, currentVersion);
+      createRecordIndex(metaClient, userIndexName, indexType);
     }
   }
 
-  private void createRecordIndex(HoodieTableMetaClient metaClient, String userIndexName, String indexType, HoodieIndexVersion version) {
+  private void createRecordIndex(HoodieTableMetaClient metaClient, String userIndexName, String indexType) {
     if (!userIndexName.equals(PARTITION_NAME_RECORD_INDEX)) {
       throw new HoodieIndexException("Record index should be named as record_index");
     }
@@ -115,7 +113,8 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
       throw new HoodieMetadataIndexException("Index already exists: " + userIndexName);
     }
 
-    LOG.info("Creating index {}", fullIndexName);
+    HoodieIndexVersion version = HoodieIndexVersion.getCurrentVersion(metaClient.getTableConfig().getTableVersion(), MetadataPartitionType.RECORD_INDEX);
+    LOG.info("Creating index {} using version {}", fullIndexName, version);
     try (SparkRDDWriteClient writeClient = getWriteClient(metaClient, Option.empty(), Option.of(indexType))) {
       // generate index plan
       HoodieIndexVersion currentVersion = HoodieIndexVersion.getCurrentVersion(
@@ -150,10 +149,9 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
   }
 
   private void createExpressionOrSecondaryIndex(HoodieTableMetaClient metaClient, String userIndexName, String indexType,
-                                                Map<String, Map<String, String>> columns, Map<String, String> options, Map<String, String> tableProperties,
-                                                HoodieIndexVersion version) throws Exception {
+                                                Map<String, Map<String, String>> columns, Map<String, String> options, Map<String, String> tableProperties) throws Exception {
     HoodieIndexDefinition indexDefinition = HoodieIndexUtils.getSecondaryOrExpressionIndexDefinition(
-        metaClient, userIndexName, indexType, columns, options, tableProperties, version);
+        metaClient, userIndexName, indexType, columns, options, tableProperties);
     if (!metaClient.getTableConfig().getRelativeIndexDefinitionPath().isPresent()
         || !metaClient.getIndexMetadata().isPresent()
         || !metaClient.getIndexMetadata().get().getIndexDefinitions().containsKey(indexDefinition.getIndexName())) {
