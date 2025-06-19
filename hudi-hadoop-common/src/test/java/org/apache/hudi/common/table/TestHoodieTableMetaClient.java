@@ -272,7 +272,7 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
         .withIndexName(indexName)
         .withIndexType("column_stats")
         .withIndexFunction("identity")
-        .withVersion(HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.current(), "column_stats"))
+        .withVersion(HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.current(), indexName))
         .withSourceFields(new ArrayList<>(columnsMap.keySet()))
         .withIndexOptions(Collections.emptyMap())
         .build();
