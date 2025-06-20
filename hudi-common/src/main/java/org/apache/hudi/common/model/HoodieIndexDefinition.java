@@ -183,6 +183,9 @@ public class HoodieIndexDefinition implements Serializable {
 
   public static class Builder {
 
+    // e.g. create index <user index name> on myTable using column_stats(ts) options(expr='from_unixtime', format='yyyy-MM-dd')
+    // Index name is composed of 2 parts - MDT partition path prefix + user index name. In this case, the partition path is
+    // EXPRESSION_INDEX.getPartitionPath.
     private String indexName;
     private String indexType;
     private String indexFunction;
@@ -197,6 +200,8 @@ public class HoodieIndexDefinition implements Serializable {
     }
 
     public Builder withIndexName(String indexName) {
+      // Validate the index name belongs to a valid partition path. Function throws exception if it is a random index name.
+      MetadataPartitionType.fromPartitionPath(indexName);
       this.indexName = indexName;
       return this;
     }
@@ -222,6 +227,9 @@ public class HoodieIndexDefinition implements Serializable {
     }
 
     public Builder withVersion(HoodieIndexVersion version) {
+      if (indexName == null) {
+        throw new IllegalStateException("Please set index name first before setting version");
+      }
       // Make sure the version enum matching the metadata partition is used.
       version.ensureVersionCanBeAssignedToIndexType(MetadataPartitionType.fromPartitionPath(indexName));
       this.version = version;

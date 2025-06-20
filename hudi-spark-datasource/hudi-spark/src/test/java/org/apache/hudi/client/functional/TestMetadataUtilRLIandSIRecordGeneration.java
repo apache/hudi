@@ -332,7 +332,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       HoodieIndexDefinition indexDefinition = HoodieIndexDefinition.newBuilder()
           .withIndexName("secondary_index_idx_rider")
           .withIndexType(MetadataPartitionType.COLUMN_STATS.name())
-          .withVersion(HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.current(), MetadataPartitionType.COLUMN_STATS))
+          .withVersion(HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.current(), MetadataPartitionType.SECONDARY_INDEX))
           .withIndexFunction("")
           .withSourceFields(Collections.singletonList("rider"))
           .withIndexOptions(Collections.emptyMap())

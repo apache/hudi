@@ -2190,13 +2190,14 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
       HoodieExpressionIndex.BLOOM_FILTER_NUM_ENTRIES -> "1000",
       HoodieExpressionIndex.DYNAMIC_BLOOM_MAX_ENTRIES -> "1000"
     )
+    val mdtPartitionName = "expr_index_random"
     val bloomFilterRecords = SparkMetadataWriterUtils.getExpressionIndexRecordsUsingBloomFilter(df, "c5",
         HoodieStorageConfig.newBuilder().build(), "",
         HoodieIndexDefinition.newBuilder()
-          .withIndexName("random")
+          .withIndexName(mdtPartitionName)
           .withIndexType(MetadataPartitionType.COLUMN_STATS.name())
           .withVersion(HoodieIndexVersion.getCurrentVersion(
-            HoodieTableVersion.current(), MetadataPartitionType.COLUMN_STATS))
+            HoodieTableVersion.current(), mdtPartitionName))
           .withIndexOptions(JavaConverters.mapAsJavaMapConverter(indexOptions).asJava).build())
       .getExpressionIndexRecords
     // Since there is only one partition file pair there is only one bloom filter record
