@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -533,7 +534,11 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       ValidationUtils.checkArgument(dataSchema != null, "Data schema is required");
       ValidationUtils.checkArgument(requestedSchema != null, "Requested schema is required");
       ValidationUtils.checkArgument(props != null, "Props is required");
-
+      // Ensure that ordering field is populated for mergers and legacy payloads
+      if (hoodieTableMetaClient.getTableConfig().getPreCombineField() != null) {
+        props.putIfAbsent(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, hoodieTableMetaClient.getTableConfig().getPreCombineField());
+        props.putIfAbsent(HoodieTableConfig.PRECOMBINE_FIELD.key(), hoodieTableMetaClient.getTableConfig().getPreCombineField());
+      }
 
       return new HoodieFileGroupReader<>(
           readerContext, storage, tablePath, latestCommitTime, fileSlice,
