@@ -671,7 +671,7 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<Long> WRITE_COMMIT_ACK_TIMEOUT = ConfigOptions
       .key("write.commit.ack.timeout")
       .longType()
-      .defaultValue(-1L) // default at least once
+      .defaultValue(300_000L)
       .withDescription("Timeout limit for a writer task after it finishes a checkpoint and\n"
           + "waits for the instant commit success, only for internal use");
 

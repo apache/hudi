@@ -38,7 +38,7 @@ import java.util.List;
  * Utilities for wrapping and unwrapping {@link CoordinationResponse}
  * by {@link CollectCoordinationResponse}.
  */
-public class CoordinationResponseSeDe {
+public class CoordinationResponseSerDe {
   private static final String MAGIC_VERSION = "__internal__";
   private static final long MAGIC_OFFSET = 15213L;
 

@@ -38,7 +38,8 @@ import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.sink.common.AbstractStreamWriteFunction;
 import org.apache.hudi.sink.event.Correspondent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
-import org.apache.hudi.sink.utils.CoordinationResponseSeDe;
+import org.apache.hudi.sink.utils.CommitGuard;
+import org.apache.hudi.sink.utils.CoordinationResponseSerDe;
 import org.apache.hudi.sink.utils.EventBuffers;
 import org.apache.hudi.sink.utils.ExplicitClassloaderThreadFactory;
 import org.apache.hudi.sink.utils.HiveSyncContext;
@@ -195,6 +196,11 @@ public class StreamWriteOperatorCoordinator
   private ClientIds clientIds;
 
   /**
+   * The commit guard for blocking instant time generation.
+   */
+  private Option<CommitGuard> commitGuardOpt;
+
+  /**
    * Constructs a StreamingSinkOperatorCoordinator.
    *
    * @param conf    The config options
@@ -214,8 +220,10 @@ public class StreamWriteOperatorCoordinator
     // setup classloader for APIs that use reflection without taking ClassLoader param
     // reference: https://stackoverflow.com/questions/1771679/difference-between-threads-context-class-loader-and-normal-classloader
     Thread.currentThread().setContextClassLoader(getClass().getClassLoader());
+    this.tableState = TableState.create(conf);
+    initCommitGuard(this.conf);
     // initialize event buffer
-    this.eventBuffers = EventBuffers.getInstance();
+    this.eventBuffers = EventBuffers.getInstance(this.commitGuardOpt);
     this.gateways = new SubtaskGateway[this.parallelism];
     try {
       // init table, create if not exists.
@@ -224,14 +232,13 @@ public class StreamWriteOperatorCoordinator
       this.writeClient = FlinkWriteClients.createWriteClient(conf);
       this.writeClient.tryUpgrade(instant, this.metaClient);
       initMetadataTable(this.writeClient);
-      this.tableState = TableState.create(conf);
       // start the executor
       this.executor = NonThrownExecutor.builder(LOG)
           .threadFactory(getThreadFactory("meta-event-handle"))
           .exceptionHook((errMsg, t) -> this.context.failJob(new HoodieException(errMsg, t)))
           .waitForTasksFinish(true).build();
       this.instantRequestExecutor = NonThrownExecutor.builder(LOG)
-          .threadFactory(getThreadFactory("instant-response"))
+          .threadFactory(getThreadFactory("instant-request"))
           .exceptionHook((errMsg, t) -> this.context.failJob(new HoodieException(errMsg, t)))
           .build();
       // start the executor if required
@@ -359,12 +366,14 @@ public class StreamWriteOperatorCoordinator
       Pair<String, WriteMetadataEvent[]> instantTimeAndEventBuffer = this.eventBuffers.getInstantAndEventBuffer(checkpointId);
       final String instantTime;
       if (instantTimeAndEventBuffer == null) {
+        // wait until previous instants are committed.
+        awaitAllInstantsToCompleteIfNecessary();
         instantTime = startInstant();
         this.eventBuffers.initNewEventBuffer(checkpointId, instantTime, this.parallelism);
       } else {
         instantTime = instantTimeAndEventBuffer.getLeft();
       }
-      response.complete(CoordinationResponseSeDe.wrap(Correspondent.InstantTimeResponse.getInstance(instantTime)));
+      response.complete(CoordinationResponseSerDe.wrap(Correspondent.InstantTimeResponse.getInstance(instantTime)));
     }, "request instant time");
     return response;
   }
@@ -372,6 +381,12 @@ public class StreamWriteOperatorCoordinator
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
+
+  private void awaitAllInstantsToCompleteIfNecessary() {
+    if (this.commitGuardOpt.isPresent() && this.eventBuffers.nonEmpty()) {
+      this.commitGuardOpt.get().blockFor(this.eventBuffers.getPendingInstants());
+    }
+  }
 
   private ThreadFactory getThreadFactory(String threadName) {
     return new ExplicitClassloaderThreadFactory(threadName, context.getUserCodeClassloader());
@@ -424,6 +439,14 @@ public class StreamWriteOperatorCoordinator
   private void initClientIds(Configuration conf) {
     this.clientIds = ClientIds.builder().conf(conf).build();
     this.clientIds.start();
+  }
+
+  private void initCommitGuard(Configuration conf) {
+    if (tableState.isBlockingInstantGeneration) {
+      this.commitGuardOpt = Option.of(CommitGuard.create(conf.get(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT)));
+    } else {
+      this.commitGuardOpt = Option.empty();
+    }
   }
 
   private String startInstant() {
@@ -663,6 +686,10 @@ public class StreamWriteOperatorCoordinator
     final boolean syncHive;
     final boolean syncMetadata;
     final boolean isDeltaTimeCompaction;
+    /**
+     * Whether the writer for the table applies blocking instant generation.
+     */
+    final boolean isBlockingInstantGeneration;
 
     private TableState(Configuration conf) {
       this.operationType = WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION));
@@ -674,6 +701,7 @@ public class StreamWriteOperatorCoordinator
       this.syncHive = conf.getBoolean(FlinkOptions.HIVE_SYNC_ENABLED);
       this.syncMetadata = conf.getBoolean(FlinkOptions.METADATA_ENABLED);
       this.isDeltaTimeCompaction = OptionsResolver.isDeltaTimeCompaction(conf);
+      this.isBlockingInstantGeneration = OptionsResolver.isBlockingInstantGeneration(conf);
     }
 
     public static TableState create(Configuration conf) {
