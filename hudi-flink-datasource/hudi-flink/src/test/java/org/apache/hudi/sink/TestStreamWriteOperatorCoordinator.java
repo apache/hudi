@@ -67,6 +67,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
+import static org.apache.hudi.configuration.FlinkOptions.TABLE_TYPE_MERGE_ON_READ;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
@@ -410,6 +411,7 @@ public class TestStreamWriteOperatorCoordinator {
     // override the default configuration
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     conf.setBoolean(FlinkOptions.METADATA_ENABLED, true);
+    conf.set(FlinkOptions.TABLE_TYPE, TABLE_TYPE_MERGE_ON_READ);
     coordinator = createCoordinator(conf, 1);
 
     String instant = coordinator.getInstant();
