@@ -76,7 +76,7 @@ public class SecondaryIndexStreamingTracker {
                                        HoodieWriteConfig config, String instantTime, Schema writeSchemaWithMetaFields) {
     // TODO: @see <a href="https://issues.apache.org/jira/browse/HUDI-9533">HUDI-9533</a> Optimise the computation for multiple secondary indexes
     HoodieEngineContext engineContext = new HoodieLocalEngineContext(hoodieTable.getStorageConf(), taskContextSupplier);
-    HoodieReaderContext readerContext = engineContext.getReaderContextFactory(hoodieTable.getMetaClient()).getContext();
+    HoodieReaderContext readerContext = engineContext.getReaderContextFactory(hoodieTable.getMetaClient(), config.getRecordMerger().getRecordType()).getContext();
 
     // For Append handle, we need to merge the records written by new log files with the existing file slice to check
     // the corresponding updates for secondary index. It is possible the records written in the new log files are ignored
@@ -144,7 +144,7 @@ public class SecondaryIndexStreamingTracker {
   static void trackSecondaryIndexStats(HoodieRecord record, WriteStatus writeStatus, Schema writeSchemaWithMetaFields,
                                        List<HoodieIndexDefinition> secondaryIndexDefns, HoodieTable hoodieTable, TaskContextSupplier taskContextSupplier) {
     HoodieEngineContext engineContext = new HoodieLocalEngineContext(hoodieTable.getStorageConf(), taskContextSupplier);
-    HoodieReaderContext readerContext = engineContext.getReaderContextFactory(hoodieTable.getMetaClient()).getContext();
+    HoodieReaderContext readerContext = engineContext.getReaderContextFactory(hoodieTable.getMetaClient(), config.getRecordMerger().getRecordType()).getContext();
 
     // Add secondary index records for all the inserted records
     secondaryIndexDefns.forEach(def -> {
@@ -179,7 +179,7 @@ public class SecondaryIndexStreamingTracker {
                                            List<HoodieIndexDefinition> secondaryIndexDefns, Option<BaseKeyGenerator> keyGeneratorOpt, HoodieTable hoodieTable,
                                            TaskContextSupplier taskContextSupplier) {
     HoodieEngineContext engineContext = new HoodieLocalEngineContext(hoodieTable.getStorageConf(), taskContextSupplier);
-    HoodieReaderContext readerContext = engineContext.getReaderContextFactory(hoodieTable.getMetaClient()).getContext();
+    HoodieReaderContext readerContext = engineContext.getReaderContextFactory(hoodieTable.getMetaClient(), config.getRecordMerger().getRecordType()).getContext();
 
     secondaryIndexDefns.forEach(def -> {
       String secondaryIndexSourceField = def.getSourceFieldsKey();

@@ -58,7 +58,7 @@ public class SparkBulkInsertDeltaCommitActionExecutor<T>
   public HoodieWriteMetadata<HoodieData<WriteStatus>> execute() {
     try {
       return SparkBulkInsertHelper.newInstance().bulkInsert(inputRecordsRDD, instantTime, table, config,
-          this, true, bulkInsertPartitioner, Option.of(context.getReaderContextFactory(table.getMetaClient())));
+          this, true, bulkInsertPartitioner, Option.of(context.getReaderContextFactory(table.getMetaClient(), config.getRecordMerger().getRecordType())));
     } catch (HoodieInsertException ie) {
       throw ie;
     } catch (Throwable e) {

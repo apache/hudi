@@ -275,7 +275,7 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
       return Collections.singletonList((List<WriteStatus>) Collections.EMPTY_LIST).iterator();
     }
     return new JavaLazyInsertIterable<>(recordItr, true, config, instantTime, table, idPfx,
-        taskContextSupplier, new CreateHandleFactory<>(), Option.of(context.getReaderContextFactory(table.getMetaClient())));
+        taskContextSupplier, new CreateHandleFactory<>(), Option.of(context.getReaderContextFactory(table.getMetaClient(), config.getRecordMerger().getRecordType())));
   }
 
   /**

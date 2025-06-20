@@ -281,7 +281,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
       // Partition only
       partitionedRDD = mappedRDD.partitionBy(partitioner);
     }
-    ReaderContextFactory<T> readerContextFactory = context.getReaderContextFactory(table.getMetaClient());
+    ReaderContextFactory<T> readerContextFactory = context.getReaderContextFactory(table.getMetaClient(), config.getRecordMerger().getRecordType());
     return HoodieJavaRDD.of(partitionedRDD.map(Tuple2::_2).mapPartitionsWithIndex((partition, recordItr) -> {
       if (WriteOperationType.isChangingRecords(operationType)) {
         return handleUpsertPartition(instantTime, partition, recordItr, partitioner, Option.of(readerContextFactory));

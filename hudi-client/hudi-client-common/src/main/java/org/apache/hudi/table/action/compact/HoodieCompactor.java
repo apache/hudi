@@ -147,7 +147,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
               operation -> logCompact(config, operation, compactionInstantTime, instantRange, table, taskContextSupplier))
           .flatMap(List::iterator);
     } else {
-      ReaderContextFactory<T> readerContextFactory = context.getReaderContextFactory(metaClient);
+      ReaderContextFactory<T> readerContextFactory = context.getReaderContextFactory(metaClient, config.getRecordMerger().getRecordType());
       return context.parallelize(operations).map(
               operation -> compact(config, operation, compactionInstantTime, readerContextFactory.getContext(), table, maxInstantTime, taskContextSupplier))
           .flatMap(List::iterator);
