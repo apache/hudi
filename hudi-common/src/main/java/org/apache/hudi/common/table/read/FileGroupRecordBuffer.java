@@ -114,8 +114,8 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
     this.orderingFieldName = orderingFieldName;
     // Ensure that ordering field is populated for mergers and legacy payloads
     orderingFieldName.ifPresent(orderingField -> {
-      props.putIfAbsent(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, hoodieTableMetaClient.getTableConfig().getPreCombineField());
-      props.putIfAbsent(HoodieTableConfig.PRECOMBINE_FIELD.key(), hoodieTableMetaClient.getTableConfig().getPreCombineField());
+      props.putIfAbsent(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, orderingField);
+      props.putIfAbsent(HoodieTableConfig.PRECOMBINE_FIELD.key(), orderingField);
     });
     this.props = props;
 
