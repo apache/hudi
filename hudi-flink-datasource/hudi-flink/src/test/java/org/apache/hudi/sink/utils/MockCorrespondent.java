@@ -22,8 +22,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.event.Correspondent;
 
-import org.apache.flink.configuration.Configuration;
-
 /**
  * A mock {@link Correspondent} that always return the latest instant.
  */
