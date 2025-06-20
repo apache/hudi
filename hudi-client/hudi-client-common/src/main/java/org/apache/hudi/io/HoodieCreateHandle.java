@@ -180,7 +180,7 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   }
 
   private void trackMetadataIndexStats(HoodieRecord record) {
-    if (isSecondaryIndexStreamingDisabled()) {
+    if (!shouldGenerateStreamingSecIndexStats()) {
       return;
     }
 

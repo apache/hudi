@@ -474,7 +474,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
   }
 
   private void trackMetadataIndexStats(Option<HoodieKey> hoodieKeyOpt, Option<HoodieRecord> combinedRecordOpt, Option<HoodieRecord<T>> oldRecordOpt, boolean isDelete) {
-    if (isSecondaryIndexStreamingDisabled()) {
+    if (!shouldGenerateStreamingSecIndexStats()) {
       return;
     }
     HoodieEngineContext engineContext = new HoodieLocalEngineContext(hoodieTable.getStorageConf(), taskContextSupplier);

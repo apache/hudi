@@ -1155,9 +1155,11 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   }
 
   private Pair<List<MetadataPartitionType>, Set<String>> getStreamingMetadataPartitionsToUpdate() {
-    List<MetadataPartitionType> mdtPartitionsToTag = new ArrayList<>();
+    Set<MetadataPartitionType> mdtPartitionsToTag = new HashSet<>();
     // Add record index
-    mdtPartitionsToTag.add(RECORD_INDEX);
+    if (enabledPartitionTypes.contains(RECORD_INDEX)) {
+      mdtPartitionsToTag.add(RECORD_INDEX);
+    }
     // Add secondary indexes
     Set<String> mdtPartitionPathsToTag = new HashSet<>(mdtPartitionsToTag.stream().map(mdtPartitionToTag -> mdtPartitionToTag.getPartitionPath()).collect(Collectors.toSet()));
     List<String> secondaryIndexPartitionPaths = dataMetaClient.getTableConfig().getMetadataPartitions()
@@ -1168,7 +1170,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       mdtPartitionPathsToTag.addAll(secondaryIndexPartitionPaths);
       mdtPartitionsToTag.add(SECONDARY_INDEX);
     }
-    return Pair.of(mdtPartitionsToTag, mdtPartitionPathsToTag);
+    return Pair.of(new ArrayList<>(mdtPartitionsToTag), mdtPartitionPathsToTag);
   }
 
   /**

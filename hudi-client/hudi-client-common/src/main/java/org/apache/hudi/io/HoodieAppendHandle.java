@@ -233,7 +233,11 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
 
   private Option<FileSlice> getFileSlice() {
     TableFileSystemView.SliceView rtView = hoodieTable.getSliceView();
-    return rtView.getLatestFileSlice(partitionPath, fileId);
+    return rtView.getLatestMergedFileSlicesBeforeOrOn(partitionPath, instantTime)
+        .filter(fileSlice -> fileSlice.getFileId().equals(fileId))
+        .map(Option::ofNullable)
+        .findFirst()
+        .orElse(Option.empty());
   }
 
   private void init(HoodieRecord record) {
@@ -558,7 +562,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       }
 
       // generate Secondary index stats if streaming is enabled.
-      if (!isSecondaryIndexStreamingDisabled()) {
+      if (shouldGenerateStreamingSecIndexStats()) {
         // Adds secondary index only for the last log file write status. We do not need to add secondary index stats
         // for every log file written as part of the append handle write. The last write status would update the
         // secondary index considering all the log files.

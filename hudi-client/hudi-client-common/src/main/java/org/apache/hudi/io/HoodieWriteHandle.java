@@ -139,8 +139,8 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
   /**
    * Returns true if secondary index streaming is disabled for the table.
    */
-  boolean isSecondaryIndexStreamingDisabled() {
-    return !config.isSecondaryIndexEnabled() || secondaryIndexDefns.isEmpty() || !isStreamingWriteToMetadataEnabled;
+  boolean shouldGenerateStreamingSecIndexStats() {
+    return config.isSecondaryIndexEnabled() && !secondaryIndexDefns.isEmpty() && isStreamingWriteToMetadataEnabled;
   }
 
   /**
