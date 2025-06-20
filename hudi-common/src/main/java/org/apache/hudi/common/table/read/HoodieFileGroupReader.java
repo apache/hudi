@@ -158,16 +158,12 @@ public final class HoodieFileGroupReader<T> implements Closeable {
         ? new PositionBasedSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, tableConfig, props)
         : new FileGroupReaderSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, tableConfig, props));
     this.outputConverter = readerContext.getSchemaHandler().getOutputConverter();
-    this.orderingFieldName = recordMergeMode == RecordMergeMode.COMMIT_TIME_ORDERING
-        ? Option.empty()
-        : Option.ofNullable(ConfigUtils.getOrderingField(props))
-        .or(() -> {
-          String preCombineField = hoodieTableMetaClient.getTableConfig().getPreCombineField();
-          if (StringUtils.isNullOrEmpty(preCombineField)) {
-            return Option.empty();
-          }
-          return Option.of(preCombineField);
-        });
+    if (recordMergeMode == RecordMergeMode.COMMIT_TIME_ORDERING) {
+      this.orderingFieldName = Option.empty();
+    } else {
+      String preCombineField = hoodieTableMetaClient.getTableConfig().getPreCombineField();
+      this.orderingFieldName = StringUtils.isNullOrEmpty(preCombineField) ? Option.empty() : Option.of(preCombineField);
+    }
     this.readStats = new HoodieReadStats();
     this.recordBuffer = getRecordBuffer(readerContext, hoodieTableMetaClient,
         recordMergeMode, props, hoodieBaseFileOption, this.logFiles.isEmpty(),
@@ -549,7 +545,6 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       ValidationUtils.checkArgument(dataSchema != null, "Data schema is required");
       ValidationUtils.checkArgument(requestedSchema != null, "Requested schema is required");
       ValidationUtils.checkArgument(props != null, "Props is required");
-
 
       return new HoodieFileGroupReader<>(
           readerContext, storage, tablePath, latestCommitTime, fileSlice,
