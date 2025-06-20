@@ -62,7 +62,6 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   protected long recordsDeleted = 0;
   private Map<String, HoodieRecord<T>> recordMap;
   private boolean useWriterSchema = false;
-  private final boolean preserveMetadata;
 
   public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                             String partitionPath, String fileId, TaskContextSupplier taskContextSupplier) {
@@ -88,7 +87,6 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
                             TaskContextSupplier taskContextSupplier, boolean preserveMetadata) {
     super(config, instantTime, partitionPath, fileId, hoodieTable, overriddenSchema,
         taskContextSupplier, preserveMetadata);
-    this.preserveMetadata = preserveMetadata;
     writeStatus.setFileId(fileId);
     writeStatus.setPartitionPath(partitionPath);
     writeStatus.setStat(new HoodieWriteStat());
@@ -143,14 +141,14 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
 
         if (preserveMetadata) {
           HoodieRecord populatedRecord = updateFileName(record, schema, writeSchemaWithMetaFields, path.getName(), config.getProps());
-          if (shouldGenerateStreamingSecIndexStats()) {
+          if (isSecondaryIndexStatsStreamingWritesEnabled) {
             WriteHandleMetadataUtils.trackMetadataIndexStats(populatedRecord, writeStatus, writeSchemaWithMetaFields, secondaryIndexDefns, hoodieTable, taskContextSupplier);
           }
           fileWriter.write(record.getRecordKey(), populatedRecord, writeSchemaWithMetaFields);
         } else {
           // rewrite the record to include metadata fields in schema, and the values will be set later.
           record = record.prependMetaFields(schema, writeSchemaWithMetaFields, new MetadataValues(), config.getProps());
-          if (shouldGenerateStreamingSecIndexStats()) {
+          if (isSecondaryIndexStatsStreamingWritesEnabled) {
             WriteHandleMetadataUtils.trackMetadataIndexStats(record, writeStatus, writeSchemaWithMetaFields, secondaryIndexDefns, hoodieTable, taskContextSupplier);
           }
           fileWriter.writeWithMetadata(record.getKey(), record, writeSchemaWithMetaFields);

@@ -41,12 +41,17 @@ import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
 
+import javax.annotation.Nullable;
+
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
 
+/**
+ * Utility class for write handle metadata.
+ */
 public class WriteHandleMetadataUtils {
 
   /**
@@ -55,17 +60,17 @@ public class WriteHandleMetadataUtils {
    * reading the file slice without the new log files and comparing it by reading file slice with the
    * new log files written by the handle.
    *
-   * @param partitionPath - Partition path
-   * @param fileId - Corresponding file id
-   * @param fileSliceOpt - File slice
-   * @param newLogFiles - New log files
-   * @param status - Write status corresponding to the last log file written by the handle
-   * @param hoodieTable - Hoodie Table
-   * @param taskContextSupplier - Task context supplier
-   * @param secondaryIndexDefns - Definitions for secondary index which need to be updated
-   * @param config - Write config
-   * @param instantTime - Instant time of the commit
-   * @param writeSchemaWithMetaFields - Write schema with metadata fields
+   * @param partitionPath             Partition path
+   * @param fileId                    Corresponding file id
+   * @param fileSliceOpt              File slice
+   * @param newLogFiles               New log files
+   * @param status                    Write status corresponding to the last log file written by the handle
+   * @param hoodieTable               Hoodie Table
+   * @param taskContextSupplier       Task context supplier
+   * @param secondaryIndexDefns       Definitions for secondary index which need to be updated
+   * @param config                    Write config
+   * @param instantTime               Instant time of the commit
+   * @param writeSchemaWithMetaFields Write schema with metadata fields
    */
   static void trackMetadataIndexStatsForStreamingMetadataWrites(String partitionPath, String fileId, Option<FileSlice> fileSliceOpt, List<String> newLogFiles, WriteStatus status,
                                                                 HoodieTable hoodieTable, TaskContextSupplier taskContextSupplier, List<Pair<String, HoodieIndexDefinition>> secondaryIndexDefns,
@@ -129,14 +134,15 @@ public class WriteHandleMetadataUtils {
   /**
    * Utility function used by HoodieCreateHandle to generate secondary index stats for the corresponding hoodie record.
    *
-   * @param record - HoodieRecord
-   * @param writeStatus - WriteStatus
-   * @param writeSchemaWithMetaFields - Schema with metadata fields
-   * @param secondaryIndexDefns - Definitions for secondary index which need to be updated
-   * @param hoodieTable - Hoodie table
-   * @param taskContextSupplier - Task context supplier
+   * @param record                    HoodieRecord
+   * @param writeStatus               WriteStatus
+   * @param writeSchemaWithMetaFields Schema with metadata fields
+   * @param secondaryIndexDefns       Definitions for secondary index which need to be updated
+   * @param hoodieTable               Hoodie table
+   * @param taskContextSupplier       Task context supplier
    */
-  static void trackMetadataIndexStats(HoodieRecord record, WriteStatus writeStatus, Schema writeSchemaWithMetaFields, List<Pair<String, HoodieIndexDefinition>> secondaryIndexDefns,
+  static void trackMetadataIndexStats(HoodieRecord record, WriteStatus writeStatus, Schema writeSchemaWithMetaFields,
+                                      List<Pair<String, HoodieIndexDefinition>> secondaryIndexDefns,
                                       HoodieTable hoodieTable, TaskContextSupplier taskContextSupplier) {
     HoodieEngineContext engineContext = new HoodieLocalEngineContext(hoodieTable.getStorageConf(), taskContextSupplier);
     HoodieReaderContext readerContext = engineContext.getReaderContextFactory(hoodieTable.getMetaClient()).getContext();
@@ -158,19 +164,19 @@ public class WriteHandleMetadataUtils {
    * It considers the new merged version of the record and compares it with the older version of the record to generate
    * secondary index stats.
    *
-   * @param hoodieKeyOpt - Option containing the value of hoodie key
-   * @param combinedRecordOpt - New record merged with the old record
-   * @param oldRecordOpt - Old record option
-   * @param isDelete - Whether the record is being deleted
-   * @param writeStatus - Write status
-   * @param writeSchemaWithMetaFields - Write schema with metadata fields
-   * @param newSchemaSupplier - Schema supplier for the new record
-   * @param secondaryIndexDefns - Definitions for secondary index which need to be updated
-   * @param keyGeneratorOpt - Option containing key generator
-   * @param hoodieTable - Hoodie Table
-   * @param taskContextSupplier - Task context supplier
+   * @param hoodieKey                 The hoodie key
+   * @param combinedRecordOpt         New record merged with the old record
+   * @param oldRecord                 The old record
+   * @param isDelete                  Whether the record is a DELETE
+   * @param writeStatus               The Write status
+   * @param writeSchemaWithMetaFields The write schema with metadata fields
+   * @param newSchemaSupplier         The schema supplier for the new record
+   * @param secondaryIndexDefns       Definitions for secondary index which need to be updated
+   * @param keyGeneratorOpt           Option containing key generator
+   * @param hoodieTable               The hoodie table
+   * @param taskContextSupplier       The task context supplier
    */
-  static <T> void trackMetadataIndexStats(Option<HoodieKey> hoodieKeyOpt, Option<HoodieRecord> combinedRecordOpt, Option<HoodieRecord<T>> oldRecordOpt, boolean isDelete,
+  static <T> void trackMetadataIndexStats(@Nullable HoodieKey hoodieKey, Option<HoodieRecord> combinedRecordOpt, @Nullable HoodieRecord<T> oldRecord, boolean isDelete,
                                           WriteStatus writeStatus, Schema writeSchemaWithMetaFields, Supplier<Schema> newSchemaSupplier,
                                           List<Pair<String, HoodieIndexDefinition>> secondaryIndexDefns, Option<BaseKeyGenerator> keyGeneratorOpt, HoodieTable hoodieTable,
                                           TaskContextSupplier taskContextSupplier) {
@@ -181,8 +187,7 @@ public class WriteHandleMetadataUtils {
       String secondaryIndexSourceField = String.join(".", secondaryIndexPartitionPathFieldPair.getValue().getSourceFields());
       Option<Object> oldSecondaryKeyOpt = Option.empty();
       Option<Object> newSecondaryKeyOpt = Option.empty();
-      if (oldRecordOpt.isPresent() && oldRecordOpt.get() instanceof HoodieAvroIndexedRecord) {
-        HoodieRecord<T> oldRecord = oldRecordOpt.get();
+      if (oldRecord instanceof HoodieAvroIndexedRecord) {
         Object oldSecondaryKey = readerContext.getValue(oldRecord.getData(), writeSchemaWithMetaFields, secondaryIndexSourceField);
         if (oldSecondaryKey != null) {
           oldSecondaryKeyOpt = Option.of(oldSecondaryKey);
@@ -203,8 +208,8 @@ public class WriteHandleMetadataUtils {
         shouldUpdate = !oldSecondaryKeyOpt.get().equals(newSecondaryKeyOpt.get());
       }
       if (shouldUpdate) {
-        String recordKey = hoodieKeyOpt.map(HoodieKey::getRecordKey)
-            .or(() -> oldRecordOpt.map(rec -> rec.getRecordKey(writeSchemaWithMetaFields, keyGeneratorOpt)))
+        String recordKey = Option.ofNullable(hoodieKey).map(HoodieKey::getRecordKey)
+            .or(() -> Option.ofNullable(oldRecord).map(rec -> rec.getRecordKey(writeSchemaWithMetaFields, keyGeneratorOpt)))
             .or(() -> combinedRecordOpt.map(HoodieRecord::getRecordKey))
             .get();
         // Add secondary index delete records for old records

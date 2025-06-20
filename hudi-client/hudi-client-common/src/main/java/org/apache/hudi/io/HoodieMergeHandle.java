@@ -54,6 +54,7 @@ import org.apache.avro.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nullable;
 import javax.annotation.concurrent.NotThreadSafe;
 
 import java.io.Closeable;
@@ -104,7 +105,6 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
   protected Map<String, HoodieRecord<T>> keyToNewRecords;
   protected Set<String> writtenRecordKeys;
   protected HoodieFileWriter fileWriter;
-  protected final boolean preserveMetadata;
 
   protected StoragePath newFilePath;
   protected StoragePath oldFilePath;
@@ -129,8 +129,6 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
                            Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
                            TaskContextSupplier taskContextSupplier, HoodieBaseFile baseFile, Option<BaseKeyGenerator> keyGeneratorOpt) {
     super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier, false);
-    // The super class constructor is called with preserveMetadata as false
-    this.preserveMetadata = false;
     init(recordItr);
     init(fileId, partitionPath, baseFile);
     validateAndSetAndKeyGenProps(keyGeneratorOpt, config.populateMetaFields());
@@ -144,8 +142,6 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
                            HoodieBaseFile dataFileToBeMerged, TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
     super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier, true);
     this.keyToNewRecords = keyToNewRecords;
-    // The super class constructor is called with preserveMetadata as true
-    this.preserveMetadata = true;
     init(fileId, this.partitionPath, dataFileToBeMerged);
     validateAndSetAndKeyGenProps(keyGeneratorOpt, config.populateMetaFields());
   }
@@ -162,9 +158,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
    */
   public HoodieMergeHandle(HoodieWriteConfig config, String instantTime, String partitionPath,
                            String fileId, HoodieTable<T, I, K, O> hoodieTable, TaskContextSupplier taskContextSupplier) {
-    super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier, false);
-    // The super class constructor is called with preserveMetadata as true
-    this.preserveMetadata = true;
+    super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier, true);
   }
 
   private void validateAndSetAndKeyGenProps(Option<BaseKeyGenerator> keyGeneratorOpt, boolean populateMetaFields) {
@@ -304,7 +298,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       }
       updatedRecordsWritten++;
     }
-    return writeRecord(newRecord, Option.of(oldRecord), combineRecordOpt, writerSchema, config.getPayloadConfig().getProps(), isDelete);
+    return writeRecord(newRecord, oldRecord, combineRecordOpt, writerSchema, config.getPayloadConfig().getProps(), isDelete);
   }
 
   protected void writeInsertRecord(HoodieRecord<T> newRecord) throws IOException {
@@ -316,15 +310,14 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     writeInsertRecord(newRecord, schema, config.getProps());
   }
 
-  protected void writeInsertRecord(HoodieRecord<T> newRecord, Schema schema, Properties prop)
-      throws IOException {
-    if (writeRecord(newRecord, Option.empty(), Option.of(newRecord), schema, prop, HoodieOperation.isDelete(newRecord.getOperation()))) {
+  protected void writeInsertRecord(HoodieRecord<T> newRecord, Schema schema, Properties prop) {
+    if (writeRecord(newRecord, null, Option.of(newRecord), schema, prop, HoodieOperation.isDelete(newRecord.getOperation()))) {
       insertRecordsWritten++;
     }
   }
 
   protected boolean writeRecord(HoodieRecord<T> newRecord, Option<HoodieRecord> combineRecord, Schema schema, Properties prop) throws IOException {
-    return writeRecord(newRecord, Option.empty(), combineRecord, schema, prop, false);
+    return writeRecord(newRecord, null, combineRecord, schema, prop, false);
   }
 
   /**
@@ -332,17 +325,22 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
    * created by merging the old record with the new incoming record. It decides whether the combined record needs to be
    * written to the file and writes the record accordingly.
    *
-   * @param newRecord The new incoming record
-   * @param oldRecordOpt Optianal value of old record
+   * @param newRecord     The new incoming record
+   * @param oldRecord     The value of old record
    * @param combineRecord Record created by merging the old record with the new incoming record
-   * @param schema Record schema
-   * @param prop Properties
-   * @param isDelete Whether the new record is a delete record
+   * @param schema        Record schema
+   * @param prop          Properties
+   * @param isDelete      Whether the new record is a delete record
+   *
    * @return true if the record was written successfully
    * @throws IOException
    */
-  private boolean writeRecord(HoodieRecord<T> newRecord, Option<HoodieRecord<T>> oldRecordOpt, Option<HoodieRecord> combineRecord, Schema schema, Properties prop,
-                              boolean isDelete) throws IOException {
+  private boolean writeRecord(HoodieRecord<T> newRecord,
+                              @Nullable HoodieRecord<T> oldRecord,
+                              Option<HoodieRecord> combineRecord,
+                              Schema schema,
+                              Properties prop,
+                              boolean isDelete) {
     Option recordMetadata = newRecord.getMetadata();
     if (!partitionPath.equals(newRecord.getPartitionPath())) {
       HoodieUpsertException failureEx = new HoodieUpsertException("mismatched partition path, record partition: "
@@ -351,29 +349,31 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       return false;
     }
     try {
-      Option<HoodieKey> hoodieKeyOpt = Option.ofNullable(newRecord.getKey());
       if (combineRecord.isPresent() && !combineRecord.get().isDelete(schema, config.getProps()) && !isDelete) {
         // Last-minute check.
         boolean decision = recordMerger.shouldFlush(combineRecord.get(), schema, config.getProps());
 
-        if (decision) { // CASE (1): Flush the merged record.
-          if (shouldGenerateStreamingSecIndexStats()) {
-            WriteHandleMetadataUtils.trackMetadataIndexStats(hoodieKeyOpt, combineRecord, oldRecordOpt, false, writeStatus,
-                writeSchemaWithMetaFields, () -> getNewSchema(), secondaryIndexDefns, keyGeneratorOpt, hoodieTable, taskContextSupplier);
+        if (decision) {
+          // CASE (1): Flush the merged record.
+          HoodieKey hoodieKey = newRecord.getKey();
+          if (isSecondaryIndexStatsStreamingWritesEnabled) {
+            WriteHandleMetadataUtils.trackMetadataIndexStats(hoodieKey, combineRecord, oldRecord, false, writeStatus,
+                writeSchemaWithMetaFields, this::getNewSchema, secondaryIndexDefns, keyGeneratorOpt, hoodieTable, taskContextSupplier);
           }
-          writeToFile(newRecord.getKey(), combineRecord.get(), schema, prop, preserveMetadata);
+          writeToFile(hoodieKey, combineRecord.get(), schema, prop, preserveMetadata);
           recordsWritten++;
-        } else {  // CASE (2): A delete operation.
-          if (shouldGenerateStreamingSecIndexStats()) {
-            WriteHandleMetadataUtils.trackMetadataIndexStats(hoodieKeyOpt, combineRecord, oldRecordOpt, true, writeStatus,
-                writeSchemaWithMetaFields, () -> getNewSchema(), secondaryIndexDefns, keyGeneratorOpt, hoodieTable, taskContextSupplier);
+        } else {
+          // CASE (2): A delete operation.
+          if (isSecondaryIndexStatsStreamingWritesEnabled) {
+            WriteHandleMetadataUtils.trackMetadataIndexStats(newRecord.getKey(), combineRecord, oldRecord, true, writeStatus,
+                writeSchemaWithMetaFields, this::getNewSchema, secondaryIndexDefns, keyGeneratorOpt, hoodieTable, taskContextSupplier);
           }
           recordsDeleted++;
         }
       } else {
-        if (shouldGenerateStreamingSecIndexStats()) {
-          WriteHandleMetadataUtils.trackMetadataIndexStats(hoodieKeyOpt, combineRecord, oldRecordOpt, true, writeStatus,
-              writeSchemaWithMetaFields, () -> getNewSchema(), secondaryIndexDefns, keyGeneratorOpt, hoodieTable, taskContextSupplier);
+        if (isSecondaryIndexStatsStreamingWritesEnabled) {
+          WriteHandleMetadataUtils.trackMetadataIndexStats(newRecord.getKey(), combineRecord, oldRecord, true, writeStatus,
+              writeSchemaWithMetaFields, this::getNewSchema, secondaryIndexDefns, keyGeneratorOpt, hoodieTable, taskContextSupplier);
         }
         recordsDeleted++;
         // Clear the new location as the record was deleted

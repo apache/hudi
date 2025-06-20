@@ -86,7 +86,11 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
   protected final TaskContextSupplier taskContextSupplier;
   // For full schema evolution
   protected final boolean schemaOnReadEnabled;
-  protected final boolean isStreamingWriteToMetadataEnabled;
+  protected final boolean preserveMetadata;
+  /**
+   * Flag saying whether secondary index streaming writes is enabled for the table.
+   */
+  protected final boolean isSecondaryIndexStatsStreamingWritesEnabled;
   List<Pair<String, HoodieIndexDefinition>> secondaryIndexDefns = Collections.emptyList();
 
   private boolean closed = false;
@@ -110,37 +114,34 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     this.taskContextSupplier = taskContextSupplier;
     this.writeToken = makeWriteToken();
     this.schemaOnReadEnabled = !isNullOrEmpty(hoodieTable.getConfig().getInternalSchema());
+    this.preserveMetadata = preserveMetadata;
     this.recordMerger = config.getRecordMerger();
     this.writeStatus = (WriteStatus) ReflectionUtils.loadClass(config.getWriteStatusClassName(),
         hoodieTable.shouldTrackSuccessRecords(), config.getWriteStatusFailureFraction(), hoodieTable.isMetadataTable());
-    this.isStreamingWriteToMetadataEnabled = config.isMetadataStreamingWritesEnabled(hoodieTable.getMetaClient().getTableConfig().getTableVersion());
-    initMetadataPartitionsToCollectStats(preserveMetadata);
-  }
-
-  private void initMetadataPartitionsToCollectStats(boolean preserveMetadata) {
-    if (isStreamingWriteToMetadataEnabled) {
-      // Secondary index should not be updated for clustering and compaction
-      // Since for clustering and compaction preserveMetadata is true, we are checking for it before enabling secondary index update
-      if (config.isSecondaryIndexEnabled() && !preserveMetadata) {
-        ValidationUtils.checkArgument(recordMerger.getRecordType() == HoodieRecord.HoodieRecordType.AVRO,
-            "Only Avro record type is supported for streaming writes to metadata table with write handles");
-        secondaryIndexDefns = hoodieTable.getMetaClient().getIndexMetadata()
-            .map(indexMetadata -> indexMetadata.getIndexDefinitions().values())
-            .orElse(Collections.emptyList())
-            .stream()
-            .filter(indexDef -> indexDef.getIndexName().startsWith(HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX))
-            .map(indexDef -> Pair.of(indexDef.getIndexName(), indexDef))
-            .collect(Collectors.toList());
-        secondaryIndexDefns.forEach(pair -> writeStatus.getIndexStats().instantiateSecondaryIndexStatsForIndex(pair.getKey()));
-      }
+    boolean isMetadataStreamingWritesEnabled = config.isMetadataStreamingWritesEnabled(hoodieTable.getMetaClient().getTableConfig().getTableVersion());
+    if (isMetadataStreamingWritesEnabled) {
+      initMetadataPartitionsToCollectStats(preserveMetadata);
+      this.isSecondaryIndexStatsStreamingWritesEnabled = !secondaryIndexDefns.isEmpty();
+    } else {
+      this.isSecondaryIndexStatsStreamingWritesEnabled = false;
     }
   }
 
-  /**
-   * Returns true if secondary index streaming is disabled for the table.
-   */
-  boolean shouldGenerateStreamingSecIndexStats() {
-    return config.isSecondaryIndexEnabled() && !secondaryIndexDefns.isEmpty() && isStreamingWriteToMetadataEnabled;
+  private void initMetadataPartitionsToCollectStats(boolean preserveMetadata) {
+    // Secondary index should not be updated for clustering and compaction
+    // Since for clustering and compaction preserveMetadata is true, we are checking for it before enabling secondary index update
+    if (config.isSecondaryIndexEnabled() && !preserveMetadata) {
+      ValidationUtils.checkArgument(recordMerger.getRecordType() == HoodieRecord.HoodieRecordType.AVRO,
+          "Only Avro record type is supported for streaming writes to metadata table with write handles");
+      secondaryIndexDefns = hoodieTable.getMetaClient().getIndexMetadata()
+          .map(indexMetadata -> indexMetadata.getIndexDefinitions().values())
+          .orElse(Collections.emptyList())
+          .stream()
+          .filter(indexDef -> indexDef.getIndexName().startsWith(HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX))
+          .map(indexDef -> Pair.of(indexDef.getIndexName(), indexDef))
+          .collect(Collectors.toList());
+      secondaryIndexDefns.forEach(pair -> writeStatus.getIndexStats().instantiateSecondaryIndexStatsForIndex(pair.getKey()));
+    }
   }
 
   /**

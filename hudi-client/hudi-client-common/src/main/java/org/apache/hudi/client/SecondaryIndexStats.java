@@ -21,10 +21,11 @@ package org.apache.hudi.client;
 import java.io.Serializable;
 
 /**
- * Class is used to hold secondary index metadata updates. These updates are generated from
+ * Class used to hold secondary index metadata stats. These stats are generated from
  * various write handles during write.
  */
 public class SecondaryIndexStats implements Serializable {
+  private static final long serialVersionUID = 1L;
 
   private String recordKey;
   private String secondaryKeyValue;

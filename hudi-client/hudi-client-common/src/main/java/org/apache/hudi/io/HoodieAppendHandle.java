@@ -156,7 +156,8 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
             // schema containing the updated fields only
             ? Option.of(new Schema.Parser().parse(config.getPartialUpdateSchema()))
             : Option.empty(),
-        taskContextSupplier, false);
+        taskContextSupplier,
+        false);
     this.recordItr = recordItr;
     this.sizeEstimator = getSizeEstimator();
     this.statuses = new ArrayList<>();
@@ -555,8 +556,8 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         status.getStat().setFileSizeInBytes(logFileSize);
       }
 
-      // generate Secondary index stats if streaming is enabled.
-      if (shouldGenerateStreamingSecIndexStats()) {
+      // generate Secondary index stats if streaming writes is enabled.
+      if (isSecondaryIndexStatsStreamingWritesEnabled) {
         // Adds secondary index only for the last log file write status. We do not need to add secondary index stats
         // for every log file written as part of the append handle write. The last write status would update the
         // secondary index considering all the log files.
