@@ -20,6 +20,7 @@ package org.apache.hudi.io;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieOperation;
@@ -66,25 +67,26 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                             String partitionPath, String fileId, TaskContextSupplier taskContextSupplier) {
     this(config, instantTime, hoodieTable, partitionPath, fileId, Option.empty(),
-        taskContextSupplier, false);
+        taskContextSupplier, false, Option.empty());
   }
 
   public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                             String partitionPath, String fileId, TaskContextSupplier taskContextSupplier,
-                            boolean preserveMetadata) {
+                            boolean preserveMetadata, Option<ReaderContextFactory<T>> readerContextFactoryOpt) {
     this(config, instantTime, hoodieTable, partitionPath, fileId, Option.empty(),
-        taskContextSupplier, preserveMetadata);
+        taskContextSupplier, preserveMetadata, readerContextFactoryOpt);
   }
 
   public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                             String partitionPath, String fileId, Option<Schema> overriddenSchema,
                             TaskContextSupplier taskContextSupplier) {
-    this(config, instantTime, hoodieTable, partitionPath, fileId, overriddenSchema, taskContextSupplier, false);
+    this(config, instantTime, hoodieTable, partitionPath, fileId, overriddenSchema, taskContextSupplier, false,
+        Option.empty());
   }
 
   public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                             String partitionPath, String fileId, Option<Schema> overriddenSchema,
-                            TaskContextSupplier taskContextSupplier, boolean preserveMetadata) {
+                            TaskContextSupplier taskContextSupplier, boolean preserveMetadata, Option<ReaderContextFactory<T>> readerContextFactoryOpt) {
     super(config, instantTime, partitionPath, fileId, hoodieTable, overriddenSchema,
         taskContextSupplier, preserveMetadata);
     writeStatus.setFileId(fileId);
@@ -116,7 +118,7 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                             String partitionPath, String fileId, Map<String, HoodieRecord<T>> recordMap,
                             TaskContextSupplier taskContextSupplier) {
-    this(config, instantTime, hoodieTable, partitionPath, fileId, taskContextSupplier, true);
+    this(config, instantTime, hoodieTable, partitionPath, fileId, taskContextSupplier, true, Option.empty());
     this.recordMap = recordMap;
     this.useWriterSchema = true;
   }

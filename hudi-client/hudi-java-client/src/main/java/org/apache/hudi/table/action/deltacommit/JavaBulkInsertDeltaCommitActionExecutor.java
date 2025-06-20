@@ -57,7 +57,7 @@ public class JavaBulkInsertDeltaCommitActionExecutor<T> extends BaseJavaDeltaCom
   public HoodieWriteMetadata<List<WriteStatus>> execute() {
     try {
       return JavaBulkInsertHelper.newInstance().bulkInsert(inputRecords, instantTime, table, config,
-          this, true, bulkInsertPartitioner);
+          this, true, bulkInsertPartitioner, Option.empty());
     } catch (HoodieInsertException ie) {
       throw ie;
     } catch (Throwable e) {

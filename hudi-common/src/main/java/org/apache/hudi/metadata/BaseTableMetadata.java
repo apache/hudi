@@ -361,7 +361,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
         })
         .orElseGet(Collections::emptyList);
 
-    LOG.debug("Listed file in partition from metadata: partition={}, #files={}", relativePartitionPath, pathInfoList.size());
+    LOG.info("Listed file in partition from metadata: partition={}, #files={}", relativePartitionPath, pathInfoList.size());
     return pathInfoList;
   }
 
