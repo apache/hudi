@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.hudi.{AvroConversionUtils, HoodieCLIUtils, HoodieSparkSqlWriter}
+import org.apache.avro.Schema
 import org.apache.hudi.DataSourceWriteOptions.{BULK_INSERT_OPERATION_OPT_VAL, ENABLE_ROW_WRITER, OPERATION}
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.client.SparkRDDWriteClient
@@ -25,30 +25,28 @@ import org.apache.hudi.common.config.{HoodieMetadataConfig, SerializableSchema}
 import org.apache.hudi.common.engine.{HoodieEngineContext, ReaderContextFactory}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{PartitionBucketIndexHashingConfig, WriteOperationType}
-import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.read.HoodieFileGroupReader
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
+import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.{Option, ValidationUtils}
-import org.apache.hudi.config.{HoodieIndexConfig, HoodieInternalConfig, HoodieWriteConfig}
 import org.apache.hudi.config.HoodieWriteConfig.ROLLBACK_USING_MARKERS_ENABLE
+import org.apache.hudi.config.{HoodieIndexConfig, HoodieInternalConfig, HoodieWriteConfig}
 import org.apache.hudi.data.CloseableIteratorListener
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.index.bucket.partition.{PartitionBucketIndexCalculator, PartitionBucketIndexUtils}
 import org.apache.hudi.internal.schema.InternalSchema
-import org.apache.hudi.storage.{StorageConfiguration, StoragePath}
-
-import org.apache.avro.Schema
+import org.apache.hudi.storage.StoragePath
+import org.apache.hudi.{AvroConversionUtils, HoodieCLIUtils, HoodieSparkSqlWriter}
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{HoodieUnsafeUtils, Row, SaveMode}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.PredicateHelper
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
+import org.apache.spark.sql.{HoodieUnsafeUtils, Row, SaveMode}
 
 import java.util
 import java.util.function.Supplier
-
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 
