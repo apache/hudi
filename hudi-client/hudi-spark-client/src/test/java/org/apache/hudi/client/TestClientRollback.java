@@ -139,9 +139,9 @@ public class TestClientRollback extends HoodieClientTestBase {
       client.commit(newCommitTime, jsc.parallelize(statusList), Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
 
       HoodieWriteConfig config = getConfig();
-      List<String> partitionPaths =
-          FSUtils.getAllPartitionPaths(context, storage, config.getMetadataConfig(), cfg.getBasePath());
       metaClient = HoodieTableMetaClient.reload(metaClient);
+      List<String> partitionPaths =
+          FSUtils.getAllPartitionPaths(context, metaClient, config.getMetadataConfig());
       HoodieSparkTable table = HoodieSparkTable.create(getConfig(), context, metaClient);
       final BaseFileOnlyView view1 = table.getBaseFileOnlyView();
 
@@ -322,9 +322,9 @@ public class TestClientRollback extends HoodieClientTestBase {
       assertNoWriteErrors(statusList);
 
       HoodieWriteConfig config = getConfig();
-      List<String> partitionPaths =
-          FSUtils.getAllPartitionPaths(context, storage, config.getMetadataConfig(), cfg.getBasePath());
       metaClient = HoodieTableMetaClient.reload(metaClient);
+      List<String> partitionPaths =
+          FSUtils.getAllPartitionPaths(context, metaClient, config.getMetadataConfig());
       HoodieSparkTable table = HoodieSparkTable.create(getConfig(), context, metaClient);
       final BaseFileOnlyView view1 = table.getBaseFileOnlyView();
 

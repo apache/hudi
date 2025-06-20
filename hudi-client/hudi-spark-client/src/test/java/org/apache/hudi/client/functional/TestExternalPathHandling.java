@@ -216,7 +216,8 @@ public class TestExternalPathHandling extends HoodieClientTestBase {
   }
 
   private void assertFileGroupCorrectness(String instantTime, String partitionPath, String filePath, String fileId, int expectedSize) {
-    HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(context, metaClient.getStorage(), writeConfig.getMetadataConfig(), metaClient.getBasePath().toString());
+    HoodieTableMetadata tableMetadata = metaClient.getTableFormat().getMetadataFactory().create(
+        context, metaClient.getStorage(), writeConfig.getMetadataConfig(), metaClient.getBasePath().toString());
     HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(tableMetadata, metaClient, metaClient.reloadActiveTimeline());
     List<HoodieFileGroup> fileGroups = fsView.getAllFileGroups(partitionPath).collect(Collectors.toList());
     Assertions.assertEquals(expectedSize, fileGroups.size());
