@@ -22,7 +22,6 @@ package org.apache.hudi.metadata;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.data.HoodieData;
-import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -106,11 +105,9 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     HoodieData<HoodieRecord> result = HoodieTableMetadataUtil.readRecordKeysFromFileSlices(
         engineContext,
         partitionFileSlicePairs,
-        false,
         1,
         "activeModule",
-        metaClient,
-        EngineType.SPARK
+        metaClient
     );
     assertTrue(result.isEmpty());
   }
@@ -206,11 +203,9 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     HoodieData<HoodieRecord> result = HoodieTableMetadataUtil.readRecordKeysFromFileSlices(
         engineContext,
         partitionFileSlicePairs,
-        false,
         1,
         "activeModule",
-        metaClient,
-        EngineType.SPARK
+        metaClient
     );
     // Validate the result.
     List<HoodieRecord> records = result.collectAsList();
