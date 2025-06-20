@@ -87,6 +87,7 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
   // For full schema evolution
   protected final boolean schemaOnReadEnabled;
   protected final boolean isStreamingWriteToMetadataEnabled;
+  protected final boolean preserveMetadata;
   List<Pair<String, HoodieIndexDefinition>> secondaryIndexDefns = Collections.emptyList();
 
   private boolean closed = false;
@@ -114,7 +115,8 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     this.writeStatus = (WriteStatus) ReflectionUtils.loadClass(config.getWriteStatusClassName(),
         hoodieTable.shouldTrackSuccessRecords(), config.getWriteStatusFailureFraction(), hoodieTable.isMetadataTable());
     this.isStreamingWriteToMetadataEnabled = config.isMetadataStreamingWritesEnabled(hoodieTable.getMetaClient().getTableConfig().getTableVersion());
-    initMetadataPartitionsToCollectStats(preserveMetadata);
+    this.preserveMetadata = preserveMetadata;
+    initMetadataPartitionsToCollectStats(this.preserveMetadata);
   }
 
   private void initMetadataPartitionsToCollectStats(boolean preserveMetadata) {
