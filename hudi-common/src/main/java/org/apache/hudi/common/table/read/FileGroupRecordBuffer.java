@@ -28,9 +28,11 @@ import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
+import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.KeySpec;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
@@ -110,7 +112,13 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
       this.payloadClass = Option.empty();
     }
     this.orderingFieldName = orderingFieldName;
+    // Ensure that ordering field is populated for mergers and legacy payloads
+    orderingFieldName.ifPresent(orderingField -> {
+      props.putIfAbsent(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, hoodieTableMetaClient.getTableConfig().getPreCombineField());
+      props.putIfAbsent(HoodieTableConfig.PRECOMBINE_FIELD.key(), hoodieTableMetaClient.getTableConfig().getPreCombineField());
+    });
     this.props = props;
+
     this.internalSchema = readerContext.getSchemaHandler().getInternalSchema();
     this.hoodieTableMetaClient = hoodieTableMetaClient;
     long maxMemorySizeInBytes = props.getLong(MAX_MEMORY_FOR_MERGE.key(), MAX_MEMORY_FOR_MERGE.defaultValue());

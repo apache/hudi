@@ -28,7 +28,6 @@ import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -143,16 +142,12 @@ public final class HoodieFileGroupReader<T> implements Closeable {
         ? new PositionBasedSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, tableConfig, props)
         : new FileGroupReaderSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, tableConfig, props));
     this.outputConverter = readerContext.getSchemaHandler().getOutputConverter();
-    this.orderingFieldName = readerContext.getMergeMode() == RecordMergeMode.COMMIT_TIME_ORDERING
-        ? Option.empty()
-        : Option.ofNullable(ConfigUtils.getOrderingField(props))
-        .or(() -> {
-          String preCombineField = hoodieTableMetaClient.getTableConfig().getPreCombineField();
-          if (StringUtils.isNullOrEmpty(preCombineField)) {
-            return Option.empty();
-          }
-          return Option.of(preCombineField);
-        });
+    if (readerContext.getMergeMode() == RecordMergeMode.COMMIT_TIME_ORDERING) {
+      this.orderingFieldName = Option.empty();
+    } else {
+      String preCombineField = hoodieTableMetaClient.getTableConfig().getPreCombineField();
+      this.orderingFieldName = StringUtils.isNullOrEmpty(preCombineField) ? Option.empty() : Option.of(preCombineField);
+    }
     this.readStats = new HoodieReadStats();
     this.recordBuffer = getRecordBuffer(readerContext, hoodieTableMetaClient,
         readerContext.getMergeMode(), props, hoodieBaseFileOption, this.logFiles.isEmpty(),
@@ -534,11 +529,6 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       ValidationUtils.checkArgument(dataSchema != null, "Data schema is required");
       ValidationUtils.checkArgument(requestedSchema != null, "Requested schema is required");
       ValidationUtils.checkArgument(props != null, "Props is required");
-      // Ensure that ordering field is populated for mergers and legacy payloads
-      if (hoodieTableMetaClient.getTableConfig().getPreCombineField() != null) {
-        props.putIfAbsent(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, hoodieTableMetaClient.getTableConfig().getPreCombineField());
-        props.putIfAbsent(HoodieTableConfig.PRECOMBINE_FIELD.key(), hoodieTableMetaClient.getTableConfig().getPreCombineField());
-      }
 
       return new HoodieFileGroupReader<>(
           readerContext, storage, tablePath, latestCommitTime, fileSlice,
