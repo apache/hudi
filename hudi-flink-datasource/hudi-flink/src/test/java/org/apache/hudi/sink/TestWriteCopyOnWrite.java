@@ -202,6 +202,38 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   }
 
   @Test
+  public void testNonBlockedInstantRequestAfterFailover() throws Exception {
+    conf.set(FlinkOptions.WRITE_BATCH_SIZE, BATCH_SIZE_MB);
+    conf.set(FlinkOptions.PRE_COMBINE, true);
+    conf.set(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 10_000L);
+    Map<String, String> expected = new HashMap<>();
+    expected.put("par1", "[id1,par1,id1,Danny,23,1,par1]");
+
+    preparePipeline()
+        // will eager flush
+        .consume(TestData.DATA_SET_INSERT_DUPLICATES)
+        .checkpoint(1)
+        .allDataFlushed()
+        .handleEvents(2)
+        .checkpointComplete(1)
+        .checkWrittenData(expected, 1)
+        // will eager flush
+        .consume(TestData.DATA_SET_INSERT_DUPLICATES)
+        .handleEvents(1)
+        // task failover, and send empty bootstrap event to coordinator
+        .subTaskFails(0, 1)
+        // handle the bootstrap event and reset buffer for subtask 0
+        .assertNextEvent()
+        // consume new data, will not be blocked
+        .consume(TestData.DATA_SET_INSERT)
+        .checkpoint(2)
+        .handleEvents(1)
+        .checkpointComplete(2)
+        .checkWrittenData(EXPECTED1, 4)
+        .end();
+  }
+
+  @Test
   public void testBlockedInstantTimeRequest() throws Exception {
     conf.set(FlinkOptions.WRITE_BATCH_SIZE, BATCH_SIZE_MB);
     conf.set(FlinkOptions.PRE_COMBINE, true);
@@ -236,12 +268,13 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .consume(TestData.DATA_SET_INSERT_DUPLICATES)
         .consume(TestData.DATA_SET_INSERT)
         .checkpoint(2)
-        .allDataFlushed()
-        .handleEvents(3)
+        .allDataFlushed();
+    t1.join();
+
+    testHarness.handleEvents(3)
         .checkpointComplete(2)
         .checkWrittenData(EXPECTED1, 4)
         .end();
-    t1.join();
   }
 
   @Test
@@ -584,7 +617,8 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .checkpointComplete(1)
         // requested instant with checkpoint id as 1
         .consume(TestData.DATA_SET_INSERT)
-        .checkpoint(2);
+        .checkpoint(2)
+        .handleEvents(4);
     // requested instant with checkpoint id as 2
     if (OptionsResolver.isBlockingInstantGeneration(conf)) {
       pipeline

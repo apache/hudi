@@ -62,10 +62,6 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
     // partial failover is only valid for append mode.
   }
 
-  public void testBlockedInstantTimeRequest() {
-    // blocking instant time generation is only for cow table with upsert operation.
-  }
-
   @Test
   public void testInsertAppendMode() {
     // append mode is only valid for cow table.

@@ -40,7 +40,7 @@ public class MockCorrespondentWithTimeout extends Correspondent {
 
   public MockCorrespondentWithTimeout(StreamWriteOperatorCoordinator coordinator, Configuration conf) {
     this.coordinator = coordinator;
-    this.commitAckTimeout = conf.getLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 60_000L);
+    this.commitAckTimeout = conf.get(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT);
   }
 
   @Override
