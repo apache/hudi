@@ -66,6 +66,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
 import static org.apache.hudi.avro.TestHoodieAvroUtils.SCHEMA_WITH_AVRO_TYPES_STR;
 import static org.apache.hudi.avro.TestHoodieAvroUtils.SCHEMA_WITH_NESTED_FIELD_STR;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.computeRevivedAndDeletedKeys;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getFileIDForFileGroup;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.validateDataTypeForSecondaryOrExpressionIndex;
@@ -175,7 +176,10 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
   public void testReadRecordKeysFromBaseFilesWithValidRecords() throws Exception {
     HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(metaClient.getStorageConf());
     String instant = "20230918120000000";
-    hoodieTestTable = hoodieTestTable.addCommit(instant);
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    commitMetadata.setOperationType(WriteOperationType.INSERT);
+    commitMetadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, TRIP_EXAMPLE_SCHEMA);
+    hoodieTestTable = hoodieTestTable.addCommit(instant, Option.of(commitMetadata));
     Set<String> recordKeys = new HashSet<>();
     final List<Pair<String, FileSlice>> partitionFileSlicePairs = new ArrayList<>();
     // Generate 10 inserts for each partition and populate partitionBaseFilePairs and recordKeys.
