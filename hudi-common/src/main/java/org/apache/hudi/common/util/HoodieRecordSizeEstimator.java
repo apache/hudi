@@ -34,19 +34,26 @@ public class HoodieRecordSizeEstimator<T> implements SizeEstimator<T> {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieRecordSizeEstimator.class);
 
   private final long sizeOfSchema;
+  private final Schema recordSchema;
 
   public HoodieRecordSizeEstimator(Schema schema) {
     sizeOfSchema = ObjectSizeCalculator.getObjectSize(schema);
+    this.recordSchema = schema;
   }
 
   @Override
   public long sizeEstimate(T hoodieRecord) {
-    // Most HoodieRecords are bound to have data + schema. Although, the same schema object is shared amongst
-    // all records in the JVM. Calculate and print the size of the Schema and of the Record to
-    // note the sizes and differences. A correct estimation in such cases is handled in
-    /** {@link ExternalSpillableMap} **/
-    long sizeOfRecord = ObjectSizeCalculator.getObjectSize(hoodieRecord);
-    LOG.debug("SizeOfRecord => {} SizeOfSchema => {}", sizeOfRecord, sizeOfSchema);
-    return sizeOfRecord;
+    try {
+      // Most HoodieRecords are bound to have data + schema. Although, the same schema object is shared amongst
+      // all records in the JVM. Calculate and print the size of the Schema and of the Record to
+      // note the sizes and differences. A correct estimation in such cases is handled in
+      /** {@link ExternalSpillableMap} **/
+      long sizeOfRecord = ObjectSizeCalculator.getObjectSize(hoodieRecord);
+      LOG.debug("SizeOfRecord => {} SizeOfSchema => {}", sizeOfRecord, sizeOfSchema);
+      return sizeOfRecord;
+    } catch (Throwable e) {
+      LOG.error("Failed to estimate size of Avro record: {} with schema:{}", hoodieRecord, recordSchema, e);
+      throw new RuntimeException("Failed to estimate size of Avro record: " + hoodieRecord, e);
+    }
   }
 }

@@ -58,6 +58,8 @@ public class HoodieInternalRow extends InternalRow {
    */
   private final UTF8String[] metaFields;
   private final InternalRow sourceRow;
+  // indicates whether this row represents a delete operation. Used in the CDC read.
+  private boolean isDeleteOperation;
 
   /**
    * Specifies whether source {@link #sourceRow} contains meta-fields
@@ -71,24 +73,39 @@ public class HoodieInternalRow extends InternalRow {
                            UTF8String fileName,
                            InternalRow sourceRow,
                            boolean sourceContainsMetaFields) {
-    this.metaFields = new UTF8String[] {
-        commitTime,
-        commitSeqNumber,
-        recordKey,
-        partitionPath,
-        fileName
-    };
-
-    this.sourceRow = sourceRow;
-    this.sourceContainsMetaFields = sourceContainsMetaFields;
+    this(new UTF8String[] {commitTime, commitSeqNumber, recordKey, partitionPath, fileName}, sourceRow, sourceContainsMetaFields, false);
   }
 
   public HoodieInternalRow(UTF8String[] metaFields,
                            InternalRow sourceRow,
                            boolean sourceContainsMetaFields) {
+    this(metaFields, sourceRow, sourceContainsMetaFields, false);
+  }
+
+  private HoodieInternalRow(UTF8String[] metaFields,
+                            InternalRow sourceRow,
+                            boolean sourceContainsMetaFields,
+                            boolean isDeleteOperation) {
     this.metaFields = metaFields;
     this.sourceRow = sourceRow;
     this.sourceContainsMetaFields = sourceContainsMetaFields;
+    this.isDeleteOperation = isDeleteOperation;
+  }
+
+  public static HoodieInternalRow createDeleteRow(UTF8String recordKey, UTF8String partitionPath, InternalRow sourceRow) {
+    if (sourceRow instanceof HoodieInternalRow) {
+      HoodieInternalRow hoodieInternalRow = (HoodieInternalRow) sourceRow;
+      hoodieInternalRow.isDeleteOperation = true;
+      return hoodieInternalRow;
+    }
+    UTF8String[] metaFields = sourceRow != null ? new UTF8String[0] : new UTF8String[] {
+        null,
+        null,
+        recordKey,
+        partitionPath,
+        null
+    };
+    return new HoodieInternalRow(metaFields, sourceRow, false, true);
   }
 
   @Override
@@ -130,7 +147,7 @@ public class HoodieInternalRow extends InternalRow {
     if (ordinal < metaFields.length) {
       return metaFields[ordinal] == null;
     }
-    return sourceRow.isNullAt(rebaseOrdinal(ordinal));
+    return sourceRow == null || sourceRow.isNullAt(rebaseOrdinal(ordinal));
   }
 
   @Override
@@ -253,5 +270,9 @@ public class HoodieInternalRow extends InternalRow {
     if (ordinal < metaFields.length) {
       throw new ClassCastException(String.format("Can not cast meta-field of type UTF8String at (%d) as %s", ordinal, expectedDataType.getName()));
     }
+  }
+
+  public boolean isDeleteOperation() {
+    return isDeleteOperation;
   }
 }

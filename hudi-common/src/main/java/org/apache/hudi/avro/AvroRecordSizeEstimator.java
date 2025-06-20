@@ -31,20 +31,29 @@ import org.apache.avro.specific.SpecificRecord;
  * Avro record excluding the internal {@link Schema}.
  */
 public class AvroRecordSizeEstimator implements SizeEstimator<BufferedRecord<IndexedRecord>> {
+  private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(AvroRecordSizeEstimator.class);
+  private final Schema recordSchema;
   private final long sizeOfSchema;
 
   public AvroRecordSizeEstimator(Schema recordSchema) {
+    this.recordSchema = recordSchema;
     sizeOfSchema = ObjectSizeCalculator.getObjectSize(recordSchema);
   }
 
   @Override
   public long sizeEstimate(BufferedRecord<IndexedRecord> record) {
-    long sizeOfRecord = ObjectSizeCalculator.getObjectSize(record);
-    // generated record do not contain Schema field, so do not need minus size of Schema.
-    if (record.getRecord() instanceof SpecificRecord) {
-      return sizeOfRecord;
+    try {
+      long sizeOfRecord = ObjectSizeCalculator.getObjectSize(record);
+
+      // generated record do not contain Schema field, so do not need minus size of Schema.
+      if (record.getRecord() instanceof SpecificRecord) {
+        return sizeOfRecord;
+      }
+      // do not contain size of Avro schema as the schema is reused among records
+      return sizeOfRecord - sizeOfSchema + 8;
+    } catch (Throwable e) {
+      LOG.error("Failed to estimate size of Avro record: {} with schema:{}", record, recordSchema, e);
+      throw new RuntimeException("Failed to estimate size of Avro record: " + record, e);
     }
-    // do not contain size of Avro schema as the schema is reused among records
-    return sizeOfRecord - sizeOfSchema + 8;
   }
 }

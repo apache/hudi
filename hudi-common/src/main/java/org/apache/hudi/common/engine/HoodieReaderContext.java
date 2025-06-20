@@ -24,10 +24,10 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.serialization.CustomSerializer;
-import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.BufferedRecordSerializer;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.LocalAvroSchemaCache;
@@ -192,7 +192,7 @@ public abstract class HoodieReaderContext<T> {
   }
 
   public CustomSerializer<BufferedRecord<T>> getRecordSerializer() {
-    return new DefaultSerializer<>();
+    return new BufferedRecordSerializer<>();
   }
 
   /**
@@ -491,4 +491,12 @@ public abstract class HoodieReaderContext<T> {
   protected Schema decodeAvroSchema(Object versionId) {
     return this.localAvroSchemaCache.getSchema((Integer) versionId).orElse(null);
   }
+
+  /**
+   * Checks if the record is a delete operation.
+   *
+   * @param record The record to check.
+   * @return true if the record is a delete operation, false otherwise.
+   */
+  public abstract boolean isDeleteOperation(T record);
 }
