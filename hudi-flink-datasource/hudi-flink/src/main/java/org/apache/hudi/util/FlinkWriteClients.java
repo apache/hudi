@@ -244,9 +244,11 @@ public class FlinkWriteClients {
     }
 
     HoodieWriteConfig writeConfig = builder.build();
-    // always LAZY for non-blocking instant time generation.
-    writeConfig.setValue(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key(),
-        HoodieFailedWritesCleaningPolicy.LAZY.name());
+    if (!OptionsResolver.isBlockingInstantGeneration(conf)) {
+      // always LAZY for non-blocking instant time generation.
+      writeConfig.setValue(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key(),
+          HoodieFailedWritesCleaningPolicy.LAZY.name());
+    }
     if (loadFsViewStorageConfig && !conf.containsKey(FileSystemViewStorageConfig.REMOTE_HOST_NAME.key())) {
       // do not use the builder to give a change for recovering the original fs view storage config
       FileSystemViewStorageConfig viewStorageConfig = ViewStorageProperties.loadFromProperties(conf.getString(FlinkOptions.PATH), conf);

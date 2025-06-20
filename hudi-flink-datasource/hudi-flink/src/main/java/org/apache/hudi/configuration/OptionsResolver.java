@@ -480,6 +480,13 @@ public class OptionsResolver {
     return HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.defaultValue().equalsIgnoreCase(HoodieFailedWritesCleaningPolicy.LAZY.name());
   }
 
+  /**
+   * Returns whether the writers should use blocking instant time generation.
+   */
+  public static boolean isBlockingInstantGeneration(Configuration conf) {
+    return isCowTable(conf) && isUpsertOperation(conf);
+  }
+
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
