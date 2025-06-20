@@ -65,18 +65,10 @@ public class HoodieFileGroupReaderTestHarness extends HoodieCommonTestHarness {
   protected List<Boolean> shouldWritePositions;
 
   // Environmental variables.
-  protected static StorageConfiguration<?> storageConf;
+  protected static StorageConfiguration<?> storageConf = getDefaultStorageConf();
   protected static HoodieTestTable testTable;
-  protected static TypedProperties properties;
+  protected static TypedProperties properties = new TypedProperties();
   protected HoodieReaderContext<IndexedRecord> readerContext;
-
-  static {
-    // Note: Make `timestamp` as ordering field.
-    properties = new TypedProperties();
-    properties.setProperty(
-        "hoodie.datasource.write.precombine.field", "timestamp");
-    storageConf = getDefaultStorageConf();
-  }
 
   @AfterAll
   public static void tearDown() throws IOException {
