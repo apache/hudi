@@ -196,11 +196,12 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     List<InsertBucketCumulativeWeightPair> insertBuckets = partitioner.getInsertBuckets(testPartitionPath);
 
     assertEquals(3, partitioner.numPartitions(), "Should have 3 partitions");
-    assertEquals(BucketType.UPDATE, partitioner.getBucketInfo(0).bucketType,
+    SparkBucketInfoGetter bucketInfoGetter = partitioner.getSparkBucketInfoGetter();
+    assertEquals(BucketType.UPDATE, bucketInfoGetter.getBucketInfo(0).bucketType,
         "Bucket 0 is UPDATE");
-    assertEquals(BucketType.INSERT, partitioner.getBucketInfo(1).bucketType,
+    assertEquals(BucketType.INSERT, bucketInfoGetter.getBucketInfo(1).bucketType,
         "Bucket 1 is INSERT");
-    assertEquals(BucketType.INSERT, partitioner.getBucketInfo(2).bucketType,
+    assertEquals(BucketType.INSERT, bucketInfoGetter.getBucketInfo(2).bucketType,
         "Bucket 2 is INSERT");
     assertEquals(3, insertBuckets.size(), "Total of 3 insert buckets");
 
@@ -213,13 +214,14 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     insertBuckets = partitioner.getInsertBuckets(testPartitionPath);
 
     assertEquals(4, partitioner.numPartitions(), "Should have 4 partitions");
-    assertEquals(BucketType.UPDATE, partitioner.getBucketInfo(0).bucketType,
+    bucketInfoGetter = partitioner.getSparkBucketInfoGetter();
+    assertEquals(BucketType.UPDATE, bucketInfoGetter.getBucketInfo(0).bucketType,
         "Bucket 0 is UPDATE");
-    assertEquals(BucketType.INSERT, partitioner.getBucketInfo(1).bucketType,
+    assertEquals(BucketType.INSERT, bucketInfoGetter.getBucketInfo(1).bucketType,
         "Bucket 1 is INSERT");
-    assertEquals(BucketType.INSERT, partitioner.getBucketInfo(2).bucketType,
+    assertEquals(BucketType.INSERT, bucketInfoGetter.getBucketInfo(2).bucketType,
         "Bucket 2 is INSERT");
-    assertEquals(BucketType.INSERT, partitioner.getBucketInfo(3).bucketType,
+    assertEquals(BucketType.INSERT, bucketInfoGetter.getBucketInfo(3).bucketType,
         "Bucket 3 is INSERT");
     assertEquals(4, insertBuckets.size(), "Total of 4 insert buckets");
 
@@ -257,9 +259,10 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     SparkUpsertDeltaCommitPartitioner partitioner = new SparkUpsertDeltaCommitPartitioner(profile, context, table, config, WriteOperationType.UPSERT);
 
     assertEquals(1, partitioner.numPartitions(), "Should have 1 partitions");
-    assertEquals(BucketType.UPDATE, partitioner.getBucketInfo(0).bucketType,
+    SparkBucketInfoGetter bucketInfoGetter = partitioner.getSparkBucketInfoGetter();
+    assertEquals(BucketType.UPDATE, bucketInfoGetter.getBucketInfo(0).bucketType,
             "Bucket 0 is UPDATE");
-    assertEquals("2", partitioner.getBucketInfo(0).fileIdPrefix,
+    assertEquals("2", bucketInfoGetter.getBucketInfo(0).fileIdPrefix,
             "Should be assigned to only file id not pending compaction which is 2");
   }
 
@@ -334,9 +337,10 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     SparkUpsertDeltaCommitPartitioner partitioner = new SparkUpsertDeltaCommitPartitioner(profile, context, table, config, WriteOperationType.UPSERT);
 
     assertEquals(1, partitioner.numPartitions(), "Should have 1 partitions");
-    assertEquals(BucketType.UPDATE, partitioner.getBucketInfo(0).bucketType,
+    SparkBucketInfoGetter bucketInfoGetter = partitioner.getSparkBucketInfoGetter();
+    assertEquals(BucketType.UPDATE, bucketInfoGetter.getBucketInfo(0).bucketType,
             "Bucket 0 should be UPDATE");
-    assertEquals("fg1", partitioner.getBucketInfo(0).fileIdPrefix,
+    assertEquals("fg1", bucketInfoGetter.getBucketInfo(0).fileIdPrefix,
             "Insert should be assigned to fg1");
   }
 

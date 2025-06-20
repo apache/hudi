@@ -19,14 +19,20 @@
 
 package org.apache.hudi.table.action.commit;
 
+import java.io.Serializable;
+
 /**
  * Some SparkHoodiePartitioner classes can store a lot of data. To prevent
  * unnecessary serialization and transmission of data, SparkBucketInfoGetter
  * was created to store the minimal data needed for getBucketInfo.
  * getBucketInfo is invoked on the executor
  */
-public interface SparkBucketInfoGetter {
+public interface SparkBucketInfoGetter extends Serializable {
 
+  /**
+   * @param bucketNumber spark partition id
+   * @return bucket info for that spark partition
+   */
   BucketInfo getBucketInfo(int bucketNumber);
 
 }

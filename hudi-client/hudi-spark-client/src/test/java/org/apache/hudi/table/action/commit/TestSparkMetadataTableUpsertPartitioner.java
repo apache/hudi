@@ -82,9 +82,10 @@ public class TestSparkMetadataTableUpsertPartitioner extends HoodieClientTestBas
     }).collect(Collectors.toList());
 
     SparkHoodiePartitioner partitioner = new SparkMetadataTableUpsertPartitioner(bucketInfoList, fileIdToSparkPartitionIndexMap);
+    SparkBucketInfoGetter bucketInfoGetter = partitioner.getSparkBucketInfoGetter();
     keysToProbe.stream().forEach(keyToProbe -> {
       int sparkPartitionIndex = partitioner.getPartition(keyToProbe);
-      BucketInfo bucketInfo = partitioner.getBucketInfo(sparkPartitionIndex);
+      BucketInfo bucketInfo = bucketInfoGetter.getBucketInfo(sparkPartitionIndex);
       // validate expected values.
       assertEquals(expectedBucketInfoForRecordKey.get(keyToProbe._1.getRecordKey()), bucketInfo);
       assertEquals(bucketInfoList.get(sparkPartitionIndex), bucketInfo);
