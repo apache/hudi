@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.OperationModeAwareness;
+import org.apache.hudi.common.model.debezium.LegacyMySqlDebeziumAvroMerger;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 
@@ -74,22 +75,46 @@ public class HoodieRecordUtils {
   /**
    * Instantiate a given class with a record merge.
    */
-  public static HoodieRecordMerger createRecordMerger(String basePath, EngineType engineType,
-                                                      List<String> mergerClassList, String recordMergerStrategy) {
-    if (mergerClassList.isEmpty() || HoodieTableMetadata.isMetadataTable(basePath)) {
+  public static HoodieRecordMerger createRecordMerger(String basePath,
+                                                      EngineType engineType,
+                                                      List<String> mergerClassList,
+                                                      String recordMergerStrategy,
+                                                      Option<String> payloadClassOpt) {
+    if (HoodieTableMetadata.isMetadataTable(basePath)) {
       return HoodieAvroRecordMerger.INSTANCE;
+    } else if (mergerClassList.isEmpty()) {
+      return createRecordMergerFromPayloadClass(recordMergerStrategy, payloadClassOpt)
+          .orElse(HoodieAvroRecordMerger.INSTANCE);
     } else {
       return createValidRecordMerger(engineType, mergerClassList, recordMergerStrategy)
           .orElse(HoodieAvroRecordMerger.INSTANCE);
     }
   }
 
-  public static Option<HoodieRecordMerger> createValidRecordMerger(EngineType engineType,
-                                                                   String mergerImpls, String recordMergerStrategy) {
-    if (recordMergerStrategy.equals(HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID)) {
+  public static Option<HoodieRecordMerger> createRecordMergerFromPayloadClass(String recordMergerStrategy,
+                                                                              Option<String> payloadClassOpt) {
+    if ((recordMergerStrategy != null
+        && !recordMergerStrategy.equals(HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID))
+        || payloadClassOpt.isEmpty()) {
+      return Option.empty();
+    }
+    String payloadClass = payloadClassOpt.get();
+    if (payloadClass.equals(LegacyMySqlDebeziumAvroMerger.class.getName())) {
+      return Option.ofNullable(LegacyMySqlDebeziumAvroMerger.INSTANCE);
+    } else {
       return Option.of(HoodieAvroRecordMerger.INSTANCE);
     }
-    return createValidRecordMerger(engineType,ConfigUtils.split2List(mergerImpls), recordMergerStrategy);
+  }
+
+  public static Option<HoodieRecordMerger> createValidRecordMerger(EngineType engineType,
+                                                                   String mergerImpls,
+                                                                   String recordMergerStrategy,
+                                                                   Option<String> payloadClassOpt) {
+    if (recordMergerStrategy.equals(HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID)) {
+      return createRecordMergerFromPayloadClass(recordMergerStrategy, payloadClassOpt)
+          .or(() -> Option.of(HoodieAvroRecordMerger.INSTANCE));
+    }
+    return createValidRecordMerger(engineType, ConfigUtils.split2List(mergerImpls), recordMergerStrategy);
   }
 
   public static Option<HoodieRecordMerger> createValidRecordMerger(EngineType engineType,
