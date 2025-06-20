@@ -267,7 +267,7 @@ public class HoodieIndexUtils {
     if (instantTime.isEmpty()) {
       return hoodieTable.getContext().emptyHoodieData();
     }
-    ReaderContextFactory<R> readerContextFactory = hoodieTable.getContext().getReaderContextFactory(metaClient);
+    ReaderContextFactory<R> readerContextFactory = hoodieTable.getContext().getReaderContextFactory(metaClient, config.getRecordMerger().getRecordType());
     return partitionLocations.flatMap(p -> {
       Option<FileSlice> fileSliceOption = Option.fromJavaOptional(hoodieTable
           .getHoodieView()

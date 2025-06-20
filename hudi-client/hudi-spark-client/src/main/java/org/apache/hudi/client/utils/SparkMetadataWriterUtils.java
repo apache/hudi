@@ -271,7 +271,7 @@ public class SparkMetadataWriterUtils {
     ValidationUtils.checkArgument(indexDefinition.getSourceFields().size() == 1, "Only one source field is supported for expression index");
     String columnToIndex = indexDefinition.getSourceFields().get(0);
 
-    ReaderContextFactory<InternalRow> readerContextFactory = engineContext.getReaderContextFactory(metaClient);
+    ReaderContextFactory<InternalRow> readerContextFactory = engineContext.getReaderContextFactory(metaClient, dataWriteConfig.getRecordMerger().getRecordType());
     // Read records and append expression index metadata to every row
     HoodieData<Row> rowData = sparkEngineContext.parallelize(partitionFilePathAndSizeTriplet, parallelism)
         .flatMap((SerializableFunction<Pair<String, Pair<String, Long>>, Iterator<Row>>) entry ->

@@ -29,14 +29,13 @@ import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.read.HoodieFileGroupReader
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.util.{Option, ValidationUtils}
-import org.apache.hudi.config.{HoodieIndexConfig, HoodieInternalConfig}
+import org.apache.hudi.config.{HoodieIndexConfig, HoodieInternalConfig, HoodieWriteConfig}
 import org.apache.hudi.config.HoodieWriteConfig.ROLLBACK_USING_MARKERS_ENABLE
 import org.apache.hudi.data.CloseableIteratorListener
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.index.bucket.partition.{PartitionBucketIndexCalculator, PartitionBucketIndexUtils}
 import org.apache.hudi.internal.schema.InternalSchema
-import org.apache.hudi.storage.StoragePath
-
+import org.apache.hudi.storage.{StorageConfiguration, StoragePath}
 import org.apache.avro.Schema
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
@@ -48,7 +47,6 @@ import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util
 import java.util.function.Supplier
-
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 
@@ -213,7 +211,8 @@ class PartitionBucketIndexManager extends BaseProcedure
           throw new HoodieException("Failed to get table schema during clustering", e)
       }
 
-      val readerContextFactory: ReaderContextFactory[InternalRow] = context.getReaderContextFactory(metaClient)
+      val writeConfig = HoodieWriteConfig.newBuilder().withPath(basePath).withProps(config.asJava).build()
+      val readerContextFactory: ReaderContextFactory[InternalRow] = context.getReaderContextFactory(metaClient, writeConfig.getRecordMerger().getRecordType())
       val sparkSchemaWithMetaFields = AvroConversionUtils.convertAvroSchemaToStructType(tableSchemaWithMetaFields)
 
       val res: RDD[InternalRow] = if (allFileSlice.isEmpty) {

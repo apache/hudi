@@ -280,7 +280,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
   private HoodieData<HoodieRecord<T>> readRecordsForGroup(JavaSparkContext jsc, HoodieClusteringGroup clusteringGroup, String instantTime) {
     List<ClusteringOperation> clusteringOps = clusteringGroup.getSlices().stream().map(ClusteringOperation::create).collect(Collectors.toList());
     int readParallelism = Math.min(writeConfig.getClusteringGroupReadParallelism(), clusteringOps.size());
-    ReaderContextFactory<T> readerContextFactory = getEngineContext().getReaderContextFactory(getHoodieTable().getMetaClient());
+    ReaderContextFactory<T> readerContextFactory = getEngineContext().getReaderContextFactory(getHoodieTable().getMetaClient(), writeConfig.getRecordMerger().getRecordType());
     return HoodieJavaRDD.of(jsc.parallelize(clusteringOps, readParallelism).mapPartitions(clusteringOpsPartition -> {
       List<Supplier<ClosableIterator<HoodieRecord<T>>>> suppliers = new ArrayList<>();
       long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(new SparkTaskContextSupplier(), getWriteConfig());
@@ -312,7 +312,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
 
     // broadcast reader context.
     HoodieTableMetaClient metaClient = getHoodieTable().getMetaClient();
-    ReaderContextFactory<InternalRow> readerContextFactory = getEngineContext().getReaderContextFactory(metaClient);
+    ReaderContextFactory<InternalRow> readerContextFactory = getEngineContext().getReaderContextFactory(metaClient, writeConfig.getRecordMerger().getRecordType());
     StructType sparkSchemaWithMetaFields = AvroConversionUtils.convertAvroSchemaToStructType(tableSchemaWithMetaFields);
 
     RDD<InternalRow> internalRowRDD = jsc.parallelize(clusteringOps, clusteringOps.size()).flatMap(new FlatMapFunction<ClusteringOperation, InternalRow>() {

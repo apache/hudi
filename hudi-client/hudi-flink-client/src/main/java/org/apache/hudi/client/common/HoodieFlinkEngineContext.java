@@ -36,6 +36,7 @@ import org.apache.hudi.common.function.SerializableConsumer;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializablePairFlatMapFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
@@ -210,7 +211,7 @@ public class HoodieFlinkEngineContext extends HoodieEngineContext {
   }
 
   @Override
-  public ReaderContextFactory<?> getReaderContextFactory(HoodieTableMetaClient metaClient) {
+  public ReaderContextFactory<?> getReaderContextFactory(HoodieTableMetaClient metaClient, HoodieRecord.HoodieRecordType recordType) {
     // metadata table reads are only supported by the AvroReaderContext.
     if (metaClient.isMetadataTable()) {
       return new AvroReaderContextFactory(metaClient);

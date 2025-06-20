@@ -26,6 +26,7 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
+import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -38,9 +39,12 @@ import org.apache.hudi.common.table.log.LogFileCreationCallback;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
@@ -55,6 +59,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 
@@ -81,18 +86,21 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
   protected final TaskContextSupplier taskContextSupplier;
   // For full schema evolution
   protected final boolean schemaOnReadEnabled;
+  protected final boolean isStreamingWriteToMetadataEnabled;
+  protected final boolean preserveMetadata;
+  List<Pair<String, HoodieIndexDefinition>> secondaryIndexDefns = Collections.emptyList();
 
   private boolean closed = false;
 
   public HoodieWriteHandle(HoodieWriteConfig config, String instantTime, String partitionPath,
-                           String fileId, HoodieTable<T, I, K, O> hoodieTable, TaskContextSupplier taskContextSupplier) {
+                           String fileId, HoodieTable<T, I, K, O> hoodieTable, TaskContextSupplier taskContextSupplier, boolean preserveMetadata) {
     this(config, instantTime, partitionPath, fileId, hoodieTable,
-        Option.empty(), taskContextSupplier);
+        Option.empty(), taskContextSupplier, preserveMetadata);
   }
 
   protected HoodieWriteHandle(HoodieWriteConfig config, String instantTime, String partitionPath, String fileId,
                               HoodieTable<T, I, K, O> hoodieTable, Option<Schema> overriddenSchema,
-                              TaskContextSupplier taskContextSupplier) {
+                              TaskContextSupplier taskContextSupplier, boolean preserveMetadata) {
     super(config, Option.of(instantTime), hoodieTable);
     this.partitionPath = partitionPath;
     this.fileId = fileId;
@@ -106,6 +114,35 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     this.recordMerger = config.getRecordMerger();
     this.writeStatus = (WriteStatus) ReflectionUtils.loadClass(config.getWriteStatusClassName(),
         hoodieTable.shouldTrackSuccessRecords(), config.getWriteStatusFailureFraction(), hoodieTable.isMetadataTable());
+    this.isStreamingWriteToMetadataEnabled = config.isMetadataStreamingWritesEnabled(hoodieTable.getMetaClient().getTableConfig().getTableVersion());
+    this.preserveMetadata = preserveMetadata;
+    initMetadataPartitionsToCollectStats(this.preserveMetadata);
+  }
+
+  private void initMetadataPartitionsToCollectStats(boolean preserveMetadata) {
+    if (isStreamingWriteToMetadataEnabled) {
+      // Secondary index should not be updated for clustering and compaction
+      // Since for clustering and compaction preserveMetadata is true, we are checking for it before enabling secondary index update
+      if (config.isSecondaryIndexEnabled() && !preserveMetadata) {
+        ValidationUtils.checkArgument(recordMerger.getRecordType() == HoodieRecord.HoodieRecordType.AVRO,
+            "Only Avro record type is supported for streaming writes to metadata table with write handles");
+        secondaryIndexDefns = hoodieTable.getMetaClient().getIndexMetadata()
+            .map(indexMetadata -> indexMetadata.getIndexDefinitions().values())
+            .orElse(Collections.emptyList())
+            .stream()
+            .filter(indexDef -> indexDef.getIndexName().startsWith(HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX))
+            .map(indexDef -> Pair.of(indexDef.getIndexName(), indexDef))
+            .collect(Collectors.toList());
+        secondaryIndexDefns.forEach(pair -> writeStatus.getIndexStats().instantiateSecondaryIndexStatsForIndex(pair.getKey()));
+      }
+    }
+  }
+
+  /**
+   * Returns true if secondary index streaming is disabled for the table.
+   */
+  boolean shouldGenerateStreamingSecIndexStats() {
+    return config.isSecondaryIndexEnabled() && !secondaryIndexDefns.isEmpty() && isStreamingWriteToMetadataEnabled;
   }
 
   /**

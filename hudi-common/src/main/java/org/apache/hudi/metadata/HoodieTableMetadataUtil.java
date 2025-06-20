@@ -1016,11 +1016,7 @@ public class HoodieTableMetadataUtil {
                                                          EngineType engineType) {
     if (writerSchemaOpt.isPresent()) {
       final StorageConfiguration<?> storageConf = datasetMetaClient.getStorageConf();
-      HoodieRecordMerger recordMerger = HoodieRecordUtils.createRecordMerger(
-          datasetMetaClient.getBasePath().toString(),
-          engineType,
-          Collections.emptyList(),
-          datasetMetaClient.getTableConfig().getRecordMergeStrategyId());
+      HoodieRecordMerger recordMerger = getRecordMerger(datasetMetaClient, engineType);
 
       // CRITICAL: Ensure allowInflightInstants is set to true while replacing the scanner with *LogRecordReader or HoodieFileGroupReader
       HoodieMergedLogRecordScanner mergedLogRecordScanner = HoodieMergedLogRecordScanner.newBuilder()
@@ -1043,6 +1039,14 @@ public class HoodieTableMetadataUtil {
       return mergedLogRecordScanner.getRecords();
     }
     return Collections.emptyMap();
+  }
+
+  public static HoodieRecordMerger getRecordMerger(HoodieTableMetaClient datasetMetaClient, EngineType engineType) {
+    return HoodieRecordUtils.createRecordMerger(
+        datasetMetaClient.getBasePath().toString(),
+        engineType,
+        Collections.emptyList(),
+        datasetMetaClient.getTableConfig().getRecordMergeStrategyId());
   }
 
   @VisibleForTesting
@@ -2397,11 +2401,7 @@ public class HoodieTableMetadataUtil {
             .withDiskMapType(storageConf.getEnum(SPILLABLE_DISK_MAP_TYPE.key(), SPILLABLE_DISK_MAP_TYPE.defaultValue()))
             .withBitCaskDiskMapCompressionEnabled(storageConf.getBoolean(
                 DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue()))
-            .withRecordMerger(HoodieRecordUtils.createRecordMerger(
-                metaClient.getBasePath().toString(),
-                engineType,
-                Collections.emptyList(), // TODO: support different merger classes, which is currently only known to write config
-                metaClient.getTableConfig().getRecordMergeStrategyId()))
+            .withRecordMerger(getRecordMerger(metaClient, engineType))
             .withTableMetaClient(metaClient)
             .build();
         ClosableIterator<String> recordKeyIterator = ClosableIterator.wrap(mergedLogRecordScanner.getRecords().keySet().iterator());

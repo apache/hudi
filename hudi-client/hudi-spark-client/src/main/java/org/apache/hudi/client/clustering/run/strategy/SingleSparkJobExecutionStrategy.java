@@ -57,7 +57,7 @@ public abstract class SingleSparkJobExecutionStrategy<T>
     final SerializableSchema serializableSchema = new SerializableSchema(schema);
     final List<ClusteringGroupInfo> clusteringGroupInfos = clusteringPlan.getInputGroups().stream().map(ClusteringGroupInfo::create).collect(Collectors.toList());
 
-    ReaderContextFactory<T> readerContextFactory = getEngineContext().getReaderContextFactory(getHoodieTable().getMetaClient());
+    ReaderContextFactory<T> readerContextFactory = getEngineContext().getReaderContextFactory(getHoodieTable().getMetaClient(), writeConfig.getRecordMerger().getRecordType());
     HoodieData<WriteStatus> writeStatus = getEngineContext().parallelize(clusteringGroupInfos).map(group -> {
       return performClusteringForGroup(readerContextFactory, group, clusteringPlan.getStrategy().getStrategyParams(),
           Option.ofNullable(clusteringPlan.getPreserveHoodieMetadata()).orElse(false),
