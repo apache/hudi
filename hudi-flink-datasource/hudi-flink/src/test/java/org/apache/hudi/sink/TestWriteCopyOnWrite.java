@@ -572,7 +572,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   @Test
   public void testWriteExactlyOnce() throws Exception {
     // reset the config option
-    conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 1L);
+    conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 1000L);
     conf.set(FlinkOptions.WRITE_MEMORY_SEGMENT_PAGE_SIZE, 128);
     conf.setDouble(FlinkOptions.WRITE_TASK_MAX_SIZE, 200.0006); // 630 bytes buffer size
     preparePipeline(conf)
@@ -585,7 +585,8 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .consume(TestData.DATA_SET_INSERT)
         .checkpoint(2)
         // requested instant with checkpoint id as 2
-        .consume(TestData.DATA_SET_INSERT)
+        .assertConsumeThrows(TestData.DATA_SET_INSERT,
+            "Timeout(1000ms) while waiting for instants")
         .end();
   }
 

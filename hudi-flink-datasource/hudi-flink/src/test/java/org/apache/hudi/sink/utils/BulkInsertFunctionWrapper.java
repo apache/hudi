@@ -213,7 +213,7 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
     writeFunction.setRuntimeContext(runtimeContext);
     writeFunction.setOperatorEventGateway(gateway);
     writeFunction.open(conf);
-    writeFunction.setCorrespondent(new MockCorrespondent(this.coordinator));
+    writeFunction.setCorrespondent(new MockCorrespondent(this.coordinator, conf));
   }
 
   private void setupMapFunction() {

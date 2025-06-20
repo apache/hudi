@@ -18,24 +18,32 @@
 
 package org.apache.hudi.sink.utils;
 
+import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.event.Correspondent;
+
+import org.apache.flink.configuration.Configuration;
+
+import java.util.concurrent.TimeUnit;
 
 /**
  * A mock {@link Correspondent} that always return the latest instant.
  */
 public class MockCorrespondent extends Correspondent {
   private final StreamWriteOperatorCoordinator coordinator;
+  private final long commitAckTimeout;
 
-  public MockCorrespondent(StreamWriteOperatorCoordinator coordinator) {
+  public MockCorrespondent(StreamWriteOperatorCoordinator coordinator, Configuration conf) {
     this.coordinator = coordinator;
+    this.commitAckTimeout = conf.getLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 60_000L);
   }
 
   @Override
   public String requestInstantTime(long checkpointId) {
     try {
-      InstantTimeResponse response = CoordinationResponseSeDe.unwrap(this.coordinator.handleCoordinationRequest(InstantTimeRequest.getInstance(checkpointId)).get());
+      InstantTimeResponse response = CoordinationResponseSeDe.unwrap(
+          this.coordinator.handleCoordinationRequest(InstantTimeRequest.getInstance(checkpointId)).get(commitAckTimeout, TimeUnit.MILLISECONDS));
       return response.getInstant();
     } catch (Exception e) {
       throw new HoodieException("Error requesting the instant time from the coordinator", e);
