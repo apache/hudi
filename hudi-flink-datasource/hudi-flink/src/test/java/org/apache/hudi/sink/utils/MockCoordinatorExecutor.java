@@ -50,7 +50,6 @@ public class MockCoordinatorExecutor extends NonThrownExecutor {
       // if we have a JVM critical error, promote it immediately, there is a good
       // chance the
       // logging or job failing will not succeed anymore
-      LOG.error("Exception happened.", t);
       ExceptionUtils.rethrowIfFatalErrorOrOOM(t);
       final String errMsg = String.format("Executor executes action [%s] error", actionString);
       if (hook != null) {
