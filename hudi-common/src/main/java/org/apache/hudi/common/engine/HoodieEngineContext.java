@@ -27,6 +27,7 @@ import org.apache.hudi.common.function.SerializableConsumer;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializablePairFlatMapFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
@@ -128,5 +129,5 @@ public abstract class HoodieEngineContext {
    */
   public abstract <I, O> O aggregate(HoodieData<I> data, O zeroValue, Functions.Function2<O, I, O> seqOp, Functions.Function2<O, O, O> combOp);
 
-  public abstract <T> ReaderContextFactory<T> getReaderContextFactory(HoodieTableMetaClient metaClient);
+  public abstract <T> ReaderContextFactory<T> getReaderContextFactory(HoodieTableMetaClient metaClient, HoodieRecord.HoodieRecordType recordType);
 }

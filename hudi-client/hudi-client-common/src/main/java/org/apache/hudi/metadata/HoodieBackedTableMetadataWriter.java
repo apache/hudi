@@ -689,7 +689,8 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
         this.getClass().getSimpleName(),
         dataMetaClient,
         indexDefinition,
-        dataWriteConfig.getProps());
+        dataWriteConfig.getProps(),
+        getEngineType());
 
     // Initialize the file groups - using the same estimation logic as that of record index
     final int fileGroupCount = HoodieTableMetadataUtil.estimateFileGroupCount(RECORD_INDEX, records.count(),
@@ -773,7 +774,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
 
     engineContext.setJobStatus(activeModule, "Record Index: reading record keys from " + partitionFileSlicePairs.size() + " file slices");
     final int parallelism = Math.min(partitionFileSlicePairs.size(), recordIndexMaxParallelism);
-    ReaderContextFactory<T> readerContextFactory = engineContext.getReaderContextFactory(metaClient);
+    ReaderContextFactory<T> readerContextFactory = engineContext.getReaderContextFactory(metaClient, dataWriteConfig.getRecordMerger().getRecordType());
     return engineContext.parallelize(partitionFileSlicePairs, parallelism).flatMap(partitionAndFileSlice -> {
       final String partition = partitionAndFileSlice.getKey();
       final FileSlice fileSlice = partitionAndFileSlice.getValue();
@@ -1396,7 +1397,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     HoodieTableFileSystemView fsView = getMetadataView();
     fsView.loadPartitions(new ArrayList<>(commitMetadata.getWritePartitionPaths()));
     return convertWriteStatsToSecondaryIndexRecords(allWriteStats, instantTime, indexDefinition, dataWriteConfig.getMetadataConfig(),
-        fsView, dataMetaClient, engineContext, dataWriteConfig.getProps());
+        fsView, dataMetaClient, engineContext, dataWriteConfig.getProps(), getEngineType());
   }
 
   /**
