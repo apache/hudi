@@ -78,6 +78,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordReader;
 import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.table.read.FileGroupRecordBuffer;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.read.HoodieReadStats;
@@ -1025,9 +1026,13 @@ public class HoodieTableMetadataUtil {
       final StorageConfiguration<?> storageConf = datasetMetaClient.getStorageConf();
       TypedProperties properties = getFileGroupReaderPropertiesFromStorageConf(storageConf);
       readerContext.setLatestCommitTime(latestCommitTimestamp);
-
+      readerContext.setHasBootstrapBaseFile(false);
+      readerContext.setHasLogFiles(true);
+      HoodieTableConfig tableConfig = datasetMetaClient.getTableConfig();
+      readerContext.initRecordMerger(properties);
+      readerContext.setSchemaHandler(new FileGroupReaderSchemaHandler<>(readerContext, writerSchemaOpt.get(), writerSchemaOpt.get(), Option.empty(), tableConfig, properties));
       KeyBasedFileGroupRecordBuffer<T> recordBuffer = new KeyBasedFileGroupRecordBuffer<>(readerContext, datasetMetaClient,
-          datasetMetaClient.getTableConfig().getRecordMergeMode(), properties, new HoodieReadStats(), Option.ofNullable(datasetMetaClient.getTableConfig().getPreCombineField()), true);
+          readerContext.getMergeMode(), properties, new HoodieReadStats(), Option.ofNullable(tableConfig.getPreCombineField()), true);
 
       // CRITICAL: Ensure allowInflightInstants is set to true
       HoodieMergedLogRecordReader<T> mergedLogRecordReader = HoodieMergedLogRecordReader.<T>newBuilder()
@@ -1042,7 +1047,7 @@ public class HoodieTableMetadataUtil {
           .withAllowInflightInstants(true)
           .withRecordBuffer(recordBuffer)
           .build();
-      return new CloseableLogRecordsIterator(mergedLogRecordReader, recordBuffer);
+      return new CloseableLogRecordsIterator<>(mergedLogRecordReader, recordBuffer);
     }
     return ClosableIterator.wrap(Collections.emptyIterator());
   }
