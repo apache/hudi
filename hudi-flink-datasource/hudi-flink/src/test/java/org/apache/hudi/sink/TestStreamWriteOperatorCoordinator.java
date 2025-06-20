@@ -37,7 +37,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.sink.event.Correspondent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
-import org.apache.hudi.sink.utils.CoordinationResponseSeDe;
+import org.apache.hudi.sink.utils.CoordinationResponseSerDe;
 import org.apache.hudi.sink.utils.MockCoordinatorExecutor;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
 import org.apache.hudi.util.StreamerUtil;
@@ -428,16 +428,18 @@ public class TestStreamWriteOperatorCoordinator {
         .createNewInstant(new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieActiveTimeline.DELTA_COMMIT_ACTION, instant));
     metadataTableMetaClient.getActiveTimeline().transitionRequestedToInflight(HoodieActiveTimeline.DELTA_COMMIT_ACTION, instant);
     metadataTableMetaClient.reloadActiveTimeline();
+    // reset the coordinator to mimic the job failover.
+    coordinator = createCoordinator(conf, 1);
 
-    // write another commit with existing instant on the metadata timeline
+    // write another commit with new instant on the metadata timeline
     instant = mockWriteWithMetadata(ckp);
     metadataTableMetaClient.reloadActiveTimeline();
 
     completedTimeline = metadataTableMetaClient.getActiveTimeline().filterCompletedInstants();
     assertThat("One instant need to sync to metadata table", completedTimeline.countInstants(), is(metadataPartitions + 3));
-    assertThat(completedTimeline.nthFromLastInstant(1).get().getTimestamp(), is(instant));
+    assertThat(completedTimeline.lastInstant().get().getTimestamp(), is(instant));
     assertThat("The pending instant should be rolled back first",
-        completedTimeline.lastInstant().get().getAction(), is(HoodieTimeline.ROLLBACK_ACTION));
+        completedTimeline.nthFromLastInstant(1).get().getAction(), is(HoodieTimeline.ROLLBACK_ACTION));
   }
 
   @Test
@@ -546,7 +548,7 @@ public class TestStreamWriteOperatorCoordinator {
 
   private String requestInstantTime(StreamWriteOperatorCoordinator coordinator, long checkpointId) {
     try {
-      Correspondent.InstantTimeResponse response = CoordinationResponseSeDe.unwrap(coordinator.handleCoordinationRequest(Correspondent.InstantTimeRequest.getInstance(checkpointId)).get());
+      Correspondent.InstantTimeResponse response = CoordinationResponseSerDe.unwrap(coordinator.handleCoordinationRequest(Correspondent.InstantTimeRequest.getInstance(checkpointId)).get());
       return response.getInstant();
     } catch (Exception e) {
       throw new HoodieException("Error requesting the instant time from the coordinator", e);

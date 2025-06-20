@@ -20,7 +20,7 @@ package org.apache.hudi.sink.event;
 
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.sink.utils.CoordinationResponseSeDe;
+import org.apache.hudi.sink.utils.CoordinationResponseSerDe;
 
 import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.jobgraph.tasks.TaskOperatorEventGateway;
@@ -63,7 +63,7 @@ public class Correspondent {
    */
   public String requestInstantTime(long checkpointId) {
     try {
-      InstantTimeResponse response = CoordinationResponseSeDe.unwrap(this.gateway.sendRequestToCoordinator(this.operatorID,
+      InstantTimeResponse response = CoordinationResponseSerDe.unwrap(this.gateway.sendRequestToCoordinator(this.operatorID,
           new SerializedValue<>(InstantTimeRequest.getInstance(checkpointId))).get());
       return response.getInstant();
     } catch (Exception e) {

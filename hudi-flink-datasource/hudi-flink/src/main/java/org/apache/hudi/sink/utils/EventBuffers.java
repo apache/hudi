@@ -25,7 +25,9 @@ import org.apache.hudi.sink.event.WriteMetadataEvent;
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -36,13 +38,15 @@ public class EventBuffers implements Serializable {
 
   // {checkpointId -> (instant, events)}
   private final Map<Long, Pair<String, WriteMetadataEvent[]>> eventBuffers;
+  private final Option<CommitGuard> commitGuardOption;
 
-  private EventBuffers(Map<Long, Pair<String, WriteMetadataEvent[]>> eventBuffers) {
+  private EventBuffers(Map<Long, Pair<String, WriteMetadataEvent[]>> eventBuffers, Option<CommitGuard> commitGuardOption) {
     this.eventBuffers = eventBuffers;
+    this.commitGuardOption = commitGuardOption;
   }
 
-  public static EventBuffers getInstance() {
-    return new EventBuffers(new ConcurrentHashMap<>());
+  public static EventBuffers getInstance(Option<CommitGuard> commitGuardOption) {
+    return new EventBuffers(new ConcurrentHashMap<>(), commitGuardOption);
   }
 
   /**
@@ -116,5 +120,16 @@ public class EventBuffers implements Serializable {
 
   public void reset(long checkpointId) {
     this.eventBuffers.remove(checkpointId);
+    this.commitGuardOption.ifPresent(CommitGuard::unblock);
+  }
+
+  public boolean nonEmpty() {
+    return this.eventBuffers.values().stream()
+        .map(Pair::getValue)
+        .flatMap(Arrays::stream).anyMatch(Objects::nonNull);
+  }
+
+  public String getPendingInstants() {
+    return this.eventBuffers.values().stream().map(Pair::getKey).collect(Collectors.joining(","));
   }
 }
