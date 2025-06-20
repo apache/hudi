@@ -67,7 +67,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
-import static org.apache.hudi.configuration.FlinkOptions.TABLE_TYPE_MERGE_ON_READ;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
@@ -411,7 +410,6 @@ public class TestStreamWriteOperatorCoordinator {
     // override the default configuration
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     conf.setBoolean(FlinkOptions.METADATA_ENABLED, true);
-    conf.set(FlinkOptions.TABLE_TYPE, TABLE_TYPE_MERGE_ON_READ);
     coordinator = createCoordinator(conf, 1);
 
     String instant = coordinator.getInstant();
@@ -435,16 +433,18 @@ public class TestStreamWriteOperatorCoordinator {
         .createNewInstant(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieActiveTimeline.DELTA_COMMIT_ACTION, instant));
     metadataTableMetaClient.getActiveTimeline().transitionRequestedToInflight(HoodieActiveTimeline.DELTA_COMMIT_ACTION, instant);
     metadataTableMetaClient.reloadActiveTimeline();
+    // reset the coordinator to mimic the job failover.
+    coordinator = createCoordinator(conf, 1);
 
-    // write another commit with existing instant on the metadata timeline
+    // write another commit with new instant on the metadata timeline
     instant = mockWriteWithMetadata(ckp);
     metadataTableMetaClient.reloadActiveTimeline();
 
     completedTimeline = metadataTableMetaClient.getActiveTimeline().filterCompletedInstants();
     assertThat("One instant need to sync to metadata table", completedTimeline.countInstants(), is(metadataPartitions + 3));
-    assertThat(completedTimeline.nthFromLastInstant(1).get().requestedTime(), is(instant));
+    assertThat(completedTimeline.lastInstant().get().requestedTime(), is(instant));
     assertThat("The pending instant should be rolled back first",
-        completedTimeline.lastInstant().get().getAction(), is(HoodieTimeline.ROLLBACK_ACTION));
+        completedTimeline.nthFromLastInstant(1).get().getAction(), is(HoodieTimeline.ROLLBACK_ACTION));
   }
 
   @Test

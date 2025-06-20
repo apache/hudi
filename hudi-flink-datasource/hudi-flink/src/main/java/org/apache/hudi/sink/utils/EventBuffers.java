@@ -25,6 +25,7 @@ import org.apache.hudi.sink.event.WriteMetadataEvent;
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -123,7 +124,9 @@ public class EventBuffers implements Serializable {
   }
 
   public boolean nonEmpty() {
-    return !this.eventBuffers.isEmpty();
+    return this.eventBuffers.values().stream()
+        .map(Pair::getValue)
+        .flatMap(Arrays::stream).anyMatch(Objects::nonNull);
   }
 
   public String getPendingInstants() {
