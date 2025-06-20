@@ -212,7 +212,7 @@ public class InsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
     writeFunction.setOperatorEventGateway(gateway);
     writeFunction.initializeState(this.stateInitializationContext);
     writeFunction.open(conf);
-    writeFunction.setCorrespondent(new MockCorrespondent(this.coordinator, conf));
+    writeFunction.setCorrespondent(new MockCorrespondent(this.coordinator));
     // set up subtask gateway
     coordinator.subtaskReady(0, subtaskGateway);
   }

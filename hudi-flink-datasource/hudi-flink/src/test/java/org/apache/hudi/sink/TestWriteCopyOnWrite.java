@@ -81,49 +81,6 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   }
 
   @Test
-  public void testSlowCheckpointWithNewEagerFlush() throws Exception {
-    conf.set(FlinkOptions.WRITE_BATCH_SIZE, BATCH_SIZE_MB);
-    conf.set(FlinkOptions.PRE_COMBINE, true);
-    conf.set(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 10_000L);
-
-    Map<String, String> expected = new HashMap<>();
-    expected.put("par1", "[id1,par1,id1,Danny,23,1,par1]");
-
-    TestHarness testHarness = preparePipeline()
-        .consume(TestData.DATA_SET_INSERT_DUPLICATES)
-        .assertDataBuffer(1, 2)
-        .checkpoint(1)
-        .allDataFlushed()
-        .handleEvents(2);
-
-    Thread t1 = new Thread(() -> {
-      try {
-        Thread.sleep(3000);
-        testHarness.checkpointComplete(1);
-        testHarness.checkWrittenData(expected, 1);
-      } catch (Exception e) {
-        throw new HoodieException(e);
-      }
-    });
-    t1.start();
-
-    testHarness
-        // new records coming and flushing while cp1 is not completed yet,
-        // bucket assign function will upsert(U) new records to previous fg stored in state.
-        // If async instant generation is used , HoodieMergedHandle will either throw exception
-        // or get the wrong base file in the file group, since cp1 is not committed yet.
-        .consume(TestData.DATA_SET_INSERT_DUPLICATES)
-        .consume(TestData.DATA_SET_INSERT)
-        .checkpoint(2)
-        .allDataFlushed()
-        .handleEvents(3)
-        .checkpointComplete(2)
-        .checkWrittenData(EXPECTED1, 4)
-        .end();
-    t1.join();
-  }
-
-  @Test
   public void testCheckpointFails() throws Exception {
     // reset the config option
     conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 1L);
@@ -242,6 +199,49 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         // so we need recommit it
         .assertEmptyEvent()
         .end();
+  }
+
+  @Test
+  public void testBlockedInstantTimeRequest() throws Exception {
+    conf.set(FlinkOptions.WRITE_BATCH_SIZE, BATCH_SIZE_MB);
+    conf.set(FlinkOptions.PRE_COMBINE, true);
+    conf.set(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 10_000L);
+
+    Map<String, String> expected = new HashMap<>();
+    expected.put("par1", "[id1,par1,id1,Danny,23,1,par1]");
+
+    TestHarness testHarness = preparePipeline()
+        .consume(TestData.DATA_SET_INSERT_DUPLICATES)
+        .assertDataBuffer(1, 2)
+        .checkpoint(1)
+        .allDataFlushed()
+        .handleEvents(2);
+
+    Thread t1 = new Thread(() -> {
+      try {
+        Thread.sleep(3000);
+        testHarness.checkpointComplete(1);
+        testHarness.checkWrittenData(expected, 1);
+      } catch (Exception e) {
+        throw new HoodieException(e);
+      }
+    });
+    t1.start();
+
+    testHarness
+        // new records coming and flushing while cp1 is not completed yet,
+        // bucket assign function will upsert(U) new records to previous fg stored in state.
+        // If async instant generation is used , HoodieMergedHandle will either throw exception
+        // or get the wrong base file in the file group, since cp1 is not committed yet.
+        .consume(TestData.DATA_SET_INSERT_DUPLICATES)
+        .consume(TestData.DATA_SET_INSERT)
+        .checkpoint(2)
+        .allDataFlushed()
+        .handleEvents(3)
+        .checkpointComplete(2)
+        .checkWrittenData(EXPECTED1, 4)
+        .end();
+    t1.join();
   }
 
   @Test
@@ -575,7 +575,8 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
     conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 1000L);
     conf.set(FlinkOptions.WRITE_MEMORY_SEGMENT_PAGE_SIZE, 128);
     conf.setDouble(FlinkOptions.WRITE_TASK_MAX_SIZE, 200.0006); // 630 bytes buffer size
-    preparePipeline(conf)
+    TestHarness pipeline = preparePipeline(conf)
+        .resetInstantTimeRequest(conf)
         .consume(TestData.DATA_SET_INSERT)
         .initialEventBuffer()
         .checkpoint(1)
@@ -583,11 +584,18 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .checkpointComplete(1)
         // requested instant with checkpoint id as 1
         .consume(TestData.DATA_SET_INSERT)
-        .checkpoint(2)
-        // requested instant with checkpoint id as 2
-        .assertConsumeThrows(TestData.DATA_SET_INSERT,
-            "Timeout(1000ms) while waiting for instants")
-        .end();
+        .checkpoint(2);
+    // requested instant with checkpoint id as 2
+    if (OptionsResolver.isBlockingInstantGeneration(conf)) {
+      pipeline
+          .assertConsumeThrows(TestData.DATA_SET_INSERT,
+          "Timeout(1000ms) while waiting for instants")
+          .end();
+    } else {
+      pipeline
+          .consume(TestData.DATA_SET_INSERT)
+          .end();
+    }
   }
 
   // case1: txn2's time range is involved in txn1

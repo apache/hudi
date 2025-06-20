@@ -438,6 +438,16 @@ public class TestWriteBase {
     }
 
     /**
+     * Overrides the instant time request to avoid the write task hangs up.
+     */
+    public TestHarness resetInstantTimeRequest(Configuration conf) {
+      if (OptionsResolver.isBlockingInstantGeneration(conf)) {
+        this.pipeline.getWriteFunction().setCorrespondent(new MockCorrespondentWithTimeout(this.pipeline.getCoordinator(), conf));
+      }
+      return this;
+    }
+
+    /**
      * Mark the task with id {@code taskId} as failed.
      */
     public TestHarness subTaskFails(int taskId) throws Exception {

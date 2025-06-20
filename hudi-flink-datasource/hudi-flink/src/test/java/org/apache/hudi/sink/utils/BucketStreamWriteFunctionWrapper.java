@@ -220,7 +220,7 @@ public class BucketStreamWriteFunctionWrapper<I> implements TestFunctionWrapper<
     writeFunction.setOperatorEventGateway(gateway);
     writeFunction.initializeState(this.stateInitializationContext);
     writeFunction.open(conf);
-    writeFunction.setCorrespondent(new MockCorrespondent(this.coordinator, conf));
+    writeFunction.setCorrespondent(new MockCorrespondent(this.coordinator));
   }
 
   protected StreamWriteFunction createWriteFunction() {

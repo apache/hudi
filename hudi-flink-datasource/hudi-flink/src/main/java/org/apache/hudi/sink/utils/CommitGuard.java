@@ -34,11 +34,13 @@ public class CommitGuard {
   /**
    * A lock used to block instant generation until being signaled after pending instant is committed.
    */
-  private final Lock lock = new ReentrantLock();
-  private final Condition condition = lock.newCondition();
+  private final Lock lock;
+  private final Condition condition;
   private final long commitAckTimeout;
 
   private CommitGuard(long commitAckTimeout) {
+    this.lock = new ReentrantLock();
+    this.condition = lock.newCondition();
     this.commitAckTimeout = commitAckTimeout;
   }
 

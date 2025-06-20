@@ -37,7 +37,7 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.sink.event.Correspondent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
-import org.apache.hudi.sink.utils.CoordinationResponseSeDe;
+import org.apache.hudi.sink.utils.CoordinationResponseSerDe;
 import org.apache.hudi.sink.utils.MockCoordinatorExecutor;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
 import org.apache.hudi.storage.HoodieStorage;
@@ -553,7 +553,7 @@ public class TestStreamWriteOperatorCoordinator {
 
   private String requestInstantTime(StreamWriteOperatorCoordinator coordinator, long checkpointId) {
     try {
-      Correspondent.InstantTimeResponse response = CoordinationResponseSeDe.unwrap(coordinator.handleCoordinationRequest(Correspondent.InstantTimeRequest.getInstance(checkpointId)).get());
+      Correspondent.InstantTimeResponse response = CoordinationResponseSerDe.unwrap(coordinator.handleCoordinationRequest(Correspondent.InstantTimeRequest.getInstance(checkpointId)).get());
       return response.getInstant();
     } catch (Exception e) {
       throw new HoodieException("Error requesting the instant time from the coordinator", e);

@@ -39,7 +39,7 @@ import org.apache.hudi.sink.common.AbstractStreamWriteFunction;
 import org.apache.hudi.sink.event.Correspondent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.utils.CommitGuard;
-import org.apache.hudi.sink.utils.CoordinationResponseSeDe;
+import org.apache.hudi.sink.utils.CoordinationResponseSerDe;
 import org.apache.hudi.sink.utils.EventBuffers;
 import org.apache.hudi.sink.utils.ExplicitClassloaderThreadFactory;
 import org.apache.hudi.sink.utils.HiveSyncContext;
@@ -238,7 +238,7 @@ public class StreamWriteOperatorCoordinator
           .exceptionHook((errMsg, t) -> this.context.failJob(new HoodieException(errMsg, t)))
           .waitForTasksFinish(true).build();
       this.instantRequestExecutor = NonThrownExecutor.builder(LOG)
-          .threadFactory(getThreadFactory("instant-response"))
+          .threadFactory(getThreadFactory("instant-request"))
           .exceptionHook((errMsg, t) -> this.context.failJob(new HoodieException(errMsg, t)))
           .build();
       // start the executor if required
@@ -373,7 +373,7 @@ public class StreamWriteOperatorCoordinator
       } else {
         instantTime = instantTimeAndEventBuffer.getLeft();
       }
-      response.complete(CoordinationResponseSeDe.wrap(Correspondent.InstantTimeResponse.getInstance(instantTime)));
+      response.complete(CoordinationResponseSerDe.wrap(Correspondent.InstantTimeResponse.getInstance(instantTime)));
     }, "request instant time");
     return response;
   }
