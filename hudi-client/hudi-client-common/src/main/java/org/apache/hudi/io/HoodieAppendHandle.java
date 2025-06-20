@@ -22,9 +22,6 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.engine.HoodieLocalEngineContext;
-import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BaseFile;
@@ -33,7 +30,6 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
-import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodiePayloadProps;
@@ -61,10 +57,8 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieAppendException;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
-import org.apache.hudi.metadata.SecondaryIndexRecordGenerationUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.util.CommonClientUtils;
@@ -566,71 +560,14 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         // Adds secondary index only for the last log file write status. We do not need to add secondary index stats
         // for every log file written as part of the append handle write. The last write status would update the
         // secondary index considering all the log files.
-        trackMetadataIndexStatsForStreamingMetadataWrites(fileSliceOpt.or(this::getFileSlice), statuses.stream().map(status -> status.getStat().getPath()).collect(Collectors.toList()),
-            statuses.get(statuses.size() - 1));
+        WriteHandleMetadataUtils.trackMetadataIndexStatsForStreamingMetadataWrites(partitionPath, fileId, fileSliceOpt.or(this::getFileSlice), statuses.stream().map(status -> status.getStat().getPath()).collect(Collectors.toList()),
+            statuses.get(statuses.size() - 1), hoodieTable, taskContextSupplier, secondaryIndexDefns, config, instantTime, writeSchemaWithMetaFields);
       }
 
       return statuses;
     } catch (IOException e) {
       throw new HoodieUpsertException("Failed to close UpdateHandle", e);
     }
-  }
-
-  private void trackMetadataIndexStatsForStreamingMetadataWrites(Option<FileSlice> fileSliceOpt, List<String> newLogFiles, WriteStatus status) {
-    // TODO: @see <a href="https://issues.apache.org/jira/browse/HUDI-9533">HUDI-9533</a> Optimise the computation for multiple secondary indexes
-    HoodieEngineContext engineContext = new HoodieLocalEngineContext(hoodieTable.getStorageConf(), taskContextSupplier);
-    HoodieReaderContext readerContext = engineContext.getReaderContextFactory(hoodieTable.getMetaClient()).getContext();
-
-    // For Append handle, we need to merge the records written by new log files with the existing file slice to check
-    // the corresponding updates for secondary index. It is possible the records written in the new log files are ignored
-    // by record merger.
-    secondaryIndexDefns.forEach(secondaryIndexDefnPair -> {
-      // fetch primary key -> secondary index for prev file slice.
-      Map<String, String> recordKeyToSecondaryKeyForPreviousFileSlice = fileSliceOpt.map(fileSlice -> {
-        try {
-          return SecondaryIndexRecordGenerationUtils.getRecordKeyToSecondaryKey(hoodieTable.getMetaClient(), readerContext, fileSlice, writeSchemaWithMetaFields,
-              secondaryIndexDefnPair.getValue(), instantTime, config.getProps(), false);
-        } catch (IOException e) {
-          throw new HoodieIOException("Failed to generate secondary index stats ", e);
-        }
-      }).orElse(Collections.emptyMap());
-
-      // fetch primary key -> secondary index for latest file slice including inflight.
-      FileSlice latestIncludingInflight = fileSliceOpt.orElse(new FileSlice(new HoodieFileGroupId(partitionPath, fileId), instantTime));
-      // Add all the new log files to the file slice
-      newLogFiles.stream().forEach(logFile -> latestIncludingInflight.addLogFile(new HoodieLogFile(new StoragePath(config.getBasePath(), logFile))));
-      Map<String, String> recordKeyToSecondaryKeyForCurrentFileSlice;
-      try {
-        recordKeyToSecondaryKeyForCurrentFileSlice = SecondaryIndexRecordGenerationUtils.getRecordKeyToSecondaryKey(hoodieTable.getMetaClient(), readerContext,
-            latestIncludingInflight, writeSchemaWithMetaFields, secondaryIndexDefnPair.getValue(), instantTime, config.getProps(), true);
-      } catch (IOException e) {
-        throw new HoodieIOException("Failed to generate secondary index stats ", e);
-      }
-
-      // Iterate over record keys in current file slice and prepare the secondary index records based on
-      // whether the record is a new record, record with updated secondary key or deleted record
-      recordKeyToSecondaryKeyForCurrentFileSlice.forEach((recordKey, secondaryKey) -> {
-        if (!recordKeyToSecondaryKeyForPreviousFileSlice.containsKey(recordKey)) {
-          status.getIndexStats().addSecondaryIndexStats(secondaryIndexDefnPair.getKey(), recordKey, secondaryKey, false);
-        } else {
-          // delete previous entry and insert new value if secondaryKey is different
-          String previousSecondaryKey = recordKeyToSecondaryKeyForPreviousFileSlice.get(recordKey);
-          if (!previousSecondaryKey.equals(secondaryKey)) {
-            status.getIndexStats().addSecondaryIndexStats(secondaryIndexDefnPair.getKey(), recordKey, previousSecondaryKey, true);
-            status.getIndexStats().addSecondaryIndexStats(secondaryIndexDefnPair.getKey(), recordKey, secondaryKey, false);
-          }
-        }
-      });
-
-      // Iterate over records in previous file slice and add delete secondary index records for records not present
-      // in current file slice
-      Map<String, String> finalRecordKeyToSecondaryKeyForCurrentFileSlice = recordKeyToSecondaryKeyForCurrentFileSlice;
-      recordKeyToSecondaryKeyForPreviousFileSlice.forEach((recordKey, secondaryKey) -> {
-        if (!finalRecordKeyToSecondaryKeyForCurrentFileSlice.containsKey(recordKey)) {
-          status.getIndexStats().addSecondaryIndexStats(secondaryIndexDefnPair.getKey(), recordKey, secondaryKey, true);
-        }
-      });
-    });
   }
 
   public void write(Map<String, HoodieRecord<T>> recordMap) {

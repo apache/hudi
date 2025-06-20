@@ -20,12 +20,8 @@ package org.apache.hudi.io;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.engine.HoodieLocalEngineContext;
-import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
@@ -361,15 +357,24 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
         boolean decision = recordMerger.shouldFlush(combineRecord.get(), schema, config.getProps());
 
         if (decision) { // CASE (1): Flush the merged record.
-          trackMetadataIndexStats(hoodieKeyOpt, combineRecord, oldRecordOpt, false);
+          if (shouldGenerateStreamingSecIndexStats()) {
+            WriteHandleMetadataUtils.trackMetadataIndexStats(hoodieKeyOpt, combineRecord, oldRecordOpt, false, writeStatus,
+                writeSchemaWithMetaFields, () -> getNewSchema(), secondaryIndexDefns, keyGeneratorOpt, hoodieTable, taskContextSupplier);
+          }
           writeToFile(newRecord.getKey(), combineRecord.get(), schema, prop, preserveMetadata);
           recordsWritten++;
         } else {  // CASE (2): A delete operation.
-          trackMetadataIndexStats(hoodieKeyOpt, combineRecord, oldRecordOpt, true);
+          if (shouldGenerateStreamingSecIndexStats()) {
+            WriteHandleMetadataUtils.trackMetadataIndexStats(hoodieKeyOpt, combineRecord, oldRecordOpt, true, writeStatus,
+                writeSchemaWithMetaFields, () -> getNewSchema(), secondaryIndexDefns, keyGeneratorOpt, hoodieTable, taskContextSupplier);
+          }
           recordsDeleted++;
         }
       } else {
-        trackMetadataIndexStats(hoodieKeyOpt, combineRecord, oldRecordOpt, true);
+        if (shouldGenerateStreamingSecIndexStats()) {
+          WriteHandleMetadataUtils.trackMetadataIndexStats(hoodieKeyOpt, combineRecord, oldRecordOpt, true, writeStatus,
+              writeSchemaWithMetaFields, () -> getNewSchema(), secondaryIndexDefns, keyGeneratorOpt, hoodieTable, taskContextSupplier);
+        }
         recordsDeleted++;
         // Clear the new location as the record was deleted
         newRecord.unseal();
@@ -473,56 +478,8 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     }
   }
 
-  private void trackMetadataIndexStats(Option<HoodieKey> hoodieKeyOpt, Option<HoodieRecord> combinedRecordOpt, Option<HoodieRecord<T>> oldRecordOpt, boolean isDelete) {
-    if (!shouldGenerateStreamingSecIndexStats()) {
-      return;
-    }
-    HoodieEngineContext engineContext = new HoodieLocalEngineContext(hoodieTable.getStorageConf(), taskContextSupplier);
-    HoodieReaderContext readerContext = engineContext.getReaderContextFactory(hoodieTable.getMetaClient()).getContext();
-
-    secondaryIndexDefns.forEach(secondaryIndexPartitionPathFieldPair -> {
-      String secondaryIndexSourceField = String.join(".", secondaryIndexPartitionPathFieldPair.getValue().getSourceFields());
-      Option<Object> oldSecondaryKeyOpt = Option.empty();
-      Option<Object> newSecondaryKeyOpt = Option.empty();
-      if (oldRecordOpt.isPresent() && oldRecordOpt.get() instanceof HoodieAvroIndexedRecord) {
-        HoodieRecord<T> oldRecord = oldRecordOpt.get();
-        Object oldSecondaryKey = readerContext.getValue(oldRecord.getData(), writeSchemaWithMetaFields, secondaryIndexSourceField);
-        if (oldSecondaryKey != null) {
-          oldSecondaryKeyOpt = Option.of(oldSecondaryKey);
-        }
-      }
-
-      if (combinedRecordOpt.isPresent() && combinedRecordOpt.get() instanceof HoodieAvroIndexedRecord && !isDelete) {
-        Schema newSchema = getNewSchema();
-        Object secondaryKey = readerContext.getValue(combinedRecordOpt.get().getData(), newSchema, secondaryIndexSourceField);
-        if (secondaryKey != null) {
-          newSecondaryKeyOpt = Option.of(secondaryKey);
-        }
-      }
-
-      boolean shouldUpdate = true;
-      if (oldSecondaryKeyOpt.isPresent() && newSecondaryKeyOpt.isPresent()) {
-        // If new secondary key is different from old secondary key, update secondary index records
-        shouldUpdate = !oldSecondaryKeyOpt.get().equals(newSecondaryKeyOpt.get());
-      }
-      if (shouldUpdate) {
-        String recordKey = hoodieKeyOpt.map(HoodieKey::getRecordKey)
-            .or(() -> oldRecordOpt.map(rec -> rec.getRecordKey(writeSchemaWithMetaFields, keyGeneratorOpt)))
-            .or(() -> combinedRecordOpt.map(HoodieRecord::getRecordKey))
-            .get();
-        // Add secondary index delete records for old records
-        oldSecondaryKeyOpt.ifPresent(secKey -> addSecondaryIndexStat(secondaryIndexPartitionPathFieldPair.getKey(), recordKey, secKey, true));
-        newSecondaryKeyOpt.ifPresent(secKey -> addSecondaryIndexStat(secondaryIndexPartitionPathFieldPair.getKey(), recordKey, secKey, false));
-      }
-    });
-  }
-
   private Schema getNewSchema() {
     return preserveMetadata ? writeSchemaWithMetaFields : writeSchema;
-  }
-
-  private void addSecondaryIndexStat(String secondaryIndexPartitionPath, String recordKey, Object secKey, boolean isDeleted) {
-    writeStatus.getIndexStats().addSecondaryIndexStats(secondaryIndexPartitionPath, recordKey, secKey.toString(), isDeleted);
   }
 
   @Override

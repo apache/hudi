@@ -20,12 +20,8 @@ package org.apache.hudi.io;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.engine.HoodieLocalEngineContext;
-import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -147,12 +143,16 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
 
         if (preserveMetadata) {
           HoodieRecord populatedRecord = updateFileName(record, schema, writeSchemaWithMetaFields, path.getName(), config.getProps());
-          trackMetadataIndexStats(populatedRecord);
+          if (shouldGenerateStreamingSecIndexStats()) {
+            WriteHandleMetadataUtils.trackMetadataIndexStats(populatedRecord, writeStatus, writeSchemaWithMetaFields, secondaryIndexDefns, hoodieTable, taskContextSupplier);
+          }
           fileWriter.write(record.getRecordKey(), populatedRecord, writeSchemaWithMetaFields);
         } else {
           // rewrite the record to include metadata fields in schema, and the values will be set later.
           record = record.prependMetaFields(schema, writeSchemaWithMetaFields, new MetadataValues(), config.getProps());
-          trackMetadataIndexStats(record);
+          if (shouldGenerateStreamingSecIndexStats()) {
+            WriteHandleMetadataUtils.trackMetadataIndexStats(record, writeStatus, writeSchemaWithMetaFields, secondaryIndexDefns, hoodieTable, taskContextSupplier);
+          }
           fileWriter.writeWithMetadata(record.getKey(), record, writeSchemaWithMetaFields);
         }
 
@@ -177,26 +177,6 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       writeStatus.markFailure(record, t, recordMetadata);
       LOG.error("Error writing record " + record, t);
     }
-  }
-
-  private void trackMetadataIndexStats(HoodieRecord record) {
-    if (!shouldGenerateStreamingSecIndexStats()) {
-      return;
-    }
-
-    HoodieEngineContext engineContext = new HoodieLocalEngineContext(hoodieTable.getStorageConf(), taskContextSupplier);
-    HoodieReaderContext readerContext = engineContext.getReaderContextFactory(hoodieTable.getMetaClient()).getContext();
-
-    // Add secondary index records for all the inserted records
-    secondaryIndexDefns.forEach(secondaryIndexPartitionPathFieldPair -> {
-      String secondaryIndexSourceField = String.join(".", secondaryIndexPartitionPathFieldPair.getValue().getSourceFields());
-      if (record instanceof HoodieAvroIndexedRecord) {
-        Object secondaryKey = readerContext.getValue(record.getData(), writeSchemaWithMetaFields, secondaryIndexSourceField);
-        if (secondaryKey != null) {
-          writeStatus.getIndexStats().addSecondaryIndexStats(secondaryIndexPartitionPathFieldPair.getKey(), record.getRecordKey(), secondaryKey.toString(), false);
-        }
-      }
-    });
   }
 
   protected HoodieRecord<T> updateFileName(HoodieRecord<T> record, Schema schema, Schema targetSchema, String fileName, Properties prop) {
