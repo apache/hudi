@@ -32,6 +32,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartitionPathParser;
+import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordReader;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
@@ -120,7 +121,10 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     this.metaClient = hoodieTableMetaClient;
     this.storage = storage;
     this.hoodieBaseFileOption = fileSlice.getBaseFile();
-    this.logFiles = fileSlice.getLogFiles().sorted(HoodieLogFile.getLogFileComparator()).collect(Collectors.toList());
+    this.logFiles = fileSlice.getLogFiles()
+        .sorted(HoodieLogFile.getLogFileComparator())
+        .filter(logFile -> !logFile.getFileName().endsWith(HoodieCDCUtils.CDC_LOGFILE_SUFFIX))
+        .collect(Collectors.toList());
     this.props = props;
     this.start = start;
     this.length = length;
