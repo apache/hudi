@@ -133,7 +133,6 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   private boolean useWriterSchema = false;
 
   private final Properties recordProperties = new Properties();
-  private Option<FileSlice> fileSliceOpt;
 
   /**
    * This is used by log compaction only.
@@ -196,7 +195,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       prevCommit = instantTime;
       if (hoodieTable.getMetaClient().getTableConfig().isCDCEnabled()) {
         // the cdc reader needs the base file metadata to have deterministic update sequence.
-        fileSlice = getFileSlice();
+        fileSlice = hoodieTable.getSliceView().getLatestFileSlice(partitionPath, instantTime);
         if (fileSlice.isPresent()) {
           prevCommit = fileSlice.get().getBaseInstantTime();
           baseFile = fileSlice.get().getBaseFile().map(BaseFile::getFileName).orElse("");
@@ -205,7 +204,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       }
     } else {
       // older table versions.
-      fileSlice = getFileSlice();
+      fileSlice = hoodieTable.getSliceView().getLatestFileSlice(partitionPath, instantTime);
       if (fileSlice.isPresent()) {
         prevCommit = fileSlice.get().getBaseInstantTime();
         baseFile = fileSlice.get().getBaseFile().map(BaseFile::getFileName).orElse("");
@@ -226,15 +225,6 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     return fileSlice;
   }
 
-  private Option<FileSlice> getFileSlice() {
-    TableFileSystemView.SliceView rtView = hoodieTable.getSliceView();
-    return rtView.getLatestMergedFileSlicesBeforeOrOn(partitionPath, instantTime)
-        .filter(fileSlice -> fileSlice.getFileId().equals(fileId))
-        .map(Option::ofNullable)
-        .findFirst()
-        .orElse(Option.empty());
-  }
-
   private void init(HoodieRecord record) {
     if (!doInit) {
       return;
@@ -246,7 +236,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     writeStatus.setPartitionPath(partitionPath);
     deltaWriteStat.setPartitionPath(partitionPath);
     deltaWriteStat.setFileId(fileId);
-    fileSliceOpt = populateWriteStatAndFetchFileSlice(record, deltaWriteStat);
+    Option<FileSlice> fileSliceOpt = populateWriteStatAndFetchFileSlice(record, deltaWriteStat);
     averageRecordSize = sizeEstimator.sizeEstimate(record);
     try {
       // Save hoodie partition meta in the partition path
@@ -561,7 +551,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         // Adds secondary index only for the last log file write status. We do not need to add secondary index stats
         // for every log file written as part of the append handle write. The last write status would update the
         // secondary index considering all the log files.
-        WriteHandleMetadataUtils.trackMetadataIndexStatsForStreamingMetadataWrites(partitionPath, fileId, fileSliceOpt.or(this::getFileSlice),
+        WriteHandleMetadataUtils.trackMetadataIndexStatsForStreamingMetadataWrites(partitionPath, fileId, getReadFileSlice(),
             statuses.stream().map(status -> status.getStat().getPath()).collect(Collectors.toList()),
             statuses.get(statuses.size() - 1), hoodieTable, taskContextSupplier, secondaryIndexDefns, config, instantTime, writeSchemaWithMetaFields);
       }
@@ -726,5 +716,15 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       default:
         throw new HoodieException("Data block format " + logDataBlockFormat + " not implemented");
     }
+  }
+
+  /**
+   * Returns the file slice for reader view.
+   */
+  private Option<FileSlice> getReadFileSlice() {
+    TableFileSystemView.SliceView rtView = hoodieTable.getSliceView();
+    return Option.fromJavaOptional(rtView.getLatestMergedFileSlicesBeforeOrOn(partitionPath, instantTime)
+        .filter(fileSlice -> fileSlice.getFileId().equals(fileId))
+        .findFirst());
   }
 }
