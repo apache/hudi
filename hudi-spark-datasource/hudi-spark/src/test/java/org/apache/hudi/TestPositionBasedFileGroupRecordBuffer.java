@@ -19,6 +19,7 @@
 
 package org.apache.hudi;
 
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
@@ -108,7 +109,7 @@ public class TestPositionBasedFileGroupRecordBuffer extends TestHoodieFileGroupR
 
     HoodieReaderContext<InternalRow> ctx = getHoodieReaderContext(getBasePath(), avroSchema, getStorageConf(), metaClient);
     ctx.setTablePath(getBasePath());
-    ctx.setLatestCommitTime(metaClient.createNewInstantTime());
+    ctx.setLatestCommitTime(WriteClientTestUtils.createNewInstantTime());
     ctx.setShouldMergeUseRecordPosition(true);
     ctx.setHasBootstrapBaseFile(false);
     ctx.setHasLogFiles(true);

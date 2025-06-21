@@ -19,6 +19,7 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
@@ -520,7 +521,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
         ? new HoodieReplaceCommitMetadata() : new HoodieCommitMetadata();
     commitMetadata.setOperationType(writeOperationType);
     extraMetadata.forEach((k, v) -> commitMetadata.getExtraMetadata().put(k, v));
-    String commitTime = metaClient.createNewInstantTime();
+    String commitTime = WriteClientTestUtils.createNewInstantTime();
     metaClient.getActiveTimeline().createNewInstant(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, commitActiontype, commitTime));
     HoodieInstant inflightInstant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, commitActiontype, commitTime);
     metaClient.getActiveTimeline().createNewInstant(inflightInstant);

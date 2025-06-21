@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink.bulk;
 
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.table.HoodieFlinkTable;
@@ -66,7 +67,7 @@ public class TestBulkInsertWriteHelper {
   @Test
   void testWrite() throws Exception {
     HoodieFlinkTable<?> table = FlinkTables.createTable(conf);
-    String instant = table.getMetaClient().createNewInstantTime();
+    String instant = WriteClientTestUtils.createNewInstantTime();
     RowType rowType = TestConfigurations.ROW_TYPE;
     BulkInsertWriterHelper writerHelper = new BulkInsertWriterHelper(conf, table, table.getConfig(), instant,
         1, 1, 0, rowType, false);
