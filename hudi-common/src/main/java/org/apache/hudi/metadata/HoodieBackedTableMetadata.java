@@ -448,12 +448,14 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
    *
    * @param secondaryKeys The list of secondary keys to read
    */
+  @SuppressWarnings("checkstyle:CommentsIndentation")
   @Override
   public HoodieData<HoodieRecordGlobalLocation> readSecondaryIndexWithoutMapping(HoodieData<String> secondaryKeys, String partitionName) {
     HoodieIndexVersion indexVersion = getExistingHoodieIndexVersionOrDefault(partitionName, metadataMetaClient);
 
     if (indexVersion.equals(HoodieIndexVersion.SECONDARY_INDEX_ONE)) {
-      return readSecondaryIndexV1WithMapping(secondaryKeys, partitionName).values();
+      throw new IllegalArgumentException("no v1");
+//      return readSecondaryIndexV1WithMapping(secondaryKeys, partitionName).values();
     } else if (indexVersion.equals(HoodieIndexVersion.SECONDARY_INDEX_TWO)) {
       return readRecordIndexWithoutMapping(getRecordKeysFromSecondaryIndexV2(secondaryKeys, partitionName));
     } else {
@@ -498,7 +500,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     // Now collect the record-keys and fetch the RLI records
     List<String> recordKeys = new ArrayList<>();
     secondaryKeyRecords.values().forEach(recordKeys::addAll);
-    return readRecordIndexWithMapping(HoodieListData.eager(recordKeys));
+    readRecordIndexWithMapping(HoodieListData.eager(recordKeys));
+    return getEngineContext().emptyHoodiePairData();
   }
 
   protected HoodieData<HoodieRecord<HoodieMetadataPayload>> readIndexWithoutMapping(

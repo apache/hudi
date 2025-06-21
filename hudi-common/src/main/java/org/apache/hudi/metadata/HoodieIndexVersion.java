@@ -80,10 +80,7 @@ public enum HoodieIndexVersion {
     } else if (partitionType == MetadataPartitionType.EXPRESSION_INDEX) {
       return EXPRESSION_INDEX_ONE;
     } else if (partitionType == MetadataPartitionType.SECONDARY_INDEX) {
-      if (tableVersion.greaterThanOrEquals(HoodieTableVersion.NINE)) {
-        return SECONDARY_INDEX_TWO;
-      }
-      return SECONDARY_INDEX_ONE;
+      return SECONDARY_INDEX_TWO;
     } else if (partitionType == MetadataPartitionType.FILES) {
       return FILES_INDEX_ONE;
     } else if (partitionType == MetadataPartitionType.PARTITION_STATS) {
@@ -96,24 +93,6 @@ public enum HoodieIndexVersion {
   }
 
   public static boolean isValidIndexDefinition(HoodieTableVersion tv, HoodieIndexDefinition idxDef) {
-    HoodieIndexVersion iv = idxDef.getVersion();
-    MetadataPartitionType metadataPartitionType = MetadataPartitionType.fromPartitionPath(idxDef.getIndexName());
-    // Table version 8, missing version attribute is allowed.
-    if (tv == HoodieTableVersion.EIGHT && iv == null) {
-      return true;
-    }
-    // Table version eight, SI only v1 is allowed.
-    if (tv == HoodieTableVersion.EIGHT && MetadataPartitionType.SECONDARY_INDEX.equals(metadataPartitionType) && iv != HoodieIndexVersion.SECONDARY_INDEX_ONE) {
-      return false;
-    }
-    // Table version 9, SI must have none null version.
-    if (tv == HoodieTableVersion.NINE && MetadataPartitionType.SECONDARY_INDEX.equals(metadataPartitionType) && iv == null) {
-      return false;
-    }
-    // Table version 9, SI must be v2 or above.
-    if (tv == HoodieTableVersion.NINE && MetadataPartitionType.SECONDARY_INDEX.equals(metadataPartitionType) && !iv.greaterThanOrEquals(HoodieIndexVersion.SECONDARY_INDEX_TWO)) {
-      return false;
-    }
     return true;
   }
 
