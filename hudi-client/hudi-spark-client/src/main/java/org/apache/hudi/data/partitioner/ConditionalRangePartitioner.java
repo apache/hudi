@@ -33,9 +33,18 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import scala.Tuple2;
 
+/**
+ * Partitioner that partitions the data based on the value ranges of the keys.
+ * 
+ * It is used to partition the data into a fixed number of partitions, so that:
+ * 1. The keys are sorted within each partition.
+ * 2. There is at most only 1 key per partition.
+ * 3. For partitions containing entries of the same key, the value ranges are not overlapping.
+ */
 public class ConditionalRangePartitioner extends Partitioner {
   private static final Logger LOG = LoggerFactory.getLogger(ConditionalRangePartitioner.class);
 
@@ -43,16 +52,15 @@ public class ConditionalRangePartitioner extends Partitioner {
   private final Map<Integer, Integer> startIndex;
   private final int totalPartitions;
 
-  public ConditionalRangePartitioner(Map<Integer, List<String>> splitPoints, int keyRange) {
+  public ConditionalRangePartitioner(Map<Integer, List<String>> splitPoints) {
     this.splitPoints = splitPoints;
     this.startIndex = new HashMap<>();
     int idx = 0;
-    for (int i = 0; i <= keyRange; i++) {
-      if (!splitPoints.containsKey(i)) {
-        continue;
-      }
-      startIndex.put(i, idx);
-      idx += splitPoints.get(i).size() + 1;
+    // Sort the key to ensure consistent key processing order across executors.
+    List<Integer> sortedKeys = splitPoints.keySet().stream().sorted().collect(Collectors.toList());
+    for (Integer sortedKey : sortedKeys) {
+      startIndex.put(sortedKey, idx);
+      idx += splitPoints.get(sortedKey).size() + 1;
     }
     this.totalPartitions = idx;
     LOG.info("Total num of partitions to be enforced is {}", totalPartitions);
@@ -81,6 +89,9 @@ public class ConditionalRangePartitioner extends Partitioner {
     return startIndex.get(key) + bucket;
   }
 
+  /**
+   * Comparator that sort first on key, then on value.
+   */
   public static class CompositeKeyComparator implements Comparator<Tuple2<Integer, String>>, Serializable {
     @Override
     public int compare(Tuple2<Integer, String> o1, Tuple2<Integer, String> o2) {
@@ -95,10 +106,11 @@ public class ConditionalRangePartitioner extends Partitioner {
   /**
    * Computes split point map per key, with all computation on executors.
    *
-   * @param sampled         Sampled RDD of (key, value)
-   * @param sampleFraction  Fraction used to estimate total size
+   * @param sampled         Sampled RDD of (key, value), it must contain all keys from the original rdd.
+   * @param sampleFraction  Fraction used to estimate total size, if the fraction is so small that
+   *                        actual total size * fraction < 1, we assume at least 1 key is sampled.
    * @param maxKeyPerBucket Max number of items allowed per partition
-   * @return Map of key -> list of split points
+   * @return Map of key -> list of split points specifying value range per partition.
    */
   public static Map<Integer, List<String>> computeSplitPointMapDistributed(
       JavaPairRDD<Integer, String> sampled,
@@ -116,12 +128,16 @@ public class ConditionalRangePartitioner extends Partitioner {
           int splitCount = (int) Math.ceil((double) estimatedTotal / maxKeyPerBucket) - 1;
 
           if (splitCount > 0) {
+            // If we only have x data points yet we need to split into > x + 1 parts, then only split into x + 1
+            // pieces using every single sampled data as a split point.
             return computeSplitPoints(sortedValues, Math.min(splitCount, sortedValues.size()));
           } else {
+            // If estimatedTotal of a given key < maxKeyPerBucket, don't create split points, meaning that all entries
+            // of the key goes into 1 single partition.
             return Collections.<String>emptyList();
           }
         })
-        .collectAsMap(); // Now result is small enough to collect to driver
+        .collectAsMap(); // Now the result is small enough to collect to driver
   }
 
   public static List<String> computeSplitPoints(List<String> sortedValues, int numSplits) {

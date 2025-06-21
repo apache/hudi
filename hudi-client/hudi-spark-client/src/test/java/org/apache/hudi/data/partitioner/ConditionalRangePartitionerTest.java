@@ -53,7 +53,7 @@ public class ConditionalRangePartitionerTest {
     splitPoints.put(2, Arrays.asList("x", "z"));
     splitPoints.put(6, Collections.emptyList());
     splitPoints.put(7, Collections.singletonList("a"));
-    partitioner = new ConditionalRangePartitioner(splitPoints, 10);
+    partitioner = new ConditionalRangePartitioner(splitPoints);
   }
 
   @AfterEach
