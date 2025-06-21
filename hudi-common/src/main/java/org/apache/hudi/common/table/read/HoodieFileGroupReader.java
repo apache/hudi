@@ -31,7 +31,6 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.PartitionPathParser;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordReader;
 import org.apache.hudi.common.util.ConfigUtils;
@@ -43,7 +42,6 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.EmptyIterator;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.storage.HoodieStorage;
@@ -60,8 +58,6 @@ import java.util.List;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY;
-import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath;
 import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
 
@@ -131,19 +127,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     HoodieTableConfig tableConfig = hoodieTableMetaClient.getTableConfig();
     this.partitionPath = fileSlice.getPartitionPath();
     this.partitionPathFields = tableConfig.getPartitionFields();
-    RecordMergeMode recordMergeMode = tableConfig.getRecordMergeMode();
-    String mergeStrategyId = tableConfig.getRecordMergeStrategyId();
-    if (!tableConfig.getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
-      Triple<RecordMergeMode, String, String> triple = HoodieTableConfig.inferCorrectMergingBehavior(
-          recordMergeMode, tableConfig.getPayloadClass(),
-          mergeStrategyId, null, tableConfig.getTableVersion());
-      recordMergeMode = triple.getLeft();
-      mergeStrategyId = triple.getRight();
-    }
-    readerContext.setRecordMerger(readerContext.getRecordMerger(
-        recordMergeMode, mergeStrategyId,
-        props.getString(RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY,
-            props.getString(RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY, ""))));
+    readerContext.initRecordMerger(props);
     readerContext.setTablePath(tablePath);
     readerContext.setLatestCommitTime(latestCommitTime);
     boolean isSkipMerge = ConfigUtils.getStringWithAltKeys(props, HoodieReaderConfig.MERGE_TYPE, true).equalsIgnoreCase(HoodieReaderConfig.REALTIME_SKIP_MERGE);
@@ -158,7 +142,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
         ? new PositionBasedSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, tableConfig, props)
         : new FileGroupReaderSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, tableConfig, props));
     this.outputConverter = readerContext.getSchemaHandler().getOutputConverter();
-    this.orderingFieldName = recordMergeMode == RecordMergeMode.COMMIT_TIME_ORDERING
+    this.orderingFieldName = readerContext.getMergeMode() == RecordMergeMode.COMMIT_TIME_ORDERING
         ? Option.empty()
         : Option.ofNullable(ConfigUtils.getOrderingField(props))
         .or(() -> {
@@ -170,7 +154,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
         });
     this.readStats = new HoodieReadStats();
     this.recordBuffer = getRecordBuffer(readerContext, hoodieTableMetaClient,
-        recordMergeMode, props, hoodieBaseFileOption, this.logFiles.isEmpty(),
+        readerContext.getMergeMode(), props, hoodieBaseFileOption, this.logFiles.isEmpty(),
         isSkipMerge, shouldUseRecordPosition, readStats, emitDelete, sortOutput);
     this.allowInflightInstants = allowInflightInstants;
   }
