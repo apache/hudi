@@ -16,16 +16,23 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.function;
+package org.apache.hudi.table.upgrade;
 
-import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.config.ConfigProperty;
+import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.table.HoodieTable;
 
-import java.io.Serializable;
+import java.util.Collections;
+import java.util.Map;
 
-/**
- * A function that returns key-value pairs (Tuple2&lt;K, V&gt;).
- */
-@FunctionalInterface
-public interface SerializablePairFunction<I, K, V> extends Serializable {
-  Pair<K, V> call(I t) throws Exception;
+public class EightToNineUpgradeHandler implements UpgradeHandler {
+
+  @Override
+  public Map<ConfigProperty, String> upgrade(HoodieWriteConfig config, HoodieEngineContext context,
+                                             String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
+    HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
+    SecondaryIndexUpgradeDowngradeHelper.dropSecondaryIndexPartitions(config, context, table, "upgrading");
+    return Collections.emptyMap();
+  }
 }

@@ -286,4 +286,5 @@ public class HoodieIndexingConfig extends HoodieConfig {
   public boolean isIndexUsingRecordIndex() {
     return getIndexType().equalsIgnoreCase(MetadataPartitionType.RECORD_INDEX.name());
   }
+
 }
