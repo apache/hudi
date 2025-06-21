@@ -62,7 +62,7 @@ public class FunctionWrapper {
     };
   }
 
-  public static <I, K, V> Function<I, Pair<K, V>> throwingMapToPairWrapper(SerializablePairFunction<I, K, V> throwingPairFunction) {
+  public static <I, K, V> Function<I, Pair<K, V>> throwingMapToPairWrapper(SerializableFunctionPairOut<I, K, V> throwingPairFunction) {
     return v1 -> {
       try {
         return throwingPairFunction.call(v1);

@@ -34,7 +34,7 @@ import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.function.SerializableConsumer;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializablePairFlatMapFunction;
-import org.apache.hudi.common.function.SerializablePairFunction;
+import org.apache.hudi.common.function.SerializableFunctionPairOut;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
@@ -134,7 +134,7 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
   }
 
   @Override
-  public <I, K, V> List<V> mapToPairAndReduceByKey(List<I> data, SerializablePairFunction<I, K, V> mapToPairFunc, SerializableBiFunction<V, V, V> reduceFunc, int parallelism) {
+  public <I, K, V> List<V> mapToPairAndReduceByKey(List<I> data, SerializableFunctionPairOut<I, K, V> mapToPairFunc, SerializableBiFunction<V, V, V> reduceFunc, int parallelism) {
     return javaSparkContext.parallelize(data, parallelism).mapToPair(input -> {
       Pair<K, V> pair = mapToPairFunc.call(input);
       return new Tuple2<>(pair.getLeft(), pair.getRight());
@@ -173,7 +173,7 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
   }
 
   @Override
-  public <I, K, V> Map<K, V> mapToPair(List<I> data, SerializablePairFunction<I, K, V> func, Integer parallelism) {
+  public <I, K, V> Map<K, V> mapToPair(List<I> data, SerializableFunctionPairOut<I, K, V> func, Integer parallelism) {
     if (Objects.nonNull(parallelism)) {
       return javaSparkContext.parallelize(data, parallelism).mapToPair(input -> {
         Pair<K, V> pair = func.call(input);

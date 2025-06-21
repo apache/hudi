@@ -27,7 +27,7 @@ import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.function.SerializableConsumer;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializablePairFlatMapFunction;
-import org.apache.hudi.common.function.SerializablePairFunction;
+import org.apache.hudi.common.function.SerializableFunctionPairOut;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
@@ -85,7 +85,7 @@ public abstract class HoodieEngineContext {
   public abstract <I, O> List<O> map(List<I> data, SerializableFunction<I, O> func, int parallelism);
 
   public abstract <I, K, V> List<V> mapToPairAndReduceByKey(
-      List<I> data, SerializablePairFunction<I, K, V> mapToPairFunc, SerializableBiFunction<V, V, V> reduceFunc, int parallelism);
+      List<I> data, SerializableFunctionPairOut<I, K, V> mapToPairFunc, SerializableBiFunction<V, V, V> reduceFunc, int parallelism);
 
   public abstract <I, K, V> Stream<ImmutablePair<K, V>> mapPartitionsToPairAndReduceByKey(
       Stream<I> data, SerializablePairFlatMapFunction<Iterator<I>, K, V> flatMapToPairFunc,
@@ -98,7 +98,7 @@ public abstract class HoodieEngineContext {
 
   public abstract <I> void foreach(List<I> data, SerializableConsumer<I> consumer, int parallelism);
 
-  public abstract <I, K, V> Map<K, V> mapToPair(List<I> data, SerializablePairFunction<I, K, V> func, Integer parallelism);
+  public abstract <I, K, V> Map<K, V> mapToPair(List<I> data, SerializableFunctionPairOut<I, K, V> func, Integer parallelism);
 
   public abstract void setProperty(EngineProperty key, String value);
 
