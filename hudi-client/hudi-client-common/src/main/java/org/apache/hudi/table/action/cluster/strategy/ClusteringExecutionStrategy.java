@@ -65,7 +65,7 @@ public abstract class ClusteringExecutionStrategy<T, I, K, O> implements Seriali
 
   private final HoodieTable<T, I, K, O> hoodieTable;
   private final transient HoodieEngineContext engineContext;
-  protected final HoodieWriteConfig writeConfig;
+  protected HoodieWriteConfig writeConfig;
   protected final HoodieRecordType recordType;
   protected final Schema readerSchemaWithMetaFields;
 
@@ -94,6 +94,10 @@ public abstract class ClusteringExecutionStrategy<T, I, K, O> implements Seriali
 
   protected HoodieWriteConfig getWriteConfig() {
     return this.writeConfig;
+  }
+
+  protected void resetWriteConfig(HoodieWriteConfig config) {
+    this.writeConfig = config;
   }
 
   protected ClosableIterator<HoodieRecord<T>> getRecordIterator(ReaderContextFactory<T> readerContextFactory, ClusteringOperation operation, String instantTime, long maxMemory) {
