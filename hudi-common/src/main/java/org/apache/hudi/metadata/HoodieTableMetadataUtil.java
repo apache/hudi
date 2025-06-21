@@ -2362,7 +2362,7 @@ public class HoodieTableMetadataUtil {
 
   /**
    * Reads the record keys from the base files and returns a {@link HoodieData} of {@link HoodieRecord} to be updated in the metadata table.
-   * Use {@link #readRecordKeysFromFileSlices(HoodieEngineContext, List, boolean, int, String, HoodieTableMetaClient)} instead.
+   * Use {@link #readRecordKeysFromFileSlices} instead.
    */
   @Deprecated
   public static HoodieData<HoodieRecord> readRecordKeysFromBaseFiles(HoodieEngineContext engineContext,
