@@ -20,6 +20,7 @@ package org.apache.hudi.common.data;
 
 import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.function.SerializableFunction;
+import org.apache.hudi.common.function.SerializableFunctionPairIn;
 import org.apache.hudi.common.function.SerializablePairFunction;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -207,6 +208,20 @@ public class HoodieListPairData<K, V> extends HoodieBaseListData<Pair<K, V>> imp
     ValidationUtils.checkArgument(other instanceof HoodieListPairData);
     Stream<Pair<K, V>> unionStream = Stream.concat(asStream(), ((HoodieListPairData<K, V>) other).asStream());
     return new HoodieListPairData<>(unionStream, lazy);
+  }
+
+  @Override
+  public HoodiePairData<K, V> filter(SerializableFunctionPairIn<K, V, Boolean> filter) {
+    return new HoodieListPairData<>(
+        asStream().filter(p -> {
+          try {
+            return filter.call(p.getKey(), p.getValue());
+          } catch (Exception e) {
+            throw new RuntimeException(e);
+          }
+        }),
+        lazy
+    );
   }
 
   @Override

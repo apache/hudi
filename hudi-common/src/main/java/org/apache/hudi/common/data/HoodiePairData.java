@@ -22,6 +22,7 @@ package org.apache.hudi.common.data;
 import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
+import org.apache.hudi.common.function.SerializableFunctionPairIn;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -134,6 +135,8 @@ public interface HoodiePairData<K, V> extends Serializable {
    * Performs a union of this dataset with the provided dataset
    */
   HoodiePairData<K, V> union(HoodiePairData<K, V> other);
+
+  HoodiePairData<K, V> filter(SerializableFunctionPairIn<K, V, Boolean> filter);
 
   /**
    * Performs an inner join of this dataset against {@code other}.
