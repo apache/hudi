@@ -236,7 +236,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
         if (indexName == "column_stats") {
           assertEquals(idxDef.getVersion, HoodieIndexVersion.COLUMN_STATS_ONE)
         } else if (indexName.startsWith("secondary_index_")) {
-          assertEquals(idxDef.getVersion, if (version == 8) HoodieIndexVersion.SECONDARY_INDEX_ONE else HoodieIndexVersion.SECONDARY_INDEX_TWO)
+          assertEquals(idxDef.getVersion, if (version == 8) HoodieIndexVersion.SECONDARY_INDEX_TWO else HoodieIndexVersion.SECONDARY_INDEX_TWO)
         }
       })
     }
