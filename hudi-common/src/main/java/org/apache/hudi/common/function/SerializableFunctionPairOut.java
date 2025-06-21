@@ -26,6 +26,6 @@ import java.io.Serializable;
  * A function that returns key-value pairs (Tuple2&lt;K, V&gt;).
  */
 @FunctionalInterface
-public interface SerializablePairFunction<I, K, V> extends Serializable {
+public interface SerializableFunctionPairOut<I, K, V> extends Serializable {
   Pair<K, V> call(I t) throws Exception;
 }
