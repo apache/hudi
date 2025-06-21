@@ -32,6 +32,13 @@ ARG CONFLUENT_VERSION=5.5.12
 ARG KAFKA_CONNECT_HDFS_VERSION=10.1.13
 ARG SCALA_VERSION=2.12
 
+RUN wget https://archive.apache.org/dist/maven/maven-3/3.6.3/binaries/apache-maven-3.6.3-bin.tar.gz \
+    && mkdir -p /usr/share/maven \
+    && tar xzvf apache-maven-3.6.3-bin.tar.gz -C /usr/share/maven \
+    && rm apache-maven-3.6.3-bin.tar.gz
+ENV MAVEN_HOME=/usr/share/maven/apache-maven-3.6.3
+ENV PATH=$MAVEN_HOME/bin:$PATH
+
 RUN wget https://archive.apache.org/dist/hadoop/common/hadoop-$HADOOP_VERSION/hadoop-$HADOOP_VERSION.tar.gz -P "$WORKDIR" \
     && tar -xf $WORKDIR/hadoop-$HADOOP_VERSION.tar.gz -C $WORKDIR/ \
     && rm $WORKDIR/hadoop-$HADOOP_VERSION.tar.gz

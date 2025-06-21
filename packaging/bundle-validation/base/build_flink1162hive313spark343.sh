@@ -24,4 +24,4 @@ docker build \
  --build-arg SPARK_HADOOP_VERSION=3 \
  --build-arg HADOOP_VERSION=3.3.5 \
  -t hudi-ci-bundle-validation-base:flink1162hive313spark343 .
-docker image tag hudi-ci-bundle-validation-base:flink1162hive313spark343 apachehudi/hudi-ci-bundle-validation-base:flink1162hive313spark343
+docker image tag hudi-ci-bundle-validation-base:flink1162hive313spark343 timbrown126/tb-integ-test:flink1162hive313spark343
