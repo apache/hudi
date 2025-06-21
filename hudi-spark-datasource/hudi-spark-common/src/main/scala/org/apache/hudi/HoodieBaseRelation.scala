@@ -502,7 +502,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
         tableStructSchema,
         tableConfig.propsMap,
         timeZoneId,
-        sparkAdapter.getSparkParsePartitionUtil,
+        SparkBaseParsePartitionUtil,
         conf.getBoolean("spark.sql.sources.validatePartitionColumns", true))
       if(rowValues.length != partitionColumns.length) {
         throw new HoodieException("Failed to get partition column values from the partition-path:"

@@ -90,7 +90,7 @@ class TestSparkReaderContextFactory extends HoodieClientTestBase {
             .$plus(new Tuple2<>(FileFormat.OPTION_RETURNING_BATCH(), Boolean.toString(true)));
     ArgumentCaptor<Configuration> configurationArgumentCaptor = ArgumentCaptor.forClass(Configuration.class);
     SparkParquetReader sparkParquetReader = mock(SparkParquetReader.class);
-    when(sparkAdapter.createParquetFileReader(eq(false), eq(context.getSqlContext().sessionState().conf()), eq(options), configurationArgumentCaptor.capture()))
+    when(sparkAdapter.createParquetFileReader(eq(false), eq(context.getSqlContext().sparkSession().sessionState().conf()), eq(options), configurationArgumentCaptor.capture()))
         .thenReturn(sparkParquetReader);
 
     SparkReaderContextFactory sparkHoodieReaderContextFactory = new SparkReaderContextFactory(context, metaClient, schemaResolver, sparkAdapter);

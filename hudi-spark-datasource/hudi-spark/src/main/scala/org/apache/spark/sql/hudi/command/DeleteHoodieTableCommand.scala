@@ -25,6 +25,7 @@ import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.plans.QueryPlan
 import org.apache.spark.sql.catalyst.plans.logical.{DeleteFromTable, Filter, LogicalPlan, Project, UpdateTable}
+import org.apache.spark.sql.classic.SparkSession
 import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.execution.command.DataWritingCommand
 import org.apache.spark.sql.execution.metric.SQLMetric
@@ -67,7 +68,7 @@ object DeleteHoodieTableCommand extends SparkAdapterSupport with ProvidesHoodieC
   def inputPlan(sparkSession: SparkSession, dft: DeleteFromTable, catalogTable: HoodieCatalogTable): (LogicalPlan, Map[String, String]) = {
     val condition = sparkAdapter.extractDeleteCondition(dft)
 
-    val config = if (sparkSession.sqlContext.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key()
+    val config = if (sparkSession.sessionState.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key()
       , SPARK_SQL_OPTIMIZED_WRITES.defaultValue()) == "true") {
       buildHoodieDeleteTableConfig(catalogTable, sparkSession) + (SPARK_SQL_WRITES_PREPPED_KEY -> "true")
     } else {
@@ -86,7 +87,7 @@ object DeleteHoodieTableCommand extends SparkAdapterSupport with ProvidesHoodieC
 
     val requiredCols = recordKeys ++ conditionColumns
 
-    val targetLogicalPlan = if (sparkSession.sqlContext.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key()
+    val targetLogicalPlan = if (sparkSession.sessionState.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key()
       , SPARK_SQL_OPTIMIZED_WRITES.defaultValue()) == "true") {
       tryPruningDeleteRecordSchema(dft.table, requiredCols)
     } else {

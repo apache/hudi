@@ -151,7 +151,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
       allPartitions.flatMap(partition => {
         val df = spark.read.format("hudi").load(tablePath) // assumes its partition table, but there is only one partition.
         val exprs: Seq[String] =
-          s"'${typedLit("")}' AS file" +:
+          s"${typedLit("")} AS file" +:
             s"sum(1) AS valueCount" +:
             df.columns
               .filter(col => includedCols.contains(col))
@@ -198,7 +198,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
       baseFiles.flatMap(file => {
         val df = spark.read.schema(sourceTableSchema).parquet(file.toString)
         val exprs: Seq[String] =
-          s"'${typedLit(file.getName)}' AS fileName" +:
+          s"${typedLit(file.getName)} AS fileName" +:
             s"sum(1) AS valueCount" +:
             includedCols.union(indexedCols).distinct.sorted.flatMap(col => {
           val minColName = s"`${col}_minValue`"

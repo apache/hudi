@@ -19,7 +19,6 @@ package org.apache.hudi
 
 import org.apache.hudi.HoodieSparkUtils.injectSQLConf
 import org.apache.hudi.client.WriteStatus
-import org.apache.hudi.client.model.HoodieInternalRow
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.data.HoodieData
 import org.apache.hudi.common.engine.TaskContextSupplier
@@ -54,7 +53,11 @@ import scala.collection.JavaConverters.asScalaBufferConverter
 import scala.collection.mutable
 
 object HoodieDatasetBulkInsertHelper
-  extends ParallelismHelper[DataFrame](toJavaSerializableFunctionUnchecked(df => getNumPartitions(df))) with Logging {
+  extends ParallelismHelper[DataFrame](toJavaSerializableFunctionUnchecked(df => getNumPartitions(df)))
+    with Logging
+    with SparkAdapterSupport {
+
+  private val hoodieUTF8StringFactory = sparkAdapter.getHoodieUTF8StringFactory
 
   /**
    * Prepares [[DataFrame]] for bulk-insert into Hudi table, taking following steps:
@@ -108,14 +111,15 @@ object HoodieDatasetBulkInsertHelper
 
           iter.map { row =>
             // auto generate record keys if needed
-            val recordKey = keyGenerator.getRecordKey(row, schema)
-            val partitionPath = keyGenerator.getPartitionPath(row, schema)
-            val commitTimestamp = UTF8String.EMPTY_UTF8
-            val commitSeqNo = UTF8String.EMPTY_UTF8
-            val filename = UTF8String.EMPTY_UTF8
+            val metaFields = new Array[UTF8String](5)
+            metaFields(2) = keyGenerator.getRecordKey(row, schema)
+            metaFields(3) = keyGenerator.getPartitionPath(row, schema)
+            metaFields(0) = UTF8String.EMPTY_UTF8
+            metaFields(1) = UTF8String.EMPTY_UTF8
+            metaFields(4) = UTF8String.EMPTY_UTF8
 
             // TODO use mutable row, avoid re-allocating
-            new HoodieInternalRow(commitTimestamp, commitSeqNo, recordKey, partitionPath, filename, row, false)
+            sparkAdapter.createInternalRow(metaFields, row, false)
           }
         }, SQLConf.get)
       }
@@ -244,6 +248,7 @@ object HoodieDatasetBulkInsertHelper
     // NOTE: Pre-combine field could be a nested field
     val preCombineFieldPath = composeNestedFieldPath(schema, preCombineFieldRef)
       .getOrElse(throw new HoodieException(s"Pre-combine field $preCombineFieldRef is missing in $schema"))
+    val isStringType = preCombineFieldPath.parts(0)._2.dataType.isInstanceOf[StringType]
 
     rdd.map { row =>
         val rowKey = if (isGlobalIndex) {
@@ -258,12 +263,24 @@ object HoodieDatasetBulkInsertHelper
         (rowKey, row.copy())
       }
       .reduceByKey ((oneRow, otherRow) => {
-        val onePreCombineVal = getNestedInternalRowValue(oneRow, preCombineFieldPath).asInstanceOf[Comparable[AnyRef]]
-        val otherPreCombineVal = getNestedInternalRowValue(otherRow, preCombineFieldPath).asInstanceOf[Comparable[AnyRef]]
-        if (onePreCombineVal.compareTo(otherPreCombineVal.asInstanceOf[AnyRef]) >= 0) {
-          oneRow
+        if (!isStringType) {
+          val onePreCombineVal = getNestedInternalRowValue(oneRow, preCombineFieldPath).asInstanceOf[Comparable[AnyRef]]
+          val otherPreCombineVal = getNestedInternalRowValue(otherRow, preCombineFieldPath).asInstanceOf[Comparable[AnyRef]]
+          if (onePreCombineVal.compareTo(otherPreCombineVal.asInstanceOf[AnyRef]) >= 0) {
+            oneRow
+          } else {
+            otherRow
+          }
         } else {
-          otherRow
+          val onePreCombineVal = hoodieUTF8StringFactory.wrapUTF8String(
+            getNestedInternalRowValue(oneRow, preCombineFieldPath).asInstanceOf[UTF8String])
+          val otherPreCombineVal = hoodieUTF8StringFactory.wrapUTF8String(
+            getNestedInternalRowValue(otherRow, preCombineFieldPath).asInstanceOf[UTF8String])
+          if (onePreCombineVal.compareTo(otherPreCombineVal) >= 0) {
+            oneRow
+          } else {
+            otherRow
+          }
         }
       }, targetParallelism)
       .values
