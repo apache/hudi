@@ -76,7 +76,7 @@ public abstract class JavaExecutionStrategy<T>
     clusteringPlan.getInputGroups().forEach(
         inputGroup -> writeStatusList.addAll(runClusteringForGroup(
             inputGroup, clusteringPlan.getStrategy().getStrategyParams(),
-            Option.ofNullable(clusteringPlan.getPreserveHoodieMetadata()).orElse(false),
+            Option.ofNullable(clusteringPlan.getPreserveHoodieMetadata()).orElse(true),
             instantTime)));
     HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata = new HoodieWriteMetadata<>();
     writeMetadata.setWriteStatuses(HoodieListData.eager(writeStatusList));

@@ -1058,7 +1058,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
       List<WriteStatus> statuses = writeFn.apply(client, recordList, newCommitTime);
       assertNoWriteErrors(statuses);
       assertEquals(2, statuses.size());
-      assertNoDuplicatesInPartition(statuses.stream().map(WriteStatus::getWrittenRecordDelegates).flatMap(Collection::stream)
+      assertNoDuplicatesInPartition(statuses.stream().map(ws -> ws.getIndexStats().getWrittenRecordDelegates()).flatMap(Collection::stream)
               .collect(Collectors.toList()));
     }
   }

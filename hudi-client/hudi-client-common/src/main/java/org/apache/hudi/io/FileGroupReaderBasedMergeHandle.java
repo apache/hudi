@@ -86,7 +86,6 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieMergeHand
     this.readerContext = readerContext;
     this.fileSlice = fileSlice;
     this.operation = operation;
-    this.preserveMetadata = true;
     // If the table is a metadata table or the base file is an HFile, we use AVRO record type, otherwise we use the engine record type.
     this.recordType = hoodieTable.isMetadataTable() || HFILE.getFileExtension().equals(hoodieTable.getBaseFileExtension()) ? HoodieRecord.HoodieRecordType.AVRO : enginRecordType;
     init(operation, this.partitionPath, fileSlice.getBaseFile());
