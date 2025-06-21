@@ -173,7 +173,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   @Override
   public JavaRDD<WriteStatus> secondaryWriteToMetadataTablePartitions(JavaRDD<HoodieRecord> preppedRecords, String instantTime) {
     engineContext.setJobStatus(this.getClass().getSimpleName(), String.format("Upserting at %s into metadata table %s", instantTime, metadataWriteConfig.getTableName()));
-    JavaRDD<WriteStatus> partialMetadataWriteStatuses = getWriteClient().upsertPreppedRecords(preppedRecords, instantTime);
+    JavaRDD<WriteStatus> partialMetadataWriteStatuses = getSparkWriteClient(Option.empty()).upsertPreppedRecords(preppedRecords, instantTime, false);
     return partialMetadataWriteStatuses;
   }
 

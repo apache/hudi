@@ -29,6 +29,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.commit.SparkMetadataTableUpsertCommitActionExecutor;
+import org.apache.hudi.table.action.commit.SparkMetadataTableUpsertPreppedCommitActionExecutor;
 
 import java.util.List;
 
@@ -48,7 +49,12 @@ public class HoodieSparkMergeOnReadMetadataTable<T> extends HoodieSparkMergeOnRe
                                                                     Option<List<HoodieFileGroupId>> hoodieFileGroupIdListOpt,
                                                                     boolean initialCall) {
     // upsert partitioner for metadata table when all records are upsert and locations are known upfront
-    return new SparkMetadataTableUpsertCommitActionExecutor<>((HoodieSparkEngineContext) context, config, this, instantTime, preppedRecords,
+    return new SparkMetadataTableUpsertPreppedCommitActionExecutor<>((HoodieSparkEngineContext) context, config, this, instantTime, preppedRecords,
         hoodieFileGroupIdListOpt.get(), initialCall).execute();
+  }
+
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> upsertPrepped(HoodieEngineContext context, String instantTime,
+                                                                    HoodieData<HoodieRecord<T>> preppedRecords, boolean initialCall) {
+    return new SparkMetadataTableUpsertCommitActionExecutor<>((HoodieSparkEngineContext) context, config, this, instantTime, preppedRecords, initialCall).execute();
   }
 }
