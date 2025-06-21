@@ -26,14 +26,12 @@ import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieListData;
-import org.apache.hudi.common.data.HoodieListPairData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
@@ -257,42 +255,6 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
 
     Map<String, Pair<String, String>> columnStatKeyToFileNameMap = computeColStatKeyToFileName(partitionNameFileNameList, columnNames);
     return computeFileToColumnStatsMap(columnStatKeyToFileNameMap);
-  }
-
-  /**
-   * Reads record keys from record-level index.
-   * <p>
-   * If the Metadata Table is not enabled, an exception is thrown to distinguish this from the absence of the key.
-   *
-   * @param recordKeys The list of record keys to read
-   */
-  @Override
-  public HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndexWithMapping(HoodieData<String> recordKeys) {
-    ValidationUtils.checkState(recordKeys instanceof HoodieListData, "readRecordIndex only support HoodieListData at the moment");
-
-    // If record index is not initialized yet, we cannot return an empty result here unlike the code for reading from other
-    // indexes. This is because results from this function are used for upserts and returning an empty result here would lead
-    // to existing records being inserted again causing duplicates.
-    // The caller is required to check for record index existence in MDT before calling this method.
-    ValidationUtils.checkState(dataMetaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX),
-        "Record index is not initialized in MDT");
-
-    HoodieTimer timer = HoodieTimer.start();
-    Map<String, HoodieRecord<HoodieMetadataPayload>> result = getRecordsByKeysWithMapping(
-        recordKeys, MetadataPartitionType.RECORD_INDEX.getPartitionPath())
-        .collectAsMapWithOverwriteStrategy();
-    Map<String, HoodieRecordGlobalLocation> recordKeyToLocation = new HashMap<>(result.size());
-    result.forEach((key, record) -> {
-      if (!record.getData().isDeleted()) {
-        recordKeyToLocation.put(key, record.getData().getRecordGlobalLocation());
-      }
-    });
-
-    metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_RECORD_INDEX_TIME_STR, timer.endTimer()));
-    metrics.ifPresent(m -> m.setMetric(HoodieMetadataMetrics.LOOKUP_RECORD_INDEX_KEYS_COUNT_STR, recordKeys.count()));
-    metrics.ifPresent(m -> m.setMetric(HoodieMetadataMetrics.LOOKUP_RECORD_INDEX_KEYS_HITS_COUNT_STR, recordKeyToLocation.size()));
-
-    return HoodieListPairData.eagerMapKV(recordKeyToLocation);
   }
 
   /**
