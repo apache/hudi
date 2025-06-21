@@ -20,6 +20,7 @@ package org.apache.hudi.common.util.collection;
 
 import java.util.Iterator;
 import java.util.NoSuchElementException;
+import java.util.Objects;
 
 public class ClosableSortedDedupingIterator<T> implements Iterator<T>, AutoCloseable {
   private final Iterator<T> inner;
@@ -27,6 +28,7 @@ public class ClosableSortedDedupingIterator<T> implements Iterator<T>, AutoClose
   private T nextUnique = null;
   private boolean hasNextCached = false;
   private T lastReturned = null;
+  private boolean hasReturnedAny = false;
 
   public ClosableSortedDedupingIterator(Iterator<T> inner) {
     this.inner = inner;
@@ -41,7 +43,7 @@ public class ClosableSortedDedupingIterator<T> implements Iterator<T>, AutoClose
 
     while (inner.hasNext()) {
       T candidate = inner.next();
-      if (lastReturned == null || (!candidate.equals(lastReturned))) {
+      if (!hasReturnedAny || (!Objects.equals(candidate, lastReturned))) {
         nextUnique = candidate;
         hasNextCached = true;
         return true;
@@ -58,6 +60,7 @@ public class ClosableSortedDedupingIterator<T> implements Iterator<T>, AutoClose
     }
     hasNextCached = false;
     lastReturned = nextUnique;
+    hasReturnedAny = true;
     return nextUnique;
   }
 
