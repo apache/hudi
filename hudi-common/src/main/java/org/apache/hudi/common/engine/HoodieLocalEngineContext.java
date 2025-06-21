@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.engine;
 
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.data.HoodieAccumulator;
 import org.apache.hudi.common.data.HoodieAtomicLongAccumulator;
 import org.apache.hudi.common.data.HoodieData;
@@ -29,7 +30,7 @@ import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.function.SerializableConsumer;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializablePairFlatMapFunction;
-import org.apache.hudi.common.function.SerializablePairFunction;
+import org.apache.hudi.common.function.SerializableFunctionPairOut;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
@@ -95,7 +96,7 @@ public final class HoodieLocalEngineContext extends HoodieEngineContext {
 
   @Override
   public <I, K, V> List<V> mapToPairAndReduceByKey(
-      List<I> data, SerializablePairFunction<I, K, V> mapToPairFunc, SerializableBiFunction<V, V, V> reduceFunc, int parallelism) {
+      List<I> data, SerializableFunctionPairOut<I, K, V> mapToPairFunc, SerializableBiFunction<V, V, V> reduceFunc, int parallelism) {
     return data.stream().parallel().map(throwingMapToPairWrapper(mapToPairFunc))
         .collect(Collectors.groupingBy(p -> p.getKey())).values().stream()
         .map(list -> list.stream().map(e -> e.getValue()).reduce(throwingReduceWrapper(reduceFunc)).get())
@@ -134,7 +135,7 @@ public final class HoodieLocalEngineContext extends HoodieEngineContext {
   }
 
   @Override
-  public <I, K, V> Map<K, V> mapToPair(List<I> data, SerializablePairFunction<I, K, V> func, Integer parallelism) {
+  public <I, K, V> Map<K, V> mapToPair(List<I> data, SerializableFunctionPairOut<I, K, V> func, Integer parallelism) {
     return data.stream().map(throwingMapToPairWrapper(func)).collect(
         Collectors.toMap(Pair::getLeft, Pair::getRight, (oldVal, newVal) -> newVal)
     );
@@ -183,6 +184,12 @@ public final class HoodieLocalEngineContext extends HoodieEngineContext {
   @Override
   public <I, O> O aggregate(HoodieData<I> data, O zeroValue, Functions.Function2<O, I, O> seqOp, Functions.Function2<O, O, O> combOp) {
     return data.collectAsList().stream().reduce(zeroValue, seqOp::apply, combOp::apply);
+  }
+
+  @Override
+  public void dropIndex(HoodieConfig config, List<String> metadataPartitions) {
+    throw new UnsupportedOperationException(
+        String.format("%s does not support drop index operation", getClass().getCanonicalName()));
   }
 
   @Override

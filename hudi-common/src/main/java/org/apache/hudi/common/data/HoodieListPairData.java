@@ -20,7 +20,8 @@ package org.apache.hudi.common.data;
 
 import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.function.SerializableFunction;
-import org.apache.hudi.common.function.SerializablePairFunction;
+import org.apache.hudi.common.function.SerializableFunctionPairIn;
+import org.apache.hudi.common.function.SerializableFunctionPairOut;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.MappingIterator;
@@ -169,7 +170,7 @@ public class HoodieListPairData<K, V> extends HoodieBaseListData<Pair<K, V>> imp
   }
 
   @Override
-  public <L, W> HoodiePairData<L, W> mapToPair(SerializablePairFunction<Pair<K, V>, L, W> mapToPairFunc) {
+  public <L, W> HoodiePairData<L, W> mapToPair(SerializableFunctionPairOut<Pair<K, V>, L, W> mapToPairFunc) {
     return new HoodieListPairData<>(asStream().map(p -> throwingMapToPairWrapper(mapToPairFunc).apply(p)), lazy);
   }
 
@@ -210,6 +211,20 @@ public class HoodieListPairData<K, V> extends HoodieBaseListData<Pair<K, V>> imp
   }
 
   @Override
+  public HoodiePairData<K, V> filter(SerializableFunctionPairIn<K, V, Boolean> filter) {
+    return new HoodieListPairData<>(
+        asStream().filter(p -> {
+          try {
+            return filter.call(p.getKey(), p.getValue());
+          } catch (Exception e) {
+            throw new RuntimeException(e);
+          }
+        }),
+        lazy
+    );
+  }
+
+  @Override
   public <W> HoodiePairData<K, Pair<V, W>> join(HoodiePairData<K, W> other) {
     ValidationUtils.checkArgument(other instanceof HoodieListPairData);
 
@@ -247,6 +262,12 @@ public class HoodieListPairData<K, V> extends HoodieBaseListData<Pair<K, V>> imp
   }
 
   @Override
+  public HoodiePairData<Integer, String> rangeBasedRepartitionForEachKey(
+      int keyRange, double sampleFraction, int maxKeyPerBucket, long seed) {
+    throw new UnsupportedOperationException("Range based repartition is not supported for HoodieListPairData");
+  }
+
+  @Override
   public int deduceNumPartitions() {
     return 1;
   }
@@ -261,6 +282,17 @@ public class HoodieListPairData<K, V> extends HoodieBaseListData<Pair<K, V>> imp
 
   public static <K, V> HoodieListPairData<K, V> lazy(Map<K, List<V>> data) {
     return new HoodieListPairData<>(explode(data), true);
+  }
+
+  public static <K, V> HoodieListPairData<K, V> eagerMapKV(Map<K, V> data) {
+    return HoodieListPairData.eager(
+        data.entrySet()
+        .stream()
+        .collect(Collectors.toMap(
+            Map.Entry::getKey,
+            entry -> Collections.singletonList(entry.getValue())
+        ))
+    );
   }
 
   public static <K, V> HoodieListPairData<K, V> eager(Map<K, List<V>> data) {

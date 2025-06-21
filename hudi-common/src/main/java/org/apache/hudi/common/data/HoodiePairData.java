@@ -21,7 +21,8 @@ package org.apache.hudi.common.data;
 
 import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.function.SerializableFunction;
-import org.apache.hudi.common.function.SerializablePairFunction;
+import org.apache.hudi.common.function.SerializableFunctionPairOut;
+import org.apache.hudi.common.function.SerializableFunctionPairIn;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -29,6 +30,7 @@ import java.io.Serializable;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * An abstraction for pairs of key in type K and value in type V to store the reference
@@ -114,7 +116,7 @@ public interface HoodiePairData<K, V> extends Serializable {
    * @return containing the result. Actual execution may be deferred.
    */
   <L, W> HoodiePairData<L, W> mapToPair(
-      SerializablePairFunction<Pair<K, V>, L, W> mapToPairFunc);
+      SerializableFunctionPairOut<Pair<K, V>, L, W> mapToPairFunc);
 
   /**
    * Performs a left outer join of this dataset against {@code other}.
@@ -134,6 +136,8 @@ public interface HoodiePairData<K, V> extends Serializable {
    */
   HoodiePairData<K, V> union(HoodiePairData<K, V> other);
 
+  HoodiePairData<K, V> filter(SerializableFunctionPairIn<K, V, Boolean> filter);
+
   /**
    * Performs an inner join of this dataset against {@code other}.
    *
@@ -152,6 +156,28 @@ public interface HoodiePairData<K, V> extends Serializable {
    * This is a terminal operation
    */
   List<Pair<K, V>> collectAsList();
+
+  /**
+   * Collects results of the underlying collection into a {@link Map<Pair<K, V>>}
+   * If there are multiple pairs sharing the same key, the resulting map randomly picks one among them.
+   *
+   * This is a terminal operation
+   */
+  default Map<K, V> collectAsMapWithOverwriteStrategy() {
+    // If there are multiple entries sharing the same key, use the incoming one
+    return collectAsList()
+        .stream()
+        .collect(Collectors.toMap(
+            Pair::getKey,
+            Pair::getValue,
+            (existing, incoming) -> incoming
+        ));
+  }
+
+  // HoodiePairData does not have a notion of partition, so it cannot do map partitions or work
+  // with anything that requires partition like logic.
+  HoodiePairData<Integer, String> rangeBasedRepartitionForEachKey(
+      int keyRange, double sampleFraction, int maxKeyPerBucket, long seed);
 
   /**
    * @return the deduce number of shuffle partitions
