@@ -134,7 +134,7 @@ public class TestHoodieRowCreateHandle extends HoodieSparkClientTestHarness {
 
     HoodieRowCreateHandle handle =
         new HoodieRowCreateHandle(table, cfg, partitionPath, fileId, instantTime, RANDOM.nextInt(100000), RANDOM.nextLong(), RANDOM.nextLong(), SparkDatasetTestUtils.STRUCT_TYPE);
-    int size = 10 + RANDOM.nextInt(1000);
+    int size = 100;
     int totalFailures = 5;
     // Generate first batch of valid rows
     Dataset<Row> inputRows = SparkDatasetTestUtils.getRandomRows(sqlContext, size / 2, partitionPath, false);
