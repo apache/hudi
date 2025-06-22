@@ -219,8 +219,8 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   }
 
   @Override
-  public Iterator<BufferedRecord<T>> getLogRecordIterator() {
-    return records.values().iterator();
+  public ClosableIterator<BufferedRecord<T>> getLogRecordIterator() {
+    return new LogRecordIterator<>(this);
   }
 
   @Override
@@ -393,5 +393,30 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
     return isCommitTimeOrderingValue(deleteRecord.getOrderingValue())
         ? DEFAULT_ORDERING_VALUE
         : readerContext.convertValueToEngineType(deleteRecord.getOrderingValue());
+  }
+
+  private static class LogRecordIterator<T> implements ClosableIterator<BufferedRecord<T>> {
+    private final FileGroupRecordBuffer<T> fileGroupRecordBuffer;
+    private final Iterator<BufferedRecord<T>> logRecordIterator;
+
+    private LogRecordIterator(FileGroupRecordBuffer<T> fileGroupRecordBuffer) {
+      this.fileGroupRecordBuffer = fileGroupRecordBuffer;
+      this.logRecordIterator = fileGroupRecordBuffer.records.values().iterator();
+    }
+
+    @Override
+    public boolean hasNext() {
+      return logRecordIterator.hasNext();
+    }
+
+    @Override
+    public BufferedRecord<T> next() {
+      return logRecordIterator.next();
+    }
+
+    @Override
+    public void close() {
+      fileGroupRecordBuffer.close();
+    }
   }
 }

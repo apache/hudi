@@ -80,7 +80,6 @@ import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordReader;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
-import org.apache.hudi.common.table.read.FileGroupRecordBuffer;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.table.read.KeyBasedFileGroupRecordBuffer;
@@ -1035,7 +1034,7 @@ public class HoodieTableMetadataUtil {
           readerContext.getMergeMode(), PartialUpdateMode.NONE, properties, new HoodieReadStats(), Option.ofNullable(tableConfig.getPreCombineField()), true);
 
       // CRITICAL: Ensure allowInflightInstants is set to true
-      HoodieMergedLogRecordReader<T> mergedLogRecordReader = HoodieMergedLogRecordReader.<T>newBuilder()
+      try (HoodieMergedLogRecordReader<T> mergedLogRecordReader = HoodieMergedLogRecordReader.<T>newBuilder()
           .withStorage(datasetMetaClient.getStorage())
           .withHoodieReaderContext(readerContext)
           .withLogFiles(logFilePaths.stream().map(HoodieLogFile::new).collect(toList()))
@@ -1046,38 +1045,12 @@ public class HoodieTableMetadataUtil {
           .withMetaClient(datasetMetaClient)
           .withAllowInflightInstants(true)
           .withRecordBuffer(recordBuffer)
-          .build();
-      return new CloseableLogRecordsIterator<>(mergedLogRecordReader, recordBuffer);
+          .build()) {
+        // initializes the record buffer with the log records
+        return recordBuffer.getLogRecordIterator();
+      }
     }
     return ClosableIterator.wrap(Collections.emptyIterator());
-  }
-
-  private static class CloseableLogRecordsIterator<T> implements ClosableIterator<BufferedRecord<T>> {
-    private final HoodieMergedLogRecordReader<T> mergedLogRecordReader;
-    private final FileGroupRecordBuffer<T> recordBuffer;
-    private final Iterator<BufferedRecord<T>> iterator;
-
-    public CloseableLogRecordsIterator(HoodieMergedLogRecordReader<T> mergedLogRecordReader, FileGroupRecordBuffer<T> recordBuffer) {
-      this.mergedLogRecordReader = mergedLogRecordReader;
-      this.recordBuffer = recordBuffer;
-      this.iterator = mergedLogRecordReader.iterator();
-    }
-
-    @Override
-    public void close() {
-      mergedLogRecordReader.close();
-      recordBuffer.close();
-    }
-
-    @Override
-    public boolean hasNext() {
-      return iterator.hasNext();
-    }
-
-    @Override
-    public BufferedRecord<T> next() {
-      return iterator.next();
-    }
   }
 
   @VisibleForTesting
