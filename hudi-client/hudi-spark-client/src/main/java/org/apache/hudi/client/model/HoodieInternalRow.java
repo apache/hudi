@@ -58,8 +58,6 @@ public class HoodieInternalRow extends InternalRow {
    */
   private final UTF8String[] metaFields;
   private final InternalRow sourceRow;
-  // indicates whether this row represents a delete operation. Used in the CDC read.
-  private final boolean isDeleteOperation;
 
   /**
    * Specifies whether source {@link #sourceRow} contains meta-fields
@@ -83,7 +81,6 @@ public class HoodieInternalRow extends InternalRow {
 
     this.sourceRow = sourceRow;
     this.sourceContainsMetaFields = sourceContainsMetaFields;
-    this.isDeleteOperation = false;
   }
 
   public HoodieInternalRow(UTF8String[] metaFields,
@@ -92,26 +89,6 @@ public class HoodieInternalRow extends InternalRow {
     this.metaFields = metaFields;
     this.sourceRow = sourceRow;
     this.sourceContainsMetaFields = sourceContainsMetaFields;
-    this.isDeleteOperation = false;
-  }
-
-  private HoodieInternalRow(UTF8String recordKey,
-                            UTF8String partitionPath,
-                            InternalRow sourceRow) {
-    this.metaFields = new UTF8String[] {
-        null,
-        null,
-        recordKey,
-        partitionPath,
-        null
-    };
-    this.sourceRow = null;
-    this.sourceContainsMetaFields = false;
-    this.isDeleteOperation = true;
-  }
-
-  public static HoodieInternalRow createDeleteRow(UTF8String recordKey, UTF8String partitionPath, InternalRow sourceRow) {
-    return new HoodieInternalRow(recordKey, partitionPath, sourceRow);
   }
 
   @Override
@@ -276,9 +253,5 @@ public class HoodieInternalRow extends InternalRow {
     if (ordinal < metaFields.length) {
       throw new ClassCastException(String.format("Can not cast meta-field of type UTF8String at (%d) as %s", ordinal, expectedDataType.getName()));
     }
-  }
-
-  public boolean isDeleteOperation() {
-    return isDeleteOperation;
   }
 }
