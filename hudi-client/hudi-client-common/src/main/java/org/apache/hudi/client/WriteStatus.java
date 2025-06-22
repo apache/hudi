@@ -233,6 +233,7 @@ public class WriteStatus implements Serializable {
   }
 
   public void setGlobalError(Throwable t) {
+    LOG.warn("Setting global error for WriteStatus.", t);
     this.globalError = t;
   }
 

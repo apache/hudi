@@ -173,7 +173,7 @@ public class TestHoodieRowCreateHandle extends HoodieSparkClientTestHarness {
     try {
       assertTrue(writeStatus.getGlobalError().getMessage().contains(expectedError));
     } catch (Throwable e) {
-      fail("Expected error to contain: " + expectedError + ", the actual error message: " + writeStatus.getGlobalError().getMessage());
+      fail("Expected error to contain: " + expectedError + ", the actual error message: " + writeStatus.getGlobalError());
     }
 
     assertEquals(writeStatus.getFileId(), fileId);
