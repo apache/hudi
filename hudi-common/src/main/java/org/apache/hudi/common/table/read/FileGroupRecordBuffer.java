@@ -70,7 +70,6 @@ import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FOR_ME
 import static org.apache.hudi.common.config.HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH;
 import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 import static org.apache.hudi.common.model.HoodieRecord.HOODIE_IS_DELETED_FIELD;
-import static org.apache.hudi.common.model.HoodieRecord.OPERATION_METADATA_FIELD;
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.INSTANT_TIME;
 
@@ -224,8 +223,8 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   }
 
   @Override
-  public Iterator<BufferedRecord<T>> getLogRecordIterator() {
-    return records.values().iterator();
+  public ClosableIterator<BufferedRecord<T>> getLogRecordIterator() {
+    return new LogRecordIterator<>(this);
   }
 
   @Override
@@ -640,17 +639,28 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
         : readerContext.convertValueToEngineType(deleteRecord.getOrderingValue());
   }
 
-  private boolean isDeleteRecord(Option<T> record, Schema schema) {
-    if (record.isEmpty()) {
-      return true;
+  private static class LogRecordIterator<T> implements ClosableIterator<BufferedRecord<T>> {
+    private final FileGroupRecordBuffer<T> fileGroupRecordBuffer;
+    private final Iterator<BufferedRecord<T>> logRecordIterator;
+
+    private LogRecordIterator(FileGroupRecordBuffer<T> fileGroupRecordBuffer) {
+      this.fileGroupRecordBuffer = fileGroupRecordBuffer;
+      this.logRecordIterator = fileGroupRecordBuffer.records.values().iterator();
     }
 
-    Object operation = readerContext.getValue(record.get(), schema, OPERATION_METADATA_FIELD);
-    if (operation != null && HoodieOperation.isDeleteRecord(operation.toString())) {
-      return true;
+    @Override
+    public boolean hasNext() {
+      return logRecordIterator.hasNext();
     }
 
-    Object deleteMarker = readerContext.getValue(record.get(), schema, HOODIE_IS_DELETED_FIELD);
-    return deleteMarker instanceof Boolean && (boolean) deleteMarker;
+    @Override
+    public BufferedRecord<T> next() {
+      return logRecordIterator.next();
+    }
+
+    @Override
+    public void close() {
+      fileGroupRecordBuffer.close();
+    }
   }
 }
