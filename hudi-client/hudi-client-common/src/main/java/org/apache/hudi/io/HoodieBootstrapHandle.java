@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io;
 
+import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
@@ -47,9 +48,9 @@ public class HoodieBootstrapHandle<T, I, K, O> extends HoodieCreateHandle<T, I, 
   public static final Schema METADATA_BOOTSTRAP_RECORD_SCHEMA = createMetadataBootstrapRecordSchema();
 
   public HoodieBootstrapHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T, I, K, O> hoodieTable,
-      String partitionPath, String fileId, TaskContextSupplier taskContextSupplier) {
+                               String partitionPath, String fileId, TaskContextSupplier taskContextSupplier, Option<ReaderContextFactory<T>> readerContextFactoryOpt) {
     super(config, commitTime, hoodieTable, partitionPath, fileId,
-        Option.of(METADATA_BOOTSTRAP_RECORD_SCHEMA), taskContextSupplier);
+        Option.of(METADATA_BOOTSTRAP_RECORD_SCHEMA), taskContextSupplier, readerContextFactoryOpt);
   }
 
   @Override

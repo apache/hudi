@@ -322,7 +322,7 @@ public class SparkBootstrapCommitActionExecutor<T>
     return context.parallelize(
             bootstrapPaths, Math.min(bootstrapPaths.size(), config.getBootstrapParallelism()))
         .map(partitionFsPair -> getMetadataHandler(config, table, partitionFsPair.getRight().getRight()).runMetadataBootstrap(partitionFsPair.getLeft(),
-            partitionFsPair.getRight().getLeft(), keyGenerator));
+            partitionFsPair.getRight().getLeft(), keyGenerator, Option.of(context.getReaderContextFactory(table.getMetaClient(), config.getRecordMerger().getRecordType()))));
   }
 
   @Override

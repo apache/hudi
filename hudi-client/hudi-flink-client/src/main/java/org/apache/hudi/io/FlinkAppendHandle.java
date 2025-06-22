@@ -21,6 +21,7 @@ package org.apache.hudi.io;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
@@ -62,7 +63,7 @@ public class FlinkAppendHandle<T, I, K, O>
       BucketType bucketType,
       Iterator<HoodieRecord<T>> recordItr,
       TaskContextSupplier taskContextSupplier) {
-    super(config, instantTime, hoodieTable, partitionPath, fileId, recordItr, taskContextSupplier);
+    super(config, instantTime, hoodieTable, partitionPath, fileId, recordItr, taskContextSupplier, Option.empty());
     this.writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), hoodieTable, instantTime);
     this.bucketType = bucketType;
   }

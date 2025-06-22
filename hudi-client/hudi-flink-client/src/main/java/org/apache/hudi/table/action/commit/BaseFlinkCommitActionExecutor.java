@@ -166,13 +166,13 @@ public abstract class BaseFlinkCommitActionExecutor<T> extends
         // the first batch(batch1) operation triggers an INSERT bucket,
         // the second batch batch2 tries to reuse the same bucket
         // and append instead of UPDATE.
-        return handleInsert(fileIdHint, recordItr);
+        return handleInsert(fileIdHint, recordItr, Option.empty());
       } else if (this.writeHandle instanceof HoodieMergeHandle) {
         return handleUpdate(partitionPath, fileIdHint, recordItr);
       } else {
         switch (bucketType) {
           case INSERT:
-            return handleInsert(fileIdHint, recordItr);
+            return handleInsert(fileIdHint, recordItr, Option.empty());
           case UPDATE:
             return handleUpdate(partitionPath, fileIdHint, recordItr);
           default:
@@ -208,7 +208,7 @@ public abstract class BaseFlinkCommitActionExecutor<T> extends
   }
 
   @Override
-  public Iterator<List<WriteStatus>> handleInsert(String idPfx, Iterator<HoodieRecord<T>> recordItr)
+  public Iterator<List<WriteStatus>> handleInsert(String idPfx, Iterator<HoodieRecord<T>> recordItr, Option<ReaderContextFactory<T>> readerContextFactoryOpt)
       throws Exception {
     // This is needed since sometimes some buckets are never picked in getPartition() and end up with 0 records
     if (!recordItr.hasNext()) {
@@ -216,7 +216,7 @@ public abstract class BaseFlinkCommitActionExecutor<T> extends
       return Collections.singletonList((List<WriteStatus>) Collections.EMPTY_LIST).iterator();
     }
     return new FlinkLazyInsertIterable<>(recordItr, true, config, instantTime, table, idPfx,
-        taskContextSupplier, new ExplicitWriteHandleFactory<>(writeHandle));
+        taskContextSupplier, new ExplicitWriteHandleFactory<>(writeHandle), Option.empty());
   }
 
   @Override

@@ -145,7 +145,9 @@ public abstract class JavaExecutionStrategy<T>
     LOG.info("MaxMemoryPerCompaction run as part of clustering => {}", maxMemoryPerCompaction);
 
     List<Supplier<ClosableIterator<HoodieRecord<T>>>> suppliers = new ArrayList<>(clusteringOps.size());
-    clusteringOps.forEach(op -> suppliers.add(() -> getRecordIterator(getEngineContext().getReaderContextFactory(getHoodieTable().getMetaClient(), config.getRecordMerger().getRecordType()), op, instantTime, maxMemoryPerCompaction)));
+    clusteringOps.forEach(op -> suppliers.add(
+        () -> getRecordIterator(getEngineContext().getReaderContextFactory(getHoodieTable().getMetaClient(), config.getRecordMerger().getRecordType()),
+            op, instantTime, maxMemoryPerCompaction)));
     LazyConcatenatingIterator<HoodieRecord<T>> lazyIterator = new LazyConcatenatingIterator<>(suppliers);
 
     lazyIterator.forEachRemaining(records::add);

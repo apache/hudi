@@ -98,7 +98,7 @@ public class TestAppendHandle extends BaseTestHandle {
     assertTrue(numDeletes > 0);
     metaClient = HoodieTableMetaClient.reload(metaClient);
     table = HoodieSparkTable.create(config, context, metaClient);
-    HoodieAppendHandle handle = new HoodieAppendHandle(config, instantTime, table, partitionPath, fileId, records.iterator(), new LocalTaskContextSupplier());
+    HoodieAppendHandle handle = new HoodieAppendHandle(config, instantTime, table, partitionPath, fileId, records.iterator(), new LocalTaskContextSupplier(), Option.empty());
     Map<String, HoodieRecord> recordMap = new HashMap<>();
     for (int i = 0; i < records.size(); i++) {
       recordMap.put(String.valueOf(i), records.get(i));

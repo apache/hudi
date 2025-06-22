@@ -200,7 +200,8 @@ public class TestColStatsRecordWithMetadataRecord extends HoodieSparkClientTestH
 
     HoodieTable table = HoodieSparkTable.create(mdtWriteConfig, context, mdtMetaClient);
     String newCommitTime = InProcessTimeGenerator.createNewInstantTime();
-    HoodieCreateHandle handle = new HoodieCreateHandle(mdtWriteConfig, newCommitTime, table, COLUMN_STATS.getPartitionPath(), "col-stats-00001-0", new PhoneyTaskContextSupplier());
+    HoodieCreateHandle handle = new HoodieCreateHandle(mdtWriteConfig, newCommitTime, table, COLUMN_STATS.getPartitionPath(), "col-stats-00001-0", new PhoneyTaskContextSupplier(),
+        Option.empty());
 
     // write the record to hfile.
     Schema writeSchema = AvroSchemaCache.intern(new Schema.Parser().parse(mdtWriteConfig.getSchema()));

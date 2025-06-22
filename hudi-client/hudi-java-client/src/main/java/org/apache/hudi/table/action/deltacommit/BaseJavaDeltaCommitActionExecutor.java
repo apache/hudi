@@ -79,7 +79,7 @@ abstract class BaseJavaDeltaCommitActionExecutor<T> extends BaseJavaCommitAction
       return super.handleUpdate(partitionPath, fileId, recordItr);
     } else {
       HoodieAppendHandle<?, ?, ?, ?> appendHandle = new HoodieAppendHandle<>(config, instantTime, table,
-          partitionPath, fileId, recordItr, taskContextSupplier);
+          partitionPath, fileId, recordItr, taskContextSupplier, readerContextFactoryOpt);
       appendHandle.doAppend();
       return Collections.singletonList(appendHandle.close()).iterator();
     }

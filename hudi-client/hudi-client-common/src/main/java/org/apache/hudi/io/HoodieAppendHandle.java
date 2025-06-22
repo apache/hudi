@@ -22,6 +22,7 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BaseFile;
@@ -139,15 +140,17 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
    */
   public HoodieAppendHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                             String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr,
-                            TaskContextSupplier taskContextSupplier, Map<HeaderMetadataType, String> header) {
-    this(config, instantTime, hoodieTable, partitionPath, fileId, recordItr, taskContextSupplier);
+                            TaskContextSupplier taskContextSupplier, Map<HeaderMetadataType, String> header,
+                            Option<ReaderContextFactory<T>> readerContextFactoryOpt) {
+    this(config, instantTime, hoodieTable, partitionPath, fileId, recordItr, taskContextSupplier, readerContextFactoryOpt);
     this.useWriterSchema = true;
     this.isLogCompaction = true;
     this.header.putAll(header);
   }
 
   public HoodieAppendHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                            String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr, TaskContextSupplier taskContextSupplier) {
+                            String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr, TaskContextSupplier taskContextSupplier,
+                            Option<ReaderContextFactory<T>> readerContextFactoryOpt) {
     super(config, instantTime, partitionPath, fileId, hoodieTable,
         config.shouldWritePartialUpdates()
             // When enabling writing partial updates to the data blocks in log files,
@@ -155,8 +158,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
             // schema containing the updated fields only
             ? Option.of(new Schema.Parser().parse(config.getPartialUpdateSchema()))
             : Option.empty(),
-        taskContextSupplier,
-        false);
+        taskContextSupplier, false, readerContextFactoryOpt);
     this.recordItr = recordItr;
     this.sizeEstimator = getSizeEstimator();
     this.statuses = new ArrayList<>();
@@ -170,8 +172,9 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   }
 
   public HoodieAppendHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                            String partitionPath, String fileId, TaskContextSupplier sparkTaskContextSupplier) {
-    this(config, instantTime, hoodieTable, partitionPath, fileId, null, sparkTaskContextSupplier);
+                            String partitionPath, String fileId, TaskContextSupplier sparkTaskContextSupplier,
+                            Option<ReaderContextFactory<T>> readerContextFactoryOpt) {
+    this(config, instantTime, hoodieTable, partitionPath, fileId, null, sparkTaskContextSupplier, readerContextFactoryOpt);
   }
 
   protected SizeEstimator<HoodieRecord> getSizeEstimator() {
@@ -553,7 +556,8 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         // secondary index considering all the log files.
         SecondaryIndexStreamingTracker.trackSecondaryIndexStats(partitionPath, fileId, getReadFileSlice(),
             statuses.stream().map(status -> status.getStat().getPath()).collect(Collectors.toList()),
-            statuses.get(statuses.size() - 1), hoodieTable, taskContextSupplier, secondaryIndexDefns, config, instantTime, writeSchemaWithMetaFields);
+            statuses.get(statuses.size() - 1), hoodieTable, secondaryIndexDefns, config, instantTime,
+            writeSchemaWithMetaFields, readerContextFactoryOpt);
       }
 
       return statuses;

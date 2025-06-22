@@ -20,8 +20,10 @@ package org.apache.hudi.execution;
 
 import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.queue.HoodieExecutor;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -51,8 +53,9 @@ public class FlinkLazyInsertIterable<T> extends HoodieLazyInsertIterable<T> {
                                  HoodieTable hoodieTable,
                                  String idPrefix,
                                  TaskContextSupplier taskContextSupplier,
-                                 ExplicitWriteHandleFactory writeHandleFactory) {
-    super(recordItr, areRecordsSorted, config, instantTime, hoodieTable, idPrefix, taskContextSupplier, writeHandleFactory);
+                                 ExplicitWriteHandleFactory writeHandleFactory,
+                                 Option<ReaderContextFactory<T>> readerContextFactoryOpt) {
+    super(recordItr, areRecordsSorted, config, instantTime, hoodieTable, idPrefix, taskContextSupplier, writeHandleFactory, readerContextFactoryOpt);
   }
 
   @Override

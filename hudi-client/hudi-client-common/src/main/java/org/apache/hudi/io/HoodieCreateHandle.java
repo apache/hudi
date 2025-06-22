@@ -65,9 +65,10 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   private boolean useWriterSchema = false;
 
   public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                            String partitionPath, String fileId, TaskContextSupplier taskContextSupplier) {
+                            String partitionPath, String fileId, TaskContextSupplier taskContextSupplier,
+                            Option<ReaderContextFactory<T>> readerContextFactoryOpt) {
     this(config, instantTime, hoodieTable, partitionPath, fileId, Option.empty(),
-        taskContextSupplier, false, Option.empty());
+        taskContextSupplier, false, readerContextFactoryOpt);
   }
 
   public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
@@ -79,16 +80,17 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
 
   public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                             String partitionPath, String fileId, Option<Schema> overriddenSchema,
-                            TaskContextSupplier taskContextSupplier) {
+                            TaskContextSupplier taskContextSupplier, Option<ReaderContextFactory<T>> readerContextFactoryOpt) {
     this(config, instantTime, hoodieTable, partitionPath, fileId, overriddenSchema, taskContextSupplier, false,
-        Option.empty());
+        readerContextFactoryOpt);
   }
 
   public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                             String partitionPath, String fileId, Option<Schema> overriddenSchema,
-                            TaskContextSupplier taskContextSupplier, boolean preserveMetadata, Option<ReaderContextFactory<T>> readerContextFactoryOpt) {
+                            TaskContextSupplier taskContextSupplier, boolean preserveMetadata,
+                            Option<ReaderContextFactory<T>> readerContextFactoryOpt) {
     super(config, instantTime, partitionPath, fileId, hoodieTable, overriddenSchema,
-        taskContextSupplier, preserveMetadata);
+        taskContextSupplier, preserveMetadata, readerContextFactoryOpt);
     writeStatus.setFileId(fileId);
     writeStatus.setPartitionPath(partitionPath);
     writeStatus.setStat(new HoodieWriteStat());
@@ -117,8 +119,8 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
    */
   public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                             String partitionPath, String fileId, Map<String, HoodieRecord<T>> recordMap,
-                            TaskContextSupplier taskContextSupplier) {
-    this(config, instantTime, hoodieTable, partitionPath, fileId, taskContextSupplier, true, Option.empty());
+                            TaskContextSupplier taskContextSupplier, Option<ReaderContextFactory<T>> readerContextFactoryOpt) {
+    this(config, instantTime, hoodieTable, partitionPath, fileId, taskContextSupplier, true, readerContextFactoryOpt);
     this.recordMap = recordMap;
     this.useWriterSchema = true;
   }
@@ -144,14 +146,14 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         if (preserveMetadata) {
           HoodieRecord populatedRecord = updateFileName(record, schema, writeSchemaWithMetaFields, path.getName(), config.getProps());
           if (isSecondaryIndexStatsStreamingWritesEnabled) {
-            SecondaryIndexStreamingTracker.trackSecondaryIndexStats(populatedRecord, writeStatus, writeSchemaWithMetaFields, secondaryIndexDefns, hoodieTable, taskContextSupplier);
+            SecondaryIndexStreamingTracker.trackSecondaryIndexStats(populatedRecord, writeStatus, writeSchemaWithMetaFields, secondaryIndexDefns, readerContextFactoryOpt);
           }
           fileWriter.write(record.getRecordKey(), populatedRecord, writeSchemaWithMetaFields);
         } else {
           // rewrite the record to include metadata fields in schema, and the values will be set later.
           record = record.prependMetaFields(schema, writeSchemaWithMetaFields, new MetadataValues(), config.getProps());
           if (isSecondaryIndexStatsStreamingWritesEnabled) {
-            SecondaryIndexStreamingTracker.trackSecondaryIndexStats(record, writeStatus, writeSchemaWithMetaFields, secondaryIndexDefns, hoodieTable, taskContextSupplier);
+            SecondaryIndexStreamingTracker.trackSecondaryIndexStats(record, writeStatus, writeSchemaWithMetaFields, secondaryIndexDefns, readerContextFactoryOpt);
           }
           fileWriter.writeWithMetadata(record.getKey(), record, writeSchemaWithMetaFields);
         }

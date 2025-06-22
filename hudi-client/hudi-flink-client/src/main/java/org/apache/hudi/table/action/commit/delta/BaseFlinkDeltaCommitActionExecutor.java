@@ -62,8 +62,8 @@ public abstract class BaseFlinkDeltaCommitActionExecutor<T>
   }
 
   @Override
-  public Iterator<List<WriteStatus>> handleInsert(String idPfx, Iterator<HoodieRecord<T>> recordItr) {
+  public Iterator<List<WriteStatus>> handleInsert(String idPfx, Iterator<HoodieRecord<T>> recordItr, Option<ReaderContextFactory<T>> readerContextFactoryOpt) {
     return new FlinkLazyInsertIterable<>(recordItr, true, config, instantTime, table,
-        idPfx, taskContextSupplier, new ExplicitWriteHandleFactory(writeHandle));
+        idPfx, taskContextSupplier, new ExplicitWriteHandleFactory(writeHandle), readerContextFactoryOpt);
   }
 }

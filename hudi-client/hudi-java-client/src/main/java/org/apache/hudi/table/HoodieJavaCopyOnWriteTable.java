@@ -304,7 +304,7 @@ public class HoodieJavaCopyOnWriteTable<T>
       }
     }
     return HoodieMergeHandleFactory.create(config, instantTime, this, keyToNewRecords, partitionPath, fileId,
-        dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt);
+        dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt, Option.of(context.getReaderContextFactory(metaClient, config.getRecordMerger().getRecordType())));
   }
 
   @Override
@@ -312,7 +312,8 @@ public class HoodieJavaCopyOnWriteTable<T>
       String instantTime, String partitionPath, String fileId,
       Map<String, HoodieRecord<?>> recordMap) {
     HoodieCreateHandle<?, ?, ?, ?> createHandle =
-        new HoodieCreateHandle(config, instantTime, this, partitionPath, fileId, recordMap, taskContextSupplier);
+        new HoodieCreateHandle(config, instantTime, this, partitionPath, fileId, recordMap, taskContextSupplier,
+            Option.of(context.getReaderContextFactory(metaClient, config.getRecordMerger().getRecordType())));
     createHandle.write();
     return Collections.singletonList(createHandle.close()).iterator();
   }

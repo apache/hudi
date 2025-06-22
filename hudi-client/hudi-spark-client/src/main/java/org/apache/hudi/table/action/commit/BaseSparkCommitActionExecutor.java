@@ -344,7 +344,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
       if (btype.equals(BucketType.INSERT)) {
         return handleInsert(binfo.fileIdPrefix, recordItr, readerContextFactoryOpt);
       } else if (btype.equals(BucketType.UPDATE)) {
-        return handleUpdate(binfo.partitionPath, binfo.fileIdPrefix, recordItr);
+        return handleUpdate(binfo.partitionPath, binfo.fileIdPrefix, recordItr, readerContextFactoryOpt);
       } else {
         throw new HoodieUpsertException("Unknown bucketType " + btype + " for partition :" + partition);
       }
@@ -378,7 +378,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     }
 
     // these are updates
-    HoodieMergeHandle upsertHandle = getUpdateHandle(partitionPath, fileId, recordItr);
+    HoodieMergeHandle upsertHandle = getUpdateHandle(partitionPath, fileId, recordItr, readerContextFactoryOpt);
     return handleUpdateInternal(upsertHandle, fileId);
   }
 
@@ -388,9 +388,9 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     return upsertHandle.getWriteStatusesAsIterator();
   }
 
-  protected HoodieMergeHandle getUpdateHandle(String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr) {
+  protected HoodieMergeHandle getUpdateHandle(String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr, Option<ReaderContextFactory<T>> readerContextFactoryOpt) {
     return HoodieMergeHandleFactory.create(operationType, config, instantTime, table, recordItr, partitionPath, fileId,
-        taskContextSupplier, keyGeneratorOpt);
+        taskContextSupplier, keyGeneratorOpt, readerContextFactoryOpt);
   }
 
   @Override

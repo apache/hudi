@@ -78,7 +78,8 @@ public class JavaUpsertPreppedDeltaCommitActionExecutor<T> extends BaseJavaDelta
     try {
       recordsByFileId.forEach((k, v) -> {
         HoodieAppendHandle<?, ?, ?, ?> appendHandle = new HoodieAppendHandle(config, instantTime, table,
-            k.getRight(), k.getLeft(), v.iterator(), taskContextSupplier);
+            k.getRight(), k.getLeft(), v.iterator(), taskContextSupplier,
+            Option.of(context.getReaderContextFactory(table.getMetaClient(), config.getRecordMerger().getRecordType())));
         appendHandle.doAppend();
         allWriteStatuses.addAll(appendHandle.close());
       });

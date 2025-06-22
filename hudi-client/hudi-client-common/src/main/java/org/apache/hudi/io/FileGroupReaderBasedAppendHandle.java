@@ -23,6 +23,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
@@ -62,7 +63,7 @@ public class FileGroupReaderBasedAppendHandle<T, I, K, O> extends HoodieAppendHa
   public FileGroupReaderBasedAppendHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                           FileSlice fileSlice, CompactionOperation operation, TaskContextSupplier taskContextSupplier,
                                           HoodieReaderContext<T> readerContext) {
-    super(config, instantTime, hoodieTable, operation.getPartitionPath(), operation.getFileId(), taskContextSupplier);
+    super(config, instantTime, hoodieTable, operation.getPartitionPath(), operation.getFileId(), taskContextSupplier, Option.of((ReaderContextFactory) () -> readerContext));
     this.operation = operation;
     this.readerContext = readerContext;
     this.fileSlice = fileSlice;

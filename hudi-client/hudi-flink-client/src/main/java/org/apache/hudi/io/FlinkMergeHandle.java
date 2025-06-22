@@ -67,7 +67,7 @@ public class FlinkMergeHandle<T, I, K, O>
   public FlinkMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                           Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
                           TaskContextSupplier taskContextSupplier) {
-    super(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier, Option.empty());
+    super(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier, Option.empty(), Option.empty());
     if (rolloverPaths == null) {
       // #makeOldAndNewFilePaths may already initialize it already
       rolloverPaths = new ArrayList<>();

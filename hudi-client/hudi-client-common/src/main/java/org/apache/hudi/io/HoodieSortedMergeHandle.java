@@ -19,6 +19,7 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -52,8 +53,8 @@ public class HoodieSortedMergeHandle<T, I, K, O> extends HoodieMergeHandle<T, I,
 
   public HoodieSortedMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                  Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId, TaskContextSupplier taskContextSupplier,
-                                 Option<BaseKeyGenerator> keyGeneratorOpt) {
-    super(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
+                                 Option<BaseKeyGenerator> keyGeneratorOpt, Option<ReaderContextFactory<T>> readerContextFactoryOpt) {
+    super(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt, readerContextFactoryOpt);
     newRecordKeysSorted.addAll(keyToNewRecords.keySet());
   }
 
@@ -61,10 +62,11 @@ public class HoodieSortedMergeHandle<T, I, K, O> extends HoodieMergeHandle<T, I,
    * Called by compactor code path.
    */
   public HoodieSortedMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-      Map<String, HoodieRecord<T>> keyToNewRecordsOrig, String partitionPath, String fileId,
-      HoodieBaseFile dataFileToBeMerged, TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
+                                 Map<String, HoodieRecord<T>> keyToNewRecordsOrig, String partitionPath, String fileId,
+                                 HoodieBaseFile dataFileToBeMerged, TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt,
+                                 Option<ReaderContextFactory<T>> readerContextFactoryOpt) {
     super(config, instantTime, hoodieTable, keyToNewRecordsOrig, partitionPath, fileId, dataFileToBeMerged,
-        taskContextSupplier, keyGeneratorOpt);
+        taskContextSupplier, keyGeneratorOpt, readerContextFactoryOpt);
 
     newRecordKeysSorted.addAll(keyToNewRecords.keySet());
   }

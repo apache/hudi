@@ -22,9 +22,11 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.avro.model.HoodiePath;
 import org.apache.hudi.client.bootstrap.BootstrapWriteStatus;
+import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BootstrapFileMapping;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.HoodieBootstrapHandle;
@@ -52,11 +54,11 @@ public abstract class BaseBootstrapMetadataHandler implements BootstrapMetadataH
     this.srcFileStatus = srcFileStatus;
   }
 
-  public BootstrapWriteStatus runMetadataBootstrap(String srcPartitionPath, String partitionPath, KeyGeneratorInterface keyGenerator) {
+  public BootstrapWriteStatus runMetadataBootstrap(String srcPartitionPath, String partitionPath, KeyGeneratorInterface keyGenerator, Option<ReaderContextFactory> readerContextFactoryOpt) {
     HoodiePath path = srcFileStatus.getPath();
     StoragePath sourceFilePath = path != null ? new StoragePath(path.getUri()) : null;
     HoodieBootstrapHandle<?, ?, ?, ?> bootstrapHandle = new HoodieBootstrapHandle(config, HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS,
-        table, partitionPath, FSUtils.createNewFileIdPfx(), table.getTaskContextSupplier());
+        table, partitionPath, FSUtils.createNewFileIdPfx(), table.getTaskContextSupplier(), readerContextFactoryOpt);
     try {
       Schema avroSchema = getAvroSchema(sourceFilePath);
       List<String> recordKeyColumns = keyGenerator.getRecordKeyFieldNames().stream()

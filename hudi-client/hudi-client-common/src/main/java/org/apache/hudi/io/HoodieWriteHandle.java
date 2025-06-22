@@ -22,6 +22,7 @@ import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
@@ -83,6 +84,7 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
   protected final String fileId;
   protected final String writeToken;
   protected final TaskContextSupplier taskContextSupplier;
+  protected final Option<ReaderContextFactory<T>> readerContextFactoryOpt;
   // For full schema evolution
   protected final boolean schemaOnReadEnabled;
   protected final boolean preserveMetadata;
@@ -95,14 +97,15 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
   private boolean closed = false;
 
   public HoodieWriteHandle(HoodieWriteConfig config, String instantTime, String partitionPath,
-                           String fileId, HoodieTable<T, I, K, O> hoodieTable, TaskContextSupplier taskContextSupplier, boolean preserveMetadata) {
+                           String fileId, HoodieTable<T, I, K, O> hoodieTable, TaskContextSupplier taskContextSupplier, boolean preserveMetadata,
+                           Option<ReaderContextFactory<T>> readerContextFactoryOpt) {
     this(config, instantTime, partitionPath, fileId, hoodieTable,
-        Option.empty(), taskContextSupplier, preserveMetadata);
+        Option.empty(), taskContextSupplier, preserveMetadata, readerContextFactoryOpt);
   }
 
   protected HoodieWriteHandle(HoodieWriteConfig config, String instantTime, String partitionPath, String fileId,
                               HoodieTable<T, I, K, O> hoodieTable, Option<Schema> overriddenSchema,
-                              TaskContextSupplier taskContextSupplier, boolean preserveMetadata) {
+                              TaskContextSupplier taskContextSupplier, boolean preserveMetadata, Option<ReaderContextFactory<T>> readerContextFactoryOpt) {
     super(config, Option.of(instantTime), hoodieTable);
     this.partitionPath = partitionPath;
     this.fileId = fileId;
@@ -111,6 +114,7 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     this.timer = HoodieTimer.start();
     this.newRecordLocation = new HoodieRecordLocation(instantTime, fileId);
     this.taskContextSupplier = taskContextSupplier;
+    this.readerContextFactoryOpt = readerContextFactoryOpt;
     this.writeToken = makeWriteToken();
     this.schemaOnReadEnabled = !isNullOrEmpty(hoodieTable.getConfig().getInternalSchema());
     this.preserveMetadata = preserveMetadata;

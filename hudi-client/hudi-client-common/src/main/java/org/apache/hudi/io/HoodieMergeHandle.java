@@ -20,6 +20,7 @@ package org.apache.hudi.io;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -119,15 +120,15 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
 
   public HoodieMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                            Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
-                           TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
+                           TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt, Option<ReaderContextFactory<T>> readerContextFactoryOpt) {
     this(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier,
-        getLatestBaseFile(hoodieTable, partitionPath, fileId), keyGeneratorOpt);
+        getLatestBaseFile(hoodieTable, partitionPath, fileId), keyGeneratorOpt, readerContextFactoryOpt);
   }
 
   public HoodieMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                            Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
-                           TaskContextSupplier taskContextSupplier, HoodieBaseFile baseFile, Option<BaseKeyGenerator> keyGeneratorOpt) {
-    super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier, false);
+                           TaskContextSupplier taskContextSupplier, HoodieBaseFile baseFile, Option<BaseKeyGenerator> keyGeneratorOpt, Option<ReaderContextFactory<T>> readerContextFactoryOpt) {
+    super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier, false, readerContextFactoryOpt);
     init(recordItr);
     init(fileId, partitionPath, baseFile);
     validateAndSetAndKeyGenProps(keyGeneratorOpt, config.populateMetaFields());
@@ -138,8 +139,9 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
    */
   public HoodieMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                            Map<String, HoodieRecord<T>> keyToNewRecords, String partitionPath, String fileId,
-                           HoodieBaseFile dataFileToBeMerged, TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
-    super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier, true);
+                           HoodieBaseFile dataFileToBeMerged, TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt,
+                           Option<ReaderContextFactory<T>> readerContextFactoryOpt) {
+    super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier, true, readerContextFactoryOpt);
     this.keyToNewRecords = keyToNewRecords;
     init(fileId, this.partitionPath, dataFileToBeMerged);
     validateAndSetAndKeyGenProps(keyGeneratorOpt, config.populateMetaFields());
@@ -148,16 +150,17 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
   /**
    * Used by `HoodieSparkFileGroupReaderBasedMergeHandle`.
    *
-   * @param config              Hudi write config
-   * @param instantTime         Instant time to use
-   * @param partitionPath       Partition path
-   * @param fileId              File group ID for the merge handle to operate on
-   * @param hoodieTable         {@link HoodieTable} instance
-   * @param taskContextSupplier Task context supplier
+   * @param config                  Hudi write config
+   * @param instantTime             Instant time to use
+   * @param partitionPath           Partition path
+   * @param fileId                  File group ID for the merge handle to operate on
+   * @param hoodieTable             {@link HoodieTable} instance
+   * @param taskContextSupplier     Task context supplier
+   * @param readerContextFactoryOpt
    */
   public HoodieMergeHandle(HoodieWriteConfig config, String instantTime, String partitionPath,
-                           String fileId, HoodieTable<T, I, K, O> hoodieTable, TaskContextSupplier taskContextSupplier) {
-    super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier, true);
+                           String fileId, HoodieTable<T, I, K, O> hoodieTable, TaskContextSupplier taskContextSupplier, Option<ReaderContextFactory<T>> readerContextFactoryOpt) {
+    super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier, true, readerContextFactoryOpt);
   }
 
   private void validateAndSetAndKeyGenProps(Option<BaseKeyGenerator> keyGeneratorOpt, boolean populateMetaFields) {
@@ -357,7 +360,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
           HoodieKey hoodieKey = newRecord.getKey();
           if (isSecondaryIndexStatsStreamingWritesEnabled) {
             SecondaryIndexStreamingTracker.trackSecondaryIndexStats(hoodieKey, combineRecord, oldRecord, false, writeStatus,
-                writeSchemaWithMetaFields, this::getNewSchema, secondaryIndexDefns, keyGeneratorOpt, hoodieTable, taskContextSupplier);
+                writeSchemaWithMetaFields, this::getNewSchema, secondaryIndexDefns, keyGeneratorOpt, readerContextFactoryOpt);
           }
           writeToFile(hoodieKey, combineRecord.get(), schema, prop, preserveMetadata);
           recordsWritten++;
@@ -365,14 +368,14 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
           // CASE (2): A delete operation.
           if (isSecondaryIndexStatsStreamingWritesEnabled) {
             SecondaryIndexStreamingTracker.trackSecondaryIndexStats(newRecord.getKey(), combineRecord, oldRecord, true, writeStatus,
-                writeSchemaWithMetaFields, this::getNewSchema, secondaryIndexDefns, keyGeneratorOpt, hoodieTable, taskContextSupplier);
+                writeSchemaWithMetaFields, this::getNewSchema, secondaryIndexDefns, keyGeneratorOpt, readerContextFactoryOpt);
           }
           recordsDeleted++;
         }
       } else {
         if (isSecondaryIndexStatsStreamingWritesEnabled) {
           SecondaryIndexStreamingTracker.trackSecondaryIndexStats(newRecord.getKey(), combineRecord, oldRecord, true, writeStatus,
-              writeSchemaWithMetaFields, this::getNewSchema, secondaryIndexDefns, keyGeneratorOpt, hoodieTable, taskContextSupplier);
+              writeSchemaWithMetaFields, this::getNewSchema, secondaryIndexDefns, keyGeneratorOpt, readerContextFactoryOpt);
         }
         recordsDeleted++;
         // Clear the new location as the record was deleted

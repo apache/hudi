@@ -62,7 +62,7 @@ public class FlinkUpsertDeltaCommitActionExecutor<T> extends BaseFlinkCommitActi
   }
 
   @Override
-  public Iterator<List<WriteStatus>> handleInsert(String idPfx, Iterator<HoodieRecord<T>> recordItr) {
+  public Iterator<List<WriteStatus>> handleInsert(String idPfx, Iterator<HoodieRecord<T>> recordItr, Option<ReaderContextFactory<T>> readerContextFactoryOpt) {
     return handleWrite();
   }
 

@@ -19,6 +19,8 @@
 package org.apache.hudi.table.action.bootstrap;
 
 import org.apache.hudi.client.bootstrap.BootstrapWriteStatus;
+import org.apache.hudi.common.engine.ReaderContextFactory;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.keygen.KeyGeneratorInterface;
 
 /**
@@ -28,10 +30,11 @@ public interface BootstrapMetadataHandler {
   /**
    * Execute bootstrap with only metadata.
    *
-   * @param srcPartitionPath source partition path.
-   * @param partitionPath    destination partition path.
-   * @param keyGenerator     key generator to use.
+   * @param srcPartitionPath        source partition path.
+   * @param partitionPath           destination partition path.
+   * @param keyGenerator            key generator to use.
+   * @param readerContextFactoryOpt
    * @return the {@link BootstrapWriteStatus} which has the result of execution.
    */
-  BootstrapWriteStatus runMetadataBootstrap(String srcPartitionPath, String partitionPath, KeyGeneratorInterface keyGenerator);
+  BootstrapWriteStatus runMetadataBootstrap(String srcPartitionPath, String partitionPath, KeyGeneratorInterface keyGenerator, Option<ReaderContextFactory> readerContextFactoryOpt);
 }

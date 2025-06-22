@@ -33,6 +33,6 @@ public class AppendHandleFactory<T, I, K, O> extends WriteHandleFactory<T, I, K,
                                                Option<ReaderContextFactory<T>> readerContextFactoryOpt) {
 
     return new HoodieAppendHandle(hoodieConfig, commitTime, hoodieTable, partitionPath,
-        getNextFileId(fileIdPrefix), sparkTaskContextSupplier);
+        getNextFileId(fileIdPrefix), sparkTaskContextSupplier, readerContextFactoryOpt);
   }
 }

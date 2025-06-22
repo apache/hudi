@@ -243,7 +243,7 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
       return Collections.singletonList((List<WriteStatus>) Collections.EMPTY_LIST).iterator();
     }
     // these are updates
-    HoodieMergeHandle upsertHandle = getUpdateHandle(partitionPath, fileId, recordItr);
+    HoodieMergeHandle upsertHandle = getUpdateHandle(partitionPath, fileId, recordItr, readerContextFactoryOpt);
     return handleUpdateInternal(upsertHandle, fileId);
   }
 
@@ -253,7 +253,7 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
     return upsertHandle.getWriteStatusesAsIterator();
   }
 
-  protected HoodieMergeHandle getUpdateHandle(String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr) {
+  protected HoodieMergeHandle getUpdateHandle(String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr, Option<ReaderContextFactory<T>> readerContextFactoryOpt) {
     Option<BaseKeyGenerator> keyGeneratorOpt = Option.empty();
     if (!config.populateMetaFields()) {
       try {
@@ -264,7 +264,7 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
       }
     }
     return HoodieMergeHandleFactory.create(operationType, config, instantTime, table, recordItr, partitionPath, fileId,
-        taskContextSupplier, keyGeneratorOpt);
+        taskContextSupplier, keyGeneratorOpt, readerContextFactoryOpt);
   }
 
   @Override

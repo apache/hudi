@@ -472,7 +472,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         handle = new HoodieMergeHandle(config, instantTime, table, new HashMap<>(),
             partitionPath, FSUtils.getFileId(baseFile.getFileName()), baseFile, new SparkTaskContextSupplier(),
             config.populateMetaFields() ? Option.empty() :
-                Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(config.getProps())));
+                Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(config.getProps())),
+            Option.empty());
         WriteStatus writeStatus = new WriteStatus(false, 0.0);
         writeStatus.setStat(new HoodieWriteStat());
         writeStatus.getStat().setNumWrites(0);
@@ -493,7 +494,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         handle = new HoodieMergeHandle(cfg2, newInstantTime, table, new HashMap<>(),
             partitionPath, FSUtils.getFileId(baseFile.getFileName()), baseFile, new SparkTaskContextSupplier(),
             config.populateMetaFields() ? Option.empty() :
-                Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(config.getProps())));
+                Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(config.getProps())),
+            Option.empty());
         WriteStatus writeStatus = new WriteStatus(false, 0.0);
         writeStatus.setStat(new HoodieWriteStat());
         writeStatus.getStat().setNumWrites(0);

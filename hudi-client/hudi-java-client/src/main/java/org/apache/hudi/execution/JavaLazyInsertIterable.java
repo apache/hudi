@@ -45,8 +45,9 @@ public class JavaLazyInsertIterable<T> extends HoodieLazyInsertIterable<T> {
                                 String instantTime,
                                 HoodieTable hoodieTable,
                                 String idPrefix,
-                                TaskContextSupplier taskContextSupplier) {
-    super(recordItr, areRecordsSorted, config, instantTime, hoodieTable, idPrefix, taskContextSupplier);
+                                TaskContextSupplier taskContextSupplier,
+                                Option<ReaderContextFactory<T>> readerContextFactoryOpt) {
+    super(recordItr, areRecordsSorted, config, instantTime, hoodieTable, idPrefix, taskContextSupplier, readerContextFactoryOpt);
   }
 
   public JavaLazyInsertIterable(Iterator<HoodieRecord<T>> recordItr,

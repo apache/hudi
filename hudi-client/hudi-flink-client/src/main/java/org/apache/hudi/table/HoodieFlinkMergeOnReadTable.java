@@ -141,7 +141,7 @@ public class HoodieFlinkMergeOnReadTable<T>
                                                                    Map<String, HoodieRecord<?>> recordMap,
                                                                    Map<HoodieLogBlock.HeaderMetadataType, String> header) {
     HoodieAppendHandle appendHandle = new HoodieAppendHandle(config, instantTime, this,
-        partitionPath, fileId, recordMap.values().iterator(), taskContextSupplier, header);
+        partitionPath, fileId, recordMap.values().iterator(), taskContextSupplier, header, Option.empty());
     appendHandle.write(recordMap);
     List<WriteStatus> writeStatuses = appendHandle.close();
     return Collections.singletonList(writeStatuses).iterator();

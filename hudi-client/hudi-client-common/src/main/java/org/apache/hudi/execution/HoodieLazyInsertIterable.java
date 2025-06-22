@@ -57,9 +57,10 @@ public abstract class HoodieLazyInsertIterable<T>
                                   String instantTime,
                                   HoodieTable hoodieTable,
                                   String idPrefix,
-                                  TaskContextSupplier taskContextSupplier) {
+                                  TaskContextSupplier taskContextSupplier,
+                                  Option<ReaderContextFactory<T>> readerContextFactoryOpt) {
     this(recordItr, areRecordsSorted, config, instantTime, hoodieTable, idPrefix, taskContextSupplier,
-        new CreateHandleFactory<>(), Option.empty());
+        new CreateHandleFactory<>(), readerContextFactoryOpt);
   }
 
   public HoodieLazyInsertIterable(Iterator<HoodieRecord<T>> recordItr, boolean areRecordsSorted,

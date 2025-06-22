@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io;
 
+import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -50,23 +51,24 @@ public class HoodieMergeHandleFactory {
       String partitionPath,
       String fileId,
       TaskContextSupplier taskContextSupplier,
-      Option<BaseKeyGenerator> keyGeneratorOpt) {
+      Option<BaseKeyGenerator> keyGeneratorOpt,
+      Option<ReaderContextFactory<T>> readerContextFactoryOpt) {
     LOG.info("Create update handle for fileId {} and partition path {} at commit {}", fileId, partitionPath, instantTime);
     if (table.requireSortedRecords()) {
       if (table.getMetaClient().getTableConfig().isCDCEnabled()) {
         return new HoodieSortedMergeHandleWithChangeLog<>(writeConfig, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier,
-            keyGeneratorOpt);
+            keyGeneratorOpt, readerContextFactoryOpt);
       } else {
         return new HoodieSortedMergeHandle<>(writeConfig, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier,
-            keyGeneratorOpt);
+            keyGeneratorOpt, readerContextFactoryOpt);
       }
     } else if (!WriteOperationType.isChangingRecords(operationType) && writeConfig.allowDuplicateInserts()) {
-      return new HoodieConcatHandle<>(writeConfig, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
+      return new HoodieConcatHandle<>(writeConfig, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt, readerContextFactoryOpt);
     } else {
       if (table.getMetaClient().getTableConfig().isCDCEnabled()) {
-        return new HoodieMergeHandleWithChangeLog<>(writeConfig, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
+        return new HoodieMergeHandleWithChangeLog<>(writeConfig, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt, readerContextFactoryOpt);
       } else {
-        return new HoodieMergeHandle<>(writeConfig, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
+        return new HoodieMergeHandle<>(writeConfig, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt, readerContextFactoryOpt);
       }
     }
   }
@@ -83,20 +85,21 @@ public class HoodieMergeHandleFactory {
       String fileId,
       HoodieBaseFile dataFileToBeMerged,
       TaskContextSupplier taskContextSupplier,
-      Option<BaseKeyGenerator> keyGeneratorOpt) {
+      Option<BaseKeyGenerator> keyGeneratorOpt,
+      Option<ReaderContextFactory<T>> readerContextFactoryOpt) {
     LOG.info("Get updateHandle for fileId {} and partitionPath {} at commit {}", fileId, partitionPath, instantTime);
     if (table.requireSortedRecords()) {
       return new HoodieSortedMergeHandle<>(writeConfig, instantTime, table, keyToNewRecords, partitionPath, fileId,
-          dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt);
+          dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt, readerContextFactoryOpt);
     } else if (table.getMetaClient().getTableConfig().isCDCEnabled() && writeConfig.isYieldingPureLogForMor()) {
       // IMPORTANT: only index type that yields pure log files need to enable the cdc log files for compaction,
       // index type such as the BLOOM does not need this because it would do delta merge for inserts and generates log for updates,
       // both of these two cases are already handled in HoodieCDCExtractor.
       return new HoodieMergeHandleWithChangeLog<>(writeConfig, instantTime, table, keyToNewRecords, partitionPath, fileId,
-          dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt);
+          dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt, readerContextFactoryOpt);
     } else {
       return new HoodieMergeHandle<>(writeConfig, instantTime, table, keyToNewRecords, partitionPath, fileId,
-          dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt);
+          dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt, readerContextFactoryOpt);
     }
   }
 }

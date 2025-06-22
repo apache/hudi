@@ -266,7 +266,8 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
       handle = new HoodieMergeHandle(config, instantTime, table, new HashMap<>(),
           partitionAndBaseFilePaths.getLeft(), FSUtils.getFileId(baseFile.getFileName()), baseFile, new JavaTaskContextSupplier(),
           config.populateMetaFields() ? Option.empty() :
-              Option.of((BaseKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(config.getProps())));
+              Option.of((BaseKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(config.getProps())),
+          Option.empty());
     } catch (HoodieCorruptedDataException e1) {
       fail("Exception not expected because merge validation check is disabled");
     } finally {
@@ -284,7 +285,8 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
       handle = new HoodieMergeHandle(cfg2, newInstantTime, table, new HashMap<>(),
           partitionAndBaseFilePaths.getLeft(), FSUtils.getFileId(baseFile.getFileName()), baseFile, new JavaTaskContextSupplier(),
           config.populateMetaFields() ? Option.empty() :
-              Option.of((BaseKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(config.getProps())));
+              Option.of((BaseKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(config.getProps())),
+          Option.empty());
       fail("The above line should have thrown an exception");
     } catch (HoodieUpsertException e2) {
       // expected

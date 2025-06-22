@@ -22,6 +22,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
@@ -56,7 +57,7 @@ public class BaseTestHandle extends HoodieSparkClientTestHarness {
   Pair<WriteStatus, List<HoodieRecord>> createParquetFile(HoodieWriteConfig config, HoodieTable table, String partitionPath,
                                                           String fileId, String instantTime, HoodieTestDataGenerator dataGenerator) {
     List<HoodieRecord> records = dataGenerator.generateInserts(instantTime, 100);
-    HoodieCreateHandle handle = new HoodieCreateHandle(config, instantTime, table, partitionPath, fileId, new LocalTaskContextSupplier(), false);
+    HoodieCreateHandle handle = new HoodieCreateHandle(config, instantTime, table, partitionPath, fileId, new LocalTaskContextSupplier(), false, Option.empty());
     for (int i = 0; i < records.size(); i++) {
       handle.write(records.get(i), handle.getWriterSchemaWithMetaFields(), handle.getConfig().getProps());
     }
