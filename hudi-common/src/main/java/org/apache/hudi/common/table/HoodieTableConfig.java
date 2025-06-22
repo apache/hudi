@@ -114,6 +114,7 @@ public class HoodieTableConfig extends HoodieConfig {
   public static final String HOODIE_PROPERTIES_FILE_BACKUP = "hoodie.properties.backup";
   public static final String HOODIE_WRITE_TABLE_NAME_KEY = "hoodie.datasource.write.table.name";
   public static final String HOODIE_TABLE_NAME_KEY = "hoodie.table.name";
+  public static final String HOODIE_TEMP_FILE_SUFFIX = ".temp";
 
   public static final ConfigProperty<String> DATABASE_NAME = ConfigProperty
       .key("hoodie.database.name")
@@ -504,6 +505,7 @@ public class HoodieTableConfig extends HoodieConfig {
   private static void modify(HoodieStorage storage, StoragePath metadataFolder, Properties modifyProps, BiConsumer<Properties, Properties> modifyFn) {
     StoragePath cfgPath = new StoragePath(metadataFolder, HOODIE_PROPERTIES_FILE);
     StoragePath backupCfgPath = new StoragePath(metadataFolder, HOODIE_PROPERTIES_FILE_BACKUP);
+    StoragePath tempCfgPath = new StoragePath(metadataFolder, HOODIE_PROPERTIES_FILE + HOODIE_TEMP_FILE_SUFFIX);
     try {
       // 0. do any recovery from prior attempts.
       recoverIfNeeded(storage, cfgPath, backupCfgPath);
@@ -519,14 +521,16 @@ public class HoodieTableConfig extends HoodieConfig {
       // 3. delete the properties file, reads will go to the backup, until we are done.
       storage.deleteFile(cfgPath);
 
-      // 4. Upsert and save back.
-      String checksum;
-      try (OutputStream out = storage.create(cfgPath, true)) {
+      // 4. Upsert and save back to a temp file
+      try (OutputStream out = storage.create(tempCfgPath, true)) {
         modifyFn.accept(props, modifyProps);
         checksum = storeProperties(props, out);
       }
 
-      // 4. verify and remove backup.
+      // 5. Rename to the original config file
+      storage.rename(tempCfgPath, cfgPath);
+
+      // 6. verify and remove backup.
       try (InputStream in = storage.open(cfgPath)) {
         props.clear();
         props.load(in);
@@ -538,7 +542,7 @@ public class HoodieTableConfig extends HoodieConfig {
         }
       }
 
-      // 5. delete the backup properties file
+      // 7. delete the backup properties file
       storage.deleteFile(backupCfgPath);
     } catch (IOException e) {
       throw new HoodieIOException("Error updating table configs.", e);
