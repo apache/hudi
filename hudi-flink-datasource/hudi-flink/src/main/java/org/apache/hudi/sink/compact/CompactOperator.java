@@ -21,20 +21,18 @@ package org.apache.hudi.sink.compact;
 import org.apache.hudi.adapter.MaskingOutputAdapter;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.model.HoodieAvroRecordMerger;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.storage.StorageConfiguration;
-import org.apache.hudi.table.HoodieFlinkTable;
-import org.apache.hudi.table.format.FlinkRowDataReaderContext;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.metrics.FlinkCompactionMetrics;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
+import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.action.compact.HoodieFlinkMergeOnReadTableCompactor;
+import org.apache.hudi.table.format.FlinkRowDataReaderContext;
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.util.CompactionUtil;
 import org.apache.hudi.util.FlinkWriteClients;
@@ -139,12 +137,6 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
       this.executor = NonThrownExecutor.builder(LOG).build();
     }
     this.collector = new StreamRecordCollector<>(output);
-    HoodieTableMetaClient metaClient = flinkTable.getMetaClient();
-    this.useFileGroupReaderBasedCompaction =
-        !metaClient.isMetadataTable()
-            && writeClient.getConfig().getBooleanOrDefault(HoodieReaderConfig.FILE_GROUP_READER_ENABLED)
-            && writeClient.getConfig().populateMetaFields()                                                         // Virtual key support by fg reader is not ready
-            && !(metaClient.getTableConfig().isCDCEnabled() && writeClient.getConfig().isYieldingPureLogForMor());  // do not support produce cdc log during fg reader
     registerMetrics();
   }
 
@@ -183,7 +175,6 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
     // schema evolution
     CompactionUtil.setAvroSchema(writeConfig, metaClient);
     List<WriteStatus> writeStatuses = compactor.compact(
-        flinkTable,
         writeConfig,
         compactionOperation,
         instantTime,
@@ -194,27 +185,20 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
     collector.collect(new CompactionCommitEvent(instantTime, compactionOperation.getFileId(), writeStatuses, taskID));
   }
 
-  private Option<HoodieReaderContext<?>> createReaderContext(HoodieFlinkWriteClient<?> writeClient, boolean needReloadMetaClient) {
-    if (useFileGroupReaderBasedCompaction) {
-      HoodieTableMetaClient metaClient = flinkTable.getMetaClient();
-      // CAUTION: InternalSchemaManager will scan timeline, reusing the meta client so that the timeline is updated.
-      // Instantiate internalSchemaManager lazily here since it may not be needed for FG reader, e.g., schema evolution
-      // for log files in FG reader do not use internalSchemaManager.
-      Supplier<InternalSchemaManager> internalSchemaManagerSupplier = () -> {
-        if (internalSchemaManager == null || needReloadMetaClient) {
-          internalSchemaManager = InternalSchemaManager.get(metaClient.getStorageConf(), metaClient);
-        }
-        return internalSchemaManager;
-      };
-
-      // initialize storage conf lazily.
-      StorageConfiguration<?> readerConf = writeClient.getEngineContext().getStorageConf();
-      return Option.of(new FlinkRowDataReaderContext(
-          readerConf, internalSchemaManagerSupplier, Collections.emptyList(), metaClient.getTableConfig(), Option.empty()));
-    }
-    // always using avro record merger for legacy compaction since log scanner do not support rowdata reading yet.
-    writeClient.getConfig().setRecordMergerClass(HoodieAvroRecordMerger.class.getName());
-    return Option.empty();
+  private HoodieReaderContext<?> createReaderContext(HoodieFlinkWriteClient<?> writeClient, boolean needReloadMetaClient) {
+    HoodieTableMetaClient metaClient = flinkTable.getMetaClient();
+    // CAUTION: InternalSchemaManager will scan timeline, reusing the meta client so that the timeline is updated.
+    // Instantiate internalSchemaManager lazily here since it may not be needed for FG reader, e.g., schema evolution
+    // for log files in FG reader do not use internalSchemaManager.
+    Supplier<InternalSchemaManager> internalSchemaManagerSupplier = () -> {
+      if (internalSchemaManager == null || needReloadMetaClient) {
+        internalSchemaManager = InternalSchemaManager.get(metaClient.getStorageConf(), metaClient);
+      }
+      return internalSchemaManager;
+    };
+    // initialize storage conf lazily.
+    StorageConfiguration<?> readerConf = writeClient.getEngineContext().getStorageConf();
+    return new FlinkRowDataReaderContext(readerConf, internalSchemaManagerSupplier, Collections.emptyList(), metaClient.getTableConfig(), Option.empty());
   }
 
   @VisibleForTesting

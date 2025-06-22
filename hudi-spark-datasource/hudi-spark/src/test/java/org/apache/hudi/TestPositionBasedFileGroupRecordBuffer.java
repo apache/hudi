@@ -159,7 +159,8 @@ public class TestPositionBasedFileGroupRecordBuffer extends SparkClientFunctiona
         props,
         readStats,
         Option.of("timestamp"),
-        false);
+        false,
+        Option.empty());
   }
 
   private void commitToTable(List<HoodieRecord> recordList, String operation, Map<String, String> options) {

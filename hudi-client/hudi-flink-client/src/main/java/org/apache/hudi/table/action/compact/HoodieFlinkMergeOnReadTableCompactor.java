@@ -31,9 +31,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantGenerator;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.table.HoodieCompactionHandler;
 import org.apache.hudi.table.HoodieTable;
 
 import org.slf4j.Logger;
@@ -69,35 +67,22 @@ public class HoodieFlinkMergeOnReadTableCompactor<T>
     }
   }
 
-  public List<WriteStatus> compact(HoodieCompactionHandler compactionHandler,
-                                   HoodieWriteConfig writeConfig,
+  public List<WriteStatus> compact(HoodieWriteConfig writeConfig,
                                    CompactionOperation operation,
                                    String instantTime,
                                    TaskContextSupplier taskContextSupplier,
-                                   Option<HoodieReaderContext<?>> readerContextOpt,
+                                   HoodieReaderContext<?> readerContext,
                                    HoodieTable table) throws IOException {
     String maxInstantTime = getMaxInstantTime(table.getMetaClient());
-    if (readerContextOpt.isEmpty()) {
-      LOG.info("Compact using legacy compaction, operation: {}.", operation);
-      return compact(
-          compactionHandler,
-          table.getMetaClient(),
-          writeConfig,
-          operation,
-          instantTime,
-          maxInstantTime,
-          taskContextSupplier);
-    } else {
-      LOG.info("Compact using file group reader based compaction, operation: {}.", operation);
-      return compact(
-          writeConfig,
-          operation,
-          instantTime,
-          readerContextOpt.get(),
-          table,
-          maxInstantTime,
-          taskContextSupplier);
-    }
+    LOG.info("Compact using file group reader based compaction, operation: {}.", operation);
+    return compact(
+        writeConfig,
+        operation,
+        instantTime,
+        readerContext,
+        table,
+        maxInstantTime,
+        taskContextSupplier);
   }
 
   @Override

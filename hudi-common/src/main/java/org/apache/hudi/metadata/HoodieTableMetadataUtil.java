@@ -1031,7 +1031,7 @@ public class HoodieTableMetadataUtil {
       readerContext.initRecordMerger(properties);
       readerContext.setSchemaHandler(new FileGroupReaderSchemaHandler<>(readerContext, writerSchemaOpt.get(), writerSchemaOpt.get(), Option.empty(), tableConfig, properties));
       KeyBasedFileGroupRecordBuffer<T> recordBuffer = new KeyBasedFileGroupRecordBuffer<>(readerContext, datasetMetaClient,
-          readerContext.getMergeMode(), PartialUpdateMode.NONE, properties, new HoodieReadStats(), Option.ofNullable(tableConfig.getPreCombineField()), true);
+          readerContext.getMergeMode(), PartialUpdateMode.NONE, properties, new HoodieReadStats(), Option.ofNullable(tableConfig.getPreCombineField()), true, Option.empty());
 
       // CRITICAL: Ensure allowInflightInstants is set to true
       try (HoodieMergedLogRecordReader<T> mergedLogRecordReader = HoodieMergedLogRecordReader.<T>newBuilder()

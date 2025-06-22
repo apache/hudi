@@ -97,6 +97,8 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   // the allowInflightInstants flag would need to be set to true. This would ensure the HoodieMergedLogRecordReader
   // considers the log records which are inflight.
   private final boolean allowInflightInstants;
+  // Callback to run custom logic on updates to the base files for the file group
+  private final Option<FileGroupUpdateCallback<T>> fileGroupUpdateCallback;
 
   /**
    * Constructs an instance of the HoodieFileGroupReader.
@@ -111,14 +113,16 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       long start, long length, boolean shouldUseRecordPosition) {
     this(readerContext, storage, tablePath, latestCommitTime, fileSlice, dataSchema,
         requestedSchema, internalSchemaOpt, hoodieTableMetaClient, props, start, length,
-        shouldUseRecordPosition, false, false, false);
+        shouldUseRecordPosition, false, false, false, Option.empty());
   }
 
   private HoodieFileGroupReader(HoodieReaderContext<T> readerContext, HoodieStorage storage, String tablePath,
                                 String latestCommitTime, FileSlice fileSlice, Schema dataSchema, Schema requestedSchema,
                                 Option<InternalSchema> internalSchemaOpt, HoodieTableMetaClient hoodieTableMetaClient, TypedProperties props,
-                                long start, long length, boolean shouldUseRecordPosition, boolean allowInflightInstants, boolean emitDelete, boolean sortOutput) {
+                                long start, long length, boolean shouldUseRecordPosition, boolean allowInflightInstants, boolean emitDelete, boolean sortOutput,
+                                Option<FileGroupUpdateCallback<T>> updateCallback) {
     this.readerContext = readerContext;
+    this.fileGroupUpdateCallback = updateCallback;
     this.metaClient = hoodieTableMetaClient;
     this.storage = storage;
     this.hoodieBaseFileOption = fileSlice.getBaseFile();
@@ -193,13 +197,13 @@ public final class HoodieFileGroupReader<T> implements Closeable {
           readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, readStats, emitDelete);
     } else if (sortOutput) {
       return new SortedKeyBasedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, readStats, orderingFieldName, emitDelete);
+          readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, readStats, orderingFieldName, emitDelete, fileGroupUpdateCallback);
     } else if (shouldUseRecordPosition && baseFileOption.isPresent()) {
       return new PositionBasedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, baseFileOption.get().getCommitTime(), props, readStats, orderingFieldName, emitDelete);
+          readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, baseFileOption.get().getCommitTime(), props, readStats, orderingFieldName, emitDelete, fileGroupUpdateCallback);
     } else {
       return new KeyBasedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, readStats, orderingFieldName, emitDelete);
+          readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, readStats, orderingFieldName, emitDelete, fileGroupUpdateCallback);
     }
   }
 
@@ -455,6 +459,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     private boolean allowInflightInstants = false;
     private boolean emitDelete;
     private boolean sortOutput = false;
+    private Option<FileGroupUpdateCallback<T>> fileGroupUpdateCallback = Option.empty();
 
     public Builder<T> withReaderContext(HoodieReaderContext<T> readerContext) {
       this.readerContext = readerContext;
@@ -522,6 +527,11 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       return this;
     }
 
+    public Builder<T> withFileGroupUpdateCallback(Option<FileGroupUpdateCallback<T>> fileGroupUpdateCallback) {
+      this.fileGroupUpdateCallback = fileGroupUpdateCallback;
+      return this;
+    }
+
     /**
      * If true, the output of the merge will be sorted instead of appending log records to end of the iterator if they do not have matching keys in the base file.
      * This assumes that the base file is already sorted by key.
@@ -551,7 +561,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       return new HoodieFileGroupReader<>(
           readerContext, storage, tablePath, latestCommitTime, fileSlice,
           dataSchema, requestedSchema, internalSchemaOpt, hoodieTableMetaClient,
-          props, start, length, shouldUseRecordPosition, allowInflightInstants, emitDelete, sortOutput);
+          props, start, length, shouldUseRecordPosition, allowInflightInstants, emitDelete, sortOutput, fileGroupUpdateCallback);
     }
   }
 }

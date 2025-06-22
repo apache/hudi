@@ -74,8 +74,9 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
                                             TypedProperties props,
                                             HoodieReadStats readStats,
                                             Option<String> orderingFieldName,
-                                            boolean emitDelete) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, readStats, orderingFieldName, emitDelete);
+                                            boolean emitDelete,
+                                            Option<FileGroupUpdateCallback<T>> updateCallback) {
+    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, readStats, orderingFieldName, emitDelete, updateCallback);
     this.baseFileInstantTime = baseFileInstantTime;
   }
 

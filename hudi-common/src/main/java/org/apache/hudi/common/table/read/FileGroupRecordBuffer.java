@@ -77,6 +77,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   protected final boolean shouldCheckCustomDeleteMarker;
   protected final boolean shouldCheckBuiltInDeleteMarker;
   protected final boolean emitDelete;
+  private final Option<FileGroupUpdateCallback<T>> callbackOption;
   protected ClosableIterator<T> baseFileIterator;
   protected Iterator<BufferedRecord<T>> logRecordIterator;
   protected T nextRecord;
@@ -93,8 +94,10 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
                                   TypedProperties props,
                                   HoodieReadStats readStats,
                                   Option<String> orderingFieldName,
-                                  boolean emitDelete) {
+                                  boolean emitDelete,
+                                  Option<FileGroupUpdateCallback<T>> updateCallback) {
     this.readerContext = readerContext;
+    this.callbackOption = updateCallback;
     this.readerSchema = AvroSchemaCache.intern(readerContext.getSchemaHandler().getRequiredSchema());
     this.recordMergeMode = recordMergeMode;
     this.partialUpdateMode = partialUpdateMode;
@@ -321,15 +324,21 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
       if (!isDeleteAndRecord.getLeft()) {
         // Updates
         nextRecord = readerContext.seal(isDeleteAndRecord.getRight());
+        callbackOption.ifPresent(callback -> {
+          BufferedRecord<T> mergeResult = BufferedRecord.forRecordWithContext(isDeleteAndRecord.getRight(), readerSchema, readerContext, orderingFieldName, false);
+          callback.onUpdate(readerContext.constructHoodieRecord(baseRecordInfo), readerContext.constructHoodieRecord(logRecordInfo), readerContext.constructHoodieRecord(mergeResult));
+        });
         readStats.incrementNumUpdates();
         return true;
       } else if (emitDelete) {
         // emit Deletes
+        callbackOption.ifPresent(callback -> callback.onDelete(readerContext.constructHoodieRecord(baseRecordInfo), readerContext.constructHoodieRecord(logRecordInfo)));
         nextRecord = readerContext.getDeleteRow(isDeleteAndRecord.getRight(), baseRecordInfo.getRecordKey());
         readStats.incrementNumDeletes();
         return nextRecord != null;
       } else {
         // not emit Deletes
+        callbackOption.ifPresent(callback -> callback.onDelete(readerContext.constructHoodieRecord(baseRecordInfo), readerContext.constructHoodieRecord(logRecordInfo)));
         readStats.incrementNumDeletes();
         return false;
       }
@@ -354,6 +363,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
       BufferedRecord<T> nextRecordInfo = logRecordIterator.next();
       if (!nextRecordInfo.isDelete()) {
         nextRecord = nextRecordInfo.getRecord();
+        callbackOption.ifPresent(callback -> callback.onInsert(readerContext.constructHoodieRecord(nextRecordInfo)));
         readStats.incrementNumInserts();
         return true;
       } else if (emitDelete) {

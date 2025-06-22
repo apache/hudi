@@ -129,7 +129,7 @@ class TestSortedKeyBasedFileGroupRecordBuffer {
     PartialUpdateMode partialUpdateMode = PartialUpdateMode.NONE;
     TypedProperties props = new TypedProperties();
     return new SortedKeyBasedFileGroupRecordBuffer<>(
-        mockReaderContext, mockMetaClient, recordMergeMode, partialUpdateMode, props, readStats, Option.empty(), false);
+        mockReaderContext, mockMetaClient, recordMergeMode, partialUpdateMode, props, readStats, Option.empty(), false, Option.empty());
   }
 
   private static List<TestRecord> getActualRecords(SortedKeyBasedFileGroupRecordBuffer<TestRecord> fileGroupRecordBuffer) throws IOException {

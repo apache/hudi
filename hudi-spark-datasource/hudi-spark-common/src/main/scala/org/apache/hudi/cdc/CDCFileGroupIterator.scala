@@ -23,15 +23,14 @@ import org.apache.hudi.{AvroConversionUtils, HoodieTableSchema, SparkAdapterSupp
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.HoodieDataSourceHelper.AvroDeserializerSupport
 import org.apache.hudi.avro.HoodieAvroUtils
-import org.apache.hudi.client.model.HoodieInternalRow
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMemoryConfig, HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.config.HoodieCommonConfig.{DISK_MAP_BITCASK_COMPRESSION_ENABLED, SPILLABLE_DISK_MAP_TYPE}
 import org.apache.hudi.common.config.HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH
-import org.apache.hudi.common.config.HoodieReaderConfig.{RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY, RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY}
+import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{FileSlice, HoodieLogFile, HoodieRecordMerger, HoodieSparkRecord}
 import org.apache.hudi.common.serialization.DefaultSerializer
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion}
+import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.cdc.{HoodieCDCFileSplit, HoodieCDCUtils}
 import org.apache.hudi.common.table.cdc.HoodieCDCInferenceCase._
 import org.apache.hudi.common.table.cdc.HoodieCDCOperation._
@@ -39,10 +38,11 @@ import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode._
 import org.apache.hudi.common.table.log.{HoodieCDCLogRecordIterator, HoodieMergedLogRecordReader}
 import org.apache.hudi.common.table.read.{BufferedRecord, FileGroupReaderSchemaHandler, HoodieFileGroupReader, HoodieReadStats, KeyBasedFileGroupRecordBuffer}
 import org.apache.hudi.common.util.{DefaultSizeEstimator, FileIOUtils, Option}
-import org.apache.hudi.common.util.collection.{ClosableIterator, ExternalSpillableMap, ImmutablePair}
+import org.apache.hudi.common.util.collection.{ExternalSpillableMap, ImmutablePair}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.data.CloseableIteratorListener
 import org.apache.hudi.storage.{StorageConfiguration, StoragePath}
+
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.conf.Configuration
@@ -58,7 +58,7 @@ import java.io.Closeable
 import java.util
 import java.util.{Collections, Locale}
 import java.util.stream.Collectors
-import java.util.stream.Collectors.toList
+
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.collection.mutable
@@ -97,7 +97,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
   }
 
   private lazy val recordMerger: HoodieRecordMerger = {
-    val readerContext = new SparkFileFormatInternalRowReaderContext(parquetReader, Seq.empty, Seq.empty, conf, metaClient.getTableConfig)
+    val readerContext: HoodieReaderContext[InternalRow] = new SparkFileFormatInternalRowReaderContext(parquetReader, Seq.empty, Seq.empty, conf, metaClient.getTableConfig)
     readerContext.initRecordMerger(props)
     readerContext.getRecordMerger.get()
   }
@@ -498,10 +498,10 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
     readerContext.initRecordMerger(readerProperties)
     readerContext.setSchemaHandler(
       new FileGroupReaderSchemaHandler[InternalRow](readerContext, avroSchema, avroSchema,
-        Option.empty, metaClient.getTableConfig, readerProperties))
+        Option.empty(), metaClient.getTableConfig, readerProperties))
     val recordBuffer = new KeyBasedFileGroupRecordBuffer[InternalRow](readerContext, metaClient,
       readerContext.getMergeMode, readerProperties, new HoodieReadStats,
-      Option.ofNullable(metaClient.getTableConfig.getPreCombineField), true)
+      Option.ofNullable(metaClient.getTableConfig.getPreCombineField), true, Option.empty())
 
     HoodieMergedLogRecordReader.newBuilder[InternalRow]
       .withStorage(metaClient.getStorage)
