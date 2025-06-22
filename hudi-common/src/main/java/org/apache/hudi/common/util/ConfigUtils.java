@@ -79,12 +79,12 @@ public class ConfigUtils {
    */
   public static String getOrderingField(Properties properties) {
     String orderField = null;
-    if (properties.containsKey(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY)) {
-      orderField = properties.getProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY);
-    } else if (properties.containsKey("hoodie.datasource.write.precombine.field")) {
+    if (properties.containsKey("hoodie.datasource.write.precombine.field")) {
       orderField = properties.getProperty("hoodie.datasource.write.precombine.field");
     } else if (properties.containsKey(HoodieTableConfig.PRECOMBINE_FIELD.key())) {
       orderField = properties.getProperty(HoodieTableConfig.PRECOMBINE_FIELD.key());
+    } else if (properties.containsKey(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY)) {
+      orderField = properties.getProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY);
     }
     return orderField;
   }
