@@ -77,12 +77,13 @@ import java.util.Set;
  *     else write the record as is
  * For all pending records from incoming batch, write to file.
  *
+ * <p>
  * Illustration with simple data.
  * Incoming data:
  *     rec1_2, rec4_2, rec5_1, rec6_1
  * Existing data:
  *     rec1_1, rec2_1, rec3_1, rec4_1
- *
+ * <p>
  * For every existing record, merge w/ incoming if required and write to storage.
  *    => rec1_1 and rec1_2 is merged to write rec1_2 to storage
  *    => rec2_1 is written as is
@@ -90,11 +91,9 @@ import java.util.Set;
  *    => rec4_2 and rec4_1 is merged to write rec4_2 to storage
  * Write all pending records from incoming set to storage
  *    => rec5_1 and rec6_1
- *
+ * <p>
  * Final snapshot in storage
  * rec1_2, rec2_1, rec3_1, rec4_2, rec5_1, rec6_1
- *
- * </p>
  */
 @SuppressWarnings("Duplicates")
 @NotThreadSafe
@@ -357,7 +356,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
           // CASE (1): Flush the merged record.
           HoodieKey hoodieKey = newRecord.getKey();
           if (isSecondaryIndexStatsStreamingWritesEnabled) {
-            WriteHandleMetadataUtils.trackMetadataIndexStats(hoodieKey, combineRecord, oldRecord, false, writeStatus,
+            SecondaryIndexStreamingTracker.trackSecondaryIndexStats(hoodieKey, combineRecord, oldRecord, false, writeStatus,
                 writeSchemaWithMetaFields, this::getNewSchema, secondaryIndexDefns, keyGeneratorOpt, hoodieTable, taskContextSupplier);
           }
           writeToFile(hoodieKey, combineRecord.get(), schema, prop, preserveMetadata);
@@ -365,14 +364,14 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
         } else {
           // CASE (2): A delete operation.
           if (isSecondaryIndexStatsStreamingWritesEnabled) {
-            WriteHandleMetadataUtils.trackMetadataIndexStats(newRecord.getKey(), combineRecord, oldRecord, true, writeStatus,
+            SecondaryIndexStreamingTracker.trackSecondaryIndexStats(newRecord.getKey(), combineRecord, oldRecord, true, writeStatus,
                 writeSchemaWithMetaFields, this::getNewSchema, secondaryIndexDefns, keyGeneratorOpt, hoodieTable, taskContextSupplier);
           }
           recordsDeleted++;
         }
       } else {
         if (isSecondaryIndexStatsStreamingWritesEnabled) {
-          WriteHandleMetadataUtils.trackMetadataIndexStats(newRecord.getKey(), combineRecord, oldRecord, true, writeStatus,
+          SecondaryIndexStreamingTracker.trackSecondaryIndexStats(newRecord.getKey(), combineRecord, oldRecord, true, writeStatus,
               writeSchemaWithMetaFields, this::getNewSchema, secondaryIndexDefns, keyGeneratorOpt, hoodieTable, taskContextSupplier);
         }
         recordsDeleted++;

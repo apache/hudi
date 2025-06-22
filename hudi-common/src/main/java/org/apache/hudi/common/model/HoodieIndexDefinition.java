@@ -43,7 +43,7 @@ import static org.apache.hudi.index.expression.HoodieExpressionIndex.TRIM_STRING
 /**
  * Class representing the metadata for a functional or secondary index in Hudi.
  */
-@JsonIgnoreProperties(ignoreUnknown = true)
+@JsonIgnoreProperties(ignoreUnknown = true, value = {"sourceFieldsKey"})
 public class HoodieIndexDefinition implements Serializable {
 
   // Name of the index
@@ -57,11 +57,19 @@ public class HoodieIndexDefinition implements Serializable {
   // Data fields the expression is derived from
   private List<String> sourceFields;
 
+  /**
+   * Source fields concatenated with dot '.'.
+   *
+   * <p>The field should be ignored in Ser/De.
+   */
+  private String sourceFieldsKey;
+
   // Any other configuration or properties specific to the index
   private Map<String, String> indexOptions;
 
   public HoodieIndexDefinition() {
   }
+
 
   HoodieIndexDefinition(String indexName, String indexType, String indexFunction, List<String> sourceFields, Map<String, String> indexOptions) {
     this.indexName = indexName;
@@ -77,6 +85,13 @@ public class HoodieIndexDefinition implements Serializable {
 
   public List<String> getSourceFields() {
     return sourceFields;
+  }
+
+  public String getSourceFieldsKey() {
+    if (this.sourceFieldsKey == null) {
+      this.sourceFieldsKey = String.join(".", this.sourceFields);
+    }
+    return this.sourceFieldsKey;
   }
 
   public Map<String, String> getIndexOptions() {

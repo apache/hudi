@@ -142,14 +142,14 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         if (preserveMetadata) {
           HoodieRecord populatedRecord = updateFileName(record, schema, writeSchemaWithMetaFields, path.getName(), config.getProps());
           if (isSecondaryIndexStatsStreamingWritesEnabled) {
-            WriteHandleMetadataUtils.trackMetadataIndexStats(populatedRecord, writeStatus, writeSchemaWithMetaFields, secondaryIndexDefns, hoodieTable, taskContextSupplier);
+            SecondaryIndexStreamingTracker.trackSecondaryIndexStats(populatedRecord, writeStatus, writeSchemaWithMetaFields, secondaryIndexDefns, hoodieTable, taskContextSupplier);
           }
           fileWriter.write(record.getRecordKey(), populatedRecord, writeSchemaWithMetaFields);
         } else {
           // rewrite the record to include metadata fields in schema, and the values will be set later.
           record = record.prependMetaFields(schema, writeSchemaWithMetaFields, new MetadataValues(), config.getProps());
           if (isSecondaryIndexStatsStreamingWritesEnabled) {
-            WriteHandleMetadataUtils.trackMetadataIndexStats(record, writeStatus, writeSchemaWithMetaFields, secondaryIndexDefns, hoodieTable, taskContextSupplier);
+            SecondaryIndexStreamingTracker.trackSecondaryIndexStats(record, writeStatus, writeSchemaWithMetaFields, secondaryIndexDefns, hoodieTable, taskContextSupplier);
           }
           fileWriter.writeWithMetadata(record.getKey(), record, writeSchemaWithMetaFields);
         }

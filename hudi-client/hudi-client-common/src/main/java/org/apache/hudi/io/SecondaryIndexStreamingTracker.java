@@ -31,7 +31,6 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
@@ -52,11 +51,11 @@ import java.util.function.Supplier;
 /**
  * Utility class for write handle metadata.
  */
-public class WriteHandleMetadataUtils {
+public class SecondaryIndexStreamingTracker {
 
   /**
    * The utility function used by Append Handle to generate secondary index stats for the file slice
-   * considering the new log files added by the handle. The function generates secondary index stats by
+   * considering the new log files added by the append handle. The function generates secondary index stats by
    * reading the file slice without the new log files and comparing it by reading file slice with the
    * new log files written by the handle.
    *
@@ -72,9 +71,9 @@ public class WriteHandleMetadataUtils {
    * @param instantTime               Instant time of the commit
    * @param writeSchemaWithMetaFields Write schema with metadata fields
    */
-  static void trackMetadataIndexStatsForStreamingMetadataWrites(String partitionPath, String fileId, Option<FileSlice> fileSliceOpt, List<String> newLogFiles, WriteStatus status,
-                                                                HoodieTable hoodieTable, TaskContextSupplier taskContextSupplier, List<Pair<String, HoodieIndexDefinition>> secondaryIndexDefns,
-                                                                HoodieWriteConfig config, String instantTime, Schema writeSchemaWithMetaFields) {
+  static void trackSecondaryIndexStats(String partitionPath, String fileId, Option<FileSlice> fileSliceOpt, List<String> newLogFiles, WriteStatus status,
+                                       HoodieTable hoodieTable, TaskContextSupplier taskContextSupplier, List<HoodieIndexDefinition> secondaryIndexDefns,
+                                       HoodieWriteConfig config, String instantTime, Schema writeSchemaWithMetaFields) {
     // TODO: @see <a href="https://issues.apache.org/jira/browse/HUDI-9533">HUDI-9533</a> Optimise the computation for multiple secondary indexes
     HoodieEngineContext engineContext = new HoodieLocalEngineContext(hoodieTable.getStorageConf(), taskContextSupplier);
     HoodieReaderContext readerContext = engineContext.getReaderContextFactory(hoodieTable.getMetaClient()).getContext();
@@ -82,12 +81,12 @@ public class WriteHandleMetadataUtils {
     // For Append handle, we need to merge the records written by new log files with the existing file slice to check
     // the corresponding updates for secondary index. It is possible the records written in the new log files are ignored
     // by record merger.
-    secondaryIndexDefns.forEach(secondaryIndexDefnPair -> {
+    secondaryIndexDefns.forEach(def -> {
       // fetch primary key -> secondary index for prev file slice.
       Map<String, String> recordKeyToSecondaryKeyForPreviousFileSlice = fileSliceOpt.map(fileSlice -> {
         try {
           return SecondaryIndexRecordGenerationUtils.getRecordKeyToSecondaryKey(hoodieTable.getMetaClient(), readerContext, fileSlice, writeSchemaWithMetaFields,
-              secondaryIndexDefnPair.getValue(), instantTime, config.getProps(), false);
+              def, instantTime, config.getProps(), false);
         } catch (IOException e) {
           throw new HoodieIOException("Failed to generate secondary index stats ", e);
         }
@@ -100,22 +99,23 @@ public class WriteHandleMetadataUtils {
       Map<String, String> recordKeyToSecondaryKeyForCurrentFileSlice;
       try {
         recordKeyToSecondaryKeyForCurrentFileSlice = SecondaryIndexRecordGenerationUtils.getRecordKeyToSecondaryKey(hoodieTable.getMetaClient(), readerContext,
-            latestIncludingInflight, writeSchemaWithMetaFields, secondaryIndexDefnPair.getValue(), instantTime, config.getProps(), true);
+            latestIncludingInflight, writeSchemaWithMetaFields, def, instantTime, config.getProps(), true);
       } catch (IOException e) {
         throw new HoodieIOException("Failed to generate secondary index stats ", e);
       }
 
       // Iterate over record keys in current file slice and prepare the secondary index records based on
       // whether the record is a new record, record with updated secondary key or deleted record
+      final String indexName = def.getIndexName();
       recordKeyToSecondaryKeyForCurrentFileSlice.forEach((recordKey, secondaryKey) -> {
         if (!recordKeyToSecondaryKeyForPreviousFileSlice.containsKey(recordKey)) {
-          status.getIndexStats().addSecondaryIndexStats(secondaryIndexDefnPair.getKey(), recordKey, secondaryKey, false);
+          status.getIndexStats().addSecondaryIndexStats(indexName, recordKey, secondaryKey, false);
         } else {
           // delete previous entry and insert new value if secondaryKey is different
           String previousSecondaryKey = recordKeyToSecondaryKeyForPreviousFileSlice.get(recordKey);
           if (!previousSecondaryKey.equals(secondaryKey)) {
-            status.getIndexStats().addSecondaryIndexStats(secondaryIndexDefnPair.getKey(), recordKey, previousSecondaryKey, true);
-            status.getIndexStats().addSecondaryIndexStats(secondaryIndexDefnPair.getKey(), recordKey, secondaryKey, false);
+            status.getIndexStats().addSecondaryIndexStats(indexName, recordKey, previousSecondaryKey, true);
+            status.getIndexStats().addSecondaryIndexStats(indexName, recordKey, secondaryKey, false);
           }
         }
       });
@@ -125,7 +125,7 @@ public class WriteHandleMetadataUtils {
       Map<String, String> finalRecordKeyToSecondaryKeyForCurrentFileSlice = recordKeyToSecondaryKeyForCurrentFileSlice;
       recordKeyToSecondaryKeyForPreviousFileSlice.forEach((recordKey, secondaryKey) -> {
         if (!finalRecordKeyToSecondaryKeyForCurrentFileSlice.containsKey(recordKey)) {
-          status.getIndexStats().addSecondaryIndexStats(secondaryIndexDefnPair.getKey(), recordKey, secondaryKey, true);
+          status.getIndexStats().addSecondaryIndexStats(indexName, recordKey, secondaryKey, true);
         }
       });
     });
@@ -141,19 +141,17 @@ public class WriteHandleMetadataUtils {
    * @param hoodieTable               Hoodie table
    * @param taskContextSupplier       Task context supplier
    */
-  static void trackMetadataIndexStats(HoodieRecord record, WriteStatus writeStatus, Schema writeSchemaWithMetaFields,
-                                      List<Pair<String, HoodieIndexDefinition>> secondaryIndexDefns,
-                                      HoodieTable hoodieTable, TaskContextSupplier taskContextSupplier) {
+  static void trackSecondaryIndexStats(HoodieRecord record, WriteStatus writeStatus, Schema writeSchemaWithMetaFields,
+                                       List<HoodieIndexDefinition> secondaryIndexDefns, HoodieTable hoodieTable, TaskContextSupplier taskContextSupplier) {
     HoodieEngineContext engineContext = new HoodieLocalEngineContext(hoodieTable.getStorageConf(), taskContextSupplier);
     HoodieReaderContext readerContext = engineContext.getReaderContextFactory(hoodieTable.getMetaClient()).getContext();
 
     // Add secondary index records for all the inserted records
-    secondaryIndexDefns.forEach(secondaryIndexPartitionPathFieldPair -> {
-      String secondaryIndexSourceField = String.join(".", secondaryIndexPartitionPathFieldPair.getValue().getSourceFields());
+    secondaryIndexDefns.forEach(def -> {
       if (record instanceof HoodieAvroIndexedRecord) {
-        Object secondaryKey = readerContext.getValue(record.getData(), writeSchemaWithMetaFields, secondaryIndexSourceField);
+        Object secondaryKey = readerContext.getValue(record.getData(), writeSchemaWithMetaFields, def.getSourceFieldsKey());
         if (secondaryKey != null) {
-          writeStatus.getIndexStats().addSecondaryIndexStats(secondaryIndexPartitionPathFieldPair.getKey(), record.getRecordKey(), secondaryKey.toString(), false);
+          writeStatus.getIndexStats().addSecondaryIndexStats(def.getIndexName(), record.getRecordKey(), secondaryKey.toString(), false);
         }
       }
     });
@@ -176,15 +174,15 @@ public class WriteHandleMetadataUtils {
    * @param hoodieTable               The hoodie table
    * @param taskContextSupplier       The task context supplier
    */
-  static <T> void trackMetadataIndexStats(@Nullable HoodieKey hoodieKey, Option<HoodieRecord> combinedRecordOpt, @Nullable HoodieRecord<T> oldRecord, boolean isDelete,
-                                          WriteStatus writeStatus, Schema writeSchemaWithMetaFields, Supplier<Schema> newSchemaSupplier,
-                                          List<Pair<String, HoodieIndexDefinition>> secondaryIndexDefns, Option<BaseKeyGenerator> keyGeneratorOpt, HoodieTable hoodieTable,
-                                          TaskContextSupplier taskContextSupplier) {
+  static <T> void trackSecondaryIndexStats(@Nullable HoodieKey hoodieKey, Option<HoodieRecord> combinedRecordOpt, @Nullable HoodieRecord<T> oldRecord, boolean isDelete,
+                                           WriteStatus writeStatus, Schema writeSchemaWithMetaFields, Supplier<Schema> newSchemaSupplier,
+                                           List<HoodieIndexDefinition> secondaryIndexDefns, Option<BaseKeyGenerator> keyGeneratorOpt, HoodieTable hoodieTable,
+                                           TaskContextSupplier taskContextSupplier) {
     HoodieEngineContext engineContext = new HoodieLocalEngineContext(hoodieTable.getStorageConf(), taskContextSupplier);
     HoodieReaderContext readerContext = engineContext.getReaderContextFactory(hoodieTable.getMetaClient()).getContext();
 
-    secondaryIndexDefns.forEach(secondaryIndexPartitionPathFieldPair -> {
-      String secondaryIndexSourceField = String.join(".", secondaryIndexPartitionPathFieldPair.getValue().getSourceFields());
+    secondaryIndexDefns.forEach(def -> {
+      String secondaryIndexSourceField = def.getSourceFieldsKey();
       Option<Object> oldSecondaryKeyOpt = Option.empty();
       Option<Object> newSecondaryKeyOpt = Option.empty();
       if (oldRecord instanceof HoodieAvroIndexedRecord) {
@@ -213,9 +211,9 @@ public class WriteHandleMetadataUtils {
             .or(() -> combinedRecordOpt.map(HoodieRecord::getRecordKey))
             .get();
         // Add secondary index delete records for old records
-        oldSecondaryKeyOpt.ifPresent(secKey -> addSecondaryIndexStat(writeStatus, secondaryIndexPartitionPathFieldPair.getKey(), recordKey, secKey, true));
+        oldSecondaryKeyOpt.ifPresent(secKey -> addSecondaryIndexStat(writeStatus, def.getIndexName(), recordKey, secKey, true));
         newSecondaryKeyOpt.ifPresent(secKey ->
-            addSecondaryIndexStat(writeStatus, secondaryIndexPartitionPathFieldPair.getKey(), recordKey, secKey, false));
+            addSecondaryIndexStat(writeStatus, def.getIndexName(), recordKey, secKey, false));
       }
     });
   }

@@ -40,7 +40,6 @@ import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -91,7 +90,7 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
    * Flag saying whether secondary index streaming writes is enabled for the table.
    */
   protected final boolean isSecondaryIndexStatsStreamingWritesEnabled;
-  List<Pair<String, HoodieIndexDefinition>> secondaryIndexDefns = Collections.emptyList();
+  List<HoodieIndexDefinition> secondaryIndexDefns = Collections.emptyList();
 
   private boolean closed = false;
 
@@ -120,14 +119,14 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
         hoodieTable.shouldTrackSuccessRecords(), config.getWriteStatusFailureFraction(), hoodieTable.isMetadataTable());
     boolean isMetadataStreamingWritesEnabled = config.isMetadataStreamingWritesEnabled(hoodieTable.getMetaClient().getTableConfig().getTableVersion());
     if (isMetadataStreamingWritesEnabled) {
-      initMetadataPartitionsToCollectStats(preserveMetadata);
+      initSecondaryIndexStats(preserveMetadata);
       this.isSecondaryIndexStatsStreamingWritesEnabled = !secondaryIndexDefns.isEmpty();
     } else {
       this.isSecondaryIndexStatsStreamingWritesEnabled = false;
     }
   }
 
-  private void initMetadataPartitionsToCollectStats(boolean preserveMetadata) {
+  private void initSecondaryIndexStats(boolean preserveMetadata) {
     // Secondary index should not be updated for clustering and compaction
     // Since for clustering and compaction preserveMetadata is true, we are checking for it before enabling secondary index update
     if (config.isSecondaryIndexEnabled() && !preserveMetadata) {
@@ -138,9 +137,8 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
           .orElse(Collections.emptyList())
           .stream()
           .filter(indexDef -> indexDef.getIndexName().startsWith(HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX))
-          .map(indexDef -> Pair.of(indexDef.getIndexName(), indexDef))
           .collect(Collectors.toList());
-      secondaryIndexDefns.forEach(pair -> writeStatus.getIndexStats().instantiateSecondaryIndexStatsForIndex(pair.getKey()));
+      secondaryIndexDefns.forEach(def -> writeStatus.getIndexStats().initSecondaryIndexStats(def.getIndexName()));
     }
   }
 
