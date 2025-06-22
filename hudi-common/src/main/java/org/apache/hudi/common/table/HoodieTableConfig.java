@@ -522,6 +522,7 @@ public class HoodieTableConfig extends HoodieConfig {
       storage.deleteFile(cfgPath);
 
       // 4. Upsert and save back to a temp file
+      String checksum;
       try (OutputStream out = storage.create(tempCfgPath, true)) {
         modifyFn.accept(props, modifyProps);
         checksum = storeProperties(props, out);
