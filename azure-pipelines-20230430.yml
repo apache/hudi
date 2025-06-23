@@ -259,7 +259,7 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'clean install'
-              options: $(MVN_OPTS_INSTALL) -pl $(JOB3456_MODULES) -am -XX:-OmitStackTraceInFastThrow
+              options: $(MVN_OPTS_INSTALL) -pl $(JOB3456_MODULES) -am
               publishJUnitResults: false
               jdkVersionOption: '1.8'
           - task: Maven@4
@@ -267,10 +267,11 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: $(MVN_OPTS_TEST) -Punit-tests $(JAVA_MVN_TEST_FILTER) $(MVN_ARG_NON_FUNCTIONAL_PACKAGE_TEST) $(JACOCO_AGENT_DESTFILE1_ARG) -pl $(JOB3456_MODULES) -XX:-OmitStackTraceInFastThrow
+              options: $(MVN_OPTS_TEST) -Punit-tests $(JAVA_MVN_TEST_FILTER) $(MVN_ARG_NON_FUNCTIONAL_PACKAGE_TEST) $(JACOCO_AGENT_DESTFILE1_ARG) -pl $(JOB3456_MODULES)
               publishJUnitResults: true
               testResultsFiles: '**/surefire-reports/TEST-*.xml'
               jdkVersionOption: '1.8'
+              mavenOptions: '-Xmx4g -XX:-OmitStackTraceInFastThrow'
           - script: |
               ./scripts/jacoco/download_jacoco.sh
               ./scripts/jacoco/merge_jacoco_exec_files.sh jacoco-lib/lib/jacococli.jar $(Build.SourcesDirectory)
