@@ -586,6 +586,95 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
   }
 
   /**
+   * Test secondary index with nullable columns
+   */
+  test("Test Secondary Index With Nullable Columns") {
+    withTempDir { tmp =>
+      val tableName = generateTableName + "_nullable"
+      val basePath = s"${tmp.getCanonicalPath}/$tableName"
+
+      // Create table with nullable column
+      spark.sql(
+        s"""
+           |CREATE TABLE $tableName (
+           |  id INT,
+           |  name STRING,
+           |  description STRING,
+           |  ts LONG
+           |) USING HUDI
+           |options(
+           |  primaryKey = 'id',
+           |  type = 'mor',
+           |  preCombineField = 'ts',
+           |  hoodie.metadata.enable = 'true',
+           |  hoodie.metadata.record.index.enable = 'true',
+           |  hoodie.metadata.index.secondary.enable = 'true',
+           |  hoodie.datasource.write.payload.class = 'org.apache.hudi.common.model.OverwriteWithLatestAvroPayload'
+           |)
+           |location '$basePath'
+           |""".stripMargin)
+
+      // Insert data with null values
+      spark.sql(
+        s"""
+           |INSERT INTO $tableName VALUES
+           |  (1, 'record1', 'description1', 1000),
+           |  (2, 'record2', NULL, 1001),
+           |  (3, 'record3', 'description3', 1002),
+           |  (4, 'record4', NULL, 1003)
+           |""".stripMargin)
+
+      // Verify initial data
+      checkAnswer(s"SELECT id, name, description, ts FROM $tableName ORDER BY id")(
+        Seq(1, "record1", "description1", 1000),
+        Seq(2, "record2", null, 1001),
+        Seq(3, "record3", "description3", 1002),
+        Seq(4, "record4", null, 1003)
+      )
+
+      // Create secondary index on nullable column
+      spark.sql(s"CREATE INDEX idx_description ON $tableName (description)")
+
+      // Verify index is created
+      checkAnswer(s"SHOW INDEXES FROM $tableName")(
+        Seq("column_stats", "column_stats", ""),
+        Seq("secondary_index_idx_description", "secondary_index", "description"),
+        Seq("record_index", "record_index", "")
+      )
+
+      // Verify secondary index entries in metadata
+      val expectedSecondaryKeys = spark.sql(s"SELECT _hoodie_record_key, description FROM $tableName")
+        .collect().map(row => {
+          val recordKey = row.getString(0)
+          val description = if (row.isNullAt(1)) null else row.getString(1)
+          SecondaryIndexKeyUtils.constructSecondaryIndexKey(description, recordKey)
+        })
+      
+      val actualSecondaryKeys = spark.sql(s"SELECT key FROM hudi_metadata('$basePath') WHERE type=7 AND key LIKE '%$SECONDARY_INDEX_RECORD_KEY_SEPARATOR%'")
+        .collect().map(indexKey => indexKey.getString(0))
+      
+      assertEquals(expectedSecondaryKeys.toSet, actualSecondaryKeys.toSet)
+
+      // Test query with null values using the secondary index
+      checkAnswer(s"SELECT * FROM $tableName WHERE description IS NULL ORDER BY id")(
+        Seq(2, "record2", null, 1001),
+        Seq(4, "record4", null, 1003)
+      )
+
+      // Test query with non-null values
+      checkAnswer(s"SELECT * FROM $tableName WHERE description IS NOT NULL ORDER BY id")(
+        Seq(1, "record1", "description1", 1000),
+        Seq(3, "record3", "description3", 1002)
+      )
+
+      // Test specific value query
+      checkAnswer(s"SELECT * FROM $tableName WHERE description = 'description1'")(
+        Seq(1, "record1", "description1", 1000)
+      )
+    }
+  }
+
+  /**
    * Test secondary index with auto generation of record keys
    */
   test("Test Secondary Index With Auto Record Key Generation") {
