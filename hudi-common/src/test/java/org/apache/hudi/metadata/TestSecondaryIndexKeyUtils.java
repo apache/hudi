@@ -45,6 +45,7 @@ public class TestSecondaryIndexKeyUtils {
     assertEquals(recordKey, extractedRecordKey);
   }
 
+  @SuppressWarnings("checkstyle:IllegalTokenText")
   private static Stream<Arguments> roundTripTestCases() {
     return Stream.of(
         // Normal cases
