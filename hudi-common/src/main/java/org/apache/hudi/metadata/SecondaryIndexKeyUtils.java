@@ -23,6 +23,11 @@ import static org.apache.hudi.metadata.HoodieMetadataPayload.SECONDARY_INDEX_REC
 
 public class SecondaryIndexKeyUtils {
 
+  // Null character (ASCII 0) used to represent null strings
+  private static final char NULL_CHAR = '\0';
+  // Escape character
+  private static final char ESCAPE_CHAR = '\\';
+
   public static String getRecordKeyFromSecondaryIndexKey(String key) {
     // the payload key is in the format of "secondaryKey$primaryKey"
     // we need to extract the primary key from the payload key
@@ -43,11 +48,20 @@ public class SecondaryIndexKeyUtils {
     return escapeSpecialChars(secondaryKey) + SECONDARY_INDEX_RECORD_KEY_SEPARATOR + escapeSpecialChars(recordKey);
   }
 
+  // TODO: Use version protection.
+  /**
+   * Escapes special characters in a string. If the input is null, returns a string containing only the null character.
+   * For non-null strings, escapes backslash, dollar sign, and null character.
+   */
   private static String escapeSpecialChars(String str) {
+    if (str == null) {
+      return String.valueOf(NULL_CHAR);
+    }
+    
     StringBuilder escaped = new StringBuilder();
     for (char c : str.toCharArray()) {
-      if (c == '\\' || c == '$') {
-        escaped.append('\\');  // Add escape character
+      if (c == ESCAPE_CHAR || c == '$' || c == NULL_CHAR) {
+        escaped.append(ESCAPE_CHAR);  // Add escape character
       }
       escaped.append(c);  // Add the actual character
     }
@@ -61,7 +75,7 @@ public class SecondaryIndexKeyUtils {
     // Find the delimiter index while skipping escaped $
     for (int i = 0; i < key.length(); i++) {
       char c = key.charAt(i);
-      if (c == '\\' && !isEscape) {
+      if (c == ESCAPE_CHAR && !isEscape) {
         isEscape = true;
       } else if (c == '$' && !isEscape) {
         delimiterIndex = i;
@@ -74,14 +88,23 @@ public class SecondaryIndexKeyUtils {
     return delimiterIndex;
   }
 
+  /**
+   * Unescapes special characters in a string. If the input is a single null character, returns null.
+   * For other strings, unescapes backslash, dollar sign, and null character.
+   */
   private static String unescapeSpecialChars(String str) {
+    // If the string is exactly one null character, it represents a null value
+    if (str.length() == 1) {
+      return null;
+    }
+    
     StringBuilder unescaped = new StringBuilder();
     boolean isEscape = false;
     for (char c : str.toCharArray()) {
       if (isEscape) {
         unescaped.append(c);
         isEscape = false;
-      } else if (c == '\\') {
+      } else if (c == ESCAPE_CHAR) {
         isEscape = true;  // Set escape flag to skip next character
       } else {
         unescaped.append(c);
