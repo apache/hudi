@@ -69,7 +69,7 @@ public class HoodieIndexDefinition implements Serializable {
 
   public HoodieIndexDefinition() {
   }
-  
+
   HoodieIndexDefinition(String indexName, String indexType, String indexFunction, List<String> sourceFields, Map<String, String> indexOptions) {
     this.indexName = indexName;
     this.indexType = indexType;

@@ -1060,6 +1060,20 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     }
   }
 
+  @Override
+  public final Option<FileSlice> getLatestMergedFileSliceBeforeOrOn(String partitionStr, String maxInstantTime, String fileId) {
+    try {
+      readLock.lock();
+      return getLatestMergedFileSlicesBeforeOrOn(partitionStr, maxInstantTime)
+          .filter(fileSlice -> fileSlice.getFileId().equals(fileId))
+          .map(Option::of)
+          .findFirst()
+          .orElse(Option.empty());
+    } finally {
+      readLock.unlock();
+    }
+  }
+
   /**
    * Stream all "merged" file-slices before on an instant time
    * for a MERGE_ON_READ table with index that can index log files(which means it writes pure logs first).
