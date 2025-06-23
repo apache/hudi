@@ -53,6 +53,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.metadata.HoodieMetadataPayload.createSecondaryIndexRecord;
@@ -134,7 +135,7 @@ public class SecondaryIndexRecordGenerationUtils {
         } else {
           // delete previous entry and insert new value if secondaryKey is different
           String previousSecondaryKey = recordKeyToSecondaryKeyForPreviousFileSlice.get(recordKey);
-          if (!previousSecondaryKey.equals(secondaryKey)) {
+          if (!isSameKey(secondaryKey, previousSecondaryKey)) {
             records.add(createSecondaryIndexRecord(recordKey, previousSecondaryKey, indexDefinition.getIndexName(), true));
             records.add(createSecondaryIndexRecord(recordKey, secondaryKey, indexDefinition.getIndexName(), false));
           }
@@ -147,6 +148,11 @@ public class SecondaryIndexRecordGenerationUtils {
       });
       return records.iterator();
     });
+  }
+
+  private static boolean isSameKey(String secondaryKey, String previousSecondaryKey) {
+    return (previousSecondaryKey == null && secondaryKey == null)
+        || (previousSecondaryKey != null && previousSecondaryKey.equals(secondaryKey));
   }
 
   public static <T> Map<String, String> getRecordKeyToSecondaryKey(HoodieTableMetaClient metaClient,
@@ -254,13 +260,15 @@ public class SecondaryIndexRecordGenerationUtils {
         while (recordIterator.hasNext()) {
           T record = recordIterator.next();
           Object secondaryKey = readerContext.getValue(record, tableSchema, secondaryKeyField);
-          if (secondaryKey != null) {
-            nextValidRecord = Pair.of(
-                readerContext.getRecordKey(record, tableSchema),
-                secondaryKey.toString()
-            );
-            return true;
+          String secondaryKeyStr = null;
+          if (Objects.nonNull(secondaryKey)) {
+            secondaryKeyStr = secondaryKey.toString();
           }
+          nextValidRecord = Pair.of(
+              readerContext.getRecordKey(record, tableSchema),
+              secondaryKeyStr
+          );
+          return true;
         }
 
         // If no valid records are found
