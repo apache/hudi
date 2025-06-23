@@ -22,7 +22,6 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieKey;
@@ -142,11 +141,9 @@ public class SecondaryIndexStreamingTracker {
 
     // Add secondary index records for all the inserted records
     secondaryIndexDefns.forEach(def -> {
-      if (record instanceof HoodieAvroIndexedRecord) {
-        Object secondaryKey = readerContext.getValue(record.getData(), writeSchemaWithMetaFields, def.getSourceFieldsKey());
-        if (secondaryKey != null) {
-          writeStatus.getIndexStats().addSecondaryIndexStats(def.getIndexName(), record.getRecordKey(), secondaryKey.toString(), false);
-        }
+      Object secondaryKey = readerContext.getValue(record.getData(), writeSchemaWithMetaFields, def.getSourceFieldsKey());
+      if (secondaryKey != null) {
+        writeStatus.getIndexStats().addSecondaryIndexStats(def.getIndexName(), record.getRecordKey(), secondaryKey.toString(), false);
       }
     });
   }
@@ -177,14 +174,12 @@ public class SecondaryIndexStreamingTracker {
       String secondaryIndexSourceField = def.getSourceFieldsKey();
       Option<Object> oldSecondaryKeyOpt = Option.empty();
       Option<Object> newSecondaryKeyOpt = Option.empty();
-      if (oldRecord instanceof HoodieAvroIndexedRecord) {
-        Object oldSecondaryKey = readerContext.getValue(oldRecord.getData(), writeSchemaWithMetaFields, secondaryIndexSourceField);
-        if (oldSecondaryKey != null) {
-          oldSecondaryKeyOpt = Option.of(oldSecondaryKey);
-        }
+      Object oldSecondaryKey = readerContext.getValue(oldRecord.getData(), writeSchemaWithMetaFields, secondaryIndexSourceField);
+      if (oldSecondaryKey != null) {
+        oldSecondaryKeyOpt = Option.of(oldSecondaryKey);
       }
 
-      if (combinedRecordOpt.isPresent() && combinedRecordOpt.get() instanceof HoodieAvroIndexedRecord && !isDelete) {
+      if (combinedRecordOpt.isPresent() && !isDelete) {
         Schema newSchema = newSchemaSupplier.get();
         Object secondaryKey = readerContext.getValue(combinedRecordOpt.get().getData(), newSchema, secondaryIndexSourceField);
         if (secondaryKey != null) {

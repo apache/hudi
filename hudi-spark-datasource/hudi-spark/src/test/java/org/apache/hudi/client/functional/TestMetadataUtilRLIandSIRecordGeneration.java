@@ -725,7 +725,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       });
       TypedProperties properties = new TypedProperties();
       // configure un-merged log file reader
-      HoodieReaderContext readerContext = context.getReaderContextFactory(metaClient, writeConfig.getRecordMerger().getRecordType()).getContext();
+      HoodieReaderContext readerContext = context.getReaderContextFactory(metaClient, HoodieRecord.HoodieRecordType.SPARK).getContext();
       HoodieFileGroupReader reader = HoodieFileGroupReader.newBuilder()
           .withReaderContext(readerContext)
           .withDataSchema(writerSchemaOpt.get())

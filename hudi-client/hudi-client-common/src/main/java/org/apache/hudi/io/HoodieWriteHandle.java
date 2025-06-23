@@ -134,8 +134,8 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     // Secondary index should not be updated for clustering and compaction
     // Since for clustering and compaction preserveMetadata is true, we are checking for it before enabling secondary index update
     if (config.isSecondaryIndexEnabled() && !preserveMetadata) {
-      ValidationUtils.checkArgument(recordMerger.getRecordType() == HoodieRecord.HoodieRecordType.AVRO,
-          "Only Avro record type is supported for streaming writes to metadata table with write handles");
+      ValidationUtils.checkArgument(readerContextFactoryOpt.isPresent(),
+          "Reader Context is required for computing secondary index");
       secondaryIndexDefns = hoodieTable.getMetaClient().getIndexMetadata()
           .map(indexMetadata -> indexMetadata.getIndexDefinitions().values())
           .orElse(Collections.emptyList())

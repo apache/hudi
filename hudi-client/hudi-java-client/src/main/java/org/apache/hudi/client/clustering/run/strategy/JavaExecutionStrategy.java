@@ -146,7 +146,7 @@ public abstract class JavaExecutionStrategy<T>
 
     List<Supplier<ClosableIterator<HoodieRecord<T>>>> suppliers = new ArrayList<>(clusteringOps.size());
     clusteringOps.forEach(op -> suppliers.add(
-        () -> getRecordIterator(getEngineContext().getReaderContextFactory(getHoodieTable().getMetaClient(), config.getRecordMerger().getRecordType()),
+        () -> getRecordIterator(getEngineContext().getReaderContextFactory(getHoodieTable().getMetaClient(), recordType),
             op, instantTime, maxMemoryPerCompaction)));
     LazyConcatenatingIterator<HoodieRecord<T>> lazyIterator = new LazyConcatenatingIterator<>(suppliers);
 
