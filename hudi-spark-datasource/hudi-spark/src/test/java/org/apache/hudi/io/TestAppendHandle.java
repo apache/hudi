@@ -91,7 +91,7 @@ public class TestAppendHandle extends BaseTestHandle {
     String fileId = fileGroup.getFileGroupId().getFileId();
 
     // generate update and delete records
-    instantTime = "001";
+    instantTime = InProcessTimeGenerator.createNewInstantTime();
     int numUpdates = 20;
     List<HoodieRecord> records = dataGenerator.generateUniqueUpdates(instantTime, numUpdates);
     int numDeletes = generateDeleteRecords(records, dataGenerator, instantTime);
