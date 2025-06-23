@@ -197,7 +197,6 @@ public class HoodieRowCreateHandle implements Serializable {
         writeStatus.markFailure(recordKey.toString(), partitionPath.toString(), t);
       }
     } catch (Exception e) {
-      LOG.warn("Setting global error for WriteStatus.", e);
       writeStatus.setGlobalError(e);
       throw e;
     }

@@ -134,7 +134,7 @@ public class TestHoodieRowCreateHandle extends HoodieSparkClientTestHarness {
 
     HoodieRowCreateHandle handle =
         new HoodieRowCreateHandle(table, cfg, partitionPath, fileId, instantTime, RANDOM.nextInt(100000), RANDOM.nextLong(), RANDOM.nextLong(), SparkDatasetTestUtils.STRUCT_TYPE);
-    int size = 100;
+    int size = 10 + RANDOM.nextInt(1000);
     int totalFailures = 5;
     // Generate first batch of valid rows
     Dataset<Row> inputRows = SparkDatasetTestUtils.getRandomRows(sqlContext, size / 2, partitionPath, false);
@@ -170,13 +170,8 @@ public class TestHoodieRowCreateHandle extends HoodieSparkClientTestHarness {
         ? "class java.lang.String cannot be cast to class org.apache.spark.unsafe.types.UTF8String"
         : "java.lang.String cannot be cast to org.apache.spark.unsafe.types.UTF8String";
 
-    try {
-      assertTrue(writeStatus.getGlobalError() instanceof ClassCastException);
-      assertTrue(writeStatus.getGlobalError().getMessage().contains(expectedError), "Expected error to contain: " + expectedError + ", the actual error message: " + writeStatus.getGlobalError());
-    } catch (Throwable e) {
-      writeStatus.getGlobalError().printStackTrace();
-      fail("Expected error to contain: " + expectedError + ", the actual error message: " + writeStatus.getGlobalError().toString());
-    }
+    assertTrue(writeStatus.getGlobalError() instanceof ClassCastException);
+    assertTrue(writeStatus.getGlobalError().getMessage().contains(expectedError), "Expected error to contain: " + expectedError + ", the actual error message: " + writeStatus.getGlobalError());
 
     assertEquals(writeStatus.getFileId(), fileId);
     assertEquals(writeStatus.getPartitionPath(), partitionPath);

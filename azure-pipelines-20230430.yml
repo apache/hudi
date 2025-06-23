@@ -271,7 +271,7 @@ stages:
               publishJUnitResults: true
               testResultsFiles: '**/surefire-reports/TEST-*.xml'
               jdkVersionOption: '1.8'
-              mavenOptions: '-Xmx4g -XX:-OmitStackTraceInFastThrow'
+              mavenOptions: '-Xmx4g'
           - script: |
               ./scripts/jacoco/download_jacoco.sh
               ./scripts/jacoco/merge_jacoco_exec_files.sh jacoco-lib/lib/jacococli.jar $(Build.SourcesDirectory)
