@@ -88,7 +88,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   protected final boolean shouldCheckCustomDeleteMarker;
   protected final boolean shouldCheckBuiltInDeleteMarker;
   protected final boolean emitDelete;
-  private final Option<FileGroupUpdateCallback<T>> callbackOption;
+  protected final Option<FileGroupUpdateCallback<T>> callbackOption;
   protected ClosableIterator<T> baseFileIterator;
   protected Iterator<BufferedRecord<T>> logRecordIterator;
   protected T nextRecord;
@@ -570,12 +570,15 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
       Pair<Boolean, T> isDeleteAndRecord = merge(baseRecordInfo, logRecordInfo);
       if (!isDeleteAndRecord.getLeft()) {
         // Updates
-        nextRecord = applyOutputSchemaConversion(readerContext.seal(isDeleteAndRecord.getRight()));
-        callbackOption.ifPresent(callback -> {
-          BufferedRecord<T> mergeResult = BufferedRecord.forRecordWithContext(nextRecord, readerContext.getSchemaHandler().getRequestedSchema(), readerContext, orderingFieldName, false);
-          callback.onUpdate(readerContext.constructHoodieRecord(applyOutputSchemaConversion(baseRecordInfo)), readerContext.constructHoodieRecord(applyOutputSchemaConversion(logRecordInfo)),
-              readerContext.constructHoodieRecord(applyOutputSchemaConversion(mergeResult)));
-        });
+        nextRecord = readerContext.seal(applyOutputSchemaConversion(isDeleteAndRecord.getRight()));
+        // If the record is not the same as the base record, we can emit an update
+        if (isDeleteAndRecord.getRight() != baseRecord) {
+          callbackOption.ifPresent(callback -> {
+            BufferedRecord<T> mergeResult = BufferedRecord.forRecordWithContext(nextRecord, readerContext.getSchemaHandler().getRequestedSchema(), readerContext, orderingFieldName, false);
+            callback.onUpdate(readerContext.constructHoodieRecord(applyOutputSchemaConversion(baseRecordInfo)), readerContext.constructHoodieRecord(applyOutputSchemaConversion(logRecordInfo)),
+                readerContext.constructHoodieRecord(applyOutputSchemaConversion(mergeResult)));
+          });
+        }
         readStats.incrementNumUpdates();
         return true;
       } else {
@@ -593,7 +596,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
     }
 
     // Inserts
-    nextRecord = applyOutputSchemaConversion(readerContext.seal(baseRecord));
+    nextRecord = readerContext.seal(applyOutputSchemaConversion(baseRecord));
     readStats.incrementNumInserts();
     return true;
   }
