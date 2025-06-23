@@ -14,7 +14,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-FROM --platform=linux/amd64 adoptopenjdk/openjdk8:alpine
+FROM --platform=linux/amd64 adoptopenjdk/openjdk8:alpine AS base
+ARG HIVE_VERSION=3.1.3
+
+RUN wget https://archive.apache.org/dist/maven/maven-3/3.6.3/binaries/apache-maven-3.6.3-bin.tar.gz \
+    && mkdir maven \
+    && tar xzvf apache-maven-3.6.3-bin.tar.gz -C maven \
+    && rm apache-maven-3.6.3-bin.tar.gz
+
+RUN wget https://archive.apache.org/dist/hive/hive-$HIVE_VERSION/apache-hive-$HIVE_VERSION-bin.tar.gz \
+    && mkdir workdir \
+    && tar -xf apache-hive-$HIVE_VERSION-bin.tar.gz -C workdir \
+    && rm apache-hive-$HIVE_VERSION-bin.tar.gz
+
+FROM --platform=linux/amd64 adoptopenjdk/openjdk8:alpine AS final
 
 RUN apk add --no-cache --upgrade bash curl jq openjdk11 openjdk17 --repository=https://dl-cdn.alpinelinux.org/alpine/v3.15/community
 
@@ -32,22 +45,17 @@ ARG CONFLUENT_VERSION=5.5.12
 ARG KAFKA_CONNECT_HDFS_VERSION=10.1.13
 ARG SCALA_VERSION=2.12
 
-RUN wget https://archive.apache.org/dist/maven/maven-3/3.6.3/binaries/apache-maven-3.6.3-bin.tar.gz \
-    && mkdir -p /usr/share/maven \
-    && tar xzvf apache-maven-3.6.3-bin.tar.gz -C /usr/share/maven \
-    && rm apache-maven-3.6.3-bin.tar.gz
-ENV MAVEN_HOME=/usr/share/maven/apache-maven-3.6.3
-ENV PATH=$MAVEN_HOME/bin:$PATH
+RUN mkdir -p /usr/share/maven
+COPY --from=base maven /usr/share/maven
+ENV PATH=/usr/share/maven/apache-maven-3.6.3/bin:$PATH
+
+COPY --from=base workdir $WORKDIR/
+ENV HIVE_HOME=$WORKDIR/apache-hive-$HIVE_VERSION-bin
 
 RUN wget https://archive.apache.org/dist/hadoop/common/hadoop-$HADOOP_VERSION/hadoop-$HADOOP_VERSION.tar.gz -P "$WORKDIR" \
     && tar -xf $WORKDIR/hadoop-$HADOOP_VERSION.tar.gz -C $WORKDIR/ \
     && rm $WORKDIR/hadoop-$HADOOP_VERSION.tar.gz
 ENV HADOOP_HOME=$WORKDIR/hadoop-$HADOOP_VERSION
-
-RUN wget https://archive.apache.org/dist/hive/hive-$HIVE_VERSION/apache-hive-$HIVE_VERSION-bin.tar.gz -P "$WORKDIR" \
-    && tar -xf $WORKDIR/apache-hive-$HIVE_VERSION-bin.tar.gz -C $WORKDIR/ \
-    && rm $WORKDIR/apache-hive-$HIVE_VERSION-bin.tar.gz
-ENV HIVE_HOME=$WORKDIR/apache-hive-$HIVE_VERSION-bin
 
 RUN wget https://archive.apache.org/dist/db/derby/db-derby-$DERBY_VERSION/db-derby-$DERBY_VERSION-bin.tar.gz -P "$WORKDIR" \
     && tar -xf $WORKDIR/db-derby-$DERBY_VERSION-bin.tar.gz -C $WORKDIR/ \
