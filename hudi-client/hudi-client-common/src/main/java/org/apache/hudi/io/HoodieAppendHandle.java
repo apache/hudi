@@ -195,7 +195,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       prevCommit = instantTime;
       if (hoodieTable.getMetaClient().getTableConfig().isCDCEnabled()) {
         // the cdc reader needs the base file metadata to have deterministic update sequence.
-        fileSlice = hoodieTable.getSliceView().getLatestFileSlice(partitionPath, instantTime);
+        fileSlice = hoodieTable.getSliceView().getLatestFileSlice(partitionPath, fileId);
         if (fileSlice.isPresent()) {
           prevCommit = fileSlice.get().getBaseInstantTime();
           baseFile = fileSlice.get().getBaseFile().map(BaseFile::getFileName).orElse("");
@@ -204,7 +204,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       }
     } else {
       // older table versions.
-      fileSlice = hoodieTable.getSliceView().getLatestFileSlice(partitionPath, instantTime);
+      fileSlice = hoodieTable.getSliceView().getLatestFileSlice(partitionPath, fileId);
       if (fileSlice.isPresent()) {
         prevCommit = fileSlice.get().getBaseInstantTime();
         baseFile = fileSlice.get().getBaseFile().map(BaseFile::getFileName).orElse("");
