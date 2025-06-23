@@ -53,6 +53,7 @@ import java.util.Iterator;
 import java.util.Locale;
 import java.util.Map;
 import java.util.function.Function;
+import java.util.function.UnaryOperator;
 
 import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED;
 import static org.apache.hudi.common.config.HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE;
@@ -64,6 +65,7 @@ import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERG
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.INSTANT_TIME;
 
 public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T> {
+  private final Option<UnaryOperator<T>> outputConverter;
   protected final HoodieReaderContext<T> readerContext;
   protected final Schema readerSchema;
   protected final Option<String> orderingFieldName;
@@ -97,6 +99,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
                                   boolean emitDelete,
                                   Option<FileGroupUpdateCallback<T>> updateCallback) {
     this.readerContext = readerContext;
+    this.outputConverter = readerContext.getSchemaHandler().getOutputConverter();
     this.callbackOption = updateCallback;
     this.readerSchema = AvroSchemaCache.intern(readerContext.getSchemaHandler().getRequiredSchema());
     this.recordMergeMode = recordMergeMode;
@@ -323,31 +326,57 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
       Pair<Boolean, T> isDeleteAndRecord = merge(baseRecordInfo, logRecordInfo);
       if (!isDeleteAndRecord.getLeft()) {
         // Updates
-        nextRecord = readerContext.seal(isDeleteAndRecord.getRight());
+        nextRecord = readerContext.seal(applyOutputSchemaConversion(isDeleteAndRecord.getRight()));
         callbackOption.ifPresent(callback -> {
-          BufferedRecord<T> mergeResult = BufferedRecord.forRecordWithContext(isDeleteAndRecord.getRight(), readerSchema, readerContext, orderingFieldName, false);
-          callback.onUpdate(readerContext.constructHoodieRecord(baseRecordInfo), readerContext.constructHoodieRecord(logRecordInfo), readerContext.constructHoodieRecord(mergeResult));
+          BufferedRecord<T> mergeResult = BufferedRecord.forRecordWithContext(nextRecord, readerContext.getSchemaHandler().getRequestedSchema(), readerContext, orderingFieldName, false);
+          callback.onUpdate(readerContext.constructHoodieRecord(applyOutputSchemaConversion(baseRecordInfo)), readerContext.constructHoodieRecord(applyOutputSchemaConversion(logRecordInfo)),
+              readerContext.constructHoodieRecord(applyOutputSchemaConversion(mergeResult)));
         });
         readStats.incrementNumUpdates();
         return true;
-      } else if (emitDelete) {
-        // emit Deletes
-        callbackOption.ifPresent(callback -> callback.onDelete(readerContext.constructHoodieRecord(baseRecordInfo), readerContext.constructHoodieRecord(logRecordInfo)));
-        nextRecord = readerContext.getDeleteRow(isDeleteAndRecord.getRight(), baseRecordInfo.getRecordKey());
-        readStats.incrementNumDeletes();
-        return nextRecord != null;
       } else {
-        // not emit Deletes
-        callbackOption.ifPresent(callback -> callback.onDelete(readerContext.constructHoodieRecord(baseRecordInfo), readerContext.constructHoodieRecord(logRecordInfo)));
+        // emit Deletes
+        callbackOption.ifPresent(callback -> callback.onDelete(readerContext.constructHoodieRecord(applyOutputSchemaConversion(baseRecordInfo)),
+            readerContext.constructHoodieRecord(applyOutputSchemaConversion(logRecordInfo))));
         readStats.incrementNumDeletes();
-        return false;
+        if (emitDelete) {
+          nextRecord = applyOutputSchemaConversion(readerContext.getDeleteRow(isDeleteAndRecord.getRight(), baseRecordInfo.getRecordKey()));
+          return nextRecord != null;
+        } else {
+          return false;
+        }
       }
     }
 
     // Inserts
-    nextRecord = readerContext.seal(baseRecord);
+    nextRecord = readerContext.seal(applyOutputSchemaConversion(baseRecord));
     readStats.incrementNumInserts();
     return true;
+  }
+
+  /**
+   * Applies the final output schema conversion to the buffered record if required. This ensures the records match the requested schema.
+   * @param bufferedRecord the buffered record to convert
+   * @return a new buffered record with the converted record and the proper schema ID set
+   */
+  private BufferedRecord<T> applyOutputSchemaConversion(BufferedRecord<T> bufferedRecord) {
+    if (bufferedRecord.getRecord() != null && outputConverter.isPresent()) {
+      return new BufferedRecord<>(bufferedRecord.getRecordKey(), bufferedRecord.getOrderingValue(),
+          outputConverter.get().apply(bufferedRecord.getRecord()), readerContext.encodeAvroSchema(readerContext.getSchemaHandler().getRequestedSchema()), bufferedRecord.isDelete());
+    }
+    return bufferedRecord;
+  }
+
+  /**
+   * Applies the final output schema conversion to the record if required. This ensures the records match the requested schema.
+   * @param record the record to convert
+   * @return a converted record with the updated schema
+   */
+  private T applyOutputSchemaConversion(T record) {
+    if (record != null && outputConverter.isPresent()) {
+      return outputConverter.get().apply(record);
+    }
+    return record;
   }
 
   protected void initializeLogRecordIterator() {
@@ -363,11 +392,11 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
       BufferedRecord<T> nextRecordInfo = logRecordIterator.next();
       if (!nextRecordInfo.isDelete()) {
         nextRecord = nextRecordInfo.getRecord();
-        callbackOption.ifPresent(callback -> callback.onInsert(readerContext.constructHoodieRecord(nextRecordInfo)));
+        callbackOption.ifPresent(callback -> callback.onInsert(readerContext.constructHoodieRecord(applyOutputSchemaConversion(nextRecordInfo))));
         readStats.incrementNumInserts();
         return true;
       } else if (emitDelete) {
-        nextRecord = readerContext.getDeleteRow(nextRecordInfo.getRecord(), nextRecordInfo.getRecordKey());
+        nextRecord = applyOutputSchemaConversion(readerContext.getDeleteRow(nextRecordInfo.getRecord(), nextRecordInfo.getRecordKey()));
         readStats.incrementNumDeletes();
         if (nextRecord != null) {
           return true;

@@ -338,11 +338,15 @@ public final class HoodieFileGroupReader<T> implements Closeable {
    * @return The next record after calling {@link #hasNext}.
    */
   T next() {
-    T nextVal = recordBuffer == null ? baseFileIterator.next() : recordBuffer.next();
-    if (outputConverter.isPresent()) {
-      return outputConverter.get().apply(nextVal);
+    if (recordBuffer == null) {
+      T nextVal = baseFileIterator.next();
+      if (outputConverter.isPresent()) {
+        return outputConverter.get().apply(nextVal);
+      }
+      return nextVal;
     }
-    return nextVal;
+    // Record buffer already applies the output converter
+    return recordBuffer.next();
   }
 
   private void scanLogFiles() {

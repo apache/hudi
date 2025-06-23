@@ -224,7 +224,10 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieMergeHand
   public List<WriteStatus> close() {
     try {
       super.close();
-      cdcLogger.ifPresent(HoodieCDCLogger::close);
+      cdcLogger.ifPresent(logger -> {
+        logger.close();
+        writeStatus.getStat().setCdcStats(logger.getCDCWriteStats());
+      });
       writeStatus.getStat().setTotalLogReadTimeMs(readStats.getTotalLogReadTimeMs());
       writeStatus.getStat().setTotalUpdatedRecordsCompacted(readStats.getTotalUpdatedRecordsCompacted());
       writeStatus.getStat().setTotalLogFilesCompacted(readStats.getTotalLogFilesCompacted());

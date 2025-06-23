@@ -244,28 +244,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
     nextRecordPosition = readerContext.extractRecordPosition(baseRecord, readerSchema,
         ROW_INDEX_TEMPORARY_COLUMN_NAME, nextRecordPosition);
     BufferedRecord<T> logRecordInfo = records.remove(nextRecordPosition++);
-
-    final Pair<Boolean, T> isDeleteAndRecord;
-    T resultRecord = null;
-    if (logRecordInfo != null) {
-      BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(baseRecord, readerSchema, readerContext, orderingFieldName, false);
-      isDeleteAndRecord = merge(bufferedRecord, logRecordInfo);
-      if (!isDeleteAndRecord.getLeft()) {
-        resultRecord = isDeleteAndRecord.getRight();
-        readStats.incrementNumUpdates();
-      } else {
-        readStats.incrementNumDeletes();
-      }
-    } else {
-      resultRecord = baseRecord;
-      readStats.incrementNumInserts();
-    }
-
-    if (resultRecord != null) {
-      nextRecord = readerContext.seal(resultRecord);
-      return true;
-    }
-    return false;
+    return super.hasNextBaseRecord(baseRecord, logRecordInfo);
   }
 
   private boolean doHasNextFallbackBaseRecord(T baseRecord) throws IOException {
