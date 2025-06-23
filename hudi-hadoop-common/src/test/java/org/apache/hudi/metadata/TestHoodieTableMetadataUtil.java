@@ -71,6 +71,9 @@ import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
 import static org.apache.hudi.avro.TestHoodieAvroUtils.SCHEMA_WITH_AVRO_TYPES_STR;
 import static org.apache.hudi.avro.TestHoodieAvroUtils.SCHEMA_WITH_NESTED_FIELD_STR;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.metadata.HoodieIndexVersion.SECONDARY_INDEX_ONE;
+import static org.apache.hudi.metadata.HoodieIndexVersion.SECONDARY_INDEX_TWO;
+import static org.apache.hudi.metadata.HoodieMetadataPayload.NULL_STR_HASH_VAL_FOR_INDEXING;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.computeRevivedAndDeletedKeys;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getFileIDForFileGroup;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.validateDataTypeForSecondaryOrExpressionIndex;
@@ -773,7 +776,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
             "primary_key$secondary_key",
             10,
             "secondary_index_idx_ts",
-            HoodieIndexVersion.SECONDARY_INDEX_TWO,
+            SECONDARY_INDEX_TWO,
             6  // Uses secondary key portion for hashing
         ),
         // Test case 3: Secondary index record key but version < 2
@@ -782,7 +785,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
             "primary_key$secondary_key",
             10,
             "secondary_index_idx_ts",
-            HoodieIndexVersion.SECONDARY_INDEX_ONE,
+            SECONDARY_INDEX_ONE,
             4  // Uses full key for hashing
         ),
         // Test case 4: Secondary index record key but not in secondary index partition
@@ -800,7 +803,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
             "primary_key_secondary_key",
             10,
             "secondary_index_idx_ts",
-            HoodieIndexVersion.SECONDARY_INDEX_TWO,
+            SECONDARY_INDEX_TWO,
             7  // Uses full key for hashing since no separator found
         ),
         // Test case 6: Empty record key
@@ -809,7 +812,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
             "",
             10,
             "secondary_index_idx_ts",
-            HoodieIndexVersion.SECONDARY_INDEX_TWO,
+            SECONDARY_INDEX_TWO,
             0  // Empty string hashes to 0
         ),
         // Test case 7: Single file group
@@ -818,7 +821,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
             "test_key$record_key",
             1,
             "secondary_index_idx_ts",
-            HoodieIndexVersion.SECONDARY_INDEX_TWO,
+            SECONDARY_INDEX_TWO,
             0  // Any key with numFileGroups=1 should return 0
         ),
         // Test case 8: Record key with special characters
@@ -828,6 +831,33 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
             10,
             "files",
             HoodieIndexVersion.FILES_INDEX_ONE,
+            0  // Calculated using the explicit hashing algorithm
+        ),
+        // Test case 9: Record key with special characters
+        Arguments.of(
+            "Null str handling files index",
+            null,
+            NULL_STR_HASH_VAL_FOR_INDEXING,
+            "files",
+            HoodieIndexVersion.FILES_INDEX_ONE,
+            0  // Calculated using the explicit hashing algorithm
+        ),
+        // Test case 10: Record key with special characters
+        Arguments.of(
+            "Null str handling sec idx v2",
+            null,
+            10,
+            "secondary_index_idx_ts",
+            SECONDARY_INDEX_TWO,
+            0  // Calculated using the explicit hashing algorithm
+        ),
+        // Test case 10: Record key with special characters
+        Arguments.of(
+            "Null str handling sec idx v2",
+            null,
+            10,
+            "secondary_index_idx_ts",
+            SECONDARY_INDEX_ONE,
             0  // Calculated using the explicit hashing algorithm
         )
     );

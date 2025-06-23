@@ -173,6 +173,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
    */
   public static final String SECONDARY_INDEX_RECORD_KEY_ESCAPE_CHAR = "\\";
   public static final String SECONDARY_INDEX_RECORD_KEY_SEPARATOR = "$";
+  public static final Integer NULL_STR_HASH_VAL_FOR_INDEXING = 0;
   public static final String SECONDARY_INDEX_FIELD_IS_DELETED = FIELD_IS_DELETED;
 
   /**
