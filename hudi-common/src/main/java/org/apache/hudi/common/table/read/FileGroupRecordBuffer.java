@@ -326,7 +326,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
       Pair<Boolean, T> isDeleteAndRecord = merge(baseRecordInfo, logRecordInfo);
       if (!isDeleteAndRecord.getLeft()) {
         // Updates
-        nextRecord = readerContext.seal(applyOutputSchemaConversion(isDeleteAndRecord.getRight()));
+        nextRecord = applyOutputSchemaConversion(readerContext.seal(isDeleteAndRecord.getRight()));
         callbackOption.ifPresent(callback -> {
           BufferedRecord<T> mergeResult = BufferedRecord.forRecordWithContext(nextRecord, readerContext.getSchemaHandler().getRequestedSchema(), readerContext, orderingFieldName, false);
           callback.onUpdate(readerContext.constructHoodieRecord(applyOutputSchemaConversion(baseRecordInfo)), readerContext.constructHoodieRecord(applyOutputSchemaConversion(logRecordInfo)),
@@ -349,7 +349,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
     }
 
     // Inserts
-    nextRecord = readerContext.seal(applyOutputSchemaConversion(baseRecord));
+    nextRecord = applyOutputSchemaConversion(readerContext.seal(baseRecord));
     readStats.incrementNumInserts();
     return true;
   }
@@ -391,8 +391,9 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
     while (logRecordIterator.hasNext()) {
       BufferedRecord<T> nextRecordInfo = logRecordIterator.next();
       if (!nextRecordInfo.isDelete()) {
-        nextRecord = nextRecordInfo.getRecord();
-        callbackOption.ifPresent(callback -> callback.onInsert(readerContext.constructHoodieRecord(applyOutputSchemaConversion(nextRecordInfo))));
+        BufferedRecord<T> convertedBufferedRecord = applyOutputSchemaConversion(nextRecordInfo);
+        nextRecord = convertedBufferedRecord.getRecord();
+        callbackOption.ifPresent(callback -> callback.onInsert(readerContext.constructHoodieRecord(convertedBufferedRecord)));
         readStats.incrementNumInserts();
         return true;
       } else if (emitDelete) {
