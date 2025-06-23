@@ -21,6 +21,17 @@ package org.apache.hudi.metadata;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.SECONDARY_INDEX_RECORD_KEY_SEPARATOR;
 
+/**
+ * Utility class for constructing and parsing secondary index keys used in the Hudi Metadata Table.
+ *
+ * <p>Secondary index keys are encoded as a single string composed of an escaped secondary key,
+ * a special separator (`$`), and an escaped record key. This utility ensures that special characters
+ * such as {@code \}, {@code $}, and null characters are escaped to maintain a reversible format.</p>
+ *
+ * <p>For example, a secondary key {@code user$id} and a record key {@code rec$123} would be
+ * encoded as {@code user\$id$rec\$123}. Escaping is performed to ensure the delimiter remains
+ * unambiguous even when present in either component.</p>
+ */
 public class SecondaryIndexKeyUtils {
 
   // Null character (ASCII 0) used to represent null strings
@@ -28,6 +39,13 @@ public class SecondaryIndexKeyUtils {
   // Escape character
   private static final char ESCAPE_CHAR = '\\';
 
+  /**
+   * Extracts the record key portion from an encoded secondary index key.
+   *
+   * @param key the encoded key in the form "escapedSecondaryKey$escapedRecordKey"
+   * @return the unescaped record key, or {@code null} if the record key was {@code null}
+   * @throws IllegalStateException if the key format is invalid (i.e., no unescaped separator found)
+   */
   public static String getRecordKeyFromSecondaryIndexKey(String key) {
     // the payload key is in the format of "secondaryKey$primaryKey"
     // we need to extract the primary key from the payload key
@@ -36,6 +54,13 @@ public class SecondaryIndexKeyUtils {
     return unescapeSpecialChars(key.substring(delimiterIndex + 1));
   }
 
+  /**
+   * Extracts the secondary key portion from an encoded secondary index key.
+   *
+   * @param key the encoded key in the form "escapedSecondaryKey$escapedRecordKey"
+   * @return the unescaped secondary key, or {@code null} if the secondary key was {@code null}
+   * @throws IllegalStateException if the key format is invalid (i.e., no unescaped separator found)
+   */
   public static String getSecondaryKeyFromSecondaryIndexKey(String key) {
     // the payload key is in the format of "secondaryKey$primaryKey"
     // we need to extract the secondary key from the payload key
@@ -44,6 +69,14 @@ public class SecondaryIndexKeyUtils {
     return unescapeSpecialChars(key.substring(0, delimiterIndex));
   }
 
+  /**
+   * Constructs an encoded secondary index key by escaping the given secondary and record keys,
+   * and concatenating them with the separator {@code "$"}.
+   *
+   * @param secondaryKey the secondary key (can be {@code null})
+   * @param recordKey the record key (can be {@code null})
+   * @return a string representing the encoded secondary index key
+   */
   public static String constructSecondaryIndexKey(String secondaryKey, String recordKey) {
     return escapeSpecialChars(secondaryKey) + SECONDARY_INDEX_RECORD_KEY_SEPARATOR + escapeSpecialChars(recordKey);
   }
@@ -68,6 +101,7 @@ public class SecondaryIndexKeyUtils {
     return escaped.toString();
   }
 
+  // Find the position of the first unescaped '$' char in the string.
   private static int getSecondaryIndexKeySeparatorPosition(String key) {
     int delimiterIndex = -1;
     boolean isEscape = false;
@@ -93,11 +127,11 @@ public class SecondaryIndexKeyUtils {
    * For other strings, unescapes backslash, dollar sign, and null character.
    */
   private static String unescapeSpecialChars(String str) {
-    // If the string is exactly one null character, it represents a null value
-    if (str.length() == 1) {
+
+    if (str.length() == 1 && str.equals(String.valueOf(NULL_CHAR))) {
       return null;
     }
-    
+
     StringBuilder unescaped = new StringBuilder();
     boolean isEscape = false;
     for (char c : str.toCharArray()) {
