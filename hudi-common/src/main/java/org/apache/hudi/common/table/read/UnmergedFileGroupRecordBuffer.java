@@ -63,7 +63,7 @@ public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
 
     // Output from base file first.
     if (baseFileIterator.hasNext()) {
-      nextRecord = readerContext.seal(baseFileIterator.next());
+      nextRecord = applyOutputSchemaConversion(readerContext.seal(baseFileIterator.next()));
       return true;
     }
 
@@ -81,7 +81,7 @@ public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
     if (recordIterator == null || !recordIterator.hasNext()) {
       return false;
     }
-    nextRecord = readerContext.seal(recordIterator.next());
+    nextRecord = applyOutputSchemaConversion(readerContext.seal(recordIterator.next()));
     readStats.incrementNumInserts();
     return true;
   }

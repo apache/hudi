@@ -359,7 +359,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
    * @param bufferedRecord the buffered record to convert
    * @return a new buffered record with the converted record and the proper schema ID set
    */
-  private BufferedRecord<T> applyOutputSchemaConversion(BufferedRecord<T> bufferedRecord) {
+  protected BufferedRecord<T> applyOutputSchemaConversion(BufferedRecord<T> bufferedRecord) {
     if (bufferedRecord.getRecord() != null && outputConverter.isPresent()) {
       return new BufferedRecord<>(bufferedRecord.getRecordKey(), bufferedRecord.getOrderingValue(),
           outputConverter.get().apply(bufferedRecord.getRecord()), readerContext.encodeAvroSchema(readerContext.getSchemaHandler().getRequestedSchema()), bufferedRecord.isDelete());
@@ -372,7 +372,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
    * @param record the record to convert
    * @return a converted record with the updated schema
    */
-  private T applyOutputSchemaConversion(T record) {
+  protected T applyOutputSchemaConversion(T record) {
     if (record != null && outputConverter.isPresent()) {
       return outputConverter.get().apply(record);
     }
