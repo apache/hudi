@@ -667,7 +667,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
 
       // Step 2: Delete by record key whose secondary index is null and validate secondary index
       spark.sql(s"DELETE FROM $tableName WHERE id = 2")
-      
+
       // Verify data after delete
       checkAnswer(s"SELECT id, name, description, ts FROM $tableName ORDER BY id")(
         Seq(1, "record1", "description1", 1000),
@@ -690,7 +690,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
 
       // Step 3: Update null to non-null
       spark.sql(s"UPDATE $tableName SET description = 'updated_description' WHERE id = 4")
-      
+
       // Verify data after null to non-null update
       checkAnswer(s"SELECT id, name, description, ts FROM $tableName ORDER BY id")(
         Seq(1, "record1", "description1", 1000),
@@ -718,7 +718,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
 
       // Step 4: Update non-null to null
       spark.sql(s"UPDATE $tableName SET description = NULL WHERE id = 1")
-      
+
       // Verify data after non-null to null update
       checkAnswer(s"SELECT id, name, description, ts FROM $tableName ORDER BY id")(
         Seq(1, "record1", null, 1000),
@@ -741,7 +741,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
 
       // Step 5: Update null to null (should be no-op but validate)
       spark.sql(s"UPDATE $tableName SET description = NULL WHERE id = 1")
-      
+
       // Verify data after null to null update (should remain same)
       checkAnswer(s"SELECT id, name, description, ts FROM $tableName ORDER BY id")(
         Seq(1, "record1", null, 1000),
@@ -754,7 +754,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
 
       // Step 6: Insert new record with null description
       spark.sql(s"INSERT INTO $tableName VALUES (5, 'record5', NULL, 1004)")
-      
+
       // Verify data after inserting null
       checkAnswer(s"SELECT id, name, description, ts FROM $tableName ORDER BY id")(
         Seq(1, "record1", null, 1000),
@@ -774,7 +774,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
 
       // Step 7: Insert new record with non-null description
       spark.sql(s"INSERT INTO $tableName VALUES (6, 'record6', 'new_description', 1005)")
-      
+
       // Verify data after inserting non-null
       checkAnswer(s"SELECT id, name, description, ts FROM $tableName ORDER BY id")(
         Seq(1, "record1", null, 1000),
@@ -783,7 +783,6 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
         Seq(5, "record5", null, 1004),
         Seq(6, "record6", "new_description", 1005)
       )
-
 
       // Validate secondary index after inserting non-null
       validateSecondaryIndexEntries(basePath, tableName)
@@ -820,11 +819,10 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
         val description = if (row.isNullAt(1)) null else row.getString(1)
         SecondaryIndexKeyUtils.constructSecondaryIndexKey(description, recordKey)
       })
-    
     val actualSecondaryKeys = spark.sql(s"SELECT key FROM hudi_metadata('$basePath') WHERE type=7 AND key LIKE '%$SECONDARY_INDEX_RECORD_KEY_SEPARATOR%'")
       .collect().map(indexKey => indexKey.getString(0))
-    
-    assertEquals(expectedSecondaryKeys.toSet, actualSecondaryKeys.toSet, 
+
+    assertEquals(expectedSecondaryKeys.toSet, actualSecondaryKeys.toSet,
       s"Secondary index entries mismatch for table $tableName")
   }
 
