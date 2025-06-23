@@ -116,6 +116,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
     orderingFieldName.ifPresent(orderingField -> {
       props.putIfAbsent(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, orderingField);
       props.putIfAbsent(HoodieTableConfig.PRECOMBINE_FIELD.key(), orderingField);
+      props.putIfAbsent("hoodie.datasource.write.precombine.field", orderingField);
     });
     this.props = props;
 
