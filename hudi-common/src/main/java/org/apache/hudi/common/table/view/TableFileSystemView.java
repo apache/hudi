@@ -167,6 +167,16 @@ public interface TableFileSystemView {
     Stream<FileSlice> getLatestMergedFileSlicesBeforeOrOn(String partitionPath, String maxInstantTime);
 
     /**
+     * Fetches the "latest merged" file-slice before on an instant time. If a file-group has a pending compaction request, the
+     * file-slice before and after compaction request instant is merged and returned.
+     *
+     * @param partitionPath  Partition Path
+     * @param maxInstantTime Max Instant Time
+     * @param fileId         File Id of the file slice to fetch
+     */
+    Option<FileSlice> getLatestMergedFileSliceBeforeOrOn(String partitionPath, String maxInstantTime, String fileId);
+
+    /**
      * Stream all the latest file slices, in the given range.
      */
     Stream<FileSlice> getLatestFileSliceInRange(List<String> commitsToReturn);

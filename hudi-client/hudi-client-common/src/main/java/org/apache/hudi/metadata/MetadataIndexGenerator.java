@@ -18,6 +18,7 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.client.SecondaryIndexStats;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -34,8 +35,10 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 
 import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
+import static org.apache.hudi.metadata.MetadataPartitionType.SECONDARY_INDEX;
 
 /**
  * For now this is a placeholder to generate all MDT records in one place.
@@ -66,6 +69,9 @@ public class MetadataIndexGenerator implements Serializable {
       if (enabledPartitionTypes.contains(RECORD_INDEX)) {
         allRecords.addAll(processWriteStatusForRLI(writeStatus, dataWriteConfig));
       }
+      if (enabledPartitionTypes.contains(SECONDARY_INDEX)) {
+        allRecords.addAll(processWriteStatusForSecondaryIndex(writeStatus));
+      }
       // yet to add support for more partitions.
       // bloom filter
       // secondary index
@@ -76,7 +82,7 @@ public class MetadataIndexGenerator implements Serializable {
 
   protected static List<HoodieRecord> processWriteStatusForRLI(WriteStatus writeStatus, HoodieWriteConfig dataWriteConfig) {
     List<HoodieRecord> allRecords = new ArrayList<>();
-    for (HoodieRecordDelegate recordDelegate : writeStatus.getWrittenRecordDelegates()) {
+    for (HoodieRecordDelegate recordDelegate : writeStatus.getIndexStats().getWrittenRecordDelegates()) {
       if (!writeStatus.isErrored(recordDelegate.getHoodieKey())) {
         if (recordDelegate.getIgnoreIndexUpdate()) {
           continue;
@@ -110,5 +116,17 @@ public class MetadataIndexGenerator implements Serializable {
       }
     }
     return allRecords;
+  }
+
+  protected static List<HoodieRecord> processWriteStatusForSecondaryIndex(WriteStatus writeStatus) {
+    List<HoodieRecord> secondaryIndexRecords = new ArrayList<>(writeStatus.getIndexStats().getSecondaryIndexStats().size());
+    for (Map.Entry<String, List<SecondaryIndexStats>> entry : writeStatus.getIndexStats().getSecondaryIndexStats().entrySet()) {
+      String indexPartitionName = entry.getKey();
+      List<SecondaryIndexStats> secondaryIndexStats = entry.getValue();
+      for (SecondaryIndexStats stat : secondaryIndexStats) {
+        secondaryIndexRecords.add(HoodieMetadataPayload.createSecondaryIndexRecord(stat.getRecordKey(), stat.getSecondaryKeyValue(), indexPartitionName, stat.isDeleted()));
+      }
+    }
+    return secondaryIndexRecords;
   }
 }
