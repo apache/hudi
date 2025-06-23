@@ -174,6 +174,7 @@ public class TestHoodieRowCreateHandle extends HoodieSparkClientTestHarness {
       assertTrue(writeStatus.getGlobalError() instanceof ClassCastException);
       assertTrue(writeStatus.getGlobalError().getMessage().contains(expectedError), "Expected error to contain: " + expectedError + ", the actual error message: " + writeStatus.getGlobalError());
     } catch (Throwable e) {
+      writeStatus.getGlobalError().printStackTrace();
       fail("Expected error to contain: " + expectedError + ", the actual error message: " + writeStatus.getGlobalError().toString());
     }
 
