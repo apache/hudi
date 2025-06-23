@@ -74,7 +74,9 @@ public class SortedKeyBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupRec
       if (!nextLogRecord.isDelete() || emitDelete) {
         // If the next log record does not result in a deletion, or we are emitting deletes, we can return it
         // and queue the base record, which is already read from the iterator, for the next iteration
-        nextRecord = nextLogRecord.getRecord();
+        BufferedRecord<T> transformedLogRecord = applyOutputSchemaConversion(nextLogRecord);
+        nextRecord = readerContext.seal(transformedLogRecord.getRecord());
+        callbackOption.ifPresent(callback -> callback.onInsert(readerContext.constructHoodieRecord(transformedLogRecord)));
         queuedBaseFileRecord = Option.of(baseRecord);
         readStats.incrementNumInserts();
         return true;
