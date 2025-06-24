@@ -179,7 +179,6 @@ public class SecondaryIndexStreamingTracker {
         oldSecondaryKeyOpt = Option.of(oldSecondaryKey);
       }
 
-
       if (combinedRecordOpt.isPresent() && !isDelete) {
         Schema newSchema = newSchemaSupplier.get();
         Object secondaryKey = combinedRecordOpt.get().getColumnValueAsJava(newSchema, secondaryIndexSourceField, config.getProps());
