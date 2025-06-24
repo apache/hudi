@@ -178,8 +178,10 @@ public abstract class AbstractHoodieLogRecordScanner {
     this.preCombineField = tableConfig.getPreCombineField();
     // Log scanner merge log with precombine
     TypedProperties props = new TypedProperties();
-    if (this.preCombineField != null) {
-      props.setProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, this.preCombineField);
+    if (preCombineField != null) {
+      props.setProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, preCombineField);
+      props.setProperty(HoodieTableConfig.PRECOMBINE_FIELD.key(), preCombineField);
+      props.setProperty("hoodie.datasource.write.precombine.field", preCombineField);
     }
     this.tableVersion = tableConfig.getTableVersion();
     this.payloadProps = props;
