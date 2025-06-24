@@ -591,9 +591,12 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       return HoodieListPairData.eager(Collections.emptyList());
     }
 
+    // As the first step, always convert keys to the escaped version.
+    keys = keys.map(SecondaryIndexKeyUtils::escapeSpecialChars);
     Map<String, Set<String>> res = getRecordsByKeyPrefixes(keys, partitionName, false).map(
             record -> {
               if (!record.getData().isDeleted()) {
+                // values read from index are unescaped.
                 String recordKey = SecondaryIndexKeyUtils.getRecordKeyFromSecondaryIndexKey(record.getRecordKey());
                 String secondaryKey = SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey(record.getRecordKey());
                 return Pair.of(secondaryKey, recordKey);
