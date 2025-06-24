@@ -100,9 +100,9 @@ public class SparkMain {
    */
   enum SparkCommand {
     BOOTSTRAP(21), ROLLBACK(6), DEDUPLICATE(8), ROLLBACK_TO_SAVEPOINT(6), SAVEPOINT(7),
-    IMPORT(13), UPSERT(13), COMPACT_SCHEDULE(7), COMPACT_RUN(10), COMPACT_SCHEDULE_AND_EXECUTE(9),
+    IMPORT(13), UPSERT(13), COMPACT_SCHEDULE(6), COMPACT_RUN(10), COMPACT_SCHEDULE_AND_EXECUTE(9),
     COMPACT_UNSCHEDULE_PLAN(9), COMPACT_UNSCHEDULE_FILE(10), COMPACT_VALIDATE(7), COMPACT_REPAIR(8),
-    CLUSTERING_SCHEDULE(7), CLUSTERING_RUN(9), CLUSTERING_SCHEDULE_AND_EXECUTE(8), CLEAN(5),
+    CLUSTERING_SCHEDULE(6), CLUSTERING_RUN(9), CLUSTERING_SCHEDULE_AND_EXECUTE(8), CLEAN(5),
     DELETE_MARKER(5), DELETE_SAVEPOINT(5), UPGRADE(5), DOWNGRADE(5),
     REPAIR_DEPRECATED_PARTITION(4), RENAME_PARTITION(6), ARCHIVE(8);
 
@@ -180,7 +180,7 @@ public class SparkMain {
               Integer.parseInt(args[7]), HoodieCompactor.SCHEDULE_AND_EXECUTE, propsFilePath, configs);
           break;
         case COMPACT_SCHEDULE:
-          returnCode = compact(jsc, args[3], args[4], args[5], 1, "", 0, HoodieCompactor.SCHEDULE, propsFilePath, configs);
+          returnCode = compact(jsc, args[3], args[4], null, 1, "", 0, HoodieCompactor.SCHEDULE, propsFilePath, configs);
           break;
         case COMPACT_VALIDATE:
           cmd.assertEq(args.length);
@@ -213,7 +213,7 @@ public class SparkMain {
               Integer.parseInt(args[6]), SCHEDULE_AND_EXECUTE, propsFilePath, configs);
           break;
         case CLUSTERING_SCHEDULE:
-          returnCode = cluster(jsc, args[3], args[4], args[5], 1, args[2], 0, SCHEDULE, propsFilePath, configs);
+          returnCode = cluster(jsc, args[3], args[4], null, 1, args[2], 0, SCHEDULE, propsFilePath, configs);
           break;
         case CLEAN:
           clean(jsc, args[3], propsFilePath, configs);

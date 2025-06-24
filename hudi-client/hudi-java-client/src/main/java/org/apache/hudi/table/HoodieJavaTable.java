@@ -79,7 +79,9 @@ public abstract class HoodieJavaTable<T>
   }
 
   @Override
-  protected Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstantTimestamp, HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy) {
+  protected Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstantTimestamp,
+                                                                HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
+                                                                boolean streamingWrites) {
     if (isMetadataTable()) {
       return Option.empty();
     }

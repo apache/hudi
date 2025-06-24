@@ -1379,6 +1379,34 @@ public class TestInputFormat {
     TestData.assertRowDataEquals(result, TestData.DATA_SET_INSERT);
   }
 
+  @Test
+  public void testWriteCowWithPartialUpdate() throws Exception {
+    Map<String, String> options = new HashMap<>();
+    // new config with merge classes and merge mode
+    options.put(FlinkOptions.RECORD_MERGE_MODE.key(), RecordMergeMode.CUSTOM.name());
+    options.put(FlinkOptions.RECORD_MERGER_IMPLS.key(), PartialUpdateFlinkRecordMerger.class.getName());
+    beforeEach(HoodieTableType.COPY_ON_WRITE, options);
+
+    // first insert
+    List<RowData> sourceData = Arrays.asList(
+        insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), null,
+            TimestampData.fromEpochMillis(2), StringData.fromString("par1"))
+    );
+    TestData.writeData(sourceData, conf);
+
+    // second insert to trigger merging during write
+    sourceData = Arrays.asList(
+        insertRow(StringData.fromString("id1"), null, 23,
+            TimestampData.fromEpochMillis(1), StringData.fromString("par1"))
+    );
+    TestData.writeData(sourceData, conf);
+
+    Map<String, String> expected = new HashMap<>();
+    expected.put("par1", "[id1,par1,id1,Danny,23,2,par1]");
+    // check result from base file
+    TestData.checkWrittenData(tempFile, expected, expected.size());
+  }
+
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------

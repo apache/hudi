@@ -18,6 +18,7 @@
 
 package org.apache.hudi.execution;
 
+import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
@@ -72,6 +73,7 @@ public class SparkLazyInsertIterable<T> extends HoodieLazyInsertIterable<T> {
       if (useWriterSchema) {
         schema = HoodieAvroUtils.addMetadataFields(schema);
       }
+      schema = AvroSchemaCache.intern(schema);
 
       bufferedIteratorExecutor = ExecutorFactory.create(hoodieConfig, inputItr, getInsertHandler(),
           getTransformer(schema, hoodieConfig), hoodieTable.getPreExecuteRunnable());

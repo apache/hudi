@@ -114,7 +114,7 @@ public class SerializationUtils {
    * This class has a no-arg constructor, suitable for use with reflection instantiation. For Details checkout
    * com.twitter.chill.KryoBase.
    */
-  private static class KryoInstantiator implements Serializable {
+  public static class KryoInstantiator implements Serializable {
 
     public Kryo newKryo() {
       Kryo kryo = new Kryo();

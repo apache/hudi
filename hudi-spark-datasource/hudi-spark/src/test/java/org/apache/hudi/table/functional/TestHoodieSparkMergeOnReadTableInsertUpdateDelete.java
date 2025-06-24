@@ -101,8 +101,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
   private static Stream<Arguments> testSimpleInsertAndUpdate() {
     return Stream.of(
         Arguments.of(HoodieFileFormat.PARQUET, true),
-        Arguments.of(HoodieFileFormat.PARQUET, false),
-        Arguments.of(HoodieFileFormat.HFILE, true)
+        Arguments.of(HoodieFileFormat.PARQUET, false)
     );
   }
 

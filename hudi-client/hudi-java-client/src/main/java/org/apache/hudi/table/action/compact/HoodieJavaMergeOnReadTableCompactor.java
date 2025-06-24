@@ -20,6 +20,7 @@
 package org.apache.hudi.table.action.compact;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
@@ -48,7 +49,9 @@ public class HoodieJavaMergeOnReadTableCompactor<T>
     }
     HoodieInstant inflightInstant = table.getInstantGenerator().getCompactionInflightInstant(instantTime);
     if (pendingCompactionTimeline.containsInstant(inflightInstant)) {
-      table.rollbackInflightCompaction(inflightInstant);
+      try (TransactionManager transactionManager = new TransactionManager(table.getConfig(), table.getStorage())) {
+        table.rollbackInflightCompaction(inflightInstant, transactionManager);
+      }
       table.getMetaClient().reloadActiveTimeline();
     }
   }
@@ -56,5 +59,10 @@ public class HoodieJavaMergeOnReadTableCompactor<T>
   @Override
   public void maybePersist(HoodieData<WriteStatus> writeStatus, HoodieEngineContext context, HoodieWriteConfig config, String instantTime) {
     // No OP
+  }
+
+  @Override
+  protected HoodieRecord.HoodieRecordType getEngineRecordType() {
+    return HoodieRecord.HoodieRecordType.AVRO;
   }
 }

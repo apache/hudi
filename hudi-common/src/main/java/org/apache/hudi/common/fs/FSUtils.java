@@ -23,7 +23,6 @@ import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.avro.model.HoodiePath;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -69,8 +68,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
-import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
 
 /**
  * Utility functions related to accessing the file storage.
@@ -614,7 +611,7 @@ public class FSUtils {
                 pairOfSubPathAndConf.getKey(), pairOfSubPathAndConf.getValue(), true)
         );
         boolean result = storage.deleteDirectory(dirPath);
-        LOG.info("Removed directory at " + dirPath);
+        LOG.info("Removed directory at {}", dirPath);
         return result;
       }
     } catch (IOException ioe) {
@@ -663,18 +660,16 @@ public class FSUtils {
   public static <T> Map<String, T> parallelizeSubPathProcess(
       HoodieEngineContext hoodieEngineContext, HoodieStorage storage, StoragePath dirPath, int parallelism,
       Predicate<StoragePathInfo> subPathPredicate, SerializableFunction<Pair<String, StorageConfiguration<?>>, T> pairFunction) {
-    Map<String, T> result = new HashMap<>();
     try {
       List<StoragePathInfo> pathInfoList = storage.listDirectEntries(dirPath);
       List<String> subPaths = pathInfoList.stream()
           .filter(subPathPredicate)
           .map(fileStatus -> fileStatus.getPath().toString())
           .collect(Collectors.toList());
-      result = parallelizeFilesProcess(hoodieEngineContext, storage, parallelism, pairFunction, subPaths);
+      return parallelizeFilesProcess(hoodieEngineContext, storage, parallelism, pairFunction, subPaths);
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
     }
-    return result;
   }
 
   public static <T> Map<String, T> parallelizeFilesProcess(
@@ -761,12 +756,5 @@ public class FSUtils {
 
   private static Option<HoodieLogFile> getLatestLogFile(Stream<HoodieLogFile> logFiles) {
     return Option.fromJavaOptional(logFiles.min(HoodieLogFile.getReverseLogFileComparator()));
-  }
-
-  public static boolean isMdtBaseFile(HoodieBaseFile baseFile) {
-    StoragePathInfo baseFileStoragePathInfo = baseFile.getPathInfo();
-    return (baseFileStoragePathInfo != null
-        && baseFileStoragePathInfo.getPath().toString().contains(METAFOLDER_NAME))
-        || baseFile.getStoragePath().toString().contains(METAFOLDER_NAME);
   }
 }

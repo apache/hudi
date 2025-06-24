@@ -152,11 +152,8 @@ import static org.junit.jupiter.api.Assertions.fail;
 @Tag("functional")
 public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
-  private static final Map<String, String> STRATEGY_PARAMS = new HashMap<String, String>() {
-    {
-      put("sortColumn", "record_key");
-    }
-  };
+  private static final Map<String, String> STRATEGY_PARAMS = Collections.singletonMap("sortColumn", "record_key");
+
   private static Stream<Arguments> smallInsertHandlingParams() {
     return Arrays.stream(new Boolean[][] {{true}, {false}}).map(Arguments::of);
   }
@@ -1040,7 +1037,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     // trigger another commit. this should rollback latest partial commit.
     JavaRDD<WriteStatus> statuses = (JavaRDD<WriteStatus>)
         insertBatchRecords(client, commitTime1, 200, 1, 2, SparkRDDWriteClient::upsert).getLeft();
-    client.commit(commitTime1, statuses);
     metaClient.reloadActiveTimeline();
     // rollback should have succeeded. Essentially, the pending clustering should not hinder the rollback of regular commits.
     assertEquals(1, metaClient.getActiveTimeline().getCommitsTimeline().filterInflightsAndRequested().countInstants());

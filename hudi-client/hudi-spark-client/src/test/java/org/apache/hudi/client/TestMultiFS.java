@@ -131,7 +131,7 @@ public class TestMultiFS extends HoodieSparkClientTestHarness {
 
       // Write generated data to hdfs (only inserts)
       String readCommitTime = hdfsWriteClient.startCommit();
-      LOG.info("Starting commit " + readCommitTime);
+      LOG.info("Starting commit {}", readCommitTime);
       List<HoodieRecord> records = dataGen.generateInserts(readCommitTime, 10);
       JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 2);
       JavaRDD<WriteStatus> writeStatusJavaRDD = hdfsWriteClient.upsert(writeRecords, readCommitTime);
@@ -152,14 +152,14 @@ public class TestMultiFS extends HoodieSparkClientTestHarness {
           .initTable(storageConf.newInstance(), tablePath);
 
       String writeCommitTime = localWriteClient.startCommit();
-      LOG.info("Starting write commit " + writeCommitTime);
+      LOG.info("Starting write commit {}", writeCommitTime);
       List<HoodieRecord> localRecords = dataGen.generateInserts(writeCommitTime, 10);
       JavaRDD<HoodieRecord> localWriteRecords = jsc.parallelize(localRecords, 2);
-      LOG.info("Writing to path: " + tablePath);
+      LOG.info("Writing to path: {}", tablePath);
       writeStatusJavaRDD = localWriteClient.upsert(localWriteRecords, writeCommitTime);
       localWriteClient.commit(writeCommitTime, writeStatusJavaRDD, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
 
-      LOG.info("Reading from path: " + tablePath);
+      LOG.info("Reading from path: {}", tablePath);
       fs = HadoopFSUtils.getFs(tablePath, HoodieTestUtils.getDefaultStorageConf());
       metaClient = HoodieTestUtils.createMetaClient(new HadoopStorageConfiguration(fs.getConf()), tablePath);
       timeline = TIMELINE_FACTORY.createActiveTimeline(metaClient).getCommitAndReplaceTimeline();

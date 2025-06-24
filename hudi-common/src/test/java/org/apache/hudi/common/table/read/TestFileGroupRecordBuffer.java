@@ -28,9 +28,11 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -92,6 +94,8 @@ class TestFileGroupRecordBuffer {
     when(readerContext.getSchemaHandler()).thenReturn(schemaHandler);
     when(schemaHandler.getRequiredSchema()).thenReturn(schema);
     when(readerContext.getRecordMerger()).thenReturn(Option.empty());
+    when(readerContext.getRecordSerializer()).thenReturn(new DefaultSerializer<>());
+    when(readerContext.getRecordSizeEstimator()).thenReturn(new DefaultSizeEstimator<>());
   }
 
   @Test
@@ -292,7 +296,8 @@ class TestFileGroupRecordBuffer {
             props,
             readStats,
             Option.empty(),
-            false);
+            false
+        );
     when(readerContext.getValue(any(), any(), any())).thenReturn(null);
     assertFalse(keyBasedBuffer.isCustomDeleteRecord(record));
 
@@ -305,7 +310,8 @@ class TestFileGroupRecordBuffer {
             props,
             readStats,
             Option.empty(),
-            false);
+            false
+    );
     when(readerContext.getValue(any(), any(), any())).thenReturn("i");
     assertFalse(keyBasedBuffer.isCustomDeleteRecord(record));
     when(readerContext.getValue(any(), any(), any())).thenReturn("d");
@@ -327,7 +333,8 @@ class TestFileGroupRecordBuffer {
             props,
             readStats,
             Option.empty(),
-            false);
+            false
+        );
 
     // CASE 1: With custom delete marker.
     GenericRecord record = new GenericData.Record(schema);
