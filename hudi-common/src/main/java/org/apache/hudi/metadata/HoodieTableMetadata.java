@@ -255,7 +255,6 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
   Map<Pair<String, String>, HoodieMetadataColumnStats> getColumnStats(final List<Pair<String, String>> partitionNameFileNameList, final String columnName)
       throws HoodieMetadataException;
 
-
   /**
    * Get column stats for files from the metadata table index.
    *
