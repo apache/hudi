@@ -18,10 +18,12 @@
 
 package org.apache.hudi.io;
 
+import org.apache.hudi.client.SecondaryIndexStats;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
@@ -30,8 +32,14 @@ import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Unit tests {@link HoodieCreateHandle}.
@@ -76,5 +84,30 @@ public class BaseTestHandle extends HoodieSparkClientTestHarness {
     }
     existingRecords.addAll(deletes);
     return deletes.size();
+  }
+
+  static void validateSecondaryIndexStatsContent(WriteStatus writeStatus, int numUpdates, int numDeletes) {
+    Map<String, String> deletedRecordAndSecondaryKeys = new HashMap<>();
+    Map<String, String> newRecordAndSecondaryKeys = new HashMap<>();
+    for (SecondaryIndexStats stat : writeStatus.getIndexStats().getSecondaryIndexStats().values().stream().findFirst().get()) {
+      // verify si stat marks record as not deleted
+      if (stat.isDeleted()) {
+        deletedRecordAndSecondaryKeys.put(stat.getRecordKey(), stat.getSecondaryKeyValue());
+      } else {
+        newRecordAndSecondaryKeys.put(stat.getRecordKey(), stat.getSecondaryKeyValue());
+      }
+      // verify the record key and secondary key is present
+      assertTrue(StringUtils.nonEmpty(stat.getRecordKey()));
+      assertTrue(StringUtils.nonEmpty(stat.getSecondaryKeyValue()));
+    }
+
+    // Ensure that all record keys are unique and match the initial update size
+    // There should be numUpdates + numDeletes delete secondary index records and numUpdates new secondary index records
+    assertEquals(numUpdates + numDeletes, deletedRecordAndSecondaryKeys.size());
+    assertEquals(numUpdates, newRecordAndSecondaryKeys.size());
+    for (String recordKey : deletedRecordAndSecondaryKeys.keySet()) {
+      // verify secondary key for deleted and new secondary index records is different
+      assertNotEquals(deletedRecordAndSecondaryKeys.get(recordKey), newRecordAndSecondaryKeys.get(recordKey));
+    }
   }
 }

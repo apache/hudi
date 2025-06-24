@@ -18,7 +18,6 @@
 
 package org.apache.hudi.io;
 
-import org.apache.hudi.client.SecondaryIndexStats;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
@@ -34,7 +33,6 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieSparkCopyOnWriteTable;
 import org.apache.hudi.table.HoodieSparkTable;
@@ -44,15 +42,12 @@ import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -131,29 +126,6 @@ public class TestMergeHandle extends BaseTestHandle {
     // 2 * numUpdates si records for old secondary keys and new secondary keys related to updates
     // numDeletes secondary keys related to deletes
     assertEquals(2 * numUpdates + numDeletes, writeStatus.getIndexStats().getSecondaryIndexStats().values().stream().findFirst().get().size());
-
-    // Validate the secondary index stats returned
-    Map<String, String> deletedRecordAndSecondaryKeys = new HashMap<>();
-    Map<String, String> newRecordAndSecondaryKeys = new HashMap<>();
-    for (SecondaryIndexStats stat : writeStatus.getIndexStats().getSecondaryIndexStats().values().stream().findFirst().get()) {
-      // verify si stat marks record as not deleted
-      if (stat.isDeleted()) {
-        deletedRecordAndSecondaryKeys.put(stat.getRecordKey(), stat.getSecondaryKeyValue());
-      } else {
-        newRecordAndSecondaryKeys.put(stat.getRecordKey(), stat.getSecondaryKeyValue());
-      }
-      // verify the record key and secondary key is present
-      assertTrue(StringUtils.nonEmpty(stat.getRecordKey()));
-      assertTrue(StringUtils.nonEmpty(stat.getSecondaryKeyValue()));
-    }
-
-    // Ensure that all record keys are unique and match the initial update size
-    // There should be numUpdates + numDeletes delete secondary index records and numUpdates new secondary index records
-    assertEquals(numUpdates + numDeletes, deletedRecordAndSecondaryKeys.size());
-    assertEquals(numUpdates, newRecordAndSecondaryKeys.size());
-    for (String recordKey : deletedRecordAndSecondaryKeys.keySet()) {
-      // verify secondary key for deleted and new secondary index records is different
-      assertNotEquals(deletedRecordAndSecondaryKeys.get(recordKey), newRecordAndSecondaryKeys.get(recordKey));
-    }
+    validateSecondaryIndexStatsContent(writeStatus, numUpdates, numDeletes);
   }
 }

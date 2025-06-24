@@ -130,5 +130,6 @@ public class TestAppendHandle extends BaseTestHandle {
     // secondary index records size is same twice the number of updates and number of deletes
     // Two records for every update - delete old record and insert new record
     assertEquals(2 * numUpdates + numDeletes, writeStatus.getIndexStats().getSecondaryIndexStats().values().stream().findFirst().get().size());
+    validateSecondaryIndexStatsContent(writeStatus, numUpdates, numDeletes);
   }
 }
