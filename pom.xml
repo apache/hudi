@@ -130,7 +130,7 @@
     <orc.flink.version>1.5.6</orc.flink.version>
     <roaringbitmap.version>0.9.47</roaringbitmap.version>
     <airlift.version>0.16</airlift.version>
-    <prometheus.version>0.8.0</prometheus.version>
+    <prometheus.version>0.16.0</prometheus.version>
     <aws.sdk.httpclient.version>4.5.13</aws.sdk.httpclient.version>
     <aws.sdk.httpcore.version>4.4.13</aws.sdk.httpcore.version>
     <http.version>4.4.1</http.version>
