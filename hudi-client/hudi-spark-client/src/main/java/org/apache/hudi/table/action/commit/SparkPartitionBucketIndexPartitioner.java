@@ -23,7 +23,6 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -35,7 +34,6 @@ import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.WorkloadStat;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -145,40 +143,9 @@ public class SparkPartitionBucketIndexPartitioner<T> extends SparkHoodiePartitio
   }
 
   @Override
-  public BucketInfo getBucketInfo(int bucketNumber) {
-    Pair<Integer, String> res = computeBucketAndPartitionPath(bucketNumber);
-    int bucket = res.getLeft();
-    String partitionPath = res.getRight();
-    // Insert overwrite always generates new bucket file id
-    if (isOverwrite) {
-      ValidationUtils.checkArgument(!isNonBlockingConcurrencyControl,
-          "Insert overwrite is not supported with non-blocking concurrency control");
-      return new BucketInfo(BucketType.INSERT, BucketIdentifier.newBucketFileIdPrefix(bucket), partitionPath);
-    }
-    Option<String> fileIdOption = Option.fromJavaOptional(updatePartitionPathFileIds
-        .getOrDefault(partitionPath, Collections.emptySet()).stream()
-        .filter(e -> e.startsWith(BucketIdentifier.bucketIdStr(bucket)))
-        .findFirst());
-    if (fileIdOption.isPresent()) {
-      return new BucketInfo(BucketType.UPDATE, fileIdOption.get(), partitionPath);
-    } else {
-      // Always write into log file instead of base file if using NB-CC
-      if (isNonBlockingConcurrencyControl) {
-        String fileId = BucketIdentifier.newBucketFileIdForNBCC(bucket);
-        return new BucketInfo(BucketType.UPDATE, fileId, partitionPath);
-      }
-      String fileIdPrefix = BucketIdentifier.newBucketFileIdPrefix(bucket);
-      return new BucketInfo(BucketType.INSERT, fileIdPrefix, partitionPath);
-    }
-  }
-
-  private Pair<Integer, String> computeBucketAndPartitionPath(int bucketNumber) {
-    Integer bucket;
-    String partitionPath;
-    bucket = partitionNumberToLocalBucketId[bucketNumber];
-    partitionPath = partitionNumberToPath[bucketNumber];
-    ValidationUtils.checkArgument(bucket != null && partitionPath != null);
-    return Pair.of(bucket, partitionPath);
+  public SparkBucketInfoGetter getSparkBucketInfoGetter() {
+    return new SparkPartitionBucketIndexBucketInfoGetter(partitionNumberToLocalBucketId, partitionNumberToPath,
+        updatePartitionPathFileIds, isOverwrite, isNonBlockingConcurrencyControl);
   }
 
   @Override
