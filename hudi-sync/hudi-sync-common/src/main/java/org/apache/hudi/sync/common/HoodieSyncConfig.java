@@ -53,6 +53,7 @@ import static org.apache.hudi.common.table.HoodieTableConfig.HIVE_STYLE_PARTITIO
 import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_TABLE_NAME_KEY;
 import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_WRITE_TABLE_NAME_KEY;
 import static org.apache.hudi.common.table.HoodieTableConfig.URL_ENCODE_PARTITIONING;
+import static org.apache.hudi.config.metrics.HoodieMetricsConfig.META_SYNC_BASE_PATH_KEY;
 
 /**
  * Configs needed to sync data into external meta stores, catalogs, etc.
@@ -67,7 +68,7 @@ public class HoodieSyncConfig extends HoodieConfig {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieSyncConfig.class);
 
   public static final ConfigProperty<String> META_SYNC_BASE_PATH = ConfigProperty
-      .key("hoodie.datasource.meta.sync.base.path")
+      .key(META_SYNC_BASE_PATH_KEY)
       .defaultValue("")
       .markAdvanced()
       .withDocumentation("Base path of the hoodie table to sync");
