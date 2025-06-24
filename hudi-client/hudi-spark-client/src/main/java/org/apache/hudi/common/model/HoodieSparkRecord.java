@@ -57,6 +57,7 @@ import java.util.Properties;
 
 import scala.Function1;
 
+import static org.apache.hudi.BaseSparkInternalRowReaderContext.getFieldValueFromInternalRow;
 import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELDS;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.spark.sql.HoodieInternalRowUtils.getCachedUnsafeProjection;
@@ -191,7 +192,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
 
   @Override
   public Object getColumnValueAsJava(Schema recordSchema, String column, Properties props) {
-    throw new UnsupportedOperationException("Unsupported yet for " + this.getClass().getSimpleName());
+    return getFieldValueFromInternalRow(data, recordSchema, column);
   }
 
   @Override

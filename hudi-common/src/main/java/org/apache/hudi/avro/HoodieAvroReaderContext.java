@@ -235,7 +235,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
     };
   }
 
-  private Object getFieldValueFromIndexedRecord(
+  public static Object getFieldValueFromIndexedRecord(
       IndexedRecord record,
       String fieldName) {
     Schema currentSchema = record.getSchema();

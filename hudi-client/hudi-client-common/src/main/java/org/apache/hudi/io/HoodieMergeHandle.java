@@ -357,7 +357,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
           HoodieKey hoodieKey = newRecord.getKey();
           if (isSecondaryIndexStatsStreamingWritesEnabled) {
             SecondaryIndexStreamingTracker.trackSecondaryIndexStats(hoodieKey, combineRecord, oldRecord, false, writeStatus,
-                writeSchemaWithMetaFields, this::getNewSchema, secondaryIndexDefns, keyGeneratorOpt, hoodieTable, taskContextSupplier);
+                writeSchemaWithMetaFields, this::getNewSchema, secondaryIndexDefns, keyGeneratorOpt, config);
           }
           writeToFile(hoodieKey, combineRecord.get(), schema, prop, preserveMetadata);
           recordsWritten++;
@@ -365,14 +365,14 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
           // CASE (2): A delete operation.
           if (isSecondaryIndexStatsStreamingWritesEnabled) {
             SecondaryIndexStreamingTracker.trackSecondaryIndexStats(newRecord.getKey(), combineRecord, oldRecord, true, writeStatus,
-                writeSchemaWithMetaFields, this::getNewSchema, secondaryIndexDefns, keyGeneratorOpt, hoodieTable, taskContextSupplier);
+                writeSchemaWithMetaFields, this::getNewSchema, secondaryIndexDefns, keyGeneratorOpt, config);
           }
           recordsDeleted++;
         }
       } else {
         if (isSecondaryIndexStatsStreamingWritesEnabled) {
           SecondaryIndexStreamingTracker.trackSecondaryIndexStats(newRecord.getKey(), combineRecord, oldRecord, true, writeStatus,
-              writeSchemaWithMetaFields, this::getNewSchema, secondaryIndexDefns, keyGeneratorOpt, hoodieTable, taskContextSupplier);
+              writeSchemaWithMetaFields, this::getNewSchema, secondaryIndexDefns, keyGeneratorOpt, config);
         }
         recordsDeleted++;
         // Clear the new location as the record was deleted

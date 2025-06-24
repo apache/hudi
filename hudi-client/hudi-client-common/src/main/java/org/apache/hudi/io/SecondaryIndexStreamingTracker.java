@@ -24,7 +24,6 @@ import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieKey;
@@ -138,21 +137,15 @@ public class SecondaryIndexStreamingTracker {
    * @param writeStatus               WriteStatus
    * @param writeSchemaWithMetaFields Schema with metadata fields
    * @param secondaryIndexDefns       Definitions for secondary index which need to be updated
-   * @param hoodieTable               Hoodie table
-   * @param taskContextSupplier       Task context supplier
+   * @param config                    Hoodie write config
    */
   static void trackSecondaryIndexStats(HoodieRecord record, WriteStatus writeStatus, Schema writeSchemaWithMetaFields,
-                                       List<HoodieIndexDefinition> secondaryIndexDefns, HoodieTable hoodieTable, TaskContextSupplier taskContextSupplier) {
-    HoodieEngineContext engineContext = new HoodieLocalEngineContext(hoodieTable.getStorageConf(), taskContextSupplier);
-    HoodieReaderContext readerContext = engineContext.getReaderContextFactory(hoodieTable.getMetaClient()).getContext();
-
+                                       List<HoodieIndexDefinition> secondaryIndexDefns, HoodieWriteConfig config) {
     // Add secondary index records for all the inserted records
     secondaryIndexDefns.forEach(def -> {
-      if (record instanceof HoodieAvroIndexedRecord) {
-        Object secondaryKey = readerContext.getValue(record.getData(), writeSchemaWithMetaFields, def.getSourceFieldsKey());
-        if (secondaryKey != null) {
-          writeStatus.getIndexStats().addSecondaryIndexStats(def.getIndexName(), record.getRecordKey(), secondaryKey.toString(), false);
-        }
+      Object secondaryKey = record.getColumnValueAsJava(writeSchemaWithMetaFields, def.getSourceFieldsKey(), config.getProps());
+      if (secondaryKey != null) {
+        writeStatus.getIndexStats().addSecondaryIndexStats(def.getIndexName(), record.getRecordKey(), secondaryKey.toString(), false);
       }
     });
   }
@@ -171,30 +164,25 @@ public class SecondaryIndexStreamingTracker {
    * @param newSchemaSupplier         The schema supplier for the new record
    * @param secondaryIndexDefns       Definitions for secondary index which need to be updated
    * @param keyGeneratorOpt           Option containing key generator
-   * @param hoodieTable               The hoodie table
-   * @param taskContextSupplier       The task context supplier
+   * @param config                    Hoodie write config
    */
   static <T> void trackSecondaryIndexStats(@Nullable HoodieKey hoodieKey, Option<HoodieRecord> combinedRecordOpt, @Nullable HoodieRecord<T> oldRecord, boolean isDelete,
                                            WriteStatus writeStatus, Schema writeSchemaWithMetaFields, Supplier<Schema> newSchemaSupplier,
-                                           List<HoodieIndexDefinition> secondaryIndexDefns, Option<BaseKeyGenerator> keyGeneratorOpt, HoodieTable hoodieTable,
-                                           TaskContextSupplier taskContextSupplier) {
-    HoodieEngineContext engineContext = new HoodieLocalEngineContext(hoodieTable.getStorageConf(), taskContextSupplier);
-    HoodieReaderContext readerContext = engineContext.getReaderContextFactory(hoodieTable.getMetaClient()).getContext();
+                                           List<HoodieIndexDefinition> secondaryIndexDefns, Option<BaseKeyGenerator> keyGeneratorOpt, HoodieWriteConfig config) {
 
     secondaryIndexDefns.forEach(def -> {
       String secondaryIndexSourceField = def.getSourceFieldsKey();
       Option<Object> oldSecondaryKeyOpt = Option.empty();
       Option<Object> newSecondaryKeyOpt = Option.empty();
-      if (oldRecord instanceof HoodieAvroIndexedRecord) {
-        Object oldSecondaryKey = readerContext.getValue(oldRecord.getData(), writeSchemaWithMetaFields, secondaryIndexSourceField);
-        if (oldSecondaryKey != null) {
-          oldSecondaryKeyOpt = Option.of(oldSecondaryKey);
-        }
+      Object oldSecondaryKey = oldRecord.getColumnValueAsJava(writeSchemaWithMetaFields, secondaryIndexSourceField, config.getProps());
+      if (oldSecondaryKey != null) {
+        oldSecondaryKeyOpt = Option.of(oldSecondaryKey);
       }
 
-      if (combinedRecordOpt.isPresent() && combinedRecordOpt.get() instanceof HoodieAvroIndexedRecord && !isDelete) {
+
+      if (combinedRecordOpt.isPresent() && !isDelete) {
         Schema newSchema = newSchemaSupplier.get();
-        Object secondaryKey = readerContext.getValue(combinedRecordOpt.get().getData(), newSchema, secondaryIndexSourceField);
+        Object secondaryKey = combinedRecordOpt.get().getColumnValueAsJava(newSchema, secondaryIndexSourceField, config.getProps());
         if (secondaryKey != null) {
           newSecondaryKeyOpt = Option.of(secondaryKey);
         }

@@ -39,7 +39,6 @@ import org.apache.hudi.common.table.log.LogFileCreationCallback;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -130,8 +129,6 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     // Secondary index should not be updated for clustering and compaction
     // Since for clustering and compaction preserveMetadata is true, we are checking for it before enabling secondary index update
     if (config.isSecondaryIndexEnabled() && !preserveMetadata) {
-      ValidationUtils.checkArgument(recordMerger.getRecordType() == HoodieRecord.HoodieRecordType.AVRO,
-          "Only Avro record type is supported for streaming writes to metadata table with write handles");
       secondaryIndexDefns = hoodieTable.getMetaClient().getIndexMetadata()
           .map(indexMetadata -> indexMetadata.getIndexDefinitions().values())
           .orElse(Collections.emptyList())
