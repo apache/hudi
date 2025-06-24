@@ -26,6 +26,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.SeekableDataInputStream;
+import org.apache.hudi.metadata.SecondaryIndexKeyUtils;
 import org.apache.hudi.storage.HoodieStorage;
 
 import org.apache.avro.Schema;
@@ -508,7 +509,8 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
             });
 
         if (fullKey && keys.contains(key)
-            || !fullKey && keys.stream().anyMatch(key::startsWith)) {
+            || !fullKey && keys.stream().anyMatch(
+                k -> key.startsWith(SecondaryIndexKeyUtils.escapeSpecialChars(k)))) {
           return true;
         }
       }

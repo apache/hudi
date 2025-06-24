@@ -190,6 +190,30 @@ public class Types {
   /**
    * Time primitive type.
    */
+  public static class NullType extends PrimitiveType {
+    private static final NullType INSTANCE = new NullType();
+
+    public static NullType get() {
+      return INSTANCE;
+    }
+
+    private NullType() {
+    }
+
+    @Override
+    public TypeID typeId() {
+      return TypeID.NULL;
+    }
+
+    @Override
+    public String toString() {
+      return "null";
+    }
+  }
+
+  /**
+   * Time primitive type.
+   */
   public static class TimestampType extends PrimitiveType {
     private static final TimestampType INSTANCE = new TimestampType();
 
