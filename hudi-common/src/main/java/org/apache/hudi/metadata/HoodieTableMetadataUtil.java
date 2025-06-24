@@ -1393,10 +1393,14 @@ public class HoodieTableMetadataUtil {
   }
 
   // change to configurable larger group
-  private static int mapRecordKeyToFileGroupIndex(String recordKey, int numFileGroups) {
+  private static int mapRecordKeyToFileGroupIndex(String key, int numFileGroups) {
+    // For null key, apply special hashing rule.
+    if (key == null) {
+      return NULL_STR_HASH_VAL_FOR_INDEXING;
+    }
     int h = 0;
-    for (int i = 0; i < recordKey.length(); ++i) {
-      h = 31 * h + recordKey.charAt(i);
+    for (int i = 0; i < key.length(); ++i) {
+      h = 31 * h + key.charAt(i);
     }
 
     return Math.abs(Math.abs(h) % numFileGroups);

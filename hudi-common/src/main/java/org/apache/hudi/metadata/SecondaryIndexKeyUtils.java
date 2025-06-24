@@ -86,7 +86,7 @@ public class SecondaryIndexKeyUtils {
    * Escapes special characters in a string. If the input is null, returns a string containing only the null character.
    * For non-null strings, escapes backslash, dollar sign, and null character.
    */
-  private static String escapeSpecialChars(String str) {
+  public static String escapeSpecialChars(String str) {
     if (str == null) {
       return String.valueOf(NULL_CHAR);
     }
