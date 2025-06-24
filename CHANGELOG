@@ -838,3 +838,8 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 
 --- [2025-06-21 00:54:03] [release-v1.135.0] ---
 [AUDIT-1071]: Changelog for release-v1.134.0 (#1412)
+
+--- [2025-06-24 16:04:19] [release-v1.136.0] ---
+[ENG-28313][INTERNAL] Pass correct base path key to metrics of sync tool (#1408)
+[ENG-25704][INTERNAL] Upgrade Prometheus to 0.16.0 (#1417)
+[AUDIT-1462]: Changelog for release-v1.135.0 (#1414)
