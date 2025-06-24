@@ -30,6 +30,10 @@ import java.util.UUID;
 public class Literal<T> extends LeafExpression {
 
   public static <V> Literal from(V value) {
+    if (value == null) {
+      return new Literal<>(null, Types.NullType.get());
+    }
+
     if (value instanceof Integer || value instanceof Short) {
       return new Literal<>(value, Types.IntType.get());
     }
