@@ -52,6 +52,7 @@ import java.util.stream.Collectors;
 public class HoodieMetricsConfig extends HoodieConfig {
 
   public static final String METRIC_PREFIX = "hoodie.metrics";
+  public static final String META_SYNC_BASE_PATH_KEY = "hoodie.datasource.meta.sync.base.path";
 
   public static final ConfigProperty<Boolean> TURN_METRICS_ON = ConfigProperty
       .key(METRIC_PREFIX + ".on")
@@ -168,7 +169,13 @@ public class HoodieMetricsConfig extends HoodieConfig {
    * base properties.
    */
   public String getBasePath() {
-    return getString(HoodieCommonConfig.BASE_PATH);
+    // First search default base path key.
+    String basePathKey = getString(HoodieCommonConfig.BASE_PATH);
+    // This works when initialized in a meta-sync tool.
+    if (basePathKey == null) {
+      return getString(META_SYNC_BASE_PATH_KEY);
+    }
+    return basePathKey;
   }
 
   /**
