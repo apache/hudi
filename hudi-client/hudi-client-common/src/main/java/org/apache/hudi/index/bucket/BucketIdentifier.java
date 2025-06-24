@@ -85,13 +85,21 @@ public class BucketIdentifier implements Serializable {
   }
 
   public static String newBucketFileIdPrefix(int bucketId) {
-    return FSUtils.createNewFileIdPfx().replaceFirst(".{8}", bucketIdStr(bucketId));
+    return newBucketFileIdPrefix(bucketIdStr(bucketId));
+  }
+
+  public static String newBucketFileIdPrefix(String bucketIdStr) {
+    return FSUtils.createNewFileIdPfx().replaceFirst(".{8}", bucketIdStr);
+  }
+
+  public static String newBucketFileIdForNBCC(int bucketId) {
+    return newBucketFileIdForNBCC(bucketIdStr(bucketId));
   }
 
   /**
    * Generate a new file id for NBCC mode, file id is fixed for each bucket with format: "{bucket_id}-0000-0000-0000-000000000000-0"
    */
-  public static String newBucketFileIdForNBCC(int bucketId) {
-    return FSUtils.createNewFileId(bucketIdStr(bucketId) + CONSTANT_FILE_ID_SUFFIX, 0);
+  public static String newBucketFileIdForNBCC(String bucketIdStr) {
+    return FSUtils.createNewFileId(bucketIdStr + CONSTANT_FILE_ID_SUFFIX, 0);
   }
 }

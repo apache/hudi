@@ -35,6 +35,7 @@ import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import org.apache.spark.Partitioner;
+import org.apache.spark.broadcast.Broadcast;
 
 import java.util.Arrays;
 import java.util.Iterator;
@@ -101,15 +102,14 @@ public class SparkInsertOverwriteCommitActionExecutor<T>
   }
 
   @Override
-  protected Iterator<List<WriteStatus>> handleInsertPartition(String instantTime, Integer partition, Iterator recordItr, Partitioner partitioner) {
-    SparkHoodiePartitioner upsertPartitioner = (SparkHoodiePartitioner) partitioner;
-    BucketInfo binfo = upsertPartitioner.getBucketInfo(partition);
+  protected Iterator<List<WriteStatus>> handleInsertPartition(String instantTime, Integer partition, Iterator recordItr, Broadcast<SparkBucketInfoGetter> bucketInfoGetter) {
+    BucketInfo binfo = bucketInfoGetter.getValue().getBucketInfo(partition);
     BucketType btype = binfo.bucketType;
     switch (btype) {
       case INSERT:
         return handleInsert(binfo.fileIdPrefix, recordItr);
       default:
-        throw new AssertionError("Expect INSERT bucketType for insert overwrite, please correct the logical of " + partitioner.getClass().getName());
+        throw new IllegalStateException("INSERT bucketType expected for insert overwrite. Ensure that the correct partitioner is used.");
     }
   }
 }

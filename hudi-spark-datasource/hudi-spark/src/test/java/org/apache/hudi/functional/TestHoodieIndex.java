@@ -54,7 +54,12 @@ import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.commit.BaseSparkBucketIndexBucketInfoGetter;
+import org.apache.hudi.table.action.commit.BucketInfo;
+import org.apache.hudi.table.action.commit.BucketType;
+import org.apache.hudi.table.action.commit.SparkBucketIndexBucketInfoGetter;
 import org.apache.hudi.table.action.commit.SparkBucketIndexPartitioner;
+import org.apache.hudi.table.action.commit.SparkPartitionBucketIndexBucketInfoGetter;
 import org.apache.hudi.testutils.HoodieSparkWriteableTestTable;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
@@ -73,9 +78,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -662,5 +669,151 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
         ? Option.of(Pair.of(hr.getPartitionPath(), hr.getCurrentLocation().getFileId()))
         : Option.empty())
     );
+  }
+
+  @Test
+  public void testSparkBucketIndexBucketInfoGetterOverwrite() {
+    int numBuckets = 2;
+    List<String> partitions = Arrays.asList("part1", "part2", "part3");
+    Integer[] partitionNumberToLocalBucketId = {0, 1, 0, 1, 0, 1};
+    String[] partitionNumberToPath = {"part1", "part1", "part2", "part2", "part3", "part3"};
+
+    SparkBucketIndexBucketInfoGetter overwriteGetter = new SparkBucketIndexBucketInfoGetter(
+        numBuckets,
+        partitions,
+        Collections.emptyMap(),
+        true,
+        false
+    );
+    SparkPartitionBucketIndexBucketInfoGetter partitionOverwriteGetter = new SparkPartitionBucketIndexBucketInfoGetter(
+        partitionNumberToLocalBucketId,
+        partitionNumberToPath,
+        Collections.emptyMap(),
+        true,
+        false
+    );
+
+    // bucketId -> expectedPartition, expectedPrefix
+    Object[][] testCases = new Object[][]{
+        {1, "part1", "00000001-"},
+        {2, "part2", "00000000-"},
+        {5, "part3", "00000001-"}
+    };
+
+    for (Object[] testCase : testCases) {
+      int bucketId = (int) testCase[0];
+      String expectedPartition = (String) testCase[1];
+      String expectedPrefix = (String) testCase[2];
+
+      for (BaseSparkBucketIndexBucketInfoGetter getter : Arrays.asList(overwriteGetter, partitionOverwriteGetter)) {
+        BucketInfo info = getter.getBucketInfo(bucketId);
+        assertEquals(BucketType.INSERT, info.getBucketType());
+        assertEquals(expectedPartition, info.getPartitionPath());
+        assertTrue(info.getFileIdPrefix().startsWith(expectedPrefix));
+      }
+    }
+  }
+
+  @Test
+  public void testSparkBucketIndexBucketInfoGetter() {
+    int numBuckets = 2;
+    List<String> partitions = Arrays.asList("part1", "part2", "part3");
+    Map<String, Set<String>> updateMap = new HashMap<>();
+    updateMap.put("part1", new HashSet<>(Arrays.asList("00000000-fileA", "00000001-fileB")));
+    updateMap.put("part2", new HashSet<>(Arrays.asList("00000000-fileC", "00000001-fileD")));
+    Integer[] partitionNumberToLocalBucketId = {0, 1, 0, 1, 0, 1};
+    String[] partitionNumberToPath = {"part1", "part1", "part2", "part2", "part3", "part3"};
+
+    SparkBucketIndexBucketInfoGetter updateGetter = new SparkBucketIndexBucketInfoGetter(
+        numBuckets,
+        partitions,
+        updateMap,
+        false,
+        false
+    );
+
+    SparkPartitionBucketIndexBucketInfoGetter partitionOverwriteGetter = new SparkPartitionBucketIndexBucketInfoGetter(
+        partitionNumberToLocalBucketId,
+        partitionNumberToPath,
+        updateMap,
+        false,
+        false
+    );
+
+    // Bucket ID 0
+    BucketInfo updateInfo = updateGetter.getBucketInfo(0);
+    assertEquals(BucketType.UPDATE, updateInfo.getBucketType());
+    assertEquals("part1", updateInfo.getPartitionPath());
+    assertEquals("00000000-fileA", updateInfo.getFileIdPrefix());
+
+    BucketInfo partitionInfo = partitionOverwriteGetter.getBucketInfo(0);
+    assertEquals(BucketType.UPDATE, partitionInfo.getBucketType());
+    assertEquals("part1", partitionInfo.getPartitionPath());
+    assertEquals("00000000-fileA", partitionInfo.getFileIdPrefix());
+
+    // Bucket ID 3
+    updateInfo = updateGetter.getBucketInfo(3);
+    assertEquals(BucketType.UPDATE, updateInfo.getBucketType());
+    assertEquals("part2", updateInfo.getPartitionPath());
+    assertEquals("00000001-fileD", updateInfo.getFileIdPrefix());
+
+    partitionInfo = partitionOverwriteGetter.getBucketInfo(3);
+    assertEquals(BucketType.UPDATE, partitionInfo.getBucketType());
+    assertEquals("part2", partitionInfo.getPartitionPath());
+    assertEquals("00000001-fileD", partitionInfo.getFileIdPrefix());
+
+    // Bucket ID 4
+    updateInfo = updateGetter.getBucketInfo(4);
+    assertEquals(BucketType.INSERT, updateInfo.getBucketType());
+    assertEquals("part3", updateInfo.getPartitionPath());
+    assertTrue(updateInfo.getFileIdPrefix().startsWith("00000000-"));
+
+    partitionInfo = partitionOverwriteGetter.getBucketInfo(4);
+    assertEquals(BucketType.INSERT, partitionInfo.getBucketType());
+    assertEquals("part3", partitionInfo.getPartitionPath());
+    assertTrue(partitionInfo.getFileIdPrefix().startsWith("00000000-"));
+  }
+
+  @Test
+  public void testSparkBucketIndexBucketInfoGetterWithNBCC() {
+    int numBuckets = 2;
+    List<String> partitions = Arrays.asList("part1", "part2", "part3");
+    Map<String, Set<String>> updateMap = new HashMap<>();
+    updateMap.put("part1", new HashSet<>(Arrays.asList("00000000-fileA", "00000001-fileB")));
+    updateMap.put("part2", new HashSet<>(Arrays.asList("00000000-fileC", "00000001-fileD")));
+    Integer[] partitionNumberToLocalBucketId = {0, 1, 0, 1, 0, 1};
+    String[] partitionNumberToPath = {"part1", "part1", "part2", "part2", "part3", "part3"};
+
+    SparkBucketIndexBucketInfoGetter updateGetterNBCC = new SparkBucketIndexBucketInfoGetter(
+        numBuckets,
+        partitions,
+        updateMap,
+        false,
+        true
+    );
+    SparkPartitionBucketIndexBucketInfoGetter partitionOverwriteGetter = new SparkPartitionBucketIndexBucketInfoGetter(
+        partitionNumberToLocalBucketId,
+        partitionNumberToPath,
+        updateMap,
+        false,
+        true
+    );
+
+    int[] testBucketIds = {0, 3, 4};
+    String[] expectedPartitions = {"part1", "part2", "part3"};
+    String[] expectedFileIds = {
+        "00000000-fileA", "00000001-fileD", "00000000-0000-0000-0000-000000000000-0"
+    };
+
+    BaseSparkBucketIndexBucketInfoGetter[] getters = {updateGetterNBCC, partitionOverwriteGetter};
+
+    for (BaseSparkBucketIndexBucketInfoGetter getter : getters) {
+      for (int i = 0; i < testBucketIds.length; i++) {
+        BucketInfo info = getter.getBucketInfo(testBucketIds[i]);
+        assertEquals(BucketType.UPDATE, info.getBucketType());
+        assertEquals(expectedPartitions[i], info.getPartitionPath());
+        assertEquals(expectedFileIds[i], info.getFileIdPrefix());
+      }
+    }
   }
 }
