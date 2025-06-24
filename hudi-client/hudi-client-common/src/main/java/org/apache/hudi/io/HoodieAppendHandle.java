@@ -553,7 +553,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         // secondary index considering all the log files.
         SecondaryIndexStreamingTracker.trackSecondaryIndexStats(partitionPath, fileId, getReadFileSlice(),
             statuses.stream().map(status -> status.getStat().getPath()).collect(Collectors.toList()),
-            statuses.get(statuses.size() - 1), hoodieTable, taskContextSupplier, secondaryIndexDefns, config, instantTime, writeSchemaWithMetaFields);
+            statuses.get(statuses.size() - 1), hoodieTable, secondaryIndexDefns, config, instantTime, writeSchemaWithMetaFields);
       }
 
       return statuses;
@@ -723,8 +723,6 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
    */
   private Option<FileSlice> getReadFileSlice() {
     TableFileSystemView.SliceView rtView = hoodieTable.getSliceView();
-    return Option.fromJavaOptional(rtView.getLatestMergedFileSlicesBeforeOrOn(partitionPath, instantTime)
-        .filter(fileSlice -> fileSlice.getFileId().equals(fileId))
-        .findFirst());
+    return rtView.getLatestMergedFileSliceBeforeOrOn(partitionPath, instantTime, fileId);
   }
 }

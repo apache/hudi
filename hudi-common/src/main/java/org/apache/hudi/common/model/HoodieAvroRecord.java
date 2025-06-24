@@ -133,7 +133,7 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
         return null;
       }
     } catch (IOException e) {
-      throw new HoodieIOException("Could not fetch column value");
+      throw new HoodieIOException("Could not fetch value for column: " + column);
     }
   }
 

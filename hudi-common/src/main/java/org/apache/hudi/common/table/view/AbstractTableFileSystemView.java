@@ -1064,11 +1064,9 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   public final Option<FileSlice> getLatestMergedFileSliceBeforeOrOn(String partitionStr, String maxInstantTime, String fileId) {
     try {
       readLock.lock();
-      return getLatestMergedFileSlicesBeforeOrOn(partitionStr, maxInstantTime)
+      return Option.fromJavaOptional(getLatestMergedFileSlicesBeforeOrOn(partitionStr, maxInstantTime)
           .filter(fileSlice -> fileSlice.getFileId().equals(fileId))
-          .map(Option::of)
-          .findFirst()
-          .orElse(Option.empty());
+          .findFirst());
     } finally {
       readLock.unlock();
     }

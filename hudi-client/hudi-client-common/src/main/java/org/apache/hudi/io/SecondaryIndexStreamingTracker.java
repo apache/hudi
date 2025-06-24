@@ -19,10 +19,7 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
@@ -71,11 +68,10 @@ public class SecondaryIndexStreamingTracker {
    * @param writeSchemaWithMetaFields Write schema with metadata fields
    */
   static void trackSecondaryIndexStats(String partitionPath, String fileId, Option<FileSlice> fileSliceOpt, List<String> newLogFiles, WriteStatus status,
-                                       HoodieTable hoodieTable, TaskContextSupplier taskContextSupplier, List<HoodieIndexDefinition> secondaryIndexDefns,
+                                       HoodieTable hoodieTable, List<HoodieIndexDefinition> secondaryIndexDefns,
                                        HoodieWriteConfig config, String instantTime, Schema writeSchemaWithMetaFields) {
     // TODO: @see <a href="https://issues.apache.org/jira/browse/HUDI-9533">HUDI-9533</a> Optimise the computation for multiple secondary indexes
-    HoodieEngineContext engineContext = new HoodieLocalEngineContext(hoodieTable.getStorageConf(), taskContextSupplier);
-    HoodieReaderContext readerContext = engineContext.getReaderContextFactory(hoodieTable.getMetaClient()).getContext();
+    HoodieReaderContext readerContext = hoodieTable.getContext().getReaderContextFactory(hoodieTable.getMetaClient()).getContext();
 
     // For Append handle, we need to merge the records written by new log files with the existing file slice to check
     // the corresponding updates for secondary index. It is possible the records written in the new log files are ignored
