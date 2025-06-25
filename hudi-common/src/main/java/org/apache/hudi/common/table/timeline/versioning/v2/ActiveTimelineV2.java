@@ -562,7 +562,7 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
         ValidationUtils.checkArgument(
             metaClient.getStorage().exists(getInstantFileNamePath(fromInstantFileName)),
             "File " + getInstantFileNamePath(fromInstantFileName) + " does not exist!");
-        String completionTime = HoodieInstantTimeGenerator.formatDateUTC(new Date(createCompleteFileInMetaPath(shouldLock, toInstant, metadata)));
+        String completionTime = HoodieInstantTimeGenerator.formatDateBasedOnTimeZone(new Date(createCompleteFileInMetaPath(shouldLock, toInstant, metadata)));
         return new HoodieInstant(toInstant.getState(), toInstant.getAction(), toInstant.requestedTime(), completionTime, instantComparator.requestedTimeOrderedComparator());
       }
     } catch (IOException e) {
@@ -746,7 +746,7 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
     Option<HoodieInstantWriter> writerOption = getHoodieInstantWriterOption(this, metadata);
     TimeGenerator timeGenerator = TimeGenerators
         .getTimeGenerator(metaClient.getTimeGeneratorConfig(), metaClient.getStorageConf());
-    timeGenerator.consumeTime(!shouldLock, currentTimeMillis -> {
+    return timeGenerator.consumeTime(!shouldLock, currentTimeMillis -> {
       String completionTime = HoodieInstantTimeGenerator.formatDateBasedOnTimeZone(new Date(currentTimeMillis));
       String fileName = instantFileNameGenerator.getFileName(completionTime, instant);
       StoragePath fullPath = getInstantFileNamePath(fileName);
