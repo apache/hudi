@@ -61,7 +61,6 @@ public class SecondaryIndexStreamingTracker {
    * @param newLogFiles               New log files
    * @param status                    Write status corresponding to the last log file written by the handle
    * @param hoodieTable               Hoodie Table
-   * @param taskContextSupplier       Task context supplier
    * @param secondaryIndexDefns       Definitions for secondary index which need to be updated
    * @param config                    Write config
    * @param instantTime               Instant time of the commit
@@ -168,25 +167,17 @@ public class SecondaryIndexStreamingTracker {
 
     secondaryIndexDefns.forEach(def -> {
       String secondaryIndexSourceField = def.getSourceFieldsKey();
-      Option<Object> oldSecondaryKeyOpt = Option.empty();
-      Option<Object> newSecondaryKeyOpt = Option.empty();
       Object oldSecondaryKey = oldRecord.getColumnValueAsJava(writeSchemaWithMetaFields, secondaryIndexSourceField, config.getProps());
-      if (oldSecondaryKey != null) {
-        oldSecondaryKeyOpt = Option.of(oldSecondaryKey);
-      }
-
+      Object newSecondaryKey = null;
       if (combinedRecordOpt.isPresent() && !isDelete) {
         Schema newSchema = newSchemaSupplier.get();
-        Object secondaryKey = combinedRecordOpt.get().getColumnValueAsJava(newSchema, secondaryIndexSourceField, config.getProps());
-        if (secondaryKey != null) {
-          newSecondaryKeyOpt = Option.of(secondaryKey);
-        }
+        newSecondaryKey = combinedRecordOpt.get().getColumnValueAsJava(newSchema, secondaryIndexSourceField, config.getProps());
       }
 
       boolean shouldUpdate = true;
-      if (oldSecondaryKeyOpt.isPresent() && newSecondaryKeyOpt.isPresent()) {
+      if (oldSecondaryKey != null && newSecondaryKey != null) {
         // If new secondary key is different from old secondary key, update secondary index records
-        shouldUpdate = !oldSecondaryKeyOpt.get().equals(newSecondaryKeyOpt.get());
+        shouldUpdate = !oldSecondaryKey.equals(newSecondaryKey);
       }
       if (shouldUpdate) {
         String recordKey = Option.ofNullable(hoodieKey).map(HoodieKey::getRecordKey)
@@ -194,9 +185,12 @@ public class SecondaryIndexStreamingTracker {
             .or(() -> combinedRecordOpt.map(HoodieRecord::getRecordKey))
             .get();
         // Add secondary index delete records for old records
-        oldSecondaryKeyOpt.ifPresent(secKey -> addSecondaryIndexStat(writeStatus, def.getIndexName(), recordKey, secKey, true));
-        newSecondaryKeyOpt.ifPresent(secKey ->
-            addSecondaryIndexStat(writeStatus, def.getIndexName(), recordKey, secKey, false));
+        if (oldSecondaryKey != null) {
+          addSecondaryIndexStat(writeStatus, def.getIndexName(), recordKey, oldSecondaryKey, true);
+        }
+        if(newSecondaryKey != null) {
+          addSecondaryIndexStat(writeStatus, def.getIndexName(), recordKey, newSecondaryKey, false);
+        }
       }
     });
   }
