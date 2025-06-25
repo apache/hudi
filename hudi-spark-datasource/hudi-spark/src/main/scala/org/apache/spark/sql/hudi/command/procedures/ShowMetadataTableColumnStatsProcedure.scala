@@ -25,7 +25,7 @@ import org.apache.hudi.common.data.HoodieData
 import org.apache.hudi.common.engine.HoodieEngineContext
 import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.TableSchemaResolver
-import org.apache.hudi.common.table.timeline.HoodieInstant
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieInstantTimeGenerator}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.metadata.HoodieTableMetadata
@@ -136,14 +136,7 @@ class ShowMetadataTableColumnStatsProcedure extends BaseProcedure with Procedure
     val metaClient = createMetaClient(jsc, basePath)
 
     val timeline = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants()
-
-    val maxInstant = metaClient.createNewInstantTime()
-    val instants = timeline.getInstants.iterator().asScala.filter(_.requestedTime < maxInstant)
-
-    val filteredTimeline = metaClient.getTimelineLayout.getTimelineFactory.createDefaultTimeline(
-      new java.util.ArrayList[HoodieInstant](instants.toList.asJava).stream(), metaClient.getActiveTimeline.getInstantReader)
-
-    HoodieTableFileSystemView.fileListingBasedFileSystemView(engineContext, metaClient, filteredTimeline)
+    HoodieTableFileSystemView.fileListingBasedFileSystemView(engineContext, metaClient, timeline)
   }
 
   override def build: Procedure = new ShowMetadataTableColumnStatsProcedure()

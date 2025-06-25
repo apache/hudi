@@ -242,8 +242,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     assertTrue(javaRDD.filter(record -> record.isCurrentLocationKnown()).collect().isEmpty());
 
     // Insert totalRecords records
-    String newCommitTime = writeClient.createNewInstantTime();
-    WriteClientTestUtils.startCommitWithTime(writeClient, newCommitTime);
+    String newCommitTime = writeClient.startCommit();
     JavaRDD<WriteStatus> writeStatusRdd = writeClient.upsert(writtenRecords, newCommitTime);
     List<WriteStatus> writeStatuses = writeStatusRdd.collect();
     assertNoWriteErrors(writeStatuses);
@@ -358,8 +357,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
 
     HoodieSparkTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
 
-    String newCommitTime = writeClient.createNewInstantTime();
-    WriteClientTestUtils.startCommitWithTime(writeClient, newCommitTime);
+    String newCommitTime = writeClient.startCommit();
     JavaRDD<WriteStatus> writeStatues = writeClient.upsert(writeRecords, newCommitTime);
     JavaRDD<HoodieRecord> javaRDD1 = tagLocation(index, writeRecords, hoodieTable);
 

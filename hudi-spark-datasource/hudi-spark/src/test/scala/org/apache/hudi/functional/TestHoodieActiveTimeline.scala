@@ -18,6 +18,7 @@
 package org.apache.hudi.functional
 
 import org.apache.hudi.{DataSourceWriteOptions, HoodieDataSourceHelpers}
+import org.apache.hudi.client.WriteClientTestUtils
 import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
@@ -29,7 +30,7 @@ import org.apache.hudi.testutils.HoodieSparkClientTestBase
 
 import org.apache.spark.sql._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertTrue, fail}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue, fail}
 import org.slf4j.LoggerFactory
 
 import java.io.FileNotFoundException
@@ -250,7 +251,7 @@ class TestHoodieActiveTimeline extends HoodieSparkClientTestBase {
     val activeTimeline = metaClient.getActiveTimeline
     try {
       activeTimeline.getInstantContentStream(HoodieTestUtils.INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT,
-        HoodieTimeline.CLUSTERING_ACTION, metaClient.createNewInstantTime()))
+        HoodieTimeline.CLUSTERING_ACTION, WriteClientTestUtils.createNewInstantTime()))
     } catch {
       // org.apache.hudi.common.util.ClusteringUtils.getRequestedReplaceMetadata depends upon this behaviour
       // where FileNotFoundException is the cause of exception thrown by the API getInstantDetails

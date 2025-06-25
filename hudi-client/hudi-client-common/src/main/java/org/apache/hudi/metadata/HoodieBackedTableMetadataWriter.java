@@ -1817,12 +1817,10 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       writeClient.compact(compactionInstantTime, true);
     } else if (metadataWriteConfig.isLogCompactionEnabled()) {
       // Schedule and execute log compaction with new instant time.
-      final String logCompactionInstantTime = metadataMetaClient.createNewInstantTime(false);
-      if (metadataMetaClient.getActiveTimeline().filterCompletedInstants().containsInstant(logCompactionInstantTime)) {
-        LOG.info("Log compaction with same {} time is already present in the timeline.", logCompactionInstantTime);
-      } else if (writeClient.scheduleLogCompactionAtInstant(logCompactionInstantTime, Option.empty())) {
-        LOG.info("Log compaction is scheduled for timestamp {}", logCompactionInstantTime);
-        writeClient.logCompact(logCompactionInstantTime, true);
+      Option<String> scheduledLogCompaction = writeClient.scheduleLogCompaction(Option.empty());
+      if (scheduledLogCompaction.isPresent()) {
+        LOG.info("Log compaction is scheduled for timestamp {}", scheduledLogCompaction.get());
+        writeClient.logCompact(scheduledLogCompaction.get(), true);
       }
     }
   }

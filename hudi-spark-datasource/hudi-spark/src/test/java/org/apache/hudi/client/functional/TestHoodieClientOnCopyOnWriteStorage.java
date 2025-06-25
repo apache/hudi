@@ -340,7 +340,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     int numRecords = 200;
     //set wrong value for expected number of rows
     HoodieWriteConfig config = getConfigBuilder().withPreCommitValidatorConfig(createPreCommitValidatorConfig(500)).build();
-    String newCommitTime = metaClient.createNewInstantTime();
+    String newCommitTime = WriteClientTestUtils.createNewInstantTime();
     try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
       Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieRecord>, String> writeFn = (writeClient, recordRDD, instantTime) ->
           writeClient.bulkInsert(recordRDD, instantTime, Option.empty());

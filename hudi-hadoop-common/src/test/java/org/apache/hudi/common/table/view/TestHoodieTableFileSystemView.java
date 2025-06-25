@@ -47,6 +47,7 @@ import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
 import org.apache.hudi.common.table.view.TableFileSystemView.SliceView;
@@ -625,7 +626,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     assertEquals(deltaFile1, logFiles.get(1).getFileName(), "Log File Order check");
 
     // schedules a compaction
-    String compactionInstantTime1 = metaClient.createNewInstantTime(); // 60 -> 80
+    String compactionInstantTime1 = HoodieInstantTimeGenerator.getCurrentInstantTimeStr(); // 60 -> 80
     String compactionFile1 = FSUtils.makeBaseFileName(compactionInstantTime1, TEST_WRITE_TOKEN, fileId, BASE_FILE_EXTENSION);
     List<Pair<String, FileSlice>> partitionFileSlicesPairs = new ArrayList<>();
     partitionFileSlicesPairs.add(Pair.of(partitionPath, fileSlices.get(0)));
