@@ -21,6 +21,7 @@ package org.apache.spark.sql.hudi.dml.insert
 
 import org.apache.hudi.{DataSourceWriteOptions, HoodieCLIUtils, HoodieSparkUtils}
 import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.client.WriteClientTestUtils
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
@@ -1257,7 +1258,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
 
           // Simulate a insert overwrite failure
           val metaClient = createMetaClient(spark, tableLocation)
-          val instant = metaClient.createNewInstantTime()
+          val instant = WriteClientTestUtils.createNewInstantTime()
           val timeline = HoodieTestUtils.TIMELINE_FACTORY.createActiveTimeline(metaClient)
           timeline.createNewInstant(metaClient.createNewInstant(
             HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, instant))

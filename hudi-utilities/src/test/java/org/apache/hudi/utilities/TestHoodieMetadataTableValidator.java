@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities;
 
 import org.apache.hudi.DataSourceWriteOptions;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
@@ -1506,7 +1507,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     for (int i = 0; i < 20; i++) {
       String fileId = UUID.randomUUID().toString();
 
-      String baseInstantTime = metaClient.createNewInstantTime();
+      String baseInstantTime = WriteClientTestUtils.createNewInstantTime();
 
       // Create file slice with base file and log files
       HoodieBaseFile baseFile = new HoodieBaseFile(FSUtils.makeBaseFileName(

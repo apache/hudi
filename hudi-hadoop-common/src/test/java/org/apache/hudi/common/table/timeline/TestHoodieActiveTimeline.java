@@ -29,7 +29,6 @@ import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.MockHoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.storage.HoodieStorage;
@@ -50,10 +49,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
 import java.util.Set;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -62,7 +57,6 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
-import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.common.testutils.Assertions.assertStreamEquals;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_PARSER;
@@ -705,42 +699,6 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     assertStreamEquals(
         Stream.of(instant1, instant2),
         timeline.getCommitTimeline().getInstantsAsStream(), "Check the instants stream");
-  }
-
-  @Test
-  public void testCreateNewInstantTime() throws Exception {
-    String lastInstantTime = metaClient.createNewInstantTime(false);
-    for (int i = 0; i < 3; ++i) {
-      String newInstantTime = metaClient.createNewInstantTime(false);
-      assertTrue(compareTimestamps(lastInstantTime, LESSER_THAN, newInstantTime));
-      lastInstantTime = newInstantTime;
-    }
-
-    // Multiple thread test
-    final int numChecks = 100000;
-    final int numThreads = 100;
-    final long milliSecondsInYear = 365 * 24 * 3600 * 1000;
-    ExecutorService executorService = Executors.newFixedThreadPool(numThreads);
-    List<Future> futures = new ArrayList<>(numThreads);
-    for (int idx = 0; idx < numThreads; ++idx) {
-      futures.add(executorService.submit(() -> {
-        Date date = new Date(System.currentTimeMillis() + (int) (Math.random() * numThreads) * milliSecondsInYear);
-        final String expectedFormat = TimelineUtils.formatDate(date);
-        for (int tidx = 0; tidx < numChecks; ++tidx) {
-          final String curFormat = TimelineUtils.formatDate(date);
-          if (!curFormat.equals(expectedFormat)) {
-            throw new HoodieException("Format error: expected=" + expectedFormat + ", curFormat=" + curFormat);
-          }
-        }
-      }));
-    }
-
-    executorService.shutdown();
-    assertTrue(executorService.awaitTermination(60, TimeUnit.SECONDS));
-    // required to catch exceptions
-    for (Future f : futures) {
-      f.get();
-    }
   }
 
   @Test

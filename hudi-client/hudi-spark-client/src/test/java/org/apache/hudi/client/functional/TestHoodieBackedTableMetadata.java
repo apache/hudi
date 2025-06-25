@@ -22,6 +22,7 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.FileSlice;
@@ -359,10 +360,10 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     init(tableType, writeConfig);
     String partition = "p1";
     // Simulate two bulk insert operations adding two data files in partition "p1"
-    String instant1 = metaClient.createNewInstantTime();
+    String instant1 = WriteClientTestUtils.createNewInstantTime();
     HoodieCommitMetadata commitMetadata1 =
         testTable.doWriteOperation(instant1, BULK_INSERT, emptyList(), asList(partition), 1);
-    String instant2 = metaClient.createNewInstantTime();
+    String instant2 = WriteClientTestUtils.createNewInstantTime();
     HoodieCommitMetadata commitMetadata2 =
         testTable.doWriteOperation(instant2, BULK_INSERT, emptyList(), asList(partition), 1);
 
@@ -370,7 +371,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     while (getNumCompactions(metadataMetaClient) == 0) {
       // Write until the compaction happens in the metadata table
       testTable.doWriteOperation(
-          metaClient.createNewInstantTime(), BULK_INSERT, emptyList(), asList(partition), 1);
+          WriteClientTestUtils.createNewInstantTime(), BULK_INSERT, emptyList(), asList(partition), 1);
       metadataMetaClient.reloadActiveTimeline();
     }
 
@@ -381,13 +382,13 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     fileIdsToReplace.addAll(commitMetadata2.getFileIdAndRelativePaths().keySet());
     // Simulate clustering operation replacing two data files with a new data file
     testTable.doCluster(
-        metaClient.createNewInstantTime(),
+        WriteClientTestUtils.createNewInstantTime(),
         Collections.singletonMap(partition, fileIdsToReplace), asList(partition), 1);
     Set<String> fileSetBeforeCleaning = getFilePathsInPartition(partition);
 
     // Simulate two clean actions deleting the same set of date files
     // based on the first two commits
-    String cleanInstant = metaClient.createNewInstantTime();
+    String cleanInstant = WriteClientTestUtils.createNewInstantTime();
     HoodieCleanMetadata cleanMetadata = testTable.doCleanBasedOnCommits(cleanInstant, asList(instant1, instant2));
     List<String> deleteFileList = cleanMetadata.getPartitionMetadata().get(partition).getDeletePathPatterns();
     assertTrue(deleteFileList.size() > 0);
@@ -398,7 +399,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     metaClient.reloadActiveTimeline();
     HoodieCleanerPlan cleanerPlan = CleanerUtils.getCleanerPlan(
         metaClient, INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, CLEAN_ACTION, cleanInstant));
-    testTable.repeatClean(metaClient.createNewInstantTime(), cleanerPlan, cleanMetadata);
+    testTable.repeatClean(WriteClientTestUtils.createNewInstantTime(), cleanerPlan, cleanMetadata);
 
     // Compaction should not happen after the first compaction in this test case
     assertEquals(1, getNumCompactions(metadataMetaClient));

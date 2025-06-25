@@ -543,13 +543,6 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   /**
-   * Returns next instant time in the correct format. Lock is enabled by default.
-   */
-  public String createNewInstantTime() {
-    return createNewInstantTime(true);
-  }
-
-  /**
    * Returns next instant time in the correct format.
    *
    * @param shouldLock whether the lock should be enabled to get the instant time.
