@@ -295,7 +295,6 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     return createPartitionFilesRecord(partition, filesAdded, filesDeleted, false);
   }
 
-
   public static HoodieRecord<HoodieMetadataPayload> createPartitionFilesRecord(String partition,
                                                                                Map<String, Long> filesAdded,
                                                                                List<String> filesDeleted,
