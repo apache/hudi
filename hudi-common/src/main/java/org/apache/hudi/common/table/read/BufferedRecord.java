@@ -78,10 +78,6 @@ public class BufferedRecord<T> implements Serializable {
     return new BufferedRecord<>(deleteRecord.getRecordKey(), orderingValue, null, null, true);
   }
 
-  public static <T> BufferedRecord<T> forDeleteRecord(String recordKey, Comparable orderingValue) {
-    return new BufferedRecord<>(recordKey, orderingValue, null, null, true);
-  }
-
   public String getRecordKey() {
     return recordKey;
   }
