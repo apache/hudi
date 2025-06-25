@@ -188,7 +188,7 @@ public class SecondaryIndexStreamingTracker {
         if (oldSecondaryKey != null) {
           addSecondaryIndexStat(writeStatus, def.getIndexName(), recordKey, oldSecondaryKey, true);
         }
-        if(newSecondaryKey != null) {
+        if (newSecondaryKey != null) {
           addSecondaryIndexStat(writeStatus, def.getIndexName(), recordKey, newSecondaryKey, false);
         }
       }
