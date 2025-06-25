@@ -38,6 +38,11 @@ import java.util.List;
  */
 public class SecondaryIndexUtils {
 
+  public static boolean isSameKey(Object secondaryKey, Object previousSecondaryKey) {
+    return (previousSecondaryKey == null && secondaryKey == null)
+        || (previousSecondaryKey != null && previousSecondaryKey.equals(secondaryKey));
+  }
+
   /**
    * Get secondary index metadata for this table
    *
