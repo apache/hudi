@@ -56,6 +56,7 @@ import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.index.secondary.SecondaryIndexUtils.isSameKey;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.createSecondaryIndexRecord;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.filePath;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartitionLatestFileSlicesIncludingInflight;
@@ -148,11 +149,6 @@ public class SecondaryIndexRecordGenerationUtils {
       });
       return records.iterator();
     });
-  }
-
-  private static boolean isSameKey(String secondaryKey, String previousSecondaryKey) {
-    return (previousSecondaryKey == null && secondaryKey == null)
-        || (previousSecondaryKey != null && previousSecondaryKey.equals(secondaryKey));
   }
 
   public static <T> Map<String, String> getRecordKeyToSecondaryKey(HoodieTableMetaClient metaClient,
