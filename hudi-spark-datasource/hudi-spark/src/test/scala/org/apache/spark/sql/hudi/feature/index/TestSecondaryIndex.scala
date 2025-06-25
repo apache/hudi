@@ -28,9 +28,10 @@ import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtil
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
-import org.apache.hudi.metadata.{HoodieIndexVersion, SecondaryIndexKeyUtils}
 import org.apache.hudi.metadata.HoodieMetadataPayload.SECONDARY_INDEX_RECORD_KEY_SEPARATOR
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX
+import org.apache.hudi.metadata.SecondaryIndexKeyUtils
+import org.apache.hudi.metadata.indexversion.{ColumnStatsIndexVersion, SecondaryIndexVersion}
 import org.apache.hudi.storage.StoragePath
 
 import org.apache.spark.sql.SaveMode
@@ -234,9 +235,9 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
       val indexDefs = metaClient.getIndexMetadata.get().getIndexDefinitions
       indexDefs.forEach((indexName, idxDef) => {
         if (indexName == "column_stats") {
-          assertEquals(idxDef.getVersion, HoodieIndexVersion.COLUMN_STATS_ONE)
+          assertEquals(idxDef.getVersion, ColumnStatsIndexVersion.V1)
         } else if (indexName.startsWith("secondary_index_")) {
-          assertEquals(idxDef.getVersion, if (version == 8) HoodieIndexVersion.SECONDARY_INDEX_ONE else HoodieIndexVersion.SECONDARY_INDEX_TWO)
+          assertEquals(idxDef.getVersion, if (version == 8) SecondaryIndexVersion.V1 else SecondaryIndexVersion.V2)
         }
       })
     }

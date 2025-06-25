@@ -39,7 +39,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieMetadataIndexException;
-import org.apache.hudi.metadata.HoodieIndexVersion;
+import org.apache.hudi.metadata.indexversion.HoodieIndexVersion;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.StorageSchemes;
 import org.apache.hudi.table.action.index.BaseHoodieIndexClient;

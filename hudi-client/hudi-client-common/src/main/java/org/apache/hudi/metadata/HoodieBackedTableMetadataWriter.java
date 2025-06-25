@@ -77,6 +77,7 @@ import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.DirectoryInfo;
+import org.apache.hudi.metadata.indexversion.HoodieIndexVersion;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
@@ -1257,7 +1258,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       });
     }
 
-    Map<String, HoodieIndexVersion> indexVersions = new HashMap<>();
+    Map<String, org.apache.hudi.metadata.indexversion.HoodieIndexVersion> indexVersions = new HashMap<>();
     partitionToLatestFileSlices.keySet().forEach(
         mdtPartition -> indexVersions.put(mdtPartition, existingIndexVersionOrDefault(mdtPartition, metadataMetaClient)));
     HoodieData<HoodieRecord> taggedRecords = untaggedRecords.map(mdtRecord -> {

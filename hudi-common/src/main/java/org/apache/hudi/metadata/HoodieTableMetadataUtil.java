@@ -109,6 +109,8 @@ import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieIOFactory;
+import org.apache.hudi.metadata.indexversion.HoodieIndexVersion;
+import org.apache.hudi.metadata.indexversion.SecondaryIndexVersion;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -1380,7 +1382,7 @@ public class HoodieTableMetadataUtil {
   public static int mapRecordKeyToFileGroupIndex(
       String recordKey, int numFileGroups, String partitionName, HoodieIndexVersion version) {
     if (MetadataPartitionType.SECONDARY_INDEX.matchesPartitionPath(partitionName)
-        && version.greaterThanOrEquals(HoodieIndexVersion.SECONDARY_INDEX_TWO)
+        && version.greaterThanOrEquals(SecondaryIndexVersion.V2)
         && recordKey.contains(SECONDARY_INDEX_RECORD_KEY_SEPARATOR)) {
       return mapRecordKeyToFileGroupIndex(SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey(recordKey), numFileGroups);
     }

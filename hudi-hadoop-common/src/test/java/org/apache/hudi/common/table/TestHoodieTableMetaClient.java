@@ -29,8 +29,10 @@ import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.MetadataPartitionType;
+import org.apache.hudi.metadata.indexversion.ColumnStatsIndexVersion;
+import org.apache.hudi.metadata.indexversion.HoodieIndexVersion;
+import org.apache.hudi.metadata.indexversion.SecondaryIndexVersion;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.hadoop.fs.Path;
@@ -319,16 +321,16 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     HoodieIndexMetadata loadedDef2 = getIndexDef.apply("indexMissingVersion1.json");
     HoodieTableMetaClient.populateIndexVersionIfMissing(HoodieTableVersion.EIGHT, Option.of(loadedDef2));
 
-    assertEquals(HoodieIndexVersion.COLUMN_STATS_ONE, loadedDef2.getIndexDefinitions().get("column_stats").getVersion());
-    assertEquals(HoodieIndexVersion.SECONDARY_INDEX_ONE, loadedDef2.getIndexDefinitions().get("secondary_index_idx_price").getVersion());
+    assertEquals(ColumnStatsIndexVersion.V1, loadedDef2.getIndexDefinitions().get("column_stats").getVersion());
+    assertEquals(SecondaryIndexVersion.V1, loadedDef2.getIndexDefinitions().get("secondary_index_idx_price").getVersion());
     validateAllFieldsExcludingVersion(loadedDef2);
 
     // If it is table version 9 and only non secondary index index missing version attribute
     HoodieIndexMetadata loadedDef3 = getIndexDef.apply("indexMissingVersion2.json");
     HoodieTableMetaClient.populateIndexVersionIfMissing(HoodieTableVersion.NINE, Option.of(loadedDef3));
 
-    assertEquals(HoodieIndexVersion.COLUMN_STATS_ONE, loadedDef3.getIndexDefinitions().get("column_stats").getVersion());
-    assertEquals(HoodieIndexVersion.SECONDARY_INDEX_TWO, loadedDef3.getIndexDefinitions().get("secondary_index_idx_price").getVersion());
+    assertEquals(ColumnStatsIndexVersion.V1, loadedDef3.getIndexDefinitions().get("column_stats").getVersion());
+    assertEquals(SecondaryIndexVersion.V2, loadedDef3.getIndexDefinitions().get("secondary_index_idx_price").getVersion());
     validateAllFieldsExcludingVersion(loadedDef3);
   }
 

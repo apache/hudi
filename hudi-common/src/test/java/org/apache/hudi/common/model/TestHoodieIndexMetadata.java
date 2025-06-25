@@ -20,7 +20,7 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.table.HoodieTableVersion;
-import org.apache.hudi.metadata.HoodieIndexVersion;
+import org.apache.hudi.metadata.indexversion.HoodieIndexVersion;
 import org.apache.hudi.metadata.MetadataPartitionType;
 
 import org.junit.jupiter.api.Test;

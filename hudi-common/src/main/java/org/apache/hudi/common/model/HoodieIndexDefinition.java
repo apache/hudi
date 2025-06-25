@@ -20,7 +20,7 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.metadata.HoodieIndexVersion;
+import org.apache.hudi.metadata.indexversion.HoodieIndexVersion;
 import org.apache.hudi.metadata.MetadataPartitionType;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;

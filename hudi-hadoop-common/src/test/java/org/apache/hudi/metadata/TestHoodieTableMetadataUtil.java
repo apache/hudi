@@ -40,6 +40,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
+import org.apache.hudi.metadata.indexversion.SecondaryIndexVersion;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.Lazy;
 
@@ -750,8 +751,8 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
 
   @ParameterizedTest(name = "{0}")
   @MethodSource("mapRecordKeyToFileGroupIndexTestCases")
-  public void testMapRecordKeyToFileGroupIndex(String testName, String recordKey, int numFileGroups, String partitionName, 
-      HoodieIndexVersion version, int expectedIndex) {
+  public void testMapRecordKeyToFileGroupIndex(String testName, String recordKey, int numFileGroups, String partitionName,
+                                               org.apache.hudi.metadata.indexversion.HoodieIndexVersion version, int expectedIndex) {
     int index = HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(recordKey, numFileGroups, partitionName, version);
     assertEquals(expectedIndex, index, "File group index should match expected value");
   }
@@ -764,7 +765,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
             "test_key",
             10,
             "files",
-            HoodieIndexVersion.FILES_INDEX_ONE,
+            org.apache.hudi.metadata.indexversion.FilesIndexVersion.V1,
             8  // Calculated using the explicit hashing algorithm
         ),
         // Test case 2: Secondary index record key with version >= 2
@@ -773,7 +774,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
             "primary_key$secondary_key",
             10,
             "secondary_index_idx_ts",
-            HoodieIndexVersion.SECONDARY_INDEX_TWO,
+            SecondaryIndexVersion.V2,
             6  // Uses secondary key portion for hashing
         ),
         // Test case 3: Secondary index record key but version < 2
@@ -782,7 +783,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
             "primary_key$secondary_key",
             10,
             "secondary_index_idx_ts",
-            HoodieIndexVersion.SECONDARY_INDEX_ONE,
+            org.apache.hudi.metadata.indexversion.SecondaryIndexVersion.V1,
             4  // Uses full key for hashing
         ),
         // Test case 4: Secondary index record key but not in secondary index partition
@@ -791,7 +792,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
             "primary_key$secondary_key",
             10,
             "files",
-            HoodieIndexVersion.FILES_INDEX_ONE,
+            org.apache.hudi.metadata.indexversion.FilesIndexVersion.V1,
             4  // Uses full key for hashing since not in secondary index partition
         ),
         // Test case 5: Secondary index record key but no separator
@@ -800,7 +801,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
             "primary_key_secondary_key",
             10,
             "secondary_index_idx_ts",
-            HoodieIndexVersion.SECONDARY_INDEX_TWO,
+            org.apache.hudi.metadata.indexversion.SecondaryIndexVersion.V2,
             7  // Uses full key for hashing since no separator found
         ),
         // Test case 6: Empty record key
@@ -809,7 +810,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
             "",
             10,
             "secondary_index_idx_ts",
-            HoodieIndexVersion.SECONDARY_INDEX_TWO,
+            org.apache.hudi.metadata.indexversion.SecondaryIndexVersion.V2,
             0  // Empty string hashes to 0
         ),
         // Test case 7: Single file group
@@ -818,7 +819,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
             "test_key$record_key",
             1,
             "secondary_index_idx_ts",
-            HoodieIndexVersion.SECONDARY_INDEX_TWO,
+            org.apache.hudi.metadata.indexversion.SecondaryIndexVersion.V2,
             0  // Any key with numFileGroups=1 should return 0
         ),
         // Test case 8: Record key with special characters
@@ -827,7 +828,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
             "test@key#123",
             10,
             "files",
-            HoodieIndexVersion.FILES_INDEX_ONE,
+            org.apache.hudi.metadata.indexversion.FilesIndexVersion.V1,
             0  // Calculated using the explicit hashing algorithm
         )
     );
