@@ -85,7 +85,7 @@ import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SKIP_P
 import static org.apache.hudi.config.HoodieClusteringConfig.SINGLE_SPARK_JOB_CONSISTENT_HASHING_EXECUTION_STRATEGY;
 import static org.apache.hudi.config.HoodieClusteringConfig.SPARK_CONSISTENT_BUCKET_EXECUTION_STRATEGY;
 
-@Tag("functional")
+@Tag("functional-c")
 public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHarness {
 
   private HoodieWriteConfig config;
@@ -361,6 +361,7 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024).build())
         .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(1024 * 1024).parquetMaxFileSize(1024 * 1024).build())
         .forTable("test-trip-table")
+        .withMarkersTimelineServerBasedBatchIntervalMs(10)
         .withEmbeddedTimelineServerEnabled(true);
   }
 

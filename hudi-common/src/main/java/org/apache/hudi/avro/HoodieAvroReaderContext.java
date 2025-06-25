@@ -29,21 +29,20 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.OverwriteWithLatestMerger;
+import org.apache.hudi.common.serialization.CustomSerializer;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.BufferedRecordSerializer;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.SizeEstimator;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieNotSupportedException;
-import org.apache.hudi.expression.Expression;
 import org.apache.hudi.expression.Predicate;
-import org.apache.hudi.expression.Predicates;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
-import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -93,28 +92,20 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
             filePath, baseFileFormat, Option.empty());
     if (keyFilterOpt.isEmpty()) {
       return reader.getIndexedRecordIterator(dataSchema, requiredSchema);
-    } else {
-      // Currently predicate is only supported for HFile reader.
-      if (!(reader instanceof HoodieAvroHFileReaderImplBase)) {
-        return reader.getIndexedRecordIterator(dataSchema, requiredSchema);
-      } else {
-        // Two predicates are supported currently: IN and StringStartsWithAny.
-        HoodieAvroHFileReaderImplBase hfileReader = (HoodieAvroHFileReaderImplBase) reader;
-        if (keyFilterOpt.get().getOperator().equals(Expression.Operator.IN)) {
-          List<Expression> children = ((Predicates.In) keyFilterOpt.get()).getRightChildren();
-          List<String> keysOrPrefixes = children.stream()
-              .map(e -> (String) e.eval(null)).collect(Collectors.toList());
-          return hfileReader.getIndexedRecordsByKeysIterator(keysOrPrefixes, requiredSchema);
-        } else if (keyFilterOpt.get().getOperator().equals(Expression.Operator.STARTS_WITH)) {
-          List<Expression> children = ((Predicates.StringStartsWithAny) keyFilterOpt.get()).getRightChildren();
-          List<String> keysOrPrefixes = children.stream()
-              .map(e -> (String) e.eval(null)).collect(Collectors.toList());
-          return hfileReader.getIndexedRecordsByKeyPrefixIterator(keysOrPrefixes, requiredSchema);
-        } else {
-          throw new HoodieNotSupportedException("Unrecognized predicate: " + keyFilterOpt.get());
-        }
+    }
+    if (reader.supportKeyPredicate()) {
+      List<String> keys = reader.extractKeys(keyFilterOpt);
+      if (!keys.isEmpty()) {
+        return reader.getIndexedRecordsByKeysIterator(keys, requiredSchema);
       }
     }
+    if (reader.supportKeyPrefixPredicate()) {
+      List<String> keyPrefixes = reader.extractKeyPrefixes(keyFilterOpt);
+      if (!keyPrefixes.isEmpty()) {
+        return reader.getIndexedRecordsByKeyPrefixIterator(keyPrefixes, requiredSchema);
+      }
+    }
+    return reader.getIndexedRecordIterator(dataSchema, requiredSchema);
   }
 
   @Override
@@ -152,7 +143,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
 
   @Override
   public Object getValue(IndexedRecord record, Schema schema, String fieldName) {
-    return getFieldValueFromIndexedRecord(record, schema, fieldName);
+    return getFieldValueFromIndexedRecord(record, fieldName);
   }
 
   @Override
@@ -181,6 +172,16 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
   @Override
   public IndexedRecord toBinaryRow(Schema avroSchema, IndexedRecord record) {
     return record;
+  }
+
+  @Override
+  public SizeEstimator<BufferedRecord<IndexedRecord>> getRecordSizeEstimator() {
+    return new AvroRecordSizeEstimator(getSchemaHandler().getRequiredSchema());
+  }
+
+  @Override
+  public CustomSerializer<BufferedRecord<IndexedRecord>> getRecordSerializer() {
+    return new BufferedRecordSerializer<>(new AvroRecordSerializer(this::decodeAvroSchema));
   }
 
   @Override
@@ -234,14 +235,16 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
     };
   }
 
-  private Object getFieldValueFromIndexedRecord(
+  public static Object getFieldValueFromIndexedRecord(
       IndexedRecord record,
-      Schema recordSchema,
       String fieldName) {
-    Schema currentSchema = recordSchema;
+    Schema currentSchema = record.getSchema();
     IndexedRecord currentRecord = record;
     String[] path = fieldName.split("\\.");
     for (int i = 0; i < path.length; i++) {
+      if (currentSchema.isUnion()) {
+        currentSchema = AvroSchemaUtils.resolveNullableSchema(currentSchema);
+      }
       Schema.Field field = currentSchema.getField(path[i]);
       if (field == null) {
         return null;

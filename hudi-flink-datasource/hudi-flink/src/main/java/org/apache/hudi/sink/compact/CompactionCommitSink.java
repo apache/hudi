@@ -153,7 +153,7 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
     if (events.stream().anyMatch(CompactionCommitEvent::isFailed)) {
       try {
         // handle failure case
-        CompactionUtil.rollbackCompaction(table, instant);
+        CompactionUtil.rollbackCompaction(table, instant, writeClient.getTransactionManager());
       } finally {
         // remove commitBuffer to avoid obsolete metadata commit
         reset(instant);
@@ -188,7 +188,7 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
       LOG.error("Got {} error records during compaction of instant {},\n"
           + "option '{}' is configured as false,"
           + "rolls back the compaction", numErrorRecords, instant, FlinkOptions.IGNORE_FAILED.key());
-      CompactionUtil.rollbackCompaction(table, instant);
+      CompactionUtil.rollbackCompaction(table, instant, writeClient.getTransactionManager());
       this.compactionMetrics.markCompactionRolledBack();
       return;
     }

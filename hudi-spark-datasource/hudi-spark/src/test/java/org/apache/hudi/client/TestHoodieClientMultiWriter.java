@@ -76,6 +76,7 @@ import org.apache.spark.SparkException;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -131,6 +132,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
+@Tag("functional")
 public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
   private Properties lockProperties = null;
@@ -305,12 +307,13 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
       // to save the checkpoint.
       HoodieWriteConfig writeConfig22 = HoodieWriteConfig.newBuilder().withProperties(writeConfig.getProps()).build();
       writeConfig22.setSchema("\"null\"");
-      final SparkRDDWriteClient client22 = getHoodieWriteClient(writeConfig22);
-      JavaRDD<HoodieRecord> emptyRDD = jsc.emptyRDD();
-      // Perform upsert with empty RDD
-      WriteClientTestUtils.startCommitWithTime(client22, "0013");
-      JavaRDD<WriteStatus> writeStatusRDD = client22.upsert(emptyRDD, "0013");
-      client22.commit("0013", writeStatusRDD);
+      try (final SparkRDDWriteClient client22 = getHoodieWriteClient(writeConfig22)) {
+        JavaRDD<HoodieRecord> emptyRDD = jsc.emptyRDD();
+        // Perform upsert with empty RDD
+        WriteClientTestUtils.startCommitWithTime(client22, "0013");
+        JavaRDD<WriteStatus> writeStatusRDD = client22.upsert(emptyRDD, "0013");
+        client22.commit("0013", writeStatusRDD);
+      }
       totalCommits += 1;
 
       // Validate table schema in the end.

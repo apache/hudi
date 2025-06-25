@@ -155,7 +155,8 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
             // schema containing the updated fields only
             ? Option.of(new Schema.Parser().parse(config.getPartialUpdateSchema()))
             : Option.empty(),
-        taskContextSupplier);
+        taskContextSupplier,
+        false);
     this.recordItr = recordItr;
     this.sizeEstimator = getSizeEstimator();
     this.statuses = new ArrayList<>();
@@ -194,8 +195,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       prevCommit = instantTime;
       if (hoodieTable.getMetaClient().getTableConfig().isCDCEnabled()) {
         // the cdc reader needs the base file metadata to have deterministic update sequence.
-        TableFileSystemView.SliceView rtView = hoodieTable.getSliceView();
-        fileSlice = rtView.getLatestFileSlice(partitionPath, fileId);
+        fileSlice = hoodieTable.getSliceView().getLatestFileSlice(partitionPath, fileId);
         if (fileSlice.isPresent()) {
           prevCommit = fileSlice.get().getBaseInstantTime();
           baseFile = fileSlice.get().getBaseFile().map(BaseFile::getFileName).orElse("");
@@ -204,8 +204,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       }
     } else {
       // older table versions.
-      TableFileSystemView.SliceView rtView = hoodieTable.getSliceView();
-      fileSlice = rtView.getLatestFileSlice(partitionPath, fileId);
+      fileSlice = hoodieTable.getSliceView().getLatestFileSlice(partitionPath, fileId);
       if (fileSlice.isPresent()) {
         prevCommit = fileSlice.get().getBaseInstantTime();
         baseFile = fileSlice.get().getBaseFile().map(BaseFile::getFileName).orElse("");
@@ -536,6 +535,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         writer.close();
         writer = null;
       }
+
       // update final size, once for all log files
       // TODO we can actually deduce file size purely from AppendResult (based on offset and size
       //      of the appended block)
@@ -544,6 +544,16 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
             new StoragePath(config.getBasePath(), status.getStat().getPath()))
             .getLength();
         status.getStat().setFileSizeInBytes(logFileSize);
+      }
+
+      // generate Secondary index stats if streaming writes is enabled.
+      if (isSecondaryIndexStatsStreamingWritesEnabled) {
+        // Adds secondary index only for the last log file write status. We do not need to add secondary index stats
+        // for every log file written as part of the append handle write. The last write status would update the
+        // secondary index considering all the log files.
+        SecondaryIndexStreamingTracker.trackSecondaryIndexStats(partitionPath, fileId, getReadFileSlice(),
+            statuses.stream().map(status -> status.getStat().getPath()).collect(Collectors.toList()),
+            statuses.get(statuses.size() - 1), hoodieTable, secondaryIndexDefns, config, instantTime, writeSchemaWithMetaFields);
       }
 
       return statuses;
@@ -706,5 +716,13 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       default:
         throw new HoodieException("Data block format " + logDataBlockFormat + " not implemented");
     }
+  }
+
+  /**
+   * Returns the file slice for reader view.
+   */
+  private Option<FileSlice> getReadFileSlice() {
+    TableFileSystemView.SliceView rtView = hoodieTable.getSliceView();
+    return rtView.getLatestMergedFileSliceBeforeOrOn(partitionPath, instantTime, fileId);
   }
 }

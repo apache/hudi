@@ -19,7 +19,6 @@
 package org.apache.hudi.timeline.service.handlers;
 
 import org.apache.hudi.common.conflict.detection.TimelineServerBasedDetectionStrategy;
-import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -36,7 +35,6 @@ import org.apache.hudi.timeline.service.handlers.marker.MarkerCreationFuture;
 import org.apache.hudi.timeline.service.handlers.marker.MarkerDirState;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.javalin.http.Context;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -94,19 +92,16 @@ public class MarkerHandler extends Handler {
   private final MarkerCreationDispatchingRunnable markerCreationDispatchingRunnable;
   private final Object firstCreationRequestSeenLock = new Object();
   private final Object earlyConflictDetectionLock = new Object();
-  private transient HoodieEngineContext hoodieEngineContext;
   private ScheduledFuture<?> dispatchingThreadFuture;
   private boolean firstCreationRequestSeen;
   private String currentMarkerDir = null;
   private TimelineServerBasedDetectionStrategy earlyConflictDetectionStrategy;
 
   public MarkerHandler(StorageConfiguration<?> conf, TimelineService.Config timelineServiceConfig,
-                       HoodieEngineContext hoodieEngineContext,
                        FileSystemViewManager viewManager, Registry metricsRegistry) {
     super(conf, timelineServiceConfig, viewManager);
     LOG.debug("MarkerHandler batching params: batchNumThreads={} batchIntervalMs={}ms",
         timelineServiceConfig.markerBatchNumThreads, timelineServiceConfig.markerBatchIntervalMs);
-    this.hoodieEngineContext = hoodieEngineContext;
     this.metricsRegistry = metricsRegistry;
     this.parallelism = timelineServiceConfig.markerParallelism;
     this.dispatchingExecutorService = Executors.newSingleThreadScheduledExecutor();
@@ -200,9 +195,9 @@ public class MarkerHandler extends Handler {
           if (earlyConflictDetectionStrategy == null) {
             String strategyClassName = timelineServiceConfig.earlyConflictDetectionStrategy;
             if (!ReflectionUtils.isSubClass(strategyClassName, TimelineServerBasedDetectionStrategy.class)) {
-              LOG.warn("Cannot use " + strategyClassName + " for timeline-server-based markers.");
+              LOG.warn("Cannot use {} for timeline-server-based markers.", strategyClassName);
               strategyClassName = "org.apache.hudi.timeline.service.handlers.marker.AsyncTimelineServerBasedDetectionStrategy";
-              LOG.warn("Falling back to " + strategyClassName);
+              LOG.warn("Falling back to {}", strategyClassName);
             }
 
             earlyConflictDetectionStrategy =
@@ -239,7 +234,7 @@ public class MarkerHandler extends Handler {
             + "failing the marker creation as the early conflict detection is enabled", he);
         return finishCreateMarkerFuture(context, markerDir, markerName);
       } catch (Exception e) {
-        LOG.warn("Failed to execute early conflict detection." + e.getMessage());
+        LOG.warn("Failed to execute early conflict detection.", e);
         // When early conflict detection fails to execute, we still allow the marker creation
         // to continue
         return addMarkerCreationRequestForAsyncProcessing(context, markerDir, markerName);
@@ -274,7 +269,7 @@ public class MarkerHandler extends Handler {
     MarkerCreationFuture future = new MarkerCreationFuture(context, markerDir, markerName);
     try {
       future.complete(jsonifyResult(
-          future.getContext(), future.isSuccessful(), metricsRegistry, new ObjectMapper(), LOG));
+          future.getContext(), future.isSuccessful(), metricsRegistry));
     } catch (JsonProcessingException e) {
       throw new HoodieException("Failed to JSON encode the value", e);
     }
@@ -287,7 +282,7 @@ public class MarkerHandler extends Handler {
    * @param markerDir marker directory path
    * @return {@code true} if successful; {@code false} otherwise.
    */
-  public Boolean deleteMarkers(String markerDir) {
+  public boolean deleteMarkers(String markerDir) {
     boolean result = getMarkerDirState(markerDir).deleteAllMarkers();
     markerDirStateMap.remove(markerDir);
     return result;
@@ -304,7 +299,7 @@ public class MarkerHandler extends Handler {
                   ? Option.of(earlyConflictDetectionStrategy) : Option.empty();
           markerDirState = new MarkerDirState(
               markerDir, timelineServiceConfig.markerBatchNumThreads,
-              strategy, getStorage(markerDir), metricsRegistry, hoodieEngineContext, parallelism);
+              strategy, getStorage(markerDir), metricsRegistry, parallelism);
           markerDirStateMap.put(markerDir, markerDirState);
         } else {
           markerDirState = markerDirStateMap.get(markerDir);

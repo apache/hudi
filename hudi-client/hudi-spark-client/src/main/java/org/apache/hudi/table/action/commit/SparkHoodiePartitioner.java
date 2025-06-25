@@ -46,5 +46,5 @@ public abstract class SparkHoodiePartitioner<T> extends Partitioner
     return numPartitions();
   }
 
-  public abstract BucketInfo getBucketInfo(int bucketNumber);
+  public abstract SparkBucketInfoGetter getSparkBucketInfoGetter();
 }

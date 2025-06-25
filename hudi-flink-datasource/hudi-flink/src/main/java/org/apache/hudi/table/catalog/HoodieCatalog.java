@@ -480,8 +480,8 @@ public class HoodieCatalog extends AbstractCatalog {
     }
 
     try (HoodieFlinkWriteClient<?> writeClient = HoodieCatalogUtil.createWriteClient(options, tablePathStr, tablePath, hadoopConf)) {
-      writeClient.deletePartitions(Collections.singletonList(partitionPathStr),
-              writeClient.createNewInstantTime())
+      String instantTime = writeClient.startDeletePartitionCommit();
+      writeClient.deletePartitions(Collections.singletonList(partitionPathStr), instantTime)
           .forEach(writeStatus -> {
             if (writeStatus.hasErrors()) {
               throw new HoodieMetadataException(String.format("Failed to commit metadata table records at file id %s.", writeStatus.getFileId()));

@@ -115,7 +115,6 @@ public class BaseRollbackPlanActionExecutor<T, I, K, O> extends BaseActionExecut
           LOG.warn("Request Rollback found with instant time " + rollbackInstant + ", hence skipping scheduling rollback");
         } else {
           table.getActiveTimeline().saveToRollbackRequested(rollbackInstant, rollbackPlan);
-          table.getMetaClient().reloadActiveTimeline();
           LOG.info("Requesting Rollback with instant time " + rollbackInstant);
         }
       }

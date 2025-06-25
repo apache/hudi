@@ -46,6 +46,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class TestPartialUpdateFlinkRecordMerger {
   private Schema schema;
+  private Schema schemaWithoutMetaField;
 
   String jsonSchema = "{\n"
       + "  \"type\": \"record\",\n"
@@ -64,9 +65,22 @@ public class TestPartialUpdateFlinkRecordMerger {
       + "  ]\n"
       + "}";
 
+  String jsonSchemaWithoutMetaField = "{\n"
+      + "  \"type\": \"record\",\n"
+      + "  \"name\": \"partialRecordNoMeta\", \"namespace\":\"org.apache.hudi\",\n"
+      + "  \"fields\": [\n"
+      + "    {\"name\": \"id\", \"type\": [\"null\", \"string\"]},\n"
+      + "    {\"name\": \"partition\", \"type\": [\"null\", \"string\"]},\n"
+      + "    {\"name\": \"ts\", \"type\": [\"null\", \"long\"]},\n"
+      + "    {\"name\": \"city\", \"type\": [\"null\", \"string\"]},\n"
+      + "    {\"name\": \"child\", \"type\": [\"null\", \"string\"]}\n"
+      + "  ]\n"
+      + "}";
+
   @BeforeEach
   public void setUp() throws Exception {
     schema = new Schema.Parser().parse(jsonSchema);
+    schemaWithoutMetaField = new Schema.Parser().parse(jsonSchemaWithoutMetaField);
   }
 
   @Test
@@ -155,6 +169,23 @@ public class TestPartialUpdateFlinkRecordMerger {
     assertEquals(expected.getData(), mergingResult.get().getLeft().getData());
   }
 
+  @Test
+  public void testPartialUpdateWithSchemaDiscrepancy() throws IOException {
+    PartialUpdateFlinkRecordMerger recordMerger = new PartialUpdateFlinkRecordMerger();
+    HoodieFlinkRecord record1 = createRecord(new HoodieKey("1", "par1"), "001", "001_1", "file", 1L, "NY0", "A");
+    HoodieFlinkRecord record2 = createRecordWithoutMetaField(new HoodieKey("1", "par1"),  2L, "NY1", "A");
+    Option<Pair<HoodieRecord, Schema>> mergingResult = recordMerger.merge(record1, schema, record2, schemaWithoutMetaField, new TypedProperties());
+    assertTrue(mergingResult.isPresent());
+    assertEquals(record2.getData(), mergingResult.get().getLeft().getData());
+
+    record1 = createRecord(new HoodieKey("1", "par1"), "001", "001_1", "file", 1L, "NY0", "A");
+    record2 = createRecordWithoutMetaField(new HoodieKey("1", "par1"),  2L, "NY1", null);
+    HoodieFlinkRecord expected = createRecordWithoutMetaField(new HoodieKey("1", "par1"),  2L, "NY1", "A");
+    mergingResult = recordMerger.merge(record1, schema, record2, schemaWithoutMetaField, new TypedProperties());
+    assertTrue(mergingResult.isPresent());
+    assertEquals(expected.getData(), mergingResult.get().getLeft().getData());
+  }
+
   private HoodieFlinkRecord createRecord(
       HoodieKey key, String commitTime, String seqNo, String filePath, long ts, String city, String child) {
     GenericRowData rowData = new GenericRowData(10);
@@ -168,7 +199,17 @@ public class TestPartialUpdateFlinkRecordMerger {
     rowData.setField(7, ts);
     rowData.setField(8, StringData.fromString(city));
     rowData.setField(9, StringData.fromString(child));
-    HoodieFlinkRecord record = new HoodieFlinkRecord(key, HoodieOperation.INSERT, ts, rowData);
-    return record;
+    return new HoodieFlinkRecord(key, HoodieOperation.INSERT, ts, rowData);
+  }
+
+  private HoodieFlinkRecord createRecordWithoutMetaField(
+      HoodieKey key, long ts, String city, String child) {
+    GenericRowData rowData = new GenericRowData(5);
+    rowData.setField(0, StringData.fromString(key.getRecordKey()));
+    rowData.setField(1, StringData.fromString(key.getPartitionPath()));
+    rowData.setField(2, ts);
+    rowData.setField(3, StringData.fromString(city));
+    rowData.setField(4, StringData.fromString(child));
+    return new HoodieFlinkRecord(key, HoodieOperation.INSERT, ts, rowData);
   }
 }

@@ -22,29 +22,23 @@ package org.apache
 import org.apache.hudi.DataSourceWriteOptions.RECORD_MERGE_MODE
 import org.apache.hudi.common.config.RecordMergeMode
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.storage.HoodieStorageUtils
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 
 import org.apache.spark.sql.{Row, SaveMode}
 import org.apache.spark.sql.types.{LongType, StringType, StructField, StructType}
-import org.junit.{Before, Test}
+import org.junit.jupiter.api.{BeforeEach, Tag, Test}
 import org.junit.jupiter.api.Assertions.{assertDoesNotThrow, assertFalse}
-import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.function.Executable
-
-import java.nio.file.{Files, Path}
 
 @Tag("functional")
 class TestIncrementalQueryWithArchivedInstants extends SparkClientFunctionalTestHarness {
-  var tmpDir: Path = _
   var tblPath: String = _
 
-  override def basePath(): String = tmpDir.toAbsolutePath.toUri.toString
-
-  @Before
+  @BeforeEach
   def setUp(): Unit = {
-    tmpDir = Files.createTempDirectory("hudi_random")
     tblPath = basePath()
     super.runBeforeEach()
   }
@@ -64,7 +58,9 @@ class TestIncrementalQueryWithArchivedInstants extends SparkClientFunctionalTest
       "hoodie.populate.meta.fields" -> "true",
       "hoodie.compaction.payload.class" -> "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload",
       "hoodie.datasource.write.payload.class" -> "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload",
-      RECORD_MERGE_MODE.key -> RecordMergeMode.COMMIT_TIME_ORDERING.name)
+      RECORD_MERGE_MODE.key -> RecordMergeMode.COMMIT_TIME_ORDERING.name,
+      HoodieWriteConfig.MARKERS_TIMELINE_SERVER_BASED_BATCH_INTERVAL_MS.key -> "10"
+    )
 
     val serviceOpt: Map[String, String] = Map(
       "hoodie.table.services.enabled" -> "true",

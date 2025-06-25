@@ -164,12 +164,12 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
     CompactionUtil.setAvroSchema(writeConfig, metaClient);
     List<WriteStatus> writeStatuses = compactor.compact(
         flinkTable,
-        metaClient,
         writeConfig,
         compactionOperation,
         instantTime,
         flinkTable.getTaskContextSupplier(),
-        readerContextOpt);
+        readerContextOpt,
+        flinkTable);
     compactionMetrics.endCompaction();
     collector.collect(new CompactionCommitEvent(instantTime, compactionOperation.getFileId(), writeStatuses, taskID));
   }

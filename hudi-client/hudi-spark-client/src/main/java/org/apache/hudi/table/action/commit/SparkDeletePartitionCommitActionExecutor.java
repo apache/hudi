@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table.action.commit;
 
-import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.utils.DeletePartitionUtils;
 import org.apache.hudi.common.data.HoodieData;
@@ -37,7 +36,6 @@ import org.apache.hudi.table.WorkloadStat;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import java.time.Duration;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -79,12 +77,7 @@ public class SparkDeletePartitionCommitActionExecutor<T>
       if (!table.getStorage().exists(
           new StoragePath(table.getMetaClient().getTimelinePath(),
               instantFileNameGenerator.getFileName(dropPartitionsInstant)))) {
-        HoodieRequestedReplaceMetadata requestedReplaceMetadata =
-            HoodieRequestedReplaceMetadata.newBuilder()
-                .setOperationType(WriteOperationType.DELETE_PARTITION.name())
-                .setExtraMetadata(extraMetadata.orElse(Collections.emptyMap()))
-                .build();
-        table.getMetaClient().getActiveTimeline().saveToPendingReplaceCommit(dropPartitionsInstant, requestedReplaceMetadata);
+        throw new HoodieDeletePartitionException("Commit instant was not created for instant " + instantTime);
       }
 
       this.saveWorkloadProfileMetadataToInflight(
