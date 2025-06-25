@@ -71,7 +71,7 @@ public class HoodieBinaryCopyHandle<T, I, K, O> extends HoodieWriteHandle<T, I, 
       HoodieTable<T, I, K, O> hoodieTable,
       TaskContextSupplier taskContextSupplier,
       List<StoragePath> inputFilePaths) {
-    super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier);
+    super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier, true);
     this.inputFiles = inputFilePaths;
     this.conf = hoodieTable.getStorageConf().unwrapAs(Configuration.class);
     this.writeScheMessageType = new AvroSchemaConverter(conf).convert(writeSchemaWithMetaFields);
