@@ -540,13 +540,33 @@ public class HoodieIndexUtils {
     }
   }
 
+  /**
+   * Drops secondary index partitions from metadata table.
+   *
+   * @param mdtPartitionType Type of MDT partition to drop
+   * @param config Write config
+   * @param context Engine context
+   * @param table Hoodie table
+   * @param operationType Type of operation (upgrade/downgrade)
+   */
+  public static void dropMDTPartitions(
+      MetadataPartitionType mdtPartitionType, HoodieWriteConfig config, HoodieEngineContext context, HoodieTable table, String operationType) {
+    HoodieTableMetaClient metaClient = table.getMetaClient();
+    List<String> secIdxPartitions = metaClient.getTableConfig().getMetadataPartitions()
+        .stream()
+        .filter(partition -> partition.startsWith(mdtPartitionType.getPartitionPath()))
+        .collect(Collectors.toList());
+    LOG.info("Dropping {} from MDT for {}: {}", mdtPartitionType.getPartitionPath(), operationType, secIdxPartitions);
+    context.dropIndex(config, secIdxPartitions);
+  }
+
   static HoodieIndexDefinition getSecondaryOrExpressionIndexDefinition(HoodieTableMetaClient metaClient, String userIndexName, String indexType, Map<String, Map<String, String>> columns,
                                                                        Map<String, String> options, Map<String, String> tableProperties) throws Exception {
     String fullIndexName = indexType.equals(PARTITION_NAME_SECONDARY_INDEX)
         ? PARTITION_NAME_SECONDARY_INDEX_PREFIX + userIndexName
         : PARTITION_NAME_EXPRESSION_INDEX_PREFIX + userIndexName;
     HoodieTableVersion tableVersion = metaClient.getTableConfig().getTableVersion();
-    HoodieIndexVersion version = indexType.equals(PARTITION_NAME_SECONDARY_INDEX)
+    HoodieIndexVersion indexVersion = indexType.equals(PARTITION_NAME_SECONDARY_INDEX)
         ? HoodieIndexVersion.getCurrentVersion(tableVersion, MetadataPartitionType.SECONDARY_INDEX)
         : HoodieIndexVersion.getCurrentVersion(tableVersion, MetadataPartitionType.EXPRESSION_INDEX);
     if (indexExists(metaClient, fullIndexName)) {
@@ -564,7 +584,7 @@ public class HoodieIndexUtils {
         .withIndexFunction(options.getOrDefault(EXPRESSION_OPTION, IDENTITY_TRANSFORM))
         .withSourceFields(new ArrayList<>(columns.keySet()))
         .withIndexOptions(options)
-        .withVersion(version)
+        .withVersion(indexVersion)
         .build();
   }
 

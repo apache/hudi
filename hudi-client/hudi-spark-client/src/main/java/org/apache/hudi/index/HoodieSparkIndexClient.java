@@ -67,7 +67,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_BL
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getExistingHoodieIndexVersionOrDefault;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.existingIndexVersionOrDefault;
 
 public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
 
@@ -141,7 +141,7 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
         .withIndexFunction(PARTITION_NAME_COLUMN_STATS)
         .withSourceFields(columnsToIndex)
         // Use the existing version if exists, otherwise fall back to the default version.
-        .withVersion(getExistingHoodieIndexVersionOrDefault(PARTITION_NAME_COLUMN_STATS, metaClient))
+        .withVersion(existingIndexVersionOrDefault(PARTITION_NAME_COLUMN_STATS, metaClient))
         .withIndexOptions(Collections.EMPTY_MAP)
         .build();
     LOG.info("Registering Or Updating the index " + PARTITION_NAME_COLUMN_STATS);
