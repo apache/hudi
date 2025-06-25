@@ -124,7 +124,7 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
     return unsafeProjection.apply(internalRow);
   }
 
-  private Object getFieldValueFromInternalRow(InternalRow row, Schema recordSchema, String fieldName) {
+  public static Object getFieldValueFromInternalRow(InternalRow row, Schema recordSchema, String fieldName) {
     StructType structType = getCachedSchema(recordSchema);
     scala.Option<HoodieUnsafeRowUtils.NestedFieldPath> cachedNestedFieldPath =
         HoodieInternalRowUtils.getCachedPosList(structType, fieldName);

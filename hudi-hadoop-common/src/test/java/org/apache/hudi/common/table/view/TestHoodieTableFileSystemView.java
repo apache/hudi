@@ -294,6 +294,18 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     assertEquals(fileName2, logFiles.get(0).getFileName(), "Log File Order check");
     assertEquals(fileName1, logFiles.get(1).getFileName(), "Log File Order check");
 
+    // Verify latest merged file slice API for a given file id
+    Option<FileSlice> fileSliceOpt = rtView.getLatestMergedFileSliceBeforeOrOn(partitionPath, deltaInstantTime3, fileId);
+    assertTrue(fileSliceOpt.isPresent());
+    fileSlice = fileSliceOpt.get();
+    assertEquals(fileId, fileSlice.getFileId(), "File-Id must be set correctly");
+    assertFalse(fileSlice.getBaseFile().isPresent(), "Data file for base instant must be present");
+    assertEquals(deltaInstantTime2, fileSlice.getBaseInstantTime(), "Base Instant for file-group set correctly");
+    logFiles = fileSlice.getLogFiles().collect(Collectors.toList());
+    assertEquals(2, logFiles.size(), "Correct number of log-files shows up in file-slice");
+    assertEquals(fileName2, logFiles.get(0).getFileName(), "Log File Order check");
+    assertEquals(fileName1, logFiles.get(1).getFileName(), "Log File Order check");
+
     // Check UnCompacted File Slices API
     fileSliceList = rtView.getLatestUnCompactedFileSlices(partitionPath).collect(Collectors.toList());
     assertEquals(1, fileSliceList.size());

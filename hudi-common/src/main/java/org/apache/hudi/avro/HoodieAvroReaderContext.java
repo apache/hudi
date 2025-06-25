@@ -235,13 +235,16 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
     };
   }
 
-  private Object getFieldValueFromIndexedRecord(
+  public static Object getFieldValueFromIndexedRecord(
       IndexedRecord record,
       String fieldName) {
     Schema currentSchema = record.getSchema();
     IndexedRecord currentRecord = record;
     String[] path = fieldName.split("\\.");
     for (int i = 0; i < path.length; i++) {
+      if (currentSchema.isUnion()) {
+        currentSchema = AvroSchemaUtils.resolveNullableSchema(currentSchema);
+      }
       Schema.Field field = currentSchema.getField(path[i]);
       if (field == null) {
         return null;

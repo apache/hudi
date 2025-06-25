@@ -19,6 +19,7 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.avro.HoodieAvroReaderContext;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
@@ -124,7 +125,16 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
 
   @Override
   public Object getColumnValueAsJava(Schema recordSchema, String column, Properties props) {
-    throw new UnsupportedOperationException("Unsupported yet for " + this.getClass().getSimpleName());
+    try {
+      Option<IndexedRecord> indexedRecordOpt = getData().getInsertValue(recordSchema, props);
+      if (indexedRecordOpt.isPresent()) {
+        return HoodieAvroReaderContext.getFieldValueFromIndexedRecord(indexedRecordOpt.get(), column);
+      } else {
+        return null;
+      }
+    } catch (IOException e) {
+      throw new HoodieIOException("Could not fetch value for column: " + column);
+    }
   }
 
   @Override

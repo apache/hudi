@@ -46,6 +46,7 @@ import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -148,14 +149,14 @@ public class SecondaryIndexRecordGenerationUtils {
     });
   }
 
-  private static <T> Map<String, String> getRecordKeyToSecondaryKey(HoodieTableMetaClient metaClient,
+  public static <T> Map<String, String> getRecordKeyToSecondaryKey(HoodieTableMetaClient metaClient,
                                                                     HoodieReaderContext<T> readerContext,
                                                                     FileSlice fileSlice,
                                                                     Schema tableSchema,
                                                                     HoodieIndexDefinition indexDefinition,
                                                                     String instantTime,
                                                                     TypedProperties props,
-                                                                    boolean allowInflightInstants) throws Exception {
+                                                                    boolean allowInflightInstants) throws IOException {
     Map<String, String> recordKeyToSecondaryKey = new HashMap<>();
     try (ClosableIterator<Pair<String, String>> recordKeyAndSecondaryIndexValueIter =
              createSecondaryIndexRecordGenerator(readerContext, metaClient, fileSlice, tableSchema, indexDefinition, instantTime, props, allowInflightInstants)) {
@@ -214,7 +215,7 @@ public class SecondaryIndexRecordGenerationUtils {
                                                                                                 HoodieIndexDefinition indexDefinition,
                                                                                                 String instantTime,
                                                                                                 TypedProperties props,
-                                                                                                boolean allowInflightInstants) throws Exception {
+                                                                                                boolean allowInflightInstants) throws IOException {
     String secondaryKeyField = String.join(".", indexDefinition.getSourceFields());
     HoodieFileGroupReader<T> fileGroupReader = HoodieFileGroupReader.<T>newBuilder()
         .withReaderContext(readerContext)
