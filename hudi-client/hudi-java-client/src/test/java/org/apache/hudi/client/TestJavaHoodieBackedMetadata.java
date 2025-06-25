@@ -1473,7 +1473,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
       ColumnIndexID columnIndexID = new ColumnIndexID(HoodieRecord.RECORD_KEY_METADATA_FIELD);
       List<HoodieRecord<HoodieMetadataPayload>> result = tableMetadata.getRecordsByKeyPrefixes(
           HoodieListData.eager(Collections.singletonList(columnIndexID.asBase64EncodedString())),
-          MetadataPartitionType.COLUMN_STATS.getPartitionPath(), true).collectAsList();
+          MetadataPartitionType.COLUMN_STATS.getPartitionPath(), true, Option.empty()).collectAsList();
 
       // there are 3 partitions in total and 2 commits. total entries should be 6.
       assertEquals(result.size(), 6);
@@ -1485,7 +1485,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
       PartitionIndexID partitionIndexID = new PartitionIndexID(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH);
       result = tableMetadata.getRecordsByKeyPrefixes(
           HoodieListData.eager(Collections.singletonList(columnIndexID.asBase64EncodedString().concat(partitionIndexID.asBase64EncodedString()))),
-          MetadataPartitionType.COLUMN_STATS.getPartitionPath(), true).collectAsList();
+          MetadataPartitionType.COLUMN_STATS.getPartitionPath(), true, Option.empty()).collectAsList();
       // 1 partition and 2 commits. total entries should be 2.
       assertEquals(result.size(), 2);
       result.forEach(entry -> {
@@ -1505,7 +1505,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
       columnIndexID = new ColumnIndexID(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
       result = tableMetadata.getRecordsByKeyPrefixes(
           HoodieListData.eager(Collections.singletonList(columnIndexID.asBase64EncodedString().concat(partitionIndexID.asBase64EncodedString()))),
-          MetadataPartitionType.COLUMN_STATS.getPartitionPath(), true).collectAsList();
+          MetadataPartitionType.COLUMN_STATS.getPartitionPath(), true, Option.empty()).collectAsList();
 
       // 1 partition and 2 commits. total entries should be 2.
       assertEquals(result.size(), 2);

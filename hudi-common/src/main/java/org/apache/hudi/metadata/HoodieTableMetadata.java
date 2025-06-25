@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -296,7 +297,8 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    */
   HoodieData<HoodieRecord<HoodieMetadataPayload>> getRecordsByKeyPrefixes(HoodieData<String> keyPrefixes,
                                                                           String partitionName,
-                                                                          boolean shouldLoadInMemory);
+                                                                          boolean shouldLoadInMemory,
+                                                                          Option<SerializableFunction<String, String>> keyEncoder);
 
   /**
    * Get the instant time to which the metadata is synced w.r.t data timeline.
