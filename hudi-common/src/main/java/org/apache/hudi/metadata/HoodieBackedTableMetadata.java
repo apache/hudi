@@ -75,6 +75,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -592,20 +593,23 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
     // As the first step, always convert keys to the escaped version.
     keys = keys.map(SecondaryIndexKeyUtils::escapeSpecialChars);
-    Map<String, Set<String>> res = getRecordsByKeyPrefixes(keys, partitionName, false).map(
-            record -> {
-              if (!record.getData().isDeleted()) {
-                // values read from index are unescaped.
-                String recordKey = SecondaryIndexKeyUtils.getRecordKeyFromSecondaryIndexKey(record.getRecordKey());
-                String secondaryKey = SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey(record.getRecordKey());
-                return Pair.of(secondaryKey, recordKey);
-              }
-              return null;
-            })
+    List<Pair<String, String>> pairs = getRecordsByKeyPrefixes(keys, partitionName, false)
+        .map(record -> {
+          if (!record.getData().isDeleted()) {
+            String recordKey = SecondaryIndexKeyUtils.getRecordKeyFromSecondaryIndexKey(record.getRecordKey());
+            String secondaryKey = SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey(record.getRecordKey());
+            return Pair.of(secondaryKey, recordKey);
+          }
+          return null;
+        })
         .filter(Objects::nonNull)
-        .collectAsList()
-        .stream()
-        .collect(Collectors.groupingBy(Pair::getKey, Collectors.mapping(Pair::getValue, Collectors.toSet())));
+        .collectAsList();
+
+    Map<String, Set<String>> res = new HashMap<>();
+    for (Pair<String, String> pair : pairs) {
+      String key = pair.getKey();
+      res.computeIfAbsent(key, k -> new HashSet<>()).add(pair.getValue());
+    }
     return HoodieListPairData.eagerMapKV(res);
   }
 
