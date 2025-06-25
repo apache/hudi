@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
@@ -141,9 +142,7 @@ public class SecondaryIndexStreamingTracker {
     // Add secondary index records for all the inserted records
     secondaryIndexDefns.forEach(def -> {
       Object secondaryKey = record.getColumnValueAsJava(writeSchemaWithMetaFields, def.getSourceFieldsKey(), config.getProps());
-      if (secondaryKey != null) {
-        writeStatus.getIndexStats().addSecondaryIndexStats(def.getIndexName(), record.getRecordKey(), secondaryKey.toString(), false);
-      }
+      writeStatus.getIndexStats().addSecondaryIndexStats(def.getIndexName(), record.getRecordKey(), secondaryKey.toString(), false);
     });
   }
 
@@ -170,30 +169,23 @@ public class SecondaryIndexStreamingTracker {
     secondaryIndexDefns.forEach(def -> {
       String secondaryIndexSourceField = def.getSourceFieldsKey();
       Object oldSecondaryKey = oldRecord.getColumnValueAsJava(writeSchemaWithMetaFields, secondaryIndexSourceField, config.getProps());
-      // TODO !!!! secondary key "null" is now overloaded with 2 meaning - record deletion / record value is null
-      Object newSecondaryKey = null;
+      Pair<Object, Boolean> oldSecondaryKeyCtx = Pair.of(oldSecondaryKey, isDelete);
+
+      Pair<Object, Boolean> newSecondaryKeyCtx = Pair.of(null, isDelete);
       if (combinedRecordOpt.isPresent() && !isDelete) {
         Schema newSchema = newSchemaSupplier.get();
-        newSecondaryKey = combinedRecordOpt.get().getColumnValueAsJava(newSchema, secondaryIndexSourceField, config.getProps());
+        Object newSecondaryKey = combinedRecordOpt.get().getColumnValueAsJava(newSchema, secondaryIndexSourceField, config.getProps());
+        newSecondaryKeyCtx = Pair.of(newSecondaryKey, isDelete);
       }
-
-      boolean shouldUpdate = true;
-      if (oldSecondaryKey != null && newSecondaryKey != null) {
-        // If new secondary key is different from old secondary key, update secondary index records
-        shouldUpdate = !oldSecondaryKey.equals(newSecondaryKey);
-      }
+      boolean shouldUpdate = !isSameKey(oldSecondaryKeyCtx, oldSecondaryKeyCtx);
       if (shouldUpdate) {
         String recordKey = Option.ofNullable(hoodieKey).map(HoodieKey::getRecordKey)
             .or(() -> Option.ofNullable(oldRecord).map(rec -> rec.getRecordKey(writeSchemaWithMetaFields, keyGeneratorOpt)))
             .or(() -> combinedRecordOpt.map(HoodieRecord::getRecordKey))
             .get();
         // Add secondary index delete records for old records
-        if (oldSecondaryKey != null) {
-          addSecondaryIndexStat(writeStatus, def.getIndexName(), recordKey, oldSecondaryKey, true);
-        }
-        if (newSecondaryKey != null) {
-          addSecondaryIndexStat(writeStatus, def.getIndexName(), recordKey, newSecondaryKey, false);
-        }
+        addSecondaryIndexStat(writeStatus, def.getIndexName(), recordKey, oldSecondaryKeyCtx.getKey(), true);
+        addSecondaryIndexStat(writeStatus, def.getIndexName(), recordKey, newSecondaryKeyCtx.getKey(), false);
       }
     });
   }

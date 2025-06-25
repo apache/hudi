@@ -21,6 +21,7 @@ package org.apache.hudi.index.secondary;
 
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieSecondaryIndexException;
 
@@ -41,6 +42,24 @@ public class SecondaryIndexUtils {
   public static boolean isSameKey(Object secondaryKey, Object previousSecondaryKey) {
     return (previousSecondaryKey == null && secondaryKey == null)
         || (previousSecondaryKey != null && previousSecondaryKey.equals(secondaryKey));
+  }
+
+  /**
+   * Compares two key-delete flag pairs to determine if they represent the same key state.
+   * 
+   * @param k1 First pair containing (key, isDelete) where key is the secondary index key and isDelete indicates if it's a delete record
+   * @param k2 Second pair containing (key, isDelete) where key is the secondary index key and isDelete indicates if it's a delete record
+   * @return true if both pairs represent the same key state (both are delete records, or both are non-delete records with equal keys)
+   */
+  public static boolean isSameKey(Pair<Object, Boolean> k1, Pair<Object, Boolean> k2) {
+    // Both are delete record
+    if (k1.getValue() && k2.getValue()) {
+      return true;
+    }
+    if (!k1.getValue() && !k2.getValue()) {
+      return isSameKey(k1.getKey(), k2.getKey());
+    }
+    return false;
   }
 
   /**

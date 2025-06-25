@@ -756,6 +756,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
         // Validate secondary index after null to null update
         validateSecondaryIndexEntries(basePath, tableName)
 
+        // Insert command failed to update MDT, reason unknown.
         // Step 6: Insert new record with null description
         spark.sql(s"INSERT INTO $tableName VALUES (5, 'record5', NULL, 1004)")
 
