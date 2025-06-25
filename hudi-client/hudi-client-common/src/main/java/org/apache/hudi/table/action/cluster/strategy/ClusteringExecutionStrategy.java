@@ -96,10 +96,6 @@ public abstract class ClusteringExecutionStrategy<T, I, K, O> implements Seriali
     return this.writeConfig;
   }
 
-  protected void resetWriteConfig(HoodieWriteConfig config) {
-    this.writeConfig = config;
-  }
-
   protected ClosableIterator<HoodieRecord<T>> getRecordIterator(ReaderContextFactory<T> readerContextFactory, ClusteringOperation operation, String instantTime, long maxMemory) {
     TypedProperties props = getReaderProperties(maxMemory);
 

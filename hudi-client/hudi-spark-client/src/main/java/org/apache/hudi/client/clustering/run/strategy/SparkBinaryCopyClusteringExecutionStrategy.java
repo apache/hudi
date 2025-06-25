@@ -88,9 +88,9 @@ public class SparkBinaryCopyClusteringExecutionStrategy<T> extends SparkSortAndS
         .collect(Collectors.toList());
     if (!supportBinaryStreamCopy(clusteringGroupInfos, clusteringPlan.getStrategy().getStrategyParams())) {
       LOG.info("Required conditions for binary stream copy are currently not satisfied, falling back to default clustering behavior");
-      HoodieWriteConfig newConfig = HoodieWriteConfig.newBuilder().withProperties(writeConfig.getProps())
+      // reset write config
+      this.writeConfig = HoodieWriteConfig.newBuilder().withProperties(writeConfig.getProps())
           .withStorageConfig(HoodieStorageConfig.newBuilder().parquetWriteLegacyFormat("false").build()).build();
-      resetWriteConfig(newConfig);
       return super.performClustering(clusteringPlan, schema, instantTime);
     }
     LOG.info("Required conditions are currently satisfied, enabling the optimization of using binary stream copy ");
@@ -171,15 +171,17 @@ public class SparkBinaryCopyClusteringExecutionStrategy<T> extends SparkSortAndS
       return false;
     }
 
+    if (getHoodieTable().getMetaClient().getTableConfig().getBaseFileFormat().equals(PARQUET)) {
+      LOG.warn("Binary Copy only support parquet as base file format for now.");
+      return false;
+    }
+
     JavaSparkContext engineContext = HoodieSparkEngineContext.getSparkContext(getEngineContext());
 
     List<ParquetBinaryCopyChecker.ParquetFileInfo> fileStatus = engineContext.parallelize(inputGroups, inputGroups.size())
         .flatMap(group -> group.getOperations().iterator())
         .map(op -> {
           String filePath = op.getDataFilePath();
-          if (!filePath.endsWith(PARQUET.getFileExtension())) {
-            return new ParquetBinaryCopyChecker.ParquetFileInfo(false, null, null);
-          }
           return ParquetBinaryCopyChecker.collectFileInfo(getHoodieTable().getStorageConf().unwrapAs(Configuration.class), filePath);
         })
         .collect();

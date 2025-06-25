@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.io.storage;
+package org.apache.hudi.util;
 
 import org.apache.hudi.avro.HoodieBloomFilterWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
@@ -30,7 +30,7 @@ import static org.apache.hudi.avro.HoodieBloomFilterWriteSupport.HOODIE_AVRO_BLO
 
 public class HoodieFileMetadataMerger {
 
-  private final HashMap<String, String> mergedMateData = new HashMap<>();
+  private final HashMap<String, String> mergedMetadata = new HashMap<>();
 
   private BloomFilter bloomFilter;
 
@@ -43,7 +43,7 @@ public class HoodieFileMetadataMerger {
   }
 
   public Map<String, String> mergeMetaData(Map<String, String> metaMap) {
-    mergedMateData.putAll(metaMap);
+    mergedMetadata.putAll(metaMap);
 
     String minRecordKey = metaMap.get(HoodieBloomFilterWriteSupport.HOODIE_MIN_RECORD_KEY_FOOTER);
     String maxRecordKey = metaMap.get(HoodieBloomFilterWriteSupport.HOODIE_MAX_RECORD_KEY_FOOTER);
@@ -66,19 +66,19 @@ public class HoodieFileMetadataMerger {
     }
 
     if (this.minRecordKey != null) {
-      mergedMateData.put(HoodieBloomFilterWriteSupport.HOODIE_MIN_RECORD_KEY_FOOTER, this.minRecordKey);
+      mergedMetadata.put(HoodieBloomFilterWriteSupport.HOODIE_MIN_RECORD_KEY_FOOTER, this.minRecordKey);
     }
     if (this.maxRecordKey != null) {
-      mergedMateData.put(HoodieBloomFilterWriteSupport.HOODIE_MAX_RECORD_KEY_FOOTER, this.maxRecordKey);
+      mergedMetadata.put(HoodieBloomFilterWriteSupport.HOODIE_MAX_RECORD_KEY_FOOTER, this.maxRecordKey);
     }
     if (this.bloomFilter != null) {
-      mergedMateData.put(HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY, this.bloomFilter.serializeToString());
+      mergedMetadata.put(HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY, this.bloomFilter.serializeToString());
     }
 
-    return mergedMateData;
+    return mergedMetadata;
   }
 
   public Map<String, String> getMergedMetaData() {
-    return mergedMateData;
+    return mergedMetadata;
   }
 }

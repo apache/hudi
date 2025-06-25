@@ -18,7 +18,7 @@
 
 package org.apache.hudi.parquet.io;
 
-import org.apache.hudi.io.storage.HoodieFileMetadataMerger;
+import org.apache.hudi.util.HoodieFileMetadataMerger;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.hadoop.conf.Configuration;
