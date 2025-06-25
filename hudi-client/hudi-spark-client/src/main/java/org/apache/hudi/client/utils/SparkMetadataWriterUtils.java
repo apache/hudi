@@ -402,7 +402,7 @@ public class SparkMetadataWriterUtils {
         List<HoodieColumnRangeMetadata<Comparable>> partitionColumnMetadata =
             tableMetadata.getRecordsByKeyPrefixes(
                 HoodieListData.eager(HoodieTableMetadataUtil.generateKeyPrefixes(validColumnsToIndex, partitionName)),
-                    indexPartition, false)
+                    indexPartition, false, Option.empty())
                 // schema and properties are ignored in getInsertValue, so simply pass as null
                 .map(record -> record.getData().getInsertValue(null, null))
                 .filter(Option::isPresent)
