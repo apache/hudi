@@ -87,6 +87,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -692,6 +693,25 @@ public class HoodieMetadataTableValidator implements Serializable {
         // if there is no additional partitions from FS listing and only additional partitions from MDT based listing is due to a new commit, we are good
         if (actualAdditionalPartitionsInMDT.isEmpty()) {
           misMatch.set(false);
+        }
+      }
+      if (!additionalFromFS.isEmpty()) {
+        // check for all additional partitions from FS is they are empty ones.
+        List<String> emptyPartitions = additionalFromFS.stream().filter(partition -> {
+          try {
+            Path partitionPath = new Path(basePath, partition);
+            return Arrays.stream(metaClient.getFs().listStatus(partitionPath))
+                .noneMatch(fileStatus -> fileStatus.isFile() && !fileStatus.getPath().getName().startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX));
+          } catch (IOException ex) {
+            throw new HoodieIOException("Error listing partition " + partition, ex);
+          }
+        }).collect(Collectors.toList());
+        additionalFromFS.removeAll(emptyPartitions);
+        if (additionalFromFS.isEmpty()) {
+          LOG.warn("All out of sync partitions turned out to be empty {}", emptyPartitions);
+          misMatch.set(false);
+        } else {
+          misMatch.set(true);
         }
       }
       if (misMatch.get()) {

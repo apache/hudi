@@ -61,6 +61,7 @@ import org.apache.hudi.testutils.HoodieSparkClientTestBase;
 
 import jodd.io.FileUtil;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
@@ -223,24 +224,53 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     assertFalse(validator.getThrowables().isEmpty());
   }
 
+  @Test
+  void testAdditionalEmptyPartitionInFileSystem() throws IOException {
+    String partition1 = "PARTITION1";
+    String partition2 = "PARTITION2";
+    // create a new partition which exists only in FS based listing. mimicing a scenario where new partition was added by a commit which failed eventually.
+    // so empty dir exists w/o any valid data. In this case, FS based listing will list this additional partiton, while MDT may not list it.
+    String partition3 = "PARTITION3";
+
+    HoodieMetadataTableValidator.Config config = new HoodieMetadataTableValidator.Config();
+    config.basePath = basePath;
+    config.validateLatestFileSlices = true;
+    config.validateAllFileGroups = true;
+    MockHoodieMetadataTableValidator validator = new MockHoodieMetadataTableValidator(jsc, config);
+    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+    HoodieWrapperFileSystem fs = mock(HoodieWrapperFileSystem.class);
+    when(metaClient.getFs()).thenReturn(fs);
+    when(fs.exists(new Path(basePath + "/" + partition1))).thenReturn(true);
+    when(fs.exists(new Path(basePath + "/" + partition2))).thenReturn(true);
+    // mock partitions 1-3 to have at least one file
+    mockPartitionWithFiles(Arrays.asList(partition1, partition2), fs);
+    // mock that partition4 only has the partition marker file
+    FileStatus fileStatus = mock(FileStatus.class);
+    when(fileStatus.isFile()).thenReturn(true);
+    when(fileStatus.getPath()).thenReturn(new Path(basePath, partition3 + "/.hoodie_partition_metadata"));
+    when(fs.listStatus(new Path(basePath, partition3))).thenReturn(new FileStatus[] {fileStatus});
+
+    // mock list of partitions to return
+    // - FS listing to have one additonal partition which is empty.
+    List<String> mdtPartitions = Arrays.asList(partition1, partition2);
+    validator.setMetadataPartitionsToReturn(mdtPartitions);
+    List<String> fsPartitions = Arrays.asList(partition1, partition2, partition3);
+    validator.setFsPartitionsToReturn(fsPartitions);
+
+    // mock completed timeline.
+    HoodieTimeline commitsTimeline = mock(HoodieTimeline.class);
+    HoodieTimeline completedTimeline = mock(HoodieTimeline.class);
+    when(metaClient.getCommitsTimeline()).thenReturn(commitsTimeline);
+    when(commitsTimeline.filterCompletedInstants()).thenReturn(completedTimeline);
+
+    // validate that all 3 partitions are returned
+    assertEquals(mdtPartitions, validator.validatePartitions(engineContext, basePath, metaClient));
+  }
+
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testAdditionalPartitionsinMDT(boolean testFailureCase) throws IOException {
-    Map<String, String> writeOptions = new HashMap<>();
-    writeOptions.put(DataSourceWriteOptions.TABLE_NAME().key(), "test_table");
-    writeOptions.put("hoodie.table.name", "test_table");
-    writeOptions.put(DataSourceWriteOptions.TABLE_TYPE().key(), "MERGE_ON_READ");
-    writeOptions.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
-    writeOptions.put(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp");
-    writeOptions.put(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "partition_path");
-
-    // constructor of HoodieMetadataValidator instantiates HoodieTableMetaClient. hence creating an actual table. but rest of tests is mocked.
-    Dataset<Row> inserts = makeInsertDf("000", 5).cache();
-    inserts.write().format("hudi").options(writeOptions)
-        .option(DataSourceWriteOptions.OPERATION().key(), WriteOperationType.BULK_INSERT.value())
-        .mode(SaveMode.Overwrite)
-        .save(basePath);
-
     String partition1 = "PARTITION1";
     String partition2 = "PARTITION2";
     String partition3 = "PARTITION3";
@@ -258,7 +288,9 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     when(fs.exists(new Path(basePath + "/" + partition2))).thenReturn(true);
     when(fs.exists(new Path(basePath + "/" + partition3))).thenReturn(true);
 
-    // mock list of partitions to return from MDT to have 1 additional partition compared to FS based listing.
+    // mock list of partitions to return
+    // - MDT to have 1 additional partition compared to FS based listing.
+    // - FS listing to have one additonal partition which is empty.
     List<String> mdtPartitions = Arrays.asList(partition1, partition2, partition3);
     validator.setMetadataPartitionsToReturn(mdtPartitions);
     List<String> fsPartitions = Arrays.asList(partition1, partition2);
@@ -1157,7 +1189,8 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     for (String partition : mdtPartitions) {
       when(fs.exists(new Path(basePath + "/" + partition))).thenReturn(true);
     }
-    
+    mockPartitionWithFiles(fsPartitions, fs);
+
     // Mock timeline
     HoodieTimeline commitsTimeline = mock(HoodieTimeline.class);
     HoodieTimeline completedTimeline = mock(HoodieTimeline.class);
@@ -1167,7 +1200,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     // Setup validator with test data
     validator.setMetadataPartitionsToReturn(mdtPartitions);
     validator.setFsPartitionsToReturn(fsPartitions);
-    
+
     // Test validation with truncation
     HoodieValidationException exception = assertThrows(HoodieValidationException.class, () -> {
       validator.validatePartitions(engineContext, basePath, metaClient);
@@ -1237,5 +1270,14 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     // Verify error message contains file slice counts
     assertTrue(errorMsg.contains(String.format("Number of file slices based on the file system does not match that based on the metadata table. File system-based listing: %d & MDT-based listing: %d.",
         fsFileSlices.size(), mdtFileSlices.size())));
+  }
+
+  private void mockPartitionWithFiles(List<String> partition1, HoodieWrapperFileSystem fs) throws IOException {
+    for (String partition : partition1) {
+      FileStatus fileStatus = mock(FileStatus.class);
+      when(fileStatus.getPath()).thenReturn(new Path(basePath + "/" + partition + "/001.parquet"));
+      when(fileStatus.isFile()).thenReturn(true);
+      when(fs.listStatus(new Path(basePath + "/" + partition))).thenReturn(new FileStatus[] {fileStatus});
+    }
   }
 }
