@@ -1824,6 +1824,22 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieClusteringConfig.CLUSTERING_MAX_PARALLELISM);
   }
 
+  public double getClusteringMaxDiskUsageFraction() {
+    return getDouble(HoodieClusteringConfig.CLUSTERING_MAX_DISK_USAGE_FRACTION);
+  }
+
+  public double getClusteringMinDiskUsageFraction() {
+    return getDouble(HoodieClusteringConfig.CLUSTERING_MIN_DISK_USAGE_FRACTION);
+  }
+
+  public double getClusteringDiskUsageFraction() {
+    return getDouble(HoodieClusteringConfig.CLUSTERING_DISK_USAGE_FRACTION);
+  }
+
+  public int getClusteringExecutorDiskSizeGB() {
+    return getInt(HoodieClusteringConfig.CLUSTERING_EXECUTOR_DISK_SIZE_GB);
+  }
+
   public ClusteringPlanPartitionFilterMode getClusteringPlanPartitionFilterMode() {
     String mode = getString(HoodieClusteringConfig.PLAN_PARTITION_FILTER_MODE_NAME);
     return ClusteringPlanPartitionFilterMode.valueOf(mode);

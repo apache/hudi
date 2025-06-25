@@ -153,6 +153,34 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .sinceVersion("0.9.0")
       .withDocumentation("Config to control frequency of async clustering");
 
+  public static final ConfigProperty<Double> CLUSTERING_DISK_USAGE_FRACTION = ConfigProperty
+      .key("hoodie.clustering.disk.usage.fraction")
+      .defaultValue(0.3)
+      .markAdvanced()
+      .sinceVersion("0.14.0")
+      .withDocumentation("Usage fraction of cluster total disk memory  and is used to estimate clustering batch operation.");
+
+  public static final ConfigProperty<Double> CLUSTERING_MAX_DISK_USAGE_FRACTION = ConfigProperty
+      .key("hoodie.clustering.disk.usage.max.fraction")
+      .defaultValue(0.9)
+      .markAdvanced()
+      .sinceVersion("0.14.0")
+      .withDocumentation("Max usage fraction of cluster total disk memory and is used to estimate clustering batch operation.");
+
+  public static final ConfigProperty<Double> CLUSTERING_MIN_DISK_USAGE_FRACTION = ConfigProperty
+      .key("hoodie.clustering.disk.usage.min.fraction")
+      .defaultValue(0.1)
+      .markAdvanced()
+      .sinceVersion("0.14.0")
+      .withDocumentation("Min usage fraction of cluster total disk memory and is used to estimate clustering batch operation.");
+
+  public static final ConfigProperty<Integer> CLUSTERING_EXECUTOR_DISK_SIZE_GB = ConfigProperty
+      .key("hoodie.clustering.executor.disk.size.gb")
+      .defaultValue(200)
+      .markAdvanced()
+      .sinceVersion("0.14.0")
+      .withDocumentation("Disk size per executor in GB and is used to estimate clustering batch operation.");
+
   public static final ConfigProperty<Integer> CLUSTERING_MAX_PARALLELISM = ConfigProperty
       .key("hoodie.clustering.max.parallelism")
       .defaultValue(15)

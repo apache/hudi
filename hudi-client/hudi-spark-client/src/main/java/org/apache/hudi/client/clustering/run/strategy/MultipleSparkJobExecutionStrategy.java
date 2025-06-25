@@ -30,6 +30,7 @@ import org.apache.hudi.client.utils.LazyConcatenatingIterator;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.SerializableSchema;
+import org.apache.hudi.client.utils.FileSliceMetricUtils;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
@@ -124,6 +125,8 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
     extends ClusteringExecutionStrategy<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> {
   private static final Logger LOG = LoggerFactory.getLogger(MultipleSparkJobExecutionStrategy.class);
 
+  final double minWriteIOMB = 10.0;
+
   public MultipleSparkJobExecutionStrategy(HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig writeConfig) {
     super(table, engineContext, writeConfig);
   }
@@ -132,8 +135,10 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
   public HoodieWriteMetadata<HoodieData<WriteStatus>> performClustering(final HoodieClusteringPlan clusteringPlan, final Schema schema, final String instantTime) {
     JavaSparkContext engineContext = HoodieSparkEngineContext.getSparkContext(getEngineContext());
     boolean shouldPreserveMetadata = Option.ofNullable(clusteringPlan.getPreserveHoodieMetadata()).orElse(true);
+
+    int clusteringParallelism = getClusteringParallelism(writeConfig, clusteringPlan);
     ExecutorService clusteringExecutorService = Executors.newFixedThreadPool(
-        Math.min(clusteringPlan.getInputGroups().size(), writeConfig.getClusteringMaxParallelism()),
+        clusteringParallelism,
         new CustomizedThreadFactory("clustering-job-group", true));
     try {
       boolean canUseRowWriter = getWriteConfig().getBooleanOrDefault("hoodie.datasource.write.row.writer.enable", true)
@@ -141,26 +146,34 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
       if (canUseRowWriter) {
         HoodieDataTypeUtils.tryOverrideParquetWriteLegacyFormatProperty(writeConfig.getProps(), schema);
       }
-      // execute clustering for each group async and collect WriteStatus
-      Stream<HoodieData<WriteStatus>> writeStatusesStream = FutureUtils.allOf(
-              clusteringPlan.getInputGroups().stream()
-                  .map(inputGroup -> {
-                    if (canUseRowWriter) {
-                      return runClusteringForGroupAsyncAsRow(inputGroup,
-                          clusteringPlan.getStrategy().getStrategyParams(),
-                          shouldPreserveMetadata,
-                          instantTime,
-                          clusteringExecutorService);
-                    }
-                    return runClusteringForGroupAsync(inputGroup,
+
+      Stream<HoodieData<WriteStatus>> writeStatusesStream = Stream.empty();
+      List<List<HoodieClusteringGroup>> batches = CollectionUtils.batches(clusteringPlan.getInputGroups(), clusteringParallelism);
+
+      for (List<HoodieClusteringGroup> groupList : batches) {
+        Stream<HoodieData<WriteStatus>> localWriteStatusesStream = FutureUtils.allOf(
+                groupList.stream()
+                .map(inputGroup -> {
+                  if (canUseRowWriter) {
+                    return runClusteringForGroupAsyncAsRow(inputGroup,
                         clusteringPlan.getStrategy().getStrategyParams(),
                         shouldPreserveMetadata,
                         instantTime,
                         clusteringExecutorService);
-                  })
-                  .collect(Collectors.toList()))
-          .join()
-          .stream();
+                  }
+                  return runClusteringForGroupAsync(inputGroup,
+                      clusteringPlan.getStrategy().getStrategyParams(),
+                      shouldPreserveMetadata,
+                      instantTime,
+                      clusteringExecutorService);
+                })
+                .collect(Collectors.toList()))
+            .join()
+            .stream();
+
+        writeStatusesStream = Stream.concat(writeStatusesStream, localWriteStatusesStream);
+      }
+
       JavaRDD<WriteStatus>[] writeStatuses = convertStreamToArray(writeStatusesStream.map(HoodieJavaRDD::getJavaRDD));
       JavaRDD<WriteStatus> writeStatusRDD = engineContext.union(writeStatuses);
 
@@ -170,6 +183,67 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
     } finally {
       clusteringExecutorService.shutdown();
     }
+  }
+
+  public int getClusteringParallelism(HoodieWriteConfig writeConfig, HoodieClusteringPlan clusteringPlan) {
+    return Math.min(
+        getClusteringMaxParallelismBySize(writeConfig, clusteringPlan),
+        getClusteringMaxParallelismByDiskIO(writeConfig, clusteringPlan)
+    );
+  }
+
+  public int getExecutorCount() {
+    JavaSparkContext engineContext = HoodieSparkEngineContext.getSparkContext(getEngineContext());
+    return Math.max(1, engineContext.sc().getExecutorMemoryStatus().size() - 1);
+  }
+
+  public int getClusteringMaxParallelismByDiskIO(HoodieWriteConfig writeConfig, HoodieClusteringPlan clusteringPlan) {
+    long maxDiskSizeMB = writeConfig.getClusteringExecutorDiskSizeGB() * 1024;
+    int executorCount = getExecutorCount();
+
+    double diskUsageFraction = Math.max(
+        writeConfig.getClusteringMinDiskUsageFraction(),
+        Math.min(
+            writeConfig.getClusteringMaxDiskUsageFraction(),
+            writeConfig.getClusteringDiskUsageFraction())
+    );
+
+    long totalAvailableDiskSizeMB = (long) (maxDiskSizeMB * diskUsageFraction * executorCount);
+
+
+    if (totalAvailableDiskSizeMB <= 0) {
+      return 1;
+    }
+
+    long totalIOWriteMB = 0;
+
+    for (HoodieClusteringGroup clusteringGroup : clusteringPlan.getInputGroups()) {
+      if (clusteringGroup.getMetrics() == null) {
+        totalIOWriteMB += minWriteIOMB;
+        continue;
+      }
+
+      totalIOWriteMB += (long) Math.ceil(clusteringGroup.getMetrics().getOrDefault(FileSliceMetricUtils.TOTAL_IO_WRITE_MB, minWriteIOMB));
+    }
+
+    // just in case somehow clustering plan input groups is empty
+    totalIOWriteMB = Math.max(totalIOWriteMB,  (long) minWriteIOMB);
+
+    // total batches required to process all write io operations
+    long minClusteringBatchCountRequired = Math.max(1, (long) Math.ceil((totalIOWriteMB + totalAvailableDiskSizeMB - 1) / totalAvailableDiskSizeMB));
+
+    // input groups are divided among minClusteringBatchCountRequired
+    // please note this assumes total io write operation per batch wont exceed totalAvailableDiskSizeMB
+    long maxClusteringGroupsPerBatch = Math.max(1, (long) Math.ceil((clusteringPlan.getInputGroups().size() + minClusteringBatchCountRequired - 1) / minClusteringBatchCountRequired));
+
+    return (int) maxClusteringGroupsPerBatch;
+  }
+
+  public int getClusteringMaxParallelismBySize(HoodieWriteConfig writeConfig, HoodieClusteringPlan clusteringPlan) {
+    return Math.min(
+        writeConfig.getClusteringMaxParallelism(),
+        clusteringPlan.getInputGroups().size()
+    );
   }
 
   /**
