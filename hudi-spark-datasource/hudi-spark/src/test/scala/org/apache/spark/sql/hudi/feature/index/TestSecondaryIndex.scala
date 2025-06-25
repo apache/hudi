@@ -585,6 +585,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
   }
 
   /**
+   * TODO [HUDI-9549] predicate of is null / not null will not leverage index lookup as of today
    * Test secondary index with nullable columns covering comprehensive scenarios:
    * - Initial creation with null values
    * - Delete by record key, read by data column
