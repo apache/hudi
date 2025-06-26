@@ -84,11 +84,13 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -427,19 +429,138 @@ public class HoodieAvroUtils {
   }
 
   /**
-   * Fetch schema for record key and partition path.
+   * Fetches projected schema given list of fields to project. The field can be nested in format `a.b.c` where a is
+   * the top level field, b is at second level and so on.
    */
   public static Schema getSchemaForFields(Schema fileSchema, List<String> fields) {
-    List<Schema.Field> toBeAddedFields = new ArrayList<>();
-    Schema recordSchema = Schema.createRecord("HoodieRecordKey", "", "", false);
+    List<LinkedList<String>> fieldPathLists = new ArrayList<>();
+    for (String path : fields) {
+      fieldPathLists.add(new LinkedList<>(Arrays.asList(path.split("\\."))));
+    }
 
-    for (Schema.Field schemaField : fileSchema.getFields()) {
-      if (fields.contains(schemaField.name())) {
-        toBeAddedFields.add(new Schema.Field(schemaField.name(), schemaField.schema(), schemaField.doc(), schemaField.defaultVal()));
+    Schema result = Schema.createRecord("HoodieRecordKey", "", "", false);
+    result.setFields(projectFields(fileSchema, fieldPathLists));
+    return result;
+  }
+
+  /**
+   * Projects the requested fields in the schema. The fields can be nested in format `a.b.c`.
+   *
+   * @param originalSchema Schema to project from
+   * @param fieldPaths List of fields. The field can be nested.
+   *
+   * @return List of projected schema fields
+   */
+  private static List<Schema.Field> projectFields(Schema originalSchema, List<LinkedList<String>> fieldPaths) {
+    Map<String, List<LinkedList<String>>> groupedByTop = new HashMap<>();
+
+    // Group paths by their current level (first element)
+    // Here nested fields are considered as a path. The top level field is the first element in the path
+    // second level field is the second element and so on.
+    // We maintain a map of field name to list of corresponding field paths excluding the top level field
+    // empty list at top level field indicates the entire field needs to be included in the projected schema
+    for (LinkedList<String> originalPath : fieldPaths) {
+      if (originalPath.isEmpty()) {
+        throw new IllegalArgumentException("Field path is empty or malformed: " + originalPath);
+      }
+      LinkedList<String> path = new LinkedList<>(originalPath); // Avoid mutating the original
+      String head = path.poll(); // Remove first element
+      groupedByTop.compute(head, (ignored, list) -> {
+        if (path.isEmpty() || (list != null && list.isEmpty())) {
+          // Case 1: where path is empty indicating the entire field needs to be included.
+          // No further projection provided for that field
+          // Case 2: if list is empty, it indicates that the top level field has already been selected
+          // No more projection possible.
+          return new ArrayList<>();
+        } else {
+          if (list == null) {
+            // if list is null return just the path
+            List<LinkedList<String>> retList = new ArrayList<>();
+            retList.add(path);
+            return retList;
+          } else {
+            // if list has elements, add path to it
+            list.add(path);
+            return list;
+          }
+        }
+      });
+    }
+
+    // We need to order the map so that fields are traversed in field order of original schema
+    // We traverse through the top level fields in original schema and then add the field paths of those
+    // fields in a linked hash map so that field order is preserved.
+    Map<String, List<LinkedList<String>>> orderedFieldPaths = new LinkedHashMap<>();
+    for (Schema.Field field : originalSchema.getFields()) {
+      if (groupedByTop.containsKey(field.name())) {
+        orderedFieldPaths.put(field.name(), groupedByTop.get(field.name()));
       }
     }
-    recordSchema.setFields(toBeAddedFields);
-    return recordSchema;
+
+    List<Schema.Field> projectedFields = new ArrayList<>();
+    for (Map.Entry<String, List<LinkedList<String>>> entry : orderedFieldPaths.entrySet()) {
+      // For every top level field we process the child fields to include in the projected schema
+      String fieldName = entry.getKey();
+      Schema.Field originalField = originalSchema.getField(fieldName);
+      List<LinkedList<String>> childPaths = entry.getValue();
+      Schema originalFieldSchema = originalField.schema();
+      Schema nonNullableSchema = unwrapNullable(originalFieldSchema);
+
+      Schema projectedFieldSchema;
+      if (!childPaths.isEmpty()) {
+        // If child paths are present, it indicates there are nested fields which need to be projected
+        if (nonNullableSchema.getType() != Schema.Type.RECORD) {
+          throw new IllegalArgumentException("Cannot project nested field from non-record field '" + fieldName
+              + "' of type: " + nonNullableSchema.getType());
+        }
+
+        // For those nested fields we make a recursive call to project fields to fetch the nested schema fields
+        List<Schema.Field> nestedFields = projectFields(nonNullableSchema, childPaths);
+        Schema nestedProjected = Schema.createRecord(nonNullableSchema.getName(), nonNullableSchema.getDoc(),
+            nonNullableSchema.getNamespace(), nonNullableSchema.isError());
+        nestedProjected.setFields(nestedFields);
+        projectedFieldSchema = wrapNullable(originalFieldSchema, nestedProjected);
+      } else {
+        // if child field paths are empty, we need to include the top level field itself
+        projectedFieldSchema = originalFieldSchema;
+      }
+
+      projectedFields.add(new Schema.Field(fieldName, projectedFieldSchema, originalField.doc(), originalField.defaultVal()));
+    }
+
+    return projectedFields;
+  }
+
+  /**
+   * If schema is a union with ["null", X], returns X.
+   * Otherwise, returns schema as-is.
+   */
+  public static Schema unwrapNullable(Schema schema) {
+    if (schema.getType() == Schema.Type.UNION) {
+      List<Schema> types = schema.getTypes();
+      for (Schema s : types) {
+        if (s.getType() != Schema.Type.NULL) {
+          return s;
+        }
+      }
+    }
+    return schema;
+  }
+
+  /**
+   * Wraps schema as nullable if original was a nullable union.
+   */
+  public static Schema wrapNullable(Schema original, Schema updated) {
+    if (original.getType() == Schema.Type.UNION) {
+      List<Schema> types = original.getTypes();
+      if (types.stream().anyMatch(s -> s.getType() == Schema.Type.NULL)) {
+        List<Schema> newUnion = new ArrayList<>();
+        newUnion.add(Schema.create(Schema.Type.NULL));
+        newUnion.add(updated);
+        return Schema.createUnion(newUnion);
+      }
+    }
+    return updated;
   }
 
   public static GenericRecord addHoodieKeyToRecord(GenericRecord record, String recordKey, String partitionPath,
@@ -1602,11 +1723,12 @@ public class HoodieAvroUtils {
 
   @VisibleForTesting
   public static Pair<String, Schema.Field> getSchemaForField(Schema schema, String fieldName, String prefix) {
+    Schema nonNullableSchema = unwrapNullable(schema);
     if (!fieldName.contains(".")) {
-      return Pair.of(prefix + fieldName, schema.getField(fieldName));
+      return Pair.of(prefix + fieldName, nonNullableSchema.getField(fieldName));
     } else {
       int rootFieldIndex = fieldName.indexOf(".");
-      Schema.Field rootField = schema.getField(fieldName.substring(0, rootFieldIndex));
+      Schema.Field rootField = nonNullableSchema.getField(fieldName.substring(0, rootFieldIndex));
       if (rootField == null) {
         throw new HoodieException("Failed to find " + fieldName + " in the table schema ");
       }
