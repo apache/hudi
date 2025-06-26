@@ -28,6 +28,7 @@ import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieLockException;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -115,8 +116,19 @@ public class LockManager implements Serializable, AutoCloseable {
     // Perform lazy initialization of lock provider only if needed
     if (lockProvider == null) {
       LOG.info("LockProvider " + writeConfig.getLockProviderClass());
-      lockProvider = (LockProvider) ReflectionUtils.loadClass(writeConfig.getLockProviderClass(),
-          lockConfiguration, hadoopConf.get());
+      
+      // Try to load lock provider with HoodieLockMetrics constructor first
+      Class<?>[] metricsConstructorTypes = {LockConfiguration.class, Configuration.class, HoodieLockMetrics.class};
+      if (ReflectionUtils.hasConstructor(writeConfig.getLockProviderClass(), metricsConstructorTypes)) {
+        lockProvider = ReflectionUtils.loadClass(writeConfig.getLockProviderClass(),
+            metricsConstructorTypes, lockConfiguration, hadoopConf.get(), metrics);
+        LOG.debug("Successfully loaded LockProvider with HoodieLockMetrics support");
+      } else {
+        LOG.debug("LockProvider does not support HoodieLockMetrics constructor, falling back to standard constructor");
+        // Fallback to original constructor without metrics
+        lockProvider = (LockProvider) ReflectionUtils.loadClass(writeConfig.getLockProviderClass(),
+            lockConfiguration, hadoopConf.get());
+      }
     }
     return lockProvider;
   }
