@@ -27,6 +27,7 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
@@ -399,7 +400,8 @@ public class SparkMetadataWriterUtils {
             .collect(Collectors.toSet());
         // Fetch EI column stat records for above files
         List<HoodieColumnRangeMetadata<Comparable>> partitionColumnMetadata =
-            tableMetadata.getRecordsByKeyPrefixes(HoodieTableMetadataUtil.generateKeyPrefixes(validColumnsToIndex, partitionName), indexPartition, false)
+            tableMetadata.getRecordsByKeyPrefixes(
+                    HoodieListData.lazy(HoodieTableMetadataUtil.generateKeyPrefixes(validColumnsToIndex, partitionName)), indexPartition, false, Option.empty())
                 // schema and properties are ignored in getInsertValue, so simply pass as null
                 .map(record -> record.getData().getInsertValue(null, null))
                 .filter(Option::isPresent)
