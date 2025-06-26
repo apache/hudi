@@ -19,6 +19,10 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.metadata.HoodieIndexVersion;
+import org.apache.hudi.metadata.MetadataPartitionType;
+
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import java.io.Serializable;
@@ -47,6 +51,9 @@ import static org.apache.hudi.index.expression.HoodieExpressionIndex.TRIM_STRING
 public class HoodieIndexDefinition implements Serializable {
 
   // Name of the index
+  // e.g. create index <user index name> on myTable using column_stats(ts) options(expr='from_unixtime', format='yyyy-MM-dd')
+  // Index name is composed of 2 parts - MDT partition path prefix + user index name. In this case, the partition path is
+  // EXPRESSION_INDEX.getPartitionPath.
   private String indexName;
 
   private String indexType;
@@ -67,10 +74,18 @@ public class HoodieIndexDefinition implements Serializable {
   // Any other configuration or properties specific to the index
   private Map<String, String> indexOptions;
 
-  public HoodieIndexDefinition() {
-  }
+  // Version of the index
+  private HoodieIndexVersion version;
 
-  HoodieIndexDefinition(String indexName, String indexType, String indexFunction, List<String> sourceFields, Map<String, String> indexOptions) {
+  private HoodieIndexDefinition(
+      String indexName,
+      String indexType,
+      String indexFunction,
+      List<String> sourceFields,
+      Map<String, String> indexOptions,
+      HoodieIndexVersion version) {
+    ValidationUtils.checkArgument(indexName != null);
+    ValidationUtils.checkArgument(indexType != null);
     this.indexName = indexName;
     this.indexType = indexType;
     this.indexFunction = nonEmpty(indexFunction) ? indexFunction : EMPTY_STRING;
@@ -95,6 +110,13 @@ public class HoodieIndexDefinition implements Serializable {
 
   public Map<String, String> getIndexOptions() {
     return indexOptions;
+  }
+
+  /**
+   * Return the version of this index definition
+   */
+  public HoodieIndexVersion getVersion() {
+    return version;
   }
 
   public String getExpressionIndexFormatOption(String defaultValue) {
@@ -145,6 +167,20 @@ public class HoodieIndexDefinition implements Serializable {
     return new Builder();
   }
 
+  /**
+   * Create a new Builder pre-populated with values from this instance.
+   */
+  public Builder toBuilder() {
+    Builder builder = new Builder();
+    builder.withIndexName(this.indexName)
+        .withIndexType(this.indexType)
+        .withIndexFunction(this.indexFunction)
+        .withSourceFields(new ArrayList<>(this.sourceFields))
+        .withIndexOptions(new HashMap<>(this.indexOptions))
+        .withVersion(this.version);
+    return builder;
+  }
+
   public static class Builder {
 
     private String indexName;
@@ -152,13 +188,17 @@ public class HoodieIndexDefinition implements Serializable {
     private String indexFunction;
     private List<String> sourceFields;
     private Map<String, String> indexOptions;
+    private HoodieIndexVersion version;
 
     public Builder() {
       this.sourceFields = new ArrayList<>();
       this.indexOptions = new HashMap<>();
+      this.version = null;
     }
 
     public Builder withIndexName(String indexName) {
+      // Validate the index name belongs to a valid partition path. Function throws exception if it is a random index name.
+      MetadataPartitionType.fromPartitionPath(indexName);
       this.indexName = indexName;
       return this;
     }
@@ -183,8 +223,22 @@ public class HoodieIndexDefinition implements Serializable {
       return this;
     }
 
+    public Builder withVersion(HoodieIndexVersion version) {
+      // Make sure the version enum matching the metadata partition is used.
+      version.ensureVersionCanBeAssignedToIndexType(MetadataPartitionType.fromPartitionPath(indexName));
+      this.version = version;
+      return this;
+    }
+
     public HoodieIndexDefinition build() {
-      return new HoodieIndexDefinition(indexName, indexType, indexFunction, sourceFields, indexOptions);
+      return new HoodieIndexDefinition(
+          indexName,
+          indexType,
+          indexFunction,
+          sourceFields,
+          indexOptions,
+          version
+      );
     }
   }
 
@@ -196,6 +250,7 @@ public class HoodieIndexDefinition implements Serializable {
         .add("indexFunction='" + indexFunction + "'")
         .add("sourceFields=" + sourceFields)
         .add("indexOptions=" + indexOptions)
+        .add("version=" + version)
         .toString();
   }
 
@@ -208,13 +263,16 @@ public class HoodieIndexDefinition implements Serializable {
       return false;
     }
     HoodieIndexDefinition that = (HoodieIndexDefinition) o;
-    return getIndexName().equals(that.getIndexName()) && getIndexType().equals(that.getIndexType())
-        && getIndexFunction().equals(that.getIndexFunction()) && getSourceFields().equals(that.getSourceFields())
-        && getIndexOptions().equals(that.getIndexOptions());
+    return Objects.equals(indexName, that.indexName)
+        && Objects.equals(indexType, that.indexType)
+        && Objects.equals(indexFunction, that.indexFunction)
+        && Objects.equals(sourceFields, that.sourceFields)
+        && Objects.equals(indexOptions, that.indexOptions)
+        && Objects.equals(version, that.version);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(getIndexName(), getIndexType(), getIndexFunction(), getSourceFields(), getIndexOptions());
+    return Objects.hash(indexName, indexType, indexFunction, sourceFields, indexOptions, version);
   }
 }
