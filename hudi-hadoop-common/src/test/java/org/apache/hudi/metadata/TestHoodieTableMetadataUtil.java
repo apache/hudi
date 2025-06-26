@@ -71,8 +71,6 @@ import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
 import static org.apache.hudi.avro.TestHoodieAvroUtils.SCHEMA_WITH_AVRO_TYPES_STR;
 import static org.apache.hudi.avro.TestHoodieAvroUtils.SCHEMA_WITH_NESTED_FIELD_STR;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
-import static org.apache.hudi.metadata.HoodieIndexVersion.SECONDARY_INDEX_ONE;
-import static org.apache.hudi.metadata.HoodieIndexVersion.SECONDARY_INDEX_TWO;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.NULL_STR_HASH_VAL_FOR_INDEXING;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.computeRevivedAndDeletedKeys;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getFileIDForFileGroup;
@@ -839,7 +837,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
             null,
             NULL_STR_HASH_VAL_FOR_INDEXING,
             "files",
-            HoodieIndexVersion.FILES_INDEX_ONE,
+            FilesIndexVersion.V1,
             0  // Calculated using the explicit hashing algorithm
         ),
         // Test case 10: Record key with special characters
@@ -848,7 +846,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
             null,
             10,
             "secondary_index_idx_ts",
-            SECONDARY_INDEX_TWO,
+            SecondaryIndexVersion.V2,
             0  // Calculated using the explicit hashing algorithm
         ),
         // Test case 10: Record key with special characters
@@ -857,7 +855,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
             null,
             10,
             "secondary_index_idx_ts",
-            SECONDARY_INDEX_ONE,
+            SecondaryIndexVersion.V1,
             0  // Calculated using the explicit hashing algorithm
         )
     );
