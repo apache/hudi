@@ -36,7 +36,6 @@ import org.apache.hudi.client.embedded.EmbeddedTimelineServerHelper;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.commit.BaseDatasetBulkInsertCommitActionExecutor;
 import org.apache.hudi.commit.HoodieStreamerDatasetBulkInsertCommitActionExecutor;
-import org.apache.hudi.common.NativeTableFormat;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
@@ -457,7 +456,7 @@ public class StreamSync implements Serializable, Closeable {
             Boolean.parseBoolean(HIVE_STYLE_PARTITIONING_ENABLE.defaultValue())))
         .setUrlEncodePartitioning(props.getBoolean(URL_ENCODE_PARTITIONING.key(),
             Boolean.parseBoolean(URL_ENCODE_PARTITIONING.defaultValue())))
-        .setTableFormat(props.getProperty(HoodieTableConfig.TABLE_FORMAT.key(), NativeTableFormat.TABLE_FORMAT))
+        .setTableFormat(props.getProperty(HoodieTableConfig.TABLE_FORMAT.key(), HoodieTableConfig.TABLE_FORMAT.defaultValue()))
         .initTable(storageConf, cfg.targetBasePath);
   }
 

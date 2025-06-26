@@ -299,9 +299,11 @@ class HoodieSparkSqlWriterInternal {
           if (StringUtils.nonEmpty(hoodieConfig.getString(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME)))
             hoodieConfig.getString(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME)
           else KeyGeneratorType.getKeyGeneratorClassName(hoodieConfig)
+        val tableFormat = hoodieConfig.getStringOrDefault(HoodieTableConfig.TABLE_FORMAT)
         HoodieTableMetaClient.newTableBuilder()
           .setTableType(tableType)
           .setTableVersion(tableVersion)
+          .setTableFormat(tableFormat)
           .setDatabaseName(databaseName)
           .setTableName(tblName)
           .setBaseFileFormat(baseFileFormat)
@@ -429,7 +431,8 @@ class HoodieSparkSqlWriterInternal {
             val keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(TypedProperties.copy(hoodieConfig.getProps))
             val tableMetaClient = HoodieTableMetaClient.builder
               .setConf(HadoopFSUtils.getStorageConfWithCopy(sparkContext.hadoopConfiguration))
-              .setBasePath(basePath.toString).build()
+              .setBasePath(basePath.toString)
+              .build()
             // Get list of partitions to delete
             val partitionsToDelete = if (parameters.contains(DataSourceWriteOptions.PARTITIONS_TO_DELETE.key())) {
               val partitionColsToDelete = parameters(DataSourceWriteOptions.PARTITIONS_TO_DELETE.key()).split(",")
@@ -757,12 +760,14 @@ class HoodieSparkSqlWriterInternal {
           HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.key(),
           String.valueOf(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.defaultValue())
         ))
+        val tableFormat = hoodieConfig.getStringOrDefault(HoodieTableConfig.TABLE_FORMAT)
 
         HoodieTableMetaClient.newTableBuilder()
           .setTableType(HoodieTableType.valueOf(tableType))
           .setTableName(tableName)
           .setRecordKeyFields(recordKeyFields)
           .setTableVersion(tableVersion)
+          .setTableFormat(tableFormat)
           .setArchiveLogFolder(archiveLogFolder)
           .setPayloadClassName(payloadClass)
           .setRecordMergeMode(RecordMergeMode.getValue(hoodieConfig.getString(HoodieWriteConfig.RECORD_MERGE_MODE)))

@@ -420,6 +420,13 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(HoodieWriteConfig.WRITE_TABLE_VERSION.defaultValue())
       .withDescription("Table version produced by this writer.");
 
+  @AdvancedConfig
+  public static final ConfigOption<String> WRITE_TABLE_FORMAT = ConfigOptions
+          .key(HoodieTableConfig.TABLE_FORMAT.key())
+          .stringType()
+          .defaultValue(HoodieTableConfig.TABLE_FORMAT.defaultValue())
+          .withDescription("Table format produced by this writer.");
+
   /**
    * Flag to indicate whether to drop duplicates before insert/upsert.
    * By default false to gain extra performance.
