@@ -3012,6 +3012,7 @@ public class HoodieTableMetadataUtil {
       HoodieIndexDefinition.Builder indexDefinitionBuilder = HoodieIndexDefinition.newBuilder()
           .withIndexName(indexName)
           .withIndexType(indexType)
+          .withVersion(existingIndexVersionOrDefault(indexName, dataMetaClient))
           .withSourceFields(Collections.singletonList(indexedColumn));
       if (partitionNamePrefix.equals(PARTITION_NAME_EXPRESSION_INDEX_PREFIX)) {
         indexDefinitionBuilder.withIndexOptions(metadataConfig.getExpressionIndexOptions());
