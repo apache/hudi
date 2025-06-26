@@ -171,7 +171,7 @@ public class SparkBinaryCopyClusteringExecutionStrategy<T> extends SparkSortAndS
       return false;
     }
 
-    if (getHoodieTable().getMetaClient().getTableConfig().getBaseFileFormat().equals(PARQUET)) {
+    if (!getHoodieTable().getMetaClient().getTableConfig().getBaseFileFormat().equals(PARQUET)) {
       LOG.warn("Binary Copy only support parquet as base file format for now.");
       return false;
     }
