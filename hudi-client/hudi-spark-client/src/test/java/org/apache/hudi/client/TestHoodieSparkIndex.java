@@ -18,14 +18,16 @@
 
 package org.apache.hudi.client;
 
-import org.apache.hudi.index.HoodieSparkIndexClient;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndexUtils;
+import org.apache.hudi.index.HoodieSparkIndexClient;
+import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import org.apache.spark.api.java.JavaRDD;
@@ -143,6 +145,7 @@ public class TestHoodieSparkIndex extends HoodieClientTestBase {
     return HoodieIndexDefinition.newBuilder()
         .withIndexName(fullIndexName)
         .withIndexType(indexType)
+        .withVersion(HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.current(), fullIndexName))
         .withIndexFunction(indexFunc)
         .withSourceFields(sourceFields)
         .withIndexOptions(indexOptions)
