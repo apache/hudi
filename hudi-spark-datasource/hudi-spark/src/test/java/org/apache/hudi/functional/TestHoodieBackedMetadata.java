@@ -3001,9 +3001,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         .withFinalizeWriteParallelism(1)
         .withDeleteParallelism(1)
         .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true).build())
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true)
-            .withMaxNumDeltaCommitsBeforeCompaction(4)
-            .build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build())
         .build();
 
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
@@ -3043,6 +3041,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       // assert entry is not present for deleted partition in metadata table
       HoodieTableMetadata tableMetadata = metadata(client, storage);
       assertTrue(tableMetadata.getRecordsByKeyPrefixes(Collections.singletonList(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH), FILES.getPartitionPath(), false).isEmpty());
+      assertTrue(tableMetadata.getAllPartitionPaths().contains(HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH));
+      assertFalse(tableMetadata.getAllPartitionPaths().contains(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH));
       // above upsert would have triggered clean
       validateMetadata(client);
       assertEquals(1, metadata(client, storage).getAllPartitionPaths().size());
