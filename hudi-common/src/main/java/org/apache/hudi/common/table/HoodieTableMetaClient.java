@@ -53,12 +53,14 @@ import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
+import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.HoodieStorage;
@@ -93,6 +95,7 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
+import static org.apache.hudi.metadata.HoodieIndexVersion.getCurrentVersion;
 
 /**
  * <code>HoodieTableMetaClient</code> allows to access meta-data about a hoodie table It returns meta-data about
@@ -287,21 +290,44 @@ public class HoodieTableMetaClient implements Serializable {
     if (indexMetadataOpt.isPresent() && !indexMetadataOpt.get().getIndexDefinitions().isEmpty()) {
       return indexMetadataOpt;
     }
+    Option<HoodieIndexMetadata> indexDefOption = Option.empty();
     if (tableConfig.getRelativeIndexDefinitionPath().isPresent() && StringUtils.nonEmpty(tableConfig.getRelativeIndexDefinitionPath().get())) {
-      StoragePath indexDefinitionPath =
-          new StoragePath(basePath, tableConfig.getRelativeIndexDefinitionPath().get());
-      try {
-        Option<byte[]> bytesOpt = FileIOUtils.readDataFromPath(storage, indexDefinitionPath, true);
-        if (bytesOpt.isPresent()) {
-          return Option.of(HoodieIndexMetadata.fromJson(new String(bytesOpt.get())));
-        } else {
-          return Option.of(new HoodieIndexMetadata());
-        }
-      } catch (IOException e) {
-        throw new HoodieIOException("Could not load index definition at path: " + tableConfig.getRelativeIndexDefinitionPath().get(), e);
-      }
+      indexDefOption = loadIndexDefFromStorage(basePath, tableConfig.getRelativeIndexDefinitionPath().get(), storage);
     }
-    return Option.empty();
+    populateIndexVersionIfMissing(tableConfig.getTableVersion(), indexDefOption);
+    return indexDefOption;
+  }
+
+  public static void populateIndexVersionIfMissing(HoodieTableVersion tableVersion, Option<HoodieIndexMetadata> indexDefOption) {
+    indexDefOption.ifPresent(idxDefs ->
+        idxDefs.getIndexDefinitions().replaceAll((indexName, idxDef) -> {
+          ValidationUtils.checkArgument(HoodieIndexVersion.isValidIndexDefinition(tableVersion, idxDef),
+              String.format("Table version %s, index definition %s", tableVersion, idxDef));
+          if (idxDef.getVersion() == null) {
+            // If version field is missing, it implies either of the cases (validated by isValidIndexDefinition):
+            // - It is table version 8, because we don't write version attributes in some hudi releases
+            // - It is table version 9, and it is not secondary index. Since we drop SI on upgrade and we always write version attributes.
+            return idxDef.toBuilder().withVersion(getCurrentVersion(tableVersion, idxDef.getIndexName())).build();
+          } else {
+            return idxDef;
+          }
+        }));
+  }
+
+  public static Option<HoodieIndexMetadata> loadIndexDefFromStorage(
+      StoragePath basePath, String relativeIndexDefinitionPath, HoodieStorage storage) {
+    StoragePath indexDefinitionPath =
+        new StoragePath(basePath, relativeIndexDefinitionPath);
+    try {
+      Option<byte[]> bytesOpt = FileIOUtils.readDataFromPath(storage, indexDefinitionPath, true);
+      if (bytesOpt.isPresent()) {
+        return Option.of(HoodieIndexMetadata.fromJson(new String(bytesOpt.get())));
+      } else {
+        return Option.of(new HoodieIndexMetadata());
+      }
+    } catch (IOException e) {
+      throw new HoodieIOException("Could not load index definition at path: " + relativeIndexDefinitionPath, e);
+    }
   }
 
   public static HoodieTableMetaClient reload(HoodieTableMetaClient oldMetaClient) {
