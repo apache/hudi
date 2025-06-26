@@ -44,6 +44,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
 
+import static org.apache.hudi.index.secondary.SecondaryIndexUtils.isSameKey;
+
 /**
  * Utility class for write handle metadata.
  */
@@ -107,7 +109,7 @@ public class SecondaryIndexStreamingTracker {
         } else {
           // delete previous entry and insert new value if secondaryKey is different
           String previousSecondaryKey = recordKeyToSecondaryKeyForPreviousFileSlice.get(recordKey);
-          if (!previousSecondaryKey.equals(secondaryKey)) {
+          if (!isSameKey(previousSecondaryKey, secondaryKey)) {
             status.getIndexStats().addSecondaryIndexStats(indexName, recordKey, previousSecondaryKey, true);
             status.getIndexStats().addSecondaryIndexStats(indexName, recordKey, secondaryKey, false);
           }
@@ -168,6 +170,7 @@ public class SecondaryIndexStreamingTracker {
     secondaryIndexDefns.forEach(def -> {
       String secondaryIndexSourceField = def.getSourceFieldsKey();
       Object oldSecondaryKey = oldRecord.getColumnValueAsJava(writeSchemaWithMetaFields, secondaryIndexSourceField, config.getProps());
+      // TODO !!!! secondary key "null" is now overloaded with 2 meaning - record deletion / record value is null
       Object newSecondaryKey = null;
       if (combinedRecordOpt.isPresent() && !isDelete) {
         Schema newSchema = newSchemaSupplier.get();

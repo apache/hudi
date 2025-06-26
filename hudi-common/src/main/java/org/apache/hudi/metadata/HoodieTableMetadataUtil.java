@@ -185,6 +185,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.index.expression.HoodieExpressionIndex.EXPRESSION_OPTION;
 import static org.apache.hudi.index.expression.HoodieExpressionIndex.IDENTITY_TRANSFORM;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_IS_TIGHT_BOUND;
+import static org.apache.hudi.metadata.HoodieMetadataPayload.NULL_STR_HASH_VAL_FOR_INDEXING;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.RECORD_INDEX_MISSING_FILEINDEX_FALLBACK;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.SECONDARY_INDEX_RECORD_KEY_SEPARATOR;
 import static org.apache.hudi.metadata.HoodieTableMetadata.EMPTY_PARTITION_NAME;
@@ -1371,27 +1372,35 @@ public class HoodieTableMetadataUtil {
    * Note: The hashing algorithm is same as String.hashCode() but is defined here explicitly since
    * hashCode() implementation is not guaranteed by the JVM to be consistent across versions.
    *
-   * @param recordKey record key for which the file group index is looked up
+   * @param key record key for which the file group index is looked up
    * @param numFileGroups number of file groups to map the key to
    * @param partitionName name of the partition
    * @param version index version to determine hashing behavior
    * @return file group index for the given record key
    */
   public static int mapRecordKeyToFileGroupIndex(
-      String recordKey, int numFileGroups, String partitionName, HoodieIndexVersion version) {
+      String key, int numFileGroups, String partitionName, HoodieIndexVersion version) {
+    // For null key, apply special hashing rule.
+    if (key == null) {
+      return NULL_STR_HASH_VAL_FOR_INDEXING;
+    }
     if (MetadataPartitionType.SECONDARY_INDEX.matchesPartitionPath(partitionName)
         && version.greaterThanOrEquals(HoodieIndexVersion.SECONDARY_INDEX_TWO)
         && recordKey.contains(SECONDARY_INDEX_RECORD_KEY_SEPARATOR)) {
       return mapRecordKeyToFileGroupIndex(SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey(recordKey), numFileGroups);
     }
-    return mapRecordKeyToFileGroupIndex(recordKey, numFileGroups);
+    return mapRecordKeyToFileGroupIndex(key, numFileGroups);
   }
 
   // change to configurable larger group
-  private static int mapRecordKeyToFileGroupIndex(String recordKey, int numFileGroups) {
+  private static int mapRecordKeyToFileGroupIndex(String key, int numFileGroups) {
+    // For null key, apply special hashing rule.
+    if (key == null) {
+      return NULL_STR_HASH_VAL_FOR_INDEXING;
+    }
     int h = 0;
-    for (int i = 0; i < recordKey.length(); ++i) {
-      h = 31 * h + recordKey.charAt(i);
+    for (int i = 0; i < key.length(); ++i) {
+      h = 31 * h + key.charAt(i);
     }
 
     return Math.abs(Math.abs(h) % numFileGroups);

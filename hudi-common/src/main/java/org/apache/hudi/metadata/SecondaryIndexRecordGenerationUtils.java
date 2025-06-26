@@ -53,8 +53,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.index.secondary.SecondaryIndexUtils.isSameKey;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.createSecondaryIndexRecord;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.filePath;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartitionLatestFileSlicesIncludingInflight;
@@ -134,7 +136,7 @@ public class SecondaryIndexRecordGenerationUtils {
         } else {
           // delete previous entry and insert new value if secondaryKey is different
           String previousSecondaryKey = recordKeyToSecondaryKeyForPreviousFileSlice.get(recordKey);
-          if (!previousSecondaryKey.equals(secondaryKey)) {
+          if (!isSameKey(secondaryKey, previousSecondaryKey)) {
             records.add(createSecondaryIndexRecord(recordKey, previousSecondaryKey, indexDefinition.getIndexName(), true));
             records.add(createSecondaryIndexRecord(recordKey, secondaryKey, indexDefinition.getIndexName(), false));
           }
@@ -254,13 +256,15 @@ public class SecondaryIndexRecordGenerationUtils {
         while (recordIterator.hasNext()) {
           T record = recordIterator.next();
           Object secondaryKey = readerContext.getValue(record, tableSchema, secondaryKeyField);
-          if (secondaryKey != null) {
-            nextValidRecord = Pair.of(
-                readerContext.getRecordKey(record, tableSchema),
-                secondaryKey.toString()
-            );
-            return true;
+          String secondaryKeyStr = null;
+          if (Objects.nonNull(secondaryKey)) {
+            secondaryKeyStr = secondaryKey.toString();
           }
+          nextValidRecord = Pair.of(
+              readerContext.getRecordKey(record, tableSchema),
+              secondaryKeyStr
+          );
+          return true;
         }
 
         // If no valid records are found
