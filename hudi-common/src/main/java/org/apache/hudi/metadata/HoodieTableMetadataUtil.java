@@ -54,7 +54,7 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.function.SerializableBiFunction;
-import org.apache.hudi.common.function.SerializablePairFunction;
+import org.apache.hudi.common.function.SerializableFunctionPairOut;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -1107,7 +1107,7 @@ public class HoodieTableMetadataUtil {
   @VisibleForTesting
   public static HoodieData<HoodieRecord> reduceByKeys(HoodieData<HoodieRecord> recordIndexRecords, int parallelism) {
     return recordIndexRecords.mapToPair(
-            (SerializablePairFunction<HoodieRecord, HoodieKey, HoodieRecord>) t -> Pair.of(t.getKey(), t))
+            (SerializableFunctionPairOut<HoodieRecord, HoodieKey, HoodieRecord>) t -> Pair.of(t.getKey(), t))
         .reduceByKey((SerializableBiFunction<HoodieRecord, HoodieRecord, HoodieRecord>) (record1, record2) -> {
           boolean isRecord1Deleted = record1.getData() instanceof EmptyHoodieRecordPayload;
           boolean isRecord2Deleted = record2.getData() instanceof EmptyHoodieRecordPayload;
