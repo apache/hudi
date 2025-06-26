@@ -19,32 +19,24 @@
 
 package org.apache.spark.sql.hudi.feature.index
 
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieSparkUtils}
-import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.common.config.{HoodieMetadataConfig, RecordMergeMode}
 import org.apache.hudi.common.data.HoodieListData
 import org.apache.hudi.common.engine.EngineType
-import org.apache.hudi.common.model.{HoodieRecordLocation, WriteOperationType}
+import org.apache.hudi.common.model.HoodieRecordLocation
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
-import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
-import org.apache.hudi.config.{HoodieClusteringConfig, HoodieCompactionConfig, HoodieWriteConfig}
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator
+import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.data.HoodieJavaRDD
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
-import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieIndexVersion, SecondaryIndexKeyUtils}
-import org.apache.hudi.metadata.HoodieMetadataPayload.SECONDARY_INDEX_RECORD_KEY_SEPARATOR
-import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX
-import org.apache.hudi.storage.StoragePath
+import org.apache.hudi.metadata.HoodieBackedTableMetadata
 
 import org.apache.spark.api.java.JavaSparkContext
-import org.apache.spark.sql.{SaveMode, SQLContext}
+import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.util.Utils
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 
 import java.io.File
-import java.util.concurrent.atomic.AtomicInteger
 
 import scala.collection.JavaConverters._
 

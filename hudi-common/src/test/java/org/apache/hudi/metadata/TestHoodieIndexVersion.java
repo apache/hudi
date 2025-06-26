@@ -132,7 +132,7 @@ public class TestHoodieIndexVersion {
 
   @Test
   public void testGetCurrentVersionSecondaryIndexTableVersion8() {
-    // Table version 8 should return SECONDARY_INDEX_ONE
+    // Table version 8 should return SECONDARY_INDEX V1
     HoodieIndexVersion result = HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.EIGHT, MetadataPartitionType.SECONDARY_INDEX);
     assertEquals(SecondaryIndexVersion.V1, result);
   }
