@@ -29,6 +29,7 @@ import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.StoragePath;
 
@@ -39,16 +40,21 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Properties;
+import java.util.function.Function;
 
+import static org.apache.hudi.common.table.HoodieTableMetaClient.loadIndexDefFromStorage;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -267,6 +273,7 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
         .withIndexName(indexName)
         .withIndexType("column_stats")
         .withIndexFunction("identity")
+        .withVersion(HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.current(), indexName))
         .withSourceFields(new ArrayList<>(columnsMap.keySet()))
         .withIndexOptions(Collections.emptyMap())
         .build();
@@ -280,5 +287,79 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     HoodieIndexMetadata indexMetadata = HoodieIndexMetadata.fromJson(
         new String(FileIOUtils.readDataFromPath(metaClient.getStorage(), new StoragePath(metaClient.getIndexDefinitionPath())).get()));
     assertTrue(indexMetadata.getIndexDefinitions().isEmpty());
+  }
+
+  @Test
+  public void testIndexJsonFileMissingVersionField() {
+    // Json file with no version attribute
+    HoodieIndexMetadata loadedDef = loadIndexDefFromStorage(
+        new StoragePath(Objects.requireNonNull(getClass().getClassLoader().getResource("indexMissingVersion1.json")).toString()), "",
+        metaClient.getStorage()).get();
+    assertEquals(2, loadedDef.getIndexDefinitions().size());
+    validateAllFieldsExcludingVersion(loadedDef);
+    // The populated definition object should use null.
+    assertNull(loadedDef.getIndexDefinitions().get("column_stats").getVersion());
+    assertNull(loadedDef.getIndexDefinitions().get("secondary_index_idx_price").getVersion());
+  }
+
+  @Test
+  public void testPopulateVersionFieldIfMissing() {
+    Function<String, HoodieIndexMetadata> getIndexDef = (idxFileName) ->
+        loadIndexDefFromStorage(
+           new StoragePath(Objects.requireNonNull(getClass().getClassLoader().getResource(idxFileName)).toString()), "",
+           metaClient.getStorage()).get();
+    HoodieIndexMetadata loadedDef = getIndexDef.apply("indexMissingVersion1.json");
+    assertEquals(2, loadedDef.getIndexDefinitions().size());
+    // Apply the function fixing the missing version field
+    // Table version 9 with missing version field is not acceptable for secondary index as it should always write the version field.
+    assertThrows(IllegalArgumentException.class, () -> HoodieTableMetaClient.populateIndexVersionIfMissing(HoodieTableVersion.NINE,
+        Option.of(getIndexDef.apply("indexMissingVersion1.json"))));
+
+    // If it is table version 8, secondary index def missing version field will be fixed.
+    HoodieIndexMetadata loadedDef2 = getIndexDef.apply("indexMissingVersion1.json");
+    HoodieTableMetaClient.populateIndexVersionIfMissing(HoodieTableVersion.EIGHT, Option.of(loadedDef2));
+
+    assertEquals(HoodieIndexVersion.V1, loadedDef2.getIndexDefinitions().get("column_stats").getVersion());
+    assertEquals(HoodieIndexVersion.V1, loadedDef2.getIndexDefinitions().get("secondary_index_idx_price").getVersion());
+    validateAllFieldsExcludingVersion(loadedDef2);
+
+    // If it is table version 9 and only non secondary index index missing version attribute
+    HoodieIndexMetadata loadedDef3 = getIndexDef.apply("indexMissingVersion2.json");
+    HoodieTableMetaClient.populateIndexVersionIfMissing(HoodieTableVersion.NINE, Option.of(loadedDef3));
+
+    assertEquals(HoodieIndexVersion.V1, loadedDef3.getIndexDefinitions().get("column_stats").getVersion());
+    assertEquals(HoodieIndexVersion.V2, loadedDef3.getIndexDefinitions().get("secondary_index_idx_price").getVersion());
+    validateAllFieldsExcludingVersion(loadedDef3);
+  }
+
+  private static void validateAllFieldsExcludingVersion(HoodieIndexMetadata loadedDef) {
+    HoodieIndexDefinition colStatsDef = loadedDef.getIndexDefinitions().get("column_stats");
+    assertEquals("column_stats", colStatsDef.getIndexName());
+    assertEquals("column_stats", colStatsDef.getIndexType());
+    assertEquals(Collections.emptyMap(), colStatsDef.getIndexOptions());
+    assertEquals(Arrays.asList(
+        "_hoodie_commit_time",
+        "_hoodie_partition_path",
+        "_hoodie_record_key",
+        "key",
+        "secKey",
+        "partition",
+        "intField",
+        "city",
+        "textField1",
+        "textField2",
+        "textField3",
+        "textField4",
+        "decimalField",
+        "longField",
+        "incrLongField",
+        "round"), colStatsDef.getSourceFields());
+
+    HoodieIndexDefinition secIdxDef = loadedDef.getIndexDefinitions().get("secondary_index_idx_price");
+    assertEquals("secondary_index_idx_price", secIdxDef.getIndexName());
+    assertEquals("secondary_index", secIdxDef.getIndexType());
+    assertEquals("identity", secIdxDef.getIndexFunction());
+    assertEquals(Collections.singletonList("price"), secIdxDef.getSourceFields());
+    assertEquals(Collections.emptyMap(), secIdxDef.getIndexOptions());
   }
 }
