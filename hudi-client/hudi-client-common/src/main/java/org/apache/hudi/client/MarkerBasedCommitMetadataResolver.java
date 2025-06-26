@@ -24,7 +24,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.function.SerializableFunction;
-import org.apache.hudi.common.function.SerializablePairFunction;
+import org.apache.hudi.common.function.SerializableFunctionPairOut;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -126,7 +126,7 @@ public class MarkerBasedCommitMetadataResolver implements CommitMetadataResolver
     List<Map.Entry<String, List<HoodieWriteStat>>> partitionToWriteStats = new ArrayList<>(commitMetadata.getPartitionToWriteStats().entrySet());
 
     return context.parallelize(partitionToWriteStats)
-        .mapToPair((SerializablePairFunction<Map.Entry<String, List<HoodieWriteStat>>, String, Map<String, HoodieWriteStat>>) t -> {
+        .mapToPair((SerializableFunctionPairOut<Map.Entry<String, List<HoodieWriteStat>>, String, Map<String, HoodieWriteStat>>) t -> {
           Map<String, HoodieWriteStat> fileIdToWriteStat = new HashMap<>();
           t.getValue().forEach(writeStat -> {
             if (!fileIdToWriteStat.containsKey(writeStat.getFileId())) {
@@ -160,7 +160,7 @@ public class MarkerBasedCommitMetadataResolver implements CommitMetadataResolver
           List<String> logFilePaths1 = new ArrayList<>(strings);
           logFilePaths1.addAll(strings2);
           return logFilePaths1;
-        }, parallelism).mapToPair((SerializablePairFunction<Pair<String, List<String>>, String, Map<String, List<String>>>) t -> {
+        }, parallelism).mapToPair((SerializableFunctionPairOut<Pair<String, List<String>>, String, Map<String, List<String>>>) t -> {
           // for each hudi partition, collect list of missing log files, fetch file size using file system calls, and populate fileId -> List<FileStatus> map
 
           String partitionPath = t.getKey();
