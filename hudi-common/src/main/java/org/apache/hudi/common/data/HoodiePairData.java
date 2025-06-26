@@ -21,7 +21,7 @@ package org.apache.hudi.common.data;
 
 import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.function.SerializableFunction;
-import org.apache.hudi.common.function.SerializablePairFunction;
+import org.apache.hudi.common.function.SerializableFunctionPairOut;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -114,7 +114,7 @@ public interface HoodiePairData<K, V> extends Serializable {
    * @return containing the result. Actual execution may be deferred.
    */
   <L, W> HoodiePairData<L, W> mapToPair(
-      SerializablePairFunction<Pair<K, V>, L, W> mapToPairFunc);
+      SerializableFunctionPairOut<Pair<K, V>, L, W> mapToPairFunc);
 
   /**
    * Performs a left outer join of this dataset against {@code other}.

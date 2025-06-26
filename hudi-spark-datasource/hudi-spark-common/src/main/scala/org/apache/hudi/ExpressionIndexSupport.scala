@@ -247,7 +247,7 @@ class ExpressionIndexSupport(spark: SparkSession,
     val transposedRows: HoodieData[Row] = colStatsRecords
       //TODO: [HUDI-8303] Explicit conversion might not be required for Scala 2.12+
       .filter(JFunction.toJavaSerializableFunction(r => sortedTargetColumnsSet.contains(r.getColumnName)))
-      .mapToPair(JFunction.toJavaSerializablePairFunction(r => {
+      .mapToPair(JFunction.toJavaSerializableFunctionPairOut(r => {
         if (r.getMinValue == null && r.getMaxValue == null) {
           // Corresponding row could be null in either of the 2 cases
           //    - Column contains only null values (in that case both min/max have to be nulls)
