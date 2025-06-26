@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.engine;
 
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.data.HoodieAccumulator;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
@@ -129,4 +130,6 @@ public abstract class HoodieEngineContext {
   public abstract <I, O> O aggregate(HoodieData<I> data, O zeroValue, Functions.Function2<O, I, O> seqOp, Functions.Function2<O, O, O> combOp);
 
   public abstract <T> ReaderContextFactory<T> getReaderContextFactory(HoodieTableMetaClient metaClient);
+
+  public abstract void dropIndex(HoodieConfig config, List<String> metadataPartitions);
 }

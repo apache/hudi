@@ -18,22 +18,32 @@
 
 package org.apache.hudi.table.upgrade;
 
-import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.table.HoodieTable;
 
-import java.util.Collections;
-import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-public class EightToNineUpgradeHandler implements UpgradeHandler {
+import static org.apache.hudi.index.HoodieIndexUtils.dropMDTPartitions;
 
-  @Override
-  public Map<ConfigProperty, String> upgrade(HoodieWriteConfig config, HoodieEngineContext context,
-                                             String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
-    HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
-    SecondaryIndexUpgradeDowngradeHelper.dropSecondaryIndexPartitions(
-        config, context, table, "upgrading to table version 9");
-    return Collections.emptyMap();
+/**
+ * Helper class to handle secondary index operations during upgrade/downgrade.
+ */
+public class SecondaryIndexUpgradeDowngradeHelper {
+  private static final Logger LOG = LoggerFactory.getLogger(SecondaryIndexUpgradeDowngradeHelper.class);
+
+  /**
+   * Drops secondary index partitions from metadata table.
+   *
+   * @param config Write config
+   * @param context Engine context
+   * @param table Hoodie table
+   * @param operationType Type of operation (upgrade/downgrade)
+   */
+  public static void dropSecondaryIndexPartitions(HoodieWriteConfig config, HoodieEngineContext context,
+      HoodieTable table, String operationType) {
+    dropMDTPartitions(MetadataPartitionType.SECONDARY_INDEX, config, context, table, operationType);
   }
 }
