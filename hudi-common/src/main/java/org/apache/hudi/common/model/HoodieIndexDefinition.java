@@ -92,11 +92,13 @@ public class HoodieIndexDefinition implements Serializable {
       HoodieIndexVersion version) {
     ValidationUtils.checkArgument(indexName != null);
     ValidationUtils.checkArgument(indexType != null);
+    ValidationUtils.checkArgument(version != null);
     this.indexName = indexName;
     this.indexType = indexType;
     this.indexFunction = nonEmpty(indexFunction) ? indexFunction : EMPTY_STRING;
     this.sourceFields = sourceFields;
     this.indexOptions = indexOptions;
+    this.version = version;
   }
 
   public String getIndexFunction() {
@@ -230,6 +232,9 @@ public class HoodieIndexDefinition implements Serializable {
     }
 
     public Builder withVersion(HoodieIndexVersion version) {
+      if (indexName == null) {
+        throw new IllegalStateException("Please set index name first before setting version");
+      }
       // Make sure the version enum matching the metadata partition is used.
       version.ensureVersionCanBeAssignedToIndexType(MetadataPartitionType.fromPartitionPath(indexName));
       this.version = version;

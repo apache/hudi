@@ -20,6 +20,11 @@ package org.apache.hudi.metadata;
 
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.exception.HoodieException;
+
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * Enum representing different versions of Hoodie indexes.
@@ -34,8 +39,22 @@ import org.apache.hudi.common.table.HoodieTableVersion;
  * version codes. Versions adopted by one index is not comparable with another index.</p>
  */
 public enum HoodieIndexVersion {
-  V1(1),
-  V2(2);
+  ALL_PARTITIONS_ONE(MetadataPartitionType.ALL_PARTITIONS, 1, Arrays.asList("0.14.0")),
+
+  PARTITION_STATS_ONE(MetadataPartitionType.PARTITION_STATS, 1, Arrays.asList("0.14.0")),
+
+  FILES_INDEX_ONE(MetadataPartitionType.FILES, 1, Arrays.asList("0.14.0")),
+
+  RECORD_INDEX_ONE(MetadataPartitionType.RECORD_INDEX, 1, Arrays.asList("1.0.0")),
+
+  COLUMN_STATS_ONE(MetadataPartitionType.COLUMN_STATS, 1, Arrays.asList("1.0.0")),
+
+  BLOOM_FILTERS_ONE(MetadataPartitionType.BLOOM_FILTERS, 1, Arrays.asList("1.0.0")),
+
+  EXPRESSION_INDEX_ONE(MetadataPartitionType.EXPRESSION_INDEX, 1, Arrays.asList("1.0.0")),
+
+  SECONDARY_INDEX_ONE(MetadataPartitionType.SECONDARY_INDEX, 1, Arrays.asList("1.0.0")),
+  SECONDARY_INDEX_TWO(MetadataPartitionType.SECONDARY_INDEX, 2, Arrays.asList("1.1.0"));
 
   private final int versionCode;
 
@@ -84,7 +103,28 @@ public enum HoodieIndexVersion {
    * @return the appropriate HoodieIndexVersion for the given parameters
    */
   public static HoodieIndexVersion getCurrentVersion(HoodieTableVersion tableVersion, MetadataPartitionType partitionType) {
-    return null;
+    if (partitionType == MetadataPartitionType.RECORD_INDEX) {
+      return RECORD_INDEX_ONE;
+    } else if (partitionType == MetadataPartitionType.COLUMN_STATS) {
+      return COLUMN_STATS_ONE;
+    } else if (partitionType == MetadataPartitionType.BLOOM_FILTERS) {
+      return BLOOM_FILTERS_ONE;
+    } else if (partitionType == MetadataPartitionType.EXPRESSION_INDEX) {
+      return EXPRESSION_INDEX_ONE;
+    } else if (partitionType == MetadataPartitionType.SECONDARY_INDEX) {
+      if (tableVersion.greaterThanOrEquals(HoodieTableVersion.NINE)) {
+        return SECONDARY_INDEX_TWO;
+      }
+      return SECONDARY_INDEX_ONE;
+    } else if (partitionType == MetadataPartitionType.FILES) {
+      return FILES_INDEX_ONE;
+    } else if (partitionType == MetadataPartitionType.PARTITION_STATS) {
+      return PARTITION_STATS_ONE;
+    } else if (partitionType == MetadataPartitionType.ALL_PARTITIONS) {
+      return ALL_PARTITIONS_ONE;
+    } else {
+      throw new HoodieException("Unknown metadata partition type: " + partitionType);
+    }
   }
 
   /**
@@ -99,6 +139,24 @@ public enum HoodieIndexVersion {
    * @return true if the index definition is valid for the table version, false otherwise
    */
   public static boolean isValidIndexDefinition(HoodieTableVersion tv, HoodieIndexDefinition idxDef) {
+    HoodieIndexVersion iv = idxDef.getVersion();
+    MetadataPartitionType metadataPartitionType = MetadataPartitionType.fromPartitionPath(idxDef.getIndexName());
+    // Table version 8, missing version attribute is allowed.
+    if (tv == HoodieTableVersion.EIGHT && iv == null) {
+      return true;
+    }
+    // Table version eight, SI only v1 is allowed.
+    if (tv == HoodieTableVersion.EIGHT && MetadataPartitionType.SECONDARY_INDEX.equals(metadataPartitionType) && iv != HoodieIndexVersion.SECONDARY_INDEX_ONE) {
+      return false;
+    }
+    // Table version 9, SI must have none null version.
+    if (tv == HoodieTableVersion.NINE && MetadataPartitionType.SECONDARY_INDEX.equals(metadataPartitionType) && iv == null) {
+      return false;
+    }
+    // Table version 9, SI must be v2 or above.
+    if (tv == HoodieTableVersion.NINE && MetadataPartitionType.SECONDARY_INDEX.equals(metadataPartitionType) && !iv.greaterThanOrEquals(HoodieIndexVersion.SECONDARY_INDEX_TWO)) {
+      return false;
+    }
     return true;
   }
 
