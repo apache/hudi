@@ -87,7 +87,6 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_STRATEGY_ID;
-import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_FORMAT;
 import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_PATH;
 import static org.apache.hudi.common.table.HoodieTableConfig.VERSION;
 import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
@@ -1275,6 +1274,7 @@ public class HoodieTableMetaClient implements Serializable {
       return setTableType(metaClient.getTableType())
           .setTableName(metaClient.getTableConfig().getTableName())
           .setTableVersion(metaClient.getTableConfig().getTableVersion())
+          .setTableFormat(metaClient.getTableConfig().getTableFormat(metaClient.getTimelineLayoutVersion()).getName())
           .setTimelinePath(metaClient.getTableConfig().getTimelinePath())
           .setArchiveLogFolder(metaClient.getTableConfig().getTimelineHistoryPath())
           .setRecordMergeMode(metaClient.getTableConfig().getRecordMergeMode())
@@ -1303,6 +1303,10 @@ public class HoodieTableMetaClient implements Serializable {
 
       if (hoodieConfig.contains(VERSION)) {
         setTableVersion(hoodieConfig.getInt(VERSION));
+      }
+
+      if (hoodieConfig.contains(HoodieTableConfig.TABLE_FORMAT)) {
+        setTableFormat(hoodieConfig.getString(HoodieTableConfig.TABLE_FORMAT));
       }
 
       if (hoodieConfig.contains(TIMELINE_PATH)) {
@@ -1541,7 +1545,7 @@ public class HoodieTableMetaClient implements Serializable {
         tableConfig.setValue(HoodieTableConfig.RELATIVE_INDEX_DEFINITION_PATH, indexDefinitionPath);
       }
       if (null != tableFormat) {
-        tableConfig.setValue(TABLE_FORMAT, tableFormat);
+        tableConfig.setValue(HoodieTableConfig.TABLE_FORMAT, tableFormat);
       }
       return tableConfig.getProps();
     }

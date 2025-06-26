@@ -231,6 +231,7 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
       HoodieTableMetaClient.newTableBuilder()
         .fromProperties(properties)
         .setTableVersion(Integer.valueOf(getStringWithAltKeys(tableConfigs, HoodieWriteConfig.WRITE_TABLE_VERSION)))
+        .setTableFormat(getStringWithAltKeys(tableConfigs, HoodieTableConfig.TABLE_FORMAT))
         .setDatabaseName(catalogDatabaseName)
         .setTableName(table.identifier.table)
         .setTableCreateSchema(schema.toString())
