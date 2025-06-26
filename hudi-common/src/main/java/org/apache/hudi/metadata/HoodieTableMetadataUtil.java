@@ -693,17 +693,14 @@ public class HoodieTableMetadataUtil {
     int[] fileDeleteCount = {0};
     List<String> deletedPartitions = new ArrayList<>();
     cleanMetadata.getPartitionMetadata().forEach((partitionName, partitionMetadata) -> {
+      boolean isPartitionDeleted = partitionMetadata.getIsPartitionDeleted();
       // Files deleted from a partition
       List<String> deletedFiles = partitionMetadata.getDeletePathPatterns();
+      records.add(HoodieMetadataPayload.createPartitionFilesRecord(partitionName, Collections.emptyMap(),
+          deletedFiles, isPartitionDeleted));
       fileDeleteCount[0] += deletedFiles.size();
-      boolean isPartitionDeleted = partitionMetadata.getIsPartitionDeleted();
       if (isPartitionDeleted) {
         deletedPartitions.add(partitionName);
-        records.add(HoodieMetadataPayload.createPartitionFilesRecord(partitionName, Collections.emptyMap(),
-            deletedFiles, true));
-      } else {
-        records.add(HoodieMetadataPayload.createPartitionFilesRecord(partitionName, Collections.emptyMap(),
-            deletedFiles));
       }
     });
 
