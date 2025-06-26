@@ -26,6 +26,8 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieListData;
+import org.apache.hudi.common.data.HoodieListPairData;
+import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.function.SerializableFunction;
@@ -60,6 +62,7 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.util.Transient;
+import org.apache.hudi.common.util.HoodieDataUtils;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -163,7 +166,9 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
   @Override
   protected Option<HoodieRecord<HoodieMetadataPayload>> getRecordByKey(String key, String partitionName) {
-    Map<String, HoodieRecord<HoodieMetadataPayload>> recordsByKeys = getRecordsByKeys(Collections.singletonList(key), partitionName);
+    Map<String, HoodieRecord<HoodieMetadataPayload>> recordsByKeys = getRecordsByKeysWithMapping(
+        HoodieListData.lazy(Collections.singletonList(key)), partitionName, Option.empty())
+        .collectAsMapWithOverwriteStrategy();
     return Option.ofNullable(recordsByKeys.get(key));
   }
 
@@ -203,11 +208,12 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   }
 
   @Override
-  public HoodieData<HoodieRecord<HoodieMetadataPayload>> getRecordsByKeyPrefixes(List<String> keyPrefixes,
-                                                                                 String partitionName,
-                                                                                 boolean shouldLoadInMemory) {
+  public  HoodieData<HoodieRecord<HoodieMetadataPayload>> getRecordsByKeyPrefixes(HoodieData<String> keyPrefixes,
+                                                                                  String partitionName,
+                                                                                  boolean shouldLoadInMemory,
+                                                                                  Option<SerializableFunction<String, String>> keyEncoder) {
     // Sort the prefixes so that keys are looked up in order
-    List<String> sortedKeyPrefixes = new ArrayList<>(keyPrefixes);
+    List<String> sortedKeyPrefixes = new ArrayList<>(keyPrefixes.collectAsList());
     Collections.sort(sortedKeyPrefixes);
 
     // NOTE: Since we partition records to a particular file-group by full key, we will have
@@ -279,11 +285,13 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   }
 
   @Override
-  protected Map<String, HoodieRecord<HoodieMetadataPayload>> getRecordsByKeys(List<String> keys, String partitionName) {
+  public HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> getRecordsByKeysWithMapping(
+      HoodieData<String> keys, String partitionName, Option<SerializableFunction<String, String>> keyEncoder) {
     if (keys.isEmpty()) {
-      return Collections.emptyMap();
+      return HoodieListPairData.eager(Collections.emptyList());
     }
 
+    List<String> keyList = keys.collectAsList();
     Map<String, HoodieRecord<HoodieMetadataPayload>> result;
 
     // Load the file slices for the partition. Each file slice is a shard which saves a portion of the keys.
@@ -312,7 +320,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       }, partitionedKeys.size()).forEach(result::putAll);
     }
 
-    return result;
+    return HoodieListPairData.eagerMapKV(result);
   }
 
   private static ArrayList<ArrayList<String>> partitionKeysByFileSlices(List<String> keys, int numFileSlices, String partitionName, HoodieIndexVersion version) {
@@ -579,12 +587,12 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   }
 
   @Override
-  public Map<String, Set<String>> getSecondaryIndexRecords(List<String> keys, String partitionName) {
+  public HoodiePairData<String, Set<String>> getSecondaryIndexRecords(HoodieData<String> keys, String partitionName) {
     if (keys.isEmpty()) {
-      return Collections.emptyMap();
+      return HoodieListPairData.eager(Collections.emptyList());
     }
 
-    return getRecordsByKeyPrefixes(keys, partitionName, false).map(
+    List<Pair<String, String>> pairs = getRecordsByKeyPrefixes(keys, partitionName, false, Option.of(SecondaryIndexKeyUtils::escapeSpecialChars)).map(
             record -> {
               if (!record.getData().isDeleted()) {
                 String recordKey = SecondaryIndexKeyUtils.getRecordKeyFromSecondaryIndexKey(record.getRecordKey());
@@ -594,9 +602,14 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
               return null;
             })
         .filter(Objects::nonNull)
-        .collectAsList()
-        .stream()
-        .collect(Collectors.groupingBy(Pair::getKey, Collectors.mapping(Pair::getValue, Collectors.toSet())));
+        .collectAsList();
+
+    Map<String, Set<String>> res = new HashMap<>();
+    for (Pair<String, String> pair : pairs) {
+      String key = pair.getKey();
+      res.computeIfAbsent(key, k -> new HashSet<>()).add(pair.getValue());
+    }
+    return HoodieDataUtils.eagerMapKV(res);
   }
 
   /**

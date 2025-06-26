@@ -53,6 +53,7 @@ import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.testutils.HoodieClientTestBase;
+import org.apache.hudi.common.util.HoodieDataUtils;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
