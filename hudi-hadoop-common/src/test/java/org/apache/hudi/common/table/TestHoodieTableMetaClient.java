@@ -48,6 +48,7 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.function.Function;
 
+import static org.apache.hudi.common.table.HoodieTableMetaClient.loadIndexDefFromStorage;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -291,7 +292,7 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
   @Test
   public void testIndexJsonFileMissingVersionField() {
     // Json file with no version attribute
-    HoodieIndexMetadata loadedDef = loadIndexDefFromDisk(
+    HoodieIndexMetadata loadedDef = loadIndexDefFromStorage(
         new StoragePath(Objects.requireNonNull(getClass().getClassLoader().getResource("indexMissingVersion1.json")).toString()), "",
         metaClient.getStorage()).get();
     assertEquals(2, loadedDef.getIndexDefinitions().size());
@@ -304,7 +305,7 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
   @Test
   public void testPopulateVersionFieldIfMissing() {
     Function<String, HoodieIndexMetadata> getIndexDef = (idxFileName) ->
-        loadIndexDefFromDisk(
+        loadIndexDefFromStorage(
            new StoragePath(Objects.requireNonNull(getClass().getClassLoader().getResource(idxFileName)).toString()), "",
            metaClient.getStorage()).get();
     HoodieIndexMetadata loadedDef = getIndexDef.apply("indexMissingVersion1.json");

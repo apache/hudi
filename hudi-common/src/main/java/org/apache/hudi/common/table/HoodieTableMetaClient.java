@@ -292,7 +292,7 @@ public class HoodieTableMetaClient implements Serializable {
     }
     Option<HoodieIndexMetadata> indexDefOption = Option.empty();
     if (tableConfig.getRelativeIndexDefinitionPath().isPresent() && StringUtils.nonEmpty(tableConfig.getRelativeIndexDefinitionPath().get())) {
-      indexDefOption = loadIndexDefFromDisk(basePath, tableConfig.getRelativeIndexDefinitionPath().get(), storage);
+      indexDefOption = loadIndexDefFromStorage(basePath, tableConfig.getRelativeIndexDefinitionPath().get(), storage);
     }
     populateIndexVersionIfMissing(tableConfig.getTableVersion(), indexDefOption);
     return indexDefOption;
@@ -314,7 +314,7 @@ public class HoodieTableMetaClient implements Serializable {
         }));
   }
 
-  public static Option<HoodieIndexMetadata> loadIndexDefFromDisk(
+  public static Option<HoodieIndexMetadata> loadIndexDefFromStorage(
       StoragePath basePath, String relativeIndexDefinitionPath, HoodieStorage storage) {
     StoragePath indexDefinitionPath =
         new StoragePath(basePath, relativeIndexDefinitionPath);
@@ -895,7 +895,7 @@ public class HoodieTableMetaClient implements Serializable {
     private ConsistencyGuardConfig consistencyGuardConfig = ConsistencyGuardConfig.newBuilder().build();
     private FileSystemRetryConfig fileSystemRetryConfig = FileSystemRetryConfig.newBuilder().build();
     private HoodieMetaserverConfig metaserverConfig = HoodieMetaserverConfig.newBuilder().build();
-    private Option<TimelineLayoutVersion> layoutVersion = org.apache.hudi.common.util.Option.empty();
+    private Option<TimelineLayoutVersion> layoutVersion = Option.empty();
 
     public Builder setConf(StorageConfiguration<?> conf) {
       this.conf = conf;

@@ -1379,7 +1379,7 @@ public class HoodieTableMetadataUtil {
    */
   public static int mapRecordKeyToFileGroupIndex(
       String recordKey, int numFileGroups, String partitionName, HoodieIndexVersion version) {
-    if (MetadataPartitionType.SECONDARY_INDEX.isPartitionType(partitionName)
+    if (MetadataPartitionType.SECONDARY_INDEX.matchesPartitionPath(partitionName)
         && version.greaterThanOrEquals(HoodieIndexVersion.SECONDARY_INDEX_TWO)
         && recordKey.contains(SECONDARY_INDEX_RECORD_KEY_SEPARATOR)) {
       return mapRecordKeyToFileGroupIndex(SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey(recordKey), numFileGroups);
@@ -2790,7 +2790,7 @@ public class HoodieTableMetadataUtil {
     return Option.of(indexDefs.get(metadataPartitionPath).getVersion());
   }
 
-  public static HoodieIndexVersion getExistingHoodieIndexVersionOrDefault(String metadataPartitionPath, HoodieTableMetaClient dataMetaClient) {
+  public static HoodieIndexVersion existingIndexVersionOrDefault(String metadataPartitionPath, HoodieTableMetaClient dataMetaClient) {
     return getHoodieIndexVersionOption(metadataPartitionPath, dataMetaClient).orElseGet(
         () -> HoodieIndexVersion.getCurrentVersion(dataMetaClient.getTableConfig().getTableVersion(), metadataPartitionPath));
   }
@@ -3013,7 +3013,7 @@ public class HoodieTableMetadataUtil {
       HoodieIndexDefinition.Builder indexDefinitionBuilder = HoodieIndexDefinition.newBuilder()
           .withIndexName(indexName)
           .withIndexType(indexType)
-          .withVersion(getExistingHoodieIndexVersionOrDefault(indexName, dataMetaClient))
+          .withVersion(existingIndexVersionOrDefault(indexName, dataMetaClient))
           .withSourceFields(Collections.singletonList(indexedColumn));
       if (partitionNamePrefix.equals(PARTITION_NAME_EXPRESSION_INDEX_PREFIX)) {
         indexDefinitionBuilder.withIndexOptions(metadataConfig.getExpressionIndexOptions());

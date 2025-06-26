@@ -44,15 +44,15 @@ class TestEightToNineUpgradeHandler extends BaseUpgradeDowngradeHandlerTest {
 
   @Test
   void testUpgradeWithSecondaryIndexPartitions() {
-    // Setup test data
+    // Given: metadata partitions with secondary index partitions exist
     Set<String> metadataPartitions = createMetadataPartitions(true);
     setupMocks();
     when(tableConfig.getMetadataPartitions()).thenReturn(metadataPartitions);
 
-    // Execute upgrade
+    // When: upgrade is executed
     Map<ConfigProperty, String> result = upgradeHandler.upgrade(config, context, "001", upgradeDowngradeHelper);
 
-    // Verify results
+    // Then: secondary index partitions should be dropped and empty result returned
     verify(context).dropIndex(config, Arrays.asList(
         PARTITION_NAME_SECONDARY_INDEX_PREFIX + "idx1",
         PARTITION_NAME_SECONDARY_INDEX_PREFIX + "idx2"
@@ -64,15 +64,15 @@ class TestEightToNineUpgradeHandler extends BaseUpgradeDowngradeHandlerTest {
 
   @Test
   void testUpgradeWithoutSecondaryIndexPartitions() {
-    // Setup test data
+    // Given: metadata partitions without secondary index partitions exist
     Set<String> metadataPartitions = createMetadataPartitions(false);
     setupMocks();
     when(tableConfig.getMetadataPartitions()).thenReturn(metadataPartitions);
 
-    // Execute upgrade
+    // When: upgrade is executed
     Map<ConfigProperty, String> result = upgradeHandler.upgrade(config, context, "001", upgradeDowngradeHelper);
 
-    // Verify no dropIndex was called since there are no secondary index partitions
+    // Then: no dropIndex should be called and empty result returned
     verify(context).dropIndex(config, Collections.emptyList());
 
     // Verify empty map is returned

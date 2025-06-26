@@ -19,6 +19,7 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.MetadataPartitionType;
 
@@ -50,6 +51,9 @@ import static org.apache.hudi.index.expression.HoodieExpressionIndex.TRIM_STRING
 public class HoodieIndexDefinition implements Serializable {
 
   // Name of the index
+  // e.g. create index <user index name> on myTable using column_stats(ts) options(expr='from_unixtime', format='yyyy-MM-dd')
+  // Index name is composed of 2 parts - MDT partition path prefix + user index name. In this case, the partition path is
+  // EXPRESSION_INDEX.getPartitionPath.
   private String indexName;
 
   private String indexType;
@@ -73,9 +77,6 @@ public class HoodieIndexDefinition implements Serializable {
   // Version of the index
   private HoodieIndexVersion version;
 
-  public HoodieIndexDefinition() {
-  }
-
   private HoodieIndexDefinition(
       String indexName,
       String indexType,
@@ -83,6 +84,9 @@ public class HoodieIndexDefinition implements Serializable {
       List<String> sourceFields,
       Map<String, String> indexOptions,
       HoodieIndexVersion version) {
+    ValidationUtils.checkArgument(indexName != null);
+    ValidationUtils.checkArgument(indexType != null);
+    ValidationUtils.checkArgument(version != null);
     this.indexName = indexName;
     this.indexType = indexType;
     this.indexFunction = nonEmpty(indexFunction) ? indexFunction : EMPTY_STRING;
@@ -174,18 +178,13 @@ public class HoodieIndexDefinition implements Serializable {
         .withIndexType(this.indexType)
         .withIndexFunction(this.indexFunction)
         .withSourceFields(new ArrayList<>(this.sourceFields))
-        .withIndexOptions(new HashMap<>(this.indexOptions));
-    if (this.version != null) {
-      builder.withVersion(this.version);
-    }
+        .withIndexOptions(new HashMap<>(this.indexOptions))
+        .withVersion(this.version);
     return builder;
   }
 
   public static class Builder {
 
-    // e.g. create index <user index name> on myTable using column_stats(ts) options(expr='from_unixtime', format='yyyy-MM-dd')
-    // Index name is composed of 2 parts - MDT partition path prefix + user index name. In this case, the partition path is
-    // EXPRESSION_INDEX.getPartitionPath.
     private String indexName;
     private String indexType;
     private String indexFunction;
