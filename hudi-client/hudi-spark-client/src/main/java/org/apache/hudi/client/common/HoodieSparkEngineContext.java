@@ -18,7 +18,10 @@
 
 package org.apache.hudi.client.common;
 
+import org.apache.hudi.client.BaseHoodieWriteClient;
+import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.SparkTaskContextSupplier;
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.data.HoodieAccumulator;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
@@ -37,6 +40,7 @@ import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaPairRDD;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.data.HoodieSparkLongAccumulator;
@@ -256,6 +260,12 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
       return new AvroReaderContextFactory(metaClient);
     }
     return new SparkReaderContextFactory(this, metaClient);
+  }
+
+  public void dropIndex(HoodieConfig config, List<String> metadataPartitions) {
+    try (BaseHoodieWriteClient client = new SparkRDDWriteClient(this, (HoodieWriteConfig) config)) {
+      client.dropIndex(metadataPartitions);
+    }
   }
 
   public SparkConf getConf() {

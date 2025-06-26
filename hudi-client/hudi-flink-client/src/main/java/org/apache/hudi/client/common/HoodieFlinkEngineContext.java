@@ -18,7 +18,10 @@
 
 package org.apache.hudi.client.common;
 
+import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.client.FlinkTaskContextSupplier;
+import org.apache.hudi.client.HoodieFlinkWriteClient;
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.data.HoodieAccumulator;
 import org.apache.hudi.common.data.HoodieAtomicLongAccumulator;
 import org.apache.hudi.common.data.HoodieData;
@@ -42,6 +45,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.util.FlinkClientUtil;
@@ -216,6 +220,12 @@ public class HoodieFlinkEngineContext extends HoodieEngineContext {
       return new AvroReaderContextFactory(metaClient);
     }
     return (ReaderContextFactory<?>) ReflectionUtils.loadClass("org.apache.hudi.table.format.FlinkReaderContextFactory", metaClient);
+  }
+
+  public void dropIndex(HoodieConfig config, List<String> metadataPartitions) {
+    try (BaseHoodieWriteClient client = new HoodieFlinkWriteClient(this, (HoodieWriteConfig) config)) {
+      client.dropIndex(metadataPartitions);
+    }
   }
 
   /**
