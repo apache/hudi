@@ -20,10 +20,12 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
+import org.apache.hudi.common.data.HoodieListData
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
+import org.apache.hudi.common.util.HoodieDataUtils
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
@@ -176,8 +178,8 @@ class TestMetadataRecordIndex extends HoodieSparkClientTestBase {
     val metadata = metadataWriter(writeConfig).getTableMetadata
     val readDf = spark.read.format("hudi").load(basePath)
     val rowArr = readDf.collect()
-    val recordIndexMap = metadata.readRecordIndex(
-      rowArr.map(row => row.getAs("_hoodie_record_key").toString).toList.asJava)
+    val recordIndexMap = HoodieDataUtils.collectAsMapWithOverwriteStrategy(metadata.readRecordIndexWithMapping(
+      HoodieListData.`lazy`(rowArr.map(row => row.getAs("_hoodie_record_key").toString).toList.asJava)))
 
     assertTrue(rowArr.length > 0)
     for (row <- rowArr) {
