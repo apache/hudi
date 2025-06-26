@@ -20,9 +20,14 @@ package org.apache.hudi.metadata.indexversion;
 
 import org.apache.hudi.metadata.MetadataPartitionType;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonTypeName;
+
 import java.util.Arrays;
 import java.util.List;
 
+@JsonTypeName("COLUMN_STATS_INDEX")
+@JsonFormat(shape = JsonFormat.Shape.OBJECT)
 public enum ColumnStatsIndexVersion implements HoodieIndexVersion {
   V1(1, Arrays.asList("1.0.0"));
 

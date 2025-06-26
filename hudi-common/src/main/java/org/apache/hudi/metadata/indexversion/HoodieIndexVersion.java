@@ -22,8 +22,26 @@ import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.metadata.MetadataPartitionType;
 
+import com.fasterxml.jackson.annotation.JsonSubTypes;
+import com.fasterxml.jackson.annotation.JsonTypeInfo;
+
 import java.util.List;
 
+@JsonTypeInfo(
+    use = JsonTypeInfo.Id.NAME,
+    include = JsonTypeInfo.As.PROPERTY,
+    property = "type"
+)
+@JsonSubTypes({
+    @JsonSubTypes.Type(value = RecordIndexVersion.class, name = "RECORD_INDEX"),
+    @JsonSubTypes.Type(value = ColumnStatsIndexVersion.class, name = "COLUMN_STATS"),
+    @JsonSubTypes.Type(value = BloomFiltersIndexVersion.class, name = "BLOOM_FILTERS"),
+    @JsonSubTypes.Type(value = ExpressionIndexVersion.class, name = "EXPRESSION_INDEX"),
+    @JsonSubTypes.Type(value = SecondaryIndexVersion.class, name = "SECONDARY_INDEX"),
+    @JsonSubTypes.Type(value = FilesIndexVersion.class, name = "FILES"),
+    @JsonSubTypes.Type(value = PartitionStatsIndexVersion.class, name = "PARTITION_STATS"),
+    @JsonSubTypes.Type(value = AllPartitionsIndexVersion.class, name = "ALL_PARTITIONS"),
+})
 public interface HoodieIndexVersion {
 
   MetadataPartitionType getPartitionType();

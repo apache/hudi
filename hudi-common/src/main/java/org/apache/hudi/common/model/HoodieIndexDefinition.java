@@ -19,11 +19,14 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.metadata.indexversion.HoodieIndexVersion;
 import org.apache.hudi.metadata.MetadataPartitionType;
+import org.apache.hudi.metadata.indexversion.HoodieIndexVersion;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -77,22 +80,28 @@ public class HoodieIndexDefinition implements Serializable {
   // Version of the index
   private HoodieIndexVersion version;
 
-  private HoodieIndexDefinition(
-      String indexName,
-      String indexType,
-      String indexFunction,
-      List<String> sourceFields,
-      Map<String, String> indexOptions,
-      HoodieIndexVersion version) {
-    ValidationUtils.checkArgument(indexName != null);
-    ValidationUtils.checkArgument(indexType != null);
-    ValidationUtils.checkArgument(version != null);
+  @JsonCreator
+  public HoodieIndexDefinition(
+      @JsonProperty("indexName") String indexName,
+      @JsonProperty("indexType") String indexType,
+      @JsonProperty("indexFunction") String indexFunction,
+      @JsonProperty("sourceFields") List<String> sourceFields,
+      @JsonProperty("indexOptions") Map<String, String> indexOptions,
+      @JsonProperty("version") HoodieIndexVersion version
+  ) {
+    ValidationUtils.checkArgument(indexName != null, "indexName is required");
+    ValidationUtils.checkArgument(indexType != null, "indexType is required");
+
     this.indexName = indexName;
     this.indexType = indexType;
     this.indexFunction = nonEmpty(indexFunction) ? indexFunction : EMPTY_STRING;
-    this.sourceFields = sourceFields;
-    this.indexOptions = indexOptions;
-    this.version = version;
+    this.sourceFields = sourceFields != null ? sourceFields : new ArrayList<>();
+    this.indexOptions = indexOptions != null ? indexOptions : new HashMap<>();
+
+    // If version is missing from JSON, derive default
+    this.version = version != null
+        ? version
+        : HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.EIGHT, indexName);
   }
 
   public String getIndexFunction() {

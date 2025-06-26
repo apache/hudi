@@ -20,9 +20,12 @@ package org.apache.hudi.metadata.indexversion;
 
 import org.apache.hudi.metadata.MetadataPartitionType;
 
+import com.fasterxml.jackson.annotation.JsonTypeName;
+
 import java.util.Arrays;
 import java.util.List;
 
+@JsonTypeName("FILES_INDEX")
 public enum FilesIndexVersion implements HoodieIndexVersion {
   V1(1, Arrays.asList("0.14.0"));
 

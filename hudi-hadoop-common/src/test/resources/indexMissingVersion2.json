@@ -12,7 +12,10 @@
       "indexType" : "secondary_index",
       "indexFunction" : "identity",
       "sourceFields" : [ "price" ],
-      "version": "SECONDARY_INDEX_TWO",
+      "version": {
+        "type": "SECONDARY_INDEX",
+        "name": "V2"
+      },
       "indexOptions" : { }
     }
   }
