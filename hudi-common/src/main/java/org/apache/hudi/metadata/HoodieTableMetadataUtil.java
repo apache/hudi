@@ -2776,6 +2776,23 @@ public class HoodieTableMetadataUtil {
     }
   }
 
+  public static Option<HoodieIndexVersion> getHoodieIndexVersionOption(String metadataPartitionPath, HoodieTableMetaClient metaClient) {
+    Option<HoodieIndexMetadata> expressionIndexMetadata = metaClient.getIndexMetadata();
+    if (expressionIndexMetadata.isEmpty()) {
+      return Option.empty();
+    }
+    Map<String, HoodieIndexDefinition> indexDefs = expressionIndexMetadata.get().getIndexDefinitions();
+    if (!indexDefs.containsKey(metadataPartitionPath)) {
+      return Option.empty();
+    }
+    return Option.of(indexDefs.get(metadataPartitionPath).getVersion());
+  }
+
+  public static HoodieIndexVersion existingIndexVersionOrDefault(String metadataPartitionPath, HoodieTableMetaClient dataMetaClient) {
+    return getHoodieIndexVersionOption(metadataPartitionPath, dataMetaClient).orElseGet(
+        () -> HoodieIndexVersion.getCurrentVersion(dataMetaClient.getTableConfig().getTableVersion(), metadataPartitionPath));
+  }
+
   /**
    * Generate key prefixes for each combination of column name in {@param columnsToIndex} and {@param partitionName}.
    */
