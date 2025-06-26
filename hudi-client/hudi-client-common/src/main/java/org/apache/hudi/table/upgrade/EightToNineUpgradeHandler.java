@@ -30,6 +30,9 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
   @Override
   public Map<ConfigProperty, String> upgrade(HoodieWriteConfig config, HoodieEngineContext context,
                                              String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
+    HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
+    SecondaryIndexUpgradeDowngradeHelper.dropSecondaryIndexPartitions(
+        config, context, table, "upgrading to table version 9");
     return Collections.emptyMap();
   }
 }
