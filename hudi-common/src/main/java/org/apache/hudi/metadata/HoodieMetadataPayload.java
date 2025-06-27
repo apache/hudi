@@ -292,14 +292,25 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   public static HoodieRecord<HoodieMetadataPayload> createPartitionFilesRecord(String partition,
                                                                                Map<String, Long> filesAdded,
                                                                                List<String> filesDeleted) {
+    return createPartitionFilesRecord(partition, filesAdded, filesDeleted, false);
+  }
+
+  public static HoodieRecord<HoodieMetadataPayload> createPartitionFilesRecord(String partition,
+                                                                               Map<String, Long> filesAdded,
+                                                                               List<String> filesDeleted,
+                                                                               boolean isPartitionDeleted) {
     String partitionIdentifier = getPartitionIdentifierForFilesPartition(partition);
+    HoodieKey key = new HoodieKey(partitionIdentifier, MetadataPartitionType.FILES.getPartitionPath());
+    if (isPartitionDeleted) {
+      return new HoodieAvroRecord<>(key, new HoodieMetadataPayload(Option.empty()));
+    }
+
     int size = filesAdded.size() + filesDeleted.size();
     Map<String, HoodieMetadataFileInfo> fileInfo = new HashMap<>(size, 1);
     filesAdded.forEach((fileName, fileSize) -> fileInfo.put(fileName, new HoodieMetadataFileInfo(fileSize, false)));
 
     filesDeleted.forEach(fileName -> fileInfo.put(fileName, DELETE_FILE_METADATA));
 
-    HoodieKey key = new HoodieKey(partitionIdentifier, MetadataPartitionType.FILES.getPartitionPath());
     HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), MetadataPartitionType.FILES.getRecordType(), fileInfo);
     return new HoodieAvroRecord<>(key, payload);
   }

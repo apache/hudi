@@ -3037,6 +3037,12 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       }
       writeStatuses = client.upsert(jsc.parallelize(upsertRecords, 1), newCommitTime);
       assertTrue(client.commit(newCommitTime, writeStatuses));
+
+      // assert entry is not present for deleted partition in metadata table
+      HoodieTableMetadata tableMetadata = metadata(client, storage);
+      assertTrue(tableMetadata.getRecordsByKeyPrefixes(Collections.singletonList(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH), FILES.getPartitionPath(), false).isEmpty());
+      assertTrue(tableMetadata.getAllPartitionPaths().contains(HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH));
+      assertFalse(tableMetadata.getAllPartitionPaths().contains(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH));
       // above upsert would have triggered clean
       validateMetadata(client);
       assertEquals(1, metadata(client, storage).getAllPartitionPaths().size());
