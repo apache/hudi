@@ -33,7 +33,7 @@ import org.apache.hudi.testutils.HoodieSparkClientTestBase
 
 import org.apache.spark.sql._
 import org.junit.jupiter.api._
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
 
