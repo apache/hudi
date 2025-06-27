@@ -50,28 +50,13 @@ abstract class SparkBaseNestedSchemaPruning extends Rule[LogicalPlan] {
       plan
     }
 
-  private def apply0(plan: LogicalPlan): LogicalPlan =
-    plan transformDown {
-      case op @ PhysicalOperation(projects, filters,
-      // NOTE: This is modified to accommodate for Hudi's custom relations, given that original
-      //       [[NestedSchemaPruning]] rule is tightly coupled w/ [[HadoopFsRelation]]
-      // TODO generalize to any file-based relation
-      l @ LogicalRelation(relation: HoodieBaseRelation, _, _, _, _))
-        if relation.canPruneRelationSchema =>
-
-        prunePhysicalColumns(l.output, projects, filters, relation.dataSchema,
-          prunedDataSchema => {
-            val prunedRelation =
-              relation.updatePrunedDataSchema(prunedSchema = prunedDataSchema)
-            buildPrunedRelation(l, prunedRelation)
-          }).getOrElse(op)
-    }
+  protected def apply0(plan: LogicalPlan): LogicalPlan
 
   /**
    * This method returns optional logical plan. `None` is returned if no nested field is required or
    * all nested fields are required.
    */
-  private def prunePhysicalColumns(output: Seq[AttributeReference],
+  protected def prunePhysicalColumns(output: Seq[AttributeReference],
                                    projects: Seq[NamedExpression],
                                    filters: Seq[Expression],
                                    dataSchema: StructType,
@@ -163,7 +148,7 @@ abstract class SparkBaseNestedSchemaPruning extends Rule[LogicalPlan] {
    * Builds a pruned logical relation from the output of the output relation and the schema of the
    * pruned base relation.
    */
-  private def buildPrunedRelation(outputRelation: LogicalRelation,
+  protected def buildPrunedRelation(outputRelation: LogicalRelation,
                                   prunedBaseRelation: BaseRelation): LogicalRelation = {
     val prunedOutput = getPrunedOutput(outputRelation.output, prunedBaseRelation.schema)
     outputRelation.copy(relation = prunedBaseRelation, output = prunedOutput)
