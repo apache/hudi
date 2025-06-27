@@ -117,8 +117,8 @@ public abstract class HoodieReaderContext<T> {
       return metadataKeyExtractor();
     } else {
       return virtualKeyExtractor(tableConfig.getRecordKeyFields()
-        .orElseThrow(() -> new IllegalArgumentException("No record keys specified and meta fields are not populated")));
-      }
+          .orElseThrow(() -> new IllegalArgumentException("No record keys specified and meta fields are not populated")));
+    }
   }
 
   public boolean isRecordKeyExtractedUsingMetadata() {
