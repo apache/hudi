@@ -18,6 +18,8 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.client.BaseHoodieWriteClient;
+import org.apache.hudi.client.HoodieJavaWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -110,4 +112,11 @@ public abstract class HoodieJavaTable<T>
 
     return Option.empty();
   }
+
+  public void dropIndex(HoodieWriteConfig config, HoodieEngineContext context, List<String> secIdxPartitions) {
+    try (BaseHoodieWriteClient client = new HoodieJavaWriteClient<>(context, config)) {
+      client.dropIndex(secIdxPartitions);
+    }
+  }
+
 }

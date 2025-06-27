@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.engine;
 
-import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.data.HoodieAccumulator;
 import org.apache.hudi.common.data.HoodieAtomicLongAccumulator;
 import org.apache.hudi.common.data.HoodieData;
@@ -184,12 +183,6 @@ public final class HoodieLocalEngineContext extends HoodieEngineContext {
   @Override
   public <I, O> O aggregate(HoodieData<I> data, O zeroValue, Functions.Function2<O, I, O> seqOp, Functions.Function2<O, O, O> combOp) {
     return data.collectAsList().stream().reduce(zeroValue, seqOp::apply, combOp::apply);
-  }
-
-  @Override
-  public void dropIndex(HoodieConfig config, List<String> metadataPartitions) {
-    throw new UnsupportedOperationException(
-        String.format("%s does not support drop index operation", getClass().getCanonicalName()));
   }
 
   @Override
