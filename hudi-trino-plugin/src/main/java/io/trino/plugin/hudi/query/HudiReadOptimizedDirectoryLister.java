@@ -25,6 +25,7 @@ import io.trino.plugin.hudi.HudiFileStatus;
 import io.trino.plugin.hudi.HudiTableHandle;
 import io.trino.plugin.hudi.partition.HiveHudiPartitionInfo;
 import io.trino.plugin.hudi.partition.HudiPartitionInfo;
+import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
