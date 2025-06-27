@@ -1236,10 +1236,13 @@ jobs:
           java-version: '23'
           distribution: 'temurin'
           architecture: x64
-      - name: Build and Test hudi-trino-plugin with JDK 23
+      - name: Build hudi-trino-plugin with JDK 23
         run: |
           # Build only the trino-hudi plugin.
           # It will find its already-compiled dependencies in the local .m2 repo.
           # Exclude -am flag so that dependencies are not built.
           # Not passing $MVN_ARGS as there are profiles that are not found in hudi-trino-plugin
-          mvn clean install -pl hudi-trino-plugin
+          mvn clean install -DskipTests -pl hudi-trino-plugin
+      - name: Test hudi-trino-plugin with JDK 23
+        run:
+          mvn test -pl hudi-trino-plugin
