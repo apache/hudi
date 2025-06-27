@@ -764,4 +764,47 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
       .options(options)
       .mode("append").save(location)
   }
+
+  test("Test Call run_clustering Procedure is blocked when spark.allowed.hudi.procedures.prefix is set to show_clustering") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val basePath = s"${tmp.getCanonicalPath}/$tableName"
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | options (
+           |  primaryKey ='id',
+           |  type = 'cow',
+           |  preCombineField = 'ts'
+           | )
+           | partitioned by(ts)
+           | location '$basePath'
+       """.stripMargin)
+
+      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+      spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001)")
+
+      // Set configuration to only allow 'show_clustering' procedure
+      spark.conf.set("spark.allowed.hudi.procedures.prefix", "show_clustering")
+
+      // Test that show_clustering still works
+      spark.sql(s"call show_clustering('$tableName')").collect()
+
+      // Test that run_clustering is blocked
+      checkExceptionContain(s"call run_clustering(table => '$tableName')")(
+        "Calling procedure 'run_clustering' is not allowed. Allowed procedures: show_clustering"
+      )
+
+      // Reset configuration to allow all procedures again
+      spark.conf.unset("spark.allowed.hudi.procedures.prefix")
+
+      // Verify run_clustering works again after unsetting the config
+      spark.sql(s"call run_clustering(table => '$tableName')").collect()
+    }
+  }
 }

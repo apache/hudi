@@ -143,7 +143,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
     val rules: ListBuffer[RuleBuilder] = ListBuffer(
       // NOTE: By default all commands are converted into corresponding Hudi implementations during
       //       "post-hoc resolution" phase
-      session => ResolveImplementations(),
+      session => ResolveImplementations(session),
       session => HoodiePostAnalysisRule(session)
     )
 
@@ -424,7 +424,7 @@ case class ResolveImplementationsEarly() extends Rule[LogicalPlan] {
  * NOTE: This is executed in "post-hoc resolution" phase to make sure all of the commands have
  *       been resolved prior to that
  */
-case class ResolveImplementations() extends Rule[LogicalPlan] {
+case class ResolveImplementations(spark: SparkSession) extends Rule[LogicalPlan] {
 
   override def apply(plan: LogicalPlan): LogicalPlan = {
     AnalysisHelper.allowInvokingTransformsInAnalyzer {
@@ -459,6 +459,18 @@ case class ResolveImplementations() extends Rule[LogicalPlan] {
 
         // Convert to HoodieCallProcedureCommand
         case c @ CallCommand(_, _) =>
+          spark.conf.getOption("spark.allowed.hudi.procedures.prefix") match {
+            case Some(allowedProceduresStr) =>
+              val procedureName = c.name.lastOption.getOrElse("")
+              val allowedProcedures = allowedProceduresStr.split(",").map(_.trim.toLowerCase).toSet
+              val isAllowed = allowedProcedures.contains(procedureName.toLowerCase)
+              if (!isAllowed) {
+                throw new AnalysisException(s"Calling procedure '${procedureName}' is not allowed. Allowed procedures: ${allowedProcedures.mkString(", ")}")
+              }
+            case None =>
+              // No configuration set, allow all procedures by default
+          }
+
           val procedure: Option[Procedure] = loadProcedure(c.name)
           val input = buildProcedureArgs(c.args)
           if (procedure.nonEmpty) {
