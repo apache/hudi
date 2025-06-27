@@ -166,6 +166,11 @@ public class TestBaseHoodieTable extends HoodieTable {
   }
 
   @Override
+  public void dropIndex(HoodieWriteConfig config, HoodieEngineContext context, List secIdxPartitions) {
+
+  }
+
+  @Override
   public Option<HoodieCleanerPlan> createCleanerPlan(HoodieEngineContext context, Option extraMetadata) {
     return null;
   }

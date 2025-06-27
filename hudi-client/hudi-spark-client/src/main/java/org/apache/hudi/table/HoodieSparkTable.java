@@ -18,6 +18,8 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.client.BaseHoodieWriteClient;
+import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.utils.SparkPartitionUtils;
 import org.apache.hudi.common.data.HoodieData;
@@ -44,6 +46,7 @@ import org.apache.spark.TaskContext;
 import org.apache.spark.TaskContext$;
 
 import java.io.IOException;
+import java.util.List;
 
 public abstract class HoodieSparkTable<T>
     extends HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> {
@@ -156,4 +159,9 @@ public abstract class HoodieSparkTable<T>
     }
   }
 
+  public void dropIndex(HoodieWriteConfig config, HoodieEngineContext context, List<String> metadataPartitions) {
+    try (BaseHoodieWriteClient client = new SparkRDDWriteClient(context, config)) {
+      client.dropIndex(metadataPartitions);
+    }
+  }
 }

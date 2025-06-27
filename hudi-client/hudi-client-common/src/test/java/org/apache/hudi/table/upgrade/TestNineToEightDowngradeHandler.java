@@ -55,7 +55,7 @@ class TestNineToEightDowngradeHandler extends BaseUpgradeDowngradeHandlerTest {
         downgradeHandler.downgrade(config, context, "001", upgradeDowngradeHelper);
 
     // Then: secondary index partitions are dropped and empty results are returned
-    verify(context).dropIndex(config, Arrays.asList(
+    verify(writeClient).dropIndex(Arrays.asList(
         PARTITION_NAME_SECONDARY_INDEX_PREFIX + "idx1",
         PARTITION_NAME_SECONDARY_INDEX_PREFIX + "idx2"
     ));
@@ -77,7 +77,7 @@ class TestNineToEightDowngradeHandler extends BaseUpgradeDowngradeHandlerTest {
         downgradeHandler.downgrade(config, context, "001", upgradeDowngradeHelper);
 
     // Then: no dropIndex is called and empty results are returned
-    verify(context).dropIndex(config, Collections.emptyList());
+    verify(writeClient).dropIndex(Collections.emptyList());
 
     // Verify empty maps are returned
     assertTrue(result.getLeft().isEmpty());
