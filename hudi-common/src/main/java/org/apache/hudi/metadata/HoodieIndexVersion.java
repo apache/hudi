@@ -20,11 +20,7 @@ package org.apache.hudi.metadata;
 
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.table.HoodieTableVersion;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
-
-import java.util.Arrays;
-import java.util.List;
 
 /**
  * Enum representing different versions of Hoodie indexes.
@@ -33,28 +29,14 @@ import java.util.List;
  * Each version may have different features, performance characteristics, and compatibility
  * requirements. The versioning system allows for evolution of the metadata index format
  * while maintaining backward compatibility.</p>
- * 
+ *
  * <p>Version codes are used for comparison and determining compatibility between
  * different index versions for the same index type. Different indexes may have different
  * version codes. Versions adopted by one index is not comparable with another index.</p>
  */
 public enum HoodieIndexVersion {
-  ALL_PARTITIONS_ONE(MetadataPartitionType.ALL_PARTITIONS, 1, Arrays.asList("0.14.0")),
-
-  PARTITION_STATS_ONE(MetadataPartitionType.PARTITION_STATS, 1, Arrays.asList("0.14.0")),
-
-  FILES_INDEX_ONE(MetadataPartitionType.FILES, 1, Arrays.asList("0.14.0")),
-
-  RECORD_INDEX_ONE(MetadataPartitionType.RECORD_INDEX, 1, Arrays.asList("1.0.0")),
-
-  COLUMN_STATS_ONE(MetadataPartitionType.COLUMN_STATS, 1, Arrays.asList("1.0.0")),
-
-  BLOOM_FILTERS_ONE(MetadataPartitionType.BLOOM_FILTERS, 1, Arrays.asList("1.0.0")),
-
-  EXPRESSION_INDEX_ONE(MetadataPartitionType.EXPRESSION_INDEX, 1, Arrays.asList("1.0.0")),
-
-  SECONDARY_INDEX_ONE(MetadataPartitionType.SECONDARY_INDEX, 1, Arrays.asList("1.0.0")),
-  SECONDARY_INDEX_TWO(MetadataPartitionType.SECONDARY_INDEX, 2, Arrays.asList("1.1.0"));
+  V1(1),
+  V2(2);
 
   private final int versionCode;
 
@@ -104,24 +86,24 @@ public enum HoodieIndexVersion {
    */
   public static HoodieIndexVersion getCurrentVersion(HoodieTableVersion tableVersion, MetadataPartitionType partitionType) {
     if (partitionType == MetadataPartitionType.RECORD_INDEX) {
-      return RECORD_INDEX_ONE;
+      return V1;
     } else if (partitionType == MetadataPartitionType.COLUMN_STATS) {
-      return COLUMN_STATS_ONE;
+      return V1;
     } else if (partitionType == MetadataPartitionType.BLOOM_FILTERS) {
-      return BLOOM_FILTERS_ONE;
+      return V1;
     } else if (partitionType == MetadataPartitionType.EXPRESSION_INDEX) {
-      return EXPRESSION_INDEX_ONE;
+      return V1;
     } else if (partitionType == MetadataPartitionType.SECONDARY_INDEX) {
       if (tableVersion.greaterThanOrEquals(HoodieTableVersion.NINE)) {
-        return SECONDARY_INDEX_TWO;
+        return V2;
       }
-      return SECONDARY_INDEX_ONE;
+      return V1;
     } else if (partitionType == MetadataPartitionType.FILES) {
-      return FILES_INDEX_ONE;
+      return V1;
     } else if (partitionType == MetadataPartitionType.PARTITION_STATS) {
-      return PARTITION_STATS_ONE;
+      return V1;
     } else if (partitionType == MetadataPartitionType.ALL_PARTITIONS) {
-      return ALL_PARTITIONS_ONE;
+      return V1;
     } else {
       throw new HoodieException("Unknown metadata partition type: " + partitionType);
     }
@@ -146,7 +128,7 @@ public enum HoodieIndexVersion {
       return true;
     }
     // Table version eight, SI only v1 is allowed.
-    if (tv == HoodieTableVersion.EIGHT && MetadataPartitionType.SECONDARY_INDEX.equals(metadataPartitionType) && iv != HoodieIndexVersion.SECONDARY_INDEX_ONE) {
+    if (tv == HoodieTableVersion.EIGHT && MetadataPartitionType.SECONDARY_INDEX.equals(metadataPartitionType) && iv != HoodieIndexVersion.V1) {
       return false;
     }
     // Table version 9, SI must have none null version.
@@ -154,7 +136,7 @@ public enum HoodieIndexVersion {
       return false;
     }
     // Table version 9, SI must be v2 or above.
-    if (tv == HoodieTableVersion.NINE && MetadataPartitionType.SECONDARY_INDEX.equals(metadataPartitionType) && !iv.greaterThanOrEquals(HoodieIndexVersion.SECONDARY_INDEX_TWO)) {
+    if (tv == HoodieTableVersion.NINE && MetadataPartitionType.SECONDARY_INDEX.equals(metadataPartitionType) && !iv.greaterThanOrEquals(HoodieIndexVersion.V2)) {
       return false;
     }
     return true;
