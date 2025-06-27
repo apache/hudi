@@ -192,7 +192,7 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
 
   override def getDataFrameUtil: DataFrameUtil = Spark4DataFrameUtil
 
-  override def internalCreateDataFrame(spark: SparkSession, rdd: RDD[InternalRow], schema: StructType): DataFrame = {
-    spark.asInstanceOf[org.apache.spark.sql.classic.SparkSession].internalCreateDataFrame(rdd, schema)
+  override def internalCreateDataFrame(spark: SparkSession, rdd: RDD[InternalRow], schema: StructType, isStreaming: Boolean = false): DataFrame = {
+    spark.asInstanceOf[org.apache.spark.sql.classic.SparkSession].internalCreateDataFrame(rdd, schema, isStreaming)
   }
 }

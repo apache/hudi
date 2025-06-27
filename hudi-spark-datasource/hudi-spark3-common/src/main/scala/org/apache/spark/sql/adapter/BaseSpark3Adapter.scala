@@ -97,7 +97,7 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
       case plan if !plan.resolved => None
       // NOTE: When resolving Hudi table we allow [[Filter]]s and [[Project]]s be applied
       //       on top of it
-      case PhysicalOperation(_, _, LogicalRelation(_, _, Some(table), _,)) if isHoodieTable(table) => Some(table)
+      case PhysicalOperation(_, _, LogicalRelation(_, _, Some(table), _)) if isHoodieTable(table) => Some(table)
       case _ => None
     }
   }
@@ -174,7 +174,7 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
 
   override def getDataFrameUtil: DataFrameUtil = Spark3DataFrameUtil
 
-  override def internalCreateDataFrame(spark: SparkSession, rdd: RDD[InternalRow], schema: StructType): DataFrame = {
-    spark.internalCreateDataFrame(rdd, schema)
+  override def internalCreateDataFrame(spark: SparkSession, rdd: RDD[InternalRow], schema: StructType, isStreaming: Boolean = false): DataFrame = {
+    spark.internalCreateDataFrame(rdd, schema, isStreaming)
   }
 }
