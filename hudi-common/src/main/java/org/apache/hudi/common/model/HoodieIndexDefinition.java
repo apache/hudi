@@ -88,9 +88,6 @@ public class HoodieIndexDefinition implements Serializable {
       List<String> sourceFields,
       Map<String, String> indexOptions,
       HoodieIndexVersion version) {
-    ValidationUtils.checkArgument(indexName != null);
-    ValidationUtils.checkArgument(indexType != null);
-    ValidationUtils.checkArgument(version != null);
     this.indexName = indexName;
     this.indexType = indexType;
     this.indexFunction = nonEmpty(indexFunction) ? indexFunction : EMPTY_STRING;
@@ -230,16 +227,15 @@ public class HoodieIndexDefinition implements Serializable {
     }
 
     public Builder withVersion(HoodieIndexVersion version) {
-      if (indexName == null) {
-        throw new IllegalStateException("Please set index name first before setting version");
-      }
       // Make sure the version enum matching the metadata partition is used.
-      version.ensureVersionCanBeAssignedToIndexType(MetadataPartitionType.fromPartitionPath(indexName));
       this.version = version;
       return this;
     }
 
     public HoodieIndexDefinition build() {
+      ValidationUtils.checkArgument(indexName != null, "Could not build index definition with a null index name");
+      ValidationUtils.checkArgument(indexType != null, "Could not build index definition with a null index type");
+      ValidationUtils.checkArgument(version != null, "Could not build index definition with a null index version");
       return new HoodieIndexDefinition(
           indexName,
           indexType,
