@@ -263,6 +263,12 @@ public class HoodieListPairData<K, V> extends HoodieBaseListData<Pair<K, V>> imp
   }
 
   @Override
+  public HoodiePairData<Integer, String> rangeBasedRepartitionForEachKey(
+      int keyRange, double sampleFraction, int maxKeyPerBucket, long seed) {
+    throw new UnsupportedOperationException("Range based repartition is not supported for HoodieListPairData");
+  }
+
+  @Override
   public int deduceNumPartitions() {
     return 1;
   }
