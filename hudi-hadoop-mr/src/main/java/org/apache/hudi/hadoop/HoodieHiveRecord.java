@@ -146,7 +146,7 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
 
   @Override
   public Object getColumnValueAsJava(Schema recordSchema, String column, Properties props) {
-    throw new UnsupportedOperationException("Unsupported yet for " + this.getClass().getSimpleName());
+    return HiveHoodieReaderContext.getFieldValueFromArrayWritable(data, schema, column, objectInspectorCache);
   }
 
   @Override

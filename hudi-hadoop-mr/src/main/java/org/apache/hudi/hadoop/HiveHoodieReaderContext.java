@@ -203,6 +203,10 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
 
   @Override
   public Object getValue(ArrayWritable record, Schema schema, String fieldName) {
+    return getFieldValueFromArrayWritable(record, schema, fieldName, objectInspectorCache);
+  }
+
+  public static Object getFieldValueFromArrayWritable(ArrayWritable record, Schema schema, String fieldName, ObjectInspectorCache objectInspectorCache) {
     return StringUtils.isNullOrEmpty(fieldName) ? null : objectInspectorCache.getValue(record, schema, fieldName);
   }
 
