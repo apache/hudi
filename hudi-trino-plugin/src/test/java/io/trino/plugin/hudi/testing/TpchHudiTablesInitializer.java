@@ -166,9 +166,7 @@ public class TpchHudiTablesInitializer
                     .map(MaterializedRow::getFields)
                     .map(recordConverter::toRecord)
                     .collect(Collectors.toList());
-            String timestamp = "0";
-            HoodieTableMetaClient metaClient = writeClient.createMetaClient(false);
-            writeClient.startCommit(Option.of(timestamp), metaClient.getCommitActionType(), metaClient);
+            String timestamp = writeClient.startCommit();
             writeClient.insert(records, timestamp);
         }
     }
