@@ -34,6 +34,7 @@ public class SecondaryIndexKeyUtils {
   public static String getSecondaryKeyFromSecondaryIndexKey(String key) {
     // the payload key is in the format of "secondaryKey$primaryKey"
     // we need to extract the secondary key from the payload key
+    // TODO: eliminate all such code. We need to find unescaped $.
     checkState(key.contains(SECONDARY_INDEX_RECORD_KEY_SEPARATOR), "Invalid key format for secondary index payload: " + key);
     int delimiterIndex = getSecondaryIndexKeySeparatorPosition(key);
     return unescapeSpecialChars(key.substring(0, delimiterIndex));
