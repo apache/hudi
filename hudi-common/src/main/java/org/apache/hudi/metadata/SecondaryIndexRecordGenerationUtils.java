@@ -220,7 +220,7 @@ public class SecondaryIndexRecordGenerationUtils {
                                                                                                 TypedProperties props,
                                                                                                 boolean allowInflightInstants) throws IOException {
     String secondaryKeyField = String.join(".", indexDefinition.getSourceFields());
-    Schema requestedSchema = getRequestedSchemaForSecondaryIndex(metaClient, tableSchema, secondaryKeyField);
+    Schema requestedSchema = getRequestedSchemaForSecondaryIndex(metaClient, tableSchema, secondaryKeyField, readerContext);
     HoodieFileGroupReader<T> fileGroupReader = HoodieFileGroupReader.<T>newBuilder()
         .withReaderContext(readerContext)
         .withFileSlice(fileSlice)
@@ -283,11 +283,16 @@ public class SecondaryIndexRecordGenerationUtils {
     };
   }
 
-  private static Schema getRequestedSchemaForSecondaryIndex(HoodieTableMetaClient metaClient, Schema tableSchema, String secondaryKeyField) {
-    String[] recordKeyFields = metaClient.getTableConfig().getRecordKeyFields().orElse(new String[0]);
-    String[] projectionFields = Arrays.copyOf(recordKeyFields, recordKeyFields.length + 2);
-    projectionFields[recordKeyFields.length] = RECORD_KEY_METADATA_FIELD;
-    projectionFields[recordKeyFields.length + 1] = secondaryKeyField;
-    return HoodieAvroUtils.getSchemaForFields(tableSchema, Arrays.asList(projectionFields));
+  private static <T> Schema getRequestedSchemaForSecondaryIndex(HoodieTableMetaClient metaClient, Schema tableSchema, String secondaryKeyField,
+                                                                HoodieReaderContext<T> readerContext) {
+    String[] recordKeyFields;
+    if (readerContext.isRecordKeyExtractedUsingMetadata()) {
+      recordKeyFields = new String[] {RECORD_KEY_METADATA_FIELD};
+    } else {
+      recordKeyFields = metaClient.getTableConfig().getRecordKeyFields().orElse(new String[0]);
+    }
+    String[] projectionFields = Arrays.copyOf(recordKeyFields, recordKeyFields.length + 1);
+    projectionFields[recordKeyFields.length] = secondaryKeyField;
+    return HoodieAvroUtils.projectSchema(tableSchema, Arrays.asList(projectionFields));
   }
 }

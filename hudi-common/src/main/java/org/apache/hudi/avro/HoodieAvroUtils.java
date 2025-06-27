@@ -87,10 +87,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -98,6 +98,7 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 import java.util.TimeZone;
+import java.util.TreeMap;
 import java.util.function.Function;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -432,13 +433,13 @@ public class HoodieAvroUtils {
    * Fetches projected schema given list of fields to project. The field can be nested in format `a.b.c` where a is
    * the top level field, b is at second level and so on.
    */
-  public static Schema getSchemaForFields(Schema fileSchema, List<String> fields) {
+  public static Schema projectSchema(Schema fileSchema, List<String> fields) {
     List<LinkedList<String>> fieldPathLists = new ArrayList<>();
     for (String path : fields) {
       fieldPathLists.add(new LinkedList<>(Arrays.asList(path.split("\\."))));
     }
 
-    Schema result = Schema.createRecord("HoodieRecordKey", "", "", false);
+    Schema result = Schema.createRecord(fileSchema.getName(), fileSchema.getDoc(), fileSchema.getNamespace(), fileSchema.isError());
     result.setFields(projectFields(fileSchema, fieldPathLists));
     return result;
   }
@@ -452,20 +453,26 @@ public class HoodieAvroUtils {
    * @return List of projected schema fields
    */
   private static List<Schema.Field> projectFields(Schema originalSchema, List<LinkedList<String>> fieldPaths) {
-    Map<String, List<LinkedList<String>>> groupedByTop = new HashMap<>();
+    // We maintain a mapping of top level field to list of nested field paths which need to be projected from the field
+    // If the entire field needs to be projected the list is empty
+    // The map is ordered by position of the field in the original schema so that projected schema also maintains
+    // the same field ordering
+    Map<Field, List<LinkedList<String>>> groupedByTop = new TreeMap<>(Comparator.comparingInt(Field::pos));
 
     // Group paths by their current level (first element)
     // Here nested fields are considered as a path. The top level field is the first element in the path
     // second level field is the second element and so on.
-    // We maintain a map of field name to list of corresponding field paths excluding the top level field
-    // empty list at top level field indicates the entire field needs to be included in the projected schema
+    // We iterate through the input field paths and populate groupedByTop described above
+    // For example if f1 is a top level field, and input field paths are f1.f2.f3 and f1.f2.f4
+    // we maintain a mapping from f1 to {f2->f3, f2->f4}
     for (LinkedList<String> originalPath : fieldPaths) {
       if (originalPath.isEmpty()) {
         throw new IllegalArgumentException("Field path is empty or malformed: " + originalPath);
       }
       LinkedList<String> path = new LinkedList<>(originalPath); // Avoid mutating the original
       String head = path.poll(); // Remove first element
-      groupedByTop.compute(head, (ignored, list) -> {
+      Field topField = originalSchema.getField(head);
+      groupedByTop.compute(topField, (ignored, list) -> {
         if (path.isEmpty() || (list != null && list.isEmpty())) {
           // Case 1: where path is empty indicating the entire field needs to be included.
           // No further projection provided for that field
@@ -487,21 +494,10 @@ public class HoodieAvroUtils {
       });
     }
 
-    // We need to order the map so that fields are traversed in field order of original schema
-    // We traverse through the top level fields in original schema and then add the field paths of those
-    // fields in a linked hash map so that field order is preserved.
-    Map<String, List<LinkedList<String>>> orderedFieldPaths = new LinkedHashMap<>();
-    for (Schema.Field field : originalSchema.getFields()) {
-      if (groupedByTop.containsKey(field.name())) {
-        orderedFieldPaths.put(field.name(), groupedByTop.get(field.name()));
-      }
-    }
-
     List<Schema.Field> projectedFields = new ArrayList<>();
-    for (Map.Entry<String, List<LinkedList<String>>> entry : orderedFieldPaths.entrySet()) {
+    for (Map.Entry<Field, List<LinkedList<String>>> entry : groupedByTop.entrySet()) {
       // For every top level field we process the child fields to include in the projected schema
-      String fieldName = entry.getKey();
-      Schema.Field originalField = originalSchema.getField(fieldName);
+      Field originalField = entry.getKey();
       List<LinkedList<String>> childPaths = entry.getValue();
       Schema originalFieldSchema = originalField.schema();
       Schema nonNullableSchema = unwrapNullable(originalFieldSchema);
@@ -510,7 +506,7 @@ public class HoodieAvroUtils {
       if (!childPaths.isEmpty()) {
         // If child paths are present, it indicates there are nested fields which need to be projected
         if (nonNullableSchema.getType() != Schema.Type.RECORD) {
-          throw new IllegalArgumentException("Cannot project nested field from non-record field '" + fieldName
+          throw new IllegalArgumentException("Cannot project nested field from non-record field '" + originalField.name()
               + "' of type: " + nonNullableSchema.getType());
         }
 
@@ -525,7 +521,7 @@ public class HoodieAvroUtils {
         projectedFieldSchema = originalFieldSchema;
       }
 
-      projectedFields.add(new Schema.Field(fieldName, projectedFieldSchema, originalField.doc(), originalField.defaultVal()));
+      projectedFields.add(new Schema.Field(originalField.name(), projectedFieldSchema, originalField.doc(), originalField.defaultVal()));
     }
 
     return projectedFields;

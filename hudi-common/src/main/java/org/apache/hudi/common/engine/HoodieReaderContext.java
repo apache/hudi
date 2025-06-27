@@ -87,6 +87,7 @@ public abstract class HoodieReaderContext<T> {
   private String tablePath = null;
   private String latestCommitTime = null;
   private Option<HoodieRecordMerger> recordMerger = null;
+  private boolean isRecordKeyExtractedUsingMetadata;
   private Boolean hasLogFiles = null;
   private Boolean hasBootstrapBaseFile = null;
   private Boolean needsBootstrapMerge = null;
@@ -104,11 +105,24 @@ public abstract class HoodieReaderContext<T> {
                                 Option<Predicate> keyFilterOpt) {
     this.tableConfig = tableConfig;
     this.storageConfiguration = storageConfiguration;
-    this.recordKeyExtractor = tableConfig.populateMetaFields() ? metadataKeyExtractor() : virtualKeyExtractor(tableConfig.getRecordKeyFields()
-        .orElseThrow(() -> new IllegalArgumentException("No record keys specified and meta fields are not populated")));
+    this.recordKeyExtractor = getRecordKeyExtractor(tableConfig);
     this.baseFileFormat = tableConfig.getBaseFileFormat();
     this.instantRangeOpt = instantRangeOpt;
     this.keyFilterOpt = keyFilterOpt;
+  }
+
+  private BiFunction<T, Schema, String> getRecordKeyExtractor(HoodieTableConfig tableConfig) {
+    isRecordKeyExtractedUsingMetadata = tableConfig.populateMetaFields();
+    if (isRecordKeyExtractedUsingMetadata) {
+      return metadataKeyExtractor();
+    } else {
+      return virtualKeyExtractor(tableConfig.getRecordKeyFields()
+        .orElseThrow(() -> new IllegalArgumentException("No record keys specified and meta fields are not populated")));
+      }
+  }
+
+  public boolean isRecordKeyExtractedUsingMetadata() {
+    return isRecordKeyExtractedUsingMetadata;
   }
 
   // Getter and Setter for schemaHandler
