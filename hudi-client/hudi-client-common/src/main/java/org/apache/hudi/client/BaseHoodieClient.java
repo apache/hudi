@@ -193,8 +193,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
     // no-op.
   }
 
-  @VisibleForTesting
-  public HoodieTableMetaClient createMetaClient(boolean loadActiveTimelineOnLoad) {
+  protected HoodieTableMetaClient createMetaClient(boolean loadActiveTimelineOnLoad) {
     return HoodieTableMetaClient.builder()
         .setConf(storageConf.newInstance())
         .setBasePath(config.getBasePath())
