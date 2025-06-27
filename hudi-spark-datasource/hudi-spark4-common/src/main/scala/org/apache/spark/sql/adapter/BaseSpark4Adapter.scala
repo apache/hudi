@@ -30,7 +30,8 @@ import org.apache.hudi.storage.StoragePath
 import org.apache.avro.Schema
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.{AnalysisException, Column, DataFrameUtil, ExpressionColumnNodeWrapper, HoodieUnsafeUtils, HoodieUTF8StringFactory, Spark4DataFrameUtil, Spark4HoodieUnsafeUtils, Spark4HoodieUTF8StringFactory, SparkSession, SQLContext}
+import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.{AnalysisException, Column, DataFrame, DataFrameUtil, ExpressionColumnNodeWrapper, HoodieUnsafeUtils, HoodieUTF8StringFactory, Spark4DataFrameUtil, Spark4HoodieUnsafeUtils, Spark4HoodieUTF8StringFactory, SparkSession, SQLContext}
 import org.apache.spark.sql.avro.{HoodieAvroSchemaConverters, HoodieSparkAvroSchemaConverters}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
@@ -190,4 +191,8 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
   override def getHoodieUnsafeUtils: HoodieUnsafeUtils = Spark4HoodieUnsafeUtils
 
   override def getDataFrameUtil: DataFrameUtil = Spark4DataFrameUtil
+
+  override def internalCreateDataFrame(spark: SparkSession, rdd: RDD[InternalRow], schema: StructType): DataFrame = {
+    spark.asInstanceOf[org.apache.spark.sql.classic.SparkSession].internalCreateDataFrame(rdd, schema)
+  }
 }

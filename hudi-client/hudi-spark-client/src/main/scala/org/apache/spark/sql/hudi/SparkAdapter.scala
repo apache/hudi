@@ -30,13 +30,12 @@ import org.apache.hudi.client.model.HoodieInternalRow
 import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit
 
+import org.apache.spark.rdd.RDD
 import org.apache.spark.sql._
 import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSchemaConverters, HoodieAvroSerializer}
-import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, InterpretedPredicate}
 import org.apache.spark.sql.catalyst.parser.{ParseException, ParserInterface}
-import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical.{Command, LogicalPlan}
 import org.apache.spark.sql.catalyst.trees.Origin
 import org.apache.spark.sql.catalyst.util.DateFormatter
@@ -289,4 +288,6 @@ trait SparkAdapter extends Serializable {
   def getHoodieUnsafeUtils: HoodieUnsafeUtils
 
   def getDataFrameUtil: DataFrameUtil
+
+  def internalCreateDataFrame(spark: SparkSession, rdd: RDD[InternalRow], schema: StructType): DataFrame
 }

@@ -30,7 +30,8 @@ import org.apache.hudi.storage.StoragePath
 import org.apache.avro.Schema
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.{AnalysisException, Column, DataFrameUtil, HoodieUnsafeUtils, HoodieUTF8StringFactory, Spark3DataFrameUtil, Spark3HoodieUnsafeUtils, Spark3HoodieUTF8StringFactory, SparkSession, SQLContext}
+import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.{AnalysisException, Column, DataFrame, DataFrameUtil, HoodieUnsafeUtils, HoodieUTF8StringFactory, Spark3DataFrameUtil, Spark3HoodieUnsafeUtils, Spark3HoodieUTF8StringFactory, SparkSession, SQLContext}
 import org.apache.spark.sql.avro.{HoodieAvroSchemaConverters, HoodieSparkAvroSchemaConverters}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
@@ -172,4 +173,8 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
   override def getHoodieUnsafeUtils: HoodieUnsafeUtils = Spark3HoodieUnsafeUtils
 
   override def getDataFrameUtil: DataFrameUtil = Spark3DataFrameUtil
+
+  override def internalCreateDataFrame(spark: SparkSession, rdd: RDD[InternalRow], schema: StructType): DataFrame = {
+    spark.internalCreateDataFrame(rdd, schema)
+  }
 }
