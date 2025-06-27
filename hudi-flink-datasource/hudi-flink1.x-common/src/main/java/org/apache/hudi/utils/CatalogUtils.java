@@ -19,9 +19,7 @@
 package org.apache.hudi.utils;
 
 import org.apache.flink.table.api.Schema;
-import org.apache.flink.table.api.TableSchema;
 import org.apache.flink.table.catalog.CatalogTable;
-import org.apache.flink.table.catalog.CatalogTableImpl;
 
 import javax.annotation.Nullable;
 
@@ -31,9 +29,5 @@ import java.util.Map;
 public class CatalogUtils {
   public static CatalogTable createCatalogTable(Schema schema, List<String> partitionKeys, Map<String, String> options, @Nullable String comment) {
     return CatalogTable.of(schema, comment, partitionKeys, options);
-  }
-
-  public static CatalogTable createCatalogTable(TableSchema schema, List<String> partitionKeys, Map<String, String> options, @Nullable String comment) {
-    return new CatalogTableImpl(schema, partitionKeys, options, comment);
   }
 }

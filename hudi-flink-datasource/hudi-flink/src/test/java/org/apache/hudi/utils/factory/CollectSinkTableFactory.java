@@ -21,7 +21,6 @@ package org.apache.hudi.utils.factory;
 import org.apache.hudi.adapter.RichSinkFunctionAdapter;
 import org.apache.hudi.adapter.SinkFunctionAdapter;
 import org.apache.hudi.adapter.SinkFunctionProviderAdapter;
-import org.apache.hudi.utils.TableSchemaWrapper;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.util.ChangelogModes;
 import org.apache.hudi.utils.RuntimeContextUtils;
@@ -34,6 +33,7 @@ import org.apache.flink.configuration.ConfigOptions;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.runtime.state.FunctionSnapshotContext;
 import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
+import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.connector.ChangelogMode;
 import org.apache.flink.table.connector.sink.DynamicTableSink;
 import org.apache.flink.table.data.RowData;
@@ -72,10 +72,10 @@ public class CollectSinkTableFactory implements DynamicTableSinkFactory {
     FactoryUtil.TableFactoryHelper helper = FactoryUtil.createTableFactoryHelper(this, context);
     helper.validate();
 
-    TableSchemaWrapper schemaWrapper = TableSchemaWrapper.of(context.getCatalogTable().getSchema());
+    ResolvedSchema schema = context.getCatalogTable().getResolvedSchema();
     int expectRowNum = helper.getOptions().get(SINK_EXPECTED_ROW_NUM);
     RESULT.clear();
-    return new CollectTableSink(schemaWrapper, context.getObjectIdentifier().getObjectName(), expectRowNum);
+    return new CollectTableSink(schema, context.getObjectIdentifier().getObjectName(), expectRowNum);
   }
 
   @Override
@@ -102,15 +102,15 @@ public class CollectSinkTableFactory implements DynamicTableSinkFactory {
    */
   private static class CollectTableSink implements DynamicTableSink {
 
-    private final TableSchemaWrapper schemaWrapper;
+    private final ResolvedSchema schema;
     private final String tableName;
     private final int expectedRowNum;
 
     private CollectTableSink(
-        TableSchemaWrapper schemaWrapper,
+        ResolvedSchema schema,
         String tableName,
         int expectedRowNum) {
-      this.schemaWrapper = schemaWrapper;
+      this.schema = schema;
       this.tableName = tableName;
       this.expectedRowNum = expectedRowNum;
     }
@@ -122,9 +122,9 @@ public class CollectSinkTableFactory implements DynamicTableSinkFactory {
 
     @Override
     public SinkRuntimeProvider getSinkRuntimeProvider(Context context) {
-      final DataType rowType = schemaWrapper.getSchema().toPhysicalRowDataType();
+      final DataType rowType = schema.toPhysicalRowDataType();
       final RowTypeInfo rowTypeInfo = (RowTypeInfo) TypeConversions.fromDataTypeToLegacyInfo(rowType);
-      DataStructureConverter converter = context.createDataStructureConverter(schemaWrapper.getSchema().toPhysicalRowDataType());
+      DataStructureConverter converter = context.createDataStructureConverter(rowType);
       if (expectedRowNum != -1) {
         return (SinkFunctionProviderAdapter) () -> new CollectSinkFunctionWithExpectedNum(converter, rowTypeInfo, expectedRowNum);
       } else {
@@ -134,7 +134,7 @@ public class CollectSinkTableFactory implements DynamicTableSinkFactory {
 
     @Override
     public DynamicTableSink copy() {
-      return new CollectTableSink(schemaWrapper, tableName, expectedRowNum);
+      return new CollectTableSink(schema, tableName, expectedRowNum);
     }
 
     @Override

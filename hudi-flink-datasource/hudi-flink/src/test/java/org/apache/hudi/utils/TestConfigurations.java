@@ -21,12 +21,14 @@ package org.apache.hudi.utils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.streamer.FlinkStreamerConfig;
 import org.apache.hudi.util.AvroSchemaConverter;
+import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.utils.factory.CollectSinkTableFactory;
 import org.apache.hudi.utils.factory.ContinuousFileSourceFactory;
 
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.api.DataTypes;
+import org.apache.flink.table.api.Schema;
 import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
 import org.apache.flink.table.types.DataType;
@@ -275,20 +277,20 @@ public class TestConfigurations {
         + ")";
   }
 
-  public static String getCollectSinkDDL(String tableName, TableSchemaWrapper schemaWrapper) {
-    return getCollectSinkDDLWithExpectedNum(tableName, schemaWrapper, -1);
+  public static String getCollectSinkDDL(String tableName, Schema schema) {
+    return getCollectSinkDDLWithExpectedNum(tableName, schema, -1);
   }
 
-  public static String getCollectSinkDDLWithExpectedNum(String tableName, TableSchemaWrapper schemaWrapper, int expectRowNum) {
+  public static String getCollectSinkDDLWithExpectedNum(String tableName, Schema schema, int expectRowNum) {
     final StringBuilder builder = new StringBuilder("create table " + tableName + "(\n");
-    String[] fieldNames = schemaWrapper.getSchema().getFieldNames();
-    DataType[] fieldTypes = schemaWrapper.getSchema().getFieldDataTypes();
-    for (int i = 0; i < fieldNames.length; i++) {
+    RowType rowType = DataTypeUtils.toRowType(schema);
+    List<RowType.RowField> fields = rowType.getFields();
+    for (int i = 0; i < rowType.getFieldCount(); i++) {
       builder.append("  `")
-          .append(fieldNames[i])
+          .append(fields.get(i).getName())
           .append("` ")
-          .append(fieldTypes[i].toString());
-      if (i != fieldNames.length - 1) {
+          .append(fields.get(i).getType().toString());
+      if (i != fields.size() - 1) {
         builder.append(",");
       }
       builder.append("\n");

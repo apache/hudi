@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table;
 
-import org.apache.hudi.utils.TableSchemaWrapper;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
@@ -48,6 +47,7 @@ import org.apache.hudi.utils.factory.CollectSinkTableFactory;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.execution.JobClient;
 import org.apache.flink.table.api.EnvironmentSettings;
+import org.apache.flink.table.api.Schema;
 import org.apache.flink.table.api.TableEnvironment;
 import org.apache.flink.table.api.TableResult;
 import org.apache.flink.table.api.ValidationException;
@@ -2709,8 +2709,8 @@ public class ITTestHoodieDataSource {
     if (sourceTable != null) {
       // use the source table schema as the sink schema if the source table was specified.
       ObjectPath objectPath = new ObjectPath(tEnv.getCurrentDatabase(), sourceTable);
-      TableSchemaWrapper schemaWrapper = TableSchemaWrapper.of(tEnv.getCatalog(tEnv.getCurrentCatalog()).get().getTable(objectPath).getSchema());
-      sinkDDL = TestConfigurations.getCollectSinkDDLWithExpectedNum("sink", schemaWrapper, expectedNum);
+      Schema schema = tEnv.getCatalog(tEnv.getCurrentCatalog()).get().getTable(objectPath).getUnresolvedSchema();
+      sinkDDL = TestConfigurations.getCollectSinkDDLWithExpectedNum("sink", schema, expectedNum);
     } else {
       sinkDDL = TestConfigurations.getCollectSinkDDLWithExpectedNum("sink", expectedNum);
     }
