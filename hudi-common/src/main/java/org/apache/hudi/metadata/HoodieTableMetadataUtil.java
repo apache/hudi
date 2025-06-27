@@ -1379,8 +1379,7 @@ public class HoodieTableMetadataUtil {
   public static int mapRecordKeyToFileGroupIndex(
       String recordKey, int numFileGroups, String partitionName, HoodieIndexVersion version) {
     if (MetadataPartitionType.SECONDARY_INDEX.matchesPartitionPath(partitionName)
-        // TODO: require HoodieIndexVersion implementation to be in place.
-        // && version.greaterThanOrEquals(HoodieIndexVersion.SECONDARY_INDEX_TWO)
+        && version.greaterThanOrEquals(HoodieIndexVersion.V2)
         && recordKey.contains(SECONDARY_INDEX_RECORD_KEY_SEPARATOR)) {
       return mapRecordKeyToFileGroupIndex(SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey(recordKey), numFileGroups);
     }
