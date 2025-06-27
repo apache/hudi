@@ -27,6 +27,13 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.action.deltacommit.SparkUpsertPreppedDeltaCommitActionExecutor;
 
+/**
+ * Upsert commit action executor for Metadata table. This CommitActionExecutor is expected to be used during second write
+ * to metadata table when streaming writes are enabled. This avoids adding inflight commit file to the timeline more than once
+ * for the metadata table.
+ *
+ * @param <T>
+ */
 public class SparkMetadataTableUpsertCommitActionExecutor<T> extends SparkUpsertPreppedDeltaCommitActionExecutor<T> {
   private final boolean initialCall;
 

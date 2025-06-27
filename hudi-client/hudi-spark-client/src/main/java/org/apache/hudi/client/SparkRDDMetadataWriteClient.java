@@ -91,6 +91,7 @@ public class SparkRDDMetadataWriteClient<T> extends SparkRDDWriteClient<T> {
 
   /**
    * Upserts the given prepared records into the Hoodie table, at the supplied instantTime.
+   * This is the first api to be invoked when streaming writes to metadata table is enabled.
    *
    * <p>This implementation requires that the input records are already tagged, and de-duped if needed.
    *
@@ -98,10 +99,9 @@ public class SparkRDDMetadataWriteClient<T> extends SparkRDDWriteClient<T> {
    * @param instantTime    Instant time of the commit
    * @return Collection of WriteStatus to inspect errors and counts
    */
-  public JavaRDD<WriteStatus> upsertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords, String instantTime, Option<List<HoodieFileGroupId>> hoodieFileGroupIdList) {
+  public JavaRDD<WriteStatus> streamUpsertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords, String instantTime, Option<List<HoodieFileGroupId>> hoodieFileGroupIdList) {
     HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table =
         initTable(WriteOperationType.UPSERT_PREPPED, Option.ofNullable(instantTime));
-    table.validateUpsertSchema();
     boolean initialCall = firstInstantOpt.isEmpty();
     invocationCounts++;
     if (initialCall) {
@@ -120,10 +120,19 @@ public class SparkRDDMetadataWriteClient<T> extends SparkRDDWriteClient<T> {
     return postWrite(resultRDD, instantTime, table);
   }
 
-  public JavaRDD<WriteStatus> upsertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords, String instantTime, boolean toIgnore) {
+  /**
+   * Upserts the given prepared records into the Hoodie table, at the supplied instantTime.
+   * This is the secondary api to be invoked when streaming writes to metadata table is enabled. After this invocation, the commit is expected to be wrapped up.
+   *
+   * <p>This implementation requires that the input records are already tagged, and de-duped if needed.
+   *
+   * @param preppedRecords Prepared HoodieRecords to upsert
+   * @param instantTime    Instant time of the commit
+   * @return Collection of WriteStatus to inspect errors and counts
+   */
+  public JavaRDD<WriteStatus> streamUpsertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords, String instantTime) {
     HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table =
         initTable(WriteOperationType.UPSERT_PREPPED, Option.ofNullable(instantTime));
-    table.validateUpsertSchema();
     preWrite(instantTime, WriteOperationType.UPSERT_PREPPED, table.getMetaClient());
     boolean initialCall = firstInstantOpt.isEmpty();
     if (initialCall) {

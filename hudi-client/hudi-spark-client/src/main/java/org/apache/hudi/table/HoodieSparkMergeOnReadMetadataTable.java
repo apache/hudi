@@ -48,13 +48,17 @@ public class HoodieSparkMergeOnReadMetadataTable<T> extends HoodieSparkMergeOnRe
                                                                     HoodieData<HoodieRecord<T>> preppedRecords,
                                                                     Option<List<HoodieFileGroupId>> hoodieFileGroupIdListOpt,
                                                                     boolean initialCall) {
-    // upsert partitioner for metadata table when all records are upsert and locations are known upfront
-    return new SparkMetadataTableUpsertPreppedCommitActionExecutor<>((HoodieSparkEngineContext) context, config, this, instantTime, preppedRecords,
-        hoodieFileGroupIdListOpt.get(), initialCall).execute();
+    // upsert partitioner for metadata table when all records are upsert and locations are known upfront.
+    // this is expected to be invoked first during streaming writes to metadata table.
+    return new SparkMetadataTableUpsertPreppedCommitActionExecutor<>((HoodieSparkEngineContext) context, config, this, instantTime,
+        preppedRecords, hoodieFileGroupIdListOpt.get(), initialCall).execute();
   }
 
   public HoodieWriteMetadata<HoodieData<WriteStatus>> upsertPrepped(HoodieEngineContext context, String instantTime,
                                                                     HoodieData<HoodieRecord<T>> preppedRecords, boolean initialCall) {
-    return new SparkMetadataTableUpsertCommitActionExecutor<>((HoodieSparkEngineContext) context, config, this, instantTime, preppedRecords, initialCall).execute();
+    // upsert partitioner for metadata table when all records are upsert and locations are known upfront.
+    // this is expected to be invoked second during streaming writes to metadata table.
+    return new SparkMetadataTableUpsertCommitActionExecutor<>((HoodieSparkEngineContext) context, config, this, instantTime,
+        preppedRecords, initialCall).execute();
   }
 }

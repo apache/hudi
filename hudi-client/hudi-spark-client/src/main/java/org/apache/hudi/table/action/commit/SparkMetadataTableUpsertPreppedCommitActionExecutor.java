@@ -41,7 +41,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Upsert commit action executor for Metadata table.
+ * Upsert commit action executor for Metadata table. This commit action executor is meticulously designed to avoid
+ * de-referencing the incoming records compared to regular upsert commit action executor. This CommitActionExecutor
+ * is expected to be used during first write to metadata table when streaming writes are enabled.
  *
  * @param <T>
  */
