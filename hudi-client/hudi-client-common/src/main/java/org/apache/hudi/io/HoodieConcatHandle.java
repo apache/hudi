@@ -98,7 +98,8 @@ public class HoodieConcatHandle<T, I, K, O> extends HoodieDefaultMergeHandle<T, 
       // NOTE: We're enforcing preservation of the record metadata to keep existing semantic
       writeToFile(new HoodieKey(key, partitionPath), oldRecord, oldSchema, config.getPayloadConfig().getProps(), true);
     } catch (IOException | RuntimeException e) {
-      String errMsg = String.format("Failed to write old record into new file for key %s from old file %s to new file %s with writerSchema %s",
+      String errMsg = String.format(
+          "Failed to write old record into new file for key %s from old file %s to new file %s with writerSchema %s",
           key, getOldFilePath(), newFilePath, writeSchemaWithMetaFields.toString(true));
       LOG.debug("Old record is {}", oldRecord);
       throw new HoodieUpsertException(errMsg, e);

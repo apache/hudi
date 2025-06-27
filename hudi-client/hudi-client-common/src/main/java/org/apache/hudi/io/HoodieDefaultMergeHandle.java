@@ -138,7 +138,7 @@ public class HoodieDefaultMergeHandle<T, I, K, O> extends HoodieMergeHandle<T, I
   }
 
   /**
-   * Used by `HoodieSparkFileGroupReaderBasedMergeHandle`.
+   * Used by `FileGroupReaderBasedMergeHandle`.
    *
    * @param config              Hudi write config
    * @param instantTime         Instant time to use

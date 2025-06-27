@@ -71,6 +71,7 @@ import org.apache.hudi.estimator.AverageRecordSizeEstimator;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.io.FileGroupReaderBasedMergeHandle;
 import org.apache.hudi.io.HoodieConcatHandle;
 import org.apache.hudi.io.HoodieDefaultMergeHandle;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
@@ -860,10 +861,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> FILE_GROUP_READER_MERGE_HANDLE_CLASS_NAME = ConfigProperty
       .key("hoodie.compact.merge.handle.filegroup.reader.class")
-      .defaultValue("org.apache.hudi.io.HoodieSparkFileGroupReaderBasedMergeHandle")
+      .defaultValue(FileGroupReaderBasedMergeHandle.class.getName())
       .markAdvanced()
       .sinceVersion("1.1.0")
-      .withDocumentation("Merge handle class that uses fg reader");
+      .withDocumentation("Merge handle class that uses fg reader for compaction");
 
   public static final ConfigProperty<Boolean> MERGE_HANDLE_PERFORM_FALLBACK = ConfigProperty
       .key("hoodie.write.merge.handle.fallback")
@@ -1532,6 +1533,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public String getConcatHandleClassName() {
     return getStringOrDefault(CONCAT_HANDLE_CLASS_NAME);
+  }
+
+  public String getFileGroupReaderMergeHandleClassName() {
+    return getStringOrDefault(FILE_GROUP_READER_MERGE_HANDLE_CLASS_NAME);
   }
 
   public int getFinalizeWriteParallelism() {
@@ -3443,6 +3448,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withConcatHandleClassName(String className) {
       writeConfig.setValue(CONCAT_HANDLE_CLASS_NAME, className);
+      return this;
+    }
+
+    public Builder withFileGroupReaderMergeHandleClassName(String className) {
+      writeConfig.setValue(FILE_GROUP_READER_MERGE_HANDLE_CLASS_NAME, className);
       return this;
     }
 
