@@ -155,7 +155,7 @@ public class FlinkMergeHandle<T, I, K, O>
   }
 
   @Override
-  protected void initializeIncomingRecordsMap() {
+  protected void initIncomingRecordsMap() {
     LOG.info("Initialize on-heap keyToNewRecords for incoming records.");
     // the incoming records are already buffered on heap and the underlying bytes are managed by memory pool
     // in Flink write buffer, so there is no need to use ExternalSpillableMap.

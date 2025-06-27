@@ -68,13 +68,21 @@ public abstract class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T,
    */
   public HoodieMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                            String partitionPath, String fileId, TaskContextSupplier taskContextSupplier,
-                           HoodieBaseFile baseFile, Option<BaseKeyGenerator> keyGeneratorOpt) {
-    super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier, false);
+                           HoodieBaseFile baseFile, Option<BaseKeyGenerator> keyGeneratorOpt, boolean preserveMetadata) {
+    super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier, preserveMetadata);
     this.baseFileToMerge = baseFile;
     this.keyGeneratorOpt = keyGeneratorOpt;
     initPartitionMetadataAndFilePaths(fileId, partitionPath);
     initWriteStatus(fileId, partitionPath);
     validateAndSetAndKeyGenProps(keyGeneratorOpt, config.populateMetaFields());
+  }
+
+  /**
+   * Used by fg reader merge handle
+   */
+  protected HoodieMergeHandle(HoodieWriteConfig config, String instantTime, String partitionPath,
+                              String fileId, HoodieTable<T, I, K, O> hoodieTable, TaskContextSupplier taskContextSupplier, boolean preserveMetadata) {
+    super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier, preserveMetadata);
   }
 
   /**

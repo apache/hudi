@@ -28,11 +28,9 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieSparkRecord;
-import org.apache.hudi.common.model.MetadataValues;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.util.Option;
@@ -41,7 +39,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
-import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
@@ -53,6 +51,7 @@ import javax.annotation.concurrent.NotThreadSafe;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 
@@ -81,48 +80,77 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieDefaultMe
                                          FileSlice fileSlice, CompactionOperation operation, TaskContextSupplier taskContextSupplier,
                                          HoodieReaderContext<T> readerContext, String maxInstantTime,
                                          HoodieRecord.HoodieRecordType enginRecordType) {
-    super(config, instantTime, hoodieTable, Collections.emptyMap(), operation.getPartitionPath(), operation.getFileId(),
-        operation.getBaseFile(config.getBasePath(), operation.getPartitionPath()).orElse(null), taskContextSupplier, keyGeneratorOpt);
+    super(config, instantTime, operation.getPartitionPath(), operation.getFileId(), hoodieTable, taskContextSupplier);
     this.maxInstantTime = maxInstantTime;
     this.keyToNewRecords = Collections.emptyMap();
     this.readerContext = readerContext;
-    this.conf = conf;
-    Option<HoodieBaseFile> baseFileOpt =
-        operation.getBaseFile(config.getBasePath(), operation.getPartitionPath());
-    List<HoodieLogFile> logFiles = operation.getDeltaFileNames().stream().map(p ->
-            new HoodieLogFile(new StoragePath(FSUtils.constructAbsolutePath(
-                config.getBasePath(), operation.getPartitionPath()), p)))
-        .collect(Collectors.toList());
-    this.fileSlice = new FileSlice(
-        operation.getFileGroupId(),
-        operation.getBaseInstantTime(),
-        baseFileOpt.isPresent() ? baseFileOpt.get() : null,
-        logFiles);
-    this.preserveMetadata = true;
-    setAdditionalMetrics(operation);
-    validateAndSetAndKeyGenProps(keyGeneratorOpt, config.populateMetaFields());
+    this.fileSlice = fileSlice;
+    this.operation = operation;
+    // If the table is a metadata table or the base file is an HFile, we use AVRO record type, otherwise we use the engine record type.
+    this.recordType = hoodieTable.isMetadataTable() || HFILE.getFileExtension().equals(hoodieTable.getBaseFileExtension()) ? HoodieRecord.HoodieRecordType.AVRO : enginRecordType;
+    init(operation, this.partitionPath, fileSlice.getBaseFile());
   }
 
-  private void validateAndSetAndKeyGenProps(Option<BaseKeyGenerator> keyGeneratorOpt, boolean populateMetaFields) {
-    ValidationUtils.checkArgument(populateMetaFields == !keyGeneratorOpt.isPresent());
-    this.keyGeneratorOpt = keyGeneratorOpt;
-  }
-
-  @Override
-  protected HoodieRecord.HoodieRecordType getRecordType() {
-    return HoodieRecord.HoodieRecordType.SPARK;
-  }
-
-  protected void setAdditionalMetrics(CompactionOperation operation) {
+  private void init(CompactionOperation operation, String partitionPath, Option<HoodieBaseFile> baseFileToMerge) {
+    LOG.info("partitionPath:{}, fileId to be merged:{}", partitionPath, fileId);
+    this.baseFileToMerge = baseFileToMerge.orElse(null);
+    this.writtenRecordKeys = new HashSet<>();
+    writeStatus.setStat(new HoodieWriteStat());
     writeStatus.getStat().setTotalLogSizeCompacted(
         operation.getMetrics().get(CompactionStrategy.TOTAL_LOG_FILE_SIZE).longValue());
+    try {
+      Option<String> latestValidFilePath = Option.empty();
+      if (baseFileToMerge.isPresent()) {
+        latestValidFilePath = Option.of(baseFileToMerge.get().getFileName());
+        writeStatus.getStat().setPrevCommit(baseFileToMerge.get().getCommitTime());
+        // At the moment, we only support SI for overwrite with latest payload. So, we don't need to embed entire file slice here.
+        // HUDI-8518 will be taken up to fix it for any payload during which we might require entire file slice to be set here.
+        // Already AppendHandle adds all logs file from current file slice to HoodieDeltaWriteStat.
+        writeStatus.getStat().setPrevBaseFile(latestValidFilePath.get());
+      } else {
+        writeStatus.getStat().setPrevCommit(HoodieWriteStat.NULL_COMMIT);
+      }
+
+      HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(storage, instantTime,
+          new StoragePath(config.getBasePath()),
+          FSUtils.constructAbsolutePath(config.getBasePath(), partitionPath),
+          hoodieTable.getPartitionMetafileFormat());
+      partitionMetadata.trySave();
+
+      String newFileName = FSUtils.makeBaseFileName(instantTime, writeToken, fileId, hoodieTable.getBaseFileExtension());
+      makeOldAndNewFilePaths(partitionPath,
+          latestValidFilePath.isPresent() ? latestValidFilePath.get() : null, newFileName);
+
+      LOG.info("Merging data from file group {}, to a new base file {}", fileId, newFilePath);
+      // file name is same for all records, in this bunch
+      writeStatus.setFileId(fileId);
+      writeStatus.setPartitionPath(partitionPath);
+      writeStatus.getStat().setPartitionPath(partitionPath);
+      writeStatus.getStat().setFileId(fileId);
+      setWriteStatusPath();
+
+      // Create Marker file,
+      // uses name of `newFilePath` instead of `newFileName`
+      // in case the sub-class may roll over the file handle name.
+      createMarkerFile(partitionPath, newFilePath.getName());
+
+      // Create the writer for writing the new version file
+      fileWriter = HoodieFileWriterFactory.getFileWriter(instantTime, newFilePath, hoodieTable.getStorage(),
+          config, writeSchemaWithMetaFields, taskContextSupplier, recordType);
+    } catch (IOException io) {
+      LOG.error("Error in update task at commit {}", instantTime, io);
+      writeStatus.setGlobalError(io);
+      throw new HoodieUpsertException("Failed to initialize HoodieUpdateHandle for FileId: " + fileId + " on commit "
+          + instantTime + " on path " + hoodieTable.getMetaClient().getBasePath(), io);
+    }
   }
 
   /**
    * Reads the file slice of a compaction operation using a file group reader,
    * by getting an iterator of the records; then writes the records to a new base file.
    */
-  public void write() {
+  @Override
+  public void doMerge() {
     boolean usePosition = config.getBooleanOrDefault(MERGE_USE_RECORD_POSITIONS);
     Option<InternalSchema> internalSchemaOption = SerDeHelper.fromJson(config.getInternalSchema());
     TypedProperties props = TypedProperties.copy(config.getProps());

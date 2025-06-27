@@ -858,6 +858,13 @@ public class HoodieWriteConfig extends HoodieConfig {
       .sinceVersion("1.1.0")
       .withDocumentation("The merge handle class to use to concat the records from a base file with an iterator of incoming records.");
 
+  public static final ConfigProperty<String> FILE_GROUP_READER_MERGE_HANDLE_CLASS_NAME = ConfigProperty
+      .key("hoodie.compact.merge.handle.filegroup.reader.class")
+      .defaultValue("org.apache.hudi.io.HoodieSparkFileGroupReaderBasedMergeHandle")
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Merge handle class that uses fg reader");
+
   public static final ConfigProperty<Boolean> MERGE_HANDLE_PERFORM_FALLBACK = ConfigProperty
       .key("hoodie.write.merge.handle.fallback")
       .defaultValue(true)

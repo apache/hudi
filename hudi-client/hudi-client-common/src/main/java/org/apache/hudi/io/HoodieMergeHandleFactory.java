@@ -18,7 +18,10 @@
 
 package org.apache.hudi.io;
 
+import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
+import org.apache.hudi.common.model.CompactionOperation;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -36,6 +39,9 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Objects;
+
+import static org.apache.hudi.config.HoodieWriteConfig.FILE_GROUP_READER_MERGE_HANDLE_CLASS_NAME;
 
 /**
  * Factory class for instantiating the appropriate implementation of {@link HoodieMergeHandle}.
@@ -102,6 +108,36 @@ public class HoodieMergeHandleFactory {
   }
 
   /**
+   * Creates a merge handle for compaction with file group reader.
+   */
+  public static <T, I, K, O> HoodieMergeHandle<T, I, K, O> create(
+      HoodieWriteConfig config,
+      String instantTime,
+      HoodieTable<T, I, K, O> hoodieTable,
+      FileSlice fileSlice,
+      CompactionOperation operation,
+      TaskContextSupplier taskContextSupplier,
+      HoodieReaderContext<T> readerContext,
+      String maxInstantTime,
+      HoodieRecord.HoodieRecordType recordType) {
+
+    boolean isFallbackEnabled = config.isMergeHandleFallbackEnabled();
+
+    String mergeHandleClass = config.getStringOrDefault(FILE_GROUP_READER_MERGE_HANDLE_CLASS_NAME);
+    String logContext = String.format("for fileId %s and partitionPath %s at commit %s", operation.getFileId(), operation.getPartitionPath(), instantTime);
+    LOG.info("Create HoodieMergeHandle implementation {} {}", mergeHandleClass, logContext);
+
+    Class<?>[] constructorParamTypes = new Class<?>[] {
+        HoodieWriteConfig.class, String.class, HoodieTable.class, FileSlice.class, CompactionOperation.class,
+        TaskContextSupplier.class, HoodieReaderContext.class, String.class, HoodieRecord.HoodieRecordType.class
+    };
+
+    return instantiateMergeHandle(
+        isFallbackEnabled, mergeHandleClass, FILE_GROUP_READER_MERGE_HANDLE_CLASS_NAME.defaultValue(), logContext, constructorParamTypes,
+        config, instantTime, hoodieTable, fileSlice, operation, taskContextSupplier, readerContext, maxInstantTime, recordType);
+  }
+
+  /**
    * Helper method to instantiate a HoodieMergeHandle via reflection, with an optional fallback.
    */
   private static <T, I, K, O> HoodieMergeHandle<T, I, K, O> instantiateMergeHandle(
@@ -114,7 +150,7 @@ public class HoodieMergeHandleFactory {
     try {
       return (HoodieMergeHandle<T, I, K, O>) ReflectionUtils.loadClass(primaryClass, constructorParamTypes, initargs);
     } catch (Throwable e1) {
-      if (isFallbackEnabled && fallbackClass != null) {
+      if (isFallbackEnabled && fallbackClass != null && !Objects.equals(primaryClass, fallbackClass)) {
         try {
           LOG.warn("HoodieMergeHandle implementation {} failed, now creating fallback implementation {} {}",
               primaryClass, fallbackClass, logContext);
