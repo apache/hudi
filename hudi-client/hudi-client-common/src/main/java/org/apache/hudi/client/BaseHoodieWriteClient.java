@@ -1008,7 +1008,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @return the requested instant time for the commit that was started
    */
   @VisibleForTesting
-  String startCommit(Option<String> providedInstantTime, String actionType, HoodieTableMetaClient metaClient) {
+  public String startCommit(Option<String> providedInstantTime, String actionType, HoodieTableMetaClient metaClient) {
     if (needsUpgrade(metaClient)) {
       // unclear what instant to use, since upgrade does have a given instant.
       executeUsingTxnManager(Option.empty(), () -> tryUpgrade(metaClient, Option.empty()));
