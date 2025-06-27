@@ -43,7 +43,7 @@ public class SecondaryIndexKeyUtils {
     return escapeSpecialChars(secondaryKey) + SECONDARY_INDEX_RECORD_KEY_SEPARATOR + escapeSpecialChars(recordKey);
   }
 
-  static String escapeSpecialChars(String str) {
+  public static String escapeSpecialChars(String str) {
     StringBuilder escaped = new StringBuilder();
     for (char c : str.toCharArray()) {
       if (c == '\\' || c == '$') {
