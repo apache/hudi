@@ -48,7 +48,7 @@ import static org.apache.hudi.index.expression.HoodieExpressionIndex.TRIM_STRING
 /**
  * Class representing the metadata for a functional or secondary index in Hudi.
  */
-@JsonIgnoreProperties(ignoreUnknown = true, value = {"sourceFieldsKey"})
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class HoodieIndexDefinition implements Serializable {
 
   // Name of the index
@@ -78,6 +78,10 @@ public class HoodieIndexDefinition implements Serializable {
 
   // Version of the index
   private HoodieIndexVersion version;
+
+  // Required for jackson to properly deserialize from json.
+  public HoodieIndexDefinition() {
+  }
 
   private HoodieIndexDefinition(
       String indexName,
