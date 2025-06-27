@@ -53,7 +53,7 @@ class TestEightToNineUpgradeHandler extends BaseUpgradeDowngradeHandlerTest {
     Map<ConfigProperty, String> result = upgradeHandler.upgrade(config, context, "001", upgradeDowngradeHelper);
 
     // Then: secondary index partitions should be dropped and empty result returned
-    verify(context).dropIndex(config, Arrays.asList(
+    verify(writeClient).dropIndex(Arrays.asList(
         PARTITION_NAME_SECONDARY_INDEX_PREFIX + "idx1",
         PARTITION_NAME_SECONDARY_INDEX_PREFIX + "idx2"
     ));
@@ -73,7 +73,7 @@ class TestEightToNineUpgradeHandler extends BaseUpgradeDowngradeHandlerTest {
     Map<ConfigProperty, String> result = upgradeHandler.upgrade(config, context, "001", upgradeDowngradeHelper);
 
     // Then: no dropIndex should be called and empty result returned
-    verify(context).dropIndex(config, Collections.emptyList());
+    verify(writeClient).dropIndex(Collections.emptyList());
 
     // Verify empty map is returned
     assertTrue(result.isEmpty());

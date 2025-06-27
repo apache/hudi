@@ -33,7 +33,7 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
                                              String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
     SecondaryIndexUpgradeDowngradeHelper.dropSecondaryIndexPartitions(
-        config, context, table, "upgrading to table version 9");
+        config, context, table, upgradeDowngradeHelper, "upgrading to table version 9");
     return Collections.emptyMap();
   }
 }
