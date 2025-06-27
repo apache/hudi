@@ -71,6 +71,18 @@ public class MockStreamingRuntimeContext extends StreamingRuntimeContext {
     return taskInfo;
   }
 
+  public int getIndexOfThisSubtask() {
+    return taskInfo.getIndexOfThisSubtask();
+  }
+
+  public int getNumberOfParallelSubtasks() {
+    return taskInfo.getNumberOfParallelSubtasks();
+  }
+
+  public int getAttemptNumber() {
+    return taskInfo.getAttemptNumber();
+  }
+
   @Override
   public boolean isCheckpointingEnabled() {
     return isCheckpointingEnabled;

@@ -67,6 +67,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class TestStreamReadOperator {
   private static final Map<String, String> EXPECTED = new HashMap<>();
+  private static final String TIME_CHARACTERISTIC = "timechar";
 
   static {
     EXPECTED.put("par1", "+I[id1, Danny, 23, 1970-01-01T00:00:00.001, par1], +I[id2, Stephen, 33, 1970-01-01T00:00:00.002, par1]");
@@ -270,9 +271,11 @@ public class TestStreamReadOperator {
         .build();
 
     OneInputStreamOperatorFactory<MergeOnReadInputSplit, RowData> factory = StreamReadOperator.factory(inputFormat);
+    OneInputStreamOperatorTestHarness<MergeOnReadInputSplit, RowData> harness = new OneInputStreamOperatorTestHarness<>(
+            factory, 1, 1, 0);
+    harness.getStreamConfig().getConfiguration().setString(TIME_CHARACTERISTIC, "0");
 
-    return new OneInputStreamOperatorTestHarness<>(
-        factory, 1, 1, 0);
+    return harness;
   }
 
   private SteppingMailboxProcessor createLocalMailbox(
