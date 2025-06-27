@@ -23,6 +23,7 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.function.SerializableFunction;
+import org.apache.hudi.common.function.SerializableFunctionPairIn;
 import org.apache.hudi.common.function.SerializableFunctionPairOut;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
@@ -153,6 +154,11 @@ public class HoodieJavaPairRDD<K, V> implements HoodiePairData<K, V> {
   @Override
   public HoodiePairData<K, V> union(HoodiePairData<K, V> other) {
     return HoodieJavaPairRDD.of(pairRDDData.union(HoodieJavaPairRDD.getJavaPairRDD(other)));
+  }
+
+  @Override
+  public HoodiePairData<K, V> filter(SerializableFunctionPairIn<K, V, Boolean> filter) {
+    return HoodieJavaPairRDD.of(pairRDDData.filter(p -> filter.call(p._1, p._2)));
   }
 
   @Override
