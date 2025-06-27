@@ -63,6 +63,7 @@ import software.amazon.awssdk.services.glue.model.GetPartitionsResponse;
 import software.amazon.awssdk.services.glue.model.GetTableRequest;
 import software.amazon.awssdk.services.glue.model.GetTableResponse;
 import software.amazon.awssdk.services.glue.model.PartitionError;
+import software.amazon.awssdk.services.glue.model.PartitionInput;
 import software.amazon.awssdk.services.glue.model.SerDeInfo;
 import software.amazon.awssdk.services.glue.model.StorageDescriptor;
 import software.amazon.awssdk.services.glue.model.Table;
@@ -74,6 +75,7 @@ import software.amazon.awssdk.services.sts.model.GetCallerIdentityResponse;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -81,6 +83,7 @@ import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.aws.testutils.GlueTestUtil.glueSyncProps;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
@@ -112,6 +115,9 @@ class TestAWSGlueSyncClient {
   void setUp() throws IOException {
     GlueTestUtil.setUp();
     when(mockSts.getCallerIdentity(GetCallerIdentityRequest.builder().build())).thenReturn(GetCallerIdentityResponse.builder().account(CATALOG_ID).build());
+    HiveSyncConfig hiveSyncConfig = GlueTestUtil.getHiveSyncConfig();
+    hiveSyncConfig.getProps().setProperty(GlueCatalogSyncClientConfig.GLUE_SYNC_MAX_CONCURRENT_REQUESTS.key(), "1");
+    hiveSyncConfig.getProps().setProperty(GlueCatalogSyncClientConfig.GLUE_SYNC_MAX_PARTITIONS_PER_REQUEST.key(), "2");
     awsGlueSyncClient = new AWSGlueCatalogSyncClient(mockAwsGlue, mockSts, GlueTestUtil.getHiveSyncConfig(), GlueTestUtil.getMetaClient());
   }
 
@@ -485,7 +491,7 @@ class TestAWSGlueSyncClient {
   @Test
   void testAddPartitionsToTable_Success() {
     String tableName = "tbl";
-    List<String> parts = Arrays.asList("2025/05/20", "2025/05/19");
+    List<String> parts = Arrays.asList("2025/05/20", "2025/05/19", "2025/05/18");
 
     // stub getTable to return a dummy StorageDescriptor
     StorageDescriptor baseSd = StorageDescriptor.builder().location("s3://base").build();
@@ -503,11 +509,16 @@ class TestAWSGlueSyncClient {
 
     // capture the request
     ArgumentCaptor<BatchCreatePartitionRequest> cap = ArgumentCaptor.forClass(BatchCreatePartitionRequest.class);
-    verify(mockAwsGlue).batchCreatePartition(cap.capture());
-    BatchCreatePartitionRequest req = cap.getValue();
-    assertEquals(TestAWSGlueSyncClient.CATALOG_ID, req.catalogId());
-    assertEquals(tableName, req.tableName());
-    assertEquals(parts.size(), req.partitionInputList().size());
+    verify(mockAwsGlue, times(2)).batchCreatePartition(cap.capture());
+    List<BatchCreatePartitionRequest> requests = cap.getAllValues();
+    assertEquals(Arrays.asList("2025-05-20", "2025-05-19"),
+        requests.get(0).partitionInputList().stream().map(PartitionInput::values).flatMap(Collection::stream).collect(Collectors.toList()));
+    assertEquals(Collections.singletonList("2025-05-18"),
+        requests.get(1).partitionInputList().stream().map(PartitionInput::values).flatMap(Collection::stream).collect(Collectors.toList()));
+    for (BatchCreatePartitionRequest req : requests) {
+      assertEquals(TestAWSGlueSyncClient.CATALOG_ID, req.catalogId());
+      assertEquals(tableName, req.tableName());
+    }
   }
 
   @Test

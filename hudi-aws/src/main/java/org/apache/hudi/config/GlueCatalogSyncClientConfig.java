@@ -74,4 +74,18 @@ public class GlueCatalogSyncClientConfig extends HoodieConfig {
       .noDefaultValue()
       .markAdvanced()
       .withDocumentation("The name of the destination table that we should sync the hudi table to.");
+
+  public static final ConfigProperty<Integer> GLUE_SYNC_MAX_PARTITIONS_PER_REQUEST = ConfigProperty
+      .key(GLUE_CLIENT_PROPERTY_PREFIX + "max_partitions_per_request")
+      .defaultValue(100)
+      .sinceVersion("1.1.0")
+      .markAdvanced()
+      .withDocumentation("The maximum number of partitions to be synced in a single request to Glue.");
+
+  public static final ConfigProperty<Integer> GLUE_SYNC_MAX_CONCURRENT_REQUESTS = ConfigProperty
+      .key(GLUE_CLIENT_PROPERTY_PREFIX + "max_concurrent_requests")
+      .defaultValue(100)
+      .sinceVersion("1.1.0")
+      .markAdvanced()
+      .withDocumentation("The maximum number of requests that can be run concurrently. Helps prevent throttling when syncing tables with many partitions.");
 }
