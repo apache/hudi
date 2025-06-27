@@ -223,7 +223,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
       SparkConf sparkConf = conf();
       HoodieSparkKryoRegistrar$.MODULE$.register(sparkConf);
       SparkRDDReadClient.addHoodieSupport(sparkConf);
-      spark = org.apache.spark.sql.classic.SparkSession.builder().config(sparkConf).getOrCreate();
+      spark = SparkSession.builder().config(sparkConf).getOrCreate();
       sqlContext = spark.sqlContext();
       HoodieClientTestUtils.overrideSparkHadoopConfiguration(spark.sparkContext());
       jsc = new JavaSparkContext(spark.sparkContext());
@@ -241,9 +241,9 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
    * testcase may invoke this specifically to clean up in case of repeated test runs.
    */
   @AfterAll
-  public static synchronized void resetSpark() {
+  public static synchronized void resetSpark() throws IOException {
     if (spark != null) {
-      ((org.apache.spark.sql.classic.SparkSession) spark).close();
+      spark.close();
       spark = null;
     }
     if (timelineService != null) {

@@ -32,7 +32,7 @@ import org.apache.avro.Schema
 import org.apache.parquet.hadoop.util.counters.BenchmarkCounter
 import org.apache.spark.SparkConf
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.{Dataset, HoodieUnsafeUtils, Row, SaveMode}
+import org.apache.spark.sql.{Dataset, Row, SaveMode}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.sources.BaseRelation
 import org.junit.jupiter.api.{Tag, Test}

@@ -206,7 +206,7 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
     jsc = new JavaSparkContext(sparkContext);
     jsc.setLogLevel("ERROR");
     storageConf = HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration());
-    sparkSession = org.apache.spark.sql.classic.SparkSession.builder()
+    sparkSession = SparkSession.builder()
         .withExtensions(JFunction.toScala(sparkSessionExtensions -> {
           sparkSessionExtensionsInjector.ifPresent(injector -> injector.accept(sparkSessionExtensions));
           return null;
