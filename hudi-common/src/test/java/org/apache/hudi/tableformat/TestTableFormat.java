@@ -19,7 +19,7 @@
 package org.apache.hudi.tableformat;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
-import org.apache.hudi.common.TableFormat;
+import org.apache.hudi.common.HoodieTableFormat;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -35,10 +35,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
- * Test implementation of TableFormat that records all Hoodie instants in memory.
- * Used for functional testing of TableFormat.
+ * Test implementation of HoodieTableFormat that records all Hoodie instants in memory.
+ * Used for functional testing of HoodieTableFormat.
  */
-public class TestTableFormat implements TableFormat {
+public class TestTableFormat implements HoodieTableFormat {
 
   private static final Map<String,List<HoodieInstant>> RECORDED_INSTANTS = new ConcurrentHashMap<>();
   

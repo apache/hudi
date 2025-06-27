@@ -18,8 +18,8 @@
 
 package org.apache.hudi.common.table;
 
+import org.apache.hudi.common.HoodieTableFormat;
 import org.apache.hudi.common.NativeTableFormat;
-import org.apache.hudi.common.TableFormat;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetaserverConfig;
@@ -167,7 +167,7 @@ public class HoodieTableMetaClient implements Serializable {
   protected HoodieMetaserverConfig metaserverConfig;
   private HoodieTimeGeneratorConfig timeGeneratorConfig;
   private Option<HoodieIndexMetadata> indexMetadataOpt = Option.empty();
-  private TableFormat tableFormat;
+  private HoodieTableFormat tableFormat;
 
   /**
    * Instantiate HoodieTableMetaClient.
@@ -361,7 +361,7 @@ public class HoodieTableMetaClient implements Serializable {
     return timelinePath;
   }
 
-  public TableFormat getTableFormat() {
+  public HoodieTableFormat getTableFormat() {
     return tableFormat;
   }
 

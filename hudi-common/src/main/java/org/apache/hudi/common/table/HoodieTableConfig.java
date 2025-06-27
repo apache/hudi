@@ -18,7 +18,7 @@
 
 package org.apache.hudi.common.table;
 
-import org.apache.hudi.common.TableFormat;
+import org.apache.hudi.common.HoodieTableFormat;
 import org.apache.hudi.common.NativeTableFormat;
 import org.apache.hudi.common.bootstrap.index.hfile.HFileBootstrapIndex;
 import org.apache.hudi.common.config.ConfigClassProperty;
@@ -728,11 +728,11 @@ public class HoodieTableConfig extends HoodieConfig {
         : Option.empty();
   }
 
-  public TableFormat getTableFormat(TimelineLayoutVersion layoutVersion) {
+  public HoodieTableFormat getTableFormat(TimelineLayoutVersion layoutVersion) {
     String tableFormat = getStringOrDefault(TABLE_FORMAT);
     if (!tableFormat.equals(NativeTableFormat.TABLE_FORMAT)) {
-      ServiceLoader<TableFormat> loader = ServiceLoader.load(TableFormat.class);
-      for (TableFormat tableFormatImpl : loader) {
+      ServiceLoader<HoodieTableFormat> loader = ServiceLoader.load(HoodieTableFormat.class);
+      for (HoodieTableFormat tableFormatImpl : loader) {
         if (getString(TABLE_FORMAT).equals(tableFormatImpl.getName())) {
           tableFormatImpl.init(props);
           return tableFormatImpl;

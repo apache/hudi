@@ -34,7 +34,7 @@ import java.util.Properties;
 /**
  * External Table Format needs to implement this interface
  */
-public interface TableFormat extends Serializable {
+public interface HoodieTableFormat extends Serializable {
 
   /**
    * Returns the name of the table format.

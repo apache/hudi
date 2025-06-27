@@ -24,7 +24,7 @@ import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.metadata.NativeTableMetadataFactory;
 import org.apache.hudi.metadata.TableMetadataFactory;
 
-public class NativeTableFormat implements TableFormat {
+public class NativeTableFormat implements HoodieTableFormat {
   public static final String TABLE_FORMAT = "native";
   private final TimelineLayoutVersion timelineLayoutVersion;
 
