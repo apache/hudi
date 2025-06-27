@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -268,7 +269,7 @@ public class UpgradeDowngrade {
       HoodieWriteConfig updatedConfig = HoodieWriteConfig.newBuilder().withPath(config.getBasePath()).withProperties(typedProperties).build();
 
       HoodieTable table = upgradeDowngradeHelper.getTable(updatedConfig, context);
-      String newInstant = table.getMetaClient().createNewInstantTime(false);
+      String newInstant = HoodieInstantTimeGenerator.getCurrentInstantTimeStr();
       Option<HoodieTableMetadataWriter> mdtWriterOpt = table.getMetadataWriter(newInstant);
       mdtWriterOpt.ifPresent(mdtWriter -> {
         HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
@@ -396,14 +397,14 @@ public class UpgradeDowngrade {
       // as table version SEVEN is not considered as a valid value due to being a bridge release.
       // otherwise use current table version
       HoodieTableVersion tableVersion = fromVersion == HoodieTableVersion.SEVEN
-          ? HoodieTableVersion.SIX 
+          ? HoodieTableVersion.SIX
           : metaClient.getTableConfig().getTableVersion();
 
       UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(
           upgradeDowngradeHelper.getTable(config, context),
-          context, 
-          config, 
-          upgradeDowngradeHelper, 
+          context,
+          config,
+          upgradeDowngradeHelper,
           HoodieTableType.MERGE_ON_READ.equals(metaClient.getTableType()),
           tableVersion);
     }
