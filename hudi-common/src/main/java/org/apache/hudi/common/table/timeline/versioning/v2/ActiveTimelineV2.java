@@ -549,7 +549,8 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
         StoragePath fromInstantPath = getInstantFileNamePath(fromInstantFileName);
         HoodieInstant instantWithCompletionTime =
             instantGenerator.createNewInstant(toInstant.getState(), toInstant.getAction(),
-                toInstant.requestedTime(), completionTimeOpt.map(entry -> entry).orElse(metaClient.createNewInstantTime(false)));
+                toInstant.requestedTime(), completionTimeOpt.map(entry -> entry)
+                    .orElseGet(HoodieInstantTimeGenerator::getCurrentInstantTimeStr));
         StoragePath toInstantPath =
             getInstantFileNamePath(instantFileNameGenerator.getFileName(instantWithCompletionTime));
         boolean success = metaClient.getStorage().rename(fromInstantPath, toInstantPath);

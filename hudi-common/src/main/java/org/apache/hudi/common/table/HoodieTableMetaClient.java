@@ -44,10 +44,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
 import org.apache.hudi.common.table.timeline.InstantFileNameParser;
 import org.apache.hudi.common.table.timeline.InstantGenerator;
-import org.apache.hudi.common.table.timeline.TimeGenerator;
-import org.apache.hudi.common.table.timeline.TimeGenerators;
 import org.apache.hudi.common.table.timeline.TimelineLayout;
-import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.ConfigUtils;
@@ -593,17 +590,6 @@ public class HoodieTableMetaClient implements Serializable {
     this.tableFormat = tableConfig.getTableFormat(timelineLayoutVersion);
     this.timelinePath = timelineLayout.getTimelinePathProvider().getTimelinePath(tableConfig, basePath);
     this.timelineHistoryPath = timelineLayout.getTimelinePathProvider().getTimelineHistoryPath(tableConfig, basePath);
-  }
-
-  /**
-   * Returns next instant time in the correct format.
-   *
-   * @param shouldLock whether the lock should be enabled to get the instant time.
-   */
-  public String createNewInstantTime(boolean shouldLock) {
-    TimeGenerator timeGenerator = TimeGenerators
-        .getTimeGenerator(timeGeneratorConfig, storageConf);
-    return TimelineUtils.generateInstantTime(shouldLock, timeGenerator);
   }
 
   public HoodieTimeGeneratorConfig getTimeGeneratorConfig() {
