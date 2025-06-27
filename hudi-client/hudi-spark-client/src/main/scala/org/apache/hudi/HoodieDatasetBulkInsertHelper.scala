@@ -18,6 +18,7 @@
 package org.apache.hudi
 
 import org.apache.hudi.HoodieSparkUtils.injectSQLConf
+import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 import org.apache.hudi.client.WriteStatus
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.data.HoodieData
@@ -41,7 +42,6 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{DataFrame, Dataset, HoodieUnsafeUtils, Row}
 import org.apache.spark.sql.HoodieUnsafeRowUtils.{composeNestedFieldPath, getNestedInternalRowValue}
-import org.apache.spark.sql.HoodieUnsafeUtils.getNumPartitions
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Alias, Literal}
 import org.apache.spark.sql.catalyst.plans.logical.Project
@@ -53,7 +53,7 @@ import scala.collection.JavaConverters.asScalaBufferConverter
 import scala.collection.mutable
 
 object HoodieDatasetBulkInsertHelper
-  extends ParallelismHelper[DataFrame](toJavaSerializableFunctionUnchecked(df => getNumPartitions(df)))
+  extends ParallelismHelper[DataFrame](toJavaSerializableFunctionUnchecked(df => sparkAdapter.getHoodieUnsafeUtils.getNumPartitions(df)))
     with Logging
     with SparkAdapterSupport {
 
@@ -130,7 +130,7 @@ object HoodieDatasetBulkInsertHelper
         prependedRdd
       }
 
-      HoodieUnsafeUtils.createDataFrameFromRDD(df.sparkSession, dedupedRdd, updatedSchema)
+      sparkAdapter.getHoodieUnsafeUtils.createDataFrameFromRDD(df.sparkSession, dedupedRdd, updatedSchema)
     } else {
       // NOTE: In cases when we're not populating meta-fields we actually don't
       //       need access to the [[InternalRow]] and therefore can avoid the need
@@ -139,7 +139,7 @@ object HoodieDatasetBulkInsertHelper
       val metaFieldsStubs = metaFields.map(f => Alias(Literal(UTF8String.EMPTY_UTF8, dataType = StringType), f.name)())
       val prependedQuery = Project(metaFieldsStubs ++ query.output, query)
 
-      HoodieUnsafeUtils.createDataFrameFrom(df.sparkSession, prependedQuery)
+      sparkAdapter.getHoodieUnsafeUtils.createDataFrameFrom(df.sparkSession, prependedQuery)
     }
 
     partitioner.repartitionRecords(updatedDF, targetParallelism)

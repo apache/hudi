@@ -30,11 +30,15 @@ import org.apache.hudi.storage.StoragePath
 import org.apache.avro.Schema
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.{AnalysisException, Column, ExpressionColumnNodeWrapper, HoodieUTF8StringFactory, Spark4HoodieUTF8StringFactory, SparkSession, SQLContext}
+import org.apache.spark.sql.{AnalysisException, Column, DataFrameUtil, ExpressionColumnNodeWrapper, HoodieUnsafeUtils, HoodieUTF8StringFactory, Spark4DataFrameUtil, Spark4HoodieUnsafeUtils, Spark4HoodieUTF8StringFactory, SparkSession, SQLContext}
 import org.apache.spark.sql.avro.{HoodieAvroSchemaConverters, HoodieSparkAvroSchemaConverters}
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
+import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions.{Expression, InterpretedPredicate, Predicate}
 import org.apache.spark.sql.catalyst.parser.ParseException
+import org.apache.spark.sql.catalyst.planning.PhysicalOperation
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.trees.Origin
 import org.apache.spark.sql.catalyst.util.DateFormatter
 import org.apache.spark.sql.execution.{PartitionedFileUtil, QueryExecution, SQLExecution}
@@ -81,6 +85,21 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
       partitionedFiles: Seq[PartitionedFile],
       maxSplitBytes: Long): Seq[FilePartition] = {
     FilePartition.getFilePartitions(sparkSession, partitionedFiles, maxSplitBytes)
+  }
+
+  /**
+   * Checks whether [[LogicalPlan]] refers to Hudi table, and if it's the case extracts
+   * corresponding [[CatalogTable]]
+   */
+  override def resolveHoodieTable(plan: LogicalPlan): Option[CatalogTable] = {
+    EliminateSubqueryAliases(plan) match {
+      // First, we need to weed out unresolved plans
+      case plan if !plan.resolved => None
+      // NOTE: When resolving Hudi table we allow [[Filter]]s and [[Project]]s be applied
+      //       on top of it
+      case PhysicalOperation(_, _, LogicalRelation(_, _, Some(table), _, _)) if isHoodieTable(table) => Some(table)
+      case _ => None
+    }
   }
 
   override def createInterpretedPredicate(e: Expression): InterpretedPredicate = {
@@ -167,4 +186,8 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
   override def createColumnFromExpression(expression: Expression): Column = {
     new Column(ExpressionColumnNodeWrapper.apply(expression))
   }
+
+  override def getHoodieUnsafeUtils: HoodieUnsafeUtils = Spark4HoodieUnsafeUtils
+
+  override def getDataFrameUtil: DataFrameUtil = Spark4DataFrameUtil
 }

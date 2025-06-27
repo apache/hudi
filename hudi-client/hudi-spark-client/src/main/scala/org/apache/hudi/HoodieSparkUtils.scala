@@ -129,7 +129,7 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
 
   def maybeWrapDataFrameWithException(df: DataFrame, exceptionClass: String, msg: String, shouldWrap: Boolean): DataFrame = {
     if (shouldWrap) {
-      HoodieUnsafeUtils.createDataFrameFromRDD(df.sparkSession, injectSQLConf(df.queryExecution.toRdd.mapPartitions {
+      sparkAdapter.getHoodieUnsafeUtils.createDataFrameFromRDD(df.sparkSession, injectSQLConf(df.queryExecution.toRdd.mapPartitions {
         rows => new ExceptionWrappingIterator[InternalRow](rows, exceptionClass, msg)
       }, SQLConf.get), df.schema)
     } else {

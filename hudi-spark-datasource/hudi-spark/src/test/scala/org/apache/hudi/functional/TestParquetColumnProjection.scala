@@ -17,7 +17,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, DefaultSource, HoodieBaseRelation, HoodieSparkUtils, HoodieUnsafeRDD}
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, DefaultSource, HoodieBaseRelation, HoodieSparkUtils, HoodieUnsafeRDD, SparkAdapterSupport}
 import org.apache.hudi.HoodieBaseRelation.projectSchema
 import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig, RecordMergeMode}
 import org.apache.hudi.common.model.{HoodieRecord, OverwriteNonDefaultsWithLatestAvroPayload}
@@ -42,7 +42,7 @@ import scala.collection.JavaConverters._
 import scala.math.abs
 
 @Tag("functional")
-class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with Logging {
+class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with Logging with SparkAdapterSupport {
 
   val defaultWriteOpts = Map(
     "hoodie.insert.shuffle.parallelism" -> "4",
@@ -342,7 +342,7 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
 
           val (rows, bytesRead) = measureBytesRead { () =>
             val rdd = hoodieRelation.buildScan(targetColumns, Array.empty).asInstanceOf[HoodieUnsafeRDD]
-            HoodieUnsafeUtils.collect(rdd)
+            sparkAdapter.getHoodieUnsafeUtils.collect(rdd)
           }
 
           val targetRecordCount = tableState.targetRecordCount;

@@ -146,16 +146,7 @@ trait SparkAdapter extends Serializable {
    * Checks whether [[LogicalPlan]] refers to Hudi table, and if it's the case extracts
    * corresponding [[CatalogTable]]
    */
-  def resolveHoodieTable(plan: LogicalPlan): Option[CatalogTable] = {
-    EliminateSubqueryAliases(plan) match {
-      // First, we need to weed out unresolved plans
-      case plan if !plan.resolved => None
-      // NOTE: When resolving Hudi table we allow [[Filter]]s and [[Project]]s be applied
-      //       on top of it
-      case PhysicalOperation(_, _, LogicalRelation(_, _, Some(table), _, _)) if isHoodieTable(table) => Some(table)
-      case _ => None
-    }
-  }
+  def resolveHoodieTable(plan: LogicalPlan): Option[CatalogTable]
 
   def isHoodieTable(map: java.util.Map[String, String]): Boolean = {
     isHoodieTable(map.getOrDefault("provider", ""))
@@ -294,4 +285,8 @@ trait SparkAdapter extends Serializable {
                  maxSplitSize: Long): Seq[PartitionedFile]
 
   def createColumnFromExpression(expression: Expression): Column
+
+  def getHoodieUnsafeUtils: HoodieUnsafeUtils
+
+  def getDataFrameUtil: DataFrameUtil
 }

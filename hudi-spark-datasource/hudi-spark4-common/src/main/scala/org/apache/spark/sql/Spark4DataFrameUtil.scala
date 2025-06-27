@@ -18,16 +18,23 @@
 
 package org.apache.spark.sql
 
+import org.apache.hudi.SparkAdapterSupport
+
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.execution.LogicalRDD
 import org.apache.spark.sql.types.StructType
 
-trait DataFrameUtil {
+object Spark4DataFrameUtil extends DataFrameUtil {
 
   /**
    * Creates a DataFrame out of RDD[InternalRow] that you can get
    * using `df.queryExecution.toRdd`
    */
-  def createFromInternalRows(sparkSession: SparkSession, schema: StructType, rdd: RDD[InternalRow]): DataFrame
+  def createFromInternalRows(sparkSession: SparkSession, schema:
+  StructType, rdd: RDD[InternalRow]): DataFrame = {
+    val logicalPlan = LogicalRDD(
+      SparkAdapterSupport.sparkAdapter.getSchemaUtils.toAttributes(schema), rdd)(sparkSession.asInstanceOf[org.apache.spark.sql.classic.SparkSession])
+    org.apache.spark.sql.classic.Dataset.ofRows(sparkSession.asInstanceOf[org.apache.spark.sql.classic.SparkSession], logicalPlan)
+  }
 }
-

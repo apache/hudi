@@ -18,17 +18,22 @@
 
 package org.apache.spark.sql
 
-import org.apache.hudi.{HoodieUnsafeRDD}
+import org.apache.hudi.{HoodieUnsafeRDD, SparkAdapterSupport}
+
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.plans.logical.{LocalRelation, LogicalPlan}
-import org.apache.spark.sql.catalyst.plans.physical.{Partitioning}
+import org.apache.spark.sql.catalyst.plans.physical.{Partitioning, UnknownPartitioning}
+import org.apache.spark.sql.execution.LogicalRDD
 import org.apache.spark.sql.types.StructType
+import org.apache.spark.util.MutablePair
+
+import scala.collection.JavaConverters
 
 /**
  * Suite of utilities helping in handling instances of [[HoodieUnsafeRDD]]
  */
-trait HoodieUnsafeUtils {
+object Spark4HoodieUnsafeUtils extends HoodieUnsafeUtils {
 
   /**
    * Fetches expected output [[Partitioning]] of the provided [[DataFrame]]
@@ -37,7 +42,21 @@ trait HoodieUnsafeUtils {
    *       but instead will just execute Spark resolution, optimization and actual execution planning stages
    *       returning instance of [[SparkPlan]] ready for execution
    */
-  def getNumPartitions(df: DataFrame): Int
+  def getNumPartitions(df: DataFrame): Int = {
+    // NOTE: In general we'd rely on [[outputPartitioning]] of the executable [[SparkPlan]] to determine
+    //       number of partitions plan is going to be executed with.
+    //       However in case of [[LogicalRDD]] plan's output-partitioning will be stubbed as [[UnknownPartitioning]]
+    //       and therefore we will be falling back to determine number of partitions by looking at the RDD itself
+    df.queryExecution.logical match {
+      case LogicalRDD(_, rdd, outputPartitioning, _, _, _) =>
+        outputPartitioning match {
+          case _: UnknownPartitioning => rdd.getNumPartitions
+          case _ => outputPartitioning.numPartitions
+        }
+
+      case _ => df.queryExecution.executedPlan.outputPartitioning.numPartitions
+    }
+  }
 
   /**
    * Creates [[DataFrame]] from provided [[plan]]
@@ -45,7 +64,8 @@ trait HoodieUnsafeUtils {
    * @param spark spark's session
    * @param plan given plan to wrap into [[DataFrame]]
    */
-  def createDataFrameFrom(spark: SparkSession, plan: LogicalPlan): DataFrame
+  def createDataFrameFrom(spark: SparkSession, plan: LogicalPlan): DataFrame =
+    org.apache.spark.sql.classic.Dataset.ofRows(spark.asInstanceOf[org.apache.spark.sql.classic.SparkSession], plan)
 
   /**
    * Creates [[DataFrame]] from the in-memory [[Seq]] of [[Row]]s with provided [[schema]]
@@ -57,7 +77,9 @@ trait HoodieUnsafeUtils {
    * @param rows   collection of rows to base [[DataFrame]] on
    * @param schema target [[DataFrame]]'s schema
    */
-  def createDataFrameFromRows(spark: SparkSession, rows: Seq[Row], schema: StructType): DataFrame
+  def createDataFrameFromRows(spark: SparkSession, rows: Seq[Row], schema: StructType): DataFrame =
+    org.apache.spark.sql.classic.Dataset.ofRows(spark.asInstanceOf[org.apache.spark.sql.classic.SparkSession], LocalRelation.fromExternalRows(
+      SparkAdapterSupport.sparkAdapter.getSchemaUtils.toAttributes(schema), rows))
 
   /**
    * Creates [[DataFrame]] from the in-memory [[Seq]] of [[InternalRow]]s with provided [[schema]]
@@ -69,7 +91,9 @@ trait HoodieUnsafeUtils {
    * @param rows collection of rows to base [[DataFrame]] on
    * @param schema target [[DataFrame]]'s schema
    */
-  def createDataFrameFromInternalRows(spark: SparkSession, rows: Seq[InternalRow], schema: StructType): DataFrame
+  def createDataFrameFromInternalRows(spark: SparkSession, rows: Seq[InternalRow], schema: StructType): DataFrame =
+    org.apache.spark.sql.classic.Dataset.ofRows(spark.asInstanceOf[org.apache.spark.sql.classic.SparkSession], LocalRelation(SparkAdapterSupport.sparkAdapter.getSchemaUtils.toAttributes(schema), rows))
+
 
   /**
    * Creates [[DataFrame]] from the [[RDD]] of [[Row]]s with provided [[schema]]
@@ -78,11 +102,21 @@ trait HoodieUnsafeUtils {
    * @param rdd RDD w/ [[Row]]s to base [[DataFrame]] on
    * @param schema target [[DataFrame]]'s schema
    */
-  def createDataFrameFromRDD(spark: SparkSession, rdd: RDD[InternalRow], schema: StructType): DataFrame
+  def createDataFrameFromRDD(spark: SparkSession, rdd: RDD[InternalRow], schema: StructType): DataFrame =
+    spark.asInstanceOf[org.apache.spark.sql.classic.SparkSession].internalCreateDataFrame(rdd, schema)
 
   /**
    * Canonical implementation of the [[RDD#collect]] for [[HoodieUnsafeRDD]], returning a properly
    * copied [[Array]] of [[InternalRow]]s
    */
-  def collect(rdd: HoodieUnsafeRDD): Array[InternalRow]
+  def collect(rdd: HoodieUnsafeRDD): Array[InternalRow] = {
+    rdd.mapPartitionsInternal { iter =>
+      // NOTE: We're leveraging [[MutablePair]] here to avoid unnecessary allocations, since
+      //       a) iteration is performed lazily and b) iteration is single-threaded (w/in partition)
+      val pair = new MutablePair[InternalRow, Null]()
+      iter.map(row => pair.update(row.copy(), null))
+    }
+      .map(p => p._1)
+      .collect()
+  }
 }
