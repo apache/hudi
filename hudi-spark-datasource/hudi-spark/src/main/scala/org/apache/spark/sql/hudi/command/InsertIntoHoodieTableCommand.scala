@@ -20,7 +20,6 @@ package org.apache.spark.sql.hudi.command
 import org.apache.hudi.{HoodieSparkSqlWriter, SparkAdapterSupport}
 import org.apache.hudi.exception.HoodieException
 
-import org.apache.spark.SparkContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HoodieCatalogTable}
@@ -30,13 +29,13 @@ import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project}
 import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.execution.command.DataWritingCommand
 import org.apache.spark.sql.execution.datasources.LogicalRelation
-import org.apache.spark.sql.execution.metric.{SQLMetric, SQLMetrics}
+import org.apache.spark.sql.execution.metric.SQLMetric
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.hudi.command.HoodieCommandMetrics.updateCommitMetrics
 import org.apache.spark.sql.hudi.command.HoodieLeafRunnableCommand.stripMetaFieldAttributes
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.types.{StringType, StructField, StructType}
+import org.apache.spark.sql.types.StructType
 
 /**
  * Command for insert into Hudi table.
@@ -147,25 +146,36 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
                                conf: SQLConf): LogicalPlan = {
 
     val targetPartitionSchema = catalogTable.partitionSchema
+    // Validate that partition-spec has proper format (it could be empty if all of the partition values are dynamic,
+    // ie there are no static partition-values specified)
+    if (partitionsSpec.nonEmpty && partitionsSpec.size != targetPartitionSchema.size) {
+      throw new HoodieException(s"Required partition schema is: ${targetPartitionSchema.fieldNames.mkString("[", ", ", "]")}, " +
+        s"partition spec is: ${partitionsSpec.mkString("[", ", ", "]")}")
+    }
+
     val staticPartitionValues = filterStaticPartitionValues(partitionsSpec)
-
-    // Make sure we strip out meta-fields from the incoming dataset (these will have to be discarded anyway)
-    val cleanedQuery = stripMetaFieldAttributes(query)
-    // To validate and align properly output of the query, we simply filter out partition columns with already
-    // provided static values from the table's schema
-    //
-    // NOTE: This is a crucial step: since coercion might rely on either of a) name-based or b) positional-based
-    //       matching it's important to strip out partition columns, having static values provided in the partition spec,
-    //       since such columns wouldn't be otherwise specified w/in the query itself and therefore couldn't be matched
-    //       positionally for example
-    val expectedQueryColumns = catalogTable.tableSchemaWithoutMetaFields.filterNot(f => staticPartitionValues.contains(f.name))
-    val coercedQueryOutput = coerceQueryOutputColumns(StructType(expectedQueryColumns), cleanedQuery, catalogTable, conf)
-    // After potential reshaping validate that the output of the query conforms to the table's schema
-    validate(removeMetaFields(coercedQueryOutput.schema), partitionsSpec, catalogTable)
-
     val staticPartitionValuesExprs = createStaticPartitionValuesExpressions(staticPartitionValues, targetPartitionSchema, conf)
 
-    Project(coercedQueryOutput.output ++ staticPartitionValuesExprs, coercedQueryOutput)
+    // Add static partition values to the query output
+    val queryWithStaticPartitions = if (staticPartitionValuesExprs.nonEmpty) {
+      Project(query.output ++ staticPartitionValuesExprs, query)
+    } else {
+      query
+    }
+
+    // Make sure we strip out meta-fields from the incoming dataset (these will have to be discarded anyway)
+    val cleanedQuery = stripMetaFieldAttributes(queryWithStaticPartitions)
+    // We align the query output with the expected table schema, which includes partition columns
+    val expectedQueryColumns = catalogTable.tableSchemaWithoutMetaFields
+    val coercedQueryOutput = coerceQueryOutputColumns(StructType(expectedQueryColumns), cleanedQuery, catalogTable, conf)
+    // After potential reshaping validate that the output of the query conforms to the table's schema
+    // Assert that query provides all the required columns
+    if (!conforms(coercedQueryOutput.schema, catalogTable.tableSchemaWithoutMetaFields)) {
+      throw new HoodieException(s"Expected table's schema: ${catalogTable.tableSchemaWithoutMetaFields.fields.mkString("[", ", ", "]")}, " +
+        s"query's output (including static partition values): ${coercedQueryOutput.schema.fields.mkString("[", ", ", "]")}")
+    }
+
+    coercedQueryOutput
   }
 
   private def coerceQueryOutputColumns(expectedSchema: StructType,
@@ -183,24 +193,6 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
         || ae.getMessage().startsWith("Cannot write incompatible data to table")) =>
         planUtils.resolveOutputColumns(
           catalogTable.catalogTableName, sparkAdapter.getSchemaUtils.toAttributes(expectedSchema), query, byName = false, conf)
-    }
-  }
-
-  private def validate(queryOutputSchema: StructType, partitionsSpec: Map[String, Option[String]], catalogTable: HoodieCatalogTable): Unit = {
-    // Validate that partition-spec has proper format (it could be empty if all of the partition values are dynamic,
-    // ie there are no static partition-values specified)
-    if (partitionsSpec.nonEmpty && partitionsSpec.size != catalogTable.partitionSchema.size) {
-      throw new HoodieException(s"Required partition schema is: ${catalogTable.partitionSchema.fieldNames.mkString("[", ", ", "]")}, " +
-        s"partition spec is: ${partitionsSpec.mkString("[", ", ", "]")}")
-    }
-
-    val staticPartitionValues = filterStaticPartitionValues(partitionsSpec)
-    val fullQueryOutputSchema = StructType(queryOutputSchema.fields ++ staticPartitionValues.keys.map(StructField(_, StringType)))
-
-    // Assert that query provides all the required columns
-    if (!conforms(fullQueryOutputSchema, catalogTable.tableSchemaWithoutMetaFields)) {
-      throw new HoodieException(s"Expected table's schema: ${catalogTable.tableSchemaWithoutMetaFields.fields.mkString("[", ", ", "]")}, " +
-        s"query's output (including static partition values): ${fullQueryOutputSchema.fields.mkString("[", ", ", "]")}")
     }
   }
 
