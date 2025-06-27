@@ -28,19 +28,20 @@ import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.action.deltacommit.SparkUpsertPreppedDeltaCommitActionExecutor;
 
 /**
- * Upsert commit action executor for Metadata table. This CommitActionExecutor is expected to be used during second write
- * to metadata table when streaming writes are enabled. This avoids adding inflight commit file to the timeline more than once
- * for the metadata table.
+ * Upsert delta commit action executor for metadata table.
+ *
+ * <p>This action executor is expected to be used during second write to metadata table
+ * when streaming writes are enabled to avoid adding inflight commit files twice.
  *
  * @param <T>
  */
-public class SparkMetadataTableUpsertCommitActionExecutor<T> extends SparkUpsertPreppedDeltaCommitActionExecutor<T> {
+public class SparkMetadataTableSecondaryDeltaCommitActionExecutor<T> extends SparkUpsertPreppedDeltaCommitActionExecutor<T> {
   private final boolean initialCall;
 
-  public SparkMetadataTableUpsertCommitActionExecutor(HoodieSparkEngineContext context, HoodieWriteConfig config,
-                                                      HoodieTable table, String instantTime,
-                                                      HoodieData<HoodieRecord<T>> preppedRecords,
-                                                      boolean initialCall) {
+  public SparkMetadataTableSecondaryDeltaCommitActionExecutor(HoodieSparkEngineContext context, HoodieWriteConfig config,
+                                                              HoodieTable table, String instantTime,
+                                                              HoodieData<HoodieRecord<T>> preppedRecords,
+                                                              boolean initialCall) {
     super(context, config, table, instantTime, preppedRecords);
     this.initialCall = initialCall;
   }

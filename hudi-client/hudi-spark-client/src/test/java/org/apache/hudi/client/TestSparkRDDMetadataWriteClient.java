@@ -128,7 +128,7 @@ public class TestSparkRDDMetadataWriteClient extends HoodieClientTestBase {
 
       // ingest RLI records to metadata table.
       client.startCommitForMetadataTable(metadataMetaClient, commitTimeOfInterest, DELTA_COMMIT_ACTION);
-      JavaRDD<WriteStatus> partialWriteStatusesRDD = client.streamUpsertPreppedRecords(jsc.parallelize(rliRecords), commitTimeOfInterest, Option.of(nonFilesPartitionFileGroupIdList));
+      JavaRDD<WriteStatus> partialWriteStatusesRDD = client.firstUpsertPreppedRecords(jsc.parallelize(rliRecords), commitTimeOfInterest, nonFilesPartitionFileGroupIdList);
       List<WriteStatus> partialWriteStatuses = partialWriteStatusesRDD.collect();
       // assert that isMetadataTable is rightly set
       partialWriteStatuses.forEach(writeStatus -> assertTrue(writeStatus.isMetadataTable()));
@@ -140,7 +140,7 @@ public class TestSparkRDDMetadataWriteClient extends HoodieClientTestBase {
       assertTrue(reloadedMdtActiveTimeline.filterInflightsAndRequested().getInstants().stream().anyMatch(instant -> instant.requestedTime().equals(finalCommitTimeOfInterest)));
 
       // write to FILES partition
-      JavaRDD<WriteStatus> filePartitionWriteStatusesRDD = client.streamUpsertPreppedRecords(jsc.parallelize(filesPartitionExpectedRecords), commitTimeOfInterest);
+      JavaRDD<WriteStatus> filePartitionWriteStatusesRDD = client.secondaryUpsertPreppedRecords(jsc.parallelize(filesPartitionExpectedRecords), commitTimeOfInterest);
       List<WriteStatus> filesPartitionWriteStatus = filePartitionWriteStatusesRDD.collect();
       // assert that isMetadataTable is rightly set
       filesPartitionWriteStatus.forEach(writeStatus -> assertTrue(writeStatus.isMetadataTable()));
