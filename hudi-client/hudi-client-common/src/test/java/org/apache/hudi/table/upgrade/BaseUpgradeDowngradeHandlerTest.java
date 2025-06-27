@@ -19,6 +19,7 @@
 
 package org.apache.hudi.table.upgrade;
 
+import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -50,9 +51,12 @@ abstract class BaseUpgradeDowngradeHandlerTest {
   protected HoodieTableConfig tableConfig;
   @Mock
   protected SupportsUpgradeDowngrade upgradeDowngradeHelper;
+  @Mock
+  protected BaseHoodieWriteClient writeClient;
 
   protected void setupMocks() {
     when(upgradeDowngradeHelper.getTable(config, context)).thenReturn(table);
+    when(upgradeDowngradeHelper.getWriteClient(config, context)).thenReturn(writeClient);
     when(table.getMetaClient()).thenReturn(metaClient);
     when(metaClient.getTableConfig()).thenReturn(tableConfig);
   }
