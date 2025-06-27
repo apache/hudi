@@ -36,7 +36,6 @@ env:
   SCALA_TEST_OTHERS_FILTER: -DwildcardSuites=org.apache.hudi,org.apache.spark.hudi,org.apache.spark.sql.avro,org.apache.spark.sql.execution,org.apache.spark.sql.hudi.analysis,org.apache.spark.sql.hudi.command,org.apache.spark.sql.hudi.common,org.apache.spark.sql.hudi.ddl,org.apache.spark.sql.hudi.procedure,org.apache.spark.sql.hudi.feature
   FLINK_IT_FILTER1: -Dit.test=ITTestHoodieDataSource
   FLINK_IT_FILTER2: -Dit.test=!ITTestHoodieDataSource
-  FLINK_2X_FILTER: -pl !hudi-flink-datasource/hudi-flink2.0.x,!hudi-flink-datasource/hudi-flink2.x-common
   JAVA8_FLINK_DEFAULT_PROFILE: -Dflink1.20
 jobs:
   validate-source:
@@ -1000,7 +999,7 @@ jobs:
           if [ "$SCALA_PROFILE" == "scala-2.13" ]; then
             mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -pl packaging/hudi-hadoop-mr-bundle,packaging/hudi-spark-bundle,packaging/hudi-utilities-bundle,packaging/hudi-utilities-slim-bundle,packaging/hudi-cli-bundle -am
           else
-            mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS $FLINK_2X_FILTER
+            mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS
             # TODO remove the sudo below. It's a needed workaround as detailed in HUDI-5708.
             sudo chown -R "$USER:$(id -g -n)" hudi-platform-service/hudi-metaserver/target/generated-sources
             mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -pl packaging/hudi-flink-bundle -am -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION"
@@ -1109,7 +1108,7 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SCALA_PROFILE: '-Dscala-2.12 -Dscala.binary.version=2.12'
         run:
-          mvn clean install -T 2 $SCALA_PROFILE -D"$SPARK_PROFILE" $JAVA8_FLINK_DEFAULT_PROFILE -Pintegration-tests -DskipTests=true $MVN_ARGS $FLINK_2X_FILTER
+          mvn clean install -T 2 $SCALA_PROFILE -D"$SPARK_PROFILE" $JAVA8_FLINK_DEFAULT_PROFILE -Pintegration-tests -DskipTests=true $MVN_ARGS
       - name: 'UT integ-test'
         env:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -1130,7 +1129,7 @@ jobs:
           export SPARK_HOME=$GITHUB_WORKSPACE/${SPARK_ARCHIVE_BASENAME%.*}
           rm -f $GITHUB_WORKSPACE/$SPARK_ARCHIVE
           docker system prune --all --force
-          mvn verify $SCALA_PROFILE -D"$SPARK_PROFILE" $JAVA8_FLINK_DEFAULT_PROFILE -Pintegration-tests -pl !hudi-flink-datasource/hudi-flink $MVN_ARGS $FLINK_2X_FILTER 
+          mvn verify $SCALA_PROFILE -D"$SPARK_PROFILE" $JAVA8_FLINK_DEFAULT_PROFILE -Pintegration-tests -pl !hudi-flink-datasource/hudi-flink $MVN_ARGS
 
   build-spark-java17:
     runs-on: ubuntu-latest
