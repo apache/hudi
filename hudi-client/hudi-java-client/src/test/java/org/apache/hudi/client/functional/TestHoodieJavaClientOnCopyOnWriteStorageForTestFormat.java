@@ -19,7 +19,6 @@
 package org.apache.hudi.client.functional;
 
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
@@ -36,11 +35,10 @@ public class TestHoodieJavaClientOnCopyOnWriteStorageForTestFormat extends TestH
     if (basePath == null) {
       initPath();
     }
-    TypedProperties properties = new TypedProperties();
-    properties.put(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "false");
-    properties.put(HoodieTableConfig.TABLE_FORMAT.key(), "test-format");
-    properties.put(HoodieMetadataConfig.ENABLE.key(), "false");
-    metaClient = HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE, properties);
+    storageConf.set(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "false");
+    storageConf.set(HoodieTableConfig.TABLE_FORMAT.key(), "test-format");
+    storageConf.set(HoodieMetadataConfig.ENABLE.key(), "false");
+    metaClient = HoodieTestUtils.init(storageConf, basePath, HoodieTableType.COPY_ON_WRITE);
   }
 
   @AfterAll
