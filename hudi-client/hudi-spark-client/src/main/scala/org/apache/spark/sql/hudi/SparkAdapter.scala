@@ -292,4 +292,6 @@ trait SparkAdapter extends Serializable {
                  partitionDirectory: PartitionDirectory,
                  isSplitable: Boolean,
                  maxSplitSize: Long): Seq[PartitionedFile]
+
+  def createColumnFromExpression(expression: Expression): Column
 }

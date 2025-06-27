@@ -38,7 +38,7 @@ import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadataUtil,
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartitionStatsIndexKey
 import org.apache.hudi.util.JFunction
 
-import org.apache.spark.sql.{Column, DataFrame, ExpressionColumnNodeWrapper, Row, SparkSession}
+import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.apache.spark.sql.HoodieUnsafeUtils.{createDataFrameFromInternalRows, createDataFrameFromRDD, createDataFrameFromRows}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{And, DateAdd, DateFormatClass, DateSub, EqualTo, Expression, FromUnixTime, In, Literal, ParseToDate, ParseToTimestamp, RegExpExtract, RegExpReplace, StringSplit, StringTrim, StringTrimLeft, StringTrimRight, Substring, UnaryExpression, UnixTimestamp}
@@ -58,7 +58,7 @@ class ExpressionIndexSupport(spark: SparkSession,
                              metadataConfig: HoodieMetadataConfig,
                              metaClient: HoodieTableMetaClient,
                              allowCaching: Boolean = false)
-  extends SparkBaseIndexSupport (spark, metadataConfig, metaClient) {
+  extends SparkBaseIndexSupport (spark, metadataConfig, metaClient) with SparkAdapterSupport {
 
   @transient private lazy val cachedExpressionIndexViews: ParHashMap[Seq[String], DataFrame] = ParHashMap()
 
@@ -121,7 +121,7 @@ class ExpressionIndexSupport(spark: SparkSession,
                 val indexSchema = transposedPartitionStatsDF.schema
                 val indexedCols : Seq[String] = indexDefinition.getSourceFields.asScala.toSeq
                 val indexFilter = Seq(expressionIndexQuery).map(translateIntoColumnStatsIndexFilterExpr(_, isExpressionIndex = true, indexedCols = indexedCols)).reduce(And)
-                Some(transposedPartitionStatsDF.where(new Column(ExpressionColumnNodeWrapper.apply(indexFilter)))
+                Some(transposedPartitionStatsDF.where(sparkAdapter.createColumnFromExpression(indexFilter))
                   .select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
                   .collect()
                   .map(_.getString(0))

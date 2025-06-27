@@ -17,7 +17,7 @@
 
 package org.apache.hudi.functional.cdc
 
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, SparkAdapterSupport}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode
 import org.apache.hudi.config.HoodieWriteConfig
@@ -31,7 +31,7 @@ import org.apache.spark.sql.functions._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
 
-class TestCDCStreamingSuite extends HoodieCDCTestBase {
+class TestCDCStreamingSuite extends HoodieCDCTestBase with SparkAdapterSupport {
 
   /**
    * Here we simulate a more complex streaming data ETL of a real scenario that uses CDC.
@@ -128,8 +128,8 @@ class TestCDCStreamingSuite extends HoodieCDCTestBase {
             get_json_object(col("after"), "$.ts").as("ts")
           )
           // aggregate data by country, get the delta change about the population of a country.
-          .withColumn("bcnt", new Column(ExpressionColumnNodeWrapper.apply(beforeCntExpr)))
-          .withColumn("acnt", new Column(ExpressionColumnNodeWrapper.apply(afterCntExpr)))
+          .withColumn("bcnt", sparkAdapter.createColumnFromExpression(beforeCntExpr))
+          .withColumn("acnt", sparkAdapter.createColumnFromExpression(afterCntExpr))
           .select(
             explode(array(Array(
               struct(col("bcountry").as("country"), col("bcnt").as("cnt"), col("ts")),
@@ -142,8 +142,8 @@ class TestCDCStreamingSuite extends HoodieCDCTestBase {
           .join(current, Seq("country"), "left")
           .select(
             col("country"),
-            new Column(ExpressionColumnNodeWrapper.apply(
-              Add(col("sum(cnt)").expr, If(isnull(col("population")).expr, Literal(0), col("population").expr)))).as("population"),
+            sparkAdapter.createColumnFromExpression(
+              Add(col("sum(cnt)").expr, If(isnull(col("population")).expr, Literal(0), col("population").expr))).as("population"),
             col("max(ts)").as("ts")
           )
           .write.format("hudi")

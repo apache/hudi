@@ -30,7 +30,7 @@ import org.apache.hudi.storage.StoragePath
 import org.apache.avro.Schema
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.{AnalysisException, HoodieUTF8StringFactory, Spark3HoodieUTF8StringFactory, SparkSession, SQLContext}
+import org.apache.spark.sql.{AnalysisException, Column, HoodieUTF8StringFactory, Spark3HoodieUTF8StringFactory, SparkSession, SQLContext}
 import org.apache.spark.sql.avro.{HoodieAvroSchemaConverters, HoodieSparkAvroSchemaConverters}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Expression, InterpretedPredicate, Predicate}
@@ -147,4 +147,6 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
       PartitionedFileUtil.splitFiles(sparkSession, file, file.getPath, isSplitable, maxSplitSize, partitionDirectory.values)
     )
   }
+
+  override def createColumnFromExpression(expression: Expression): Column = new Column(expression)
 }
