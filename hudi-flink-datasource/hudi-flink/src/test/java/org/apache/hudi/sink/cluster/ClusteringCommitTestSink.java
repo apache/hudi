@@ -22,6 +22,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.clustering.ClusteringCommitEvent;
 import org.apache.hudi.sink.clustering.ClusteringCommitSink;
+import org.apache.hudi.utils.RuntimeContextUtils;
 
 import org.apache.flink.configuration.Configuration;
 
@@ -40,7 +41,7 @@ public class ClusteringCommitTestSink extends ClusteringCommitSink {
     super.invoke(event, context);
     List<HoodieInstant> instants = writeClient.getHoodieTable().getMetaClient().getActiveTimeline().getInstants();
     boolean committed = instants.stream().anyMatch(i -> i.requestedTime().equals(event.getInstant()) && i.isCompleted());
-    if (committed && getRuntimeContext().getAttemptNumber() == 0) {
+    if (committed && RuntimeContextUtils.getAttemptNumber(getRuntimeContext()) == 0) {
       throw new HoodieException("Fail first attempt to simulate failover in test.");
     }
   }

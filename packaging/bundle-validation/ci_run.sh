@@ -77,7 +77,7 @@ elif [[ ${SPARK_RUNTIME} == 'spark3.4.3' ]]; then
   HADOOP_VERSION=3.3.5
   HIVE_VERSION=3.1.3
   DERBY_VERSION=10.14.1.0
-  FLINK_VERSION=1.16.2
+  FLINK_VERSION=1.17.2
   SPARK_VERSION=3.4.3
   SPARK_HADOOP_VERSION=3
   CONFLUENT_VERSION=5.5.12
@@ -177,18 +177,16 @@ else
     HUDI_UTILITIES_SLIM_BUNDLE_NAME=hudi-utilities-slim-bundle_2.12
   fi
 
-  if [[ ${FLINK_PROFILE} == 'flink1.15' ]]; then
-    HUDI_FLINK_BUNDLE_NAME=hudi-flink1.15-bundle
-  elif [[ ${FLINK_PROFILE} == 'flink1.16' ]]; then
-    HUDI_FLINK_BUNDLE_NAME=hudi-flink1.16-bundle
-  elif [[ ${FLINK_PROFILE} == 'flink1.17' ]]; then
+  if [[ ${FLINK_PROFILE} == 'flink1.17' ]]; then
     HUDI_FLINK_BUNDLE_NAME=hudi-flink1.17-bundle
   elif [[ ${FLINK_PROFILE} == 'flink1.18' ]]; then
     HUDI_FLINK_BUNDLE_NAME=hudi-flink1.18-bundle
   elif [[ ${FLINK_PROFILE} == 'flink1.19' ]]; then
     HUDI_FLINK_BUNDLE_NAME=hudi-flink1.19-bundle
   elif [[ ${FLINK_PROFILE} == 'flink1.20' ]]; then
-    HUDI_FLINK_BUNDLE_NAME=hudi-flink1.20-bundle    
+    HUDI_FLINK_BUNDLE_NAME=hudi-flink1.20-bundle
+  elif [[ ${FLINK_PROFILE} == 'flink2.0' ]]; then
+    HUDI_FLINK_BUNDLE_NAME=hudi-flink2.0-bundle
   fi
 
   echo "Downloading bundle jars from base URL - $REPO_BASE_URL ..."

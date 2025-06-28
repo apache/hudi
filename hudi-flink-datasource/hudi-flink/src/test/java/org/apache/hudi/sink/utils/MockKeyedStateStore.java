@@ -20,7 +20,6 @@ package org.apache.hudi.sink.utils;
 
 import org.apache.flink.api.common.state.AggregatingState;
 import org.apache.flink.api.common.state.AggregatingStateDescriptor;
-import org.apache.flink.api.common.state.KeyedStateStore;
 import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ListStateDescriptor;
 import org.apache.flink.api.common.state.MapState;
@@ -29,6 +28,8 @@ import org.apache.flink.api.common.state.ReducingState;
 import org.apache.flink.api.common.state.ReducingStateDescriptor;
 import org.apache.flink.api.common.state.ValueState;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
+
+import org.apache.hudi.adapter.KeyedStateStoreAdapter;
 import org.apache.hudi.sink.utils.keyedstate.MockKeyContext;
 import org.apache.hudi.sink.utils.keyedstate.MockKeyedListState;
 import org.apache.hudi.sink.utils.keyedstate.MockKeyedMapState;
@@ -46,7 +47,7 @@ import java.util.stream.Collectors;
  * and supports checkpointing and rollback functionalities.
  */
 @SuppressWarnings("rawtypes")
-public class MockKeyedStateStore implements KeyedStateStore {
+public class MockKeyedStateStore implements KeyedStateStoreAdapter {
   private final MockKeyContext keyContext;
 
   private Map<String, MockKeyedValueState> keyedValueStateMap;

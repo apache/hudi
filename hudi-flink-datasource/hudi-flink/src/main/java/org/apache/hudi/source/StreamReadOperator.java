@@ -18,9 +18,13 @@
 
 package org.apache.hudi.source;
 
+import org.apache.hudi.adapter.SourceFunctionAdapter;
+import org.apache.hudi.adapter.YieldingOperatorFactoryAdapter;
 import org.apache.hudi.metrics.FlinkStreamReadMetrics;
 import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
+import org.apache.hudi.utils.RuntimeContextUtils;
+import org.apache.hudi.utils.SourceContextUtils;
 
 import org.apache.flink.api.common.operators.MailboxExecutor;
 import org.apache.flink.api.common.state.ListState;
@@ -29,17 +33,12 @@ import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.runtime.state.JavaSerializer;
 import org.apache.flink.runtime.state.StateInitializationContext;
 import org.apache.flink.runtime.state.StateSnapshotContext;
-import org.apache.flink.streaming.api.TimeCharacteristic;
-import org.apache.flink.streaming.api.functions.source.SourceFunction;
 import org.apache.flink.streaming.api.operators.AbstractStreamOperator;
 import org.apache.flink.streaming.api.operators.AbstractStreamOperatorFactory;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperatorFactory;
-import org.apache.flink.streaming.api.operators.Output;
 import org.apache.flink.streaming.api.operators.StreamOperator;
 import org.apache.flink.streaming.api.operators.StreamOperatorParameters;
-import org.apache.flink.streaming.api.operators.StreamSourceContexts;
-import org.apache.flink.streaming.api.operators.YieldingOperatorFactory;
 import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.streaming.runtime.tasks.ProcessingTimeService;
@@ -77,7 +76,7 @@ public class StreamReadOperator extends AbstractStreamOperator<RowData>
 
   private MergeOnReadInputFormat format;
 
-  private transient SourceFunction.SourceContext<RowData> sourceContext;
+  private transient SourceFunctionAdapter.SourceContext<RowData> sourceContext;
 
   private transient ListState<MergeOnReadInputSplit> inputSplitsState;
 
@@ -114,7 +113,7 @@ public class StreamReadOperator extends AbstractStreamOperator<RowData>
     // Recover splits state from flink state backend if possible.
     splits = new LinkedBlockingDeque<>();
     if (context.isRestored()) {
-      int subtaskIdx = getRuntimeContext().getIndexOfThisSubtask();
+      int subtaskIdx = RuntimeContextUtils.getIndexOfThisSubtask(getRuntimeContext());
       LOG.info("Restoring state for operator {} (task ID: {}).", getClass().getSimpleName(), subtaskIdx);
 
       for (MergeOnReadInputSplit split : inputSplitsState.get()) {
@@ -122,11 +121,11 @@ public class StreamReadOperator extends AbstractStreamOperator<RowData>
       }
     }
 
-    this.sourceContext = getSourceContext(
-        getOperatorConfig().getTimeCharacteristic(),
+    this.sourceContext = SourceContextUtils.getSourceContext(
+        getOperatorConfig(),
         getProcessingTimeService(),
         output,
-        getRuntimeContext().getExecutionConfig().getAutoWatermarkInterval());
+        RuntimeContextUtils.getWatermarkInternal(getRuntimeContext()));
 
     // Enqueue to process the recovered input splits.
     enqueueProcessSplits();
@@ -250,7 +249,7 @@ public class StreamReadOperator extends AbstractStreamOperator<RowData>
   }
 
   private static class OperatorFactory extends AbstractStreamOperatorFactory<RowData>
-      implements OneInputStreamOperatorFactory<MergeOnReadInputSplit, RowData>, YieldingOperatorFactory<RowData> {
+      implements OneInputStreamOperatorFactory<MergeOnReadInputSplit, RowData>, YieldingOperatorFactoryAdapter<RowData> {
 
     private final MergeOnReadInputFormat format;
 
@@ -270,20 +269,5 @@ public class StreamReadOperator extends AbstractStreamOperator<RowData>
     public Class<? extends StreamOperator> getStreamOperatorClass(ClassLoader classLoader) {
       return StreamReadOperator.class;
     }
-  }
-
-  private static <O> SourceFunction.SourceContext<O> getSourceContext(
-      TimeCharacteristic timeCharacteristic,
-      ProcessingTimeService processingTimeService,
-      Output<StreamRecord<O>> output,
-      long watermarkInterval) {
-    return StreamSourceContexts.getSourceContext(
-        timeCharacteristic,
-        processingTimeService,
-        new Object(), // no actual locking needed
-        output,
-        watermarkInterval,
-        -1,
-        true);
   }
 }
