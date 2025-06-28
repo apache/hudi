@@ -20,6 +20,7 @@ package org.apache.hudi.index;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -31,6 +32,7 @@ import org.apache.hudi.data.HoodieJavaPairRDD;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.TableNotFoundException;
+import org.apache.hudi.metadata.indexversion.HoodieIndexVersion;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.table.HoodieTable;
@@ -49,6 +51,7 @@ import java.util.Map;
 import scala.Tuple2;
 
 import static org.apache.hudi.index.HoodieIndexUtils.tagGlobalLocationBackToRecords;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.existingIndexVersionOrDefault;
 
 /**
  * Hoodie Index implementation backed by the record index present in the Metadata Table.
@@ -93,9 +96,11 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
     }
 
     // Partition the record keys to lookup such that each partition looks up one record index shard
+    String partitionPath = MetadataPartitionType.RECORD_INDEX.getPartitionPath();
+    HoodieIndexVersion indexVersion = existingIndexVersionOrDefault(partitionPath, hoodieTable.getMetaClient());
     JavaRDD<String> partitionedKeyRDD = HoodieJavaRDD.getJavaRDD(records)
         .map(HoodieRecord::getRecordKey)
-        .keyBy(k -> HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(k, numFileGroups))
+        .keyBy(k -> HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(k, numFileGroups, partitionPath, indexVersion))
         .partitionBy(new PartitionIdPassthrough(numFileGroups))
         .map(t -> t._2);
     ValidationUtils.checkState(partitionedKeyRDD.getNumPartitions() <= numFileGroups);
@@ -166,7 +171,8 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
       recordKeyIterator.forEachRemaining(keysToLookup::add);
 
       // recordIndexInfo object only contains records that are present in record_index.
-      Map<String, HoodieRecordGlobalLocation> recordIndexInfo = hoodieTable.getMetadataTable().readRecordIndex(keysToLookup);
+      Map<String, HoodieRecordGlobalLocation> recordIndexInfo = hoodieTable.getMetadataTable().readRecordIndex(
+          HoodieListData.eager(keysToLookup)).collectAsMapWithOverwriteStrategy();
       return recordIndexInfo.entrySet().stream()
           .map(e -> new Tuple2<>(e.getKey(), e.getValue())).iterator();
     }
