@@ -28,6 +28,7 @@ import datahub.event.MetadataChangeProposalWrapper;
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -59,6 +60,8 @@ public class TestDataHubSyncClient {
   private static String TRIP_EXAMPLE_SCHEMA;
   private static Schema avroSchema;
   private static String tableBasePath;
+  private static String DATABASE_NAME = "database";
+  private static String TABLE_NAME = "table";
 
   @BeforeAll
   public static void beforeAll() throws IOException {
@@ -129,6 +132,20 @@ public class TestDataHubSyncClient {
     public RestEmitter getRestEmitter() {
       return emitterMock;
     }
+  }
+
+  @Test
+  public void testTableAndDatabaseName() {
+    Properties props = new Properties();
+    props.put(META_SYNC_PARTITION_EXTRACTOR_CLASS.key(), DummyPartitionValueExtractor.class.getName());
+    props.put("hoodie.meta.sync.datahub.database.name", DATABASE_NAME);
+    props.put("hoodie.meta.sync.datahub.table.name", TABLE_NAME);
+
+    DatahubSyncConfigStub configStub = new DatahubSyncConfigStub(props, restEmitterMock);
+    DataHubSyncClientStub dhClient = new DataHubSyncClientStub(configStub);
+
+    Assertions.assertEquals(DATABASE_NAME, dhClient.getDatabaseName());
+    Assertions.assertEquals(TABLE_NAME, dhClient.getTableName());
   }
 
 }

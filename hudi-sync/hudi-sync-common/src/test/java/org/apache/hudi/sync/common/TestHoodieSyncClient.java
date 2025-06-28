@@ -22,27 +22,49 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.sync.common.model.PartitionValueExtractor;
 
 import org.apache.hadoop.conf.Configuration;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 
 class TestHoodieSyncClient {
+
+  private HoodieTableMetaClient metaClient;
+  private final Properties properties = new Properties();
+  @BeforeEach
+  void setUp() {
+    metaClient = mock(HoodieTableMetaClient.class);
+    properties.put("hoodie.datasource.hive_sync.partition_extractor_class", DummyExtractor.class.getName());
+  }
+
   @Test
   void partitionValueExtractorLoaded() {
     // extractor is loaded from config
-    Properties properties = new Properties();
-    properties.put("hoodie.datasource.hive_sync.partition_extractor_class", DummyExtractor.class.getName());
     HoodieSyncConfig config = new HoodieSyncConfig(properties, new Configuration());
-    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
     try (DummySyncClient client = new DummySyncClient(config, metaClient)) {
       assertSame(metaClient, client.getMetaClient());
       assertTrue(client.getPartitionValueExtractor() instanceof DummyExtractor);
+    }
+  }
+
+  @Test
+  void testTableAndDatabaseName() {
+    properties.put("hoodie.datasource.hive_sync.table", "table");
+    properties.put("hoodie.datasource.hive_sync.database", "database");
+
+    HoodieSyncConfig config = new HoodieSyncConfig(properties, new Configuration());
+
+    try (DummySyncClient client = new DummySyncClient(config, metaClient)) {
+      assertSame(metaClient, client.getMetaClient());
+      assertEquals("table", client.getTableName());
+      assertEquals("database", client.getDatabaseName());
     }
   }
 

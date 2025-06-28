@@ -63,6 +63,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
+import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_DATAHUB_DATABASE_NAME;
+import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_DATAHUB_TABLE_NAME;
+
 public class DataHubSyncClient extends HoodieSyncClient {
 
   protected final DataHubSyncConfig config;
@@ -75,6 +80,16 @@ public class DataHubSyncClient extends HoodieSyncClient {
     super(config, metaClient);
     this.config = config;
     this.datasetUrn = config.datasetIdentifier.getDatasetUrn();
+  }
+
+  @Override
+  public String getTableName() {
+    return config.getStringOrDefault(META_SYNC_DATAHUB_TABLE_NAME, config.getString(META_SYNC_TABLE_NAME));
+  }
+
+  @Override
+  public String getDatabaseName() {
+    return config.getStringOrDefault(META_SYNC_DATAHUB_DATABASE_NAME, config.getString(META_SYNC_DATABASE_NAME));
   }
 
   @Override
