@@ -32,9 +32,11 @@ import org.apache.hudi.common.model.HoodieArchivedLogFile;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRollingStatMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Writer;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
@@ -48,10 +50,12 @@ import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathFilter;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -71,6 +75,7 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.COMPLETED;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.INFLIGHT;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -419,6 +424,45 @@ public class TestArchivedTimelineV1 extends HoodieCommonTestHarness {
     assertEquals(instants, timeline.getInstants());
   }
 
+  @Test
+  public void testDuplicateTimestampDifferentActions() throws Exception {
+    // Two actions that share the very same commit time "30"
+    HoodieInstant commit30 = createInstantV1(COMPLETED, HoodieTimeline.COMMIT_ACTION, "30");
+    HoodieInstant clean30  = createInstantV1(COMPLETED, HoodieTimeline.CLEAN_ACTION,  "30");
+
+    HoodieInstant commit31 = createInstantV1(COMPLETED, HoodieTimeline.COMMIT_ACTION, "31");
+
+    // Write them to a brand new archive log
+    try (HoodieLogFormat.Writer writer = buildWriter(
+            ArchivedTimelineV1.getArchiveLogPath(metaClient.getArchivePath()))) {
+      List<IndexedRecord> records = new ArrayList<>();
+      records.add(createArchivedMetaWrapper(commit30));
+      records.add(createArchivedMetaWrapper(clean30));
+      records.add(createArchivedMetaWrapper(commit31));
+      writeArchiveLog(writer, records);
+    }
+
+    // Build timeline (no filters), should read the new archive
+    HoodieArchivedTimeline dupTimeline = new ArchivedTimelineV1(metaClient);
+    dupTimeline.loadCompletedInstantDetailsInMemory();
+
+    // Both actions for 30 are present (positive case)
+    assertTrue(dupTimeline.getInstantDetails(commit30).isPresent(),
+        "commit metadata for ts=30 must be loaded");
+    assertTrue(dupTimeline.getInstantDetails(clean30).isPresent(),
+        "clean metadata for ts=30 must be loaded");
+    assertFalse(Arrays.equals(dupTimeline.getInstantDetails(commit30).get(),
+        dupTimeline.getInstantDetails(clean30).get()),
+        "clean and commit metadata should have different payloads");
+
+    // For ts=31 we only archived COMMIT, so CLEAN must be absent (negative case)
+    HoodieInstant fakeClean31 = createInstantV1(COMPLETED, HoodieTimeline.CLEAN_ACTION, "31");
+    assertTrue(dupTimeline.getInstantDetails(commit31).isPresent(),
+        "commit metadata for ts=31 must be loaded");
+    assertFalse(dupTimeline.getInstantDetails(fakeClean31).isPresent(),
+        "clean metadata for ts=31 must NOT be loaded");
+  }
+
   /**
    * Validate whether the instants of given timestamps of the hudi archived timeline are loaded to memory or not.
    * @param hoodieArchivedTimeline archived timeline to test against
@@ -745,5 +789,39 @@ public class TestArchivedTimelineV1 extends HoodieCommonTestHarness {
     // Do not archive Rolling Stats, cannot set to null since AVRO will throw null pointer
     avroMetaData.getExtraMetadata().put(HoodieRollingStatMetadata.ROLLING_STAT_METADATA_KEY, "");
     return avroMetaData;
+  }
+
+  @Test
+  void shouldReadArchivedFileFrom2025AndValidateContent() {
+    Path path = new Path(TestArchivedTimelineV1.class
+        .getResource("/archivecommits/.commits_.archive.681_1-0-1").getPath());
+
+    assertDoesNotThrow(() -> readAndValidateArchivedFile(path, metaClient));
+  }
+
+  @Test
+  void shouldReadArchivedFileFrom2022AndValidateContent() {
+    Path path = new Path(TestArchivedTimelineV1.class
+        .getResource("/archivecommits/.commits_.archive.1_1-0-1").getPath());
+
+    assertDoesNotThrow(() -> readAndValidateArchivedFile(path, metaClient));
+  }
+
+  void readAndValidateArchivedFile(Path path, HoodieTableMetaClient metaClient) throws IOException {
+    try (HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(
+        metaClient.getStorage(), new HoodieLogFile(path.toString()), HoodieArchivedMetaEntry.getClassSchema())) {
+      while (reader.hasNext()) {
+        HoodieLogBlock block = reader.next();
+        if (block instanceof HoodieAvroDataBlock) {
+          HoodieAvroDataBlock avroBlock = (HoodieAvroDataBlock) block;
+          try (ClosableIterator<HoodieRecord<IndexedRecord>> itr =
+                   avroBlock.getRecordIterator(HoodieRecord.HoodieRecordType.AVRO)) {
+            if (itr.hasNext()) {
+              itr.next(); // just consume one record to verify decoding works
+            }
+          }
+        }
+      }
+    }
   }
 }
