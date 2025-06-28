@@ -85,27 +85,53 @@ public class SparkRDDMetadataWriteClient<T> extends SparkRDDWriteClient<T> {
     // When streaming writes are enabled, writes to metadata may not call this method as the caller tightly controls the dag de-referencing.
     // Even then, to initialize a new partition in Metadata table and for non-incremental operations like insert_overwrite, etc., writes to metadata table
     // will invoke this commit method.
-    List<HoodieWriteStat> hoodieWriteStats = writeStatuses.map(writeStatus -> writeStatus.getStat()).collect();
+    List<HoodieWriteStat> hoodieWriteStats = writeStatuses.map(WriteStatus::getStat).collect();
     return commitStats(instantTime, hoodieWriteStats, extraMetadata, commitActionType, partitionToReplacedFileIds, extraPreCommitFunc);
   }
 
   /**
-   * Upserts the given prepared records into the Hoodie table, at the supplied instantTime.
+   * Upserts the given prepared records into the metadata table, at the given instantTime.
+   *
+   * <p>This implementation requires that the input records are already tagged, and de-duped if needed.
+   *
+   * @param preppedRecords        Prepared HoodieRecords to upsert
+   * @param instantTime           Instant time of the commit
+   * @param hoodieFileGroupIdList File group list
+   *
+   * @return Collection of WriteStatus to inspect errors and counts.
+   */
+  public JavaRDD<WriteStatus> firstUpsertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords,
+                                                        String instantTime,
+                                                        List<HoodieFileGroupId> hoodieFileGroupIdList) {
+    HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table =
+        initTable(WriteOperationType.UPSERT_PREPPED, Option.ofNullable(instantTime));
+    ValidationUtils.checkState(firstInstantOpt.isEmpty(), "Upsert Prepped should be invoked for the first time");
+    invocationCounts++;
+    preWrite(instantTime, WriteOperationType.UPSERT_PREPPED, table.getMetaClient());
+    firstInstantOpt = Option.of(instantTime);
+    HoodieWriteMetadata<HoodieData<WriteStatus>> result = ((HoodieSparkMergeOnReadMetadataTable) table).upsertPrepped(context, instantTime, HoodieJavaRDD.of(preppedRecords),
+        hoodieFileGroupIdList);
+    HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getWriteStatuses()));
+    return postWrite(resultRDD, instantTime, table);
+  }
+
+  /**
+   * Upserts the given prepared records into the metadata table, at the given instantTime.
    *
    * <p>This implementation requires that the input records are already tagged, and de-duped if needed.
    *
    * @param preppedRecords Prepared HoodieRecords to upsert
    * @param instantTime    Instant time of the commit
-   * @return Collection of WriteStatus to inspect errors and counts
+   *
+   * @return Collection of WriteStatus to inspect errors and counts.
    */
-  public JavaRDD<WriteStatus> upsertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords, String instantTime, Option<List<HoodieFileGroupId>> hoodieFileGroupIdList) {
+  public JavaRDD<WriteStatus> secondaryUpsertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords, String instantTime) {
     HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table =
         initTable(WriteOperationType.UPSERT_PREPPED, Option.ofNullable(instantTime));
-    table.validateUpsertSchema();
+    preWrite(instantTime, WriteOperationType.UPSERT_PREPPED, table.getMetaClient());
     boolean initialCall = firstInstantOpt.isEmpty();
-    invocationCounts++;
     if (initialCall) {
-      // we do not want to call prewrite more than once for the same instant, since we could be writing to metadata table more than once w/ streaming writes.
+      // we do not want to call #preWrite more than once for the same instant, since we could be writing to metadata table more than once w/ streaming writes.
       preWrite(instantTime, WriteOperationType.UPSERT_PREPPED, table.getMetaClient());
       firstInstantOpt = Option.of(instantTime);
     } else {
@@ -114,25 +140,8 @@ public class SparkRDDMetadataWriteClient<T> extends SparkRDDWriteClient<T> {
     }
     ValidationUtils.checkArgument(invocationCounts <= 2, "Upsert Prepped invoked more then twice for the same instant time with metadata write client "
         + firstInstantOpt.get());
-    HoodieWriteMetadata<HoodieData<WriteStatus>> result = ((HoodieSparkMergeOnReadMetadataTable) table).upsertPrepped(context, instantTime, HoodieJavaRDD.of(preppedRecords),
-        hoodieFileGroupIdList, initialCall);
-    HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getWriteStatuses()));
-    return postWrite(resultRDD, instantTime, table);
-  }
 
-  @Override
-  public JavaRDD<WriteStatus> upsertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords, String instantTime) {
-    HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table =
-        initTable(WriteOperationType.UPSERT_PREPPED, Option.ofNullable(instantTime));
-    table.validateUpsertSchema();
-    preWrite(instantTime, WriteOperationType.UPSERT_PREPPED, table.getMetaClient());
-    if (!firstInstantOpt.isPresent()) {
-      // we do not want to call prewrite more than once for the same instant, since we could be writing to metadata table more than once w/ streaming writes.
-      preWrite(instantTime, WriteOperationType.UPSERT_PREPPED, table.getMetaClient());
-      firstInstantOpt = Option.of(instantTime);
-    }
-
-    HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.upsertPrepped(context, instantTime, HoodieJavaRDD.of(preppedRecords));
+    HoodieWriteMetadata<HoodieData<WriteStatus>> result = ((HoodieSparkMergeOnReadMetadataTable) table).upsertPrepped(context, instantTime, HoodieJavaRDD.of(preppedRecords), initialCall);
     HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getWriteStatuses()));
     return postWrite(resultRDD, instantTime, table);
   }

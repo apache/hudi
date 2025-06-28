@@ -54,7 +54,7 @@ public class StreamingMetadataWriteHandler {
     Option<HoodieTableMetadataWriter> metadataWriterOpt = getMetadataWriter(instantTime, table);
     ValidationUtils.checkState(metadataWriterOpt.isPresent(),
         "Cannot instantiate metadata writer for the table of interest " + table.getMetaClient().getBasePath());
-    return streamWriteToMetadataTable(dataTableWriteStatuses, metadataWriterOpt, table, instantTime);
+    return streamWriteToMetadataTable(dataTableWriteStatuses, metadataWriterOpt.get(), table, instantTime);
   }
 
   /**
@@ -85,11 +85,11 @@ public class StreamingMetadataWriteHandler {
   }
 
   private HoodieData<WriteStatus> streamWriteToMetadataTable(HoodieData<WriteStatus> dataTableWriteStatuses,
-                                                             Option<HoodieTableMetadataWriter> metadataWriterOpt,
+                                                             HoodieTableMetadataWriter metadataWriter,
                                                              HoodieTable table,
                                                              String instantTime) {
     HoodieData<WriteStatus> allWriteStatus = dataTableWriteStatuses;
-    HoodieData<WriteStatus> mdtWriteStatuses = metadataWriterOpt.get().streamWriteToMetadataPartitions(dataTableWriteStatuses, instantTime);
+    HoodieData<WriteStatus> mdtWriteStatuses = metadataWriter.streamWriteToMetadataPartitions(dataTableWriteStatuses, instantTime);
     allWriteStatus = allWriteStatus.union(mdtWriteStatuses);
     allWriteStatus.persist("MEMORY_AND_DISK_SER", table.getContext(), HoodieData.HoodieDataCacheKey.of(table.getMetaClient().getBasePath().toString(), instantTime));
     return allWriteStatus;
