@@ -95,7 +95,8 @@ class TestStorageBasedLockProvider {
         props,
         (a,b,c) -> mockHeartbeatManager,
         (a,b,c) -> mockLockService,
-        mockLogger));
+        mockLogger,
+        null));
   }
 
   @AfterEach
@@ -601,7 +602,8 @@ class TestStorageBasedLockProvider {
           new TypedProperties(props),
           (a,b,c) -> mock(HeartbeatManager.class),
           (a,b,c) -> new StubStorageLockClient(a, b, new Properties()),
-          mock(Logger.class));
+          mock(Logger.class),
+          mockMetrics);
       
       // Verify the lock provider was created successfully
       assertNotNull(lockProviderWithMetrics, "StorageBasedLockProvider should be created successfully");
@@ -643,7 +645,8 @@ class TestStorageBasedLockProvider {
           new TypedProperties(props),
           (a,b,c) -> mock(HeartbeatManager.class),
           (a,b,c) -> new StubStorageLockClient(a, b, new Properties()),
-          mock(Logger.class));
+          mock(Logger.class),
+          null);  // No metrics for standard constructor test
       
       // Verify the lock provider was created successfully
       assertNotNull(lockProviderStandard, "StorageBasedLockProvider should be created successfully");

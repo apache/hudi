@@ -40,6 +40,14 @@ public class HoodieLockMetrics {
   public static final String LOCK_ACQUIRE_FAILURES_COUNTER_NAME = "lock.acquire.failure";
   public static final String LOCK_ACQUIRE_DURATION_TIMER_NAME = "lock.acquire.duration";
   public static final String LOCK_REQUEST_LATENCY_TIMER_NAME = "lock.request.latency";
+  public static final String LOCK_ACQUIRED_BY_OTHERS_ERROR = "lock_acquired_others_error";
+  public static final String LOCK_STATE_UNKNOWN = "lock_state_unknown";
+  public static final String LOCK_ACQUIRE_PRECONDITION_FAILURE = "lock_acquire_precondition_failure";
+  public static final String LOCK_PROVIDER_FATAL_ERROR = "lock_provider_fatal_error";
+  public static final String LOCK_RELEASE_FAILURE = "lock_release_failure";
+  public static final String LOCK_EXPIRATION_DEADLINE = "lock_expiration_deadline";
+  public static final String LOCK_DANGLING = "lock_dangling";
+  public static final String LOCK_INTERRUPTED = "lock_interrupted";
   private final HoodieWriteConfig writeConfig;
   private final boolean isMetricsEnabled;
   private final int keepLastNtimes = 100;
@@ -48,6 +56,13 @@ public class HoodieLockMetrics {
   private transient Counter lockAttempts;
   private transient Counter successfulLockAttempts;
   private transient Counter failedLockAttempts;
+  private transient Counter lockAcquiredByOthersError;
+  private transient Counter lockStateUnknown;
+  private transient Counter lockAcquirePreconditionFailure;
+  private transient Counter lockProviderFatalError;
+  private transient Counter lockReleaseFailure;
+  private transient Counter lockDangling;
+  private transient Counter lockInterrupted;
   private transient Timer lockDuration;
   private transient Timer lockApiRequestDuration;
   private static final Object REGISTRY_LOCK = new Object();
@@ -64,7 +79,13 @@ public class HoodieLockMetrics {
       lockAttempts = registry.counter(getMetricsName(LOCK_ACQUIRE_ATTEMPTS_COUNTER_NAME));
       successfulLockAttempts = registry.counter(getMetricsName(LOCK_ACQUIRE_SUCCESS_COUNTER_NAME));
       failedLockAttempts = registry.counter(getMetricsName(LOCK_ACQUIRE_FAILURES_COUNTER_NAME));
-
+      lockAcquiredByOthersError = registry.counter(getMetricsName(LOCK_ACQUIRED_BY_OTHERS_ERROR));
+      lockStateUnknown = registry.counter(getMetricsName(LOCK_STATE_UNKNOWN));
+      lockAcquirePreconditionFailure = registry.counter(getMetricsName(LOCK_ACQUIRE_PRECONDITION_FAILURE));
+      lockProviderFatalError = registry.counter(getMetricsName(LOCK_PROVIDER_FATAL_ERROR));
+      lockReleaseFailure = registry.counter(getMetricsName(LOCK_RELEASE_FAILURE));
+      lockDangling = registry.counter(getMetricsName(LOCK_DANGLING));
+      lockInterrupted = registry.counter(getMetricsName(LOCK_INTERRUPTED));
       lockDuration = createTimerForMetrics(registry, LOCK_ACQUIRE_DURATION_TIMER_NAME);
       lockApiRequestDuration = createTimerForMetrics(registry, LOCK_REQUEST_LATENCY_TIMER_NAME);
     }
@@ -128,6 +149,54 @@ public class HoodieLockMetrics {
       } else {
         LOG.info("Unable to get lock duration");
       }
+    }
+  }
+
+  public void updateLockAcquiredByOthersErrorMetric() {
+    if (isMetricsEnabled) {
+      lockAcquiredByOthersError.inc();
+    }
+  }
+
+  public void updateLockStateUnknownMetric() {
+    if (isMetricsEnabled) {
+      lockStateUnknown.inc();
+    }
+  }
+
+  public void updateLockAcquirePreconditionFailureMetric() {
+    if (isMetricsEnabled) {
+      lockAcquirePreconditionFailure.inc();
+    }
+  }
+
+  public void updateLockProviderFatalErrorMetric() {
+    if (isMetricsEnabled) {
+      lockProviderFatalError.inc();
+    }
+  }
+
+  public void updateLockReleaseFailureMetric() {
+    if (isMetricsEnabled) {
+      lockReleaseFailure.inc();
+    }
+  }
+
+  public void updateLockExpirationDeadlineMetric(int deadlineMs) {
+    if (isMetricsEnabled) {
+      metrics.registerGauge(getMetricsName(LOCK_EXPIRATION_DEADLINE), deadlineMs >= 0 ? (long)deadlineMs : 0);
+    }
+  }
+
+  public void updateLockDanglingMetric() {
+    if (isMetricsEnabled) {
+      this.lockDangling.inc();
+    }
+  }
+
+  public void updateLockInterruptedMetric() {
+    if (isMetricsEnabled) {
+      this.lockInterrupted.inc();
     }
   }
 }
