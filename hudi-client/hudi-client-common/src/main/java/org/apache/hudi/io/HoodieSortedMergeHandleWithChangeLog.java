@@ -48,8 +48,8 @@ public class HoodieSortedMergeHandleWithChangeLog<T, I, K, O> extends HoodieMerg
    * Called by compactor code path.
    */
   public HoodieSortedMergeHandleWithChangeLog(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                           Map<String, HoodieRecord<T>> keyToNewRecords, String partitionPath, String fileId,
-                           HoodieBaseFile dataFileToBeMerged, TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
+                                              Map<String, HoodieRecord<T>> keyToNewRecords, String partitionPath, String fileId,
+                                              HoodieBaseFile dataFileToBeMerged, TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
     super(config, instantTime, hoodieTable, keyToNewRecords, partitionPath, fileId, dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt);
   }
 
