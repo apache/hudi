@@ -852,3 +852,10 @@ c6badaeb3a [AUDIT-1061]: Changelog for release-v1.45.0 (#1038)
 [ENG-27166][INTERNAL] Accounting for empty partitions showing up only in FS based listing (#1420)
 [ENG-27183][INTERNAL] Remove unintentional test disable from prior PR (#1422)
 [AUDIT-1071]: Changelog for release-v1.137.0 (#1421)
+
+---[2025-06-28 11:28:09] [release-v1.139.0] ---
+5be71dbe9bc [ENG-28737][INTERNAL] Add metrics for storage based lock provider (#1425)
+3499c12f857 [ENG-26567][HUDI-9528] Support database and table name for Glue/ Datahub catalog (#1398)
+0d393e52a85 [ENG-28777][INTERNAL] Allowlist procedures in SQL through spark.allowed.hudi.procedures.prefix (#1427)
+f5824e51ca7 [ENG-28779][INTERNAL] Add parallelism configs to AwsGlueSync (#1428)
+8ec789478aa [ENG-28736][INTERNAL] Modify LockManager to check for LockProvider constructor using HoodieLockMetrics first (#1423)
