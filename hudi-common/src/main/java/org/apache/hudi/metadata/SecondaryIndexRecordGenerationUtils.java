@@ -219,8 +219,8 @@ public class SecondaryIndexRecordGenerationUtils {
                                                                                                 String instantTime,
                                                                                                 TypedProperties props,
                                                                                                 boolean allowInflightInstants) throws IOException {
-    String secondaryKeyField = String.join(".", indexDefinition.getSourceFields());
-    Schema requestedSchema = getRequestedSchemaForSecondaryIndex(metaClient, tableSchema, secondaryKeyField, readerContext);
+    String secondaryKeyField = indexDefinition.getSourceFieldsKey();
+    Schema requestedSchema = getRequestedSchemaForSecondaryIndex(metaClient, tableSchema, secondaryKeyField);
     HoodieFileGroupReader<T> fileGroupReader = HoodieFileGroupReader.<T>newBuilder()
         .withReaderContext(readerContext)
         .withFileSlice(fileSlice)
@@ -283,10 +283,9 @@ public class SecondaryIndexRecordGenerationUtils {
     };
   }
 
-  private static <T> Schema getRequestedSchemaForSecondaryIndex(HoodieTableMetaClient metaClient, Schema tableSchema, String secondaryKeyField,
-                                                                HoodieReaderContext<T> readerContext) {
+  private static Schema getRequestedSchemaForSecondaryIndex(HoodieTableMetaClient metaClient, Schema tableSchema, String secondaryKeyField) {
     String[] recordKeyFields;
-    if (readerContext.isRecordKeyExtractedUsingMetadata()) {
+    if (tableSchema.getField(RECORD_KEY_METADATA_FIELD) != null) {
       recordKeyFields = new String[] {RECORD_KEY_METADATA_FIELD};
     } else {
       recordKeyFields = metaClient.getTableConfig().getRecordKeyFields().orElse(new String[0]);
