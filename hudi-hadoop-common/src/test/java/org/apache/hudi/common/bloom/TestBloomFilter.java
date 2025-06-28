@@ -33,6 +33,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.HoodieTestTable.readLastLineFromResourceFile;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -70,6 +71,87 @@ public class TestBloomFilter {
         if (inputs.contains(randomKey)) {
           assertTrue(filter.mightContain(randomKey), "Filter should have returned true for " + randomKey);
         }
+      }
+    }
+  }
+
+  @ParameterizedTest
+  @MethodSource("bloomFilterTypeCodes")
+  public void testBloomORMethod(String typeCode) {
+    List<String> inputs = new ArrayList<>();
+    int[] sizes = {100, 1000, 10000};
+    BloomFilter bloomFilter = null;
+    for (int size : sizes) {
+      BloomFilter filter = getBloomFilter(typeCode, 20000, 0.00000001, 100000);
+      for (int i = 0; i < size; i++) {
+        String key = String.format("key%d",size + i);
+        inputs.add(key);
+        filter.add(key);
+      }
+      if (bloomFilter == null) {
+        bloomFilter = filter;
+      } else {
+        bloomFilter.or(filter);
+      }
+    }
+    for (java.lang.String key : inputs) {
+      assertTrue(bloomFilter.mightContain(key), "Filter should have returned true for " + key);
+    }
+    // The data ranges for the keys are:
+    // key ∈ [100, 200), [1000, 2000), [10000, 20000).
+    // Thus, after merging, within the range of the Bloom key [150, 200]:
+    //
+    // Data in [150, 199] exists,
+    // Data in (200, 210) does not exist.
+    for (int i = 150; i <= 210; i++) {
+      if (inputs.contains(String.format("key%d",i))) {
+        assertTrue(bloomFilter.mightContain(String.format("key%d",i)),
+            "Filter should have returned false for " + String.format("key%d",i));
+      } else {
+        assertFalse(bloomFilter.mightContain(String.format("key%d",i)),
+            "Filter should have returned false for " + String.format("key%d",i));
+      }
+    }
+
+    // The data ranges for keys are: key ∈ [100,200), [1000,2000), [10000,20000)
+    // Therefore, in the merged Bloom key range [998,1001]:
+    //   - [998,999] does not exist
+    //   - [1000,1001] exists
+    for (int i = 998; i <= 1001; i++) {
+      if (inputs.contains(String.format("key%d",i))) {
+        assertTrue(bloomFilter.mightContain(String.format("key%d",i)),
+            "Filter should have returned false for " + String.format("key%d",i));
+      } else {
+        assertFalse(bloomFilter.mightContain(String.format("key%d",i)),
+            "Filter should have returned false for " + String.format("key%d",i));
+      }
+    }
+
+    // The data ranges for keys are: key ∈ [100,200), [1000,2000), [10000,20000)
+    // Therefore, in the merged Bloom key range [9998,10001]:
+    //   - [9998,9999] does not exist
+    //   - [10000,10001] exists
+    for (int i = 9998; i <= 10001; i++) {
+      if (inputs.contains(String.format("key%d",i))) {
+        assertTrue(bloomFilter.mightContain(String.format("key%d",i)),
+            "Filter should have returned false for " + String.format("key%d",i));
+      } else {
+        assertFalse(bloomFilter.mightContain(String.format("key%d",i)),
+            "Filter should have returned false for " + String.format("key%d",i));
+      }
+    }
+
+    // The data ranges for keys are: key ∈ [100,200), [1000,2000), [10000,20000)
+    // Therefore, in the merged Bloom key range [19998,20001]:
+    //   - [19998,19999] exists
+    //   - [20000,20001] does not exist
+    for (int i = 19998; i <= 20001; i++) {
+      if (inputs.contains(String.format("key%d",i))) {
+        assertTrue(bloomFilter.mightContain(String.format("key%d",i)),
+            "Filter should have returned false for " + String.format("key%d",i));
+      } else {
+        assertFalse(bloomFilter.mightContain(String.format("key%d",i)),
+            "Filter should have returned false for " + String.format("key%d",i));
       }
     }
   }

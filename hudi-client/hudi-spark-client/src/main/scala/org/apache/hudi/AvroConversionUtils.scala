@@ -23,16 +23,15 @@ import org.apache.hudi.avro.AvroSchemaUtils
 import org.apache.hudi.exception.SchemaCompatibilityException
 import org.apache.hudi.internal.schema.HoodieSchemaException
 
+import org.apache.avro.{AvroRuntimeException, JsonProperties, Schema}
 import org.apache.avro.Schema.Type
 import org.apache.avro.generic.GenericRecord
-import org.apache.avro.{AvroRuntimeException, JsonProperties, Schema}
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.{Dataset, Row, SparkSession}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types.{ArrayType, DataType, MapType, StructType}
-import org.apache.spark.sql.{Dataset, Row, SparkSession}
 
 import java.util.concurrent.ConcurrentHashMap
-import java.util.function.Function
 
 import scala.collection.JavaConverters._
 
@@ -267,5 +266,107 @@ object AvroConversionUtils {
       return schema.getTypes.get(index)
     }
     schema
+  }
+
+  /**
+   * Recursively aligns the nullable property of hoodie table schema, supporting nested structures
+   */
+  def alignFieldsNullability(sourceSchema: StructType, avroSchema: Schema): StructType = {
+    // Converts Avro fields to a Map for efficient lookup
+    val avroFieldsMap = avroSchema.getFields.asScala.map(f => (f.name, f)).toMap
+
+    // Recursively process fields
+    val alignedFields = sourceSchema.fields.map { field =>
+      avroFieldsMap.get(field.name) match {
+        case Some(avroField) =>
+          // Process the nullable property of the current field
+          val alignedField = field.copy(nullable = avroField.schema.isNullable)
+
+          // Recursively handle nested structures
+          field.dataType match {
+            case structType: StructType =>
+              // For struct type, recursively process its internal fields
+              val nestedAvroSchema = unwrapNullableSchema(avroField.schema)
+              if (nestedAvroSchema.getType == Schema.Type.RECORD) {
+                alignedField.copy(dataType = alignFieldsNullability(structType, nestedAvroSchema))
+              } else {
+                alignedField
+              }
+
+            case ArrayType(elementType, containsNull) =>
+              // For array type, process element type
+              val arraySchema = unwrapNullableSchema(avroField.schema)
+              if (arraySchema.getType == Schema.Type.ARRAY) {
+                val elemSchema = arraySchema.getElementType
+                val newElementType = updateElementType(elementType, elemSchema)
+                alignedField.copy(dataType = ArrayType(newElementType, elemSchema.isNullable))
+              } else {
+                alignedField
+              }
+
+            case MapType(keyType, valueType, valueContainsNull) =>
+              // For Map type, process value type
+              val mapSchema = unwrapNullableSchema(avroField.schema)
+              if (mapSchema.getType == Schema.Type.MAP) {
+                val valueSchema = mapSchema.getValueType
+                val newValueType = updateElementType(valueType, valueSchema)
+                alignedField.copy(dataType = MapType(keyType, newValueType, valueSchema.isNullable))
+              } else {
+                alignedField
+              }
+
+            case _ => alignedField // Basic types are returned directly
+          }
+
+        case None => field.copy() // Field not found in Avro schema remains unchanged
+      }
+    }
+
+    StructType(alignedFields)
+  }
+
+  /**
+   * Returns the non-null schema if the schema is a UNION type containing NULL
+   */
+  private def unwrapNullableSchema(schema: Schema): Schema = {
+    if (schema.getType == Schema.Type.UNION) {
+      val types = schema.getTypes.asScala
+      val nonNullTypes = types.filter(_.getType != Schema.Type.NULL)
+      if (nonNullTypes.size == 1) nonNullTypes.head else schema
+    } else {
+      schema
+    }
+  }
+
+  /**
+   * Updates the element type, handling nested structures
+   */
+  private def updateElementType(dataType: DataType, avroSchema: Schema): DataType = {
+    dataType match {
+      case structType: StructType =>
+        if (avroSchema.getType == Schema.Type.RECORD) {
+          alignFieldsNullability(structType, avroSchema)
+        } else {
+          structType
+        }
+
+      case ArrayType(elemType, containsNull) =>
+        if (avroSchema.getType == Schema.Type.ARRAY) {
+          val elemSchema = avroSchema.getElementType
+          ArrayType(updateElementType(elemType, elemSchema), elemSchema.isNullable)
+        } else {
+          dataType
+        }
+
+      case MapType(keyType, valueType, valueContainsNull) =>
+        if (avroSchema.getType == Schema.Type.MAP) {
+          val valueSchema = avroSchema.getValueType
+          MapType(keyType, updateElementType(valueType, valueSchema), valueSchema.isNullable)
+        } else {
+          dataType
+        }
+
+      case _ => dataType // Basic types are returned directly
+    }
   }
 }

@@ -19,6 +19,7 @@
 package org.apache.hudi.common.bloom;
 
 import org.apache.hudi.common.util.Base64CodecUtil;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIndexException;
 
 import java.io.ByteArrayInputStream;
@@ -154,5 +155,14 @@ public class SimpleBloomFilter implements BloomFilter {
 
   private void extractAndSetInternalBloomFilter(DataInputStream dis) throws IOException {
     this.filter.readFields(dis);
+  }
+
+  @Override
+  public void or(BloomFilter otherFilter) {
+    if (otherFilter != null) {
+      ValidationUtils.checkArgument(otherFilter instanceof SimpleBloomFilter, "SimpleBloomFilter can only perform OR operations with other SimpleBloomFilters.");
+      SimpleBloomFilter bloomFilter = (SimpleBloomFilter) otherFilter;
+      this.filter.or(bloomFilter.filter);
+    }
   }
 }
