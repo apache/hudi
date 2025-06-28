@@ -172,7 +172,11 @@ case class HoodieFileIndex(spark: SparkSession,
    * @return list of PartitionDirectory containing partition to base files mapping
    */
   override def listFiles(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[PartitionDirectory] = {
-    val prunedPartitionsAndFilteredFileSlices = filterFileSlices(dataFilters, partitionFilters).map {
+    val prunedPartitionsAndFilteredFileSlices = filterFileSlices(dataFilters, partitionFilters).flatMap(
+      { case (partitionOpt, fileSlices) =>
+        fileSlices.map(fs => (partitionOpt, Seq(fs)))
+      }
+    ).map {
       case (partitionOpt, fileSlices) =>
         if (shouldEmbedFileSlices) {
           PartitionDirectoryConverter.convertFileSlicesToPartitionDirectory(
