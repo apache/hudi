@@ -80,7 +80,7 @@ class SecondaryIndexSupport(spark: SparkSession,
    */
   private def getCandidateFilesFromSecondaryIndex(allFiles: Seq[StoragePath], secondaryKeys: List[String], secondaryIndexName: String): Set[String] = {
     val recordKeyLocationsMap = HoodieDataUtils.collectAsMapWithOverwriteStrategy(metadataTable.readSecondaryIndexWithMapping(
-        HoodieListData.`lazy`(JavaConverters.seqAsJavaListConverter(secondaryKeys).asJava), secondaryIndexName))
+        HoodieListData.eager(JavaConverters.seqAsJavaListConverter(secondaryKeys).asJava), secondaryIndexName))
     val fileIdToPartitionMap: mutable.Map[String, String] = mutable.Map.empty
     val candidateFiles: mutable.Set[String] = mutable.Set.empty
     recordKeyLocationsMap.values().forEach(location => fileIdToPartitionMap.put(location.getFileId, location.getPartitionPath))
