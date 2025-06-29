@@ -22,6 +22,7 @@ package org.apache.hudi.index.bloom;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroupId;
@@ -65,7 +66,6 @@ import java.util.stream.Collectors;
 import scala.Tuple2;
 
 import static org.apache.hudi.metadata.HoodieMetadataPayload.getBloomFilterIndexKey;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex;
 import static org.apache.hudi.metadata.MetadataPartitionType.BLOOM_FILTERS;
 
 /**
@@ -320,9 +320,14 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
       // NOTE: It's crucial that [[targetPartitions]] be congruent w/ the number of
       //       actual file-groups in the Bloom Index in MT
       String bloomPartitionPath = BLOOM_FILTERS.getPartitionPath();
-      return mapRecordKeyToFileGroupIndex(bloomIndexEncodedKey, targetPartitions, bloomPartitionPath,
-          // TODO[HUDI-9530] The version should come from the index def json file instead of a hard code value.
-          HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.current(), bloomPartitionPath));
+      HoodieIndexVersion indexVersion = HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.current(), bloomPartitionPath);
+      SerializableFunction<String, SerializableFunction<Integer, Integer>> mappingFunction =
+          HoodieTableMetadataUtil.getRecordKeyToFileGroupIndexFunction(bloomPartitionPath, indexVersion);
+      try {
+        return mappingFunction.apply(bloomIndexEncodedKey).apply(targetPartitions);
+      } catch (Exception e) {
+        throw new HoodieException("Error apply bloom index partitioner mapping function", e);
+      }
     }
   }
 

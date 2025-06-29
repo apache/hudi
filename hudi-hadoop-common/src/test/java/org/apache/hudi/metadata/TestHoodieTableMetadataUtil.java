@@ -23,6 +23,7 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
+import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
@@ -753,8 +754,10 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
   @ParameterizedTest(name = "{0}")
   @MethodSource("mapRecordKeyToFileGroupIndexTestCases")
   public void testMapRecordKeyToFileGroupIndex(String testName, String recordKey, int numFileGroups, String partitionName, 
-      HoodieIndexVersion version, int expectedIndex) {
-    int index = HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(recordKey, numFileGroups, partitionName, version);
+      HoodieIndexVersion version, int expectedIndex) throws Exception {
+    SerializableFunction<String, SerializableFunction<Integer, Integer>> mappingFunction =
+        HoodieTableMetadataUtil.getRecordKeyToFileGroupIndexFunction(partitionName, version);
+    int index = mappingFunction.apply(recordKey).apply(numFileGroups);
     assertEquals(expectedIndex, index, "File group index should match expected value");
   }
 
