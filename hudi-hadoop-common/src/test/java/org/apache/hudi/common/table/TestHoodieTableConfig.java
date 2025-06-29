@@ -457,7 +457,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
           String expectedMergeStrategy = outputMergeStrategy;
           if (!shouldThrow && (outputMergeMode == null || outputMergeStrategy == null)) {
             expectedMergeMode = tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)
-                ? CUSTOM : inferRecordMergeModeFromPayloadClass(outputPayloadClass);
+                ? CUSTOM : inferRecordMergeModeFromPayloadClass(outputPayloadClass, tableVersion);
             expectedMergeStrategy = getRecordMergeStrategyId(expectedMergeMode, outputPayloadClass, inputMergeStrategy, tableVersion);
           }
           if (shouldThrow) {

@@ -28,6 +28,7 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.OrderedProperties;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.AWSDmsAvroPayload;
 import org.apache.hudi.common.model.BootstrapIndexType;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
@@ -37,7 +38,10 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
+import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.model.PartialUpdateAvroPayload;
+import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
@@ -829,7 +833,7 @@ public class HoodieTableConfig extends HoodieConfig {
           : (isNullOrEmpty(orderingFieldName) ? COMMIT_TIME_ORDERING : EVENT_TIME_ORDERING);
     } else {
       // Infer the merge mode from either the payload class or record merge strategy ID
-      RecordMergeMode modeBasedOnPayload = inferRecordMergeModeFromPayloadClass(payloadClassName);
+      RecordMergeMode modeBasedOnPayload = inferRecordMergeModeFromPayloadClass(payloadClassName, tableVersion);
       RecordMergeMode modeBasedOnStrategyId = inferRecordMergeModeFromMergeStrategyId(recordMergeStrategyId);
       checkArgument(modeBasedOnPayload != null || modeBasedOnStrategyId != null,
           String.format("Cannot infer record merge mode from payload class (%s) or record merge "
@@ -896,17 +900,14 @@ public class HoodieTableConfig extends HoodieConfig {
     return Triple.of(inferredRecordMergeMode, inferredPayloadClassName, inferredRecordMergeStrategyId);
   }
 
-  public static RecordMergeMode inferRecordMergeModeFromPayloadClass(String payloadClassName) {
+  public static RecordMergeMode inferRecordMergeModeFromPayloadClass(String payloadClassName, HoodieTableVersion tableVersion) {
     if (isNullOrEmpty(payloadClassName)) {
       return null;
     }
-
     if (DefaultHoodieRecordPayload.class.getName().equals(payloadClassName)
         || EventTimeAvroPayload.class.getName().equals(payloadClassName)) {
-      // DefaultHoodieRecordPayload and EventTimeAvroPayload match with EVENT_TIME_ORDERING.
       return EVENT_TIME_ORDERING;
     } else if (payloadClassName.equals(OverwriteWithLatestAvroPayload.class.getName())) {
-      // OverwriteWithLatestAvroPayload matches with COMMIT_TIME_ORDERING.
       return COMMIT_TIME_ORDERING;
     } else {
       return CUSTOM;

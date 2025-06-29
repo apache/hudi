@@ -316,6 +316,16 @@ public abstract class HoodieReaderContext<T> {
   public abstract Object getValue(T record, Schema schema, String fieldName);
 
   /**
+   * Set the value of a specific field.
+   *
+   * @param record    The record in engine-specific type.
+   * @param schema    The Avro schema of the record.
+   * @param fieldName The field name. A dot separated string if a nested field.
+   * @param value     The new value for the field.
+   */
+  public abstract void setValue(T record, Schema schema, String fieldName, Object value);
+
+  /**
    * Get value of metadata field in a more efficient way than #getValue.
    *
    * @param record The record in engine-specific type.
