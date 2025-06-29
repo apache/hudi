@@ -55,6 +55,7 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.function.SerializableBiFunction;
+import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializableFunctionPairOut;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.FileSlice;
@@ -1363,7 +1364,7 @@ public class HoodieTableMetadataUtil {
   }
 
   /**
-   * Maps a record key to a file group index in the specified partition.
+   * Returns a function that maps record keys to file group indices based on the partition name.
    * <p>
    * For secondary index partitions (version >= 2), if the record key contains the secondary index separator,
    * the secondary key portion is used for hashing. Otherwise, the full record key is used.
@@ -1371,20 +1372,68 @@ public class HoodieTableMetadataUtil {
    * Note: The hashing algorithm is same as String.hashCode() but is defined here explicitly since
    * hashCode() implementation is not guaranteed by the JVM to be consistent across versions.
    *
-   * @param recordKey record key for which the file group index is looked up
-   * @param numFileGroups number of file groups to map the key to
    * @param partitionName name of the partition
    * @param version index version to determine hashing behavior
-   * @return file group index for the given record key
+   * @return function that maps record keys to file group indices
    */
-  public static int mapRecordKeyToFileGroupIndex(
-      String recordKey, int numFileGroups, String partitionName, HoodieIndexVersion version) {
+  public static SerializableFunction<String, SerializableFunction<Integer, Integer>> getRecordKeyToFileGroupIndexFunction(
+      String partitionName, HoodieIndexVersion version) {
+    if (MetadataPartitionType.SECONDARY_INDEX.matchesPartitionPath(partitionName)
+        && version.greaterThanOrEquals(HoodieIndexVersion.V2)) {
+      return recordKey -> {
+        if (recordKey.contains(SECONDARY_INDEX_RECORD_KEY_SEPARATOR)) {
+          String secondaryKey = SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey(recordKey);
+          return numFileGroups -> mapRecordKeyToFileGroupIndex(secondaryKey, numFileGroups);
+        }
+        return numFileGroups -> mapRecordKeyToFileGroupIndex(recordKey, numFileGroups);
+      };
+    }
+    return recordKey -> numFileGroups -> mapRecordKeyToFileGroupIndex(recordKey, numFileGroups);
+  }
+
+  /**
+   * Returns a function that maps record keys to file group indices, optimized for batch processing.
+   * <p>
+   * This method should be used when processing a batch of records that are guaranteed to have the same key format
+   * (either all containing the secondary index separator or none containing it).
+   * <p>
+   * For secondary index partitions (version >= 2), if the record keys contain the secondary index separator,
+   * the secondary key portion is used for hashing. Otherwise, the full record key is used.
+   *
+   * @param partitionName name of the partition
+   * @param version index version to determine hashing behavior
+   * @param useSecondaryKeyForHashing whether to extract secondary key from composite keys (should be determined by caller)
+   * @return function that maps record keys to file group indices
+   */
+  public static SerializableFunction<String, SerializableFunction<Integer, Integer>> getRecordKeyToFileGroupIndexFunction(
+      String partitionName, HoodieIndexVersion version, boolean useSecondaryKeyForHashing) {
     if (MetadataPartitionType.SECONDARY_INDEX.matchesPartitionPath(partitionName)
         && version.greaterThanOrEquals(HoodieIndexVersion.V2)
-        && recordKey.contains(SECONDARY_INDEX_RECORD_KEY_SEPARATOR)) {
-      return mapRecordKeyToFileGroupIndex(SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey(recordKey), numFileGroups);
+        && useSecondaryKeyForHashing) {
+      return recordKey -> {
+        String secondaryKey = SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey(recordKey);
+        return numFileGroups -> mapRecordKeyToFileGroupIndex(secondaryKey, numFileGroups);
+      };
     }
-    return mapRecordKeyToFileGroupIndex(recordKey, numFileGroups);
+    return recordKey -> numFileGroups -> mapRecordKeyToFileGroupIndex(recordKey, numFileGroups);
+  }
+
+  /**
+   * Determines whether secondary key should be used for hashing in a batch of records.
+   * <p>
+   * This method checks if the partition is a secondary index partition and if the provided sample record key
+   * contains the secondary index separator. The result can be used to optimize batch processing by avoiding
+   * repeated separator checks for each record.
+   *
+   * @param partitionName name of the partition
+   * @param version index version to determine hashing behavior
+   * @param sampleRecordKey a sample record key from the batch to determine the key format
+   * @return true if secondary key should be used for hashing, false otherwise
+   */
+  public static boolean shouldUseSecondaryKeyForHashing(String partitionName, HoodieIndexVersion version, String sampleRecordKey) {
+    return MetadataPartitionType.SECONDARY_INDEX.matchesPartitionPath(partitionName)
+        && version.greaterThanOrEquals(HoodieIndexVersion.V2)
+        && sampleRecordKey.contains(SECONDARY_INDEX_RECORD_KEY_SEPARATOR);
   }
 
   // change to configurable larger group
@@ -2913,7 +2962,7 @@ public class HoodieTableMetadataUtil {
             //          - Then we merge records from base-files with the delta ones (coming as a result
             //          of the previous step)
             (oldFileInfo, newFileInfo) -> {
-              // NOTE: We can’t assume that MT update records will be ordered the same way as actual
+              // NOTE: We can't assume that MT update records will be ordered the same way as actual
               //       FS operations (since they are not atomic), therefore MT record merging should be a
               //       _commutative_ & _associative_ operation (ie one that would work even in case records
               //       will get re-ordered), which is
@@ -2921,12 +2970,12 @@ public class HoodieTableMetadataUtil {
               //          take max of the old and new records)
               //          - Not possible for is-deleted flags*
               //
-              //       *However, we’re assuming that the case of concurrent write and deletion of the same
+              //       *However, we're assuming that the case of concurrent write and deletion of the same
               //       file is _impossible_ -- it would only be possible with concurrent upsert and
               //       rollback operation (affecting the same log-file), which is implausible, b/c either
               //       of the following have to be true:
-              //          - We’re appending to failed log-file (then the other writer is trying to
-              //          rollback it concurrently, before it’s own write)
+              //          - We're appending to failed log-file (then the other writer is trying to
+              //          rollback it concurrently, before it's own write)
               //          - Rollback (of completed instant) is running concurrently with append (meaning
               //          that restore is running concurrently with a write, which is also nut supported
               //          currently)
