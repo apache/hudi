@@ -180,6 +180,20 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
   }
 
   @Override
+  public void setValue(RowData record, Schema schema, String fieldName, Object value) {
+    // Get the index of the field from Avro schema
+    Schema.Field field = schema.getField(fieldName);
+    if (field == null) {
+      throw new IllegalArgumentException("Field '" + fieldName + "' not found in schema.");
+    }
+
+    int index = field.pos();
+    GenericRowData row = (GenericRowData) record;
+    // Set the value at the correct index
+    row.setField(index, value);
+  }
+
+  @Override
   public String getMetaFieldValue(RowData record, int pos) {
     return record.getString(pos).toString();
   }
