@@ -184,7 +184,8 @@ public class HoodieSnapshotExporter {
 
   private List<String> getPartitions(HoodieEngineContext engineContext, Config cfg,
                                      HoodieStorage storage) {
-    return FSUtils.getAllPartitionPaths(engineContext, storage, cfg.sourceBasePath, true);
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(cfg.sourceBasePath).setConf(storage.getConf()).build();
+    return FSUtils.getAllPartitionPaths(engineContext, metaClient, true);
   }
 
   private void createSuccessTag(FileSystem fs, Config cfg) throws IOException {

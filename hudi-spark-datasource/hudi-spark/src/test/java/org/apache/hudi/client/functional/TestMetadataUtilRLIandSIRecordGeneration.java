@@ -334,7 +334,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
           .withIndexOptions(Collections.emptyMap())
           .build();
       HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).withSecondaryIndexParallelism(2).build();
-      HoodieTableMetadata metadata = HoodieTableMetadata.create(engineContext, storage, metadataConfig, metaClient.getBasePath().toString());
+      HoodieTableMetadata metadata = metaClient.getTableFormat().getMetadataFactory().create(engineContext, storage, metadataConfig, metaClient.getBasePath().toString());
       HoodieTableFileSystemView metadataView = new HoodieTableFileSystemView(metadata, metaClient, metaClient.getActiveTimeline());
       metadataView.loadAllPartitions();
       List<Pair<String, FileSlice>> partitionFileSlicePairs = new ArrayList<>();

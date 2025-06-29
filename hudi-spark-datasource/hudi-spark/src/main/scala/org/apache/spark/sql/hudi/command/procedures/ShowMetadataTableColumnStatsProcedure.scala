@@ -82,7 +82,7 @@ class ShowMetadataTableColumnStatsProcedure extends BaseProcedure with Procedure
     val fsView = buildFileSystemView(table, engineCtx)
     val allFileSlices: Set[FileSlice] = {
       if (partitionsSeq.isEmpty) {
-        val metaTable = HoodieTableMetadata.create(engineCtx, metaClient.getStorage, metadataConfig, basePath)
+        val metaTable = metaClient.getTableFormat.getMetadataFactory.create(engineCtx, metaClient.getStorage, metadataConfig, basePath)
         metaTable.getAllPartitionPaths
           .asScala
           .flatMap(path => fsView.getLatestFileSlices(path).iterator().asScala)

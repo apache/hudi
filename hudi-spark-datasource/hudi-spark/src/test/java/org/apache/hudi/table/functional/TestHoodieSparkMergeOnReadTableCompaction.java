@@ -395,21 +395,19 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
   }
 
   private void validateFileListingInMetadataTable() {
-    List<String> partitionPaths = FSUtils.getAllPartitionPaths(context(), hoodieStorage(), basePath(), false)
+    List<String> partitionPaths = FSUtils.getAllPartitionPaths(context(), metaClient, false)
         .stream()
         .map(e -> new StoragePath(basePath(), e).toString())
         .collect(Collectors.toList());
     Map<String, List<StoragePathInfo>> filesFromStorage = FSUtils.getFilesInPartitions(
         context(),
-        hoodieStorage(),
+        metaClient,
         HoodieMetadataConfig.newBuilder().enable(false).build(),
-        basePath(),
         partitionPaths.toArray(new String[0]));
     Map<String, List<StoragePathInfo>> filesFromMetadataTable = FSUtils.getFilesInPartitions(
         context(),
-        hoodieStorage(),
+        metaClient,
         HoodieMetadataConfig.newBuilder().enable(true).build(),
-        basePath(),
         partitionPaths.toArray(new String[0]));
     assertEquals(filesFromStorage.size(), filesFromMetadataTable.size());
     for (String partition : filesFromStorage.keySet()) {
