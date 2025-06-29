@@ -842,6 +842,13 @@ public class HoodieWriteConfig extends HoodieConfig {
       .sinceVersion("1.0.0")
       .withDocumentation("Whether to enable incremental table service. So far Clustering and Compaction support incremental processing.");
 
+  public static final ConfigProperty<Boolean> EVENT_TIME_WATERMARK_METADATA_ENABLED = ConfigProperty
+      .key("hoodie.write.event.time.watermark.metadata.enabled")
+      .defaultValue(true)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Record event time in record metadata during runtime.");
+
   /**
    * Config key with boolean value that indicates whether record being written during MERGE INTO Spark SQL
    * operation are already prepped.

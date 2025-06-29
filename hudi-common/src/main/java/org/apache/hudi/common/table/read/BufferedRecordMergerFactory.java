@@ -28,9 +28,12 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -39,12 +42,18 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 
 /**
  * Factory to create a {@link BufferedRecordMerger}.
  */
 public class BufferedRecordMergerFactory {
+
+  private BufferedRecordMergerFactory() {
+  }
+
   public static <T> BufferedRecordMerger<T> create(HoodieReaderContext<T> readerContext,
                                                    RecordMergeMode recordMergeMode,
                                                    boolean enablePartialMerging,
@@ -52,12 +61,14 @@ public class BufferedRecordMergerFactory {
                                                    Option<String> orderingFieldName,
                                                    Option<String> payloadClass,
                                                    Schema readerSchema,
-                                                   TypedProperties props) {
+                                                   TypedProperties props,
+                                                   PartialUpdateMode partialUpdateMode) {
     if (enablePartialMerging) {
       BufferedRecordMerger<T> deleteRecordMerger = create(
-          readerContext, recordMergeMode, false, recordMerger, orderingFieldName, payloadClass, readerSchema, props);
+          readerContext, recordMergeMode, false, recordMerger, orderingFieldName, payloadClass, readerSchema, props, partialUpdateMode);
       return new PartialUpdateBufferedRecordMerger<>(readerContext, recordMerger, deleteRecordMerger, readerSchema, props);
     }
+
     switch (recordMergeMode) {
       case COMMIT_TIME_ORDERING:
         return new CommitTimeBufferedRecordMerger<>();
@@ -434,5 +445,28 @@ public class BufferedRecordMergerFactory {
       return true;
     }
     return newRecord.getOrderingValue().compareTo(oldRecord.getOrderingValue()) >= 0;
+  }
+
+  public static Map<String, String> parsePartialUpdateProperties(TypedProperties props) {
+    Map<String, String> properties = new HashMap<>();
+    String raw = props.getString(HoodieTableConfig.PARTIAL_UPDATE_PROPERTIES.key());
+    if (StringUtils.isNullOrEmpty(raw)) {
+      return properties;
+    }
+    String[] entries = raw.split(",");
+    for (String entry : entries) {
+      String trimmed = entry.trim();
+      if (!trimmed.isEmpty()) {
+        String[] kv = trimmed.split("=", 2);
+        if (kv.length == 2) {
+          String key = kv[0].trim();
+          String value = kv[1].trim();
+          if (!key.isEmpty()) {
+            properties.put(key, value);
+          }
+        }
+      }
+    }
+    return properties;
   }
 }

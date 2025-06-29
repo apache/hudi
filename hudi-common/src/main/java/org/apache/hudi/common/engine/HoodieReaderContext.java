@@ -94,6 +94,7 @@ public abstract class HoodieReaderContext<T> {
   protected String partitionPath;
   protected Option<InstantRange> instantRangeOpt = Option.empty();
   private RecordMergeMode mergeMode;
+  protected ReaderContextTypeHandler typeHandler;
 
   // for encoding and decoding schemas to the spillable map
   private final LocalAvroSchemaCache localAvroSchemaCache = LocalAvroSchemaCache.getInstance();
@@ -109,6 +110,7 @@ public abstract class HoodieReaderContext<T> {
     this.baseFileFormat = tableConfig.getBaseFileFormat();
     this.instantRangeOpt = instantRangeOpt;
     this.keyFilterOpt = keyFilterOpt;
+    this.typeHandler = new ReaderContextTypeHandler();
   }
 
   // Getter and Setter for schemaHandler
@@ -201,6 +203,10 @@ public abstract class HoodieReaderContext<T> {
 
   public CustomSerializer<BufferedRecord<T>> getRecordSerializer() {
     return new DefaultSerializer<>();
+  }
+
+  public ReaderContextTypeHandler getTypeHandler() {
+    return typeHandler;
   }
 
   /**
@@ -308,6 +314,16 @@ public abstract class HoodieReaderContext<T> {
   public abstract Object getValue(T record, Schema schema, String fieldName);
 
   /**
+   * Set the value of a specific field.
+   *
+   * @param record    The record in engine-specific type.
+   * @param schema    The Avro schema of the record.
+   * @param fieldName The field name. A dot separated string if a nested field.
+   * @param value     The new value for the field.
+   */
+  public abstract void setValue(T record, Schema schema, String fieldName, Object value);
+
+  /**
    * Get value of metadata field in a more efficient way than #getValue.
    *
    * @param record The record in engine-specific type.
@@ -316,19 +332,6 @@ public abstract class HoodieReaderContext<T> {
    * @return The value for the target metadata field.
    */
   public abstract String getMetaFieldValue(T record, int pos);
-
-  /**
-   * Cast to Java boolean value.
-   * If the object is not compatible with boolean type, throws.
-   */
-  public boolean castToBoolean(Object value) {
-    if (value instanceof Boolean) {
-      return (boolean) value;
-    } else {
-      throw new IllegalArgumentException(
-          "Input value type " + value.getClass() + ", cannot be cast to boolean");
-    }
-  }
 
   /**
    * Get the {@link InstantRange} filter.
