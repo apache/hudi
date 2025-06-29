@@ -147,6 +147,11 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
   }
 
   @Override
+  public void setValue(IndexedRecord record, Schema schema, String fieldName, Object value) {
+    record.put(schema.getField(fieldName).pos(), value);
+  }
+
+  @Override
   public String getMetaFieldValue(IndexedRecord record, int pos) {
     return record.get(pos).toString();
   }

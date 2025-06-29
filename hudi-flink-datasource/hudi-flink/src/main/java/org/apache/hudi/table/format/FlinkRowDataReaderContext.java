@@ -58,6 +58,7 @@ import org.apache.hudi.util.RecordKeyToRowDataConverter;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.binary.BinaryRowData;
 import org.apache.flink.table.data.utils.JoinedRowData;
@@ -176,6 +177,20 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
     } else {
       return fieldQueryContext.getFieldGetter().getFieldOrNull(record);
     }
+  }
+
+  @Override
+  public void setValue(RowData record, Schema schema, String fieldName, Object value) {
+    // Get the index of the field from Avro schema
+    Schema.Field field = schema.getField(fieldName);
+    if (field == null) {
+      throw new IllegalArgumentException("Field '" + fieldName + "' not found in schema.");
+    }
+
+    int index = field.pos();
+    GenericRowData row = (GenericRowData) record;
+    // Set the value at the correct index
+    row.setField(index, value);
   }
 
   @Override

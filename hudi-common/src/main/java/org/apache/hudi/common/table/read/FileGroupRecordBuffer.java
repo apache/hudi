@@ -29,12 +29,14 @@ import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.log.KeySpec;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
@@ -48,6 +50,7 @@ import org.apache.avro.Schema;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Locale;
 import java.util.Map;
@@ -67,6 +70,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   protected final Schema readerSchema;
   protected final Option<String> orderingFieldName;
   protected final RecordMergeMode recordMergeMode;
+  protected final PartialUpdateMode partialUpdateMode;
   protected final Option<HoodieRecordMerger> recordMerger;
   protected final Option<String> payloadClass;
   protected final TypedProperties props;
@@ -75,6 +79,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   protected final boolean shouldCheckCustomDeleteMarker;
   protected final boolean shouldCheckBuiltInDeleteMarker;
   protected final boolean emitDelete;
+  protected Map<String, String> partialUpdateProperties;
   protected ClosableIterator<T> baseFileIterator;
   protected Iterator<BufferedRecord<T>> logRecordIterator;
   protected T nextRecord;
@@ -87,6 +92,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   protected FileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
                                   HoodieTableMetaClient hoodieTableMetaClient,
                                   RecordMergeMode recordMergeMode,
+                                  PartialUpdateMode partialUpdateMode,
                                   TypedProperties props,
                                   HoodieReadStats readStats,
                                   Option<String> orderingFieldName,
@@ -94,6 +100,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
     this.readerContext = readerContext;
     this.readerSchema = AvroSchemaCache.intern(readerContext.getSchemaHandler().getRequiredSchema());
     this.recordMergeMode = recordMergeMode;
+    this.partialUpdateMode = partialUpdateMode;
     this.recordMerger = readerContext.getRecordMerger();
     if (recordMerger.isPresent() && recordMerger.get().getMergingStrategy().equals(PAYLOAD_BASED_MERGE_STRATEGY_UUID)) {
       this.payloadClass = Option.of(hoodieTableMetaClient.getTableConfig().getPayloadClass());
@@ -130,8 +137,32 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
         readerContext.getSchemaHandler().getCustomDeleteMarkerKeyValue().isPresent();
     this.shouldCheckBuiltInDeleteMarker =
         readerContext.getSchemaHandler().hasBuiltInDelete();
+    this.partialUpdateProperties = parsePartialUpdateProperties(props);
     this.bufferedRecordMerger = BufferedRecordMergerFactory.create(
-        readerContext, recordMergeMode, enablePartialMerging, recordMerger, orderingFieldName, payloadClass, readerSchema, props);
+        readerContext, recordMergeMode, enablePartialMerging, recordMerger, orderingFieldName, payloadClass, readerSchema, props, partialUpdateMode);
+  }
+
+  public static Map<String, String> parsePartialUpdateProperties(TypedProperties props) {
+    Map<String, String> properties = new HashMap<>();
+    String raw = props.getString(HoodieTableConfig.PARTIAL_UPDATE_PROPERTIES.key());
+    if (StringUtils.isNullOrEmpty(raw)) {
+      return properties;
+    }
+    String[] entries = raw.split(",");
+    for (String entry : entries) {
+      String trimmed = entry.trim();
+      if (!trimmed.isEmpty()) {
+        String[] kv = trimmed.split("=", 2);
+        if (kv.length == 2) {
+          String key = kv[0].trim();
+          String value = kv[1].trim();
+          if (!key.isEmpty()) {
+            properties.put(key, value);
+          }
+        }
+      }
+    }
+    return properties;
   }
 
   /**
@@ -161,7 +192,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
 
     Object columnValue = readerContext.getValue(
         record, readerSchema, HOODIE_IS_DELETED_FIELD);
-    return columnValue != null && readerContext.castToBoolean(columnValue);
+    return columnValue != null && readerContext.getTypeHandler().castToBoolean(columnValue);
   }
 
   /**
@@ -227,8 +258,8 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   /**
    * Merge two log data records if needed.
    *
-   * @param newRecord                  The new incoming record
-   * @param existingRecord             The existing record
+   * @param newRecord      The new incoming record
+   * @param existingRecord The existing record
    * @return the {@link BufferedRecord} that needs to be updated, returns empty to skip the update.
    */
   protected Option<BufferedRecord<T>> doProcessNextDataRecord(BufferedRecord<T> newRecord, BufferedRecord<T> existingRecord)
