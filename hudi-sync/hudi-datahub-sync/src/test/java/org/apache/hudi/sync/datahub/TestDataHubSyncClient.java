@@ -19,6 +19,7 @@
 
 package org.apache.hudi.sync.datahub;
 
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.sync.datahub.config.DataHubSyncConfig;
 
@@ -42,6 +43,7 @@ import java.nio.file.Paths;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 
+import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_TABLE_NAME_KEY;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS;
 import static org.mockito.ArgumentMatchers.any;
@@ -144,6 +146,17 @@ public class TestDataHubSyncClient {
     DatahubSyncConfigStub configStub = new DatahubSyncConfigStub(props, restEmitterMock);
     DataHubSyncClientStub dhClient = new DataHubSyncClientStub(configStub);
 
+    Assertions.assertEquals(DATABASE_NAME, dhClient.getDatabaseName());
+    Assertions.assertEquals(TABLE_NAME, dhClient.getTableName());
+
+    // Test properties are properly inferred if overrides are not provided
+    Properties fallbackProperties = new Properties();
+    fallbackProperties.setProperty(HoodieTableConfig.DATABASE_NAME.key(), DATABASE_NAME);
+    fallbackProperties.setProperty(HOODIE_TABLE_NAME_KEY, TABLE_NAME);
+    fallbackProperties.put(META_SYNC_PARTITION_EXTRACTOR_CLASS.key(), DummyPartitionValueExtractor.class.getName());
+
+    configStub = new DatahubSyncConfigStub(fallbackProperties, restEmitterMock);
+    dhClient = new DataHubSyncClientStub(configStub);
     Assertions.assertEquals(DATABASE_NAME, dhClient.getDatabaseName());
     Assertions.assertEquals(TABLE_NAME, dhClient.getTableName());
   }

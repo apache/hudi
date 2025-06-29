@@ -85,7 +85,11 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.aws.testutils.GlueTestUtil.DB_NAME;
+import static org.apache.hudi.aws.testutils.GlueTestUtil.TABLE_NAME;
 import static org.apache.hudi.aws.testutils.GlueTestUtil.glueSyncProps;
+import static org.apache.hudi.common.table.HoodieTableConfig.DATABASE_NAME;
+import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_TABLE_NAME_KEY;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -654,8 +658,16 @@ class TestAWSGlueSyncClient {
 
   @Test
   void testTableAndDatabaseName() {
-    assertEquals(GlueTestUtil.DB_NAME, awsGlueSyncClient.getDatabaseName());
-    assertEquals(GlueTestUtil.TABLE_NAME, awsGlueSyncClient.getTableName());
+    assertEquals(DB_NAME, awsGlueSyncClient.getDatabaseName());
+    assertEquals(TABLE_NAME, awsGlueSyncClient.getTableName());
+
+    // Test properties are properly inferred if overrides are not provided
+    TypedProperties props = new TypedProperties();
+    props.setProperty(DATABASE_NAME.key(), DB_NAME);
+    props.setProperty(HOODIE_TABLE_NAME_KEY, TABLE_NAME);
+    AWSGlueCatalogSyncClient clientWithFallbackProperties = new AWSGlueCatalogSyncClient(mockAwsGlue, mockSts, new HiveSyncConfig(props), GlueTestUtil.getMetaClient());
+    assertEquals(DB_NAME, clientWithFallbackProperties.getDatabaseName());
+    assertEquals(TABLE_NAME, clientWithFallbackProperties.getTableName());
   }
 
   private CompletableFuture<GetTableResponse> getTableWithDefaultProps(String tableName, List<Column> columns, List<Column> partitionColumns) {

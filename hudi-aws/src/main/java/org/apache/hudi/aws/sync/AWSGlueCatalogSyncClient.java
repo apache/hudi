@@ -120,7 +120,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   AWSGlueCatalogSyncClient(GlueAsyncClient awsGlue, StsClient stsClient, HiveSyncConfig config, HoodieTableMetaClient metaClient) {
     super(config, metaClient);
     this.awsGlue = awsGlue;
-    this.databaseName = config.getStringOrDefault(GLUE_SYNC_DATABASE_NAME, config.getString(META_SYNC_DATABASE_NAME));
+    this.databaseName = config.getStringOrDefault(GLUE_SYNC_DATABASE_NAME, config.getStringOrDefault(META_SYNC_DATABASE_NAME));
     this.skipTableArchive = config.getBooleanOrDefault(GlueCatalogSyncClientConfig.GLUE_SKIP_TABLE_ARCHIVE);
     this.enableMetadataTable = Boolean.toString(config.getBoolean(GLUE_METADATA_FILE_LISTING)).toUpperCase();
     GetCallerIdentityResponse identityResponse = stsClient.getCallerIdentity(GetCallerIdentityRequest.builder().build());
@@ -135,7 +135,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
 
   @Override
   public String getTableName() {
-    return this.config.getStringOrDefault(GLUE_SYNC_TABLE_NAME, config.getString(META_SYNC_TABLE_NAME));
+    return this.config.getStringOrDefault(GLUE_SYNC_TABLE_NAME, config.getStringOrDefault(META_SYNC_TABLE_NAME));
   }
 
   @Override

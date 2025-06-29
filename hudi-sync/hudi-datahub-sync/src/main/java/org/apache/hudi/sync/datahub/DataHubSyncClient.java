@@ -84,12 +84,12 @@ public class DataHubSyncClient extends HoodieSyncClient {
 
   @Override
   public String getTableName() {
-    return config.getStringOrDefault(META_SYNC_DATAHUB_TABLE_NAME, config.getString(META_SYNC_TABLE_NAME));
+    return config.getStringOrDefault(META_SYNC_DATAHUB_TABLE_NAME, config.getStringOrDefault(META_SYNC_TABLE_NAME));
   }
 
   @Override
   public String getDatabaseName() {
-    return config.getStringOrDefault(META_SYNC_DATAHUB_DATABASE_NAME, config.getString(META_SYNC_DATABASE_NAME));
+    return config.getStringOrDefault(META_SYNC_DATAHUB_DATABASE_NAME, config.getStringOrDefault(META_SYNC_DATABASE_NAME));
   }
 
   @Override
