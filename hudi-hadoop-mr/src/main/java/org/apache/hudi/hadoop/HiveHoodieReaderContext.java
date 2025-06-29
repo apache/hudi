@@ -104,6 +104,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     this.partitionColSet = new HashSet<>(this.partitionCols);
     this.objectInspectorCache = objectInspectorCache;
     this.columnTypeMap = objectInspectorCache.getColumnTypeMap();
+    this.typeHandler = new HiveReaderContextTypeHandler();
   }
 
   private void setSchemas(JobConf jobConf, Schema dataSchema, Schema requiredSchema) {
@@ -206,6 +207,18 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     return getFieldValueFromArrayWritable(record, schema, fieldName, objectInspectorCache);
   }
 
+  @Override
+  public void setValue(ArrayWritable record, Schema schema, String fieldName, Object value) {
+    Schema.Field field = schema.getField(fieldName);
+    if (null == field) {
+      throw new IllegalArgumentException("Schema does not contain a field called: " + fieldName);
+    }
+
+    Writable[] values = record.get();
+    values[field.pos()] = (Writable) value;
+    record.set(values);
+  }
+
   public static Object getFieldValueFromArrayWritable(ArrayWritable record, Schema schema, String fieldName, ObjectInspectorCache objectInspectorCache) {
     return StringUtils.isNullOrEmpty(fieldName) ? null : objectInspectorCache.getValue(record, schema, fieldName);
   }
@@ -213,16 +226,6 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   @Override
   public String getMetaFieldValue(ArrayWritable record, int pos) {
     return record.get()[pos].toString();
-  }
-
-  @Override
-  public boolean castToBoolean(Object value) {
-    if (value instanceof BooleanWritable) {
-      return ((BooleanWritable) value).get();
-    } else {
-      throw new IllegalArgumentException(
-          "Expected BooleanWritable but got " + value.getClass());
-    }
   }
 
   @Override
