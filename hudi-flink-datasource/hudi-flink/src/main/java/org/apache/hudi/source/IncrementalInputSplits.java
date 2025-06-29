@@ -177,7 +177,7 @@ public class IncrementalInputSplits implements Serializable {
     final List<StoragePathInfo> fileInfoList;
     if (fullTableScan) {
       // scans the partitions and files directly.
-      FileIndex fileIndex = getFileIndex();
+      FileIndex fileIndex = getFileIndex(metaClient);
       readPartitions = new TreeSet<>(fileIndex.getOrBuildPartitionPaths());
       if (readPartitions.size() == 0) {
         LOG.warn("No partitions found for reading in user provided path.");
@@ -208,7 +208,7 @@ public class IncrementalInputSplits implements Serializable {
         LOG.warn("Found deleted files in metadata, fall back to full table scan.");
         // fallback to full table scan
         // reading from the earliest, scans the partitions and files directly.
-        FileIndex fileIndex = getFileIndex();
+        FileIndex fileIndex = getFileIndex(metaClient);
         readPartitions = new TreeSet<>(fileIndex.getOrBuildPartitionPaths());
         if (readPartitions.size() == 0) {
           LOG.warn("No partitions found for reading in user provided path.");
@@ -275,7 +275,7 @@ public class IncrementalInputSplits implements Serializable {
 
     if (instantRange.isEmpty()) {
       // reading from the earliest, scans the partitions and files directly.
-      FileIndex fileIndex = getFileIndex();
+      FileIndex fileIndex = getFileIndex(metaClient);
 
       Set<String> readPartitions = new TreeSet<>(fileIndex.getOrBuildPartitionPaths());
       if (readPartitions.size() == 0) {
@@ -411,11 +411,12 @@ public class IncrementalInputSplits implements Serializable {
         : fsView.getLatestMergedFileSlicesBeforeOrOn(relPartitionPath, endInstant);
   }
 
-  private FileIndex getFileIndex() {
+  private FileIndex getFileIndex(HoodieTableMetaClient metaClient) {
     return FileIndex.builder()
         .path(new StoragePath(path.toUri()))
         .conf(conf)
         .rowType(rowType)
+        .metaClient(metaClient)
         .partitionPruner(partitionPruner)
         .build();
   }

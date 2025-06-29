@@ -27,6 +27,7 @@ import org.apache.hudi.source.prune.ColumnStatsProbe;
 import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 
@@ -82,7 +83,7 @@ public class TestFileIndex {
     conf.setBoolean(HIVE_STYLE_PARTITIONING, hiveStylePartitioning);
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
     FileIndex fileIndex = FileIndex.builder().path(new StoragePath(tempFile.getAbsolutePath())).conf(conf)
-        .rowType(TestConfigurations.ROW_TYPE).build();
+        .rowType(TestConfigurations.ROW_TYPE).metaClient(StreamerUtil.createMetaClient(conf)).build();
     List<String> partitionKeys = Collections.singletonList("partition");
     List<Map<String, String>> partitions =
         fileIndex.getPartitions(partitionKeys, PARTITION_DEFAULT_NAME.defaultValue(),
@@ -106,7 +107,7 @@ public class TestFileIndex {
     conf.setBoolean(METADATA_ENABLED, true);
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
     FileIndex fileIndex = FileIndex.builder().path(new StoragePath(tempFile.getAbsolutePath())).conf(conf)
-        .rowType(TestConfigurations.ROW_TYPE).build();
+        .rowType(TestConfigurations.ROW_TYPE).metaClient(StreamerUtil.createMetaClient(conf)).build();
     List<String> partitionKeys = Collections.singletonList("");
     List<Map<String, String>> partitions =
         fileIndex.getPartitions(partitionKeys, PARTITION_DEFAULT_NAME.defaultValue(), false);
@@ -147,7 +148,9 @@ public class TestFileIndex {
     FileIndex fileIndex =
         FileIndex.builder()
             .path(new StoragePath(tempFile.getAbsolutePath()))
-            .conf(conf).rowType(TestConfigurations.ROW_TYPE_BIGINT)
+            .conf(conf)
+            .rowType(TestConfigurations.ROW_TYPE_BIGINT)
+            .metaClient(StreamerUtil.createMetaClient(conf))
             .columnStatsProbe(ColumnStatsProbe.newInstance(Collections.singletonList(new CallExpression(
                 FunctionIdentifier.of("greaterThan"),
                 BuiltInFunctionDefinitions.GREATER_THAN,
@@ -205,6 +208,7 @@ public class TestFileIndex {
             .path(new StoragePath(tempFile.getAbsolutePath()))
             .conf(conf)
             .rowType(TestConfigurations.ROW_TYPE)
+            .metaClient(StreamerUtil.createMetaClient(conf))
             .partitionPruner(PartitionPruners.builder().rowType(TestConfigurations.ROW_TYPE).basePath(tempFile.getAbsolutePath()).conf(conf).columnStatsProbe(columnStatsProbe).build())
             .build();
 
