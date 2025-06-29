@@ -777,7 +777,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
         .map(stat -> stat.getNumWrites() + stat.getNumUpdateWrites())
         .reduce(0L, Long::sum);
   }
-
+  
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   void testMORTableRestore(boolean restoreAfterCompaction) throws Exception {
