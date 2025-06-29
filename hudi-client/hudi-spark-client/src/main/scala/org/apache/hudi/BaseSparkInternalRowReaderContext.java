@@ -36,6 +36,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.avro.Schema;
+import org.apache.hadoop.io.ArrayWritable;
 import org.apache.spark.sql.HoodieInternalRowUtils;
 import org.apache.spark.sql.HoodieUnsafeRowUtils;
 import org.apache.spark.sql.catalyst.InternalRow;
@@ -89,6 +90,17 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
   @Override
   public Object getValue(InternalRow row, Schema schema, String fieldName) {
     return getFieldValueFromInternalRow(row, schema, fieldName);
+  }
+
+  @Override
+  public void setValue(InternalRow row, Schema schema, String fieldName, Object value) {
+    Schema.Field field = schema.getField(fieldName);
+    if (field == null) {
+      throw new IllegalArgumentException("Field '" + fieldName + "' not found in schema.");
+    }
+    int index = field.pos();
+    // Assumes type of 'value' matches expected type in InternalRow
+    row.update(index, value);
   }
 
   @Override
