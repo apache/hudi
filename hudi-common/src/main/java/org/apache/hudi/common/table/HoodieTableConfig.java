@@ -26,6 +26,7 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.OrderedProperties;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.AWSDmsAvroPayload;
 import org.apache.hudi.common.model.BootstrapIndexType;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
@@ -35,7 +36,10 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
+import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.model.PartialUpdateAvroPayload;
+import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
@@ -303,6 +307,18 @@ public class HoodieTableConfig extends HoodieConfig {
       .defaultValue(false)
       .sinceVersion("1.0.0")
       .withDocumentation("When set to true, the table can support reading and writing multiple base file formats.");
+
+  public static final ConfigProperty<PartialUpdateMode> PARIL_UPDATE_MODE = ConfigProperty
+      .key("hoodie.write.partial.update.mode")
+      .defaultValue(PartialUpdateMode.NONE)
+      .sinceVersion("1.1.0")
+      .withDocumentation("This property defines the merge behavior for standard merge mode");
+
+  public static final ConfigProperty<String> PARTIAL_UPDATE_CUSTOM_MARKER_VALUE = ConfigProperty
+      .key("hoodie.write.partial.update.custom.marker.value")
+      .noDefaultValue()
+      .sinceVersion("1.1.0")
+      .withDocumentation("This property defines custom value for partial update mode: IGNORE_MARKERS");
 
   public static final ConfigProperty<String> URL_ENCODE_PARTITIONING = KeyGeneratorOptions.URL_ENCODE_PARTITIONING;
   public static final ConfigProperty<String> HIVE_STYLE_PARTITIONING_ENABLE = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE;
@@ -854,11 +870,13 @@ public class HoodieTableConfig extends HoodieConfig {
       return null;
     }
     if (DefaultHoodieRecordPayload.class.getName().equals(payloadClassName)
-        || EventTimeAvroPayload.class.getName().equals(payloadClassName)) {
-      // DefaultHoodieRecordPayload and EventTimeAvroPayload match with EVENT_TIME_ORDERING.
+        || EventTimeAvroPayload.class.getName().equals(payloadClassName)
+        || PartialUpdateAvroPayload.class.getName().equals(payloadClassName)
+        || PostgresDebeziumAvroPayload.class.getName().equals(payloadClassName)) {
       return EVENT_TIME_ORDERING;
-    } else if (payloadClassName.equals(OverwriteWithLatestAvroPayload.class.getName())) {
-      // OverwriteWithLatestAvroPayload matches with COMMIT_TIME_ORDERING.
+    } else if (payloadClassName.equals(OverwriteWithLatestAvroPayload.class.getName())
+        || OverwriteNonDefaultsWithLatestAvroPayload.class.getName().equals(payloadClassName)
+        || AWSDmsAvroPayload.class.getName().equals(payloadClassName)) {
       return COMMIT_TIME_ORDERING;
     } else {
       return CUSTOM;
@@ -1047,6 +1065,20 @@ public class HoodieTableConfig extends HoodieConfig {
     return new HashSet<>(
         StringUtils.split(getStringOrDefault(TABLE_METADATA_PARTITIONS, StringUtils.EMPTY_STRING),
             CONFIG_VALUES_DELIMITER));
+  }
+
+  public PartialUpdateMode getPartialUpdateMode() {
+    String payloadClass = getPayloadClass();
+    if (StringUtils.isNullOrEmpty(payloadClass)) {
+      return PartialUpdateMode.valueOf(getStringOrDefault(PARIL_UPDATE_MODE));
+    } else if (payloadClass.equals(OverwriteNonDefaultsWithLatestAvroPayload.class.getName())
+        || payloadClass.equals(PartialUpdateAvroPayload.class.getName())) {
+      return PartialUpdateMode.IGNORE_DEFAULTS;
+    } else if (payloadClass.equals(PostgresDebeziumAvroPayload.class.getName())) {
+      return PartialUpdateMode.IGNORE_MARKERS;
+    } else {
+      return PartialUpdateMode.valueOf(getStringOrDefault(PARIL_UPDATE_MODE));
+    }
   }
 
   /**
