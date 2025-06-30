@@ -44,7 +44,7 @@ import org.apache.spark.sql.catalyst.trees.Origin
 import org.apache.spark.sql.catalyst.util.DateFormatter
 import org.apache.spark.sql.execution.{PartitionedFileUtil, QueryExecution, SQLExecution}
 import org.apache.spark.sql.execution.datasources._
-import org.apache.spark.sql.hudi.SparkAdapter
+import org.apache.spark.sql.hudi.{ColumnStatsExpressionUtils, Spark4ColumnStatsExpressionUtils, SparkAdapter}
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector}
@@ -195,4 +195,6 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
   override def internalCreateDataFrame(spark: SparkSession, rdd: RDD[InternalRow], schema: StructType, isStreaming: Boolean = false): DataFrame = {
     spark.asInstanceOf[org.apache.spark.sql.classic.SparkSession].internalCreateDataFrame(rdd, schema, isStreaming)
   }
+
+  override def getColumnStatsExpressionUtils: ColumnStatsExpressionUtils = Spark4ColumnStatsExpressionUtils
 }

@@ -17,26 +17,22 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.hudi.ColumnStatsIndexSupport.{getMaxColumnNameFor, getMinColumnNameFor, getNullCountColumnNameFor, getValueCountColumnNameFor}
 import org.apache.hudi.SparkAdapterSupport
-import org.apache.hudi.common.util.ValidationUtils.checkState
 
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.{AnalysisException, HoodieCatalystExpressionUtils}
+import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.expressions.{Alias, And, Attribute, AttributeReference, EqualNullSafe, EqualTo, Expression, ExtractValue, GetStructField, GreaterThan, GreaterThanOrEqual, In, InSet, IsNotNull, IsNull, LessThan, LessThanOrEqual, Literal, Not, Or, StartsWith, SubqueryExpression}
 import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
-import org.apache.spark.sql.classic.ColumnConversions.toRichColumn
-import org.apache.spark.sql.functions.col
-import org.apache.spark.sql.hudi.ColumnStatsExpressionUtils._
 import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 import org.apache.spark.unsafe.types.UTF8String
 
 import java.util.concurrent.atomic.AtomicBoolean
 
-object DataSkippingUtils extends Logging {
+object DataSkippingUtils extends Logging with SparkAdapterSupport {
 
   val LITERAL_TRUE_EXPR = TrueLiteral
+  private val columnStatsExpressionUtils = sparkAdapter.getColumnStatsExpressionUtils
 
   /**
    * Translates provided {@link filterExpr} into corresponding filter-expression for column-stats index table
@@ -115,7 +111,7 @@ object DataSkippingUtils extends Logging {
 
       // Filter "expr(colA) = B" and "B = expr(colA)"
       // Translates to "(expr(colA_minValue) <= B) AND (B <= expr(colA_maxValue))" condition for index lookup
-      case EqualTo(sourceExpr @ AllowedTransformationExpression(attrRef), valueExpr: Expression) if isValueExpression(valueExpr) =>
+      case EqualTo(sourceExpr @ columnStatsExpressionUtils.AllowedTransformationExpression(attrRef), valueExpr: Expression) if columnStatsExpressionUtils.isValueExpression(valueExpr) =>
         getTargetIndexedColumnName(attrRef, indexedCols)
           .map { colName =>
             // NOTE: Since we're supporting (almost) arbitrary expressions of the form `f(colA) = B`, we have to
@@ -123,17 +119,17 @@ object DataSkippingUtils extends Logging {
             //       expression targeted at Column Stats Index Table. For that, we take original expression holding
             //       [[AttributeReference]] referring to the Data Table, and swap it w/ expression referring to
             //       corresponding column in the Column Stats Index
-            val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
-            genColumnValuesEqualToExpression(colName, valueExpr, targetExprBuilder)
+            val targetExprBuilder: Expression => Expression = columnStatsExpressionUtils.swapAttributeRefInExpr(sourceExpr, attrRef, _)
+            columnStatsExpressionUtils.genColumnValuesEqualToExpression(colName, valueExpr, targetExprBuilder)
           }.orElse({
           Option.empty
         })
 
-      case EqualTo(valueExpr: Expression, sourceExpr @ AllowedTransformationExpression(attrRef)) if isValueExpression(valueExpr) =>
+      case EqualTo(valueExpr: Expression, sourceExpr @ columnStatsExpressionUtils.AllowedTransformationExpression(attrRef)) if columnStatsExpressionUtils.isValueExpression(valueExpr) =>
         getTargetIndexedColumnName(attrRef, indexedCols)
           .map { colName =>
-            val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
-            genColumnValuesEqualToExpression(colName, valueExpr, targetExprBuilder)
+            val targetExprBuilder: Expression => Expression = columnStatsExpressionUtils.swapAttributeRefInExpr(sourceExpr, attrRef, _)
+            columnStatsExpressionUtils.genColumnValuesEqualToExpression(colName, valueExpr, targetExprBuilder)
           }.orElse({
           Option.empty
         })
@@ -142,20 +138,20 @@ object DataSkippingUtils extends Logging {
       // Translates to "NOT(expr(colA_minValue) = B AND expr(colA_maxValue) = B)"
       // NOTE: This is NOT an inversion of `colA = b`, instead this filter ONLY excludes files for which `colA = B`
       //       holds true
-      case Not(EqualTo(sourceExpr @ AllowedTransformationExpression(attrRef), value: Expression)) if isValueExpression(value) =>
+      case Not(EqualTo(sourceExpr @ columnStatsExpressionUtils.AllowedTransformationExpression(attrRef), value: Expression)) if columnStatsExpressionUtils.isValueExpression(value) =>
         getTargetIndexedColumnName(attrRef, indexedCols)
           .map { colName =>
-            val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
-            Not(genColumnOnlyValuesEqualToExpression(colName, value, targetExprBuilder))
+            val targetExprBuilder: Expression => Expression = columnStatsExpressionUtils.swapAttributeRefInExpr(sourceExpr, attrRef, _)
+            Not(columnStatsExpressionUtils.genColumnOnlyValuesEqualToExpression(colName, value, targetExprBuilder))
           }.orElse({
           Option.empty
         })
 
-      case Not(EqualTo(value: Expression, sourceExpr @ AllowedTransformationExpression(attrRef))) if isValueExpression(value) =>
+      case Not(EqualTo(value: Expression, sourceExpr @ columnStatsExpressionUtils.AllowedTransformationExpression(attrRef))) if columnStatsExpressionUtils.isValueExpression(value) =>
         getTargetIndexedColumnName(attrRef, indexedCols)
           .map { colName =>
-            val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
-            Not(genColumnOnlyValuesEqualToExpression(colName, value, targetExprBuilder))
+            val targetExprBuilder: Expression => Expression = columnStatsExpressionUtils.swapAttributeRefInExpr(sourceExpr, attrRef, _)
+            Not(columnStatsExpressionUtils.genColumnOnlyValuesEqualToExpression(colName, value, targetExprBuilder))
           }.orElse({
           Option.empty
         })
@@ -164,87 +160,87 @@ object DataSkippingUtils extends Logging {
       // Translates to "colA_nullCount = null" for index lookup
       case EqualNullSafe(attrRef: AttributeReference, litNull @ Literal(null, _)) =>
         getTargetIndexedColumnName(attrRef, indexedCols)
-          .map(colName => EqualTo(genColNumNullsExpr(colName), litNull))
+          .map(colName => EqualTo(columnStatsExpressionUtils.genColNumNullsExpr(colName), litNull))
           .orElse({
             Option.empty
           })
 
       // Filter "expr(colA) < B" and "B > expr(colA)"
       // Translates to "expr(colA_minValue) < B" for index lookup
-      case LessThan(sourceExpr @ AllowedTransformationExpression(attrRef), value: Expression) if isValueExpression(value) =>
+      case LessThan(sourceExpr @ columnStatsExpressionUtils.AllowedTransformationExpression(attrRef), value: Expression) if columnStatsExpressionUtils.isValueExpression(value) =>
         getTargetIndexedColumnName(attrRef, indexedCols)
           .map { colName =>
-            val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
-            LessThan(targetExprBuilder.apply(genColMinValueExpr(colName)), value)
+            val targetExprBuilder: Expression => Expression = columnStatsExpressionUtils.swapAttributeRefInExpr(sourceExpr, attrRef, _)
+            LessThan(targetExprBuilder.apply(columnStatsExpressionUtils.genColMinValueExpr(colName)), value)
           }.orElse({
           Option.empty
         })
 
-      case GreaterThan(value: Expression, sourceExpr @ AllowedTransformationExpression(attrRef)) if isValueExpression(value) =>
+      case GreaterThan(value: Expression, sourceExpr @ columnStatsExpressionUtils.AllowedTransformationExpression(attrRef)) if columnStatsExpressionUtils.isValueExpression(value) =>
         getTargetIndexedColumnName(attrRef, indexedCols)
           .map { colName =>
-              val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
-              LessThan(targetExprBuilder.apply(genColMinValueExpr(colName)), value)
+              val targetExprBuilder: Expression => Expression = columnStatsExpressionUtils.swapAttributeRefInExpr(sourceExpr, attrRef, _)
+              LessThan(targetExprBuilder.apply(columnStatsExpressionUtils.genColMinValueExpr(colName)), value)
           }.orElse({
           Option.empty
         })
 
       // Filter "B < expr(colA)" and "expr(colA) > B"
       // Translates to "B < colA_maxValue" for index lookup
-      case LessThan(value: Expression, sourceExpr @ AllowedTransformationExpression(attrRef)) if isValueExpression(value) =>
+      case LessThan(value: Expression, sourceExpr @ columnStatsExpressionUtils.AllowedTransformationExpression(attrRef)) if columnStatsExpressionUtils.isValueExpression(value) =>
         getTargetIndexedColumnName(attrRef, indexedCols)
           .map { colName =>
-            val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
-            GreaterThan(targetExprBuilder.apply(genColMaxValueExpr(colName)), value)
+            val targetExprBuilder: Expression => Expression = columnStatsExpressionUtils.swapAttributeRefInExpr(sourceExpr, attrRef, _)
+            GreaterThan(targetExprBuilder.apply(columnStatsExpressionUtils.genColMaxValueExpr(colName)), value)
           }.orElse({
           Option.empty
         })
 
-      case GreaterThan(sourceExpr @ AllowedTransformationExpression(attrRef), value: Expression) if isValueExpression(value) =>
+      case GreaterThan(sourceExpr @ columnStatsExpressionUtils.AllowedTransformationExpression(attrRef), value: Expression) if columnStatsExpressionUtils.isValueExpression(value) =>
         getTargetIndexedColumnName(attrRef, indexedCols)
           .map { colName =>
-            val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
-            GreaterThan(targetExprBuilder.apply(genColMaxValueExpr(colName)), value)
+            val targetExprBuilder: Expression => Expression = columnStatsExpressionUtils.swapAttributeRefInExpr(sourceExpr, attrRef, _)
+            GreaterThan(targetExprBuilder.apply(columnStatsExpressionUtils.genColMaxValueExpr(colName)), value)
           }.orElse({
           Option.empty
         })
 
       // Filter "expr(colA) <= B" and "B >= expr(colA)"
       // Translates to "colA_minValue <= B" for index lookup
-      case LessThanOrEqual(sourceExpr @ AllowedTransformationExpression(attrRef), value: Expression) if isValueExpression(value) =>
+      case LessThanOrEqual(sourceExpr @ columnStatsExpressionUtils.AllowedTransformationExpression(attrRef), value: Expression) if columnStatsExpressionUtils.isValueExpression(value) =>
         getTargetIndexedColumnName(attrRef, indexedCols)
           .map { colName =>
-            val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
-            LessThanOrEqual(targetExprBuilder.apply(genColMinValueExpr(colName)), value)
+            val targetExprBuilder: Expression => Expression = columnStatsExpressionUtils.swapAttributeRefInExpr(sourceExpr, attrRef, _)
+            LessThanOrEqual(targetExprBuilder.apply(columnStatsExpressionUtils.genColMinValueExpr(colName)), value)
           }.orElse({
           Option.empty
         })
 
-      case GreaterThanOrEqual(value: Expression, sourceExpr @ AllowedTransformationExpression(attrRef)) if isValueExpression(value) =>
+      case GreaterThanOrEqual(value: Expression, sourceExpr @ columnStatsExpressionUtils.AllowedTransformationExpression(attrRef)) if columnStatsExpressionUtils.isValueExpression(value) =>
         getTargetIndexedColumnName(attrRef, indexedCols)
           .map { colName =>
-            val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
-            LessThanOrEqual(targetExprBuilder.apply(genColMinValueExpr(colName)), value)
+            val targetExprBuilder: Expression => Expression = columnStatsExpressionUtils.swapAttributeRefInExpr(sourceExpr, attrRef, _)
+            LessThanOrEqual(targetExprBuilder.apply(columnStatsExpressionUtils.genColMinValueExpr(colName)), value)
           }.orElse({
           Option.empty
         })
 
       // Filter "B <= expr(colA)" and "expr(colA) >= B"
       // Translates to "B <= colA_maxValue" for index lookup
-      case LessThanOrEqual(value: Expression, sourceExpr @ AllowedTransformationExpression(attrRef)) if isValueExpression(value) =>
+      case LessThanOrEqual(value: Expression, sourceExpr @ columnStatsExpressionUtils.AllowedTransformationExpression(attrRef)) if columnStatsExpressionUtils.isValueExpression(value) =>
         getTargetIndexedColumnName(attrRef, indexedCols)
           .map { colName =>
-            val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
-            GreaterThanOrEqual(targetExprBuilder.apply(genColMaxValueExpr(colName)), value)
+            val targetExprBuilder: Expression => Expression = columnStatsExpressionUtils.swapAttributeRefInExpr(sourceExpr, attrRef, _)
+            GreaterThanOrEqual(targetExprBuilder.apply(columnStatsExpressionUtils.genColMaxValueExpr(colName)), value)
           }.orElse({
           Option.empty
         })
 
-      case GreaterThanOrEqual(sourceExpr @ AllowedTransformationExpression(attrRef), value: Expression) if isValueExpression(value) =>
+      case GreaterThanOrEqual(sourceExpr @ columnStatsExpressionUtils.AllowedTransformationExpression(attrRef), value: Expression) if columnStatsExpressionUtils.isValueExpression(value) =>
         getTargetIndexedColumnName(attrRef, indexedCols)
           .map { colName =>
-            val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
-            GreaterThanOrEqual(targetExprBuilder.apply(genColMaxValueExpr(colName)), value)
+            val targetExprBuilder: Expression => Expression = columnStatsExpressionUtils.swapAttributeRefInExpr(sourceExpr, attrRef, _)
+            GreaterThanOrEqual(targetExprBuilder.apply(columnStatsExpressionUtils.genColMaxValueExpr(colName)), value)
           }.orElse({
           Option.empty
         })
@@ -253,7 +249,7 @@ object DataSkippingUtils extends Logging {
       // Translates to "colA_nullCount > 0" for index lookup
       case IsNull(attribute: AttributeReference) =>
         getTargetIndexedColumnName(attribute, indexedCols)
-          .map(colName => GreaterThan(genColNumNullsExpr(colName), Literal(0)))
+          .map(colName => GreaterThan(columnStatsExpressionUtils.genColNumNullsExpr(colName), Literal(0)))
           .orElse({
             Option.empty
           })
@@ -265,8 +261,8 @@ object DataSkippingUtils extends Logging {
       case IsNotNull(attribute: AttributeReference) =>
         getTargetIndexedColumnName(attribute, indexedCols)
           .map {colName =>
-            val numNullExpr = genColNumNullsExpr(colName)
-            val valueCountExpr = genColValueCountExpr
+            val numNullExpr = columnStatsExpressionUtils.genColNumNullsExpr(colName)
+            val valueCountExpr = columnStatsExpressionUtils.genColValueCountExpr
             Or(Or(IsNull(numNullExpr), IsNull(valueCountExpr)), LessThan(numNullExpr, valueCountExpr))
           }.orElse({
           Option.empty
@@ -276,11 +272,11 @@ object DataSkippingUtils extends Logging {
       // Translates to "(colA_minValue <= B1 AND colA_maxValue >= B1) OR (colA_minValue <= B2 AND colA_maxValue >= B2) ... "
       // for index lookup
       // NOTE: This is equivalent to "colA = B1 OR colA = B2 OR ..."
-      case In(sourceExpr @ AllowedTransformationExpression(attrRef), list: Seq[Expression]) if list.forall(isValueExpression) =>
+      case In(sourceExpr @ columnStatsExpressionUtils.AllowedTransformationExpression(attrRef), list: Seq[Expression]) if list.forall(columnStatsExpressionUtils.isValueExpression) =>
         getTargetIndexedColumnName(attrRef, indexedCols)
           .map { colName =>
-            val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
-            list.map(lit => genColumnValuesEqualToExpression(colName, lit, targetExprBuilder)).reduce(Or)
+            val targetExprBuilder: Expression => Expression = columnStatsExpressionUtils.swapAttributeRefInExpr(sourceExpr, attrRef, _)
+            list.map(lit => columnStatsExpressionUtils.genColumnValuesEqualToExpression(colName, lit, targetExprBuilder)).reduce(Or)
           }.orElse({
           Option.empty
         })
@@ -288,10 +284,10 @@ object DataSkippingUtils extends Logging {
       // Filter "expr(colA) in (B1, B2, ...)"
       // NOTE: [[InSet]] is an optimized version of the [[In]] expression, where every sub-expression w/in the
       //       set is a static literal
-      case InSet(sourceExpr @ AllowedTransformationExpression(attrRef), hset: Set[Any]) =>
+      case InSet(sourceExpr @ columnStatsExpressionUtils.AllowedTransformationExpression(attrRef), hset: Set[Any]) =>
         getTargetIndexedColumnName(attrRef, indexedCols)
           .map { colName =>
-            val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
+            val targetExprBuilder: Expression => Expression = columnStatsExpressionUtils.swapAttributeRefInExpr(sourceExpr, attrRef, _)
             hset.map { value =>
               // NOTE: [[Literal]] has a gap where it could hold [[UTF8String]], but [[Literal#apply]] doesn't
               //       accept [[UTF8String]]. As such we have to handle it separately
@@ -299,7 +295,7 @@ object DataSkippingUtils extends Logging {
                 case str: UTF8String => Literal(str.toString)
                 case _ => Literal(value)
               }
-              genColumnValuesEqualToExpression(colName, lit, targetExprBuilder)
+              columnStatsExpressionUtils.genColumnValuesEqualToExpression(colName, lit, targetExprBuilder)
             }.reduce(Or)
           }.orElse({
           Option.empty
@@ -308,11 +304,11 @@ object DataSkippingUtils extends Logging {
       // Filter "expr(colA) not in (B1, B2, ...)"
       // Translates to "NOT((colA_minValue = B1 AND colA_maxValue = B1) OR (colA_minValue = B2 AND colA_maxValue = B2))" for index lookup
       // NOTE: This is NOT an inversion of `in (B1, B2, ...)` expr, this is equivalent to "colA != B1 AND colA != B2 AND ..."
-      case Not(In(sourceExpr @ AllowedTransformationExpression(attrRef), list: Seq[Expression])) if list.forall(_.foldable) =>
+      case Not(In(sourceExpr @ columnStatsExpressionUtils.AllowedTransformationExpression(attrRef), list: Seq[Expression])) if list.forall(_.foldable) =>
         getTargetIndexedColumnName(attrRef, indexedCols)
           .map { colName =>
-            val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
-            Not(list.map(lit => genColumnOnlyValuesEqualToExpression(colName, lit, targetExprBuilder)).reduce(Or))
+            val targetExprBuilder: Expression => Expression = columnStatsExpressionUtils.swapAttributeRefInExpr(sourceExpr, attrRef, _)
+            Not(list.map(lit => columnStatsExpressionUtils.genColumnOnlyValuesEqualToExpression(colName, lit, targetExprBuilder)).reduce(Or))
           }.orElse({
           Option.empty
         })
@@ -323,11 +319,11 @@ object DataSkippingUtils extends Logging {
       // NOTE: Since a) this operator matches strings by prefix and b) given that this column is going to be ordered
       //       lexicographically, we essentially need to check that provided literal falls w/in min/max bounds of the
       //       given column
-      case StartsWith(sourceExpr @ AllowedTransformationExpression(attrRef), v @ Literal(_: UTF8String, _)) =>
+      case StartsWith(sourceExpr @ columnStatsExpressionUtils.AllowedTransformationExpression(attrRef), v @ Literal(_: UTF8String, _)) =>
         getTargetIndexedColumnName(attrRef, indexedCols)
           .map { colName =>
-            val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
-            genColumnValuesEqualToExpression(colName, v, targetExprBuilder)
+            val targetExprBuilder: Expression => Expression = columnStatsExpressionUtils.swapAttributeRefInExpr(sourceExpr, attrRef, _)
+            columnStatsExpressionUtils.genColumnValuesEqualToExpression(colName, v, targetExprBuilder)
           }.orElse({
           Option.empty
         })
@@ -335,12 +331,12 @@ object DataSkippingUtils extends Logging {
       // Filter "expr(colA) not like 'xxx%'"
       // Translates to "NOT(expr(colA_minValue) like 'xxx%' AND expr(colA_maxValue) like 'xxx%')" for index lookup
       // NOTE: This is NOT an inversion of "colA like xxx"
-      case Not(StartsWith(sourceExpr @ AllowedTransformationExpression(attrRef), value @ Literal(_: UTF8String, _))) =>
+      case Not(StartsWith(sourceExpr @ columnStatsExpressionUtils.AllowedTransformationExpression(attrRef), value @ Literal(_: UTF8String, _))) =>
         getTargetIndexedColumnName(attrRef, indexedCols)
           .map { colName =>
-            val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
-            val minValueExpr = targetExprBuilder.apply(genColMinValueExpr(colName))
-            val maxValueExpr = targetExprBuilder.apply(genColMaxValueExpr(colName))
+            val targetExprBuilder: Expression => Expression = columnStatsExpressionUtils.swapAttributeRefInExpr(sourceExpr, attrRef, _)
+            val minValueExpr = targetExprBuilder.apply(columnStatsExpressionUtils.genColMinValueExpr(colName))
+            val maxValueExpr = targetExprBuilder.apply(columnStatsExpressionUtils.genColMaxValueExpr(colName))
             Not(And(StartsWith(minValueExpr, value), StartsWith(maxValueExpr, value)))
           }.orElse({
           Option.empty
@@ -472,82 +468,4 @@ object DataSkippingUtils extends Logging {
   }
 }
 
-object ColumnStatsExpressionUtils {
-
-  @inline def genColMinValueExpr(colName: String): Expression = col(getMinColumnNameFor(colName)).expr
-  @inline def genColMaxValueExpr(colName: String): Expression = col(getMaxColumnNameFor(colName)).expr
-  @inline def genColNumNullsExpr(colName: String): Expression = col(getNullCountColumnNameFor(colName)).expr
-  @inline def genColValueCountExpr: Expression = col(getValueCountColumnNameFor).expr
-
-  @inline def genColumnValuesEqualToExpression(colName: String,
-                                               value: Expression,
-                                               targetExprBuilder: Function[Expression, Expression] = Predef.identity): Expression = {
-    val minValueExpr = targetExprBuilder.apply(genColMinValueExpr(colName))
-    val maxValueExpr = targetExprBuilder.apply(genColMaxValueExpr(colName))
-    // Only case when column C contains value V is when min(C) <= V <= max(c)
-    And(LessThanOrEqual(minValueExpr, value), GreaterThanOrEqual(maxValueExpr, value))
-  }
-
-  def genColumnOnlyValuesEqualToExpression(colName: String,
-                                           value: Expression,
-                                           targetExprBuilder: Function[Expression, Expression] = Predef.identity): Expression = {
-    val minValueExpr = targetExprBuilder.apply(genColMinValueExpr(colName))
-    val maxValueExpr = targetExprBuilder.apply(genColMaxValueExpr(colName))
-    // Only case when column C contains _only_ value V is when min(C) = V AND max(c) = V
-    And(EqualTo(minValueExpr, value), EqualTo(maxValueExpr, value))
-  }
-
-  def swapAttributeRefInExpr(sourceExpr: Expression, from: AttributeReference, to: Expression): Expression = {
-    checkState(sourceExpr.references.size == 1)
-    sourceExpr.transformDown {
-      case attrRef: AttributeReference if attrRef.sameRef(from) => to
-    }
-  }
-
-  /**
-   * This check is used to validate that the expression that target column is compared against
-   * <pre>
-   *    a) Has no references to other attributes (for ex, columns)
-   *    b) Does not contain sub-queries
-   * </pre>
-   *
-   * This in turn allows us to be certain that Spark will be able to evaluate such expression
-   * against Column Stats Index as well
-   */
-  def isValueExpression(expr: Expression): Boolean =
-    expr.references.isEmpty && !SubqueryExpression.hasSubquery(expr)
-
-  /**
-   * This utility pattern-matches an expression iff
-   *
-   * <ol>
-   *   <li>It references *exactly* 1 attribute (column)</li>
-   *   <li>It does NOT contain sub-queries</li>
-   *   <li>It contains only whitelisted transformations that preserve ordering of the source column [1]</li>
-   * </ol>
-   *
-   * [1] This is required to make sure that we can correspondingly map Column Stats Index values as well. Applying
-   * transformations that do not preserve the ordering might lead to incorrect results being returned by Data
-   * Skipping flow.
-   *
-   * Returns only [[AttributeReference]] contained as a sub-expression
-   */
-  object AllowedTransformationExpression extends SparkAdapterSupport {
-    val exprUtils: HoodieCatalystExpressionUtils = sparkAdapter.getCatalystExpressionUtils
-
-    def unapply(expr: Expression): Option[AttributeReference] = {
-      // First step, we check that expression
-      //    - Does NOT contain sub-queries
-      //    - Does contain exactly 1 attribute
-      if (SubqueryExpression.hasSubquery(expr) || expr.references.size != 1) {
-        None
-      } else {
-        // Second step, we validate that holding expression is an actually permitted
-        // transformation
-        // NOTE: That transformation composition is permitted
-        exprUtils.tryMatchAttributeOrderingPreservingTransformation(expr)
-      }
-    }
-  }
-}
 
