@@ -41,8 +41,13 @@ import java.io.IOException;
 
 import static org.apache.hudi.aws.testutils.GlueTestUtil.getHadoopConf;
 import static org.apache.hudi.aws.testutils.GlueTestUtil.glueSyncProps;
+import static org.apache.hudi.config.GlueCatalogSyncClientConfig.GLUE_SYNC_DATABASE_NAME;
+import static org.apache.hudi.config.GlueCatalogSyncClientConfig.GLUE_SYNC_TABLE_NAME;
 import static org.apache.hudi.config.GlueCatalogSyncClientConfig.RECREATE_GLUE_TABLE_ON_ERROR;
 import static org.apache.hudi.hive.HiveSyncConfig.RECREATE_HIVE_TABLE_ON_ERROR;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
@@ -78,6 +83,31 @@ class TestAwsGlueSyncTool {
 
   private void reinitGlueSyncTool() {
     awsGlueCatalogSyncTool = new MockAwsGlueCatalogSyncTool(glueSyncProps, GlueTestUtil.getHadoopConf());
+  }
+
+  @Test
+  void testDatabaseAndTableName() {
+    String hivedb = "hivedb";
+    String hivetable = "hivetable";
+
+    glueSyncProps.setProperty(META_SYNC_DATABASE_NAME.key(), hivedb);
+    glueSyncProps.setProperty(META_SYNC_TABLE_NAME.key(), hivetable);
+
+    glueSyncProps.remove(GLUE_SYNC_DATABASE_NAME.key());
+    glueSyncProps.remove(GLUE_SYNC_TABLE_NAME.key());
+
+    reinitGlueSyncTool();
+
+    assertEquals(hivedb, awsGlueCatalogSyncTool.getDatabaseName(), "database name should infer from hive properties");
+    assertEquals(hivetable, awsGlueCatalogSyncTool.getTableName(), "table name should infer from hive properties");
+
+    glueSyncProps.setProperty(GLUE_SYNC_DATABASE_NAME.key(), GlueTestUtil.DB_NAME);
+    glueSyncProps.setProperty(GLUE_SYNC_TABLE_NAME.key(), GlueTestUtil.TABLE_NAME);
+
+    reinitGlueSyncTool();
+
+    assertEquals(GlueTestUtil.DB_NAME, awsGlueCatalogSyncTool.getDatabaseName(), "database name should refer to glue properties");
+    assertEquals(GlueTestUtil.TABLE_NAME, awsGlueCatalogSyncTool.getTableName(), "table name should refer to glue properties");
   }
 
   @Test
