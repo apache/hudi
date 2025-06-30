@@ -29,7 +29,6 @@ import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeSeq, Expre
 import org.apache.spark.sql.catalyst.optimizer.ReplaceExpressions
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
-import org.apache.spark.sql.classic.ClassicConversions.castToImpl
 import org.apache.spark.sql.execution.command._
 import org.apache.spark.sql.execution.datasources.{CreateTable, LogicalRelation}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{isMetaField, removeMetaFields}
@@ -442,7 +441,7 @@ case class ResolveImplementations(sparkSession: SparkSession) extends Rule[Logic
         // Convert to MergeIntoHoodieTableCommand
         case mit@MatchMergeIntoTable(target@ResolvesToHudiTable(table), _, _) if mit.resolved =>
           val catalogTable = HoodieCatalogTable(sparkSession, table)
-          val command = MergeIntoHoodieTableCommand(ReplaceExpressions(mit).asInstanceOf[MergeIntoTable], catalogTable, sparkSession, null)
+          val command = new MergeIntoHoodieTableCommand(ReplaceExpressions(mit).asInstanceOf[MergeIntoTable], catalogTable, sparkSession, null)
           val inputPlan = command.getProcessedInputPlan
           command.copy(query = inputPlan)
 

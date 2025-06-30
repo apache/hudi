@@ -38,13 +38,13 @@ import org.apache.hudi.util.JFunction.scalaFunction1Noop
 import org.apache.avro.Schema
 import org.apache.spark.sql._
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.{attributeEquals, MatchCast}
+import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, BoundReference, EqualTo, Expression, Literal, NamedExpression, PredicateHelper}
 import org.apache.spark.sql.catalyst.expressions.BindReferences.bindReference
 import org.apache.spark.sql.catalyst.plans.{LeftOuter, QueryPlan}
 import org.apache.spark.sql.catalyst.plans.logical._
-import org.apache.spark.sql.classic.SparkSession
 import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.execution.command.DataWritingCommand
 import org.apache.spark.sql.execution.metric.SQLMetric

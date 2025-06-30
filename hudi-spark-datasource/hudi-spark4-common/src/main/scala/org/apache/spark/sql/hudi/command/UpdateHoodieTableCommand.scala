@@ -21,6 +21,7 @@ import org.apache.hudi.{HoodieSparkSqlWriter, SparkAdapterSupport}
 import org.apache.hudi.DataSourceWriteOptions.{SPARK_SQL_OPTIMIZED_WRITES, SPARK_SQL_WRITES_PREPPED_KEY}
 
 import org.apache.spark.internal.Logging
+import org.apache.spark.sql
 import org.apache.spark.sql._
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.attributeEquals
 import org.apache.spark.sql.catalyst.analysis.Resolver
@@ -35,7 +36,6 @@ import org.apache.spark.sql.execution.command.DataWritingCommand
 import org.apache.spark.sql.execution.metric.SQLMetric
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
-import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.failAnalysis
 import org.apache.spark.sql.hudi.command.HoodieCommandMetrics.updateCommitMetrics
 import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 
@@ -111,8 +111,12 @@ object UpdateHoodieTableCommand extends SparkAdapterSupport with Logging {
     sparkAdapter.resolveHoodieTable(ut.table) match {
       case Some(catalogTable) => HoodieCatalogTable(sparkSession, catalogTable)
       case _ =>
-        failAnalysis(s"Failed to resolve update statement into the Hudi table. Got instead: ${ut.table}")
+        throw new HoodieAnalysisException(s"Failed to resolve update statement into the Hudi table. Got instead: ${ut.table}")
     }
+  }
+
+  def inputPlan(sparkSession: sql.SparkSession, ut: UpdateTable): LogicalPlan = {
+    inputPlan(sparkSession.asInstanceOf[SparkSession], ut)
   }
 
   def inputPlan(sparkSession: SparkSession, ut: UpdateTable): LogicalPlan = {
