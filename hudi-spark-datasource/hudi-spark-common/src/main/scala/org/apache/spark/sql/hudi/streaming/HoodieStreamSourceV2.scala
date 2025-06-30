@@ -17,25 +17,25 @@
 
 package org.apache.spark.sql.hudi.streaming
 
+import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, HoodieCopyOnWriteCDCHadoopFsRelationFactory, HoodieCopyOnWriteIncrementalHadoopFsRelationFactoryV2, HoodieMergeOnReadCDCHadoopFsRelationFactory, HoodieMergeOnReadIncrementalHadoopFsRelationFactory, HoodieMergeOnReadIncrementalHadoopFsRelationFactoryV2, IncrementalRelationV2, MergeOnReadIncrementalRelationV2, SparkAdapterSupport}
 import org.apache.hudi.cdc.CDCRelation
 import org.apache.hudi.common.config.HoodieReaderConfig
 import org.apache.hudi.common.model.HoodieTableType
+import org.apache.hudi.common.table.{HoodieTableMetaClient, HoodieTableVersion, TableSchemaResolver}
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils
 import org.apache.hudi.common.table.checkpoint.{CheckpointUtils, StreamerCheckpointV2}
 import org.apache.hudi.common.table.log.InstantRange.RangeType
-import org.apache.hudi.common.table.{HoodieTableMetaClient, HoodieTableVersion, TableSchemaResolver}
-import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, HoodieCopyOnWriteCDCHadoopFsRelationFactory, HoodieCopyOnWriteIncrementalHadoopFsRelationFactory, HoodieMergeOnReadCDCHadoopFsRelationFactory, HoodieMergeOnReadIncrementalHadoopFsRelationFactory, IncrementalRelationV2, MergeOnReadIncrementalRelationV2, SparkAdapterSupport}
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.{DataFrame, Dataset, FileFormatUtilsForFileGroupReader, SQLContext}
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.execution.datasources.parquet.HoodieFormatTrait
 import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
+import org.apache.spark.sql.execution.datasources.parquet.HoodieFormatTrait
 import org.apache.spark.sql.execution.streaming.{Offset, Source}
 import org.apache.spark.sql.hudi.streaming.HoodieSourceOffset.INIT_OFFSET
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.{DataFrame, Dataset, FileFormatUtilsForFileGroupReader, SQLContext}
 
 /**
   * The Struct Stream Source for Hudi to consume the data by streaming job.
@@ -133,10 +133,10 @@ class HoodieStreamSourceV2(sqlContext: SQLContext,
         if (useNewParquetFileFormat) {
           val relation = if (tableType == HoodieTableType.COPY_ON_WRITE) {
             new HoodieCopyOnWriteCDCHadoopFsRelationFactory(
-              sqlContext, metaClient, parameters ++ cdcOptions, Option(CDCRelation.FULL_CDC_SPARK_SCHEMA), false).build()
+              sqlContext, metaClient, parameters ++ cdcOptions, Option(CDCRelation.FULL_CDC_SPARK_SCHEMA), false, rangeType).build()
           } else {
             new HoodieMergeOnReadCDCHadoopFsRelationFactory(
-              sqlContext, metaClient, parameters ++ cdcOptions, Option(CDCRelation.FULL_CDC_SPARK_SCHEMA), false).build()
+              sqlContext, metaClient, parameters ++ cdcOptions, Option(CDCRelation.FULL_CDC_SPARK_SCHEMA), false, rangeType).build()
           }
           relationToDataFrame(relation, CDCRelation.FULL_CDC_SPARK_SCHEMA)
         } else {
@@ -155,10 +155,10 @@ class HoodieStreamSourceV2(sqlContext: SQLContext,
 
         if (useNewParquetFileFormat) {
           val relation = if (tableType == HoodieTableType.COPY_ON_WRITE) {
-            new HoodieCopyOnWriteIncrementalHadoopFsRelationFactory(sqlContext, metaClient, incParams, Option(schema), false)
+            new HoodieCopyOnWriteIncrementalHadoopFsRelationFactoryV2(sqlContext, metaClient, incParams, Option(schema), false, rangeType)
               .build()
           } else {
-            new HoodieMergeOnReadIncrementalHadoopFsRelationFactory(sqlContext, metaClient, incParams, Option(schema), false)
+            new HoodieMergeOnReadIncrementalHadoopFsRelationFactoryV2(sqlContext, metaClient, incParams, Option(schema), false, rangeType)
               .build()
           }
           relationToDataFrame(relation, schema)
