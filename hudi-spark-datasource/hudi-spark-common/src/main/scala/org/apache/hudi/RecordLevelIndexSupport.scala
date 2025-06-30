@@ -27,7 +27,7 @@ import org.apache.hudi.common.model.HoodieTableQueryType.SNAPSHOT
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.InstantComparison
 import org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps
-import org.apache.hudi.keygen.KeyGenUtils
+import org.apache.hudi.keygen.KeyGenerator
 import org.apache.hudi.metadata.HoodieTableMetadataUtil
 import org.apache.hudi.storage.StoragePath
 
@@ -76,10 +76,8 @@ class RecordLevelIndexSupport(spark: SparkSession,
     val recordKeyLocationsMap = metadataTable.readRecordIndex(JavaConverters.seqAsJavaListConverter(recordKeys).asJava)
     val fileIdToPartitionMap: mutable.Map[String, String] = mutable.Map.empty
     val candidateFiles: mutable.Set[String] = mutable.Set.empty
-    for (locations <- JavaConverters.collectionAsScalaIterableConverter(recordKeyLocationsMap.values()).asScala) {
-      for (location <- JavaConverters.collectionAsScalaIterableConverter(locations).asScala) {
-        fileIdToPartitionMap.put(location.getFileId, location.getPartitionPath)
-      }
+    for (location <- JavaConverters.collectionAsScalaIterableConverter(recordKeyLocationsMap.values()).asScala) {
+      fileIdToPartitionMap.put(location.getFileId, location.getPartitionPath)
     }
     for (file <- allFiles) {
       val fileId = FSUtils.getFileIdFromFilePath(file)
@@ -133,7 +131,7 @@ object RecordLevelIndexSupport {
   }
 
   def getComplexKeyLiteralGenerator(): Function2[AttributeReference, Literal, String] = {
-    (attr: AttributeReference, lit: Literal) => attr.name + KeyGenUtils.DEFAULT_COLUMN_VALUE_SEPARATOR + lit.value.toString
+    (attr: AttributeReference, lit: Literal) => attr.name + KeyGenerator.DEFAULT_COLUMN_VALUE_SEPARATOR + lit.value.toString
   }
 
   /**

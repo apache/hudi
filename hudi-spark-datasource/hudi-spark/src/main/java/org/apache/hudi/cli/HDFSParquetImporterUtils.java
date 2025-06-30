@@ -202,13 +202,13 @@ public class HDFSParquetImporterUtils implements Serializable {
             throw new HoodieIOException("row field is missing. :" + this.rowKey);
           }
           String partitionPath = partitionField.toString();
-          LOG.debug("Row Key : " + rowField + ", Partition Path is (" + partitionPath + ")");
+          LOG.debug("Row Key : {}, Partition Path is ({}})", rowField, partitionPath);
           if (partitionField instanceof Number) {
             try {
               long ts = (long) (Double.parseDouble(partitionField.toString()) * 1000L);
               partitionPath = PARTITION_FORMATTER.format(Instant.ofEpochMilli(ts));
             } catch (NumberFormatException nfe) {
-              LOG.warn("Unable to parse date from partition field. Assuming partition as (" + partitionField + ")");
+              LOG.warn("Unable to parse date from partition field. Assuming partition as ({})", partitionField);
             }
           }
           return new HoodieAvroRecord<>(new HoodieKey(rowField.toString(), partitionPath),
@@ -228,13 +228,19 @@ public class HDFSParquetImporterUtils implements Serializable {
                                                                    JavaRDD<HoodieRecord<T>> hoodieRecords) {
     switch (this.command.toLowerCase()) {
       case "upsert": {
-        return client.upsert(hoodieRecords, instantTime);
+        JavaRDD<WriteStatus> writeStatusJavaRDD = client.upsert(hoodieRecords, instantTime);
+        client.commit(instantTime, writeStatusJavaRDD);
+        return writeStatusJavaRDD;
       }
       case "bulkinsert": {
-        return client.bulkInsert(hoodieRecords, instantTime);
+        JavaRDD<WriteStatus> writeStatusJavaRDD = client.bulkInsert(hoodieRecords, instantTime);
+        client.commit(instantTime, writeStatusJavaRDD);
+        return writeStatusJavaRDD;
       }
       default: {
-        return client.insert(hoodieRecords, instantTime);
+        JavaRDD<WriteStatus> writeStatusJavaRDD = client.insert(hoodieRecords, instantTime);
+        client.commit(instantTime, writeStatusJavaRDD);
+        return writeStatusJavaRDD;
       }
     }
   }
@@ -314,14 +320,14 @@ public class HDFSParquetImporterUtils implements Serializable {
     writeResponse.foreach(writeStatus -> {
       if (writeStatus.hasErrors()) {
         errors.add(1);
-        LOG.error(String.format("Error processing records :writeStatus:%s", writeStatus.getStat().toString()));
+        LOG.error("Error processing records :writeStatus:{}", writeStatus.getStat());
       }
     });
     if (errors.value() == 0) {
-      LOG.info(String.format("Table imported into hoodie with %s instant time.", instantTime));
+      LOG.info("Table imported into hoodie with {} instant time.", instantTime);
       return 0;
     }
-    LOG.error(String.format("Import failed with %d errors.", errors.value()));
+    LOG.error("Import failed with {} errors.", errors.value());
     return -1;
   }
 }

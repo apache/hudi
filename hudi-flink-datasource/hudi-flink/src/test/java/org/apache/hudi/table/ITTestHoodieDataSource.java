@@ -19,6 +19,7 @@
 package org.apache.hudi.table;
 
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -1322,6 +1323,48 @@ public class ITTestHoodieDataSource {
   }
 
   @Test
+  void tesQueryWithPartitionBucketIndexPruning() {
+    String operationType = "upsert";
+    String tableType = "MERGE_ON_READ";
+    TableEnvironment tableEnv = batchTableEnv;
+    // csv source
+    String csvSourceDDL = TestConfigurations.getCsvSourceDDL("csv_source", "test_source_5.data");
+    tableEnv.executeSql(csvSourceDDL);
+    String catalogName = "hudi_" + operationType;
+    String hudiCatalogDDL = catalog(catalogName)
+        .catalogPath(tempFile.getAbsolutePath())
+        .end();
+
+    tableEnv.executeSql(hudiCatalogDDL);
+    String dbName = "hudi";
+    tableEnv.executeSql("create database " + catalogName + "." + dbName);
+    String basePath = tempFile.getAbsolutePath() + "/hudi/hoodie_sink";
+
+    String hoodieTableDDL = sql(catalogName + ".hudi.hoodie_sink")
+        .option(FlinkOptions.PATH, basePath)
+        .option(FlinkOptions.TABLE_TYPE, tableType)
+        .option(FlinkOptions.OPERATION, operationType)
+        .option(FlinkOptions.WRITE_BULK_INSERT_SHUFFLE_INPUT, true)
+        .option(FlinkOptions.INDEX_TYPE, "BUCKET")
+        .option(FlinkOptions.HIVE_STYLE_PARTITIONING, "true")
+        .option(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, "1")
+        .option(FlinkOptions.BUCKET_INDEX_PARTITION_RULE, "regex")
+        .option(FlinkOptions.BUCKET_INDEX_PARTITION_EXPRESSIONS, "partition=(par1|par2),2")
+        .end();
+    tableEnv.executeSql(hoodieTableDDL);
+
+    String insertInto = "insert into " + catalogName + ".hudi.hoodie_sink select * from csv_source";
+    execInsertSql(tableEnv, insertInto);
+
+    List<Row> result1 = execSelectSql(tableEnv, "select * from " + catalogName + ".hudi.hoodie_sink");
+    assertRowsEquals(result1, TestData.DATA_SET_SOURCE_INSERT);
+    // apply filters which will prune based on partition level bucket index
+    List<Row> result2 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from " + catalogName + ".hudi.hoodie_sink where uuid = 'id5'").execute().collect());
+    assertRowsEquals(result2, "[+I[id5, Sophia, 18, 1970-01-01T00:00:05, par3]]");
+  }
+
+  @Test
   void testBulkInsertWithSortByRecordKey() {
     TableEnvironment tableEnv = batchTableEnv;
 
@@ -1854,6 +1897,46 @@ public class ITTestHoodieDataSource {
         .option("hoodie.metadata.index.column.stats.enable", true)
         .option(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true)
         .option(FlinkOptions.TABLE_TYPE, tableType)
+        .end();
+    tableEnv.executeSql(hoodieTableDDL);
+
+    execInsertSql(tableEnv, TestSQL.INSERT_T1);
+
+    List<Row> result1 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    assertRowsEquals(result1, TestData.DATA_SET_SOURCE_INSERT);
+    // apply filters
+    List<Row> result2 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1 where uuid > 'id5' and age > 20").execute().collect());
+    assertRowsEquals(result2, "["
+        + "+I[id7, Bob, 44, 1970-01-01T00:00:07, par4], "
+        + "+I[id8, Han, 56, 1970-01-01T00:00:08, par4]]");
+    // filter by timestamp
+    List<Row> result3 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1 where ts > TIMESTAMP '1970-01-01 00:00:05'").execute().collect());
+    assertRowsEquals(result3, "["
+        + "+I[id6, Emma, 20, 1970-01-01T00:00:06, par3], "
+        + "+I[id7, Bob, 44, 1970-01-01T00:00:07, par4], "
+        + "+I[id8, Han, 56, 1970-01-01T00:00:08, par4]]");
+    // filter by in expression
+    List<Row> result4 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1 where uuid in ('id6', 'id7', 'id8')").execute().collect());
+    assertRowsEquals(result4, "["
+        + "+I[id6, Emma, 20, 1970-01-01T00:00:06, par3], "
+        + "+I[id7, Bob, 44, 1970-01-01T00:00:07, par4], "
+        + "+I[id8, Han, 56, 1970-01-01T00:00:08, par4]]");
+  }
+
+  @Test
+  void testParquetLogBlockDataSkipping() {
+    TableEnvironment tableEnv = batchTableEnv;
+    String hoodieTableDDL = sql("t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.METADATA_ENABLED, true)
+        .option("hoodie.metadata.index.column.stats.enable", true)
+        .option(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "parquet")
+        .option(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true)
+        .option(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_MERGE_ON_READ)
         .end();
     tableEnv.executeSql(hoodieTableDDL);
 
@@ -2425,19 +2508,19 @@ public class ITTestHoodieDataSource {
   }
 
   @ParameterizedTest
-  @MethodSource("indexPartitioningAndRowDataModeParams")
-  void testWriteMultipleCommitWithLegacyAndRowDataWrite(String indexType, boolean hiveStylePartitioning, boolean rowDataWriteMode) throws Exception {
+  @MethodSource("indexAndPartitioningParams")
+  void testWriteMultipleCommitWithDifferentLogBlockType(String indexType, boolean hiveStylePartitioning) throws Exception {
     // create filesystem table named source
     String createSource = TestConfigurations.getFileSourceDDL("source");
     streamTableEnv.executeSql(createSource);
 
-    // insert first batch of data with rowdata mode writing disabled
+    // insert first batch of data with parquet log block
     String hoodieTableDDL = sql("t1")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
         .option(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ)
         .option(FlinkOptions.INDEX_TYPE, indexType)
         .option(FlinkOptions.HIVE_STYLE_PARTITIONING, hiveStylePartitioning)
-        .option(FlinkOptions.INSERT_ROWDATA_MODE_ENABLED, false)
+        .option(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "parquet")
         .option(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), false)
         .end();
     streamTableEnv.executeSql(hoodieTableDDL);
@@ -2446,7 +2529,7 @@ public class ITTestHoodieDataSource {
 
     streamTableEnv.executeSql("drop table t1");
 
-    // insert second batch of data with rowdata mode writing enabled
+    // insert second batch of data with avro log block
     hoodieTableDDL = sql("t1")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
         .option(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ)
@@ -2454,11 +2537,34 @@ public class ITTestHoodieDataSource {
         .option(FlinkOptions.READ_AS_STREAMING, true)
         .option(FlinkOptions.READ_START_COMMIT, FlinkOptions.START_COMMIT_EARLIEST)
         .option(FlinkOptions.HIVE_STYLE_PARTITIONING, hiveStylePartitioning)
-        .option(FlinkOptions.INSERT_ROWDATA_MODE_ENABLED, rowDataWriteMode)
+        .option(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "avro")
         .option(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), false)
         .end();
     streamTableEnv.executeSql(hoodieTableDDL);
     insertInto = "insert into t1 select * from source";
+    execInsertSql(streamTableEnv, insertInto);
+
+    // reading from the earliest
+    List<Row> rows = execSelectSqlWithExpectedNum(streamTableEnv, "select * from t1", TestData.DATA_SET_SOURCE_INSERT.size());
+    assertRowsEquals(rows, TestData.DATA_SET_SOURCE_INSERT);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"FLINK_STATE", "BUCKET"})
+  void testRowDataWriteModeWithParquetLogFormat(String index) throws Exception {
+    String createSource = TestConfigurations.getFileSourceDDL("source");
+    streamTableEnv.executeSql(createSource);
+
+    // insert first batch of data with rowdata mode writing disabled
+    String hoodieTableDDL = sql("t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ)
+        .option(FlinkOptions.INDEX_TYPE, index)
+        .option(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "parquet")
+        .option(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), false)
+        .end();
+    streamTableEnv.executeSql(hoodieTableDDL);
+    String insertInto = "insert into t1 select * from source";
     execInsertSql(streamTableEnv, insertInto);
 
     // reading from the earliest
@@ -2544,23 +2650,6 @@ public class ITTestHoodieDataSource {
             {"FLINK_STATE", true},
             {"BUCKET", false},
             {"BUCKET", true}};
-    return Stream.of(data).map(Arguments::of);
-  }
-
-  /**
-   * Return test params => (index type, hive style partitioning).
-   */
-  private static Stream<Arguments> indexPartitioningAndRowDataModeParams() {
-    Object[][] data =
-        new Object[][] {
-            {"FLINK_STATE", false, false},
-            {"FLINK_STATE", false, true},
-            {"FLINK_STATE", true, false},
-            {"FLINK_STATE", true, true},
-            {"BUCKET", false, false},
-            {"BUCKET", false, true},
-            {"BUCKET", true, false},
-            {"BUCKET", true, true}};
     return Stream.of(data).map(Arguments::of);
   }
 

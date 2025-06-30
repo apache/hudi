@@ -19,12 +19,9 @@
 package org.apache.hudi.common.util;
 
 import org.apache.avro.Schema;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
-import java.io.Closeable;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -34,8 +31,7 @@ import java.util.Map;
  * A map of {version_id, schema} is maintained.
  */
 @NotThreadSafe
-public class LocalAvroSchemaCache implements Closeable {
-  private static final Logger LOG = LoggerFactory.getLogger(LocalAvroSchemaCache.class);
+public class LocalAvroSchemaCache {
   private final Map<Integer, Schema> versionIdToSchema; // the mapping from version_id -> schema
   private final Map<Schema, Integer> schemaToVersionId; // the mapping from schema -> version_id
 
@@ -62,11 +58,5 @@ public class LocalAvroSchemaCache implements Closeable {
 
   public Option<Schema> getSchema(Integer versionId) {
     return Option.ofNullable(this.versionIdToSchema.get(versionId));
-  }
-
-  @Override
-  public void close() {
-    this.schemaToVersionId.clear();
-    this.versionIdToSchema.clear();
   }
 }

@@ -463,7 +463,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
       ensurePreloadedPartitions(getAllQueryPartitionPaths());
     }
 
-    LOG.info(String.format("Refresh table %s, spent: %d ms", metaClient.getTableConfig().getTableName(), timer.endTimer()));
+    LOG.info("Refresh table {}, spent: {} ms", metaClient.getTableConfig().getTableName(), timer.endTimer());
   }
 
   private void validate(HoodieTimeline activeTimeline, Option<String> queryInstant) {
@@ -583,5 +583,22 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     void put(StoragePath path, List<StoragePathInfo> leafFiles);
 
     void invalidate();
+  }
+
+  public static class NoopCache implements FileStatusCache {
+    @Override
+    public Option<List<StoragePathInfo>> get(StoragePath path) {
+      return Option.empty();
+    }
+
+    @Override
+    public void put(StoragePath path, List<StoragePathInfo> leafFiles) {
+      // no-op
+    }
+
+    @Override
+    public void invalidate() {
+      // no-op
+    }
   }
 }

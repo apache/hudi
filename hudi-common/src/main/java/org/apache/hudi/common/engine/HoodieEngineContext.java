@@ -27,6 +27,7 @@ import org.apache.hudi.common.function.SerializableConsumer;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializablePairFlatMapFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
@@ -69,10 +70,6 @@ public abstract class HoodieEngineContext {
   public abstract <T> HoodieData<T> emptyHoodieData();
 
   public abstract <K, V> HoodiePairData<K, V> emptyHoodiePairData();
-
-  public boolean supportsFileGroupReader() {
-    return false;
-  }
 
   public <T> HoodieData<T> parallelize(List<T> data) {
     if (data.isEmpty()) {
@@ -130,4 +127,6 @@ public abstract class HoodieEngineContext {
    * @return the result of the aggregation
    */
   public abstract <I, O> O aggregate(HoodieData<I> data, O zeroValue, Functions.Function2<O, I, O> seqOp, Functions.Function2<O, O, O> combOp);
+
+  public abstract <T> ReaderContextFactory<T> getReaderContextFactory(HoodieTableMetaClient metaClient);
 }

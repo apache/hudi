@@ -85,7 +85,6 @@ public class TestRemoteHoodieTableFileSystemView extends TestHoodieTableFileSyst
       TimelineServiceTestHarness.Builder builder = TimelineServiceTestHarness.newBuilder();
       builder.withNumberOfSimulatedConnectionFailures(numberOfSimulatedConnectionFailures);
       server = builder.build(
-          localEngineContext,
           HadoopFSUtils.getStorageConf().unwrap(),
           TimelineService.Config.builder().serverPort(0).build(),
           FileSystemViewManager.createViewManager(localEngineContext, metadataConfig, sConf, commonConfig));
@@ -93,7 +92,7 @@ public class TestRemoteHoodieTableFileSystemView extends TestHoodieTableFileSyst
     } catch (Exception ex) {
       throw new RuntimeException(ex);
     }
-    LOG.info("Connecting to Timeline Server :" + server.getServerPort());
+    LOG.info("Connecting to Timeline Server :{}", server.getServerPort());
     view = initFsView(metaClient, server.getServerPort(), false);
     return view;
   }

@@ -124,6 +124,11 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
     return this.coordinator.getEventBuffer();
   }
 
+  @Override
+  public WriteMetadataEvent[] getEventBuffer(long checkpointId) {
+    return this.coordinator.getEventBuffer(checkpointId);
+  }
+
   public OperatorEvent getNextEvent() {
     return this.gateway.getNextEvent();
   }
@@ -208,8 +213,7 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
     writeFunction.setRuntimeContext(runtimeContext);
     writeFunction.setOperatorEventGateway(gateway);
     writeFunction.open(conf);
-    // handle the bootstrap event
-    coordinator.handleEventFromOperator(0, getNextEvent());
+    writeFunction.setCorrespondent(new MockCorrespondent(this.coordinator));
   }
 
   private void setupMapFunction() {

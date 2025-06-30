@@ -33,8 +33,6 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -49,7 +47,6 @@ import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieMergeHandleFactory;
-import org.apache.hudi.io.HoodieSparkFileGroupReaderBasedMergeHandle;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -80,7 +77,6 @@ import org.apache.hudi.table.action.rollback.CopyOnWriteRollbackActionExecutor;
 import org.apache.hudi.table.action.rollback.RestorePlanActionExecutor;
 import org.apache.hudi.table.action.savepoint.SavepointActionExecutor;
 
-import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -213,8 +209,8 @@ public class HoodieSparkCopyOnWriteTable<T>
   }
 
   @Override
-  public Option<HoodieCleanerPlan> scheduleCleaning(HoodieEngineContext context, String instantTime, Option<Map<String, String>> extraMetadata) {
-    return new CleanPlanActionExecutor<>(context, config, this, instantTime, extraMetadata).execute();
+  public Option<HoodieCleanerPlan> createCleanerPlan(HoodieEngineContext context, Option<Map<String, String>> extraMetadata) {
+    return new CleanPlanActionExecutor<>(context, config, this, extraMetadata).execute();
   }
 
   @Override
@@ -269,22 +265,8 @@ public class HoodieSparkCopyOnWriteTable<T>
   }
 
   @Override
-  public List<WriteStatus> compactUsingFileGroupReader(String instantTime,
-                                                       CompactionOperation operation,
-                                                       HoodieWriteConfig writeConfig,
-                                                       HoodieReaderContext readerContext,
-                                                       Configuration conf) {
-    config.setDefault(writeConfig);
-    Option<BaseKeyGenerator> keyGeneratorOpt = HoodieSparkKeyGeneratorFactory.createBaseKeyGenerator(config);
-    HoodieSparkFileGroupReaderBasedMergeHandle mergeHandle = new HoodieSparkFileGroupReaderBasedMergeHandle(config,
-        instantTime, this, operation, taskContextSupplier, keyGeneratorOpt, readerContext, conf);
-    mergeHandle.write();
-    return mergeHandle.close();
-  }
-
-  @Override
   public HoodieCleanMetadata clean(HoodieEngineContext context, String cleanInstantTime) {
-    return new CleanActionExecutor<>(context, config, this, cleanInstantTime, false).execute();
+    return new CleanActionExecutor<>(context, config, this, cleanInstantTime).execute();
   }
 
   @Override

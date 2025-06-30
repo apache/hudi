@@ -24,6 +24,7 @@ import org.apache.hudi.DataSourceReadOptions.{REALTIME_PAYLOAD_COMBINE_OPT_VAL, 
 import org.apache.hudi.MergeOnReadSnapshotRelation.createPartitionedFile
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{FileSlice, HoodieLogFile}
+import org.apache.hudi.data.CloseableIteratorListener
 import org.apache.hudi.storage.StoragePath
 
 import org.apache.hadoop.conf.Configuration
@@ -134,7 +135,7 @@ class HoodieMultipleBaseFileFormat(tableState: Broadcast[HoodieTableState],
     (file: PartitionedFile) => {
       val filePath = sparkAdapter.getSparkPartitionedFileUtils.getPathFromPartitionedFile(file)
       val fileFormat = detectFileFormat(filePath.toString)
-      file.partitionValues match {
+      val iter = file.partitionValues match {
         case fileSliceMapping: HoodiePartitionFileSliceMapping =>
           if (FSUtils.isLogFile(filePath)) {
             // no base file
@@ -192,6 +193,7 @@ class HoodieMultipleBaseFileFormat(tableState: Broadcast[HoodieTableState],
           case _ => throw new UnsupportedOperationException(s"Base file format $fileFormat is not supported.")
         }
       }
+      CloseableIteratorListener.addListener(iter)
     }
   }
 

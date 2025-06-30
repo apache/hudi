@@ -31,6 +31,11 @@ import org.apache.hudi.common.util.Option;
  * are compared in lexicographical order.
  */
 public class BlockIndexEntry implements Comparable<BlockIndexEntry> {
+  // The first key stored in the block index can be shortened to save memory,
+  // i.e., a fake first key is stored in the block index entry, and such a fake
+  // first key does not exist in the data block. The fake first key is
+  // lexicographically greater than the last key of the previous block and
+  // lexicographically equal or smaller than the actual first key of the current block.
   private final Key firstKey;
   private final Option<Key> nextBlockFirstKey;
   private final long offset;

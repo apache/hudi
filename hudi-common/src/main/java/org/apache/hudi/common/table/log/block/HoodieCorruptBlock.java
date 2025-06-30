@@ -22,6 +22,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.storage.HoodieStorage;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Map;
 import java.util.function.Supplier;
@@ -39,12 +40,12 @@ public class HoodieCorruptBlock extends HoodieLogBlock {
   }
 
   @Override
-  public byte[] getContentBytes(HoodieStorage storage) throws IOException {
+  public ByteArrayOutputStream getContentBytes(HoodieStorage storage) throws IOException {
     if (!getContent().isPresent() && readBlockLazily) {
       // read content from disk
       inflate();
     }
-    return getContent().get();
+    return getContentAsByteStream().get();
   }
 
   @Override

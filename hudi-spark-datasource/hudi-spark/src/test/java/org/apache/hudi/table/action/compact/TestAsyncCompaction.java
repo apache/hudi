@@ -20,11 +20,14 @@
 package org.apache.hudi.table.action.compact;
 
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.client.HoodieWriteResult;
 import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -105,7 +108,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
       HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context, metaClient);
 
       hoodieTable.rollbackInflightCompaction(
-          INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, compactionInstantTime));
+          INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, compactionInstantTime), client.getTransactionManager());
       metaClient.reloadActiveTimeline();
       pendingCompactionInstant =
           metaClient.getCommitsAndCompactionTimeline().filterPendingCompactionTimeline()
@@ -159,7 +162,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
       assertEquals(inflightInstantTime, inflightInstant.requestedTime(), "inflight instant has expected instant time");
 
       // This should rollback
-      client.startCommitWithTime(nextInflightInstantTime);
+      WriteClientTestUtils.startCommitWithTime(client, nextInflightInstantTime);
 
       // Validate
       metaClient = HoodieTestUtils.createMetaClient(storageConf.newInstance(), cfg.getBasePath());
@@ -326,7 +329,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
     } else {
       // since there is a pending delta commit, compaction schedule should not generate any plan
       client = getHoodieWriteClient(cfg);
-      client.scheduleCompactionAtInstant(compactionInstantTime, Option.empty());
+      WriteClientTestUtils.scheduleTableService(client, compactionInstantTime, Option.empty(), TableServiceType.COMPACT);
       metaClient = HoodieTableMetaClient.builder().setConf(context.getStorageConf()).setBasePath(cfg.getBasePath()).build();
       assertFalse(metaClient.getActiveTimeline().filterPendingCompactionTimeline().lastInstant().isPresent());
     }
@@ -439,8 +442,9 @@ public class TestAsyncCompaction extends CompactionTestBase {
       Set<HoodieFileGroupId> fileGroupsBeforeReplace = getAllFileGroups(hoodieTable, dataGen.getPartitionPaths());
       // replace by using insertOverwrite
       JavaRDD<HoodieRecord> replaceRecords = jsc.parallelize(dataGen.generateInserts(replaceInstantTime, numRecs), 1);
-      client.startCommitWithTime(replaceInstantTime, HoodieTimeline.REPLACE_COMMIT_ACTION);
-      client.insertOverwrite(replaceRecords, replaceInstantTime);
+      metaClient.getActiveTimeline().createRequestedCommitWithReplaceMetadata(replaceInstantTime, HoodieTimeline.REPLACE_COMMIT_ACTION);
+      HoodieWriteResult result = client.insertOverwrite(replaceRecords, replaceInstantTime);
+      client.commit(replaceInstantTime, result.getWriteStatuses(), Option.empty(), HoodieTimeline.REPLACE_COMMIT_ACTION, result.getPartitionToReplaceFileIds());
 
       metaClient.reloadActiveTimeline();
       hoodieTable = getHoodieTable(metaClient, cfg);

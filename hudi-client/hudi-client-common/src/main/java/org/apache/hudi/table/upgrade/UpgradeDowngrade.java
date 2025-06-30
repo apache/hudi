@@ -80,12 +80,6 @@ public class UpgradeDowngrade {
       throw new HoodieUpgradeDowngradeException(
           String.format("Please upgrade table from version %s to %s before upgrading to version %s.", fromTableVersion, HoodieTableVersion.SIX.versionCode(), toWriteVersion));
     }
-    // If autoUpgrade is disabled and metadata is enabled, and table version is SIX or SEVEN, while toWriteVersion is EIGHT or greater, then we should disable metadata first
-    if (!config.autoUpgrade() && metaClient.getTableConfig().isMetadataTableAvailable()
-        && (fromTableVersion == HoodieTableVersion.SIX || fromTableVersion == HoodieTableVersion.SEVEN) && toWriteVersion.versionCode() >= HoodieTableVersion.EIGHT.versionCode()) {
-      throw new HoodieUpgradeDowngradeException(
-          String.format("Please disable metadata table before upgrading from version %s to %s.", fromTableVersion, toWriteVersion));
-    }
 
     // allow upgrades otherwise.
     return toWriteVersion.versionCode() > fromTableVersion.versionCode();
@@ -145,7 +139,7 @@ public class UpgradeDowngrade {
           HoodieTableMetaClient mdtMetaClient = HoodieTableMetaClient.builder()
               .setConf(metaClient.getStorageConf().newInstance()).setBasePath(metadataTablePath).build();
           HoodieWriteConfig mdtWriteConfig = HoodieMetadataWriteUtils.createMetadataWriteConfig(
-              config, HoodieFailedWritesCleaningPolicy.EAGER);
+              config, HoodieFailedWritesCleaningPolicy.EAGER, metaClient.getTableConfig().getTableVersion());
           new UpgradeDowngrade(mdtMetaClient, mdtWriteConfig, context, upgradeDowngradeHelper)
               .run(toVersion, instantTime);
         }

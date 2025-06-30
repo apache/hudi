@@ -90,7 +90,7 @@ public class DFSPropertiesConfiguration extends PropertiesConfig {
   }
 
   public DFSPropertiesConfiguration() {
-    this.hadoopConfig = null;
+    this.hadoopConfig = new Configuration();
     this.mainFilePath = null;
     this.hoodieConfig = new HoodieConfig();
     this.visitedFilePaths = new HashSet<>();
@@ -221,11 +221,11 @@ public class DFSPropertiesConfiguration extends PropertiesConfig {
   }
 
   public TypedProperties getProps() {
-    return new TypedProperties(hoodieConfig.getProps());
+    return TypedProperties.copy(hoodieConfig.getProps());
   }
 
   public TypedProperties getProps(boolean includeGlobalProps) {
-    return new TypedProperties(hoodieConfig.getProps(includeGlobalProps));
+    return TypedProperties.copy(hoodieConfig.getProps(includeGlobalProps));
   }
 
   private static Option<StoragePath> getConfPathFromEnv() {

@@ -23,13 +23,16 @@ import org.apache.hudi.common.data.HoodieAccumulator;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
 import org.apache.hudi.common.data.HoodiePairData;
+import org.apache.hudi.common.engine.AvroReaderContextFactory;
 import org.apache.hudi.common.engine.EngineProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.function.SerializableConsumer;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializablePairFlatMapFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
@@ -114,10 +117,6 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
   @Override
   public <K, V> HoodiePairData<K, V> emptyHoodiePairData() {
     return HoodieJavaPairRDD.of(JavaPairRDD.fromJavaRDD(javaSparkContext.emptyRDD()));
-  }
-
-  public boolean supportsFileGroupReader() {
-    return true;
   }
 
   @Override
@@ -248,6 +247,15 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
     Function2<O, I, O> seqOpFunc = seqOp::apply;
     Function2<O, O, O> combOpFunc = combOp::apply;
     return HoodieJavaRDD.getJavaRDD(data).aggregate(zeroValue, seqOpFunc, combOpFunc);
+  }
+
+  @Override
+  public ReaderContextFactory<?> getReaderContextFactory(HoodieTableMetaClient metaClient) {
+    // metadata table are only supported by the AvroReaderContext.
+    if (metaClient.isMetadataTable()) {
+      return new AvroReaderContextFactory(metaClient);
+    }
+    return new SparkReaderContextFactory(this, metaClient);
   }
 
   public SparkConf getConf() {

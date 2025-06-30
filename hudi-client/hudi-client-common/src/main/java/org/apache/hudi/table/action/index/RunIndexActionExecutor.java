@@ -266,13 +266,13 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
                                             HoodieIndexCommitMetadata indexCommitMetadata) throws IOException {
     try {
       // update the table config and timeline in a lock as there could be another indexer running
-      txnManager.beginTransaction(Option.of(indexInstant), Option.empty());
+      txnManager.beginStateChange(Option.of(indexInstant), Option.empty());
       updateMetadataPartitionsTableConfig(table.getMetaClient(),
           finalIndexPartitionInfos.stream().map(HoodieIndexPartitionInfo::getMetadataPartitionPath).collect(Collectors.toSet()));
       table.getActiveTimeline().saveAsComplete(false, instantGenerator.createNewInstant(HoodieInstant.State.INFLIGHT, INDEXING_ACTION, indexInstant.requestedTime()),
           Option.of(indexCommitMetadata));
     } finally {
-      txnManager.endTransaction(Option.of(indexInstant));
+      txnManager.endStateChange(Option.of(indexInstant));
     }
   }
 

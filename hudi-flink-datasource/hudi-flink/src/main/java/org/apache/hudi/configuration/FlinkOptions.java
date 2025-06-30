@@ -19,6 +19,7 @@
 package org.apache.hudi.configuration;
 
 import org.apache.hudi.client.clustering.plan.strategy.FlinkSizeBasedClusteringPlanStrategy;
+import org.apache.hudi.client.model.EventTimeFlinkRecordMerger;
 import org.apache.hudi.common.config.AdvancedConfig;
 import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
@@ -26,7 +27,6 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
-import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieSyncTableStrategy;
@@ -132,11 +132,20 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<String> RECORD_MERGER_IMPLS = ConfigOptions
       .key("record.merger.impls")
       .stringType()
-      .defaultValue(HoodieAvroRecordMerger.class.getName())
+      .defaultValue(EventTimeFlinkRecordMerger.class.getName())
       .withFallbackKeys(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key())
       .withDescription("List of HoodieMerger implementations constituting Hudi's merging strategy -- based on the engine used. "
           + "These merger impls will filter by record.merger.strategy. "
           + "Hudi will pick most efficient implementation to perform merging/combining of the records (during update, reading MOR table, etc)");
+
+  @AdvancedConfig
+  public static final ConfigOption<String> RECORD_MERGE_MODE = ConfigOptions
+      .key(HoodieWriteConfig.RECORD_MERGE_MODE.key())
+      .stringType()
+      .noDefaultValue()
+      .withDescription("Using EVENT_TIME_ORDERING to merge records by ordering value,"
+          + "using COMMIT_TIME_ORDERING to merge records by commit time,"
+          + "and using CUSTOM to merge records by the user specified logic.");
 
   @AdvancedConfig
   public static final ConfigOption<String> RECORD_MERGER_STRATEGY_ID = ConfigOptions
@@ -153,6 +162,13 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(DEFAULT_PARTITION_PATH) // keep sync with hoodie style
       .withDescription("The default partition name in case the dynamic partition"
           + " column value is null/empty string");
+
+  @AdvancedConfig
+  public static final ConfigOption<Boolean> WRITE_EXTRA_METADATA_ENABLED = ConfigOptions
+      .key("write.extra.metadata.enabled")
+      .booleanType()
+      .defaultValue(false) // keep sync with hoodie style
+      .withDescription("If enabled, the checkpoint Id will also be written to hudi metadata.");
 
   // ------------------------------------------------------------------------
   //  Changelog Capture Options
@@ -383,13 +399,6 @@ public class FlinkOptions extends HoodieConfig {
   // ------------------------------------------------------------------------
 
   @AdvancedConfig
-  public static final ConfigOption<Boolean> INSERT_ROWDATA_MODE_ENABLED = ConfigOptions
-      .key("write.rowdata.mode.enabled")
-      .booleanType()
-      .defaultValue(true)
-      .withDescription("Whether to enable writing RowData directly without converting to Avro.");
-
-  @AdvancedConfig
   public static final ConfigOption<Boolean> INSERT_CLUSTER = ConfigOptions
       .key("write.insert.cluster")
       .booleanType()
@@ -449,6 +458,14 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("Flag to indicate whether to ignore any non exception error (e.g. writestatus error). within a checkpoint batch. \n"
           + "By default false. Turning this on, could hide the write status errors while the flink checkpoint moves ahead. \n"
           + "So, would recommend users to use this with caution.");
+
+  @AdvancedConfig
+  public static final ConfigOption<Boolean> WRITE_FAIL_FAST = ConfigOptions
+          .key("write.fail.fast")
+          .booleanType()
+          .defaultValue(false)
+          .withDescription("Flag to indicate whether to fail job immediately when an error record is detected. \n"
+                  + "Currently, this option is only applied to Flink append write functions.");
 
   public static final ConfigOption<String> RECORD_KEY_FIELD = ConfigOptions
       .key(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())
@@ -654,7 +671,7 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<Long> WRITE_COMMIT_ACK_TIMEOUT = ConfigOptions
       .key("write.commit.ack.timeout")
       .longType()
-      .defaultValue(-1L) // default at least once
+      .defaultValue(300_000L)
       .withDescription("Timeout limit for a writer task after it finishes a checkpoint and\n"
           + "waits for the instant commit success, only for internal use");
 

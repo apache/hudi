@@ -23,20 +23,23 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hadoop.utils.HoodieArrayWritableAvroUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 import org.apache.hudi.hadoop.utils.ObjectInspectorCache;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
@@ -90,16 +93,15 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   private final List<String> partitionCols;
   private final Set<String> partitionColSet;
 
-  private final String recordKeyField;
-
   protected HiveHoodieReaderContext(HoodieFileGroupReaderBasedRecordReader.HiveReaderCreator readerCreator,
-                                    String recordKeyField,
                                     List<String> partitionCols,
-                                    ObjectInspectorCache objectInspectorCache) {
+                                    ObjectInspectorCache objectInspectorCache,
+                                    StorageConfiguration<?> storageConfiguration,
+                                    HoodieTableConfig tableConfig) {
+    super(storageConfiguration, tableConfig, Option.empty(), Option.empty());
     this.readerCreator = readerCreator;
     this.partitionCols = partitionCols;
     this.partitionColSet = new HashSet<>(this.partitionCols);
-    this.recordKeyField = recordKeyField;
     this.objectInspectorCache = objectInspectorCache;
     this.columnTypeMap = objectInspectorCache.getColumnTypeMap();
   }
@@ -130,8 +132,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
 
   @Override
   public ClosableIterator<ArrayWritable> getFileRecordIterator(
-      StoragePathInfo storagePathInfo, long start, long length, Schema dataSchema, Schema requiredSchema,
-      HoodieStorage storage) throws IOException {
+      StoragePathInfo storagePathInfo, long start, long length, Schema dataSchema, Schema requiredSchema, HoodieStorage storage) throws IOException {
     return getFileRecordIterator(storagePathInfo.getPath(), storagePathInfo.getLocations(), start, length, dataSchema, requiredSchema, storage);
   }
 
@@ -176,6 +177,11 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   }
 
   @Override
+  public ArrayWritable getDeleteRow(ArrayWritable record, String recordKey) {
+    throw new UnsupportedOperationException("Not supported for " + this.getClass().getSimpleName());
+  }
+
+  @Override
   public Option<HoodieRecordMerger> getRecordMerger(RecordMergeMode mergeMode, String mergeStrategyId, String mergeImplClasses) {
     // TODO(HUDI-7843):
     // get rid of event time and commit time ordering. Just return Option.empty
@@ -186,26 +192,27 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
         return Option.of(new OverwriteWithLatestHiveRecordMerger());
       case CUSTOM:
       default:
-        if (mergeStrategyId.equals(HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID)) {
-          return Option.of(HoodieAvroRecordMerger.INSTANCE);
-        }
-        Option<HoodieRecordMerger> mergerClass = HoodieRecordUtils.createValidRecordMerger(EngineType.JAVA, mergeImplClasses, mergeStrategyId);
-        if (mergerClass.isEmpty()) {
+        Option<HoodieRecordMerger> recordMerger = HoodieRecordUtils.createValidRecordMerger(EngineType.JAVA, mergeImplClasses, mergeStrategyId);
+        if (recordMerger.isEmpty()) {
           throw new IllegalArgumentException("No valid hive merger implementation set for `"
               + RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY + "`");
         }
-        return mergerClass;
+        return recordMerger;
     }
   }
 
   @Override
-  public String getRecordKey(ArrayWritable record, Schema schema) {
-    return getValue(record, schema, recordKeyField).toString();
+  public Object getValue(ArrayWritable record, Schema schema, String fieldName) {
+    return getFieldValueFromArrayWritable(record, schema, fieldName, objectInspectorCache);
+  }
+
+  public static Object getFieldValueFromArrayWritable(ArrayWritable record, Schema schema, String fieldName, ObjectInspectorCache objectInspectorCache) {
+    return StringUtils.isNullOrEmpty(fieldName) ? null : objectInspectorCache.getValue(record, schema, fieldName);
   }
 
   @Override
-  public Object getValue(ArrayWritable record, Schema schema, String fieldName) {
-    return StringUtils.isNullOrEmpty(fieldName) ? null : objectInspectorCache.getValue(record, schema, fieldName);
+  public String getMetaFieldValue(ArrayWritable record, int pos) {
+    return record.get()[pos].toString();
   }
 
   @Override
@@ -219,13 +226,16 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   }
 
   @Override
-  public HoodieRecord<ArrayWritable> constructHoodieRecord(Option<ArrayWritable> recordOption, Map<String, Object> metadataMap) {
-    if (!recordOption.isPresent()) {
-      return new HoodieEmptyRecord<>(new HoodieKey((String) metadataMap.get(INTERNAL_META_RECORD_KEY), (String) metadataMap.get(INTERNAL_META_PARTITION_PATH)), HoodieRecord.HoodieRecordType.HIVE);
+  public HoodieRecord<ArrayWritable> constructHoodieRecord(BufferedRecord<ArrayWritable> bufferedRecord) {
+    HoodieKey key = new HoodieKey(bufferedRecord.getRecordKey(), partitionPath);
+    if (bufferedRecord.isDelete()) {
+      return new HoodieEmptyRecord<>(
+          key,
+          HoodieRecord.HoodieRecordType.HIVE);
     }
-    Schema schema = getSchemaFromMetadata(metadataMap);
-    ArrayWritable writable = recordOption.get();
-    return new HoodieHiveRecord(new HoodieKey((String) metadataMap.get(INTERNAL_META_RECORD_KEY), (String) metadataMap.get(INTERNAL_META_PARTITION_PATH)), writable, schema, objectInspectorCache);
+    Schema schema = getSchemaFromBufferRecord(bufferedRecord);
+    ArrayWritable writable = bufferedRecord.getRecord();
+    return new HoodieHiveRecord(key, writable, schema, objectInspectorCache);
   }
 
   @Override
@@ -234,12 +244,21 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   }
 
   @Override
+  public ArrayWritable toBinaryRow(Schema schema, ArrayWritable record) {
+    return record;
+  }
+
+  @Override
   public ClosableIterator<ArrayWritable> mergeBootstrapReaders(ClosableIterator<ArrayWritable> skeletonFileIterator,
                                                                Schema skeletonRequiredSchema,
                                                                ClosableIterator<ArrayWritable> dataFileIterator,
-                                                               Schema dataRequiredSchema) {
+                                                               Schema dataRequiredSchema,
+                                                               List<Pair<String, Object>> partitionFieldsAndValues) {
     int skeletonLen = skeletonRequiredSchema.getFields().size();
     int dataLen = dataRequiredSchema.getFields().size();
+    int[] partitionFieldPositions = partitionFieldsAndValues.stream()
+        .map(pair -> dataRequiredSchema.getField(pair.getKey()).pos()).mapToInt(Integer::intValue).toArray();
+    Writable[] convertedPartitionValues = partitionFieldsAndValues.stream().map(Pair::getValue).toArray(Writable[]::new);
     return new ClosableIterator<ArrayWritable>() {
 
       private final ArrayWritable returnWritable = new ArrayWritable(Writable.class);
@@ -256,6 +275,11 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
       public ArrayWritable next() {
         Writable[] skeletonWritable = skeletonFileIterator.next().get();
         Writable[] dataWritable = dataFileIterator.next().get();
+        for (int i = 0; i < partitionFieldPositions.length; i++) {
+          if (dataWritable[partitionFieldPositions[i]] == null) {
+            dataWritable[partitionFieldPositions[i]] = convertedPartitionValues[i];
+          }
+        }
         Writable[] mergedWritable = new Writable[skeletonLen + dataLen];
         System.arraycopy(skeletonWritable, 0, mergedWritable, 0, skeletonLen);
         System.arraycopy(dataWritable, 0, mergedWritable, skeletonLen, dataLen);

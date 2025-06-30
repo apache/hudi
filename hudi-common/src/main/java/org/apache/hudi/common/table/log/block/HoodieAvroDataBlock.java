@@ -18,12 +18,14 @@
 
 package org.apache.hudi.common.table.log.block;
 
+import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.fs.SizeAwareDataInputStream;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
@@ -32,13 +34,13 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.io.BinaryDecoder;
-import org.apache.avro.io.BinaryEncoder;
 import org.apache.avro.io.Decoder;
 import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.Encoder;
@@ -76,8 +78,6 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  */
 public class HoodieAvroDataBlock extends HoodieDataBlock {
 
-  private final ThreadLocal<BinaryEncoder> encoderCache = new ThreadLocal<>();
-
   public HoodieAvroDataBlock(Supplier<SeekableDataInputStream> inputStreamSupplier,
                              Option<byte[]> content,
                              boolean readBlockLazily,
@@ -91,8 +91,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
 
   public HoodieAvroDataBlock(@Nonnull List<HoodieRecord> records,
                              @Nonnull Map<HeaderMetadataType, String> header,
-                             @Nonnull String keyField
-  ) {
+                             @Nonnull String keyField) {
     super(records, header, new HashMap<>(), keyField);
   }
 
@@ -102,9 +101,8 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
   }
 
   @Override
-  protected byte[] serializeRecords(List<HoodieRecord> records, HoodieStorage storage) throws IOException {
-    Schema schema = new Schema.Parser().parse(super.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
-    GenericDatumWriter<IndexedRecord> writer = new GenericDatumWriter<>(schema);
+  protected ByteArrayOutputStream serializeRecords(List<HoodieRecord> records, HoodieStorage storage) throws IOException {
+    Schema schema = AvroSchemaCache.intern(new Schema.Parser().parse(super.getLogBlockHeader().get(HeaderMetadataType.SCHEMA)));
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     try (DataOutputStream output = new DataOutputStream(baos)) {
       // 1. Write out the log block version
@@ -114,28 +112,22 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
       output.writeInt(records.size());
 
       // 3. Write the records
+      Properties props = initProperties(storage.getConf());
       for (HoodieRecord<?> s : records) {
-        ByteArrayOutputStream temp = new ByteArrayOutputStream();
-        BinaryEncoder encoder = EncoderFactory.get().binaryEncoder(temp, encoderCache.get());
-        encoderCache.set(encoder);
         try {
           // Encode the record into bytes
           // Spark Record not support write avro log
-          IndexedRecord data = s.toIndexedRecord(schema, new Properties()).get().getData();
-          writer.write(data, encoder);
-          encoder.flush();
-
+          ByteArrayOutputStream data = s.getAvroBytes(schema, props);
           // Write the record size
-          output.writeInt(temp.size());
+          output.writeInt(data.size());
           // Write the content
-          temp.writeTo(output);
+          data.writeTo(output);
         } catch (IOException e) {
           throw new HoodieIOException("IOException converting HoodieAvroDataBlock to bytes", e);
         }
       }
-      encoderCache.remove();
     }
-    return baos.toByteArray();
+    return baos;
   }
 
   // TODO (na) - Break down content into smaller chunks of byte [] to be GC as they are used
@@ -394,6 +386,10 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
       buffer.limit(buffer.limit() + bytesRead);
       return true;
     }
+  }
+
+  protected Properties initProperties(StorageConfiguration<?> storageConfig) {
+    return CollectionUtils.emptyProps();
   }
 
   //----------------------------------------------------------------------------------------

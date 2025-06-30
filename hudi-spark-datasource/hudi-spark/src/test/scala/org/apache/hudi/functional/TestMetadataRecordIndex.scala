@@ -148,9 +148,7 @@ class TestMetadataRecordIndex extends HoodieSparkClientTestBase {
       val prevDf = prevDfOpt.get
       val prevDfOld = prevDf.join(inputDF1, prevDf("_row_key") === inputDF1("_row_key")
         && prevDf("partition") === inputDF1("partition"), "leftanti")
-      prevDfOld.show(500, false)
       val unionDf = prevDfOld.union(inputDF1)
-      unionDf.show(500, false)
       mergedDfList = mergedDfList :+ unionDf
     }
   }
@@ -186,10 +184,7 @@ class TestMetadataRecordIndex extends HoodieSparkClientTestBase {
       val recordKey: String = row.getAs("_hoodie_record_key")
       val partitionPath: String = row.getAs("_hoodie_partition_path")
       val fileName: String = row.getAs("_hoodie_file_name")
-      val recordLocations = recordIndexMap.get(recordKey)
-      assertFalse(recordLocations.isEmpty)
-      // assuming no duplicate keys for now
-      val recordLocation = recordLocations.get(0)
+      val recordLocation = recordIndexMap.get(recordKey)
       assertEquals(partitionPath, recordLocation.getPartitionPath)
       if (!writeConfig.inlineClusteringEnabled && !writeConfig.isAsyncClusteringEnabled) {
         // The file id changes after clustering, so only assert it for usual upsert and compaction operations
@@ -207,10 +202,7 @@ class TestMetadataRecordIndex extends HoodieSparkClientTestBase {
     val nonMatchingRecords = readDf.drop("_hoodie_commit_time", "_hoodie_commit_seqno", "_hoodie_record_key",
       "_hoodie_partition_path", "_hoodie_file_name", "tip_history")
       .join(prevDf, prevDf.columns, "leftanti")
-    nonMatchingRecords.show(500, false)
     assertEquals(0, nonMatchingRecords.count())
-    readDf.show(500, false)
-    prevDf.show(500, false)
     assertEquals(readDf.count(), prevDf.count())
   }
 }

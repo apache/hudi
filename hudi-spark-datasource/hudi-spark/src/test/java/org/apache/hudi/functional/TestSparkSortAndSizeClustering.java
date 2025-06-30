@@ -20,6 +20,7 @@ package org.apache.hudi.functional;
 
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -62,7 +63,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness {
 
-
   private HoodieWriteConfig config;
   private HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0);
 
@@ -80,7 +80,6 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
     props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
     metaClient = HoodieTestUtils.init(storageConf, basePath, HoodieTableType.COPY_ON_WRITE, props);
     config = getConfigBuilder().withProps(props)
-        .withAutoCommit(false)
         .withStorageConfig(HoodieStorageConfig.newBuilder().parquetMaxFileSize(maxFileSize).build())
         .withClusteringConfig(HoodieClusteringConfig.newBuilder()
             .withClusteringPlanPartitionFilterMode(ClusteringPlanPartitionFilterMode.RECENT_DAYS)
@@ -152,7 +151,7 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records);
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
-    writeClient.startCommitWithTime(commitTime);
+    WriteClientTestUtils.startCommitWithTime(writeClient, commitTime);
     List<WriteStatus> writeStatues = writeClient.insert(writeRecords, commitTime).collect();
     org.apache.hudi.testutils.Assertions.assertNoWriteErrors(writeStatues);
 

@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.commit.BucketType;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
@@ -50,6 +51,7 @@ public class FlinkAppendHandle<T, I, K, O>
 
   private boolean isClosed = false;
   private final WriteMarkers writeMarkers;
+  private final BucketType bucketType;
 
   public FlinkAppendHandle(
       HoodieWriteConfig config,
@@ -57,10 +59,17 @@ public class FlinkAppendHandle<T, I, K, O>
       HoodieTable<T, I, K, O> hoodieTable,
       String partitionPath,
       String fileId,
+      BucketType bucketType,
       Iterator<HoodieRecord<T>> recordItr,
       TaskContextSupplier taskContextSupplier) {
     super(config, instantTime, hoodieTable, partitionPath, fileId, recordItr, taskContextSupplier);
     this.writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), hoodieTable, instantTime);
+    this.bucketType = bucketType;
+  }
+
+  @Override
+  protected void flushToDiskIfRequired(HoodieRecord record, boolean appendDeleteBlocks) {
+    // do not flush for one batch of records
   }
 
   @Override
@@ -88,8 +97,7 @@ public class FlinkAppendHandle<T, I, K, O>
     // do not use the HoodieRecord operation because hoodie writer has its own
     // INSERT/MERGE bucket for 'UPSERT' semantics. For e.g, a hoodie record with fresh new key
     // and operation HoodieCdcOperation.DELETE would be put into either an INSERT bucket or UPDATE bucket.
-    return hoodieRecord.getCurrentLocation() != null
-        && hoodieRecord.getCurrentLocation().getInstantTime().equals("U");
+    return bucketType == BucketType.UPDATE;
   }
 
   @Override

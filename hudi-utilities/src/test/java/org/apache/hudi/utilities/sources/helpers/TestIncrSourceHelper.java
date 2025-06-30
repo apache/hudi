@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieAvroPayload;
@@ -338,15 +339,13 @@ class TestIncrSourceHelper extends SparkClientFunctionalTestHarness {
     HoodieWriteConfig writeConfig = getWriteConfig();
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig)) {
 
-      writeClient.startCommitWithTime(commitTime);
+      WriteClientTestUtils.startCommitWithTime(writeClient, commitTime);
       List<HoodieRecord> s3MetadataRecords = Arrays.asList(
           generateS3EventMetadata(commitTime, "bucket-1", "data-file-1.json", 1L)
       );
-      JavaRDD<WriteStatus> result = writeClient.upsert(jsc().parallelize(s3MetadataRecords, 1), commitTime);
-
-      List<WriteStatus> statuses = result.collect();
-      assertNoWriteErrors(statuses);
-
+      List<WriteStatus> statusList = writeClient.upsert(jsc().parallelize(s3MetadataRecords, 1), commitTime).collect();
+      writeClient.commit(commitTime, jsc.parallelize(statusList));
+      assertNoWriteErrors(statusList);
       return Pair.of(commitTime, s3MetadataRecords);
     }
   }

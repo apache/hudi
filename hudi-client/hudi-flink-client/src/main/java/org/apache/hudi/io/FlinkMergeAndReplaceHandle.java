@@ -36,6 +36,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 
@@ -131,6 +132,14 @@ public class FlinkMergeAndReplaceHandle<T, I, K, O>
     } catch (IOException e) {
       throw new HoodieException("Checking existing path for merge and replace handle error: " + newFilePath, e);
     }
+  }
+
+  @Override
+  protected void initializeIncomingRecordsMap() {
+    LOG.info("Initialize on-heap keyToNewRecords for incoming records.");
+    // the incoming records are already buffered on heap and the underlying bytes are managed by memory pool
+    // in Flink write buffer, so there is no need to use ExternalSpillableMap.
+    this.keyToNewRecords = new HashMap<>();
   }
 
   /**

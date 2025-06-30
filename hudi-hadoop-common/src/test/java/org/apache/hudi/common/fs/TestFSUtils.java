@@ -246,7 +246,6 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     String partitionPath = "2019/01/01/";
     String fileName = UUID.randomUUID().toString();
     String logFile = FSUtils.makeLogFileName(fileName, ".log", "100", 2, "1-0-1");
-    System.out.println("Log File =" + logFile);
     StoragePath rlPath = new StoragePath(new StoragePath(partitionPath), logFile);
     StoragePath inlineFsPath = HadoopInLineFSUtils.getInlineFilePath(
         new StoragePath(rlPath.toUri()), "file", 0, 100);
@@ -650,13 +649,13 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   @Test
   void testGetPathWithoutScheme() {
     String path1 = "s3://test_bucket_one/table/base/path";
-    assertEquals(FSUtils.getPathWithoutScheme(new Path(path1)).toUri().toString(), "//test_bucket_one/table/base/path", "should return false since bucket names dont match");
+    assertEquals(FSUtils.getPathWithoutScheme(new StoragePath(path1)).toUri().toString(), "//test_bucket_one/table/base/path", "should return false since bucket names dont match");
 
     path1 = "s3a://test_bucket_one/table/base/path";
-    assertEquals(FSUtils.getPathWithoutScheme(new Path(path1)).toUri().toString(), "//test_bucket_one/table/base/path", "should return false since bucket names dont match");
+    assertEquals(FSUtils.getPathWithoutScheme(new StoragePath(path1)).toUri().toString(), "//test_bucket_one/table/base/path", "should return false since bucket names dont match");
 
     path1 = "gs://test_bucket_one/table/base/path";
-    assertEquals(FSUtils.getPathWithoutScheme(new Path(path1)).toUri().toString(), "//test_bucket_one/table/base/path", "should return false since bucket names dont match");
+    assertEquals(FSUtils.getPathWithoutScheme(new StoragePath(path1)).toUri().toString(), "//test_bucket_one/table/base/path", "should return false since bucket names dont match");
   }
 
   @Test

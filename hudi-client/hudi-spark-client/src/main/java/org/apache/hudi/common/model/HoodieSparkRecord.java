@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.client.model.HoodieInternalRow;
 import org.apache.hudi.common.util.ConfigUtils;
@@ -33,6 +34,7 @@ import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.sql.HoodieInternalRowUtils;
 import org.apache.spark.sql.HoodieUnsafeRowUtils;
 import org.apache.spark.sql.HoodieUnsafeRowUtils.NestedFieldPath;
@@ -47,12 +49,15 @@ import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.unsafe.types.UTF8String;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.Collections;
 import java.util.Map;
 import java.util.Properties;
 
 import scala.Function1;
 
+import static org.apache.hudi.BaseSparkInternalRowReaderContext.getFieldValueFromInternalRow;
 import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELDS;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.spark.sql.HoodieInternalRowUtils.getCachedUnsafeProjection;
@@ -186,6 +191,11 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   }
 
   @Override
+  public Object getColumnValueAsJava(Schema recordSchema, String column, Properties props) {
+    return getFieldValueFromInternalRow(data, recordSchema, column);
+  }
+
+  @Override
   public HoodieRecord joinWith(HoodieRecord other, Schema targetSchema) {
     StructType targetStructType = HoodieInternalRowUtils.getCachedSchema(targetSchema);
     InternalRow mergeRow = new JoinedRow(data, (InternalRow) other.getData());
@@ -206,12 +216,20 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   }
 
   @Override
+  public HoodieRecord updateMetaField(Schema recordSchema, int ordinal, String value) {
+    StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
+    HoodieInternalRow updatableRow = wrapIntoUpdatableOverlay(this.data, structType);
+    updatableRow.update(ordinal, CatalystTypeConverters.convertToCatalyst(value));
+    return new HoodieSparkRecord(getKey(), updatableRow, structType, getOperation(), this.currentLocation, this.newLocation, false);
+  }
+
+  @Override
   public HoodieRecord rewriteRecordWithNewSchema(Schema recordSchema, Properties props, Schema newSchema, Map<String, String> renameCols) {
     StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
     StructType newStructType = HoodieInternalRowUtils.getCachedSchema(newSchema);
 
     Function1<InternalRow, UnsafeRow> unsafeRowWriter =
-        HoodieInternalRowUtils.getCachedUnsafeRowWriter(structType, newStructType, renameCols);
+        HoodieInternalRowUtils.getCachedUnsafeRowWriter(structType, newStructType, renameCols, Collections.emptyMap());
 
     UnsafeRow unsafeRow = unsafeRowWriter.apply(this.data);
 
@@ -299,7 +317,17 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   }
 
   @Override
-  public Option<HoodieAvroIndexedRecord> toIndexedRecord(Schema recordSchema, Properties prop) throws IOException {
+  public Option<HoodieAvroIndexedRecord> toIndexedRecord(Schema recordSchema, Properties prop) {
+    if (data == null) {
+      return Option.empty();
+    }
+    StructType structType = schema == null ? AvroConversionUtils.convertAvroSchemaToStructType(recordSchema) : schema;
+    GenericRecord convertedRecord = AvroConversionUtils.createInternalRowToAvroConverter(structType, recordSchema, false).apply(data);
+    return Option.of(new HoodieAvroIndexedRecord(key, convertedRecord));
+  }
+
+  @Override
+  public ByteArrayOutputStream getAvroBytes(Schema recordSchema, Properties props) throws IOException {
     throw new UnsupportedOperationException();
   }
 
@@ -313,20 +341,18 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   }
 
   @Override
-  public Comparable<?> getOrderingValue(Schema recordSchema, Properties props) {
+  protected Comparable<?> doGetOrderingValue(Schema recordSchema, Properties props) {
     StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
     String orderingField = ConfigUtils.getOrderingField(props);
-    if (isNullOrEmpty(orderingField)) {
-      return DEFAULT_ORDERING_VALUE;
+    if (!isNullOrEmpty(orderingField)) {
+      scala.Option<NestedFieldPath> cachedNestedFieldPath =
+          HoodieInternalRowUtils.getCachedPosList(structType, orderingField);
+      if (cachedNestedFieldPath.isDefined()) {
+        NestedFieldPath nestedFieldPath = cachedNestedFieldPath.get();
+        return (Comparable<?>) HoodieUnsafeRowUtils.getNestedInternalRowValue(data, nestedFieldPath);
+      }
     }
-    scala.Option<NestedFieldPath> cachedNestedFieldPath =
-        HoodieInternalRowUtils.getCachedPosList(structType, orderingField);
-    if (cachedNestedFieldPath.isDefined()) {
-      NestedFieldPath nestedFieldPath = cachedNestedFieldPath.get();
-      return (Comparable<?>) HoodieUnsafeRowUtils.getNestedInternalRowValue(data, nestedFieldPath);
-    } else {
-      return DEFAULT_ORDERING_VALUE;
-    }
+    return DEFAULT_ORDERING_VALUE;
   }
 
   /**

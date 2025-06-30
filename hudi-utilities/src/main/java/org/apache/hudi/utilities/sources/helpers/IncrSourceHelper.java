@@ -333,7 +333,7 @@ public class IncrSourceHelper {
 
   public static Dataset<Row> coalesceOrRepartition(Dataset dataset, int numPartitions) {
     int existingNumPartitions = dataset.rdd().getNumPartitions();
-    LOG.info(String.format("existing number of partitions=%d, required number of partitions=%d", existingNumPartitions, numPartitions));
+    LOG.info("Existing number of partitions={}, required number of partitions={}", existingNumPartitions, numPartitions);
     if (existingNumPartitions < numPartitions) {
       dataset = dataset.repartition(numPartitions);
     } else {

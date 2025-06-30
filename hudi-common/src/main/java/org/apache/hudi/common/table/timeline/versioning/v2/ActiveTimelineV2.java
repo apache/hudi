@@ -33,6 +33,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstantReader;
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
 import org.apache.hudi.common.table.timeline.TimeGenerator;
@@ -56,6 +57,7 @@ import java.io.InputStream;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.Date;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
@@ -96,7 +98,7 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
     this.metaClient = metaClient;
     // multiple casts will make this lambda serializable -
     // http://docs.oracle.com/javase/specs/jls/se8/html/jls-15.html#jls-15.16
-    LOG.info("Loaded instants upto : " + lastInstant());
+    LOG.info("Loaded instants upto : {}", lastInstant());
   }
 
   public ActiveTimelineV2(HoodieTableMetaClient metaClient) {
@@ -145,11 +147,12 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
   }
 
   @Override
-  public void createRequestedCommitWithReplaceMetadata(String instantTime, String actionType) {
+  public HoodieInstant createRequestedCommitWithReplaceMetadata(String instantTime, String actionType) {
     HoodieInstant instant = instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED, actionType, instantTime);
     LOG.info("Creating a new instant " + instant);
     // Create the request replace file
     createFileInMetaPath(instantFileNameGenerator.getFileName(instant), Option.of(new HoodieRequestedReplaceMetadata()), false);
+    return instant;
   }
 
   @Override
@@ -159,20 +162,25 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
 
   @Override
   public <T> void saveAsComplete(boolean shouldLock, HoodieInstant instant, Option<T> metadata) {
-    LOG.info("Marking instant complete " + instant);
+    saveAsComplete(shouldLock, instant, metadata, Option.empty());
+  }
+
+  @Override
+  public <T> void saveAsComplete(boolean shouldLock, HoodieInstant instant, Option<T> metadata, Option<String> completionTimeOpt) {
+    LOG.info("Marking instant complete {}", instant);
     ValidationUtils.checkArgument(instant.isInflight(),
         "Could not mark an already completed instant as complete again " + instant);
     HoodieInstant commitInstant = instantGenerator.createNewInstant(HoodieInstant.State.COMPLETED, instant.getAction(), instant.requestedTime());
-    transitionStateToComplete(shouldLock, instant, commitInstant, metadata);
+    transitionStateToComplete(shouldLock, instant, commitInstant, metadata, completionTimeOpt);
     LOG.info("Completed " + instant);
   }
 
   @Override
   public HoodieInstant revertToInflight(HoodieInstant instant) {
-    LOG.info("Reverting instant to inflight " + instant);
+    LOG.info("Reverting instant to inflight {}", instant);
     HoodieInstant inflight = TimelineUtils.getInflightInstant(instant, metaClient);
     revertCompleteToInflight(instant, inflight);
-    LOG.info("Reverted " + instant + " to inflight " + inflight);
+    LOG.info("Reverted {} to inflight {}", instant, inflight);
     return inflight;
   }
 
@@ -210,18 +218,18 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
 
   @Override
   public void deleteInstantFileIfExists(HoodieInstant instant) {
-    LOG.info("Deleting instant " + instant);
+    LOG.info("Deleting instant {}", instant);
     StoragePath commitFilePath = getInstantFileNamePath(instantFileNameGenerator.getFileName(instant));
     try {
       if (metaClient.getStorage().exists(commitFilePath)) {
         boolean result = metaClient.getStorage().deleteFile(commitFilePath);
         if (result) {
-          LOG.info("Removed instant " + instant);
+          LOG.info("Removed instant {}", instant);
         } else {
           throw new HoodieIOException("Could not delete instant " + instant + " with path " + commitFilePath);
         }
       } else {
-        LOG.warn("The commit " + commitFilePath + " to remove does not exist");
+        LOG.warn("The commit {} to remove does not exist", commitFilePath);
       }
     } catch (IOException e) {
       throw new HoodieIOException("Could not remove commit " + commitFilePath, e);
@@ -229,12 +237,12 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
   }
 
   protected void deleteInstantFile(HoodieInstant instant) {
-    LOG.info("Deleting instant " + instant);
+    LOG.info("Deleting instant {}", instant);
     StoragePath filePath = getInstantFileNamePath(instantFileNameGenerator.getFileName(instant));
     try {
       boolean result = metaClient.getStorage().deleteFile(filePath);
       if (result) {
-        LOG.info("Removed instant " + instant);
+        LOG.info("Removed instant {}", instant);
       } else {
         throw new HoodieIOException("Could not delete instant " + instant + " with path " + filePath);
       }
@@ -283,8 +291,7 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
             .filter(instantCommitMetadataPair ->
                 WriteOperationType.canUpdateSchema(instantCommitMetadataPair.getRight().getOperationType())
                     && !StringUtils.isNullOrEmpty(instantCommitMetadataPair.getValue().getMetadata(HoodieCommitMetadata.SCHEMA_KEY)))
-            .findFirst()
-    );
+            .findFirst());
   }
 
   @Override
@@ -411,11 +418,11 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
   }
 
   @Override
-  public HoodieInstant transitionCleanRequestedToInflight(HoodieInstant requestedInstant, Option<HoodieCleanerPlan> metadata) {
+  public HoodieInstant transitionCleanRequestedToInflight(HoodieInstant requestedInstant) {
     ValidationUtils.checkArgument(requestedInstant.getAction().equals(HoodieTimeline.CLEAN_ACTION));
     ValidationUtils.checkArgument(requestedInstant.isRequested());
     HoodieInstant inflight = instantGenerator.createNewInstant(HoodieInstant.State.INFLIGHT, CLEAN_ACTION, requestedInstant.requestedTime());
-    transitionPendingState(requestedInstant, inflight, metadata);
+    transitionPendingState(requestedInstant, inflight, Option.empty());
     return inflight;
   }
 
@@ -486,7 +493,7 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
     ValidationUtils.checkArgument(inflightInstant.isInflight());
     HoodieInstant commitInstant = instantGenerator.createNewInstant(HoodieInstant.State.COMPLETED, REPLACE_COMMIT_ACTION, inflightInstant.requestedTime());
     // Then write to timeline
-    transitionStateToComplete(shouldLock, inflightInstant, commitInstant, Option.of(metadata));
+    transitionStateToComplete(shouldLock, inflightInstant, commitInstant, Option.of(metadata), Option.empty());
     return commitInstant;
   }
 
@@ -495,6 +502,11 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
   }
 
   protected <T> void transitionStateToComplete(boolean shouldLock, HoodieInstant fromInstant, HoodieInstant toInstant, Option<T> metadata) {
+    transitionStateToComplete(shouldLock, fromInstant, toInstant, metadata, Option.empty());
+  }
+
+  protected <T> void transitionStateToComplete(boolean shouldLock, HoodieInstant fromInstant, HoodieInstant toInstant, Option<T> metadata,
+                                               Option<String> completionTimeOpt) {
     ValidationUtils.checkArgument(fromInstant.requestedTime().equals(toInstant.requestedTime()), String.format("%s and %s are not consistent when transition state.", fromInstant, toInstant));
     String fromInstantFileName = instantFileNameGenerator.getFileName(fromInstant);
     try {
@@ -504,7 +516,7 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
         StoragePath fromInstantPath = getInstantFileNamePath(fromInstantFileName);
         HoodieInstant instantWithCompletionTime =
             instantGenerator.createNewInstant(toInstant.getState(), toInstant.getAction(),
-                toInstant.requestedTime(), metaClient.createNewInstantTime(false));
+                toInstant.requestedTime(), completionTimeOpt.map(entry -> entry).orElse(metaClient.createNewInstantTime(false)));
         StoragePath toInstantPath =
             getInstantFileNamePath(instantFileNameGenerator.getFileName(instantWithCompletionTime));
         boolean success = metaClient.getStorage().rename(fromInstantPath, toInstantPath);
@@ -550,7 +562,7 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
         } else {
           storage.createImmutableFileInPath(getInstantFileNamePath(toInstantFileName), getInstantWriter(metadata));
         }
-        LOG.info("Create new file for toInstant ?" + getInstantFileNamePath(toInstantFileName));
+        LOG.info("Create new file for toInstant ?{}", getInstantFileNamePath(toInstantFileName));
       }
     } catch (IOException e) {
       throw new HoodieIOException("Could not complete " + fromInstant, e);
@@ -701,7 +713,7 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
     TimeGenerator timeGenerator = TimeGenerators
         .getTimeGenerator(metaClient.getTimeGeneratorConfig(), metaClient.getStorageConf());
     timeGenerator.consumeTime(!shouldLock, currentTimeMillis -> {
-      String completionTime = TimelineUtils.generateInstantTime(false, timeGenerator);
+      String completionTime = HoodieInstantTimeGenerator.formatDateBasedOnTimeZone(new Date(currentTimeMillis));
       String fileName = instantFileNameGenerator.getFileName(completionTime, instant);
       StoragePath fullPath = getInstantFileNamePath(fileName);
       if (metaClient.getTimelineLayoutVersion().isNullVersion()) {
@@ -709,7 +721,7 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
       } else {
         metaClient.getStorage().createImmutableFileInPath(fullPath, writerOption);
       }
-      LOG.info("Created new file for toInstant ?" + fullPath);
+      LOG.info("Created new file for toInstant ?{}", fullPath);
     });
   }
 

@@ -79,6 +79,7 @@ import java.io.Serializable;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -87,6 +88,7 @@ import java.util.Properties;
 import java.util.UUID;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTime;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
@@ -171,9 +173,8 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
     // Prepare the AvroParquetIO
     HoodieWriteConfig config = makeHoodieClientConfigBuilder()
         .withProps(makeIndexConfig(indexType)).build();
-    String firstCommitTime = makeNewCommitTime();
     SparkRDDWriteClient writeClient = getHoodieWriteClient(config);
-    writeClient.startCommitWithTime(firstCommitTime);
+    String firstCommitTime = writeClient.startCommit();
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
     String partitionPath = "2016/01/31";
@@ -199,7 +200,8 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
 
     // Insert new records
     final HoodieSparkCopyOnWriteTable cowTable = table;
-    writeClient.insert(jsc.parallelize(records, 1), firstCommitTime);
+    JavaRDD<WriteStatus> writeStatusJavaRDD = writeClient.insert(jsc.parallelize(records, 1), firstCommitTime);
+    writeClient.commit(firstCommitTime, writeStatusJavaRDD, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
 
     FileStatus[] allFiles = getIncrementalFiles(partitionPath, "0", -1);
     assertEquals(1, allFiles.length);
@@ -236,11 +238,10 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
 
     List<HoodieRecord> updatedRecords = Arrays.asList(updatedRecord1, insertedRecord1);
 
-    Thread.sleep(1000);
-    String newCommitTime = makeNewCommitTime();
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    writeClient.startCommitWithTime(newCommitTime);
-    List<WriteStatus> statuses = writeClient.upsert(jsc.parallelize(updatedRecords), newCommitTime).collect();
+    String newCommitTime = writeClient.startCommit();
+    writeStatusJavaRDD = writeClient.upsert(jsc.parallelize(updatedRecords), newCommitTime);
+    writeClient.commit(newCommitTime, writeStatusJavaRDD, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
 
     allFiles = getIncrementalFiles(partitionPath, firstCommitTime, -1);
     assertEquals(1, allFiles.length);
@@ -270,6 +271,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
     }
     updatedReader.close();
     // Also check the numRecordsWritten
+    List<WriteStatus> statuses = writeStatusJavaRDD.collect();
     WriteStatus writeStatus = statuses.get(0);
     assertEquals(1, statuses.size(), "Should be only one file generated");
     assertEquals(4, writeStatus.getStat().getNumWrites());// 3 rewritten records + 1 new record
@@ -447,7 +449,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
     int counts = 0;
     for (File file : Paths.get(basePath, "2016/01/31").toFile().listFiles()) {
       if (file.getName().endsWith(table.getBaseFileExtension()) && FSUtils.getCommitTime(file.getName()).equals(instantTime)) {
-        LOG.info(file.getName() + "-" + file.length());
+        LOG.info("{}-{}", file.getName(), file.length());
         counts++;
       }
     }
@@ -505,9 +507,8 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
         .withPath(basePath).withSchema(TRIP_EXAMPLE_SCHEMA)
         .withBulkInsertParallelism(2).withBulkInsertSortMode(bulkInsertMode).build();
-    String instantTime = makeNewCommitTime();
     SparkRDDWriteClient writeClient = getHoodieWriteClient(config);
-    writeClient.startCommitWithTime(instantTime);
+    String instantTime = writeClient.startCommit();
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(config, context, metaClient);
 
@@ -545,13 +546,13 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
       assertTrue(table.getPartitionMetafileFormat().isPresent());
     }
 
-    String instantTime = makeNewCommitTime();
     SparkRDDWriteClient writeClient = getHoodieWriteClient(config);
-    writeClient.startCommitWithTime(instantTime);
+    String instantTime = writeClient.startCommit();
 
     // Insert new records
     final JavaRDD<HoodieRecord> inputRecords = generateTestRecordsForBulkInsert(jsc, 50);
-    writeClient.bulkInsert(inputRecords, instantTime);
+    JavaRDD<WriteStatus> writeStatusJavaRDD = writeClient.bulkInsert(inputRecords, instantTime);
+    writeClient.commit(instantTime, writeStatusJavaRDD, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
 
     // Partition metafile should be created
     StoragePath partitionPath = new StoragePath(

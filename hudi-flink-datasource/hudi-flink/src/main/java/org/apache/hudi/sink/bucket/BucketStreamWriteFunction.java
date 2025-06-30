@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -30,6 +30,7 @@ import org.apache.hudi.sink.StreamWriteFunction;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
+import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.Collector;
 import org.slf4j.Logger;
@@ -75,13 +76,15 @@ public class BucketStreamWriteFunction extends StreamWriteFunction {
    * Functions for calculating the task partition to dispatch.
    */
   private Functions.Function3<Integer, String, Integer, Integer> partitionIndexFunc;
+  /**
+   * Function to calculate num buckets per partition.
+   */
+  private NumBucketsFunction numBucketsFunction;
 
   /**
    * To prevent strings compare for each record, define this only during open()
    */
   private boolean isInsertOverwrite;
-
-  private NumBucketsFunction numBucketsFunction;
 
   /**
    * Constructs a BucketStreamWriteFunction.
@@ -103,8 +106,8 @@ public class BucketStreamWriteFunction extends StreamWriteFunction {
     this.incBucketIndex = new HashSet<>();
     this.partitionIndexFunc = BucketIndexUtil.getPartitionIndexFunc(parallelism);
     this.isInsertOverwrite = OptionsResolver.isInsertOverwrite(config);
-    this.numBucketsFunction = new NumBucketsFunction(config.get(FlinkOptions.BUCKET_INDEX_PARTITION_EXPRESSIONS), config.get(FlinkOptions.BUCKET_INDEX_PARTITION_RULE),
-        config.get(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS));
+    this.numBucketsFunction = new NumBucketsFunction(config.get(FlinkOptions.BUCKET_INDEX_PARTITION_EXPRESSIONS),
+        config.get(FlinkOptions.BUCKET_INDEX_PARTITION_RULE), config.get(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS));
   }
 
   @Override
@@ -120,8 +123,8 @@ public class BucketStreamWriteFunction extends StreamWriteFunction {
 
   @Override
   public void processElement(HoodieFlinkInternalRow record,
-                             ProcessFunction<HoodieFlinkInternalRow, Object>.Context context,
-                             Collector<Object> collector) throws Exception {
+                             ProcessFunction<HoodieFlinkInternalRow, RowData>.Context context,
+                             Collector<RowData> collector) throws Exception {
     defineRecordLocation(record);
     bufferRecord(record);
   }
@@ -133,8 +136,7 @@ public class BucketStreamWriteFunction extends StreamWriteFunction {
       bootstrapIndexIfNeed(partition);
     }
     Map<Integer, String> bucketToFileId = bucketIndex.computeIfAbsent(partition, p -> new HashMap<>());
-    int numBuckets = numBucketsFunction.getNumBuckets(partition);
-    final int bucketNum = BucketIdentifier.getBucketId(record.getRecordKey(), indexKeyFields, numBuckets);
+    final int bucketNum = BucketIdentifier.getBucketId(record.getRecordKey(), indexKeyFields, numBucketsFunction.getNumBuckets(record.getPartitionPath()));
     final String bucketId = partition + "/" + bucketNum;
 
     if (incBucketIndex.contains(bucketId)) {

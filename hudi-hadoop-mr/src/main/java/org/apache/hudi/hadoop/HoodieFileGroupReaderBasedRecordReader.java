@@ -25,19 +25,19 @@ import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroupId;
-import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.hadoop.realtime.RealtimeSplit;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 import org.apache.hudi.hadoop.utils.ObjectInspectorCache;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
@@ -98,7 +98,7 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
   }
 
   private final HiveHoodieReaderContext readerContext;
-  private final HoodieFileGroupReader<ArrayWritable> fileGroupReader;
+  private final ClosableIterator<ArrayWritable> recordIterator;
   private final ArrayWritable arrayWritable;
   private final NullWritable nullWritable = NullWritable.get();
   private final InputSplit inputSplit;
@@ -122,9 +122,10 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
     String latestCommitTime = getLatestCommitTime(split, metaClient);
     Schema tableSchema = getLatestTableSchema(metaClient, jobConfCopy, latestCommitTime);
     Schema requestedSchema = createRequestedSchema(tableSchema, jobConfCopy);
-    this.readerContext = new HiveHoodieReaderContext(readerCreator, getRecordKeyField(metaClient),
+    this.readerContext = new HiveHoodieReaderContext(readerCreator,
         getStoredPartitionFieldNames(jobConfCopy, tableSchema),
-        new ObjectInspectorCache(tableSchema, jobConfCopy));
+        new ObjectInspectorCache(tableSchema, jobConfCopy), new HadoopStorageConfiguration(jobConfCopy),
+        metaClient.getTableConfig());
     this.arrayWritable = new ArrayWritable(Writable.class, new Writable[requestedSchema.getFields().size()]);
     TypedProperties props = metaClient.getTableConfig().getProps();
     jobConf.forEach(e -> {
@@ -141,11 +142,19 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
       }
     }
     LOG.debug("Creating HoodieFileGroupReaderRecordReader with tableBasePath={}, latestCommitTime={}, fileSplit={}", tableBasePath, latestCommitTime, fileSplit.getPath());
-    this.fileGroupReader = new HoodieFileGroupReader<>(readerContext, metaClient.getStorage(), tableBasePath,
-        latestCommitTime, getFileSliceFromSplit(fileSplit, getFs(tableBasePath, jobConfCopy), tableBasePath),
-        tableSchema, requestedSchema, Option.empty(), metaClient, props, fileSplit.getStart(),
-        fileSplit.getLength(), false, false);
-    this.fileGroupReader.initRecordIterators();
+    this.recordIterator = HoodieFileGroupReader.<ArrayWritable>newBuilder()
+        .withReaderContext(readerContext)
+        .withHoodieTableMetaClient(metaClient)
+        .withLatestCommitTime(latestCommitTime)
+        .withFileSlice(getFileSliceFromSplit(fileSplit, getFs(tableBasePath, jobConfCopy), tableBasePath))
+        .withDataSchema(tableSchema)
+        .withRequestedSchema(requestedSchema)
+        .withProps(props)
+        .withStart(fileSplit.getStart())
+        .withLength(fileSplit.getLength())
+        .withShouldUseRecordPosition(false)
+        .build()
+        .getClosableIterator();
     // it expects the partition columns to be at the end
     Schema outputSchema = HoodieAvroUtils.generateProjectionSchema(tableSchema,
         Stream.concat(tableSchema.getFields().stream().map(f -> f.name().toLowerCase(Locale.ROOT)).filter(n -> !partitionColumns.contains(n)),
@@ -155,10 +164,10 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
 
   @Override
   public boolean next(NullWritable key, ArrayWritable value) throws IOException {
-    if (!fileGroupReader.hasNext()) {
+    if (!recordIterator.hasNext()) {
       return false;
     }
-    value.set(fileGroupReader.next().get());
+    value.set(recordIterator.next().get());
     reverseProjection.apply(value);
     return true;
   }
@@ -180,28 +189,12 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
 
   @Override
   public void close() throws IOException {
-    fileGroupReader.close();
+    recordIterator.close();
   }
 
   @Override
   public float getProgress() throws IOException {
     return readerContext.getProgress();
-  }
-
-  /**
-   * If populate meta fields is false, then getRecordKeyFields()
-   * should return exactly 1 recordkey field.
-   */
-  @VisibleForTesting
-  static String getRecordKeyField(HoodieTableMetaClient metaClient) {
-    if (metaClient.getTableConfig().populateMetaFields()) {
-      return HoodieRecord.RECORD_KEY_METADATA_FIELD;
-    }
-
-    Option<String[]> recordKeyFieldsOpt = metaClient.getTableConfig().getRecordKeyFields();
-    ValidationUtils.checkArgument(recordKeyFieldsOpt.isPresent(), "No record key field set in table config, but populateMetaFields is disabled");
-    ValidationUtils.checkArgument(recordKeyFieldsOpt.get().length == 1, "More than 1 record key set in table config, but populateMetaFields is disabled");
-    return recordKeyFieldsOpt.get()[0];
   }
 
   /**

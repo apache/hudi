@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.spark.sql.hudi.command.index
+package org.apache.spark.sql.hudi.feature.index
 
 import org.apache.hudi.{DataSourceReadOptions, ExpressionIndexSupport, HoodieFileIndex, HoodieSparkUtils}
 import org.apache.hudi.DataSourceWriteOptions._
@@ -1780,6 +1780,8 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
         spark.sql(s"create index idx_bloom_$tableName on $tableName using bloom_filters(city) options(expr='upper', " +
           s"${HoodieExpressionIndex.FALSE_POSITIVE_RATE}='0.01', ${HoodieExpressionIndex.BLOOM_FILTER_TYPE}='SIMPLE', ${HoodieExpressionIndex.BLOOM_FILTER_NUM_ENTRIES}='1000')")
         var metaClient = createMetaClient(spark, basePath)
+        val expectedInstantTime = metaClient.getCommitsTimeline
+          .filterCompletedInstants().lastInstant().get().requestedTime
         assertTrue(metaClient.getTableConfig.getMetadataPartitions.contains(s"expr_index_idx_bloom_$tableName"))
         assertTrue(metaClient.getIndexMetadata.isPresent)
         assertEquals(2, metaClient.getIndexMetadata.get.getIndexDefinitions.size())
@@ -1795,7 +1797,8 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
         val indexMetadata = indexMetadataDf.collect()
         indexMetadata.foreach(row => {
           val bloomFilterMetadata = row.getStruct(1)
-          assertTrue(bloomFilterMetadata.getString(0).equals("SIMPLE"))
+          assertEquals("SIMPLE", bloomFilterMetadata.getString(0))
+          assertEquals(expectedInstantTime, bloomFilterMetadata.getString(1))
         })
 
         // Pruning takes place only if query uses upper function on city
@@ -1973,11 +1976,12 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
     if (shouldRollback) {
       // rollback the operation
       val lastCompletedInstant = metaClient.reloadActiveTimeline().getCommitsTimeline.filterCompletedInstants().lastInstant()
-      val writeConfig = getWriteConfig(Map.empty, metaClient.getBasePath.toString)
-      writeConfig.setValue("hoodie.metadata.index.column.stats.enable", "false")
-      writeConfig.setValue("hoodie.metadata.index.partition.stats.enable", "false")
-      val writeClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext)), writeConfig)
+      val configBuilder = getWriteConfigBuilder(Map.empty, metaClient.getBasePath.toString)
+      configBuilder.withMetadataConfig(HoodieMetadataConfig.newBuilder()
+        .withMetadataIndexColumnStats(false).withMetadataIndexPartitionStats(false).build())
+      val writeClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext)), configBuilder.build())
       writeClient.rollback(lastCompletedInstant.get().requestedTime)
+      writeClient.close()
       // validate the expression index
       checkAnswer(metadataSql)(
         // the last commit is rolledback so no records for that
@@ -2187,7 +2191,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
       HoodieExpressionIndex.DYNAMIC_BLOOM_MAX_ENTRIES -> "1000"
     )
     val bloomFilterRecords = SparkMetadataWriterUtils.getExpressionIndexRecordsUsingBloomFilter(df, "c5",
-      HoodieWriteConfig.newBuilder().withPath("a/b").build(), "",
+        HoodieStorageConfig.newBuilder().build(), "",
         HoodieIndexDefinition.newBuilder().withIndexName("random").withIndexOptions(JavaConverters.mapAsJavaMapConverter(indexOptions).asJava).build())
       .getExpressionIndexRecords
     // Since there is only one partition file pair there is only one bloom filter record
@@ -2298,11 +2302,10 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
       metaClient.getActiveTimeline)
   }
 
-  private def getWriteConfig(hudiOpts: Map[String, String], basePath: String): HoodieWriteConfig = {
+  private def getWriteConfigBuilder(hudiOpts: Map[String, String], basePath: String): HoodieWriteConfig.Builder = {
     val props = TypedProperties.fromMap(JavaConverters.mapAsJavaMapConverter(hudiOpts).asJava)
     HoodieWriteConfig.newBuilder()
       .withProps(props)
       .withPath(basePath)
-      .build()
   }
 }

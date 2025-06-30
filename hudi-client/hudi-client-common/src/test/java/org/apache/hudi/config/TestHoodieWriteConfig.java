@@ -22,7 +22,9 @@ import org.apache.hudi.client.transaction.FileSystemBasedLockProviderTestClass;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.client.transaction.lock.NoopLockProvider;
 import org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider;
+import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
@@ -55,6 +57,8 @@ import java.util.Set;
 import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -125,7 +129,7 @@ public class TestHoodieWriteConfig {
         constructConfigMap(
             EngineType.SPARK, HoodieIndex.IndexType.SIMPLE,
             EngineType.FLINK, HoodieIndex.IndexType.INMEMORY,
-            EngineType.JAVA, HoodieIndex.IndexType.INMEMORY));
+            EngineType.JAVA, HoodieIndex.IndexType.SIMPLE));
   }
 
   @Test
@@ -707,6 +711,46 @@ public class TestHoodieWriteConfig {
         - writeConfig.getViewStorageConfig().getMaxMemoryForPendingClusteringFileGroups()
         - writeConfig.getViewStorageConfig().getMaxMemoryForReplacedFileGroups(),
         writeConfig.getViewStorageConfig().getMaxMemoryForFileGroupMap());
+  }
+
+  @Test
+  void testBloomFilterType() {
+    String bloomFilterType = BloomFilterTypeCode.SIMPLE.name();
+    assertNotEquals(HoodieStorageConfig.BLOOM_FILTER_TYPE.defaultValue().toUpperCase(),
+        bloomFilterType.toUpperCase());
+    Properties props = new Properties();
+    props.put(HoodieStorageConfig.BLOOM_FILTER_TYPE.key(), bloomFilterType);
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withProperties(props).build();
+    assertEquals(bloomFilterType, config.getBloomFilterType());
+  }
+
+  @Test
+  public void testStreamingWritesToMetadataConfig() {
+    Properties props = new Properties();
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withProperties(props)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withStreamingWriteEnabled(true).build())
+        .withEngineType(EngineType.SPARK).build();
+
+    assertTrue(config.isMetadataStreamingWritesEnabled(HoodieTableVersion.EIGHT));
+    assertFalse(config.isMetadataStreamingWritesEnabled(HoodieTableVersion.SIX));
+
+    config = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withProperties(props)
+        .withEngineType(EngineType.FLINK).build();
+    assertFalse(config.isMetadataStreamingWritesEnabled(HoodieTableVersion.SIX));
+    assertFalse(config.isMetadataStreamingWritesEnabled(HoodieTableVersion.EIGHT));
+
+    config = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withProperties(props)
+        .withEngineType(EngineType.JAVA).build();
+    assertFalse(config.isMetadataStreamingWritesEnabled(HoodieTableVersion.SIX));
+    assertFalse(config.isMetadataStreamingWritesEnabled(HoodieTableVersion.EIGHT));
   }
 
   private HoodieWriteConfig createWriteConfig(Map<String, String> configs) {

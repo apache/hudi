@@ -616,5 +616,10 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     // older partition is in the list dropped partitions
     assertEquals(1, droppedPartitions.size());
     assertEquals(olderPartition, droppedPartitions.get(0));
+
+    // Archive clean instant.
+    activeTimeline.deleteInstantFileIfExists(metaClient.getActiveTimeline().getCleanerTimeline().filterCompletedInstants().lastInstant().get());
+    droppedPartitions = TimelineUtils.getDroppedPartitions(metaClient, Option.empty(), Option.empty());
+    assertTrue(droppedPartitions.isEmpty());
   }
 }

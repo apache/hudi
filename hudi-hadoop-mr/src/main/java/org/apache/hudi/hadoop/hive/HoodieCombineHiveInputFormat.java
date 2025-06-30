@@ -357,10 +357,8 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
 
     // Store the previous value for the path specification
     String oldPaths = job.get(org.apache.hadoop.mapreduce.lib.input.FileInputFormat.INPUT_DIR);
-    if (LOG.isDebugEnabled()) {
-      LOG.debug("The received input paths are: [" + oldPaths + "] against the property "
-          + org.apache.hadoop.mapreduce.lib.input.FileInputFormat.INPUT_DIR);
-    }
+    LOG.debug("The received input paths are: [{}] against the property {}", oldPaths,
+        org.apache.hadoop.mapreduce.lib.input.FileInputFormat.INPUT_DIR);
 
     // Process the normal splits
     if (nonCombinablePaths.size() > 0) {
@@ -975,16 +973,15 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
         }
         ArrayList<CombineFileSplit> combineFileSplits = new ArrayList<>();
         HoodieCombineRealtimeFileSplit.Builder builder = new HoodieCombineRealtimeFileSplit.Builder();
-        int counter = 0;
+        long counter = 0;
         for (int pos = 0; pos < splits.length; pos++) {
-          if (counter == maxSize - 1 || pos == splits.length - 1) {
-            builder.addSplit((FileSplit) splits[pos]);
+          InputSplit split = splits[pos];
+          counter += split.getLength();
+          builder.addSplit((FileSplit) split);
+          if (counter >= maxSize || pos == splits.length - 1) {
             combineFileSplits.add(builder.build(job));
             builder = new HoodieCombineRealtimeFileSplit.Builder();
             counter = 0;
-          } else if (counter < maxSize) {
-            counter++;
-            builder.addSplit((FileSplit) splits[pos]);
           }
         }
         return combineFileSplits.toArray(new CombineFileSplit[combineFileSplits.size()]);
@@ -1063,9 +1060,7 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
         InputFormat<WritableComparable, Writable> inputFormat = getInputFormatFromCache(inputFormatClass, conf);
         if (inputFormat instanceof AvoidSplitCombination
             && ((AvoidSplitCombination) inputFormat).shouldSkipCombine(paths[i + start], conf)) {
-          if (LOG.isDebugEnabled()) {
-            LOG.debug("The path [" + paths[i + start] + "] is being parked for HiveInputFormat.getSplits");
-          }
+          LOG.debug("The path [{}] is being parked for HiveInputFormat.getSplits", paths[i + start]);
           nonCombinablePathIndices.add(i + start);
         }
       }

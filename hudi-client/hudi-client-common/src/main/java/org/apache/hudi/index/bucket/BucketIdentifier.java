@@ -54,7 +54,11 @@ public class BucketIdentifier implements Serializable {
   }
 
   public static String partitionBucketIdStr(String partition, int bucketId) {
-    return String.format("%s_%s", partition, bucketIdStr(bucketId));
+    // format: {partition}_{bucket_id}, bucket id should be 8 digits long, padded with leading zeros
+    StringBuilder sb = new StringBuilder()
+        .append(partition)
+        .append('_');
+    return appendWithPadZero(bucketId, 8, sb).toString();
   }
 
   public static int bucketIdFromFileId(String fileId) {
@@ -62,7 +66,18 @@ public class BucketIdentifier implements Serializable {
   }
 
   public static String bucketIdStr(int n) {
-    return String.format("%08d", n);
+    // bucket str should be 8 digits long, padded with leading zeros, format like: "00000001" for bucket 1
+    return appendWithPadZero(n, 8, new StringBuilder()).toString();
+  }
+
+  private static StringBuilder appendWithPadZero(int num, int targetLength, StringBuilder sb) {
+    String numStr = Integer.toString(num);
+    int zerosNeeded = targetLength - numStr.length();
+    for (int i = 0; i < zerosNeeded; i++) {
+      sb.append('0');
+    }
+    sb.append(numStr);
+    return sb;
   }
 
   public static String newBucketFileIdPrefix(int bucketId, boolean fixed) {
@@ -70,13 +85,21 @@ public class BucketIdentifier implements Serializable {
   }
 
   public static String newBucketFileIdPrefix(int bucketId) {
-    return FSUtils.createNewFileIdPfx().replaceFirst(".{8}", bucketIdStr(bucketId));
+    return newBucketFileIdPrefix(bucketIdStr(bucketId));
+  }
+
+  public static String newBucketFileIdPrefix(String bucketIdStr) {
+    return FSUtils.createNewFileIdPfx().replaceFirst(".{8}", bucketIdStr);
+  }
+
+  public static String newBucketFileIdForNBCC(int bucketId) {
+    return newBucketFileIdForNBCC(bucketIdStr(bucketId));
   }
 
   /**
    * Generate a new file id for NBCC mode, file id is fixed for each bucket with format: "{bucket_id}-0000-0000-0000-000000000000-0"
    */
-  public static String newBucketFileIdForNBCC(int bucketId) {
-    return FSUtils.createNewFileId(bucketIdStr(bucketId) + CONSTANT_FILE_ID_SUFFIX, 0);
+  public static String newBucketFileIdForNBCC(String bucketIdStr) {
+    return FSUtils.createNewFileId(bucketIdStr + CONSTANT_FILE_ID_SUFFIX, 0);
   }
 }

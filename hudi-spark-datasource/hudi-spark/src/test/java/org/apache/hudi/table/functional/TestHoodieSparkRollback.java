@@ -21,9 +21,10 @@ package org.apache.hudi.table.functional;
 
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
-import org.apache.hudi.client.functional.TestHoodieBackedMetadata;
+import org.apache.hudi.functional.TestHoodieBackedMetadata;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
@@ -77,23 +78,25 @@ public class TestHoodieSparkRollback extends SparkClientFunctionalTestHarness {
     /*
      * Write 1 (only inserts, written as base file)
      */
-    client.startCommitWithTime(commitTime);
+    WriteClientTestUtils.startCommitWithTime(client, commitTime);
 
     List<HoodieRecord> records = dataGen.generateInserts(commitTime, 20);
     JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
 
     List<WriteStatus> statuses = client.upsert(writeRecords, commitTime).collect();
+    client.commit(commitTime, jsc().parallelize(statuses));
     assertNoWriteErrors(statuses);
     return records;
   }
 
   protected List<WriteStatus> updateRecords(SparkRDDWriteClient client, HoodieTestDataGenerator dataGen, String commitTime,
                                           List<HoodieRecord> records) throws IOException {
-    client.startCommitWithTime(commitTime);
+    WriteClientTestUtils.startCommitWithTime(client, commitTime);
 
     records = dataGen.generateUpdates(commitTime, records);
     JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
     List<WriteStatus> statuses = client.upsert(writeRecords, commitTime).collect();
+    client.commit(commitTime, jsc().parallelize(statuses));
     assertNoWriteErrors(statuses);
     return statuses;
   }
@@ -109,7 +112,6 @@ public class TestHoodieSparkRollback extends SparkClientFunctionalTestHarness {
         .withSchema(TRIP_EXAMPLE_SCHEMA)
         .withParallelism(2, 2)
         .withDeleteParallelism(2)
-        .withAutoCommit(autoCommit)
         .withEmbeddedTimelineServerEnabled(false).forTable("test-trip-table")
         .withRollbackUsingMarkers(true)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(mdtEnable).build())
@@ -186,6 +188,7 @@ public class TestHoodieSparkRollback extends SparkClientFunctionalTestHarness {
     if (failRollback) {
       copyOut(tableType, "002");
       //disable MDT so we don't copy it
+      client.close();
       client = getHoodieWriteClient(getConfigToTestMDTRollbacks(true, false));
       assertTrue(client.rollback("002", "003"));
       metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -203,6 +206,7 @@ public class TestHoodieSparkRollback extends SparkClientFunctionalTestHarness {
     //now we are at a state that we would be at if a write failed after writing to MDT but before commit is finished
 
     //New update will trigger rollback and we will commit this time
+    client.close();
     client = getHoodieWriteClient(getConfigToTestMDTRollbacks(true, true));
     updateRecords(client, dataGen, "004", records);
     //validate that metadata table file listing matches reality
@@ -210,6 +214,7 @@ public class TestHoodieSparkRollback extends SparkClientFunctionalTestHarness {
     TestHoodieBackedMetadata.validateMetadata(cfg, Option.empty(), hoodieStorage(), basePath, metaClient, storageConf(), new HoodieSparkEngineContext(jsc()),
         TestHoodieBackedMetadata.metadata(client, hoodieStorage()), client, HoodieTimer.start());
     assertEquals(HoodieTableVersion.SIX, metaClient.getTableConfig().getTableVersion());
+    client.close();
   }
 
   private void copyOut(HoodieTableType tableType, String commitTime) throws IOException {
@@ -282,6 +287,7 @@ public class TestHoodieSparkRollback extends SparkClientFunctionalTestHarness {
     TestHoodieBackedMetadata.validateMetadata(cfg, Option.empty(), hoodieStorage(), basePath, metaClient,
         storageConf(), new HoodieSparkEngineContext(jsc()), TestHoodieBackedMetadata.metadata(client, hoodieStorage()), client, HoodieTimer.start());
     assertEquals(HoodieTableVersion.SIX, metaClient.getTableConfig().getTableVersion());
+    client.close();
   }
 
   /**

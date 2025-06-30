@@ -26,7 +26,6 @@ import java.nio.charset.StandardCharsets;
  */
 public class UTF8StringKey extends Key {
   public UTF8StringKey(String key) {
-
     super(key.getBytes(StandardCharsets.UTF_8));
   }
 

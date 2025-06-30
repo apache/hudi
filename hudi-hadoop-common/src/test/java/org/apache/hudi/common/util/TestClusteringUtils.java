@@ -182,7 +182,7 @@ public class TestClusteringUtils extends HoodieCommonTestHarness {
         .setVersion(CleanPlanV2MigrationHandler.VERSION)
         .build();
     metaClient.getActiveTimeline().saveToCleanRequested(requestedInstant4, Option.of(cleanerPlan1));
-    HoodieInstant inflightInstant4 = metaClient.getActiveTimeline().transitionCleanRequestedToInflight(requestedInstant4, Option.empty());
+    HoodieInstant inflightInstant4 = metaClient.getActiveTimeline().transitionCleanRequestedToInflight(requestedInstant4);
     HoodieCleanMetadata cleanMetadata = new HoodieCleanMetadata(cleanTime1, 1L, 1,
         completedInstant3.requestedTime(), "", Collections.emptyMap(), 0, Collections.emptyMap(), Collections.emptyMap());
     metaClient.getActiveTimeline().transitionCleanInflightToComplete(true, inflightInstant4, Option.of(cleanMetadata));
@@ -211,7 +211,7 @@ public class TestClusteringUtils extends HoodieCommonTestHarness {
         HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS.name(), Collections.emptyMap(),
         CleanPlanV2MigrationHandler.VERSION, Collections.emptyMap(), Collections.emptyList(), Collections.EMPTY_MAP);
     metaClient.getActiveTimeline().saveToCleanRequested(requestedInstant2, Option.of(cleanerPlan1));
-    HoodieInstant inflightInstant2 = metaClient.getActiveTimeline().transitionCleanRequestedToInflight(requestedInstant2, Option.empty());
+    HoodieInstant inflightInstant2 = metaClient.getActiveTimeline().transitionCleanRequestedToInflight(requestedInstant2);
     HoodieCleanMetadata cleanMetadata = new HoodieCleanMetadata(cleanTime1, 1L, 1,
         "", "", Collections.emptyMap(), 0, Collections.emptyMap(), Collections.emptyMap());
     metaClient.getActiveTimeline().transitionCleanInflightToComplete(true, inflightInstant2, Option.of(cleanMetadata));

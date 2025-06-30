@@ -62,7 +62,7 @@ import scala.concurrent.duration._
 /**
  * Test cases for secondary index
  */
-@Tag("functional")
+@Tag("functional-c")
 class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
 
   val metadataOpts: Map[String, String] = Map(
@@ -1318,6 +1318,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
     val firstCompletedInstant = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants().lastInstant()
     val writeClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), getWriteConfig(hudiOpts))
     writeClient.savepoint(firstCompletedInstant.get().requestedTime, "testUser", "savepoint to first commit")
+    writeClient.close()
     val savepointTimestamp = metaClient.reloadActiveTimeline().getSavePointTimeline.filterCompletedInstants().lastInstant().get().requestedTime
     assertEquals(firstCompletedInstant.get().requestedTime, savepointTimestamp)
     // Restore to savepoint

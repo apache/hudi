@@ -35,7 +35,7 @@ public class ConcatenatingIterator<T> implements Iterator<T> {
 
   private final Queue<Iterator<T>> allIterators;
 
-  public ConcatenatingIterator(List<Iterator<T>> iterators) {
+  public ConcatenatingIterator(List<? extends Iterator<T>> iterators) {
     allIterators = new LinkedList<>(iterators);
   }
 
@@ -46,10 +46,14 @@ public class ConcatenatingIterator<T> implements Iterator<T> {
         return true;
       }
       // iterator at current head is done. move ahead
-      allIterators.poll();
+      advanceIterator();
     }
 
     return false;
+  }
+
+  protected Iterator<T> advanceIterator() {
+    return allIterators.poll();
   }
 
   @Override

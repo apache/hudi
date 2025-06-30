@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.MetadataConversionUtils;
+import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -61,9 +62,10 @@ public class ConcurrentOperation {
   private Set<Pair<String, String>> mutatedPartitionAndFileIds = Collections.emptySet();
 
   public ConcurrentOperation(HoodieInstant instant, HoodieTableMetaClient metaClient) throws IOException {
-    // Replace compaction.inflight to compaction.request since inflight does not contain compaction plan.
-    if (instant.getAction().equals(COMPACTION_ACTION) && instant.getState().equals(HoodieInstant.State.INFLIGHT)) {
-      instant = metaClient.createNewInstant(HoodieInstant.State.REQUESTED, COMPACTION_ACTION, instant.requestedTime());
+    // Replace inflight compaction and clustering to requested since inflight does not contain the plan.
+    if ((instant.getAction().equals(COMPACTION_ACTION) || ClusteringUtils.isClusteringInstant(metaClient.getActiveTimeline(), instant, metaClient.getInstantGenerator()))
+        && instant.getState().equals(HoodieInstant.State.INFLIGHT)) {
+      instant = metaClient.createNewInstant(HoodieInstant.State.REQUESTED, instant.getAction(), instant.requestedTime());
     }
     this.metadataWrapper = new HoodieMetadataWrapper(MetadataConversionUtils.createMetaWrapper(instant, metaClient));
     this.commitMetadataOption = Option.empty();

@@ -127,8 +127,6 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
     def doTest(colInitType: String, start: Int, end: Int): Unit = {
       for (a <- Range(start, end)) {
         try {
-          Console.println(s"Performing test: $a with initialColType of: $colInitType")
-
           // convert int to string first before conversion to binary
           val initDF = prepDataFrame(df1, colInitType)
           initDF.printSchema()
@@ -874,14 +872,7 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
     upsertData(df2, tempRecordPath, isCow)
 
     // after implicit type change, read the table with vectorized read enabled
-    //fg reader with mor does not support vectorized currently and will auto read by row
-    if (isCow || !useFileGroupReader) {
-      assertThrows(classOf[SparkException]){
-        withSQLConf("spark.sql.parquet.enableNestedColumnVectorizedReader" -> "true") {
-          readTable(tempRecordPath, useFileGroupReader)
-        }
-      }
-    } else {
+    assertThrows(classOf[SparkException]){
       withSQLConf("spark.sql.parquet.enableNestedColumnVectorizedReader" -> "true") {
         readTable(tempRecordPath, useFileGroupReader)
       }

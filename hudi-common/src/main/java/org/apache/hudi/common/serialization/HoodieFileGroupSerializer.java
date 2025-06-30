@@ -53,7 +53,7 @@ public class HoodieFileGroupSerializer implements CustomSerializer<List<HoodieFi
             + input.stream().map(fg -> fg.getFileGroupId().toString() + ":" + ((fg.getTimeline() == null) ? "NULL" : "OK")).collect(Collectors.joining(",")) + "]");
       }
       fileGroupIdHoodieTimelineMap.put(fileGroup.getFileGroupId(), fileGroup.getTimeline());
-      return new HoodieFileGroupLite(fileGroup.getAllRawFileSlices().collect(Collectors.toList()), fileGroup.getFileGroupId());
+      return new HoodieFileGroupLite(fileGroup.getAllRawFileSlices().collect(Collectors.toList()));
     }).collect(Collectors.toList());
     return SerializationUtils.serialize(fileGroupLites);
   }
@@ -62,13 +62,13 @@ public class HoodieFileGroupSerializer implements CustomSerializer<List<HoodieFi
   public List<HoodieFileGroup> deserialize(byte[] bytes) {
     List<HoodieFileGroupLite> fileGroupLites = SerializationUtils.deserialize(bytes);
     return fileGroupLites.stream().map(fileGroupLite -> {
-      HoodieTimeline timeline = fileGroupIdHoodieTimelineMap.get(fileGroupLite.fileGroupId);
+      HoodieTimeline timeline = fileGroupIdHoodieTimelineMap.get(fileGroupLite.getFileGroupId());
       if (timeline == null) {
-        throw new IllegalStateException("Timeline for fileGroupId: '" + fileGroupLite.fileGroupId + "' was not found in the map. Available fileGroupId in map: ["
+        throw new IllegalStateException("Timeline for fileGroupId: '" + fileGroupLite.getFileGroupId() + "' was not found in the map. Available fileGroupId in map: ["
             + fileGroupIdHoodieTimelineMap.keySet().stream().map(HoodieFileGroupId::toString).collect(Collectors.joining(",")) + "]. FileGroupId that we are deserializing: ["
-            + fileGroupLites.stream().map(fg -> fg.fileGroupId.toString()).collect(Collectors.joining(",")) + "]");
+            + fileGroupLites.stream().map(fg -> fg.getFileGroupId().toString()).collect(Collectors.joining(",")) + "]");
       }
-      HoodieFileGroup fileGroup = new HoodieFileGroup(fileGroupLite.fileGroupId, timeline);
+      HoodieFileGroup fileGroup = new HoodieFileGroup(fileGroupLite.getFileGroupId(), timeline);
       fileGroupLite.fileSlices.forEach(fileGroup::addFileSlice);
       return fileGroup;
     }).collect(Collectors.toList());
@@ -78,11 +78,13 @@ public class HoodieFileGroupSerializer implements CustomSerializer<List<HoodieFi
     private static final long serialVersionUID = 1L;
 
     private final List<FileSlice> fileSlices;
-    private final HoodieFileGroupId fileGroupId;
 
-    HoodieFileGroupLite(List<FileSlice> fileSlices, HoodieFileGroupId fileGroupId) {
+    HoodieFileGroupLite(List<FileSlice> fileSlices) {
       this.fileSlices = fileSlices;
-      this.fileGroupId = fileGroupId;
+    }
+
+    private HoodieFileGroupId getFileGroupId() {
+      return fileSlices.get(0).getFileGroupId();
     }
   }
 }

@@ -35,9 +35,11 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -116,9 +118,9 @@ public class TestHoodieReadClient extends HoodieClientTestBase {
 
       JavaRDD<HoodieRecord> smallRecordsRDD = jsc.parallelize(records.subList(0, 75), PARALLELISM);
       // We create three base file, each having one record. (3 different partitions)
-      List<WriteStatus> statuses = writeFn.apply(writeClient, smallRecordsRDD, newCommitTime).collect();
-      // Verify there are no errors
-      assertNoWriteErrors(statuses);
+      List<WriteStatus> statusList = writeFn.apply(writeClient, smallRecordsRDD, newCommitTime).collect();
+      writeClient.commit(newCommitTime, jsc.parallelize(statusList), Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+      assertNoWriteErrors(statusList);
 
       SparkRDDReadClient anotherReadClient = getHoodieReadClient(config.getBasePath());
       filteredRDD = anotherReadClient.filterExists(recordsRDD);
@@ -210,7 +212,7 @@ public class TestHoodieReadClient extends HoodieClientTestBase {
       // Construct HoodieRecord from the WriteStatus but set HoodieKey, Data and HoodieRecordLocation accordingly
       // since they have been modified in the DAG
       JavaRDD<HoodieRecord> recordRDD =
-          jsc.parallelize(result.collect().stream().map(WriteStatus::getWrittenRecordDelegates).flatMap(Collection::stream)
+          jsc.parallelize(result.collect().stream().map(ws -> ws.getIndexStats().getWrittenRecordDelegates()).flatMap(Collection::stream)
               .map(recordDelegate -> new HoodieAvroRecord(recordDelegate.getHoodieKey(), null)).collect(Collectors.toList()), PARALLELISM);
       // Should have 100 records in table (check using Index), all in locations marked at commit
       SparkRDDReadClient readClient = getHoodieReadClient(hoodieWriteConfig.getBasePath());
@@ -226,7 +228,7 @@ public class TestHoodieReadClient extends HoodieClientTestBase {
           Option.of(Arrays.asList(commitTimeBetweenPrevAndNew)), initCommitTime, numRecords, updateFn, isPrepped, true,
           numRecords, 200, 2, INSTANT_GENERATOR);
       recordRDD =
-          jsc.parallelize(result.collect().stream().map(WriteStatus::getWrittenRecordDelegates).flatMap(Collection::stream)
+          jsc.parallelize(result.collect().stream().map(ws -> ws.getIndexStats().getWrittenRecordDelegates()).flatMap(Collection::stream)
               .map(recordDelegate -> new HoodieAvroRecord(recordDelegate.getHoodieKey(), null)).collect(Collectors.toList()), PARALLELISM);
       // Index should be able to locate all updates in correct locations.
       readClient = getHoodieReadClient(hoodieWriteConfig.getBasePath());

@@ -58,10 +58,8 @@ public class SparkPartitionTTLActionExecutor<T>
       if (expiredPartitions.isEmpty()) {
         return emptyResult;
       }
-      LOG.info("Partition ttl find the following expired partitions to delete:  " + String.join(",", expiredPartitions));
-      // Auto commit is disabled in config, copy config and enable auto commit for SparkDeletePartitionCommitActionExecutor.
-      HoodieWriteConfig autoCommitConfig = HoodieWriteConfig.newBuilder().withProperties(config.getProps()).withAutoCommit(true).build();
-      return new SparkDeletePartitionCommitActionExecutor<>(context, autoCommitConfig, table, instantTime, expiredPartitions).execute();
+      LOG.info("Partition ttl find the following expired partitions to delete: {}", String.join(",", expiredPartitions));
+      return new SparkAutoCommitExecutor(new SparkDeletePartitionCommitActionExecutor<>(context, config, table, instantTime, expiredPartitions)).execute();
     } catch (HoodieDeletePartitionPendingTableServiceException deletePartitionPendingTableServiceException) {
       LOG.info("Partition is under table service, do nothing, call delete partition next time.");
       return emptyResult;

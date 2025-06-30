@@ -20,6 +20,8 @@ package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.clustering.update.strategy.SparkAllowUpdateStrategy;
+import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.client.utils.SparkValidatorUtils;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
@@ -58,6 +60,7 @@ import org.apache.hudi.table.action.cluster.strategy.UpdateStrategy;
 import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.broadcast.Broadcast;
 import org.apache.spark.storage.StorageLevel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -104,7 +107,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     keyGeneratorOpt = HoodieSparkKeyGeneratorFactory.createBaseKeyGenerator(config);
   }
 
-  private HoodieData<HoodieRecord<T>> clusteringHandleUpdate(HoodieData<HoodieRecord<T>> inputRecords) {
+  protected HoodieData<HoodieRecord<T>> clusteringHandleUpdate(HoodieData<HoodieRecord<T>> inputRecords) {
     context.setJobStatus(this.getClass().getSimpleName(), "Handling updates which are under clustering: " + config.getTableName());
     Set<HoodieFileGroupId> fileGroupsInPendingClustering =
         table.getFileSystemView().getFileGroupsInPendingClustering().map(Pair::getKey).collect(Collectors.toSet());
@@ -137,9 +140,17 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
           .map(Map.Entry::getValue)
           .collect(Collectors.toSet());
       pendingClusteringInstantsToRollback.forEach(instant -> {
-        String commitTime = table.getMetaClient().createNewInstantTime();
-        table.scheduleRollback(context, commitTime, instant, false, config.shouldRollbackUsingMarkers(), false);
-        table.rollback(context, commitTime, instant, true, true);
+        try (TransactionManager transactionManager = new TransactionManager(table.getConfig(), table.getStorage())) {
+          transactionManager.beginStateChange(Option.empty(), Option.empty());
+          String commitTime;
+          try {
+            commitTime = table.getMetaClient().createNewInstantTime(false);
+            table.scheduleRollback(context, commitTime, instant, false, config.shouldRollbackUsingMarkers(), false);
+          } finally {
+            transactionManager.endStateChange(Option.empty());
+          }
+          table.rollback(context, commitTime, instant, true, true);
+        }
       });
       table.getMetaClient().reloadActiveTimeline();
     }
@@ -155,7 +166,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
   public HoodieWriteMetadata<HoodieData<WriteStatus>> execute(HoodieData<HoodieRecord<T>> inputRecords, Option<HoodieTimer> sourceReadAndIndexTimer) {
     // Cache the tagged records, so we don't end up computing both
     JavaRDD<HoodieRecord<T>> inputRDD = HoodieJavaRDD.getJavaRDD(inputRecords);
-    if (!config.isSourceRddPersisted() || inputRDD.getStorageLevel() == StorageLevel.NONE()) {
+    if (shouldPersistInputRecords(inputRDD)) {
       HoodieJavaRDD.of(inputRDD).persist(config.getTaggedRecordStorageLevel(),
           context, HoodieDataCacheKey.of(config.getBasePath(), instantTime));
     } else {
@@ -166,10 +177,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     HoodieData<HoodieRecord<T>> inputRecordsWithClusteringUpdate = clusteringHandleUpdate(inputRecords);
     LOG.info("Num spark partitions for inputRecords before triggering workload profile {}", inputRecordsWithClusteringUpdate.getNumPartitions());
 
-    context.setJobStatus(this.getClass().getSimpleName(), "Building workload profile:" + config.getTableName());
-    WorkloadProfile workloadProfile =
-        new WorkloadProfile(buildProfile(inputRecordsWithClusteringUpdate), operationType, table.getIndex().canIndexLogFiles());
-    LOG.debug("Input workload profile :{}", workloadProfile);
+    WorkloadProfile workloadProfile = prepareWorkloadProfile(inputRecordsWithClusteringUpdate);
     Long sourceReadAndIndexDurationMs = null;
     if (sourceReadAndIndexTimer.isPresent()) {
       sourceReadAndIndexDurationMs = sourceReadAndIndexTimer.get().endTimer();
@@ -177,12 +185,13 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     }
     // partition using the insert partitioner
     final Partitioner partitioner = getPartitioner(workloadProfile);
+
     saveWorkloadProfileMetadataToInflight(workloadProfile, instantTime);
 
     context.setJobStatus(this.getClass().getSimpleName(), "Doing partition and writing data: " + config.getTableName());
     HoodieData<WriteStatus> writeStatuses = mapPartitionsAsRDD(inputRecordsWithClusteringUpdate, partitioner);
     HoodieWriteMetadata<HoodieData<WriteStatus>> result = new HoodieWriteMetadata<>();
-    updateIndexAndCommitIfNeeded(writeStatuses, result);
+    updateIndexAndMaybeRunPreCommitValidations(writeStatuses, result);
     if (sourceReadAndIndexTimer.isPresent()) {
       result.setSourceReadAndIndexDurationMs(sourceReadAndIndexDurationMs);
     }
@@ -190,9 +199,26 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
   }
 
   /**
+   * Prepares workload profile.
+   * @param inputRecordsWithClusteringUpdate input records of interest.
+   * @return {@link WorkloadProfile} thus prepared.
+   */
+  protected WorkloadProfile prepareWorkloadProfile(HoodieData<HoodieRecord<T>> inputRecordsWithClusteringUpdate) {
+    context.setJobStatus(this.getClass().getSimpleName(), "Building workload profile:" + config.getTableName());
+    WorkloadProfile workloadProfile =
+        new WorkloadProfile(buildProfile(inputRecordsWithClusteringUpdate), operationType, table.getIndex().canIndexLogFiles());
+    LOG.debug("Input workload profile :{}", workloadProfile);
+    return workloadProfile;
+  }
+
+  protected boolean shouldPersistInputRecords(JavaRDD<HoodieRecord<T>> inputRDD) {
+    return !config.isSourceRddPersisted() || inputRDD.getStorageLevel() == StorageLevel.NONE();
+  }
+
+  /**
    * Count the number of updates/inserts for each file in each partition.
    */
-  private Pair<HashMap<String, WorkloadStat>, WorkloadStat> buildProfile(HoodieData<HoodieRecord<T>> inputRecords) {
+  private Pair<Map<String, WorkloadStat>, WorkloadStat> buildProfile(HoodieData<HoodieRecord<T>> inputRecords) {
     HashMap<String, WorkloadStat> partitionPathStatMap = new HashMap<>();
     WorkloadStat globalStat = new WorkloadStat();
 
@@ -237,7 +263,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     }
   }
 
-  private HoodieData<WriteStatus> mapPartitionsAsRDD(HoodieData<HoodieRecord<T>> dedupedRecords, Partitioner partitioner) {
+  protected HoodieData<WriteStatus> mapPartitionsAsRDD(HoodieData<HoodieRecord<T>> dedupedRecords, Partitioner partitioner) {
     JavaPairRDD<Tuple2<HoodieKey, Option<HoodieRecordLocation>>, HoodieRecord<T>> mappedRDD = HoodieJavaPairRDD.getJavaPairRDD(
         dedupedRecords.mapToPair(record -> Pair.of(new Tuple2<>(record.getKey(), Option.ofNullable(record.getCurrentLocation())), record)));
 
@@ -256,11 +282,14 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
       // Partition only
       partitionedRDD = mappedRDD.partitionBy(partitioner);
     }
+
+    Broadcast<SparkBucketInfoGetter> bucketInfoGetter = ((HoodieSparkEngineContext) this.context)
+        .getJavaSparkContext().broadcast(((SparkHoodiePartitioner) partitioner).getSparkBucketInfoGetter());
     return HoodieJavaRDD.of(partitionedRDD.map(Tuple2::_2).mapPartitionsWithIndex((partition, recordItr) -> {
       if (WriteOperationType.isChangingRecords(operationType)) {
-        return handleUpsertPartition(instantTime, partition, recordItr, partitioner);
+        return handleUpsertPartition(instantTime, partition, recordItr, bucketInfoGetter);
       } else {
-        return handleInsertPartition(instantTime, partition, recordItr, partitioner);
+        return handleInsertPartition(instantTime, partition, recordItr, bucketInfoGetter);
       }
     }, true).flatMap(List::iterator));
   }
@@ -277,10 +306,10 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     return statuses;
   }
 
-  protected void updateIndexAndCommitIfNeeded(HoodieData<WriteStatus> writeStatusRDD, HoodieWriteMetadata<HoodieData<WriteStatus>> result) {
+  protected void updateIndexAndMaybeRunPreCommitValidations(HoodieData<WriteStatus> writeStatusRDD, HoodieWriteMetadata<HoodieData<WriteStatus>> result) {
     updateIndex(writeStatusRDD, result);
     result.setPartitionToReplaceFileIds(getPartitionToReplacedFileIds(result));
-    commitOnAutoCommit(result);
+    runPrecommitValidators(result);
   }
 
   @Override
@@ -310,9 +339,8 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
 
   @SuppressWarnings("unchecked")
   protected Iterator<List<WriteStatus>> handleUpsertPartition(String instantTime, Integer partition, Iterator recordItr,
-                                                              Partitioner partitioner) {
-    SparkHoodiePartitioner upsertPartitioner = (SparkHoodiePartitioner) partitioner;
-    BucketInfo binfo = upsertPartitioner.getBucketInfo(partition);
+                                                              Broadcast<SparkBucketInfoGetter> bucketInfoGetter) {
+    BucketInfo binfo = bucketInfoGetter.getValue().getBucketInfo(partition);
     BucketType btype = binfo.bucketType;
     try {
       if (btype.equals(BucketType.INSERT)) {
@@ -330,8 +358,8 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
   }
 
   protected Iterator<List<WriteStatus>> handleInsertPartition(String instantTime, Integer partition, Iterator recordItr,
-                                                              Partitioner partitioner) {
-    return handleUpsertPartition(instantTime, partition, recordItr, partitioner);
+                                                              Broadcast<SparkBucketInfoGetter> bucketInfoGetter) {
+    return handleUpsertPartition(instantTime, partition, recordItr, bucketInfoGetter);
   }
 
   @Override

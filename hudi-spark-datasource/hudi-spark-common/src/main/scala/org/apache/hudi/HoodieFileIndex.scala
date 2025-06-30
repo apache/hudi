@@ -21,12 +21,13 @@ import org.apache.hudi.BaseHoodieTableFileIndex.PartitionPath
 import org.apache.hudi.DataSourceWriteOptions.{PARTITIONPATH_FIELD, PRECOMBINE_FIELD, RECORDKEY_FIELD}
 import org.apache.hudi.HoodieFileIndex.{collectReferencedColumns, convertFilterForTimestampKeyGenerator, getConfigProperties, DataSkippingFailureMode}
 import org.apache.hudi.HoodieSparkConfUtils.getConfigValue
-import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
+import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig, TypedProperties}
 import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT}
 import org.apache.hudi.common.model.{FileSlice, HoodieBaseFile, HoodieLogFile}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.index.bucket.partition.PartitionBucketIndexUtils
 import org.apache.hudi.keygen.{TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
 import org.apache.hudi.util.JFunction
@@ -106,13 +107,18 @@ case class HoodieFileIndex(spark: SparkSession,
 
   /**
    * NOTE: [[indicesSupport]] is a transient state, since it's only relevant while logical plan
-   *       is handled by the Spark's driver
-   *       The order of elements is important as in this order indices will be applied
-   *       during `lookupCandidateFilesInMetadataTable`
+   * is handled by the Spark's driver
+   * The order of elements is important as in this order indices will be applied
+   * during `lookupCandidateFilesInMetadataTable`
    */
   @transient private lazy val indicesSupport: List[SparkBaseIndexSupport] = List(
     new RecordLevelIndexSupport(spark, metadataConfig, metaClient),
-    new BucketIndexSupport(spark, metadataConfig, metaClient),
+    if (PartitionBucketIndexUtils.isPartitionSimpleBucketIndex(metaClient.getStorageConf, metaClient.getBasePath.toString)) {
+      new PartitionBucketIndexSupport(spark, metadataConfig, metaClient,
+        options.get(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key).map(HoodieSqlCommonUtils.formatQueryInstant))
+    } else {
+      new BucketIndexSupport(spark, metadataConfig, metaClient)
+    },
     new SecondaryIndexSupport(spark, metadataConfig, metaClient),
     new ExpressionIndexSupport(spark, schema, metadataConfig, metaClient),
     new BloomFiltersIndexSupport(spark, metadataConfig, metaClient),
@@ -169,26 +175,10 @@ case class HoodieFileIndex(spark: SparkSession,
     val prunedPartitionsAndFilteredFileSlices = filterFileSlices(dataFilters, partitionFilters).map {
       case (partitionOpt, fileSlices) =>
         if (shouldEmbedFileSlices) {
-          val baseFileStatusesAndLogFileOnly: Seq[FileStatus] = fileSlices.map(slice => {
-            if (slice.getBaseFile.isPresent) {
-              slice.getBaseFile.get().getPathInfo
-            } else if (slice.hasLogFiles) {
-              slice.getLogFiles.findAny().get().getPathInfo
-            } else {
-              null
-            }
-          }).filter(slice => slice != null)
-            .map(fileInfo => new FileStatus(fileInfo.getLength, fileInfo.isDirectory, 0, fileInfo.getBlockSize,
-              fileInfo.getModificationTime, new Path(fileInfo.getPath.toUri)))
-          val c = fileSlices.filter(f => f.hasLogFiles || f.hasBootstrapBase).foldLeft(Map[String, FileSlice]()) { (m, f) => m + (f.getFileId -> f) }
-          if (c.nonEmpty) {
-            sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(
-              new HoodiePartitionFileSliceMapping(InternalRow.fromSeq(partitionOpt.get.values), c), baseFileStatusesAndLogFileOnly)
-          } else {
-            sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(
-              InternalRow.fromSeq(partitionOpt.get.values), baseFileStatusesAndLogFileOnly)
-          }
-
+          PartitionDirectoryConverter.convertFileSlicesToPartitionDirectory(
+            partitionOpt,
+            fileSlices,
+            options)
         } else {
           val allCandidateFiles: Seq[FileStatus] = fileSlices.flatMap(fs => {
             val baseFileStatusOpt = getBaseFileInfo(Option.apply(fs.getBaseFile.orElse(null)))

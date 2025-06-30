@@ -24,6 +24,7 @@ import org.apache.hudi.keygen.BaseKeyGenerator;
 
 import org.apache.avro.Schema;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Properties;
 
@@ -52,4 +53,6 @@ public interface HoodieRecordCompatibilityInterface {
   HoodieRecord truncateRecordKey(Schema recordSchema, Properties props, String keyFieldName) throws IOException;
 
   Option<HoodieAvroIndexedRecord> toIndexedRecord(Schema recordSchema, Properties props) throws IOException;
+
+  ByteArrayOutputStream getAvroBytes(Schema recordSchema, Properties props) throws IOException;
 }

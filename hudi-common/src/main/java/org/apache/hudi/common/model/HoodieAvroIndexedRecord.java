@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.avro.HoodieAvroReaderContext;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
@@ -34,6 +35,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Map;
 import java.util.Properties;
@@ -56,6 +58,10 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
 
   public HoodieAvroIndexedRecord(HoodieKey key, IndexedRecord data, HoodieRecordLocation currentLocation) {
     super(key, data, null, currentLocation, null);
+  }
+
+  public HoodieAvroIndexedRecord(HoodieKey key, IndexedRecord data, HoodieOperation operation, HoodieRecordLocation currentLocation, HoodieRecordLocation newLocation) {
+    super(key, data, operation, currentLocation, newLocation);
   }
 
   public HoodieAvroIndexedRecord(IndexedRecord data, HoodieRecordLocation currentLocation) {
@@ -115,6 +121,11 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   }
 
   @Override
+  public Object getColumnValueAsJava(Schema recordSchema, String column, Properties props) {
+    return HoodieAvroReaderContext.getFieldValueFromIndexedRecord(data, column);
+  }
+
+  @Override
   public HoodieRecord joinWith(HoodieRecord other, Schema targetSchema) {
     GenericRecord record = HoodieAvroUtils.stitchRecords((GenericRecord) data, (GenericRecord) other.getData(), targetSchema);
     return new HoodieAvroIndexedRecord(key, record, operation, metaData);
@@ -125,6 +136,12 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
     GenericRecord newAvroRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(data, targetSchema);
     updateMetadataValuesInternal(newAvroRecord, metadataValues);
     return new HoodieAvroIndexedRecord(key, newAvroRecord, operation, metaData);
+  }
+
+  @Override
+  public HoodieRecord updateMetaField(Schema recordSchema, int ordinal, String value) {
+    data.put(ordinal, value);
+    return new HoodieAvroIndexedRecord(key, data, operation, metaData);
   }
 
   @Override
@@ -184,9 +201,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
     }
     HoodieKey hoodieKey = new HoodieKey(key, partition);
 
-    HoodieRecordPayload avroPayload = new RewriteAvroPayload(record);
-    HoodieRecord hoodieRecord = new HoodieAvroRecord(hoodieKey, avroPayload);
-    return hoodieRecord;
+    return new HoodieAvroIndexedRecord(hoodieKey, record);
   }
 
   @Override
@@ -195,7 +210,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   }
 
   @Override
-  public Comparable<?> getOrderingValue(Schema recordSchema, Properties props) {
+  public Comparable<?> doGetOrderingValue(Schema recordSchema, Properties props) {
     String orderingField = ConfigUtils.getOrderingField(props);
     if (isNullOrEmpty(orderingField)) {
       return DEFAULT_ORDERING_VALUE;
@@ -210,6 +225,11 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   @Override
   public Option<HoodieAvroIndexedRecord> toIndexedRecord(Schema recordSchema, Properties props) {
     return Option.of(this);
+  }
+
+  @Override
+  public ByteArrayOutputStream getAvroBytes(Schema recordSchema, Properties props) {
+    return HoodieAvroUtils.avroToBytesStream(data);
   }
 
   /**

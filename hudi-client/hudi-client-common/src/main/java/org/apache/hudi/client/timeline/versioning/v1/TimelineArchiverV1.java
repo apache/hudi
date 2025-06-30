@@ -139,7 +139,7 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
     try {
       if (acquireLock) {
         // there is no owner or instant time per se for archival.
-        txnManager.beginTransaction(Option.empty(), Option.empty());
+        txnManager.beginStateChange(Option.empty(), Option.empty());
       }
       List<HoodieInstant> instantsToArchive = getInstantsToArchive();
       if (!instantsToArchive.isEmpty()) {
@@ -156,7 +156,7 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
     } finally {
       close();
       if (acquireLock) {
-        txnManager.endTransaction(Option.empty());
+        txnManager.endStateChange(Option.empty());
       }
     }
   }

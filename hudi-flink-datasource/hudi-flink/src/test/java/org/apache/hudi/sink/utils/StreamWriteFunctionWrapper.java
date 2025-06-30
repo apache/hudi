@@ -25,11 +25,9 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.sink.RowDataStreamWriteFunction;
 import org.apache.hudi.sink.StreamWriteFunction;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.bootstrap.BootstrapOperator;
-import org.apache.hudi.sink.common.AbstractStreamWriteFunction;
 import org.apache.hudi.sink.common.AbstractWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.partitioner.BucketAssignFunction;
@@ -64,7 +62,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * A wrapper class to manipulate the instance of {@link StreamWriteFunction} or {@link RowDataStreamWriteFunction} for testing.
+ * A wrapper class to manipulate the instance {@link StreamWriteFunction} for testing.
  *
  * @param <I> Input type
  */
@@ -98,7 +96,7 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
   /**
    * Stream write function.
    */
-  protected AbstractStreamWriteFunction writeFunction;
+  protected StreamWriteFunction writeFunction;
 
   private CompactFunctionWrapper compactFunctionWrapper;
 
@@ -156,7 +154,7 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
       bootstrapOperator.setup(streamTask, streamConfig, output);
       bootstrapOperator.initializeState(this.stateInitializationContext);
 
-      Collector<HoodieFlinkInternalRow> collector = ScalaCollector.getInstance();
+      Collector<HoodieFlinkInternalRow> collector = RecordsCollector.getInstance();
       for (HoodieFlinkInternalRow bootstrapRecord : output.getRecords()) {
         stateInitializationContext.getKeyedStateStore().setCurrentKey(bootstrapRecord.getRecordKey());
         bucketAssignerFunction.processElement(bootstrapRecord, null, collector);
@@ -165,8 +163,6 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
     }
 
     setupWriteFunction();
-    // handle the bootstrap event
-    coordinator.handleEventFromOperator(0, getNextEvent());
 
     if (asyncCompaction) {
       compactFunctionWrapper.openFunction();
@@ -176,14 +172,21 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
   public void invoke(I record) throws Exception {
     HoodieFlinkInternalRow hoodieRecord = toHoodieFunction.map((RowData) record);
     stateInitializationContext.getKeyedStateStore().setCurrentKey(hoodieRecord.getRecordKey());
-    ScalaCollector<HoodieFlinkInternalRow> collector = ScalaCollector.getInstance();
+    RecordsCollector<HoodieFlinkInternalRow> collector = RecordsCollector.getInstance();
     bucketAssignerFunction.processElement(hoodieRecord, null, collector);
     bucketAssignFunctionContext.setCurrentKey(hoodieRecord.getRecordKey());
-    writeFunction.processElement(collector.getVal(), null, null);
+    for (HoodieFlinkInternalRow row: collector.getVal()) {
+      writeFunction.processElement(row, null, null);
+    }
   }
 
   public WriteMetadataEvent[] getEventBuffer() {
     return this.coordinator.getEventBuffer();
+  }
+
+  @Override
+  public WriteMetadataEvent[] getEventBuffer(long checkpointId) {
+    return this.coordinator.getEventBuffer(checkpointId);
   }
 
   public OperatorEvent getNextEvent() {
@@ -191,11 +194,7 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
   }
 
   public Map<String, List<HoodieRecord>> getDataBuffer() {
-    if (OptionsResolver.supportRowDataAppend(conf)) {
-      return ((RowDataStreamWriteFunction) writeFunction).getDataBuffer();
-    } else {
-      return ((StreamWriteFunction) writeFunction).getDataBuffer();
-    }
+    return writeFunction.getDataBuffer();
   }
 
   public void checkpointFunction(long checkpointId) throws Exception {
@@ -294,10 +293,6 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
     return this.bucketAssignFunctionContext.isKeyInState(hoodieKey.getRecordKey());
   }
 
-  public boolean isConforming() {
-    return this.writeFunction.isConfirming();
-  }
-
   public boolean isAlreadyBootstrap() throws Exception {
     return this.bootstrapOperator.isAlreadyBootstrap();
   }
@@ -307,15 +302,12 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
   // -------------------------------------------------------------------------
 
   private void setupWriteFunction() throws Exception {
-    if (OptionsResolver.supportRowDataAppend(conf)) {
-      this.writeFunction = new RowDataStreamWriteFunction(conf, rowType);
-    } else {
-      this.writeFunction = new StreamWriteFunction(conf, rowType);
-    }
+    writeFunction = new StreamWriteFunction(conf, rowType);
     writeFunction.setRuntimeContext(runtimeContext);
     writeFunction.setOperatorEventGateway(gateway);
     writeFunction.initializeState(this.stateInitializationContext);
     writeFunction.open(conf);
+    writeFunction.setCorrespondent(new MockCorrespondent(this.coordinator));
   }
 
   // -------------------------------------------------------------------------

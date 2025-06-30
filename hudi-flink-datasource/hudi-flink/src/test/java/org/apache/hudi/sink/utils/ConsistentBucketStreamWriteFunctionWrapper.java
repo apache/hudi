@@ -19,11 +19,9 @@
 package org.apache.hudi.sink.utils;
 
 import org.apache.hudi.client.model.HoodieFlinkInternalRow;
-import org.apache.hudi.configuration.OptionsResolver;
+import org.apache.hudi.sink.StreamWriteFunction;
 import org.apache.hudi.sink.bucket.ConsistentBucketAssignFunction;
 import org.apache.hudi.sink.bucket.ConsistentBucketStreamWriteFunction;
-import org.apache.hudi.sink.bucket.RowDataConsistentBucketStreamWriteFunction;
-import org.apache.hudi.sink.common.AbstractStreamWriteFunction;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.state.FunctionSnapshotContext;
@@ -56,18 +54,15 @@ public class ConsistentBucketStreamWriteFunctionWrapper<I> extends BucketStreamW
   @Override
   public void invoke(I record) throws Exception {
     HoodieFlinkInternalRow hoodieRecord = toHoodieFunction.map((RowData) record);
-    ScalaCollector<HoodieFlinkInternalRow> collector = ScalaCollector.getInstance();
+    RecordsCollector<HoodieFlinkInternalRow> collector = RecordsCollector.getInstance();
     assignFunction.processElement(hoodieRecord, null, collector);
-    writeFunction.processElement(collector.getVal(), null, null);
+    for (HoodieFlinkInternalRow row: collector.getVal()) {
+      writeFunction.processElement(row, null, null);
+    }
   }
 
-  @Override
-  protected AbstractStreamWriteFunction createWriteFunction() {
-    if (OptionsResolver.supportRowDataAppend(conf)) {
-      return new RowDataConsistentBucketStreamWriteFunction(conf, rowType);
-    } else {
-      return new ConsistentBucketStreamWriteFunction(conf, rowType);
-    }
+  protected StreamWriteFunction createWriteFunction() {
+    return new ConsistentBucketStreamWriteFunction(conf, rowType);
   }
 
   @Override

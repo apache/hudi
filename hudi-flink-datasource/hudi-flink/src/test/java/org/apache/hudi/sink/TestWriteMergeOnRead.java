@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink;
 
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.config.HoodieClusteringConfig;
@@ -198,6 +199,25 @@ public class TestWriteMergeOnRead extends TestWriteCopyOnWrite {
         .assertNextEvent()
         .checkpointComplete(3)
         .checkWrittenData(mergedExpected, 4)
+        .end();
+  }
+
+  @Test
+  void testWriteMorWithSmallLogBlock() throws Exception {
+    // total 5 records, average records size is 48,
+    // set max block size as 128 to trigger a flush during write log data blocks
+    conf.setString(HoodieStorageConfig.LOGFILE_DATA_BLOCK_MAX_SIZE.key(), "128");
+
+    Map<String, String> expected = new HashMap<>();
+    expected.put("par1", "[id1,par1,id1,Danny,23,4,par1]");
+
+    preparePipeline()
+        .consume(TestData.DATA_SET_INSERT_SAME_KEY)
+        .assertEmptyDataFiles()
+        .checkpoint(1)
+        .assertNextEvent()
+        .checkpointComplete(1)
+        .checkWrittenData(expected, 1)
         .end();
   }
 

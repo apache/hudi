@@ -21,7 +21,6 @@ package org.apache.hudi.table.action.index;
 
 import org.apache.hudi.avro.model.HoodieIndexPartitionInfo;
 import org.apache.hudi.avro.model.HoodieIndexPlan;
-import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -72,8 +71,6 @@ public class ScheduleIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<
 
   private final List<String> partitionPaths;
 
-  private final TransactionManager txnManager;
-
   public ScheduleIndexActionExecutor(HoodieEngineContext context,
                                      HoodieWriteConfig config,
                                      HoodieTable<T, I, K, O> table,
@@ -83,7 +80,6 @@ public class ScheduleIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<
     super(context, config, table, instantTime);
     this.partitionIndexTypes = partitionIndexTypes;
     this.partitionPaths = partitionPaths;
-    this.txnManager = new TransactionManager(config, table.getStorage());
   }
 
   @Override
@@ -107,7 +103,6 @@ public class ScheduleIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<
         .filter(p -> requestedPartitions.contains(p.getPartitionPath())).collect(Collectors.toList());
     final HoodieInstant indexInstant = instantGenerator.getIndexRequestedInstant(instantTime);
     try {
-      this.txnManager.beginTransaction(Option.of(indexInstant), Option.empty());
       // get last completed instant
       Option<HoodieInstant> indexUptoInstant = table.getActiveTimeline().getContiguousCompletedWriteTimeline().lastInstant();
       if (indexUptoInstant.isPresent()) {
@@ -124,8 +119,6 @@ public class ScheduleIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<
       LOG.error("Could not initialize file groups", e);
       // abort gracefully
       abort(indexInstant);
-    } finally {
-      this.txnManager.endTransaction(Option.of(indexInstant));
     }
 
     return Option.empty();

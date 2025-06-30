@@ -28,22 +28,20 @@ import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
+import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
-import org.apache.hudi.common.serialization.DefaultSerializer;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.KeySpec;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
-import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.FileIOUtils;
-import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
@@ -60,7 +58,6 @@ import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.Locale;
 import java.util.Map;
@@ -71,8 +68,6 @@ import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_
 import static org.apache.hudi.common.config.HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE;
 import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE;
 import static org.apache.hudi.common.config.HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH;
-import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_PARTITION_PATH;
-import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_RECORD_KEY;
 import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 import static org.apache.hudi.common.model.HoodieRecord.HOODIE_IS_DELETED_FIELD;
 import static org.apache.hudi.common.model.HoodieRecord.OPERATION_METADATA_FIELD;
@@ -83,18 +78,17 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   protected final HoodieReaderContext<T> readerContext;
   protected final Schema readerSchema;
   protected final Option<String> orderingFieldName;
-  protected final Option<String> partitionNameOverrideOpt;
-  protected final Option<String[]> partitionPathFieldOpt;
   protected final RecordMergeMode recordMergeMode;
   protected final Option<HoodieRecordMerger> recordMerger;
   protected final Option<String> payloadClass;
   protected final TypedProperties props;
-  protected final ExternalSpillableMap<Serializable, Pair<Option<T>, Map<String, Object>>> records;
+  protected final ExternalSpillableMap<Serializable, BufferedRecord<T>> records;
   protected final HoodieReadStats readStats;
   protected final boolean shouldCheckCustomDeleteMarker;
   protected final boolean shouldCheckBuiltInDeleteMarker;
+  protected final boolean emitDelete;
   protected ClosableIterator<T> baseFileIterator;
-  protected Iterator<Pair<Option<T>, Map<String, Object>>> logRecordIterator;
+  protected Iterator<BufferedRecord<T>> logRecordIterator;
   protected T nextRecord;
   protected boolean enablePartialMerging = false;
   protected InternalSchema internalSchema;
@@ -104,14 +98,12 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   protected FileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
                                   HoodieTableMetaClient hoodieTableMetaClient,
                                   RecordMergeMode recordMergeMode,
-                                  Option<String> partitionNameOverrideOpt,
-                                  Option<String[]> partitionPathFieldOpt,
                                   TypedProperties props,
-                                  HoodieReadStats readStats) {
+                                  HoodieReadStats readStats,
+                                  Option<String> orderingFieldName,
+                                  boolean emitDelete) {
     this.readerContext = readerContext;
     this.readerSchema = AvroSchemaCache.intern(readerContext.getSchemaHandler().getRequiredSchema());
-    this.partitionNameOverrideOpt = partitionNameOverrideOpt;
-    this.partitionPathFieldOpt = partitionPathFieldOpt;
     this.recordMergeMode = recordMergeMode;
     this.recordMerger = readerContext.getRecordMerger();
     if (recordMerger.isPresent() && recordMerger.get().getMergingStrategy().equals(PAYLOAD_BASED_MERGE_STRATEGY_UUID)) {
@@ -119,17 +111,15 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
     } else {
       this.payloadClass = Option.empty();
     }
-    this.orderingFieldName = recordMergeMode == RecordMergeMode.COMMIT_TIME_ORDERING
-        ? Option.empty()
-        : Option.ofNullable(ConfigUtils.getOrderingField(props))
-        .or(() -> {
-          String preCombineField = hoodieTableMetaClient.getTableConfig().getPreCombineField();
-          if (StringUtils.isNullOrEmpty(preCombineField)) {
-            return Option.empty();
-          }
-          return Option.of(preCombineField);
-        });
+    this.orderingFieldName = orderingFieldName;
+    // Ensure that ordering field is populated for mergers and legacy payloads
+    orderingFieldName.ifPresent(orderingField -> {
+      props.putIfAbsent(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, orderingField);
+      props.putIfAbsent(HoodieTableConfig.PRECOMBINE_FIELD.key(), orderingField);
+      props.putIfAbsent("hoodie.datasource.write.precombine.field", orderingField);
+    });
     this.props = props;
+
     this.internalSchema = readerContext.getSchemaHandler().getInternalSchema();
     this.hoodieTableMetaClient = hoodieTableMetaClient;
     long maxMemorySizeInBytes = props.getLong(MAX_MEMORY_FOR_MERGE.key(), MAX_MEMORY_FOR_MERGE.defaultValue());
@@ -139,10 +129,11 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
     boolean isBitCaskDiskMapCompressionEnabled = props.getBoolean(DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(),
         DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue());
     this.readStats = readStats;
+    this.emitDelete = emitDelete;
     try {
       // Store merged records for all versions for this log file, set the in-memory footprint to maxInMemoryMapSize
       this.records = new ExternalSpillableMap<>(maxMemorySizeInBytes, spillableMapBasePath, new DefaultSizeEstimator<>(),
-          new HoodieRecordSizeEstimator<>(readerSchema), diskMapType, new DefaultSerializer<>(), isBitCaskDiskMapCompressionEnabled, getClass().getSimpleName());
+          readerContext.getRecordSizeEstimator(), diskMapType, readerContext.getRecordSerializer(), isBitCaskDiskMapCompressionEnabled, getClass().getSimpleName());
     } catch (IOException e) {
       throw new HoodieIOException("IOException when creating ExternalSpillableMap at " + spillableMapBasePath, e);
     }
@@ -182,6 +173,18 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
     return columnValue != null && readerContext.castToBoolean(columnValue);
   }
 
+  /**
+   * Returns whether the record is a DELETE marked by the '_hoodie_operation' field.
+   */
+  protected final boolean isDeleteHoodieOperation(T record) {
+    int hoodieOperationPos = readerContext.getSchemaHandler().getHoodieOperationPos();
+    if (hoodieOperationPos < 0) {
+      return false;
+    }
+    String hoodieOperation = readerContext.getMetaFieldValue(record, hoodieOperationPos);
+    return hoodieOperation != null && HoodieOperation.isDeleteRecord(hoodieOperation);
+  }
+
   @Override
   public void setBaseFileIterator(ClosableIterator<T> baseFileIterator) {
     this.baseFileIterator = baseFileIterator;
@@ -207,7 +210,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   }
 
   @Override
-  public Map<Serializable, Pair<Option<T>, Map<String, Object>>> getLogRecords() {
+  public Map<Serializable, BufferedRecord<T>> getLogRecords() {
     return records;
   }
 
@@ -221,42 +224,35 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   }
 
   @Override
-  public Iterator<Pair<Option<T>, Map<String, Object>>> getLogRecordIterator() {
+  public Iterator<BufferedRecord<T>> getLogRecordIterator() {
     return records.values().iterator();
   }
 
   @Override
   public void close() {
-    records.clear();
+    records.close();
   }
 
   /**
    * Merge two log data records if needed.
    *
-   * @param record
-   * @param metadata
-   * @param existingRecordMetadataPair
-   * @return
-   * @throws IOException
+   * @param newRecord                  The new incoming record
+   * @param existingRecord             The existing record
+   * @return the {@link BufferedRecord} that needs to be updated, returns empty to skip the update.
    */
-  protected Option<Pair<Option<T>, Map<String, Object>>> doProcessNextDataRecord(T record,
-                                                                                 Map<String, Object> metadata,
-                                                                                 Pair<Option<T>, Map<String, Object>> existingRecordMetadataPair)
+  protected Option<BufferedRecord<T>> doProcessNextDataRecord(BufferedRecord<T> newRecord, BufferedRecord<T> existingRecord)
       throws IOException {
     totalLogRecords++;
-    if (existingRecordMetadataPair != null) {
+    if (existingRecord != null) {
       if (enablePartialMerging) {
         // TODO(HUDI-7843): decouple the merging logic from the merger
         //  and use the record merge mode to control how to merge partial updates
         // Merge and store the combined record
-        // Note that the incoming `record` is from an older commit, so it should be put as
-        // the `older` in the merge API
         Option<Pair<HoodieRecord, Schema>> combinedRecordAndSchemaOpt = recordMerger.get().partialMerge(
-            readerContext.constructHoodieRecord(Option.of(record), metadata),
-            readerContext.getSchemaFromMetadata(metadata),
-            readerContext.constructHoodieRecord(
-                existingRecordMetadataPair.getLeft(), existingRecordMetadataPair.getRight()),
-            readerContext.getSchemaFromMetadata(existingRecordMetadataPair.getRight()),
+            readerContext.constructHoodieRecord(existingRecord),
+            readerContext.getSchemaFromBufferRecord(existingRecord),
+            readerContext.constructHoodieRecord(newRecord),
+            readerContext.getSchemaFromBufferRecord(newRecord),
             readerSchema,
             props);
         if (!combinedRecordAndSchemaOpt.isPresent()) {
@@ -266,52 +262,49 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
         HoodieRecord<T> combinedRecord = combinedRecordAndSchema.getLeft();
 
         // If pre-combine returns existing record, no need to update it
-        if (combinedRecord.getData() != existingRecordMetadataPair.getLeft().get()) {
-          return Option.of(Pair.of(
-              Option.ofNullable(combinedRecord.getData()),
-              readerContext.updateSchemaAndResetOrderingValInMetadata(metadata, combinedRecordAndSchema.getRight())));
+        if (combinedRecord.getData() != existingRecord.getRecord()) {
+          return Option.of(BufferedRecord.forRecordWithContext(combinedRecord, combinedRecordAndSchema.getRight(), readerContext, props));
         }
         return Option.empty();
       } else {
         switch (recordMergeMode) {
           case COMMIT_TIME_ORDERING:
-            return Option.empty();
+            return Option.of(newRecord);
           case EVENT_TIME_ORDERING:
-            Comparable existingOrderingValue = readerContext.getOrderingValue(
-                existingRecordMetadataPair.getLeft(), existingRecordMetadataPair.getRight(),
-                readerSchema, orderingFieldName);
-            if (isDeleteRecordWithNaturalOrder(existingRecordMetadataPair.getLeft(), existingOrderingValue)) {
-              return Option.empty();
-            }
-            Comparable incomingOrderingValue = readerContext.getOrderingValue(
-                Option.of(record), metadata, readerSchema, orderingFieldName);
-            if (incomingOrderingValue.compareTo(existingOrderingValue) > 0) {
-              return Option.of(Pair.of(Option.of(record), metadata));
+            if (shouldKeepNewerRecord(existingRecord, newRecord)) {
+              return Option.of(newRecord);
             }
             return Option.empty();
           case CUSTOM:
           default:
+            if (existingRecord.isDelete() || newRecord.isDelete()) {
+              if (shouldKeepNewerRecord(existingRecord, newRecord)) {
+                // IMPORTANT:
+                // this is needed when the fallback HoodieAvroRecordMerger got used, the merger would
+                // return Option.empty when the old payload data is empty(a delete) and ignores its ordering value directly.
+                return Option.of(newRecord);
+              } else {
+                return Option.empty();
+              }
+            }
             // Merge and store the combined record
-            // Note that the incoming `record` is from an older commit, so it should be put as
-            // the `older` in the merge API
             if (payloadClass.isPresent()) {
-              Option<Pair<HoodieRecord, Schema>> combinedRecordAndSchemaOpt =
-                  getMergedRecord(Option.of(record), metadata, existingRecordMetadataPair.getLeft(), existingRecordMetadataPair.getRight());
+              Option<Pair<HoodieRecord, Schema>> combinedRecordAndSchemaOpt = getMergedRecord(existingRecord, newRecord);
               if (combinedRecordAndSchemaOpt.isPresent()) {
                 T combinedRecordData = readerContext.convertAvroRecord((IndexedRecord) combinedRecordAndSchemaOpt.get().getLeft().getData());
                 // If pre-combine does not return existing record, update it
-                if (combinedRecordData != existingRecordMetadataPair.getLeft().get()) {
-                  return Option.of(Pair.of(Option.ofNullable(combinedRecordData), metadata));
+                if (combinedRecordData != existingRecord.getRecord()) {
+                  Pair<HoodieRecord, Schema> combinedRecordAndSchema = combinedRecordAndSchemaOpt.get();
+                  return Option.of(BufferedRecord.forRecordWithContext(combinedRecordData, combinedRecordAndSchema.getRight(), readerContext, orderingFieldName, false));
                 }
               }
               return Option.empty();
             } else {
               Option<Pair<HoodieRecord, Schema>> combinedRecordAndSchemaOpt = recordMerger.get().merge(
-                  readerContext.constructHoodieRecord(Option.of(record), metadata),
-                  readerContext.getSchemaFromMetadata(metadata),
-                  readerContext.constructHoodieRecord(
-                      existingRecordMetadataPair.getLeft(), existingRecordMetadataPair.getRight()),
-                  readerContext.getSchemaFromMetadata(existingRecordMetadataPair.getRight()),
+                  readerContext.constructHoodieRecord(existingRecord),
+                  readerContext.getSchemaFromBufferRecord(existingRecord),
+                  readerContext.constructHoodieRecord(newRecord),
+                  readerContext.getSchemaFromBufferRecord(newRecord),
                   props);
 
               if (!combinedRecordAndSchemaOpt.isPresent()) {
@@ -322,8 +315,8 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
               HoodieRecord<T> combinedRecord = combinedRecordAndSchema.getLeft();
 
               // If pre-combine returns existing record, no need to update it
-              if (combinedRecord.getData() != existingRecordMetadataPair.getLeft().get()) {
-                return Option.of(Pair.of(Option.ofNullable(combinedRecord.getData()), metadata));
+              if (combinedRecord.getData() != existingRecord.getRecord()) {
+                return Option.of(BufferedRecord.forRecordWithContext(combinedRecord, combinedRecordAndSchema.getRight(), readerContext, props));
               }
               return Option.empty();
             }
@@ -334,33 +327,31 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
       // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
       //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
       //       it since these records will be put into records(Map).
-      return Option.of(Pair.of(Option.ofNullable(record), metadata));
+      return Option.of(newRecord);
     }
   }
 
   /**
    * Merge a delete record with another record (data, or delete).
    *
-   * @param deleteRecord
-   * @param existingRecordMetadataPair
-   * @return
+   * @param deleteRecord               The delete record
+   * @param existingRecord             The existing {@link BufferedRecord}
+   *
+   * @return The option of new delete record that needs to be updated with.
    */
-  protected Option<DeleteRecord> doProcessNextDeletedRecord(DeleteRecord deleteRecord,
-                                                            Pair<Option<T>, Map<String, Object>> existingRecordMetadataPair) {
+  protected Option<DeleteRecord> doProcessNextDeletedRecord(DeleteRecord deleteRecord, BufferedRecord<T> existingRecord) {
     totalLogRecords++;
-    if (existingRecordMetadataPair != null) {
+    if (existingRecord != null) {
       switch (recordMergeMode) {
         case COMMIT_TIME_ORDERING:
-          return Option.empty();
+          return Option.of(deleteRecord);
         case EVENT_TIME_ORDERING:
         case CUSTOM:
         default:
-          Comparable existingOrderingVal = readerContext.getOrderingValue(
-              existingRecordMetadataPair.getLeft(), existingRecordMetadataPair.getRight(), readerSchema,
-              orderingFieldName);
-          if (isDeleteRecordWithNaturalOrder(existingRecordMetadataPair.getLeft(), existingOrderingVal)) {
+          if (existingRecord.isCommitTimeOrderingDelete()) {
             return Option.empty();
           }
+          Comparable existingOrderingVal = existingRecord.getOrderingValue();
           Comparable deleteOrderingVal = deleteRecord.getOrderingValue();
           // Checks the ordering value does not equal to 0
           // because we use 0 as the default value which means natural order
@@ -417,64 +408,71 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
     Pair<InternalSchema, Map<String, String>> mergedInternalSchema = new InternalSchemaMerger(fileSchema, internalSchema,
         true, false, false).mergeSchemaGetRenamed();
     Schema mergedAvroSchema = AvroInternalSchemaConverter.convert(mergedInternalSchema.getLeft(), readerSchema.getFullName());
-    assert mergedAvroSchema.equals(readerSchema);
+    // `mergedAvroSchema` maybe not equal with `readerSchema`, case: drop a column `f_x`, and then add a new column with same name `f_x`,
+    // then the new added column in `mergedAvroSchema` will have a suffix: `f_xsuffix`, distinguished from the original column `f_x`, see
+    // InternalSchemaMerger#buildRecordType() for details.
+    // Delete and add a field with the same name, reads should not return previously inserted datum of dropped field of the same name,
+    // so we use `mergedAvroSchema` as the target schema for record projecting.
     return Option.of(Pair.of(readerContext.projectRecord(dataBlock.getSchema(), mergedAvroSchema, mergedInternalSchema.getRight()), mergedAvroSchema));
   }
 
   /**
    * Merge two records using the configured record merger.
    *
-   * @param older
-   * @param olderInfoMap
-   * @param newer
-   * @param newerInfoMap
-   * @return
+   * @param olderRecord  old {@link BufferedRecord}
+   * @param newerRecord  newer {@link BufferedRecord}
+   * @return a value pair, left is boolean value `isDelete`, and right is engine row.
    * @throws IOException
    */
-  protected Option<T> merge(Option<T> older, Map<String, Object> olderInfoMap,
-                            Option<T> newer, Map<String, Object> newerInfoMap) throws IOException {
-    if (!older.isPresent()) {
-      return isDeleteRecord(newer, readerContext.getSchemaFromMetadata(newerInfoMap)) ? Option.empty() : newer;
-    }
-
+  protected Pair<Boolean, T> merge(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) throws IOException {
     if (enablePartialMerging) {
       // TODO(HUDI-7843): decouple the merging logic from the merger
       //  and use the record merge mode to control how to merge partial updates
       Option<Pair<HoodieRecord, Schema>> mergedRecord = recordMerger.get().partialMerge(
-          readerContext.constructHoodieRecord(older, olderInfoMap), readerContext.getSchemaFromMetadata(olderInfoMap),
-          readerContext.constructHoodieRecord(newer, newerInfoMap), readerContext.getSchemaFromMetadata(newerInfoMap),
+          readerContext.constructHoodieRecord(olderRecord), readerContext.getSchemaFromBufferRecord(olderRecord),
+          readerContext.constructHoodieRecord(newerRecord), readerContext.getSchemaFromBufferRecord(newerRecord),
           readerSchema, props);
 
       if (mergedRecord.isPresent()
           && !mergedRecord.get().getLeft().isDelete(mergedRecord.get().getRight(), props)) {
+        HoodieRecord hoodieRecord = mergedRecord.get().getLeft();
         if (!mergedRecord.get().getRight().equals(readerSchema)) {
-          return Option.ofNullable((T) mergedRecord.get().getLeft().rewriteRecordWithNewSchema(mergedRecord.get().getRight(), null, readerSchema).getData());
+          T data = (T) hoodieRecord.rewriteRecordWithNewSchema(mergedRecord.get().getRight(), null, readerSchema).getData();
+          return Pair.of(false, data);
         }
-        return Option.ofNullable((T) mergedRecord.get().getLeft().getData());
+        return Pair.of(false, (T) hoodieRecord.getData());
       }
-      return Option.empty();
+      return Pair.of(true, null);
     } else {
       switch (recordMergeMode) {
         case COMMIT_TIME_ORDERING:
-          return isDeleteRecord(newer, readerContext.getSchemaFromMetadata(newerInfoMap)) ? Option.empty() : newer;
+          return Pair.of(newerRecord.isDelete(), newerRecord.getRecord());
         case EVENT_TIME_ORDERING:
-          Comparable newOrderingValue = readerContext.getOrderingValue(
-              newer, newerInfoMap, readerSchema, orderingFieldName);
-          if (isDeleteRecordWithNaturalOrder(newer, newOrderingValue)) {
-            return Option.empty();
+          if (newerRecord.isCommitTimeOrderingDelete()) {
+            return Pair.of(true, newerRecord.getRecord());
           }
-          Comparable oldOrderingValue = readerContext.getOrderingValue(
-              older, olderInfoMap, readerSchema, orderingFieldName);
-          if (!isDeleteRecordWithNaturalOrder(older, oldOrderingValue)
+          Comparable newOrderingValue = newerRecord.getOrderingValue();
+          Comparable oldOrderingValue = olderRecord.getOrderingValue();
+          if (!olderRecord.isCommitTimeOrderingDelete()
               && oldOrderingValue.compareTo(newOrderingValue) > 0) {
-            return isDeleteRecord(older, readerContext.getSchemaFromMetadata(olderInfoMap)) ? Option.empty() : older;
+            return Pair.of(olderRecord.isDelete(), olderRecord.getRecord());
           }
-          return isDeleteRecord(newer, readerContext.getSchemaFromMetadata(newerInfoMap)) ? Option.empty() : newer;
+          return Pair.of(newerRecord.isDelete(), newerRecord.getRecord());
         case CUSTOM:
         default:
           if (payloadClass.isPresent()) {
+            if (olderRecord.isDelete() || newerRecord.isDelete()) {
+              if (shouldKeepNewerRecord(olderRecord, newerRecord)) {
+                // IMPORTANT:
+                // this is needed when the fallback HoodieAvroRecordMerger got used, the merger would
+                // return Option.empty when the new payload data is empty(a delete) and ignores its ordering value directly.
+                return Pair.of(newerRecord.isDelete(), newerRecord.getRecord());
+              } else {
+                return Pair.of(olderRecord.isDelete(), olderRecord.getRecord());
+              }
+            }
             Option<Pair<HoodieRecord, Schema>> mergedRecord =
-                getMergedRecord(older, olderInfoMap, newer, newerInfoMap);
+                getMergedRecord(olderRecord, newerRecord);
             if (mergedRecord.isPresent()
                 && !mergedRecord.get().getLeft().isDelete(mergedRecord.get().getRight(), props)) {
               IndexedRecord indexedRecord;
@@ -483,35 +481,56 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
               } else {
                 indexedRecord = (IndexedRecord) mergedRecord.get().getLeft().getData();
               }
-              return Option.ofNullable(readerContext.convertAvroRecord(indexedRecord));
+              return Pair.of(false, readerContext.convertAvroRecord(indexedRecord));
             }
-            return Option.empty();
+            return Pair.of(true, null);
           } else {
+            if (olderRecord.isDelete() || newerRecord.isDelete()) {
+              if (shouldKeepNewerRecord(olderRecord, newerRecord)) {
+                // IMPORTANT:
+                // this is needed when the fallback HoodieAvroRecordMerger got used, the merger would
+                // return Option.empty when the new payload data is empty(a delete) and ignores its ordering value directly.
+                return Pair.of(newerRecord.isDelete(), newerRecord.getRecord());
+              } else {
+                return Pair.of(olderRecord.isDelete(), olderRecord.getRecord());
+              }
+            }
             Option<Pair<HoodieRecord, Schema>> mergedRecord = recordMerger.get().merge(
-                readerContext.constructHoodieRecord(older, olderInfoMap), readerContext.getSchemaFromMetadata(olderInfoMap),
-                readerContext.constructHoodieRecord(newer, newerInfoMap), readerContext.getSchemaFromMetadata(newerInfoMap), props);
+                readerContext.constructHoodieRecord(olderRecord), readerContext.getSchemaFromBufferRecord(olderRecord),
+                readerContext.constructHoodieRecord(newerRecord), readerContext.getSchemaFromBufferRecord(newerRecord), props);
             if (mergedRecord.isPresent()
                 && !mergedRecord.get().getLeft().isDelete(mergedRecord.get().getRight(), props)) {
+              HoodieRecord hoodieRecord = mergedRecord.get().getLeft();
               if (!mergedRecord.get().getRight().equals(readerSchema)) {
-                return Option.ofNullable((T) mergedRecord.get().getLeft().rewriteRecordWithNewSchema(mergedRecord.get().getRight(), null, readerSchema).getData());
+                return Pair.of(false, (T) hoodieRecord.rewriteRecordWithNewSchema(mergedRecord.get().getRight(), null, readerSchema).getData());
               }
-              return Option.ofNullable((T) mergedRecord.get().getLeft().getData());
+              return Pair.of(false, (T) hoodieRecord.getData());
             }
-
-            return Option.empty();
+            return Pair.of(true, null);
           }
       }
     }
   }
 
-  private Option<Pair<HoodieRecord, Schema>> getMergedRecord(Option<T> older, Map<String, Object> olderInfoMap, Option<T> newer, Map<String, Object> newerInfoMap) throws IOException {
+  /**
+   * Decides whether to keep the incoming record with ordering value comparison.
+   */
+  private boolean shouldKeepNewerRecord(BufferedRecord<T> oldRecord, BufferedRecord<T> newRecord) {
+    if (newRecord.isCommitTimeOrderingDelete()) {
+      // handle records coming from DELETE statements(the orderingVal is constant 0)
+      return true;
+    }
+    return newRecord.getOrderingValue().compareTo(oldRecord.getOrderingValue()) >= 0;
+  }
+
+  private Option<Pair<HoodieRecord, Schema>> getMergedRecord(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) throws IOException {
     ValidationUtils.checkArgument(!Objects.equals(payloadClass, OverwriteWithLatestAvroPayload.class.getCanonicalName())
         && !Objects.equals(payloadClass, DefaultHoodieRecordPayload.class.getCanonicalName()));
-    HoodieRecord oldHoodieRecord = constructHoodieAvroRecord(readerContext, older, olderInfoMap);
-    HoodieRecord newHoodieRecord = constructHoodieAvroRecord(readerContext, newer, newerInfoMap);
+    HoodieRecord oldHoodieRecord = constructHoodieAvroRecord(readerContext, olderRecord);
+    HoodieRecord newHoodieRecord = constructHoodieAvroRecord(readerContext, newerRecord);
     Option<Pair<HoodieRecord, Schema>> mergedRecord = recordMerger.get().merge(
-        oldHoodieRecord, getSchemaForAvroPayloadMerge(oldHoodieRecord, olderInfoMap),
-        newHoodieRecord, getSchemaForAvroPayloadMerge(newHoodieRecord, newerInfoMap), props);
+        oldHoodieRecord, getSchemaForAvroPayloadMerge(oldHoodieRecord, olderRecord),
+        newHoodieRecord, getSchemaForAvroPayloadMerge(newHoodieRecord, newerRecord), props);
     return mergedRecord;
   }
 
@@ -519,43 +538,43 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
    * Constructs a new {@link HoodieAvroRecord} for payload based merging
    *
    * @param readerContext reader context
-   * @param recordOption An option of the record in engine-specific type if exists.
-   * @param metadataMap  The record metadata.
+   * @param bufferedRecord buffered record
    * @return A new instance of {@link HoodieRecord}.
    */
-  private HoodieRecord constructHoodieAvroRecord(HoodieReaderContext<T> readerContext, Option<T> recordOption, Map<String, Object> metadataMap) {
-    Schema recordSchema = readerSchema;
+  private HoodieRecord constructHoodieAvroRecord(HoodieReaderContext<T> readerContext, BufferedRecord<T> bufferedRecord) {
     GenericRecord record = null;
-    if (recordOption.isPresent()) {
-      recordSchema = readerContext.getSchemaFromMetadata(metadataMap);
-      record = readerContext.convertToAvroRecord(recordOption.get(), recordSchema);
+    if (!bufferedRecord.isDelete()) {
+      Schema recordSchema = readerContext.getSchemaFromBufferRecord(bufferedRecord);
+      record = readerContext.convertToAvroRecord(bufferedRecord.getRecord(), recordSchema);
     }
-    HoodieKey hoodieKey = new HoodieKey((String) metadataMap.get(INTERNAL_META_RECORD_KEY), (String) metadataMap.get(INTERNAL_META_PARTITION_PATH));
+    HoodieKey hoodieKey = new HoodieKey(bufferedRecord.getRecordKey(), null);
     return new HoodieAvroRecord<>(hoodieKey,
-        HoodieRecordUtils.loadPayload(payloadClass.get(), new Object[] {record, readerContext.getOrderingValue(recordOption, metadataMap,
-            recordSchema, orderingFieldName)}, GenericRecord.class, Comparable.class), null);
+        HoodieRecordUtils.loadPayload(payloadClass.get(), record, bufferedRecord.getOrderingValue()), null);
   }
 
-  private Schema getSchemaForAvroPayloadMerge(HoodieRecord record, Map<String, Object> infoMap) throws IOException {
+  private Schema getSchemaForAvroPayloadMerge(HoodieRecord record, BufferedRecord<T> bufferedRecord) throws IOException {
     if (record.isDelete(readerSchema, props)) {
       return readerSchema;
     }
-    return readerContext.getSchemaFromMetadata(infoMap);
+    return readerContext.getSchemaFromBufferRecord(bufferedRecord);
   }
 
-  protected boolean hasNextBaseRecord(T baseRecord, Pair<Option<T>, Map<String, Object>> logRecordInfo) throws IOException {
-    Map<String, Object> metadata = readerContext.generateMetadataForRecord(
-        baseRecord, readerSchema);
-
+  protected boolean hasNextBaseRecord(T baseRecord, BufferedRecord<T> logRecordInfo) throws IOException {
     if (logRecordInfo != null) {
-      Option<T> resultRecord = merge(Option.of(baseRecord), metadata, logRecordInfo.getLeft(), logRecordInfo.getRight());
-      if (resultRecord.isPresent()) {
+      BufferedRecord<T> baseRecordInfo = BufferedRecord.forRecordWithContext(baseRecord, readerSchema, readerContext, orderingFieldName, false);
+      Pair<Boolean, T> isDeleteAndRecord = merge(baseRecordInfo, logRecordInfo);
+      if (!isDeleteAndRecord.getLeft()) {
         // Updates
-        nextRecord = readerContext.seal(resultRecord.get());
+        nextRecord = readerContext.seal(isDeleteAndRecord.getRight());
         readStats.incrementNumUpdates();
         return true;
+      } else if (emitDelete) {
+        // emit Deletes
+        nextRecord = readerContext.getDeleteRow(isDeleteAndRecord.getRight(), baseRecordInfo.getRecordKey());
+        readStats.incrementNumDeletes();
+        return nextRecord != null;
       } else {
-        // Deletes
+        // not emit Deletes
         readStats.incrementNumDeletes();
         return false;
       }
@@ -567,20 +586,27 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
     return true;
   }
 
-  protected boolean hasNextLogRecord() throws IOException {
+  protected void initializeLogRecordIterator() {
+    logRecordIterator = records.values().iterator();
+  }
+
+  protected boolean hasNextLogRecord() {
     if (logRecordIterator == null) {
-      logRecordIterator = records.values().iterator();
+      initializeLogRecordIterator();
     }
 
     while (logRecordIterator.hasNext()) {
-      Pair<Option<T>, Map<String, Object>> nextRecordInfo = logRecordIterator.next();
-      Option<T> resultRecord;
-      resultRecord = merge(Option.empty(), Collections.emptyMap(),
-          nextRecordInfo.getLeft(), nextRecordInfo.getRight());
-      if (resultRecord.isPresent()) {
-        nextRecord = readerContext.seal(resultRecord.get());
+      BufferedRecord<T> nextRecordInfo = logRecordIterator.next();
+      if (!nextRecordInfo.isDelete()) {
+        nextRecord = nextRecordInfo.getRecord();
         readStats.incrementNumInserts();
         return true;
+      } else if (emitDelete) {
+        nextRecord = readerContext.getDeleteRow(nextRecordInfo.getRecord(), nextRecordInfo.getRecordKey());
+        readStats.incrementNumDeletes();
+        if (nextRecord != null) {
+          return true;
+        }
       } else {
         readStats.incrementNumDeletes();
       }
@@ -612,11 +638,6 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
     return isCommitTimeOrderingValue(deleteRecord.getOrderingValue())
         ? DEFAULT_ORDERING_VALUE
         : readerContext.convertValueToEngineType(deleteRecord.getOrderingValue());
-  }
-
-  private boolean isDeleteRecordWithNaturalOrder(Option<T> rowOption,
-                                                 Comparable orderingValue) {
-    return rowOption.isEmpty() && orderingValue.equals(DEFAULT_ORDERING_VALUE);
   }
 
   private boolean isDeleteRecord(Option<T> record, Schema schema) {

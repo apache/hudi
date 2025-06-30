@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.table.log.block;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.engine.HoodieReaderContext;
@@ -38,11 +37,11 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.inline.InLineFSUtils;
 
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
@@ -101,7 +100,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
   }
 
   @Override
-  protected byte[] serializeRecords(List<HoodieRecord> records, HoodieStorage storage) throws IOException {
+  protected ByteArrayOutputStream serializeRecords(List<HoodieRecord> records, HoodieStorage storage) throws IOException {
     Schema writerSchema = new Schema.Parser().parse(
         super.getLogBlockHeader().get(HoodieLogBlock.HeaderMetadataType.SCHEMA));
     return HoodieIOFactory.getIOFactory(storage).getFileFormatUtils(HoodieFileFormat.HFILE)
@@ -183,15 +182,6 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
 
       return new CloseableMappingIterator<>(recordIterator, data -> (HoodieRecord<T>) data);
     }
-  }
-
-  /**
-   * Print the record in json format
-   */
-  private void printRecord(String msg, byte[] bs, Schema schema) throws IOException {
-    GenericRecord record = HoodieAvroUtils.bytesToAvro(bs, schema);
-    byte[] json = HoodieAvroUtils.avroToJson(record, true);
-    LOG.error(String.format("%s: %s", msg, new String(json)));
   }
 
   private HoodieConfig getHFileReaderConfig(boolean useNativeHFileReader) {

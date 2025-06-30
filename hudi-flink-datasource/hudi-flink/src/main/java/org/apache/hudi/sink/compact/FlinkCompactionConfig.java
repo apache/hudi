@@ -19,6 +19,7 @@
 package org.apache.hudi.sink.compact;
 
 import org.apache.hudi.common.config.HoodieMemoryConfig;
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.util.FileIOUtils;
@@ -68,6 +69,9 @@ public class FlinkCompactionConfig extends Configuration {
           + "'num_or_time': trigger compaction when NUM_COMMITS or TIME_ELAPSED is satisfied.\n"
           + "Default is 'num_commits'")
   public String compactionTriggerStrategy = NUM_COMMITS;
+
+  @Parameter(names = {"--disable-file-group-reader"}, description = "Whether to disable file group reader based compaction, false by default")
+  public Boolean fileGroupReaderDisabled = false;
 
   @Parameter(names = {"--compaction-delta-commits"}, description = "Max delta commits needed to trigger compaction, default 1 commit")
   public Integer compactionDeltaCommits = 1;
@@ -189,6 +193,8 @@ public class FlinkCompactionConfig extends Configuration {
     conf.setInteger(FlinkOptions.COMPACTION_DELTA_COMMITS, config.compactionDeltaCommits);
     conf.setInteger(FlinkOptions.COMPACTION_DELTA_SECONDS, config.compactionDeltaSeconds);
     conf.setInteger(FlinkOptions.COMPACTION_MAX_MEMORY, config.compactionMaxMemory);
+    // used as compaction memory by file group reader based compaction
+    conf.setInteger(FlinkOptions.WRITE_MERGE_MAX_MEMORY, config.compactionMaxMemory);
     conf.setLong(FlinkOptions.COMPACTION_TARGET_IO, config.compactionTargetIo);
     conf.setInteger(FlinkOptions.COMPACTION_TASKS, config.compactionTasks);
     conf.setBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED, config.cleanAsyncEnable);
@@ -197,6 +203,8 @@ public class FlinkCompactionConfig extends Configuration {
     conf.setBoolean(FlinkOptions.COMPACTION_SCHEDULE_ENABLED, config.schedule);
     // Map memory
     conf.setString(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH.key(), config.spillableMapPath);
+    // set file group reader
+    conf.setString(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), !config.fileGroupReaderDisabled + "");
 
     return conf;
   }

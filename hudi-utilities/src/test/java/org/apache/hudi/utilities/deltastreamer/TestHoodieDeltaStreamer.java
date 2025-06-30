@@ -1980,7 +1980,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     // Ensure it is empty
     HoodieCommitMetadata commitMetadata =
         mClient.getActiveTimeline().readCommitMetadata(newLastFinished);
-    System.out.println("New Commit Metadata=" + commitMetadata);
+    LOG.info("New Commit Metadata={}", commitMetadata);
     assertTrue(commitMetadata.getPartitionToWriteStats().isEmpty());
 
     // Try UPSERT with filterDupes true. Expect exception
@@ -3295,7 +3295,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     HoodieStreamer deltaStreamer = new HoodieStreamer(cfg, jsc);
     HoodieStreamer.StreamSyncService streamSyncService = (HoodieStreamer.StreamSyncService) deltaStreamer.getIngestionService();
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(HoodieTestUtils.getDefaultStorageConf()).setBasePath(tableBasePath).build();
-    InputBatch inputBatch = streamSyncService.getStreamSync().readFromSource("00000", metaClient).getLeft();
+    InputBatch inputBatch = streamSyncService.getStreamSync().readFromSource(metaClient).getLeft();
     // Read from source and validate persistRdd call.
     JavaRDD<GenericRecord> sourceRdd = (JavaRDD<GenericRecord>) inputBatch.getBatch().get();
     assertEquals(1000, sourceRdd.count());
@@ -3394,11 +3394,12 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
    * Return empty table.
    */
   public static class DropAllTransformer implements Transformer {
+    private static final Logger LOG = LoggerFactory.getLogger(DropAllTransformer.class);
 
     @Override
     public Dataset apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset,
                          TypedProperties properties) {
-      System.out.println("DropAllTransformer called !!");
+      LOG.info("DropAllTransformer called !!");
       return sparkSession.createDataFrame(jsc.emptyRDD(), rowDataset.schema());
     }
   }

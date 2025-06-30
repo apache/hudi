@@ -23,6 +23,8 @@ import org.apache.hudi.common.engine.EngineProperty;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.util.Option;
 
+import java.util.Map;
+
 import static org.apache.hudi.common.config.HoodieMemoryConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES;
 import static org.apache.hudi.common.config.HoodieMemoryConfig.DEFAULT_MIN_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES;
 import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FOR_COMPACTION;
@@ -70,6 +72,14 @@ public class IOUtils {
       return hoodieConfig.getLong(MAX_MEMORY_FOR_COMPACTION);
     }
     String fraction = hoodieConfig.getStringOrDefault(MAX_MEMORY_FRACTION_FOR_COMPACTION);
+    return getMaxMemoryAllowedForMerge(context, fraction);
+  }
+
+  public static long getMaxMemoryPerCompaction(TaskContextSupplier context, Map<String, String> options) {
+    if (options.containsKey(MAX_MEMORY_FOR_COMPACTION)) {
+      return Long.parseLong(options.get(MAX_MEMORY_FOR_COMPACTION));
+    }
+    String fraction = options.getOrDefault(MAX_MEMORY_FRACTION_FOR_COMPACTION.key(), MAX_MEMORY_FRACTION_FOR_COMPACTION.defaultValue());
     return getMaxMemoryAllowedForMerge(context, fraction);
   }
 }

@@ -27,7 +27,7 @@ import org.apache.hudi.common.model.{HoodieAvroRecordMerger, HoodieRecordMerger}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableVersion}
 import org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys
 import org.apache.hudi.common.util.StringUtils
-import org.apache.hudi.config.{HoodieHBaseIndexConfig, HoodieIndexConfig, HoodieWriteConfig}
+import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.config.HoodieWriteConfig.{AVRO_SCHEMA_VALIDATE_ENABLE, SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP, TBL_NAME, WRITE_PARTIAL_UPDATE_SCHEMA}
 import org.apache.hudi.exception.{HoodieException, HoodieNotSupportedException}
 import org.apache.hudi.hive.HiveSyncConfigHolder
@@ -42,12 +42,15 @@ import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, BoundReference, EqualTo, Expression, Literal, NamedExpression, PredicateHelper}
 import org.apache.spark.sql.catalyst.expressions.BindReferences.bindReference
-import org.apache.spark.sql.catalyst.plans.LeftOuter
+import org.apache.spark.sql.catalyst.plans.{LeftOuter, QueryPlan}
 import org.apache.spark.sql.catalyst.plans.logical._
+import org.apache.spark.sql.execution.SparkPlan
+import org.apache.spark.sql.execution.command.DataWritingCommand
+import org.apache.spark.sql.execution.metric.SQLMetric
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig.{combineOptions, getPartitionPathFieldWriteConfig}
-import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.failAnalysis
+import org.apache.spark.sql.hudi.command.HoodieCommandMetrics.updateCommitMetrics
 import org.apache.spark.sql.hudi.command.MergeIntoHoodieTableCommand._
 import org.apache.spark.sql.hudi.command.PartialAssignmentMode.PartialAssignmentMode
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload
@@ -105,24 +108,29 @@ class MergeIntoFieldTypeMismatchException(message: String)
  *
  * TODO explain workflow for MOR tables
  */
-case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends HoodieLeafRunnableCommand
+case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
+                                       hoodieCatalogTable: HoodieCatalogTable,
+                                       sparkSession: SparkSession,
+                                       query: LogicalPlan) extends DataWritingCommand
   with SparkAdapterSupport
   with ProvidesHoodieConfig
   with PredicateHelper {
 
-  private var sparkSession: SparkSession = _
+  override def innerChildren: Seq[QueryPlan[_]] = Seq(query)
+
+  override def outputColumnNames: Seq[String] = {
+    query.output.map(_.name)
+  }
+
+  override lazy val metrics: Map[String, SQLMetric] = HoodieCommandMetrics.metrics
+
+  override protected def withNewChildInternal(newChild: LogicalPlan): LogicalPlan = copy(query = newChild)
 
   /**
    * The target table schema without hoodie meta fields.
    */
   private lazy val targetTableSchema =
     removeMetaFields(mergeInto.targetTable.schema).fields
-
-  private lazy val hoodieCatalogTable = sparkAdapter.resolveHoodieTable(mergeInto.targetTable) match {
-    case Some(catalogTable) => HoodieCatalogTable(sparkSession, catalogTable)
-    case _ =>
-      failAnalysis(s"Failed to resolve MERGE INTO statement into the Hudi table. Got instead: ${mergeInto.targetTable}")
-  }
 
   private lazy val targetTableType = hoodieCatalogTable.tableTypeName
 
@@ -266,14 +274,13 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
         updatingActions.flatMap(_.assignments)).head
     }
 
-  override def run(sparkSession: SparkSession): Seq[Row] = {
-    this.sparkSession = sparkSession
+  override def run(sparkSession: SparkSession, inputPlan: SparkPlan): Seq[Row] = {
     // TODO move to analysis phase
     // Create the write parameters
     val props = buildMergeIntoConfig(hoodieCatalogTable)
     validate(props)
 
-    val processedInputDf: DataFrame = getProcessedInputDf
+    val processedInputDf: DataFrame = sparkSession.internalCreateDataFrame(inputPlan.execute(), inputPlan.schema)
     // Do the upsert
     executeUpsert(processedInputDf, props)
     // Refresh the table in the catalog
@@ -291,8 +298,20 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
   }
 
   /**
-   * Here we're adjusting incoming (source) dataset in case its schema is divergent from
-   * the target table, to make sure it (at a bare minimum)
+   * Here we're processing the logical plan of the source table and optionally the target
+   * table to get it prepared for writing the data into the Hudi table:
+   * <ul>
+   * <li> For a target table with record key(s) configure, the source table
+   * [[mergeInto.sourceTable]] is used.
+   * <li> For a primary keyless target table, the source table [[mergeInto.sourceTable]]
+   * and target table [[mergeInto.targetTable]] are left-outer joined based the on the
+   * merge condition so that the record key stored in the record key meta column
+   * (`_hoodie_record_key`) are attached to the input records if they are updates.
+   * </ul>
+   *
+   * After getting the initial logical plan to precess as above, we're adjusting incoming
+   * (source) dataset in case its schema is divergent from the target table, to make sure
+   * it contains all the required columns for MERGE INTO (at a bare minimum)
    *
    * <ol>
    *   <li>Contains "primary-key" column (as defined by target table's config)</li>
@@ -328,14 +347,14 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
    * <li>{@code ts = source.sts}</li>
    * </ul>
    */
-  private def getProcessedInputDf: DataFrame = {
+  def getProcessedInputPlan: LogicalPlan = {
     val resolver = sparkSession.sessionState.analyzer.resolver
 
     // For pkless table, we need to project the meta columns by joining with the target table;
     // for a Hudi table with record key, we use the source table and rely on Hudi's tagging
     // to identify inserts, updates, and deletes to avoid the join
     val inputPlan = if (!hasPrimaryKey()) {
-      // We want to join the source and target tables.
+      // For a primary keyless target table, join the source and target tables.
       // Then we want to project the output so that we have the meta columns from the target table
       // followed by the data columns of the source table
       val tableMetaCols = mergeInto.targetTable.output.filter(a => isMetaField(a.name))
@@ -343,6 +362,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       val incomingDataCols = joinData.output.filterNot(mergeInto.targetTable.outputSet.contains)
       Project(tableMetaCols ++ incomingDataCols, joinData)
     } else {
+      // For a target table with record key(s) configure, the source table is used
       mergeInto.sourceTable
     }
 
@@ -381,10 +401,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
         case _ => attr
       }
     }
-
-    val amendedPlan = Project(adjustedSourceTableOutput ++ additionalColumns, inputPlan)
-
-    Dataset.ofRows(sparkSession, amendedPlan)
+    Project(adjustedSourceTableOutput ++ additionalColumns, inputPlan)
   }
 
   /**
@@ -480,9 +497,13 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       PAYLOAD_ORIGINAL_AVRO_PAYLOAD -> hoodieCatalogTable.tableConfig.getPayloadClass
     )
 
-    val (success, _, _, _, _, _) = HoodieSparkSqlWriter.write(sparkSession.sqlContext, SaveMode.Append, writeParams, sourceDF)
+    val (success, commitInstantTime, _, _, _, _) = HoodieSparkSqlWriter.write(sparkSession.sqlContext, SaveMode.Append, writeParams, sourceDF)
     if (!success) {
       throw new HoodieException("Merge into Hoodie table command failed")
+    }
+    if (commitInstantTime.isPresent) {
+      updateCommitMetrics(metrics, hoodieCatalogTable.metaClient, commitInstantTime.get())
+      DataWritingCommand.propogateMetrics(sparkSession.sparkContext, this, metrics)
     }
   }
 
@@ -493,9 +514,14 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       ENABLE_MERGE_INTO_PARTIAL_UPDATES.key,
       ENABLE_MERGE_INTO_PARTIAL_UPDATES.defaultValue.toString).toBoolean
       && updatingActions.nonEmpty
+      // Partial update is enabled only for table version >= 8
       && (parameters.getOrElse(HoodieWriteConfig.WRITE_TABLE_VERSION.key, HoodieTableVersion.current().versionCode().toString).toInt
       >= HoodieTableVersion.EIGHT.versionCode())
-      && !useGlobalIndex(parameters))
+      // Partial update is disabled when global index is used.
+      // After HUDI-9257 is done, we can remove this limitation.
+      && !useGlobalIndex(parameters)
+      // Partial update is disabled when custom merge mode is set.
+      && !useCustomMergeMode(parameters))
   }
 
   private def getOperationType(parameters: Map[String, String]) = {
@@ -707,7 +733,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     // NOTE: We're relying on [[sourceDataset]] here instead of [[mergeInto.sourceTable]],
     //       as it could be amended to add missing primary-key and/or precombine columns.
     //       Please check [[sourceDataset]] scala-doc for more details
-    (getProcessedInputDf.queryExecution.analyzed.output ++ mergeInto.targetTable.output).filterNot(a => isMetaField(a.name))
+    (query.output ++ mergeInto.targetTable.output).filterNot(a => isMetaField(a.name))
   }
 
   private def validateInsertingAssignmentExpression(expr: Expression): Unit = {
@@ -747,6 +773,17 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       classOf[SqlKeyGenerator].getCanonicalName
     }
 
+    val mergeMode = if (tableConfig.getTableVersion.lesserThan(HoodieTableVersion.EIGHT)) {
+      val inferredMergeConfigs = HoodieTableConfig.inferCorrectMergingBehavior(
+        tableConfig.getRecordMergeMode,
+        tableConfig.getPayloadClass,
+        tableConfig.getRecordMergeStrategyId,
+        tableConfig.getPreCombineField,
+        tableConfig.getTableVersion)
+      inferredMergeConfigs.getLeft.name()
+    } else {
+      tableConfig.getRecordMergeMode.name()
+    }
     val overridingOpts = Map(
       "path" -> path,
       RECORDKEY_FIELD.key -> tableConfig.getRawRecordKeyFieldProp,
@@ -769,7 +806,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       SqlKeyGenerator.PARTITION_SCHEMA -> partitionSchema.toDDL,
       PAYLOAD_CLASS_NAME.key -> classOf[ExpressionPayload].getCanonicalName,
       RECORD_MERGE_IMPL_CLASSES.key -> classOf[HoodieAvroRecordMerger].getName,
-      HoodieWriteConfig.RECORD_MERGE_MODE.key() -> RecordMergeMode.CUSTOM.name(),
+      HoodieWriteConfig.RECORD_MERGE_MODE.key() -> mergeMode,
       RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID,
 
       // NOTE: We have to explicitly override following configs to make sure no schema validation is performed
@@ -782,6 +819,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       CANONICALIZE_SCHEMA.key -> "false",
       SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP.key -> "true",
       HoodieSparkSqlWriter.SQL_MERGE_INTO_WRITES.key -> "true",
+      // Only primary keyless table requires prepped keys and upsert
       HoodieWriteConfig.SPARK_SQL_MERGE_INTO_PREPPED_KEY -> isPrimaryKeylessTable.toString,
       HoodieWriteConfig.COMBINE_BEFORE_UPSERT.key() -> (!StringUtils.isNullOrEmpty(preCombineField)).toString
     )
@@ -1074,12 +1112,20 @@ object MergeIntoHoodieTableCommand {
     Seq(
       HoodieIndex.IndexType.GLOBAL_SIMPLE -> HoodieIndexConfig.SIMPLE_INDEX_UPDATE_PARTITION_PATH_ENABLE,
       HoodieIndex.IndexType.GLOBAL_BLOOM -> HoodieIndexConfig.BLOOM_INDEX_UPDATE_PARTITION_PATH_ENABLE,
-      HoodieIndex.IndexType.RECORD_INDEX -> HoodieIndexConfig.RECORD_INDEX_UPDATE_PARTITION_PATH_ENABLE,
-      HoodieIndex.IndexType.HBASE -> HoodieHBaseIndexConfig.UPDATE_PARTITION_PATH_ENABLE
+      HoodieIndex.IndexType.RECORD_INDEX -> HoodieIndexConfig.RECORD_INDEX_UPDATE_PARTITION_PATH_ENABLE
     ).collectFirst {
       case (hoodieIndex, config) if indexType == hoodieIndex.name =>
         parameters.getOrElse(config.key, config.defaultValue().toString).toBoolean
     }.getOrElse(false)
+  }
+
+  def useCustomMergeMode(parameters: Map[String, String]): Boolean = {
+    val mergeModeOpt = parameters.get(DataSourceWriteOptions.RECORD_MERGE_MODE.key)
+    // For table version >= 8, mergeMode should exist.
+    if (mergeModeOpt.isEmpty) {
+      throw new HoodieException("Merge mode cannot be null here")
+    }
+    mergeModeOpt.get.equals(RecordMergeMode.CUSTOM.name)
   }
 }
 

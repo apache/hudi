@@ -25,6 +25,11 @@ import org.apache.hudi.storage.HoodieStorage;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
+import org.junit.jupiter.api.Test;
+
+import java.io.IOException;
+
+import static org.junit.jupiter.api.Assertions.assertSame;
 
 /**
  * Tests {@link HoodieHadoopStorage}.
@@ -48,5 +53,21 @@ public class TestHoodieHadoopStorage extends TestHoodieStorageBase {
     Configuration conf = new Configuration();
     conf.set(CONF_KEY, CONF_VALUE);
     return conf;
+  }
+
+  @Test
+  void testClose() throws IOException {
+    Configuration conf = new Configuration();
+    String path = getTempDir();
+    FileSystem fileSystem = HadoopFSUtils.getFs(path, conf, true);
+    HoodieStorage storage = new HoodieHadoopStorage(fileSystem);
+    storage.close();
+    // This validates that HoodieHadoopStorage#close does not close the underlying FileSystem
+    // object. If the underlying FileSystem object is closed, the cache of the object based on
+    // the path is closed and removed, which causes problems if it is reused elsewhere. Fetching
+    // the FileSystem object on the same path again in this case returns a different object,
+    // which can be caught here.
+    assertSame(fileSystem, storage.getFileSystem());
+    assertSame(fileSystem, HadoopFSUtils.getFs(getTempDir(), conf, true));
   }
 }

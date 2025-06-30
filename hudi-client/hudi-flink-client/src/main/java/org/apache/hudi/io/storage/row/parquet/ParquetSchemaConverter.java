@@ -18,13 +18,10 @@
 
 package org.apache.hudi.io.storage.row.parquet;
 
-import org.apache.flink.api.common.typeinfo.BasicArrayTypeInfo;
-import org.apache.flink.api.common.typeinfo.BasicTypeInfo;
-import org.apache.flink.api.common.typeinfo.SqlTimeTypeInfo;
-import org.apache.flink.api.common.typeinfo.TypeInformation;
-import org.apache.flink.api.java.typeutils.MapTypeInfo;
-import org.apache.flink.api.java.typeutils.ObjectArrayTypeInfo;
-import org.apache.flink.api.java.typeutils.RowTypeInfo;
+import org.apache.hudi.common.util.collection.Pair;
+
+import org.apache.flink.table.api.DataTypes;
+import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.ArrayType;
 import org.apache.flink.table.types.logical.DecimalType;
 import org.apache.flink.table.types.logical.LocalZonedTimestampType;
@@ -43,9 +40,8 @@ import org.apache.parquet.schema.Types;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.lang.reflect.Array;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static org.apache.parquet.schema.LogicalTypeAnnotation.TimeUnit;
 
@@ -56,485 +52,133 @@ import static org.apache.parquet.schema.LogicalTypeAnnotation.TimeUnit;
  */
 public class ParquetSchemaConverter {
   private static final Logger LOGGER = LoggerFactory.getLogger(ParquetSchemaConverter.class);
-  public static final String MAP_VALUE = "value";
-  public static final String LIST_ARRAY_TYPE = "array";
-  public static final String LIST_ELEMENT = "element";
-  public static final String LIST_GROUP_NAME = "list";
-  public static final String MESSAGE_ROOT = "root";
 
-  /**
-   * Converts Parquet schema to Flink Internal Type.
-   *
-   * @param type Parquet schema
-   * @return Flink type information
-   */
-  public static TypeInformation<?> fromParquetType(MessageType type) {
-    return convertFields(type.getFields());
+  static final String MAP_REPEATED_NAME = "key_value";
+  static final String MAP_KEY_NAME = "key";
+  static final String MAP_VALUE_NAME = "value";
+  static final String LIST_REPEATED_NAME = "list";
+  static final String LIST_ELEMENT_NAME = "element";
+
+  public static RowType convertToRowType(MessageType messageType) {
+    List<RowType.RowField> dataFields =
+        messageType.asGroupType().getFields().stream()
+            .map(ParquetSchemaConverter::convertToRowField)
+            .collect(Collectors.toList());
+    return new RowType(dataFields);
   }
 
-  /**
-   * Converts Flink Internal Type to Parquet schema.
-   *
-   * @param typeInformation Flink type information
-   * @param legacyMode      is standard LIST and MAP schema or back-compatible schema
-   * @return Parquet schema
-   */
-  public static MessageType toParquetType(
-      TypeInformation<?> typeInformation, boolean legacyMode) {
-    return (MessageType)
-        convertField(null, typeInformation, Type.Repetition.OPTIONAL, legacyMode);
-  }
+  public static RowType.RowField convertToRowField(Type parquetType) {
+    LogicalTypeAnnotation logicalType = parquetType.getLogicalTypeAnnotation();
+    DataType dataType;
 
-  public static TypeInformation<?> convertFields(List<Type> parquetFields) {
-    List<TypeInformation<?>> types = new ArrayList<>();
-    List<String> names = new ArrayList<>();
-    for (Type field : parquetFields) {
-      TypeInformation<?> subType = convertParquetTypeToTypeInfo(field);
-      if (subType != null) {
-        types.add(subType);
-        names.add(field.getName());
-      } else {
-        LOGGER.error(
-            "Parquet field {} in schema type {} can not be converted to Flink Internal Type",
-            field.getName(),
-            field.getOriginalType().name());
-      }
-    }
-
-    return new RowTypeInfo(
-        types.toArray(new TypeInformation<?>[0]), names.toArray(new String[0]));
-  }
-
-  public static TypeInformation<?> convertParquetTypeToTypeInfo(final Type fieldType) {
-    TypeInformation<?> typeInfo;
-    if (fieldType.isPrimitive()) {
-      OriginalType originalType = fieldType.getOriginalType();
-      PrimitiveType primitiveType = fieldType.asPrimitiveType();
-      switch (primitiveType.getPrimitiveTypeName()) {
+    if (parquetType.isPrimitive()) {
+      switch (parquetType.asPrimitiveType().getPrimitiveTypeName()) {
         case BINARY:
-          if (originalType != null) {
-            switch (originalType) {
-              case DECIMAL:
-                typeInfo = BasicTypeInfo.BIG_DEC_TYPE_INFO;
-                break;
-              case UTF8:
-              case ENUM:
-              case JSON:
-              case BSON:
-                typeInfo = BasicTypeInfo.STRING_TYPE_INFO;
-                break;
-              default:
-                throw new UnsupportedOperationException(
-                    "Unsupported original type : "
-                        + originalType.name()
-                        + " for primitive type BINARY");
-            }
+          if (logicalType instanceof LogicalTypeAnnotation.StringLogicalTypeAnnotation) {
+            dataType = DataTypes.STRING();
           } else {
-            typeInfo = BasicTypeInfo.STRING_TYPE_INFO;
+            dataType = DataTypes.BYTES();
           }
           break;
         case BOOLEAN:
-          typeInfo = BasicTypeInfo.BOOLEAN_TYPE_INFO;
+          dataType = DataTypes.BOOLEAN();
+          break;
+        case FLOAT:
+          dataType = DataTypes.FLOAT();
+          break;
+        case DOUBLE:
+          dataType = DataTypes.DOUBLE();
           break;
         case INT32:
-          if (originalType != null) {
-            switch (originalType) {
-              case TIME_MICROS:
-              case TIME_MILLIS:
-                typeInfo = SqlTimeTypeInfo.TIME;
-                break;
-              case TIMESTAMP_MICROS:
-              case TIMESTAMP_MILLIS:
-                typeInfo = SqlTimeTypeInfo.TIMESTAMP;
-                break;
-              case DATE:
-                typeInfo = SqlTimeTypeInfo.DATE;
-                break;
-              case UINT_8:
-              case UINT_16:
-              case UINT_32:
-                typeInfo = BasicTypeInfo.INT_TYPE_INFO;
-                break;
-              case INT_8:
-                typeInfo = org.apache.flink.api.common.typeinfo.Types.BYTE;
-                break;
-              case INT_16:
-                typeInfo = org.apache.flink.api.common.typeinfo.Types.SHORT;
-                break;
-              case INT_32:
-                typeInfo = BasicTypeInfo.INT_TYPE_INFO;
-                break;
-              default:
-                throw new UnsupportedOperationException(
-                    "Unsupported original type : "
-                        + originalType.name()
-                        + " for primitive type INT32");
+          if (logicalType instanceof LogicalTypeAnnotation.DecimalLogicalTypeAnnotation) {
+            LogicalTypeAnnotation.DecimalLogicalTypeAnnotation decimalType =
+                (LogicalTypeAnnotation.DecimalLogicalTypeAnnotation) logicalType;
+            dataType =
+                DataTypes.of(new DecimalType(decimalType.getPrecision(), decimalType.getScale()));
+          } else if (logicalType instanceof LogicalTypeAnnotation.IntLogicalTypeAnnotation) {
+            LogicalTypeAnnotation.IntLogicalTypeAnnotation intType =
+                (LogicalTypeAnnotation.IntLogicalTypeAnnotation) logicalType;
+            int bitWidth = intType.getBitWidth();
+            if (bitWidth == 8) {
+              dataType = DataTypes.TINYINT();
+            } else if (bitWidth == 16) {
+              dataType = DataTypes.SMALLINT();
+            } else {
+              dataType = DataTypes.INT();
             }
+          } else if (logicalType instanceof LogicalTypeAnnotation.DateLogicalTypeAnnotation) {
+            dataType = DataTypes.DATE();
+          } else if (logicalType instanceof LogicalTypeAnnotation.TimeLogicalTypeAnnotation) {
+            dataType = DataTypes.TIME();
           } else {
-            typeInfo = BasicTypeInfo.INT_TYPE_INFO;
+            dataType = DataTypes.INT();
           }
           break;
         case INT64:
-          if (originalType != null) {
-            switch (originalType) {
-              case TIME_MICROS:
-                typeInfo = SqlTimeTypeInfo.TIME;
-                break;
-              case TIMESTAMP_MICROS:
-              case TIMESTAMP_MILLIS:
-                typeInfo = SqlTimeTypeInfo.TIMESTAMP;
-                break;
-              case INT_64:
-              case DECIMAL:
-                typeInfo = BasicTypeInfo.LONG_TYPE_INFO;
-                break;
-              default:
-                throw new UnsupportedOperationException(
-                    "Unsupported original type : "
-                        + originalType.name()
-                        + " for primitive type INT64");
-            }
+          if (logicalType instanceof LogicalTypeAnnotation.DecimalLogicalTypeAnnotation) {
+            LogicalTypeAnnotation.DecimalLogicalTypeAnnotation decimalType =
+                (LogicalTypeAnnotation.DecimalLogicalTypeAnnotation) logicalType;
+            dataType =
+                DataTypes.of(new DecimalType(decimalType.getPrecision(), decimalType.getScale()));
+          } else if (logicalType instanceof LogicalTypeAnnotation.TimestampLogicalTypeAnnotation) {
+            LogicalTypeAnnotation.TimestampLogicalTypeAnnotation timestampType =
+                (LogicalTypeAnnotation.TimestampLogicalTypeAnnotation) logicalType;
+            int precision = timestampType.getUnit().equals(LogicalTypeAnnotation.TimeUnit.MILLIS) ? 3 : 6;
+            dataType = DataTypes.of(new TimestampType(precision));
           } else {
-            typeInfo = BasicTypeInfo.LONG_TYPE_INFO;
+            dataType = DataTypes.BIGINT();
           }
           break;
         case INT96:
-          // It stores a timestamp type data, we read it as millisecond
-          typeInfo = SqlTimeTypeInfo.TIMESTAMP;
-          break;
-        case FLOAT:
-          typeInfo = BasicTypeInfo.FLOAT_TYPE_INFO;
-          break;
-        case DOUBLE:
-          typeInfo = BasicTypeInfo.DOUBLE_TYPE_INFO;
+          dataType = DataTypes.of(new TimestampType(9));
           break;
         case FIXED_LEN_BYTE_ARRAY:
-          if (originalType != null) {
-            switch (originalType) {
-              case DECIMAL:
-                typeInfo = BasicTypeInfo.BIG_DEC_TYPE_INFO;
-                break;
-              default:
-                throw new UnsupportedOperationException(
-                    "Unsupported original type : "
-                        + originalType.name()
-                        + " for primitive type FIXED_LEN_BYTE_ARRAY");
-            }
-          } else {
-            typeInfo = BasicTypeInfo.BIG_DEC_TYPE_INFO;
-          }
+          LogicalTypeAnnotation.DecimalLogicalTypeAnnotation decimalType =
+              (LogicalTypeAnnotation.DecimalLogicalTypeAnnotation) logicalType;
+          dataType = DataTypes.of(new DecimalType(decimalType.getPrecision(), decimalType.getScale()));
           break;
         default:
-          throw new UnsupportedOperationException("Unsupported schema: " + fieldType);
+          throw new UnsupportedOperationException("Unsupported type: " + parquetType);
       }
+      if (parquetType.getRepetition().equals(Type.Repetition.REQUIRED)) {
+        dataType = dataType.notNull();
+      }
+      return new RowType.RowField(parquetType.getName(), dataType.getLogicalType());
     } else {
-      GroupType parquetGroupType = fieldType.asGroupType();
-      OriginalType originalType = parquetGroupType.getOriginalType();
-      if (originalType != null) {
-        switch (originalType) {
-          case LIST:
-            if (parquetGroupType.getFieldCount() != 1) {
-              throw new UnsupportedOperationException(
-                  "Invalid list type " + parquetGroupType);
-            }
-            Type repeatedType = parquetGroupType.getType(0);
-            if (!repeatedType.isRepetition(Type.Repetition.REPEATED)) {
-              throw new UnsupportedOperationException(
-                  "Invalid list type " + parquetGroupType);
-            }
-
-            if (repeatedType.isPrimitive()) {
-              typeInfo = convertParquetPrimitiveListToFlinkArray(repeatedType);
-            } else {
-              // Backward-compatibility element group name can be any string
-              // (element/array/other)
-              GroupType elementType = repeatedType.asGroupType();
-              // If the repeated field is a group with multiple fields, then its type
-              // is the element
-              // type and elements are required.
-              if (elementType.getFieldCount() > 1) {
-
-                for (Type type : elementType.getFields()) {
-                  if (!type.isRepetition(Type.Repetition.REQUIRED)) {
-                    throw new UnsupportedOperationException(
-                        String.format(
-                            "List field [%s] in List [%s] has to be required. ",
-                            type, fieldType.getName()));
-                  }
-                }
-                typeInfo =
-                    ObjectArrayTypeInfo.getInfoFor(
-                        convertParquetTypeToTypeInfo(elementType));
-              } else {
-                Type internalType = elementType.getType(0);
-                if (internalType.isPrimitive()) {
-                  typeInfo =
-                      convertParquetPrimitiveListToFlinkArray(internalType);
-                } else {
-                  // No need to do special process for group named array and tuple
-                  GroupType tupleGroup = internalType.asGroupType();
-                  if (tupleGroup.getFieldCount() == 1
-                      && tupleGroup
-                      .getFields()
-                      .get(0)
-                      .isRepetition(Type.Repetition.REQUIRED)) {
-                    typeInfo =
-                        ObjectArrayTypeInfo.getInfoFor(
-                            convertParquetTypeToTypeInfo(internalType));
-                  } else {
-                    throw new UnsupportedOperationException(
-                        String.format(
-                            "Unrecgonized List schema [%s] according to Parquet"
-                                + " standard",
-                            parquetGroupType));
-                  }
-                }
-              }
-            }
-            break;
-
-          case MAP_KEY_VALUE:
-          case MAP:
-            // The outer-most level must be a group annotated with MAP
-            // that contains a single field named key_value
-            if (parquetGroupType.getFieldCount() != 1
-                || parquetGroupType.getType(0).isPrimitive()) {
-              throw new UnsupportedOperationException(
-                  "Invalid map type " + parquetGroupType);
-            }
-
-            // The middle level  must be a repeated group with a key field for map keys
-            // and, optionally, a value field for map values. But we can't enforce two
-            // strict condition here
-            // the schema generated by Parquet lib doesn't contain LogicalType
-            // ! mapKeyValType.getOriginalType().equals(OriginalType.MAP_KEY_VALUE)
-            GroupType mapKeyValType = parquetGroupType.getType(0).asGroupType();
-            if (!mapKeyValType.isRepetition(Type.Repetition.REPEATED)
-                || mapKeyValType.getFieldCount() != 2) {
-              throw new UnsupportedOperationException(
-                  "The middle level of Map should be single field named key_value. Invalid map type "
-                      + parquetGroupType);
-            }
-
-            Type keyType = mapKeyValType.getType(0);
-
-            // The key field encodes the map's key type. This field must have repetition
-            // required and
-            // must always be present.
-            if (!keyType.isPrimitive()
-                || !keyType.isRepetition(Type.Repetition.REQUIRED)
-                || !keyType.asPrimitiveType()
-                .getPrimitiveTypeName()
-                .equals(PrimitiveType.PrimitiveTypeName.BINARY)
-                || !keyType.getOriginalType().equals(OriginalType.UTF8)) {
-              throw new IllegalArgumentException(
-                  "Map key type must be required binary (UTF8): " + keyType);
-            }
-
-            Type valueType = mapKeyValType.getType(1);
-            return new MapTypeInfo<>(
-                BasicTypeInfo.STRING_TYPE_INFO,
-                convertParquetTypeToTypeInfo(valueType));
-          default:
-            throw new UnsupportedOperationException("Unsupported schema: " + fieldType);
-        }
+      GroupType groupType = parquetType.asGroupType();
+      if (logicalType instanceof LogicalTypeAnnotation.ListLogicalTypeAnnotation) {
+        dataType = DataTypes.of(new ArrayType(convertToRowField(parquetListElementType(groupType)).getType()));
+      } else if (logicalType instanceof LogicalTypeAnnotation.MapLogicalTypeAnnotation) {
+        Pair<Type, Type> keyValueType = parquetMapKeyValueType(groupType);
+        // Since parquet does not support nullable key, when converting
+        // back to DataType, set as nullable by default.
+        dataType = DataTypes.of(
+            new MapType(
+                convertToRowField(keyValueType.getLeft()).getType().copy(true),
+                convertToRowField(keyValueType.getRight()).getType()));
       } else {
-        // if no original type than it is a record
-        return convertFields(parquetGroupType.getFields());
+        dataType =
+            DataTypes.of(new RowType(
+                groupType.getFields().stream()
+                    .map(ParquetSchemaConverter::convertToRowField)
+                    .collect(Collectors.toList())));
       }
     }
 
-    return typeInfo;
+    if (parquetType.getRepetition().equals(Type.Repetition.REQUIRED)) {
+      dataType = dataType.notNull();
+    }
+
+    return new RowType.RowField(parquetType.getName(), dataType.getLogicalType());
   }
 
-  private static TypeInformation<?> convertParquetPrimitiveListToFlinkArray(Type type) {
-    // Backward-compatibility element group doesn't exist also allowed
-    TypeInformation<?> flinkType = convertParquetTypeToTypeInfo(type);
-    if (flinkType.isBasicType()) {
-      return BasicArrayTypeInfo.getInfoFor(
-          Array.newInstance(flinkType.getTypeClass(), 0).getClass());
-    } else {
-      // flinkType here can be either SqlTimeTypeInfo or BasicTypeInfo.BIG_DEC_TYPE_INFO,
-      // So it should be converted to ObjectArrayTypeInfo
-      return ObjectArrayTypeInfo.getInfoFor(flinkType);
-    }
+  public static Type parquetListElementType(GroupType listType) {
+    return listType.getType(LIST_REPEATED_NAME).asGroupType().getType(LIST_ELEMENT_NAME);
   }
 
-  private static Type convertField(
-      String fieldName,
-      TypeInformation<?> typeInfo,
-      Type.Repetition inheritRepetition,
-      boolean legacyMode) {
-    Type fieldType = null;
-
-    Type.Repetition repetition =
-        inheritRepetition == null ? Type.Repetition.OPTIONAL : inheritRepetition;
-    if (typeInfo instanceof BasicTypeInfo) {
-      BasicTypeInfo basicTypeInfo = (BasicTypeInfo) typeInfo;
-      if (basicTypeInfo.equals(BasicTypeInfo.BIG_DEC_TYPE_INFO)
-          || basicTypeInfo.equals(BasicTypeInfo.BIG_INT_TYPE_INFO)) {
-        fieldType =
-            Types.primitive(PrimitiveType.PrimitiveTypeName.BINARY, repetition)
-                .as(OriginalType.DECIMAL)
-                .named(fieldName);
-      } else if (basicTypeInfo.equals(BasicTypeInfo.INT_TYPE_INFO)) {
-        fieldType =
-            Types.primitive(PrimitiveType.PrimitiveTypeName.INT32, repetition)
-                .as(OriginalType.INT_32)
-                .named(fieldName);
-      } else if (basicTypeInfo.equals(BasicTypeInfo.DOUBLE_TYPE_INFO)) {
-        fieldType =
-            Types.primitive(PrimitiveType.PrimitiveTypeName.DOUBLE, repetition)
-                .named(fieldName);
-      } else if (basicTypeInfo.equals(BasicTypeInfo.FLOAT_TYPE_INFO)) {
-        fieldType =
-            Types.primitive(PrimitiveType.PrimitiveTypeName.FLOAT, repetition)
-                .named(fieldName);
-      } else if (basicTypeInfo.equals(BasicTypeInfo.LONG_TYPE_INFO)) {
-        fieldType =
-            Types.primitive(PrimitiveType.PrimitiveTypeName.INT64, repetition)
-                .as(OriginalType.INT_64)
-                .named(fieldName);
-      } else if (basicTypeInfo.equals(BasicTypeInfo.SHORT_TYPE_INFO)) {
-        fieldType =
-            Types.primitive(PrimitiveType.PrimitiveTypeName.INT32, repetition)
-                .as(OriginalType.INT_16)
-                .named(fieldName);
-      } else if (basicTypeInfo.equals(BasicTypeInfo.BYTE_TYPE_INFO)) {
-        fieldType =
-            Types.primitive(PrimitiveType.PrimitiveTypeName.INT32, repetition)
-                .as(OriginalType.INT_8)
-                .named(fieldName);
-      } else if (basicTypeInfo.equals(BasicTypeInfo.CHAR_TYPE_INFO)) {
-        fieldType =
-            Types.primitive(PrimitiveType.PrimitiveTypeName.BINARY, repetition)
-                .as(OriginalType.UTF8)
-                .named(fieldName);
-      } else if (basicTypeInfo.equals(BasicTypeInfo.BOOLEAN_TYPE_INFO)) {
-        fieldType =
-            Types.primitive(PrimitiveType.PrimitiveTypeName.BOOLEAN, repetition)
-                .named(fieldName);
-      } else if (basicTypeInfo.equals(BasicTypeInfo.DATE_TYPE_INFO)
-          || basicTypeInfo.equals(BasicTypeInfo.STRING_TYPE_INFO)) {
-        fieldType =
-            Types.primitive(PrimitiveType.PrimitiveTypeName.BINARY, repetition)
-                .as(OriginalType.UTF8)
-                .named(fieldName);
-      }
-    } else if (typeInfo instanceof MapTypeInfo) {
-      MapTypeInfo mapTypeInfo = (MapTypeInfo) typeInfo;
-
-      if (mapTypeInfo.getKeyTypeInfo().equals(BasicTypeInfo.STRING_TYPE_INFO)) {
-        fieldType =
-            Types.map(repetition)
-                .value(
-                    convertField(
-                        MAP_VALUE,
-                        mapTypeInfo.getValueTypeInfo(),
-                        Type.Repetition.OPTIONAL,
-                        legacyMode))
-                .named(fieldName);
-      } else {
-        throw new UnsupportedOperationException(
-            String.format(
-                "Can not convert Flink MapTypeInfo %s to Parquet"
-                    + " Map type as key has to be String",
-                typeInfo));
-      }
-    } else if (typeInfo instanceof ObjectArrayTypeInfo) {
-      ObjectArrayTypeInfo objectArrayTypeInfo = (ObjectArrayTypeInfo) typeInfo;
-
-      // Get all required sub fields
-      GroupType componentGroup =
-          (GroupType)
-              convertField(
-                  LIST_ELEMENT,
-                  objectArrayTypeInfo.getComponentInfo(),
-                  Type.Repetition.REQUIRED,
-                  legacyMode);
-
-      GroupType elementGroup = Types.repeatedGroup().named(LIST_ELEMENT);
-      elementGroup = elementGroup.withNewFields(componentGroup.getFields());
-      fieldType =
-          Types.buildGroup(repetition)
-              .addField(elementGroup)
-              .as(OriginalType.LIST)
-              .named(fieldName);
-    } else if (typeInfo instanceof BasicArrayTypeInfo) {
-      BasicArrayTypeInfo basicArrayType = (BasicArrayTypeInfo) typeInfo;
-
-      if (legacyMode) {
-
-        // Add extra layer of Group according to Parquet's standard
-        Type listGroup =
-            Types.repeatedGroup()
-                .addField(
-                    convertField(
-                        LIST_ELEMENT,
-                        basicArrayType.getComponentInfo(),
-                        Type.Repetition.REQUIRED,
-                        legacyMode))
-                .named(LIST_GROUP_NAME);
-
-        fieldType =
-            Types.buildGroup(repetition)
-                .addField(listGroup)
-                .as(OriginalType.LIST)
-                .named(fieldName);
-      } else {
-        PrimitiveType primitiveTyp =
-            convertField(
-                fieldName,
-                basicArrayType.getComponentInfo(),
-                Type.Repetition.REQUIRED,
-                legacyMode)
-                .asPrimitiveType();
-        fieldType =
-            Types.buildGroup(repetition)
-                .repeated(primitiveTyp.getPrimitiveTypeName())
-                .as(primitiveTyp.getOriginalType())
-                .named(LIST_ARRAY_TYPE)
-                .as(OriginalType.LIST)
-                .named(fieldName);
-      }
-    } else if (typeInfo instanceof SqlTimeTypeInfo) {
-      if (typeInfo.equals(SqlTimeTypeInfo.DATE)) {
-        fieldType =
-            Types.primitive(PrimitiveType.PrimitiveTypeName.INT32, repetition)
-                .as(OriginalType.DATE)
-                .named(fieldName);
-      } else if (typeInfo.equals(SqlTimeTypeInfo.TIME)) {
-        fieldType =
-            Types.primitive(PrimitiveType.PrimitiveTypeName.INT32, repetition)
-                .as(OriginalType.TIME_MILLIS)
-                .named(fieldName);
-      } else if (typeInfo.equals(SqlTimeTypeInfo.TIMESTAMP)) {
-        fieldType =
-            Types.primitive(PrimitiveType.PrimitiveTypeName.INT64, repetition)
-                .as(OriginalType.TIMESTAMP_MILLIS)
-                .named(fieldName);
-      } else {
-        throw new UnsupportedOperationException(
-            "Unsupported SqlTimeTypeInfo " + typeInfo);
-      }
-
-    } else {
-      RowTypeInfo rowTypeInfo = (RowTypeInfo) typeInfo;
-      List<Type> types = new ArrayList<>();
-      String[] fieldNames = rowTypeInfo.getFieldNames();
-      TypeInformation<?>[] fieldTypes = rowTypeInfo.getFieldTypes();
-      for (int i = 0; i < rowTypeInfo.getArity(); i++) {
-        types.add(convertField(fieldNames[i], fieldTypes[i], repetition, legacyMode));
-      }
-
-      if (fieldName == null) {
-        fieldType = new MessageType(MESSAGE_ROOT, types);
-      } else {
-        fieldType = new GroupType(repetition, fieldName, types);
-      }
-    }
-
-    return fieldType;
+  public static Pair<Type, Type> parquetMapKeyValueType(GroupType mapType) {
+    GroupType keyValue = mapType.getType(MAP_REPEATED_NAME).asGroupType();
+    return Pair.of(keyValue.getType(MAP_KEY_NAME), keyValue.getType(MAP_VALUE_NAME));
   }
 
   public static MessageType convertToParquetMessageType(String name, RowType rowType) {

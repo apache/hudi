@@ -158,6 +158,8 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
    */
   protected Option<Map<String, String>> metaData;
 
+  protected transient Comparable<?> orderingValue;
+
   public HoodieRecord(HoodieKey key, T data) {
     this(key, data, null, Option.empty());
   }
@@ -211,7 +213,28 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     return operation;
   }
 
-  public abstract Comparable<?> getOrderingValue(Schema recordSchema, Properties props);
+  /**
+   * Get ordering value for the record from the cached variable, or extracting from the record if not cached.
+   *
+   * @param recordSchema Avro schema for the record
+   * @param props Properties containing the necessary configurations
+   * @return The ordering value for the record
+   */
+  public Comparable<?> getOrderingValue(Schema recordSchema, Properties props) {
+    if (orderingValue == null) {
+      orderingValue = doGetOrderingValue(recordSchema, props);
+    }
+    return orderingValue;
+  }
+
+  /**
+   * Extracting the ordering value from the record.
+   *
+   * @param recordSchema Avro schema for the record
+   * @param props Properties containing the necessary configurations
+   * @return The ordering value for the record
+   */
+  protected abstract Comparable<?> doGetOrderingValue(Schema recordSchema, Properties props);
 
   public T getData() {
     if (data == null) {
@@ -394,6 +417,14 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
   public abstract Object[] getColumnValues(Schema recordSchema, String[] columns, boolean consistentLogicalTimestampEnabled);
 
   /**
+   * Get column as Java type in record to collect index stats: col_stats, secondary index, etc.
+   * The Java type is required to keep the value engine agnostic.
+   *
+   * @return the column value
+   */
+  public abstract Object getColumnValueAsJava(Schema recordSchema, String column, Properties props);
+
+  /**
    * Support bootstrap.
    */
   public abstract HoodieRecord joinWith(HoodieRecord other, Schema targetSchema);
@@ -404,6 +435,18 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
    * NOTE: This operation is idempotent
    */
   public abstract HoodieRecord prependMetaFields(Schema recordSchema, Schema targetSchema, MetadataValues metadataValues, Properties props);
+
+  /**
+   * Update a specific metadata field with given value.
+   *
+   * @param recordSchema the schema for the record
+   * @param ordinal the ordinal for the target medata field
+   * @param value the new value for the target metadata field
+   * @return the new HoodieRecord with updated metadata value
+   */
+  public HoodieRecord updateMetaField(Schema recordSchema, int ordinal, String value) {
+    throw new UnsupportedOperationException("updateMetaField is not supported yet for: " + this.getClass().getSimpleName());
+  }
 
   /**
    * Support schema evolution.

@@ -19,7 +19,10 @@
 
 package org.apache.spark.sql.hudi.analysis
 
-import org.apache.hudi.config.{HoodieHBaseIndexConfig, HoodieIndexConfig}
+import org.apache.hudi.DataSourceWriteOptions
+import org.apache.hudi.common.config.RecordMergeMode
+import org.apache.hudi.config.HoodieIndexConfig
+import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.index.HoodieIndex
 
 import org.apache.spark.sql.hudi.command.MergeIntoHoodieTableCommand
@@ -31,8 +34,7 @@ class TestMergeIntoHoodieTableCommand extends AnyFlatSpec with Matchers {
     val globalIndices = Seq(
       HoodieIndex.IndexType.GLOBAL_SIMPLE -> HoodieIndexConfig.SIMPLE_INDEX_UPDATE_PARTITION_PATH_ENABLE,
       HoodieIndex.IndexType.GLOBAL_BLOOM -> HoodieIndexConfig.BLOOM_INDEX_UPDATE_PARTITION_PATH_ENABLE,
-      HoodieIndex.IndexType.RECORD_INDEX -> HoodieIndexConfig.RECORD_INDEX_UPDATE_PARTITION_PATH_ENABLE,
-      HoodieIndex.IndexType.HBASE -> HoodieHBaseIndexConfig.UPDATE_PARTITION_PATH_ENABLE
+      HoodieIndex.IndexType.RECORD_INDEX -> HoodieIndexConfig.RECORD_INDEX_UPDATE_PARTITION_PATH_ENABLE
     )
 
     globalIndices.foreach { case (indexType, config) =>
@@ -48,8 +50,7 @@ class TestMergeIntoHoodieTableCommand extends AnyFlatSpec with Matchers {
     val globalIndices = Seq(
       HoodieIndex.IndexType.GLOBAL_SIMPLE -> HoodieIndexConfig.SIMPLE_INDEX_UPDATE_PARTITION_PATH_ENABLE,
       HoodieIndex.IndexType.GLOBAL_BLOOM -> HoodieIndexConfig.BLOOM_INDEX_UPDATE_PARTITION_PATH_ENABLE,
-      HoodieIndex.IndexType.RECORD_INDEX -> HoodieIndexConfig.RECORD_INDEX_UPDATE_PARTITION_PATH_ENABLE,
-      HoodieIndex.IndexType.HBASE -> HoodieHBaseIndexConfig.UPDATE_PARTITION_PATH_ENABLE
+      HoodieIndex.IndexType.RECORD_INDEX -> HoodieIndexConfig.RECORD_INDEX_UPDATE_PARTITION_PATH_ENABLE
     )
 
     globalIndices.foreach { case (indexType, config) =>
@@ -77,5 +78,29 @@ class TestMergeIntoHoodieTableCommand extends AnyFlatSpec with Matchers {
       val parameters = Map(HoodieIndexConfig.INDEX_TYPE.key -> indexType)
       MergeIntoHoodieTableCommand.useGlobalIndex(parameters) should be(false)
     }
+  }
+
+  it should "return true for CUSTOM merge mode" in {
+    val params = Map(
+      DataSourceWriteOptions.RECORD_MERGE_MODE.key -> RecordMergeMode.CUSTOM.name
+    )
+    MergeIntoHoodieTableCommand.useCustomMergeMode(params) should be(true)
+  }
+
+  it should "return false for non-CUSTOM merge mode" in {
+    var params = Map(
+      DataSourceWriteOptions.RECORD_MERGE_MODE.key -> RecordMergeMode.COMMIT_TIME_ORDERING.name
+    )
+    MergeIntoHoodieTableCommand.useCustomMergeMode(params) should be(false)
+
+    params = Map(
+      DataSourceWriteOptions.RECORD_MERGE_MODE.key -> RecordMergeMode.EVENT_TIME_ORDERING.name
+    )
+    MergeIntoHoodieTableCommand.useCustomMergeMode(params) should be(false)
+  }
+
+  it should "throw HoodieException when merge mode is missing" in {
+    val params = Map.empty[String, String]
+    an[HoodieException] should be thrownBy MergeIntoHoodieTableCommand.useCustomMergeMode(params)
   }
 }

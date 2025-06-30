@@ -79,12 +79,12 @@ public class ConfigUtils {
    */
   public static String getOrderingField(Properties properties) {
     String orderField = null;
-    if (properties.containsKey(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY)) {
-      orderField = properties.getProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY);
-    } else if (properties.containsKey("hoodie.datasource.write.precombine.field")) {
+    if (properties.containsKey("hoodie.datasource.write.precombine.field")) {
       orderField = properties.getProperty("hoodie.datasource.write.precombine.field");
     } else if (properties.containsKey(HoodieTableConfig.PRECOMBINE_FIELD.key())) {
       orderField = properties.getProperty(HoodieTableConfig.PRECOMBINE_FIELD.key());
+    } else if (properties.containsKey(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY)) {
+      orderField = properties.getProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY);
     }
     return orderField;
   }
@@ -92,8 +92,8 @@ public class ConfigUtils {
   /**
    * Get payload class.
    */
-  public static String getPayloadClass(Properties properties) {
-    return HoodieRecordPayload.getPayloadClassName(new HoodieConfig(properties));
+  public static String getPayloadClass(Properties props) {
+    return HoodieRecordPayload.getPayloadClassName(props);
   }
 
   public static List<String> split2List(String param) {
@@ -328,7 +328,7 @@ public class ConfigUtils {
    * @return raw value of the config.
    * @param <T> type of the value.
    */
-  public static <T> T getRawValueWithAltKeys(TypedProperties props, ConfigProperty<T> configProperty, boolean useDefaultValue) {
+  public static <T> T getRawValueWithAltKeys(Properties props, ConfigProperty<T> configProperty, boolean useDefaultValue) {
     Option<T> rawValue = (Option<T>) getRawValueWithAltKeys(props, configProperty);
     if (rawValue.isPresent()) {
       return rawValue.get();
@@ -486,12 +486,12 @@ public class ConfigUtils {
    * alternative keys are used to fetch the config. The default value of {@link ConfigProperty}
    * config, if exists, is returned if the config is not found in the properties.
    *
-   * @param props          Configs in {@link TypedProperties}.
+   * @param props          Configs in {@link Properties}.
    * @param configProperty {@link ConfigProperty} config to fetch.
    * @return integer value if the config exists; default integer value if the config does not exist
    * and there is default value defined in the {@link ConfigProperty} config; {@code 0} otherwise.
    */
-  public static int getIntWithAltKeys(TypedProperties props,
+  public static int getIntWithAltKeys(Properties props,
                                       ConfigProperty<?> configProperty) {
     Option<Object> rawValue = getRawValueWithAltKeys(props, configProperty);
     int defaultValue = configProperty.hasDefaultValue()

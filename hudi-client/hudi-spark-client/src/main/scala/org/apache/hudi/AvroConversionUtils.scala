@@ -23,17 +23,22 @@ import org.apache.hudi.avro.AvroSchemaUtils
 import org.apache.hudi.exception.SchemaCompatibilityException
 import org.apache.hudi.internal.schema.HoodieSchemaException
 
+import org.apache.avro.{AvroRuntimeException, JsonProperties, Schema}
 import org.apache.avro.Schema.Type
 import org.apache.avro.generic.GenericRecord
-import org.apache.avro.{AvroRuntimeException, JsonProperties, Schema}
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.{Dataset, Row, SparkSession}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types.{ArrayType, DataType, MapType, StructType}
-import org.apache.spark.sql.{Dataset, Row, SparkSession}
+
+import java.util.concurrent.ConcurrentHashMap
 
 import scala.collection.JavaConverters._
 
 object AvroConversionUtils {
+  private val ROW_TO_AVRO_CONVERTER_CACHE =
+    new ConcurrentHashMap[Tuple3[StructType, Schema, Boolean], Function1[InternalRow, GenericRecord]]
+  private val AVRO_SCHEMA_CACHE = new ConcurrentHashMap[Schema, StructType]
 
   /**
    * Creates converter to transform Avro payload into Spark's Catalyst one
@@ -58,17 +63,20 @@ object AvroConversionUtils {
    * @return converter accepting Catalyst payload (in the form of [[InternalRow]]) and transforming it into an Avro one
    */
   def createInternalRowToAvroConverter(rootCatalystType: StructType, rootAvroType: Schema, nullable: Boolean): InternalRow => GenericRecord = {
-    val serializer = sparkAdapter.createAvroSerializer(rootCatalystType, rootAvroType, nullable)
-    row => {
-      try {
-        serializer
-          .serialize(row)
-          .asInstanceOf[GenericRecord]
-      } catch {
-        case e: HoodieSchemaException => throw e
-        case e => throw new SchemaCompatibilityException("Failed to convert spark record into avro record", e)
+    val loader: java.util.function.Function[Tuple3[StructType, Schema, Boolean], Function1[InternalRow, GenericRecord]] = key => {
+      val serializer = sparkAdapter.createAvroSerializer(key._1, key._2, key._3)
+      row => {
+        try {
+          serializer
+            .serialize(row)
+            .asInstanceOf[GenericRecord]
+        } catch {
+          case e: HoodieSchemaException => throw e
+          case e => throw new SchemaCompatibilityException("Failed to convert spark record into avro record", e)
+        }
       }
     }
+    ROW_TO_AVRO_CONVERTER_CACHE.computeIfAbsent(Tuple3.apply(rootCatalystType, rootAvroType, nullable), loader)
   }
 
   /**
@@ -158,14 +166,17 @@ object AvroConversionUtils {
    * Converts Avro's [[Schema]] to Catalyst's [[StructType]]
    */
   def convertAvroSchemaToStructType(avroSchema: Schema): StructType = {
-    try {
-      val schemaConverters = sparkAdapter.getAvroSchemaConverters
-      schemaConverters.toSqlType(avroSchema) match {
-        case (dataType, _) => dataType.asInstanceOf[StructType]
+    val loader: java.util.function.Function[Schema, StructType] = key => {
+      try {
+        val schemaConverters = sparkAdapter.getAvroSchemaConverters
+        schemaConverters.toSqlType(key) match {
+          case (dataType, _) => dataType.asInstanceOf[StructType]
+        }
+      } catch {
+        case e: Exception => throw new HoodieSchemaException("Failed to convert avro schema to struct type: " + avroSchema, e)
       }
-    } catch {
-      case e: Exception => throw new HoodieSchemaException("Failed to convert avro schema to struct type: " + avroSchema, e)
     }
+    AVRO_SCHEMA_CACHE.computeIfAbsent(avroSchema, loader)
   }
 
   /**
@@ -182,8 +193,8 @@ object AvroConversionUtils {
         val structType = dataType.asInstanceOf[StructType]
         val structFields = structType.fields
         val modifiedFields = schema.getFields.asScala.map(field => {
-          val i: Int = structType.fieldIndex(field.name())
-          val comment: String = if (structFields(i).metadata.contains("comment")) {
+          val i = structType.fieldIndex(field.name())
+          val comment = if (structFields(i).metadata.contains("comment")) {
             structFields(i).metadata.getString("comment")
           } else {
             field.doc()
@@ -228,7 +239,7 @@ object AvroConversionUtils {
    * @return Avro schema with null default set to nullable fields and bool that is true if the union contains null
    *
    * */
-  private def resolveUnion(schema: Schema, dataType: DataType): (Schema, Boolean) = {
+  private def resolveUnion(schema: Schema, dataType: DataType) = {
     val innerFields = schema.getTypes.asScala
     val containsNullSchema = innerFields.foldLeft(false)((nullFieldEncountered, schema) => nullFieldEncountered | schema.getType == Schema.Type.NULL)
     (if (containsNullSchema) {
@@ -255,5 +266,107 @@ object AvroConversionUtils {
       return schema.getTypes.get(index)
     }
     schema
+  }
+
+  /**
+   * Recursively aligns the nullable property of hoodie table schema, supporting nested structures
+   */
+  def alignFieldsNullability(sourceSchema: StructType, avroSchema: Schema): StructType = {
+    // Converts Avro fields to a Map for efficient lookup
+    val avroFieldsMap = avroSchema.getFields.asScala.map(f => (f.name, f)).toMap
+
+    // Recursively process fields
+    val alignedFields = sourceSchema.fields.map { field =>
+      avroFieldsMap.get(field.name) match {
+        case Some(avroField) =>
+          // Process the nullable property of the current field
+          val alignedField = field.copy(nullable = avroField.schema.isNullable)
+
+          // Recursively handle nested structures
+          field.dataType match {
+            case structType: StructType =>
+              // For struct type, recursively process its internal fields
+              val nestedAvroSchema = unwrapNullableSchema(avroField.schema)
+              if (nestedAvroSchema.getType == Schema.Type.RECORD) {
+                alignedField.copy(dataType = alignFieldsNullability(structType, nestedAvroSchema))
+              } else {
+                alignedField
+              }
+
+            case ArrayType(elementType, containsNull) =>
+              // For array type, process element type
+              val arraySchema = unwrapNullableSchema(avroField.schema)
+              if (arraySchema.getType == Schema.Type.ARRAY) {
+                val elemSchema = arraySchema.getElementType
+                val newElementType = updateElementType(elementType, elemSchema)
+                alignedField.copy(dataType = ArrayType(newElementType, elemSchema.isNullable))
+              } else {
+                alignedField
+              }
+
+            case MapType(keyType, valueType, valueContainsNull) =>
+              // For Map type, process value type
+              val mapSchema = unwrapNullableSchema(avroField.schema)
+              if (mapSchema.getType == Schema.Type.MAP) {
+                val valueSchema = mapSchema.getValueType
+                val newValueType = updateElementType(valueType, valueSchema)
+                alignedField.copy(dataType = MapType(keyType, newValueType, valueSchema.isNullable))
+              } else {
+                alignedField
+              }
+
+            case _ => alignedField // Basic types are returned directly
+          }
+
+        case None => field.copy() // Field not found in Avro schema remains unchanged
+      }
+    }
+
+    StructType(alignedFields)
+  }
+
+  /**
+   * Returns the non-null schema if the schema is a UNION type containing NULL
+   */
+  private def unwrapNullableSchema(schema: Schema): Schema = {
+    if (schema.getType == Schema.Type.UNION) {
+      val types = schema.getTypes.asScala
+      val nonNullTypes = types.filter(_.getType != Schema.Type.NULL)
+      if (nonNullTypes.size == 1) nonNullTypes.head else schema
+    } else {
+      schema
+    }
+  }
+
+  /**
+   * Updates the element type, handling nested structures
+   */
+  private def updateElementType(dataType: DataType, avroSchema: Schema): DataType = {
+    dataType match {
+      case structType: StructType =>
+        if (avroSchema.getType == Schema.Type.RECORD) {
+          alignFieldsNullability(structType, avroSchema)
+        } else {
+          structType
+        }
+
+      case ArrayType(elemType, containsNull) =>
+        if (avroSchema.getType == Schema.Type.ARRAY) {
+          val elemSchema = avroSchema.getElementType
+          ArrayType(updateElementType(elemType, elemSchema), elemSchema.isNullable)
+        } else {
+          dataType
+        }
+
+      case MapType(keyType, valueType, valueContainsNull) =>
+        if (avroSchema.getType == Schema.Type.MAP) {
+          val valueSchema = avroSchema.getValueType
+          MapType(keyType, updateElementType(valueType, valueSchema), valueSchema.isNullable)
+        } else {
+          dataType
+        }
+
+      case _ => dataType // Basic types are returned directly
+    }
   }
 }

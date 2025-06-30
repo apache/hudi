@@ -210,10 +210,26 @@ class InternalDynamicBloomFilter extends InternalFilter {
   /**
    * Adds a new row to <i>this</i> dynamic Bloom filter.
    */
-  private void addRow() {
+  protected void addRow() {
     InternalBloomFilter[] tmp = new InternalBloomFilter[matrix.length + 1];
     System.arraycopy(matrix, 0, tmp, 0, matrix.length);
     tmp[tmp.length - 1] = new InternalBloomFilter(vectorSize, nbHash, hashType);
+    matrix = tmp;
+  }
+
+  protected void addRows(int size) {
+    if (size <= 0) {
+      return;
+    } else if (size == 1) {
+      addRow();
+      return;
+    }
+
+    InternalBloomFilter[] tmp = new InternalBloomFilter[matrix.length + size];
+    System.arraycopy(matrix, 0, tmp, 0, matrix.length);
+    for (int i = matrix.length; i < tmp.length; i++) {
+      tmp[i] = new InternalBloomFilter(vectorSize, nbHash, hashType);
+    }
     matrix = tmp;
   }
 
@@ -235,5 +251,9 @@ class InternalDynamicBloomFilter extends InternalFilter {
       return matrix[0];
     }
     return matrix[matrix.length - 1];
+  }
+
+  public int getMatrixLength() {
+    return this.matrix.length;
   }
 }

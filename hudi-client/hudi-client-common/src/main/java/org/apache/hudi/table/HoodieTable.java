@@ -32,6 +32,7 @@ import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.HoodieColumnStatsIndexUtils;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -90,6 +91,7 @@ import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.table.storage.HoodieLayoutFactory;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
+import org.apache.hudi.util.CommonClientUtils;
 
 import org.apache.avro.Schema;
 import org.slf4j.Logger;
@@ -149,7 +151,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   protected HoodieTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
     this.config = config;
     this.context = context;
-    this.isMetadataTable = HoodieTableMetadata.isMetadataTable(config.getBasePath());
+    this.isMetadataTable = metaClient.isMetadataTable();
     this.instantGenerator = metaClient.getInstantGenerator();
     this.instantFileNameGenerator = metaClient.getInstantFileNameGenerator();
     this.instantFileNameParser = metaClient.getInstantFileNameParser();
@@ -159,6 +161,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   }
 
   protected HoodieTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient, FileSystemViewManager viewManager, TaskContextSupplier supplier) {
+    // TODO clean up constructors
     this.config = config;
     this.context = context;
     this.isMetadataTable = HoodieTableMetadata.isMetadataTable(config.getBasePath());
@@ -542,16 +545,14 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   public abstract void rollbackBootstrap(HoodieEngineContext context, String instantTime);
 
   /**
-   * Schedule cleaning for the instant time.
+   * Generates a cleaner plan if required.
    *
-   * @param context HoodieEngineContext
-   * @param instantTime Instant Time for scheduling cleaning
+   * @param context       HoodieEngineContext
    * @param extraMetadata additional metadata to write into plan
    * @return HoodieCleanerPlan, if there is anything to clean.
    */
-  public abstract Option<HoodieCleanerPlan> scheduleCleaning(HoodieEngineContext context,
-                                                             String instantTime,
-                                                             Option<Map<String, String>> extraMetadata);
+  public abstract Option<HoodieCleanerPlan> createCleanerPlan(HoodieEngineContext context,
+                                                              Option<Map<String, String>> extraMetadata);
 
   /**
    * Executes a new clean action.
@@ -646,12 +647,12 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
                                                     String restoreInstantTimestamp,
                                                     String savepointToRestoreTimestamp);
 
-  public void rollbackInflightCompaction(HoodieInstant inflightInstant) {
-    rollbackInflightCompaction(inflightInstant, s -> Option.empty());
+  public void rollbackInflightCompaction(HoodieInstant inflightInstant, TransactionManager transactionManager) {
+    rollbackInflightCompaction(inflightInstant, s -> Option.empty(), transactionManager);
   }
 
-  public void rollbackInflightLogCompaction(HoodieInstant inflightInstant) {
-    rollbackInflightLogCompaction(inflightInstant, s -> Option.empty());
+  public void rollbackInflightLogCompaction(HoodieInstant inflightInstant, TransactionManager transactionManager) {
+    rollbackInflightLogCompaction(inflightInstant, s -> Option.empty(), transactionManager);
   }
 
   /**
@@ -661,9 +662,10 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @param inflightInstant Inflight Compaction Instant
    */
   public void rollbackInflightCompaction(HoodieInstant inflightInstant,
-                                         Function<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInstantFunc) {
+                                         Function<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInstantFunc,
+                                         TransactionManager transactionManager) {
     ValidationUtils.checkArgument(inflightInstant.getAction().equals(HoodieTimeline.COMPACTION_ACTION));
-    rollbackInflightInstant(inflightInstant, getPendingRollbackInstantFunc);
+    rollbackInflightInstant(inflightInstant, getPendingRollbackInstantFunc, transactionManager);
   }
 
   /**
@@ -673,8 +675,9 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @param getPendingRollbackInstantFunc Function to get rollback instant
    */
   public void rollbackInflightClustering(HoodieInstant inflightInstant,
-                                         Function<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInstantFunc) {
-    rollbackInflightClustering(inflightInstant, getPendingRollbackInstantFunc, false);
+                                         Function<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInstantFunc,
+                                         TransactionManager transactionManager) {
+    rollbackInflightClustering(inflightInstant, getPendingRollbackInstantFunc, false, transactionManager);
   }
 
   /**
@@ -684,11 +687,12 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @param getPendingRollbackInstantFunc Function to get rollback instant
    */
   public void rollbackInflightClustering(HoodieInstant inflightInstant,
-                                         Function<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInstantFunc, boolean deleteInstants) {
+                                         Function<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInstantFunc, boolean deleteInstants,
+                                         TransactionManager transactionManager) {
     ValidationUtils.checkArgument(inflightInstant.getAction().equals(HoodieTimeline.CLUSTERING_ACTION)
         || inflightInstant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION),
         String.format("Expected replace or clustering action instant but got %s", inflightInstant));
-    rollbackInflightInstant(inflightInstant, getPendingRollbackInstantFunc);
+    rollbackInflightInstant(inflightInstant, getPendingRollbackInstantFunc, transactionManager);
     if (deleteInstants) {
       // above rollback would still keep requested in the timeline. so, lets delete it if if are looking to purge the pending clustering fully.
       getActiveTimeline().deletePending(instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED, inflightInstant.getAction(), inflightInstant.requestedTime()));
@@ -702,17 +706,25 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @param getPendingRollbackInstantFunc Function to get rollback instant
    */
   void rollbackInflightInstant(HoodieInstant inflightInstant,
-                               Function<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInstantFunc) {
+                               Function<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInstantFunc,
+                               TransactionManager transactionManager) {
     // Retrieve the rollback information using the provided function.
-    final Pair<String, Boolean> rollbackInfo = getPendingRollbackInstantFunc.apply(inflightInstant.requestedTime())
-        .map(entry -> Pair.of(entry.getRollbackInstant().requestedTime(), false))
-        .orElseGet(() -> Pair.of(getMetaClient().createNewInstantTime(), true));
-    // If a rollback has not scheduled (rollbackInfo.getRight() is true), schedule it.
-    if (rollbackInfo.getRight()) {
-      scheduleRollback(context, rollbackInfo.getLeft(), inflightInstant, false, config.shouldRollbackUsingMarkers(), false);
+    final Option<HoodiePendingRollbackInfo> rollbackInfo = getPendingRollbackInstantFunc.apply(inflightInstant.requestedTime());
+    // If a rollback has not scheduled, schedule it.
+    String instantTime;
+    if (rollbackInfo.isEmpty()) {
+      transactionManager.beginStateChange(Option.empty(), Option.empty());
+      try {
+        instantTime = getMetaClient().createNewInstantTime(false);
+        scheduleRollback(context, instantTime, inflightInstant, false, config.shouldRollbackUsingMarkers(), false);
+      } finally {
+        transactionManager.endStateChange(Option.empty());
+      }
+    } else {
+      instantTime = rollbackInfo.get().getRollbackInstant().requestedTime();
     }
     // Perform the rollback.
-    rollback(context, rollbackInfo.getLeft(), inflightInstant, false, false);
+    rollback(context, instantTime, inflightInstant, false, false);
     // Revert the inflight instant to requested state in the timeline.
     getActiveTimeline().revertInstantFromInflightToRequested(inflightInstant);
   }
@@ -723,12 +735,19 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    *
    * @param inflightInstant Inflight Compaction Instant
    */
-  public void rollbackInflightLogCompaction(HoodieInstant inflightInstant, Function<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInstantFunc) {
-    final String commitTime = getPendingRollbackInstantFunc.apply(inflightInstant.requestedTime()).map(entry
-        -> entry.getRollbackInstant().requestedTime())
-        .orElseGet(() -> getMetaClient().createNewInstantTime());
-    scheduleRollback(context, commitTime, inflightInstant, false, config.shouldRollbackUsingMarkers(),
-        false);
+  public void rollbackInflightLogCompaction(HoodieInstant inflightInstant, Function<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInstantFunc,
+                                            TransactionManager transactionManager) {
+    transactionManager.beginStateChange(Option.empty(), Option.empty());
+    final String commitTime;
+    try {
+      commitTime = getPendingRollbackInstantFunc.apply(inflightInstant.requestedTime()).map(entry
+              -> entry.getRollbackInstant().requestedTime())
+          .orElseGet(() -> getMetaClient().createNewInstantTime(false));
+      scheduleRollback(context, commitTime, inflightInstant, false, config.shouldRollbackUsingMarkers(),
+          false);
+    } finally {
+      transactionManager.endStateChange(Option.empty());
+    }
     rollback(context, commitTime, inflightInstant, true, false);
   }
 
@@ -964,11 +983,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   }
 
   public HoodieFileFormat getBaseFileFormat() {
-    HoodieTableConfig tableConfig = metaClient.getTableConfig();
-    if (tableConfig.isMultipleBaseFileFormatsEnabled() && config.contains(HoodieWriteConfig.BASE_FILE_FORMAT)) {
-      return config.getBaseFileFormat();
-    }
-    return metaClient.getTableConfig().getBaseFileFormat();
+    return CommonClientUtils.getBaseFileFormat(config, metaClient.getTableConfig());
   }
 
   public Option<HoodieFileFormat> getPartitionMetafileFormat() {
@@ -996,7 +1011,17 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @return instance of {@link HoodieTableMetadataWriter}
    */
   public final Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstantTimestamp) {
-    return getMetadataWriter(triggeringInstantTimestamp, EAGER);
+    return getMetadataWriter(triggeringInstantTimestamp, false);
+  }
+
+  /**
+   * Get Table metadata writer.
+   *
+   * @param triggeringInstantTimestamp - The instant that is triggering this metadata write
+   * @return instance of {@link HoodieTableMetadataWriter}
+   */
+  public final Option<HoodieTableMetadataWriter> getMetadataWriter(String triggeringInstantTimestamp, boolean streamingWrites) {
+    return getMetadataWriter(triggeringInstantTimestamp, EAGER, streamingWrites);
   }
 
   /**
@@ -1006,15 +1031,9 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @return An instance of {@link HoodieTableMetadataWriter}.
    */
   public Option<HoodieTableMetadataWriter> getIndexingMetadataWriter(String triggeringInstantTimestamp) {
-    return getMetadataWriter(triggeringInstantTimestamp, LAZY);
+    return getMetadataWriter(triggeringInstantTimestamp, LAZY, false);
   }
 
-  /**
-   * Gets the metadata writer for regular writes.
-   *
-   * @param triggeringInstantTimestamp The instant that is triggering this metadata write.
-   * @return An instance of {@link HoodieTableMetadataWriter}.
-   */
   /**
    * Get Table metadata writer.
    * <p>
@@ -1027,11 +1046,13 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    *
    * @param triggeringInstantTimestamp The instant that is triggering this metadata write
    * @param failedWritesCleaningPolicy Cleaning policy on failed writes
+   * @param streamingWrites            Whether streaming write is enabled
    * @return instance of {@link HoodieTableMetadataWriter}
    */
   protected Option<HoodieTableMetadataWriter> getMetadataWriter(
       String triggeringInstantTimestamp,
-      HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy) {
+      HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
+      boolean streamingWrites) {
     // Each engine is expected to override this and
     // provide the actual metadata writer, if enabled.
     return Option.empty();
@@ -1112,7 +1133,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
         metadataIndexDisabled = !partitionType.isMetadataPartitionAvailable(metaClient);
         break;
       default:
-        LOG.debug("Not a valid metadata partition type: " + partitionType.name());
+        LOG.debug("Not a valid metadata partition type: {}", partitionType.name());
         return false;
     }
     return metadataIndexDisabled;

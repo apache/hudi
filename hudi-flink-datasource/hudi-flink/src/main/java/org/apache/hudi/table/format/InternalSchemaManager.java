@@ -19,6 +19,7 @@
 package org.apache.hudi.table.format;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
@@ -61,13 +62,14 @@ public class InternalSchemaManager implements Serializable {
   private static final long serialVersionUID = 1L;
 
   public static final InternalSchemaManager DISABLED = new InternalSchemaManager(null, InternalSchema.getEmptyInternalSchema(), null, null,
-      TimelineLayout.fromVersion(TimelineLayoutVersion.CURR_LAYOUT_VERSION));
+      TimelineLayout.fromVersion(TimelineLayoutVersion.CURR_LAYOUT_VERSION), null);
 
   private final Configuration conf;
   private final InternalSchema querySchema;
   private final String validCommits;
   private final String tablePath;
   private final TimelineLayout layout;
+  private final HoodieTableConfig tableConfig;
   private transient org.apache.hadoop.conf.Configuration hadoopConf;
 
   public static InternalSchemaManager get(Configuration conf, HoodieTableMetaClient metaClient) {
@@ -86,16 +88,17 @@ public class InternalSchemaManager implements Serializable {
         .getInstantsAsStream()
         .map(factory::getFileName)
         .collect(Collectors.joining(","));
-    return new InternalSchemaManager(conf, internalSchema.get(), validCommits, metaClient.getBasePath().toString(), metaClient.getTimelineLayout());
+    return new InternalSchemaManager(conf, internalSchema.get(), validCommits, metaClient.getBasePath().toString(), metaClient.getTimelineLayout(), metaClient.getTableConfig());
   }
 
   public InternalSchemaManager(Configuration conf, InternalSchema querySchema, String validCommits, String tablePath,
-                               TimelineLayout layout) {
+                               TimelineLayout layout, HoodieTableConfig tableConfig) {
     this.conf = conf;
     this.querySchema = querySchema;
     this.validCommits = validCommits;
     this.tablePath = tablePath;
     this.layout = layout;
+    this.tableConfig = tableConfig;
   }
 
   public InternalSchema getQuerySchema() {
@@ -121,8 +124,7 @@ public class InternalSchemaManager implements Serializable {
     InternalSchema fileSchema = InternalSchemaCache.getInternalSchemaByVersionId(
         commitInstantTime, tablePath,
         new HoodieHadoopStorage(tablePath, getHadoopConf()),
-        validCommits, layout.getInstantFileNameParser(),
-        layout.getCommitMetadataSerDe(), layout.getInstantGenerator());
+        validCommits, layout, tableConfig);
     if (querySchema.equals(fileSchema)) {
       return InternalSchema.getEmptyInternalSchema();
     }

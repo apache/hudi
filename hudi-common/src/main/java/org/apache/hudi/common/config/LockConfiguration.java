@@ -134,7 +134,7 @@ public class LockConfiguration implements Serializable {
   private final TypedProperties props;
 
   public LockConfiguration(Properties props) {
-    this.props = new TypedProperties(props);
+    this.props = TypedProperties.copy(props);
   }
 
   public TypedProperties getConfig() {

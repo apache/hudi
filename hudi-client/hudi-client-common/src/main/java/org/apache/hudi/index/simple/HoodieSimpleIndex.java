@@ -20,7 +20,6 @@
 package org.apache.hudi.index.simple;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -31,7 +30,6 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.io.HoodieKeyLocationFetchHandle;
@@ -103,8 +101,7 @@ public class HoodieSimpleIndex
       HoodieData<HoodieRecord<R>> inputRecords, HoodieEngineContext context,
       HoodieTable hoodieTable) {
     if (config.getSimpleIndexUseCaching()) {
-      inputRecords.persist(new HoodieConfig(config.getProps())
-          .getString(HoodieIndexConfig.SIMPLE_INDEX_INPUT_STORAGE_LEVEL_VALUE));
+      inputRecords.persist(config.getSimpleIndexInputStorageLevel());
     }
 
     HoodiePairData<HoodieKey, HoodieRecord<R>> keyedInputRecords =

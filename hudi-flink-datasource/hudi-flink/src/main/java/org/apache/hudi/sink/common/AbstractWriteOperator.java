@@ -18,11 +18,14 @@
 
 package org.apache.hudi.sink.common;
 
+import org.apache.hudi.sink.event.Correspondent;
+
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.runtime.operators.coordination.OperatorEventGateway;
 import org.apache.flink.runtime.operators.coordination.OperatorEventHandler;
 import org.apache.flink.streaming.api.operators.BoundedOneInput;
 import org.apache.flink.streaming.api.operators.ProcessOperator;
+import org.apache.flink.table.data.RowData;
 
 /**
  * Base class for write operator.
@@ -30,13 +33,17 @@ import org.apache.flink.streaming.api.operators.ProcessOperator;
  * @param <I> the input type
  */
 public abstract class AbstractWriteOperator<I>
-    extends ProcessOperator<I, Object>
+    extends ProcessOperator<I, RowData>
     implements OperatorEventHandler, BoundedOneInput {
   private final AbstractWriteFunction<I> function;
 
   public AbstractWriteOperator(AbstractWriteFunction<I> function) {
     super(function);
     this.function = function;
+  }
+
+  public void setCorrespondent(Correspondent correspondent) {
+    this.function.setCorrespondent(correspondent);
   }
 
   public void setOperatorEventGateway(OperatorEventGateway operatorEventGateway) {

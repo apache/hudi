@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.testutils.HoodieJavaClientTestHarness;
@@ -36,6 +37,7 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.util.Collections;
 
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -77,13 +79,12 @@ public class TestSchemaEvolutionClient extends HoodieJavaClientTestHarness {
   }
 
   private void prepareTable(HoodieJavaWriteClient<RawTripTestPayload> writeClient) throws IOException {
-    String commitTime = "1";
-    writeClient.startCommitWithTime(commitTime);
+    String commitTime = writeClient.startCommit();
     String jsonRow = "{\"_row_key\": \"1\", \"time\": \"2000-01-01T00:00:00.000Z\", \"number\": 1}";
     RawTripTestPayload payload = new RawTripTestPayload(jsonRow);
     HoodieAvroRecord<RawTripTestPayload> record = new HoodieAvroRecord<>(
         new HoodieKey(payload.getRowKey(), payload.getPartitionPath()), payload);
-    writeClient.insert(Collections.singletonList(record), commitTime);
+    writeClient.commit(commitTime, writeClient.insert(Collections.singletonList(record), commitTime), Option.empty(), COMMIT_ACTION, Collections.emptyMap());
   }
 
   private Types.Field getFieldByName(String fieldName) {

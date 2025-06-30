@@ -51,7 +51,7 @@ public class DirectMarkerTransactionManager extends TransactionManager {
       LOG.info("Transaction starting for " + newTxnOwnerInstantTime + " and " + filePath);
       lockManager.lock();
 
-      reset(currentTxnOwnerInstant, Option.of(getInstant(newTxnOwnerInstantTime, instantGenerator)), Option.empty());
+      reset(changeActionInstant, Option.of(getInstant(newTxnOwnerInstantTime, instantGenerator)), Option.empty());
       LOG.info("Transaction started for " + newTxnOwnerInstantTime + " and " + filePath);
     }
   }
@@ -81,7 +81,7 @@ public class DirectMarkerTransactionManager extends TransactionManager {
     if (!ZookeeperBasedLockProvider.class.getName().equals(writeConfig.getLockProviderClass())) {
       throw new HoodieNotSupportedException("Only Support ZK-based lock for DirectMarkerTransactionManager now.");
     }
-    TypedProperties props = new TypedProperties(writeConfig.getProps());
+    TypedProperties props = TypedProperties.copy(writeConfig.getProps());
     props.setProperty(LockConfiguration.ZK_LOCK_KEY_PROP_KEY, (null != partitionPath && !partitionPath.isEmpty()) ? partitionPath + "/" + fileId : fileId);
     return props;
   }

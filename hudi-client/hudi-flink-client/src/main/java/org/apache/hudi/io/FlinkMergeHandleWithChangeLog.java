@@ -20,7 +20,6 @@ package org.apache.hudi.io;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
-import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -73,9 +72,10 @@ public class FlinkMergeHandleWithChangeLog<T, I, K, O>
     final boolean result = super.writeUpdateRecord(newRecord, oldRecord, combineRecordOpt, writerSchema);
     if (result) {
       boolean isDelete = HoodieOperation.isDelete(newRecord.getOperation());
-      Option<IndexedRecord> avroRecordOpt = savedCombineRecordOp.flatMap(r ->
-          toAvroRecord(r, writerSchema, config.getPayloadConfig().getProps()));
-      cdcLogger.put(newRecord, (GenericRecord) oldRecord.getData(), isDelete ? Option.empty() : avroRecordOpt);
+      GenericRecord oldAvroRecord = (GenericRecord) toAvroRecord(oldRecord, writeSchemaWithMetaFields, config.getProps()).get();
+      Option<IndexedRecord> newAvroRecordOpt =
+          isDelete ? Option.empty() : savedCombineRecordOp.flatMap(r -> toAvroRecord(r, writerSchema, config.getProps()));
+      cdcLogger.put(newRecord, oldAvroRecord, newAvroRecordOpt);
     }
     return result;
   }
@@ -86,7 +86,7 @@ public class FlinkMergeHandleWithChangeLog<T, I, K, O>
     HoodieRecord<T> savedRecord = newRecord.newInstance();
     super.writeInsertRecord(newRecord);
     if (!HoodieOperation.isDelete(newRecord.getOperation())) {
-      cdcLogger.put(newRecord, null, savedRecord.toIndexedRecord(schema, config.getPayloadConfig().getProps()).map(HoodieAvroIndexedRecord::getData));
+      cdcLogger.put(newRecord, null, toAvroRecord(savedRecord, schema, config.getProps()));
     }
   }
 
