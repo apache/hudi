@@ -51,10 +51,7 @@ import static org.apache.hudi.index.expression.HoodieExpressionIndex.TRIM_STRING
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class HoodieIndexDefinition implements Serializable {
 
-  // Name of the index
-  // e.g. create index <user index name> on myTable using column_stats(ts) options(expr='from_unixtime', format='yyyy-MM-dd')
-  // Index name is composed of 2 parts - MDT partition path prefix + user index name. In this case, the partition path is
-  // EXPRESSION_INDEX.getPartitionPath.
+  // Index name is composed of 2 parts - MDT partition path prefix + user-specified index name.
   private String indexName;
 
   private String indexType;
@@ -202,8 +199,8 @@ public class HoodieIndexDefinition implements Serializable {
     }
 
     public Builder withIndexName(String indexName) {
-      // Validate the index name belongs to a valid partition path. Function throws exception if it is a random index name.
-      MetadataPartitionType.fromPartitionPath(indexName);
+      ValidationUtils.checkArgument(MetadataPartitionType.fromPartitionPath(indexName) != null,
+              "Invalid index name");
       this.indexName = indexName;
       return this;
     }

@@ -436,7 +436,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
    * @return A map of (key -> record)
    */
   public abstract HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> getRecordsByKeysWithMapping(
-      HoodieData<String> keys, String partitionName, Option<SerializableFunction<String, String>> keyEncoder);
+          HoodieData<String> keys, String partitionName, Option<SerializableFunction<String, String>> keyEncodingFn);
 
   /**
    * Returns a map of (secondary-key -> set-of-record-keys) for the provided secondary keys.
