@@ -21,7 +21,7 @@ package org.apache.hudi.common.data;
 
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.function.SerializableFunction;
-import org.apache.hudi.common.function.SerializableFunctionPairOut;
+import org.apache.hudi.common.function.SerializablePairFunction;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.storage.StoragePath;
 
@@ -161,7 +161,7 @@ public interface HoodieData<T> extends Serializable {
    * @param <V>  value type of the pair
    * @return {@link HoodiePairData<K, V>} holding mapped elements
    */
-  <K, V> HoodiePairData<K, V> mapToPair(SerializableFunctionPairOut<T, K, V> func);
+  <K, V> HoodiePairData<K, V> mapToPair(SerializablePairFunction<T, K, V> func);
 
   /**
    * Returns new {@link HoodieData} collection holding only distinct objects of the original one

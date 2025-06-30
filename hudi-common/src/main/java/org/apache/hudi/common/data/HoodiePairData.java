@@ -21,8 +21,8 @@ package org.apache.hudi.common.data;
 
 import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.function.SerializableFunction;
-import org.apache.hudi.common.function.SerializableFunctionPairOut;
-import org.apache.hudi.common.function.SerializableFunctionPairIn;
+import org.apache.hudi.common.function.SerializablePairFunction;
+import org.apache.hudi.common.function.SerializablePairPredicate;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -115,7 +115,7 @@ public interface HoodiePairData<K, V> extends Serializable {
    * @return containing the result. Actual execution may be deferred.
    */
   <L, W> HoodiePairData<L, W> mapToPair(
-      SerializableFunctionPairOut<Pair<K, V>, L, W> mapToPairFunc);
+      SerializablePairFunction<Pair<K, V>, L, W> mapToPairFunc);
 
   /**
    * Performs a left outer join of this dataset against {@code other}.
@@ -141,7 +141,7 @@ public interface HoodiePairData<K, V> extends Serializable {
    * @param filter predicate function that takes a key and value as input and returns true if the pair should be kept
    * @return filtered {@link HoodiePairData} containing only pairs that satisfy the predicate
    */
-  HoodiePairData<K, V> filter(SerializableFunctionPairIn<K, V, Boolean> filter);
+  HoodiePairData<K, V> filter(SerializablePairPredicate<K, V> filter);
 
   /**
    * Performs an inner join of this dataset against {@code other}.
