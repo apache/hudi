@@ -322,7 +322,7 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
       String bloomPartitionPath = BLOOM_FILTERS.getPartitionPath();
       HoodieIndexVersion indexVersion = HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.current(), bloomPartitionPath);
       SerializableFunction<String, SerializableFunction<Integer, Integer>> mappingFunction =
-          HoodieTableMetadataUtil.getRecordKeyToFileGroupIndexFunction(bloomPartitionPath, indexVersion);
+          HoodieTableMetadataUtil.getRecordKeyToFileGroupIndexFunction(bloomPartitionPath, indexVersion, false);
       try {
         return mappingFunction.apply(bloomIndexEncodedKey).apply(targetPartitions);
       } catch (Exception e) {
