@@ -755,8 +755,10 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
   @MethodSource("mapRecordKeyToFileGroupIndexTestCases")
   public void testMapRecordKeyToFileGroupIndex(String testName, String recordKey, int numFileGroups, String partitionName, 
       HoodieIndexVersion version, int expectedIndex) throws Exception {
+    boolean useSecondaryKeyForHashing = MetadataPartitionType.SECONDARY_INDEX.matchesPartitionPath(partitionName)
+        && version.greaterThanOrEquals(HoodieIndexVersion.V2);
     SerializableFunction<String, SerializableFunction<Integer, Integer>> mappingFunction =
-        HoodieTableMetadataUtil.getRecordKeyToFileGroupIndexFunction(partitionName, version);
+        HoodieTableMetadataUtil.getRecordKeyToFileGroupIndexFunction(partitionName, version, useSecondaryKeyForHashing);
     int index = mappingFunction.apply(recordKey).apply(numFileGroups);
     assertEquals(expectedIndex, index, "File group index should match expected value");
   }
