@@ -28,7 +28,7 @@ import org.apache.spark.sql.catalyst.plans.logical.{Filter, LeafNode, LogicalPla
 import org.apache.spark.sql.catalyst.plans.logical.statsEstimation.FilterEstimation
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
-import org.apache.spark.sql.hudi.analysis.HoodiePruneFileSourcePartitions.{exprUtils, getPartitionFiltersAndDataFilters, rebuildPhysicalOperation, HoodieRelationMatcher}
+import org.apache.spark.sql.hudi.analysis.Spark3HoodiePruneFileSourcePartitions.{exprUtils, getPartitionFiltersAndDataFilters, rebuildPhysicalOperation, HoodieRelationMatcher}
 import org.apache.spark.sql.sources.BaseRelation
 import org.apache.spark.sql.types.StructType
 
@@ -38,10 +38,10 @@ import org.apache.spark.sql.types.StructType
  *
  * NOTE: [[HoodiePruneFileSourcePartitions]] is a replica in kind to Spark's [[PruneFileSourcePartitions]]
  */
-case class HoodiePruneFileSourcePartitions(spark: SparkSession) extends Rule[LogicalPlan] {
+case class Spark3HoodiePruneFileSourcePartitions(spark: SparkSession) extends Rule[LogicalPlan] {
 
   override def apply(plan: LogicalPlan): LogicalPlan = plan transformDown {
-    case op @ PhysicalOperation(projects, filters, lr @ LogicalRelation(HoodieRelationMatcher(fileIndex), _, _, _, _))
+    case op @ PhysicalOperation(projects, filters, lr @ LogicalRelation(HoodieRelationMatcher(fileIndex), _, _, _))
       if !fileIndex.hasPredicatesPushedDown =>
 
       val deterministicFilters = filters.filter(f => f.deterministic && !SubqueryExpression.hasSubquery(f))
@@ -81,7 +81,7 @@ case class HoodiePruneFileSourcePartitions(spark: SparkSession) extends Rule[Log
 
 }
 
-private object HoodiePruneFileSourcePartitions extends PredicateHelper {
+private object Spark3HoodiePruneFileSourcePartitions extends PredicateHelper {
 
   private val exprUtils = sparkAdapter.getCatalystExpressionUtils
 
