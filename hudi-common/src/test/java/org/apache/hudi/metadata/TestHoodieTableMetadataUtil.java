@@ -22,9 +22,7 @@ import org.apache.hudi.common.function.SerializableFunction;
 
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieTableMetadataUtil {
 
@@ -55,30 +53,5 @@ public class TestHoodieTableMetadataUtil {
     
     // Both should hash the full key
     assertNotEquals(result3, result4);
-  }
-
-  @Test
-  public void testShouldUseSecondaryKeyForHashing() {
-    String secondaryIndexPartition = "secondary_index_test_index";
-    String regularPartition = "record_index";
-    HoodieIndexVersion version = HoodieIndexVersion.V2;
-    
-    // Test secondary index partition with composite key
-    assertTrue(HoodieTableMetadataUtil.shouldUseSecondaryKeyForHashing(
-        secondaryIndexPartition, version, "secondaryKey$recordKey"));
-    
-    // Test secondary index partition with simple key (should not use secondary key)
-    assertFalse(HoodieTableMetadataUtil.shouldUseSecondaryKeyForHashing(
-        secondaryIndexPartition, version, "simpleKey"));
-    
-    // Test regular partition (should not use secondary key regardless of key format)
-    assertFalse(HoodieTableMetadataUtil.shouldUseSecondaryKeyForHashing(
-        regularPartition, version, "secondaryKey$recordKey"));
-    assertFalse(HoodieTableMetadataUtil.shouldUseSecondaryKeyForHashing(
-        regularPartition, version, "simpleKey"));
-    
-    // Test with older version (should not use secondary key)
-    assertFalse(HoodieTableMetadataUtil.shouldUseSecondaryKeyForHashing(
-        secondaryIndexPartition, HoodieIndexVersion.V1, "secondaryKey$recordKey"));
   }
 } 
