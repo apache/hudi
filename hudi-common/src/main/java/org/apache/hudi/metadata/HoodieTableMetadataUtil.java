@@ -187,7 +187,6 @@ import static org.apache.hudi.index.expression.HoodieExpressionIndex.EXPRESSION_
 import static org.apache.hudi.index.expression.HoodieExpressionIndex.IDENTITY_TRANSFORM;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_IS_TIGHT_BOUND;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.RECORD_INDEX_MISSING_FILEINDEX_FALLBACK;
-import static org.apache.hudi.metadata.HoodieMetadataPayload.SECONDARY_INDEX_RECORD_KEY_SEPARATOR;
 import static org.apache.hudi.metadata.HoodieTableMetadata.EMPTY_PARTITION_NAME;
 import static org.apache.hudi.metadata.HoodieTableMetadata.NON_PARTITIONED_NAME;
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
@@ -1364,35 +1363,6 @@ public class HoodieTableMetadataUtil {
   }
 
   /**
-   * Returns a function that maps record keys to file group indices based on the partition name.
-   * <p>
-   * For secondary index partitions (version >= 2), if the record key contains the secondary index separator,
-   * the secondary key portion is used for hashing. Otherwise, the full record key is used.
-   * <p>
-   * Note: The hashing algorithm is same as String.hashCode() but is defined here explicitly since
-   * hashCode() implementation is not guaranteed by the JVM to be consistent across versions.
-   *
-   * @param partitionName name of the partition
-   * @param version index version to determine hashing behavior
-   * @return function that maps record keys to file group indices
-   */
-  public static SerializableFunction<String, SerializableFunction<Integer, Integer>> getRecordKeyToFileGroupIndexFunction(
-      String partitionName, HoodieIndexVersion version) {
-    if (MetadataPartitionType.SECONDARY_INDEX.matchesPartitionPath(partitionName)
-        && version.greaterThanOrEquals(HoodieIndexVersion.V2)) {
-      return recordKey -> {
-        if (recordKey.contains(SECONDARY_INDEX_RECORD_KEY_SEPARATOR)) {
-          String secondaryKey = SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey(recordKey);
-          return numFileGroups -> mapRecordKeyToFileGroupIndex(secondaryKey, numFileGroups);
-        }
-        return numFileGroups -> mapRecordKeyToFileGroupIndex(recordKey, numFileGroups);
-      };
-    }
-    return recordKey -> numFileGroups -> mapRecordKeyToFileGroupIndex(recordKey, numFileGroups);
-  }
-
-  /**
-   * Returns a function that maps record keys to file group indices, optimized for batch processing.
    * <p>
    * This method should be used when processing a batch of records that are guaranteed to have the same key format
    * (either all containing the secondary index separator or none containing it).
@@ -1416,24 +1386,6 @@ public class HoodieTableMetadataUtil {
       };
     }
     return recordKey -> numFileGroups -> mapRecordKeyToFileGroupIndex(recordKey, numFileGroups);
-  }
-
-  /**
-   * Determines whether secondary key should be used for hashing in a batch of records.
-   * <p>
-   * This method checks if the partition is a secondary index partition and if the provided sample record key
-   * contains the secondary index separator. The result can be used to optimize batch processing by avoiding
-   * repeated separator checks for each record.
-   *
-   * @param partitionName name of the partition
-   * @param version index version to determine hashing behavior
-   * @param sampleRecordKey a sample record key from the batch to determine the key format
-   * @return true if secondary key should be used for hashing, false otherwise
-   */
-  public static boolean shouldUseSecondaryKeyForHashing(String partitionName, HoodieIndexVersion version, String sampleRecordKey) {
-    return MetadataPartitionType.SECONDARY_INDEX.matchesPartitionPath(partitionName)
-        && version.greaterThanOrEquals(HoodieIndexVersion.V2)
-        && sampleRecordKey.contains(SECONDARY_INDEX_RECORD_KEY_SEPARATOR);
   }
 
   // change to configurable larger group

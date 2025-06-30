@@ -49,7 +49,6 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Function;
 
 import scala.Tuple2;
 
@@ -102,7 +101,7 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
     String partitionPath = MetadataPartitionType.RECORD_INDEX.getPartitionPath();
     HoodieIndexVersion indexVersion = existingIndexVersionOrDefault(partitionPath, hoodieTable.getMetaClient());
     SerializableFunction<String, SerializableFunction<Integer, Integer>> mappingFunction =
-        HoodieTableMetadataUtil.getRecordKeyToFileGroupIndexFunction(partitionPath, indexVersion);
+        HoodieTableMetadataUtil.getRecordKeyToFileGroupIndexFunction(partitionPath, indexVersion, false);
     JavaRDD<String> partitionedKeyRDD = HoodieJavaRDD.getJavaRDD(records)
         .map(HoodieRecord::getRecordKey)
         .keyBy(k -> mappingFunction.apply(k).apply(numFileGroups))
