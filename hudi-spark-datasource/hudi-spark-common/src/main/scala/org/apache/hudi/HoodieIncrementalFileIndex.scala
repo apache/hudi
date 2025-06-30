@@ -19,6 +19,7 @@ package org.apache.hudi
 
 import org.apache.hudi.common.model.{FileSlice, HoodieLogFile}
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.log.InstantRange.RangeType
 import org.apache.hudi.storage.StoragePathInfo
 import org.apache.hudi.util.JFunction
 
@@ -40,12 +41,13 @@ class HoodieIncrementalFileIndex(override val spark: SparkSession,
                                  override val options: Map[String, String],
                                  @transient override val fileStatusCache: FileStatusCache = NoopCache,
                                  override val includeLogFiles: Boolean,
-                                 override val shouldEmbedFileSlices: Boolean)
+                                 override val shouldEmbedFileSlices: Boolean,
+                                 val rangeType: RangeType = RangeType.CLOSED_CLOSED)
   extends HoodieFileIndex(
     spark, metaClient, schemaSpec, options, fileStatusCache, includeLogFiles, shouldEmbedFileSlices
   ) with FileIndex {
   val mergeOnReadIncrementalRelation: MergeOnReadIncrementalRelationV2 = MergeOnReadIncrementalRelationV2(
-    spark.sqlContext, options, metaClient, schemaSpec, schemaSpec)
+    spark.sqlContext, options, metaClient, schemaSpec, schemaSpec, rangeType)
 
   override def listFiles(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[PartitionDirectory] = {
     hasPushedDownPartitionPredicates = true
