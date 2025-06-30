@@ -21,7 +21,8 @@ package org.apache.hudi.common.data;
 
 import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.function.SerializableFunction;
-import org.apache.hudi.common.function.SerializablePairFunction;
+import org.apache.hudi.common.function.SerializableFunctionPairOut;
+import org.apache.hudi.common.function.SerializableFunctionPairIn;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -114,7 +115,7 @@ public interface HoodiePairData<K, V> extends Serializable {
    * @return containing the result. Actual execution may be deferred.
    */
   <L, W> HoodiePairData<L, W> mapToPair(
-      SerializablePairFunction<Pair<K, V>, L, W> mapToPairFunc);
+      SerializableFunctionPairOut<Pair<K, V>, L, W> mapToPairFunc);
 
   /**
    * Performs a left outer join of this dataset against {@code other}.
@@ -135,6 +136,14 @@ public interface HoodiePairData<K, V> extends Serializable {
   HoodiePairData<K, V> union(HoodiePairData<K, V> other);
 
   /**
+   * Filters key-value pairs of this {@link HoodiePairData} container based on provided predicate
+   *
+   * @param filter predicate function that takes a key and value as input and returns true if the pair should be kept
+   * @return filtered {@link HoodiePairData} containing only pairs that satisfy the predicate
+   */
+  HoodiePairData<K, V> filter(SerializableFunctionPairIn<K, V, Boolean> filter);
+
+  /**
    * Performs an inner join of this dataset against {@code other}.
    *
    * For each element (k, v) in this, the resulting {@link HoodiePairData} will contain all
@@ -152,6 +161,25 @@ public interface HoodiePairData<K, V> extends Serializable {
    * This is a terminal operation
    */
   List<Pair<K, V>> collectAsList();
+
+  /**
+   * WARNING: It is caller's responsibility to ensure that it is of <Integer, String> type.
+   *
+   * Repartitions the RDD based on key ranges so that:
+   * 1. The keys are sorted within each partition.
+   * 2. There is at most only 1 key per partition.
+   * 3. For partitions containing entries of the same key, the value ranges are not overlapping.
+   * 4. Number of keys per partition is probably at most maxKeyPerBucket.
+   *
+   * @param keyRange The range of keys to partition across (0 to keyRange inclusive). It must cover all possible keys
+   *                 in the RDD. Keys covered in range but not in the RDD are ignored.
+   * @param sampleFraction Fraction of data to sample for determining value range per bucket points (between 0 and 1).
+   * @param maxKeyPerBucket Maximum number of keys allowed per partition bucket
+   * @param seed Random seed for sampling
+   * @return Repartitioned RDD
+   */
+  HoodiePairData<Integer, String> rangeBasedRepartitionForEachKey(
+      int keyRange, double sampleFraction, int maxKeyPerBucket, long seed);
 
   /**
    * @return the deduce number of shuffle partitions
