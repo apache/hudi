@@ -205,7 +205,7 @@ public class ParquetUtils extends FileFormatUtils {
             List<String> fields = new ArrayList<>();
             fields.addAll(keyGenerator.getRecordKeyFieldNames());
             fields.addAll(keyGenerator.getPartitionPathFields());
-            return HoodieAvroUtils.getSchemaForFields(readAvroSchema(storage, filePath), fields);
+            return HoodieAvroUtils.projectSchema(readAvroSchema(storage, filePath), fields);
           })
           .orElse(partitionPath.isPresent() ? HoodieAvroUtils.getRecordKeySchema() : HoodieAvroUtils.getRecordKeyPartitionPathSchema());
       AvroReadSupport.setAvroReadSchema(conf, readSchema);
