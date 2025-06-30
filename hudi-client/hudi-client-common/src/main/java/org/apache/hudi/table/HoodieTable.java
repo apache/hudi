@@ -69,10 +69,10 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieDuplicateDataFileDetectedException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieInsertException;
-import org.apache.hudi.exception.HoodieDuplicateDataFileDetectedException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.exception.SchemaCompatibilityException;
@@ -1211,4 +1211,6 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
       HoodieMergeHelper.newInstance().runMerge(this, upsertHandle);
     }
   }
+
+  public abstract void dropIndex(HoodieWriteConfig config, HoodieEngineContext context, List<String> secIdxPartitions);
 }

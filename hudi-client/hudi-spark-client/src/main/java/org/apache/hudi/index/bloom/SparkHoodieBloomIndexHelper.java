@@ -22,11 +22,13 @@ package org.apache.hudi.index.bloom;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.hash.FileIndexID;
 import org.apache.hudi.common.util.hash.PartitionIndexID;
@@ -36,6 +38,7 @@ import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.HoodieKeyLookupResult;
+import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -63,7 +66,6 @@ import java.util.stream.Collectors;
 import scala.Tuple2;
 
 import static org.apache.hudi.metadata.HoodieMetadataPayload.getBloomFilterIndexKey;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex;
 import static org.apache.hudi.metadata.MetadataPartitionType.BLOOM_FILTERS;
 
 /**
@@ -317,7 +319,15 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
 
       // NOTE: It's crucial that [[targetPartitions]] be congruent w/ the number of
       //       actual file-groups in the Bloom Index in MT
-      return mapRecordKeyToFileGroupIndex(bloomIndexEncodedKey, targetPartitions);
+      String bloomPartitionPath = BLOOM_FILTERS.getPartitionPath();
+      HoodieIndexVersion indexVersion = HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.current(), bloomPartitionPath);
+      SerializableFunction<String, SerializableFunction<Integer, Integer>> mappingFunction =
+          HoodieTableMetadataUtil.getRecordKeyToFileGroupIndexFunction(bloomPartitionPath, indexVersion, false);
+      try {
+        return mappingFunction.apply(bloomIndexEncodedKey).apply(targetPartitions);
+      } catch (Exception e) {
+        throw new HoodieException("Error apply bloom index partitioner mapping function", e);
+      }
     }
   }
 

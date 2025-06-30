@@ -21,6 +21,8 @@ package org.apache.hudi.index.expression;
 
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
+import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 
 import org.apache.spark.sql.Column;
@@ -74,10 +76,12 @@ public class TestHoodieSparkExpressionIndex extends HoodieSparkClientTestHarness
     df.createOrReplaceTempView("testData");
 
     // Initialize the HoodieSparkExpressionIndex with the year function
+    String mdtPartitionName = "expr_index_yearIndex";
     HoodieIndexDefinition indexDefinition = HoodieIndexDefinition.newBuilder()
-        .withIndexName("yearIndex")
+        .withIndexName(mdtPartitionName)
         .withIndexFunction("year")
         .withIndexType(PARTITION_NAME_COLUMN_STATS)
+        .withVersion(HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.current(), mdtPartitionName))
         .withSourceFields(Arrays.asList("timestampColumn"))
         .withIndexOptions(new HashMap<>())
         .build();
@@ -110,10 +114,12 @@ public class TestHoodieSparkExpressionIndex extends HoodieSparkClientTestHarness
     df.createOrReplaceTempView("testData");
 
     // Initialize the HoodieSparkExpressionIndex with the hour function
+    String mdtPartitionName = "expr_index_hourIndex";
     HoodieIndexDefinition indexDefinition = HoodieIndexDefinition.newBuilder()
-        .withIndexName("hourIndex")
+        .withIndexName(mdtPartitionName)
         .withIndexFunction("hour")
         .withIndexType(PARTITION_NAME_COLUMN_STATS)
+        .withVersion(HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.current(), mdtPartitionName))
         .withSourceFields(Arrays.asList("timestampColumn"))
         .withIndexOptions(new HashMap<>())
         .build();
@@ -136,10 +142,12 @@ public class TestHoodieSparkExpressionIndex extends HoodieSparkClientTestHarness
   public void testApplyYearFunctionWithWrongNumberOfArguments() {
     // Setup index with the wrong number of source fields
     List<Column> sourceColumns = Arrays.asList(col("timestampColumn"), col("extraColumn"));
+    String mdtPartitionName = "expr_index_yearIndex";
     HoodieIndexDefinition indexDefinition = HoodieIndexDefinition.newBuilder()
-        .withIndexName("yearIndex")
+        .withIndexName(mdtPartitionName)
         .withIndexFunction("year")
         .withIndexType(PARTITION_NAME_COLUMN_STATS)
+        .withVersion(HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.current(), mdtPartitionName))
         .withSourceFields(Arrays.asList("timestampColumn", "extraColumn"))
         .withIndexOptions(Collections.emptyMap())
         .build();
@@ -160,11 +168,13 @@ public class TestHoodieSparkExpressionIndex extends HoodieSparkClientTestHarness
     df.createOrReplaceTempView("testData");
 
     // Initialize the HoodieSparkExpressionIndex with the upper function
+    String mdtPartitionName = "expr_index_upperIndex";
     HoodieIndexDefinition indexDefinition = HoodieIndexDefinition.newBuilder()
-        .withIndexName("upperIndex")
+        .withIndexName(mdtPartitionName)
         .withIndexFunction("upper")
         .withIndexType(PARTITION_NAME_BLOOM_FILTERS)
         .withSourceFields(Arrays.asList("name"))
+        .withVersion(HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.current(), mdtPartitionName))
         .withIndexOptions(new HashMap<String, String>() {
           {
             put(BLOOM_FILTER_TYPE, BloomFilterTypeCode.DYNAMIC_V0.name());

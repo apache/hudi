@@ -23,10 +23,13 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.function.SerializableFunction;
-import org.apache.hudi.common.function.SerializablePairFunction;
+import org.apache.hudi.common.function.SerializableFunctionPairIn;
+import org.apache.hudi.common.function.SerializableFunctionPairOut;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.data.partitioner.ConditionalRangePartitioner;
 
 import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaPairRDD;
@@ -34,11 +37,14 @@ import org.apache.spark.api.java.Optional;
 import org.apache.spark.sql.internal.SQLConf;
 import org.apache.spark.storage.StorageLevel;
 
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
 import scala.Tuple2;
+
+import static org.apache.hudi.data.partitioner.ConditionalRangePartitioner.computeSplitPointMapDistributed;
 
 /**
  * Implementation of {@link HoodiePairData} using Spark {@link JavaPairRDD}.
@@ -135,7 +141,7 @@ public class HoodieJavaPairRDD<K, V> implements HoodiePairData<K, V> {
   }
 
   @Override
-  public <L, W> HoodiePairData<L, W> mapToPair(SerializablePairFunction<Pair<K, V>, L, W> mapToPairFunc) {
+  public <L, W> HoodiePairData<L, W> mapToPair(SerializableFunctionPairOut<Pair<K, V>, L, W> mapToPairFunc) {
     return HoodieJavaPairRDD.of(pairRDDData.mapToPair(pair -> {
       Pair<L, W> newPair = mapToPairFunc.call(new ImmutablePair<>(pair._1, pair._2));
       return new Tuple2<>(newPair.getLeft(), newPair.getRight());
@@ -153,6 +159,11 @@ public class HoodieJavaPairRDD<K, V> implements HoodiePairData<K, V> {
   @Override
   public HoodiePairData<K, V> union(HoodiePairData<K, V> other) {
     return HoodieJavaPairRDD.of(pairRDDData.union(HoodieJavaPairRDD.getJavaPairRDD(other)));
+  }
+
+  @Override
+  public HoodiePairData<K, V> filter(SerializableFunctionPairIn<K, V, Boolean> filter) {
+    return HoodieJavaPairRDD.of(pairRDDData.filter(p -> filter.call(p._1, p._2)));
   }
 
   @Override
@@ -186,5 +197,28 @@ public class HoodieJavaPairRDD<K, V> implements HoodiePairData<K, V> {
     } else {
       return pairRDDData.getNumPartitions();
     }
+  }
+
+  @Override
+  public HoodiePairData<Integer, String> rangeBasedRepartitionForEachKey(
+      int keyRange, double sampleFraction, int maxKeyPerBucket, long seed) {
+    ValidationUtils.checkState(sampleFraction > 0 && sampleFraction <= 1, "sampleFraction must be between 0 and 1");
+    Map<Integer, Double> samplingFractions = new HashMap<>();
+    // For each key, sample with the given probability. All possible keys must be given up front.
+    for (int i = 0; i <= keyRange; i++) {
+      samplingFractions.put(i, sampleFraction);
+    }
+    // Caller must ensure that the RDD is of <Integer, String> type.
+    JavaPairRDD<Integer, String> pairRddDataIntKStrV = (JavaPairRDD<Integer, String>) pairRDDData;
+    // For each key, sampleFraction of total entries with that key are sampled. If it is < 1, then at least 1 entry is sampled.
+    JavaPairRDD<Integer, String> sampled = pairRddDataIntKStrV.sampleByKeyExact(false, samplingFractions, seed);
+    // Based on the sampled RDD, decide optimal num of partitions and value ranges for each partition.
+    Map<Integer, List<String>> splitPointsMap = computeSplitPointMapDistributed(sampled, sampleFraction, maxKeyPerBucket);
+    ConditionalRangePartitioner partitioner = new ConditionalRangePartitioner(splitPointsMap);
+    JavaPairRDD<Tuple2<Integer, String>, String> compositeKeyRdd = pairRddDataIntKStrV.mapToPair(t -> new Tuple2<>(t, null));
+    return HoodieJavaPairRDD.of(
+        compositeKeyRdd.repartitionAndSortWithinPartitions(
+                partitioner, new ConditionalRangePartitioner.CompositeKeyComparator())
+            .mapToPair(e -> e._1));
   }
 }
