@@ -44,6 +44,7 @@ import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -57,7 +58,9 @@ import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLUSTERING_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
@@ -213,5 +216,25 @@ public class UpgradeDowngradeUtils {
     } catch (Exception e) {
       throw new HoodieException(e);
     }
+  }
+
+  /**
+   * Drops secondary index partitions from metadata table.
+   *
+   * @param config        Write config
+   * @param context       Engine context
+   * @param table         Hoodie table
+   * @param operationType Type of operation (upgrade/downgrade)
+   */
+  public static void dropSecondaryIndexPartitions(HoodieWriteConfig config, HoodieEngineContext context,
+                                                  HoodieTable table, SupportsUpgradeDowngrade upgradeDowngradeHelper, String operationType) {
+    HoodieTableMetaClient metaClient = table.getMetaClient();
+    BaseHoodieWriteClient writeClient = upgradeDowngradeHelper.getWriteClient(config, context);
+    List<String> secIdxPartitions = metaClient.getTableConfig().getMetadataPartitions()
+            .stream()
+            .filter(partition -> partition.startsWith(MetadataPartitionType.SECONDARY_INDEX.getPartitionPath()))
+            .collect(Collectors.toList());
+    LOG.info("Dropping {} from MDT for {}: {}", MetadataPartitionType.SECONDARY_INDEX.getPartitionPath(), operationType, secIdxPartitions);
+    writeClient.dropIndex(secIdxPartitions);
   }
 }

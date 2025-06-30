@@ -218,7 +218,7 @@ public class HoodieListPairData<K, V> extends HoodieBaseListData<Pair<K, V>> imp
           try {
             return filter.call(p.getKey(), p.getValue());
           } catch (Exception e) {
-            throw new HoodieException("HoodieListData hit exception when running filter operation", e);
+            throw new HoodieException(e.getMessage(), e.getCause());
           }
         }),
         lazy

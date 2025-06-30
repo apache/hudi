@@ -200,8 +200,8 @@ public class HoodieJavaPairRDD<K, V> implements HoodiePairData<K, V> {
   }
 
   @Override
-  public HoodiePairData<Integer, String> rangeBasedRepartitionForEachKey(
-      int keyRange, double sampleFraction, int maxKeyPerBucket, long seed) {
+  public HoodiePairData<Integer, String> rangeBasedRepartitionForEachKey(int keyRange, double sampleFraction,
+                                                                         int maxKeyPerBucket, long seed) {
     ValidationUtils.checkState(sampleFraction > 0 && sampleFraction <= 1, "sampleFraction must be between 0 and 1");
     Map<Integer, Double> samplingFractions = new HashMap<>();
     // For each key, sample with the given probability. All possible keys must be given up front.
