@@ -187,6 +187,7 @@ public class FlinkMergeHandle<T, I, K, O>
     }
   }
 
+  @Override
   boolean needsUpdateLocation() {
     // No need to update location for Flink hoodie records because all the records are pre-tagged
     // with the desired locations.

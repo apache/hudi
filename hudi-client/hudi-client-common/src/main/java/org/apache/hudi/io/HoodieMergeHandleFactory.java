@@ -200,6 +200,11 @@ public class HoodieMergeHandleFactory {
     // Overwrite to sorted implementation for {@link HoodieDefaultMergeHandle} if sorting is required.
     if (table.requireSortedRecords()) {
       mergeHandleClass = HoodieSortedMergeHandle.class.getName();
+    } else if (table.getMetaClient().getTableConfig().isCDCEnabled() && writeConfig.isYieldingPureLogForMor()) {
+      // IMPORTANT: only index type that yields pure log files need to enable the cdc log files for compaction,
+      // index type such as the BLOOM does not need this because it would do delta merge for inserts and generates log for updates,
+      // both of these two cases are already handled in HoodieCDCExtractor.
+      mergeHandleClass = HoodieMergeHandleWithChangeLog.class.getName();
     } else {
       mergeHandleClass = writeConfig.getMergeHandleClassName();
       if (!mergeHandleClass.equals(HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.defaultValue())) {
