@@ -101,7 +101,6 @@ public class HoodieDefaultMergeHandle<T, I, K, O> extends HoodieMergeHandle<T, I
   protected Map<String, HoodieRecord<T>> keyToNewRecords;
   protected Set<String> writtenRecordKeys;
   protected HoodieFileWriter fileWriter;
-  protected boolean preserveMetadata = false;
 
   protected long recordsWritten = 0;
   protected long recordsDeleted = 0;
@@ -130,10 +129,10 @@ public class HoodieDefaultMergeHandle<T, I, K, O> extends HoodieMergeHandle<T, I
                                   Map<String, HoodieRecord<T>> keyToNewRecords, String partitionPath, String fileId,
                                   HoodieBaseFile dataFileToBeMerged, TaskContextSupplier taskContextSupplier,
                                   Option<BaseKeyGenerator> keyGeneratorOpt) {
-    super(config, instantTime, hoodieTable, partitionPath, fileId, taskContextSupplier, dataFileToBeMerged, keyGeneratorOpt, true);
+    super(config, instantTime, hoodieTable, partitionPath, fileId, taskContextSupplier, dataFileToBeMerged, keyGeneratorOpt,
+        // preserveMetadata is disabled by default for MDT but enabled otherwise
+        !HoodieTableMetadata.isMetadataTable(config.getBasePath()));
     this.keyToNewRecords = keyToNewRecords;
-    // preserveMetadata is disabled by default for MDT but enabled otherwise
-    this.preserveMetadata = !HoodieTableMetadata.isMetadataTable(config.getBasePath());
     initMarkerFileAndFileWriter(fileId, this.partitionPath);
   }
 
