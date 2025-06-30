@@ -23,28 +23,20 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.params.provider.Arguments;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
-import java.util.function.UnaryOperator;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.config.RecordMergeMode.COMMIT_TIME_ORDERING;
@@ -302,101 +294,5 @@ public abstract class SchemaHandlerTestBase {
 
   Schema.Field getField(String fieldName) {
     return DATA_SCHEMA.getField(fieldName);
-  }
-
-  static class MockMerger implements HoodieRecordMerger {
-
-    private final boolean isProjectionCompatible;
-    private final String[] mandatoryMergeFields;
-
-    MockMerger(boolean isProjectionCompatible, String[] mandatoryMergeFields) {
-      this.isProjectionCompatible = isProjectionCompatible;
-      this.mandatoryMergeFields = mandatoryMergeFields;
-    }
-
-    @Override
-    public boolean isProjectionCompatible() {
-      return this.isProjectionCompatible;
-    }
-
-    @Override
-    public String[] getMandatoryFieldsForMerging(Schema dataSchema, HoodieTableConfig cfg, TypedProperties properties) {
-      return this.mandatoryMergeFields;
-    }
-
-    @Override
-    public Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer,
-                                                    Schema newSchema, TypedProperties props) throws IOException {
-      return null;
-    }
-
-    @Override
-    public HoodieRecord.HoodieRecordType getRecordType() {
-      return null;
-    }
-
-    @Override
-    public String getMergingStrategy() {
-      return "";
-    }
-  }
-
-  static class MockReaderContext extends HoodieReaderContext<String> {
-    private final boolean supportsParquetRowIndex;
-
-    MockReaderContext(boolean supportsParquetRowIndex) {
-      this.supportsParquetRowIndex = supportsParquetRowIndex;
-    }
-
-    @Override
-    public boolean supportsParquetRowIndex() {
-      return this.supportsParquetRowIndex;
-    }
-
-    @Override
-    public ClosableIterator<String> getFileRecordIterator(StoragePath filePath, long start, long length, Schema dataSchema, Schema requiredSchema, HoodieStorage storage) throws IOException {
-      return null;
-    }
-
-    @Override
-    public String convertAvroRecord(IndexedRecord avroRecord) {
-      return "";
-    }
-
-    @Override
-    public GenericRecord convertToAvroRecord(String record, Schema schema) {
-      return null;
-    }
-
-    @Override
-    public Option<HoodieRecordMerger> getRecordMerger(RecordMergeMode mergeMode, String mergeStrategyId, String mergeImplClasses) {
-      return null;
-    }
-
-    @Override
-    public Object getValue(String record, Schema schema, String fieldName) {
-      return null;
-    }
-
-    @Override
-    public HoodieRecord<String> constructHoodieRecord(Option<String> recordOption, Map<String, Object> metadataMap) {
-      return null;
-    }
-
-    @Override
-    public String seal(String record) {
-      return "";
-    }
-
-    @Override
-    public ClosableIterator<String> mergeBootstrapReaders(ClosableIterator<String> skeletonFileIterator, Schema skeletonRequiredSchema, ClosableIterator<String> dataFileIterator,
-                                                          Schema dataRequiredSchema) {
-      return null;
-    }
-
-    @Override
-    public UnaryOperator<String> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns) {
-      return null;
-    }
   }
 }
