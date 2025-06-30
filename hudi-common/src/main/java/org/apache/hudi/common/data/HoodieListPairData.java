@@ -20,8 +20,8 @@ package org.apache.hudi.common.data;
 
 import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.function.SerializableFunction;
-import org.apache.hudi.common.function.SerializableFunctionPairIn;
-import org.apache.hudi.common.function.SerializableFunctionPairOut;
+import org.apache.hudi.common.function.SerializablePairPredicate;
+import org.apache.hudi.common.function.SerializablePairFunction;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.MappingIterator;
@@ -171,7 +171,7 @@ public class HoodieListPairData<K, V> extends HoodieBaseListData<Pair<K, V>> imp
   }
 
   @Override
-  public <L, W> HoodiePairData<L, W> mapToPair(SerializableFunctionPairOut<Pair<K, V>, L, W> mapToPairFunc) {
+  public <L, W> HoodiePairData<L, W> mapToPair(SerializablePairFunction<Pair<K, V>, L, W> mapToPairFunc) {
     return new HoodieListPairData<>(asStream().map(p -> throwingMapToPairWrapper(mapToPairFunc).apply(p)), lazy);
   }
 
@@ -212,7 +212,7 @@ public class HoodieListPairData<K, V> extends HoodieBaseListData<Pair<K, V>> imp
   }
 
   @Override
-  public HoodiePairData<K, V> filter(SerializableFunctionPairIn<K, V, Boolean> filter) {
+  public HoodiePairData<K, V> filter(SerializablePairPredicate<K, V> filter) {
     return new HoodieListPairData<>(
         asStream().filter(p -> {
           try {

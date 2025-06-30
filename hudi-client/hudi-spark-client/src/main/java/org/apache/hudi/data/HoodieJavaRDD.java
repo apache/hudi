@@ -24,7 +24,7 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.function.SerializableFunction;
-import org.apache.hudi.common.function.SerializableFunctionPairOut;
+import org.apache.hudi.common.function.SerializablePairFunction;
 import org.apache.hudi.common.util.collection.MappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -168,7 +168,7 @@ public class HoodieJavaRDD<T> implements HoodieData<T> {
   }
 
   @Override
-  public <K, V> HoodiePairData<K, V> mapToPair(SerializableFunctionPairOut<T, K, V> func) {
+  public <K, V> HoodiePairData<K, V> mapToPair(SerializablePairFunction<T, K, V> func) {
     return HoodieJavaPairRDD.of(rddData.mapToPair(input -> {
       Pair<K, V> pair = func.call(input);
       return new Tuple2<>(pair.getLeft(), pair.getRight());

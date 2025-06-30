@@ -25,7 +25,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.function.SerializableFunction;
-import org.apache.hudi.common.function.SerializableFunctionPairOut;
+import org.apache.hudi.common.function.SerializablePairFunction;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -317,7 +317,7 @@ public class RollbackHelperV1 extends RollbackHelper {
     // populate partitionPath -> HoodieRollbackStat
     HoodiePairData<String, HoodieRollbackStat> partitionPathToRollbackStatsHoodieData =
         context.parallelize(originalRollbackStats)
-            .mapToPair((SerializableFunctionPairOut<HoodieRollbackStat, String, HoodieRollbackStat>) t -> Pair.of(t.getPartitionPath(), t));
+            .mapToPair((SerializablePairFunction<HoodieRollbackStat, String, HoodieRollbackStat>) t -> Pair.of(t.getPartitionPath(), t));
 
     // lets do left outer join and append missing log files to HoodieRollbackStat for each partition path.
     List<HoodieRollbackStat> finalRollbackStats = addMissingLogFilesAndGetRollbackStats(partitionPathToRollbackStatsHoodieData,
@@ -328,13 +328,13 @@ public class RollbackHelperV1 extends RollbackHelper {
   private HoodiePairData<String, List<String>> populatePartitionToLogFilesHoodieData(HoodieEngineContext context, String basePathStr, List<String> logFiles) {
     return context.parallelize(logFiles)
         // lets map each log file to partition path and log file name
-        .mapToPair((SerializableFunctionPairOut<String, String, String>) t -> {
+        .mapToPair((SerializablePairFunction<String, String, String>) t -> {
           StoragePath logFilePath = new StoragePath(basePathStr, t);
           String partitionPath = FSUtils.getRelativePartitionPath(new StoragePath(basePathStr), logFilePath.getParent());
           return Pair.of(partitionPath, logFilePath.getName());
         })
         // lets group by partition path and collect it as log file list per partition path
-        .groupByKey().mapToPair((SerializableFunctionPairOut<Pair<String, Iterable<String>>, String, List<String>>) t -> {
+        .groupByKey().mapToPair((SerializablePairFunction<Pair<String, Iterable<String>>, String, List<String>>) t -> {
           List<String> allFiles = new ArrayList<>();
           t.getRight().forEach(entry -> allFiles.add(entry));
           return Pair.of(t.getKey(), allFiles);

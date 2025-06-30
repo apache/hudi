@@ -23,8 +23,8 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.function.SerializableFunction;
-import org.apache.hudi.common.function.SerializableFunctionPairIn;
-import org.apache.hudi.common.function.SerializableFunctionPairOut;
+import org.apache.hudi.common.function.SerializablePairPredicate;
+import org.apache.hudi.common.function.SerializablePairFunction;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
@@ -141,7 +141,7 @@ public class HoodieJavaPairRDD<K, V> implements HoodiePairData<K, V> {
   }
 
   @Override
-  public <L, W> HoodiePairData<L, W> mapToPair(SerializableFunctionPairOut<Pair<K, V>, L, W> mapToPairFunc) {
+  public <L, W> HoodiePairData<L, W> mapToPair(SerializablePairFunction<Pair<K, V>, L, W> mapToPairFunc) {
     return HoodieJavaPairRDD.of(pairRDDData.mapToPair(pair -> {
       Pair<L, W> newPair = mapToPairFunc.call(new ImmutablePair<>(pair._1, pair._2));
       return new Tuple2<>(newPair.getLeft(), newPair.getRight());
@@ -162,7 +162,7 @@ public class HoodieJavaPairRDD<K, V> implements HoodiePairData<K, V> {
   }
 
   @Override
-  public HoodiePairData<K, V> filter(SerializableFunctionPairIn<K, V, Boolean> filter) {
+  public HoodiePairData<K, V> filter(SerializablePairPredicate<K, V> filter) {
     return HoodieJavaPairRDD.of(pairRDDData.filter(p -> filter.call(p._1, p._2)));
   }
 

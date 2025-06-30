@@ -22,48 +22,25 @@ import java.io.Serializable;
 
 /**
  * A serializable functional interface that represents a function taking a key-value pair
- * and returning a result. This interface is designed to be used in distributed computing
- * scenarios where functions need to be serialized and transmitted across network boundaries.
- *
- * <p>This interface extends both {@link Serializable} and is marked as a functional interface,
- * making it suitable for use with lambda expressions and method references in distributed
- * processing frameworks.</p>
- *
- * <p>The function signature follows the pattern: (K, V) → I, where K is the key type,
- * V is the value type, and I is the result type.</p>
- *
- * <p><strong>Example usage:</strong></p>
- * <pre>{@code
- * // Create a function that concatenates key and value
- * SerializableFunctionPairIn<String, Integer, String> concatFunction = 
- *     (key, value) -> key + ":" + value;
- *
- * // Use in a stream or processing pipeline
- * String result = concatFunction.call("user", 123); // Returns "user:123"
- * }</pre>
- *
- * <p><strong>Note:</strong> The {@code call} method is declared to throw {@link Exception},
- * allowing implementations to handle various error conditions that may occur during
- * processing.</p>
+ * and returns a boolean. Designed to be used in filter() calls.
  *
  * @param <K> the type of the key parameter
  * @param <V> the type of the value parameter
- * @param <I> the type of the result returned by the function
  *
  */
 @FunctionalInterface
-public interface SerializableFunctionPairIn<K, V, I> extends Serializable {
+public interface SerializablePairPredicate<K, V> extends Serializable {
   
   /**
    * Applies this function to the given key-value pair.
    * 
-   * <p>This method processes the input key-value pair and returns a result of type I.
+   * <p>This method processes the input key-value pair and returns a result of type boolean.
    * The function may throw exceptions to indicate processing errors or exceptional conditions.</p>
    * 
    * @param key the key parameter of the function
    * @param value the value parameter of the function
-   * @return the function result
+   * @return boolean
    * @throws Exception if an error occurs during function execution
    */
-  I call(K key, V value) throws Exception;
+  boolean call(K key, V value) throws Exception;
 }
