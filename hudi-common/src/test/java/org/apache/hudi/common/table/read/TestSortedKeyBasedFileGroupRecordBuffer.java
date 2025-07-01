@@ -126,7 +126,7 @@ class TestSortedKeyBasedFileGroupRecordBuffer {
     when(mockReaderContext.seal(any())).thenAnswer(invocation -> invocation.getArgument(0));
     HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class);
     RecordMergeMode recordMergeMode = RecordMergeMode.COMMIT_TIME_ORDERING;
-    PartialUpdateMode partialUpdateMode = PartialUpdateMode.KEEP_VALUES;
+    PartialUpdateMode partialUpdateMode = PartialUpdateMode.NONE;
     TypedProperties props = new TypedProperties();
     return new SortedKeyBasedFileGroupRecordBuffer<>(
         mockReaderContext, mockMetaClient, recordMergeMode, partialUpdateMode, props, readStats, Option.empty(), false);
