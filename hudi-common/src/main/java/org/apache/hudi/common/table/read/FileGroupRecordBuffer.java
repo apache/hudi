@@ -60,6 +60,7 @@ import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -303,12 +304,12 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
       } else {
         switch (recordMergeMode) {
           case COMMIT_TIME_ORDERING:
-            updatePartiallyIfNeeded(
+            newRecord = updatePartiallyIfNeeded(
                 newRecord, existingRecord, readerSchema, readerSchema, partialUpdateMode);
             return Option.of(newRecord);
           case EVENT_TIME_ORDERING:
             if (shouldKeepNewerRecord(existingRecord, newRecord)) {
-              updatePartiallyIfNeeded(
+              newRecord = updatePartiallyIfNeeded(
                   newRecord, existingRecord, readerSchema, readerSchema, partialUpdateMode);
               return Option.of(newRecord);
             }
@@ -373,23 +374,24 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
    * Note that {@param newRecord} refers to the record with higher commit time
    * if COMMIT_TIME_ORDERING mode is used, or higher event time if EVENT_TIME_ORDERING mode us used.
    */
-  private void updatePartiallyIfNeeded(BufferedRecord<T> newRecord,
-                                       BufferedRecord<T> oldRecord,
-                                       Schema newSchema,
-                                       Schema oldSchema,
-                                       PartialUpdateMode partialUpdateMode) {
+  private BufferedRecord<T> updatePartiallyIfNeeded(BufferedRecord<T> newRecord,
+                                                    BufferedRecord<T> oldRecord,
+                                                    Schema newSchema,
+                                                    Schema oldSchema,
+                                                    PartialUpdateMode partialUpdateMode) {
     if (newRecord.isDelete()) {
-      return;
+      return newRecord;
     }
 
     List<Schema.Field> fields = newSchema.getFields();
+    List<Object> values = new ArrayList<>();
+    T engineRecord;
     switch (partialUpdateMode) {
       case NONE:
       case KEEP_VALUES:
       case FILL_DEFAULTS:
       case COLUMN_FAMILY:
-        // No-op for these modes
-        break;
+        return newRecord;
 
       case IGNORE_DEFAULTS:
         for (Schema.Field field : fields) {
@@ -398,12 +400,18 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
           Object newValue = readerContext.getValue(
               newRecord.getRecord(), newSchema, fieldName);
           if (defaultValue == newValue) {
-            Object oldValue = readerContext.getValue(oldRecord.getRecord(), oldSchema, fieldName);
-            readerContext.setValue(
-                newRecord.getRecord(), newSchema, fieldName, oldValue);
+            values.add(readerContext.getValue(oldRecord.getRecord(), oldSchema, fieldName));
+          } else {
+            values.add(readerContext.getValue(newRecord.getRecord(), newSchema, fieldName));
           }
         }
-        break;
+        engineRecord = readerContext.constructEngineRecord(newSchema, values);
+        return new BufferedRecord<>(
+            newRecord.getRecordKey(),
+            newRecord.getOrderingValue(),
+            engineRecord,
+            newRecord.getSchemaId(),
+            newRecord.isDelete());
 
       case IGNORE_MARKERS:
         String partialUpdateCustomMarker = partialUpdateProperties.get(PARTIAL_UPDATE_CUSTOM_MARKER);
@@ -415,16 +423,42 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
         for (Schema.Field field : fields) {
           String fieldName = field.name();
           Object newValue = readerContext.getValue(newRecord.getRecord(), newSchema, fieldName);
-          if (partialUpdateCustomMarker.equals(readerContext.getTypeHandler().castToString(newValue))) {
-            Object oldValue = readerContext.getValue(oldRecord.getRecord(), oldSchema, fieldName);
-            readerContext.setValue(newRecord.getRecord(), newSchema, fieldName, oldValue);
+          if ((isStringTyped(field) || isBytesTyped(field))
+              && partialUpdateCustomMarker.equals(readerContext.getTypeHandler().castToString(newValue))) {
+            values.add(readerContext.getValue(oldRecord.getRecord(), oldSchema, fieldName));
+          } else {
+            values.add(readerContext.getValue(newRecord.getRecord(), newSchema, fieldName));
           }
         }
-        break;
+        engineRecord = readerContext.constructEngineRecord(newSchema, values);
+        return new BufferedRecord<>(
+            newRecord.getRecordKey(),
+            newRecord.getOrderingValue(),
+            engineRecord,
+            newRecord.getSchemaId(),
+            newRecord.isDelete());
 
       default:
-        break;
+        return newRecord;
     }
+  }
+
+  static boolean isStringTyped(Schema.Field field) {
+    return hasType(field.schema(), Schema.Type.STRING);
+  }
+
+  static boolean isBytesTyped(Schema.Field field) {
+    return hasType(field.schema(), Schema.Type.BYTES);
+  }
+
+  static boolean hasType(Schema schema, Schema.Type targetType) {
+    if (schema.getType() == targetType) {
+      return true;
+    } else if (schema.getType() == Schema.Type.UNION) {
+      // Stream is lazy, so this is efficient even with multiple types
+      return schema.getTypes().stream().anyMatch(s -> s.getType() == targetType);
+    }
+    return false;
   }
 
   /**
@@ -542,7 +576,8 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
     } else {
       switch (recordMergeMode) {
         case COMMIT_TIME_ORDERING:
-          updatePartiallyIfNeeded(newerRecord, olderRecord, readerSchema, readerSchema, partialUpdateMode);
+          newerRecord = updatePartiallyIfNeeded(
+              newerRecord, olderRecord, readerSchema, readerSchema, partialUpdateMode);
           return Pair.of(newerRecord.isDelete(), newerRecord.getRecord());
         case EVENT_TIME_ORDERING:
           if (newerRecord.isCommitTimeOrderingDelete()) {
@@ -552,10 +587,12 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
           Comparable oldOrderingValue = olderRecord.getOrderingValue();
           if (!olderRecord.isCommitTimeOrderingDelete()
               && oldOrderingValue.compareTo(newOrderingValue) > 0) {
-            updatePartiallyIfNeeded(olderRecord, newerRecord, readerSchema, readerSchema, partialUpdateMode);
+            olderRecord = updatePartiallyIfNeeded(
+                olderRecord, newerRecord, readerSchema, readerSchema, partialUpdateMode);
             return Pair.of(olderRecord.isDelete(), olderRecord.getRecord());
           }
-          updatePartiallyIfNeeded(newerRecord, olderRecord, readerSchema, readerSchema, partialUpdateMode);
+          newerRecord = updatePartiallyIfNeeded(
+              newerRecord, olderRecord, readerSchema, readerSchema, partialUpdateMode);
           return Pair.of(newerRecord.isDelete(), newerRecord.getRecord());
         case CUSTOM:
         default:

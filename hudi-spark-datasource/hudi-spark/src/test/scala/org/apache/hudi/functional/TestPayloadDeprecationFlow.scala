@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.{AWSDmsAvroPayload, EventTimeAvroPayload, Ov
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
+
 import org.apache.spark.sql.SaveMode
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.params.ParameterizedTest

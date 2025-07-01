@@ -27,7 +27,6 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.serialization.CustomSerializer;
 import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
@@ -408,6 +407,15 @@ public abstract class HoodieReaderContext<T> {
    * @return A new instance of {@link HoodieRecord}.
    */
   public abstract HoodieRecord<T> constructHoodieRecord(BufferedRecord<T> bufferedRecord);
+
+  /**
+   * Constructs a new Engine based record based on a list of values from each field.
+   *
+   * @param schema    The schema of the new record.
+   * @param values    The list of values for fields specified by the schema.
+   * @return A new instance of engine record type {@link T}.
+   */
+  public abstract T constructEngineRecord(Schema schema, List<Object> values);
 
   /**
    * Seals the engine-specific record to make sure the data referenced in memory do not change.
