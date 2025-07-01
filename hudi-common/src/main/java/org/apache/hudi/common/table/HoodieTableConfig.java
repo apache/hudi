@@ -122,7 +122,7 @@ public class HoodieTableConfig extends HoodieConfig {
   public static final String HOODIE_WRITE_TABLE_NAME_KEY = "hoodie.datasource.write.table.name";
   public static final String HOODIE_TABLE_NAME_KEY = "hoodie.table.name";
   public static final String PARTIAL_UPDATE_CUSTOM_MARKER = "hoodie.write.partial.update.custom.marker";
-  public static final String DEBEZIUM_UNAVALABLE_VALUE = "__debezium_unavailable_value";
+  public static final String DEBEZIUM_UNAVAILABLE_VALUE = "__debezium_unavailable_value";
 
   public static final ConfigProperty<String> DATABASE_NAME = ConfigProperty
       .key("hoodie.database.name")
@@ -1119,28 +1119,6 @@ public class HoodieTableConfig extends HoodieConfig {
     } else {
       return PartialUpdateMode.valueOf(getStringOrDefault(PARTIAL_UPDATE_MODE));
     }
-  }
-
-  public String getPartialUpdateProperties() {
-    String payloadClass = getPayloadClass();
-    String existingProperties = getStringOrDefault(PARTIAL_UPDATE_PROPERTIES);
-
-    // If no payload class is defined, return existing properties as-is
-    if (StringUtils.isNullOrEmpty(payloadClass)) {
-      return existingProperties;
-    }
-    // Special handling for PostgresDebeziumAvroPayload
-    if (payloadClass.equals(PostgresDebeziumAvroPayload.class.getName())) {
-      String customMarkerProperty =
-          PARTIAL_UPDATE_CUSTOM_MARKER + "=" + DEBEZIUM_UNAVALABLE_VALUE;
-      // Prepend the custom marker property
-      if (StringUtils.isNullOrEmpty(existingProperties)) {
-        return customMarkerProperty;
-      } else {
-        return customMarkerProperty + "," + existingProperties;
-      }
-    }
-    return existingProperties;
   }
 
   /**

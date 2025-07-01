@@ -144,7 +144,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
 
   public static Map<String, String> parsePartialUpdateProperties(TypedProperties props) {
     Map<String, String> properties = new HashMap<>();
-    String raw = props.getString(HoodieTableConfig.PARTIAL_UPDATE_PROPERTIES.key());
+    String raw = props.getProperty(HoodieTableConfig.PARTIAL_UPDATE_PROPERTIES.key());
     if (StringUtils.isNullOrEmpty(raw)) {
       return properties;
     }
