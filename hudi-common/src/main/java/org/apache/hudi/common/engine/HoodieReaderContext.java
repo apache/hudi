@@ -27,7 +27,6 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.serialization.CustomSerializer;
 import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
