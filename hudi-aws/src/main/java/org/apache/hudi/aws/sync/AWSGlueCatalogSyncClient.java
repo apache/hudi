@@ -80,6 +80,7 @@ import software.amazon.awssdk.services.glue.model.SerDeInfo;
 import software.amazon.awssdk.services.glue.model.StorageDescriptor;
 import software.amazon.awssdk.services.glue.model.Table;
 import software.amazon.awssdk.services.glue.model.TableInput;
+import software.amazon.awssdk.services.glue.model.TagResourceRequest;
 import software.amazon.awssdk.services.glue.model.UpdateTableRequest;
 import software.amazon.awssdk.services.sts.StsClient;
 import software.amazon.awssdk.services.sts.model.GetCallerIdentityRequest;
@@ -115,6 +116,7 @@ import static org.apache.hudi.config.GlueCatalogSyncClientConfig.PARTITION_CHANG
 import static org.apache.hudi.config.HoodieAWSConfig.AWS_GLUE_ENDPOINT;
 import static org.apache.hudi.config.HoodieAWSConfig.AWS_GLUE_REGION;
 import static org.apache.hudi.config.GlueCatalogSyncClientConfig.GLUE_SYNC_DATABASE_NAME;
+import static org.apache.hudi.config.GlueCatalogSyncClientConfig.GLUE_SYNC_RESOURCE_TAGS;
 import static org.apache.hudi.config.GlueCatalogSyncClientConfig.GLUE_SYNC_TABLE_NAME;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_CREATE_MANAGED_TABLE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE;
@@ -144,6 +146,8 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
    * see https://docs.aws.amazon.com/athena/latest/ug/querying-hudi.html
    */
   private static final String ENABLE_MDT_LISTING = "hudi.metadata-listing-enabled";
+  private static final String GLUE_TABLE_ARN_FORMAT = "arn:aws:glue:%s:%s:table/%s/%s";
+  private static final String GLUE_DATABASE_ARN_FORMAT = "arn:aws:glue:%s:%s:database/%s";
   private final String databaseName;
 
   private final boolean skipTableArchive;
@@ -689,9 +693,9 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
               .build();
 
       CreateTableResponse response = awsGlue.createTable(request).get();
-      LOG.info("Created table " + tableId(databaseName, tableName) + " : " + response);
+      LOG.info("Created table {} : {}", tableId(databaseName, tableName), response);
     } catch (AlreadyExistsException e) {
-      LOG.warn("Table " + tableId(databaseName, tableName) + " already exists.", e);
+      LOG.warn("Table {} already exists.", tableId(databaseName, tableName), e);
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Fail to create " + tableId(databaseName, tableName), e);
     }
@@ -893,9 +897,10 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     ).build();
     try {
       CreateDatabaseResponse result = awsGlue.createDatabase(request).get();
-      LOG.info("Successfully created database in AWS Glue: " + result.toString());
+      tagResource(String.format(GLUE_DATABASE_ARN_FORMAT, awsGlue.serviceClientConfiguration().region(), catalogId, databaseName));
+      LOG.info("Successfully created database in AWS Glue: {}", result.toString());
     } catch (AlreadyExistsException e) {
-      LOG.warn("AWS Glue Database " + databaseName + " already exists", e);
+      LOG.warn("AWS Glue Database {} already exists", databaseName, e);
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Fail to create database " + databaseName, e);
     }
@@ -1157,5 +1162,36 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Fail to update params for table " + tableId(databaseName, tableName) + ": " + updatingParams, e);
     }
+  }
+
+  private String getBasePathForTable() {
+    return s3aToS3(getBasePath());
+  }
+
+  private void tagResource(String resourceArn) {
+    Map<String, String> resourceTags = parseResourceTags(config.getStringOrDefault(GLUE_SYNC_RESOURCE_TAGS, ""));
+    if (resourceTags.isEmpty()) {
+      return;
+    }
+    TagResourceRequest tagRequest = TagResourceRequest.builder()
+        .resourceArn(resourceArn)
+        .tagsToAdd(resourceTags)
+        .build();
+    awsGlue.tagResource(tagRequest).join();
+  }
+
+  private Map<String, String> parseResourceTags(String resourceTagKeyValues) {
+    Map<String, String> tags = new HashMap<>();
+    if (resourceTagKeyValues == null || resourceTagKeyValues.trim().isEmpty()) {
+      return tags;
+    }
+    String[] tagPairs = resourceTagKeyValues.split(",");
+    for (String tagPair : tagPairs) {
+      String[] keyValue = tagPair.split(":", 2);
+      if (keyValue.length == 2) {
+        tags.put(keyValue[0].trim(), keyValue[1].trim());
+      }
+    }
+    return tags;
   }
 }

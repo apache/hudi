@@ -40,6 +40,7 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import software.amazon.awssdk.services.glue.GlueAsyncClient;
+import software.amazon.awssdk.services.glue.GlueServiceClientConfiguration;
 import software.amazon.awssdk.services.glue.model.BatchCreatePartitionRequest;
 import software.amazon.awssdk.services.glue.model.BatchCreatePartitionResponse;
 import software.amazon.awssdk.services.glue.model.BatchDeletePartitionRequest;
@@ -66,11 +67,14 @@ import software.amazon.awssdk.services.glue.model.PartitionError;
 import software.amazon.awssdk.services.glue.model.SerDeInfo;
 import software.amazon.awssdk.services.glue.model.StorageDescriptor;
 import software.amazon.awssdk.services.glue.model.Table;
+import software.amazon.awssdk.services.glue.model.TagResourceRequest;
+import software.amazon.awssdk.services.glue.model.TagResourceResponse;
 import software.amazon.awssdk.services.glue.model.UpdateTableRequest;
 import software.amazon.awssdk.services.glue.model.UpdateTableResponse;
 import software.amazon.awssdk.services.sts.StsClient;
 import software.amazon.awssdk.services.sts.model.GetCallerIdentityRequest;
 import software.amazon.awssdk.services.sts.model.GetCallerIdentityResponse;
+import software.amazon.awssdk.regions.Region;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -168,7 +172,6 @@ class TestAWSGlueSyncClient {
 
     CompletableFuture<DeleteTableResponse> deleteTableResponse = CompletableFuture.completedFuture(DeleteTableResponse.builder().build());
     Mockito.when(mockAwsGlue.deleteTable(any(DeleteTableRequest.class))).thenReturn(deleteTableResponse);
-
     awsGlueSyncClient.createOrReplaceTable(tableName, storageSchema, inputFormatClass, outputFormatClass, serdeClass, serdeProperties, tableProperties);
 
     verify(mockAwsGlue, times(2)).deleteTable(any(DeleteTableRequest.class));
@@ -191,7 +194,6 @@ class TestAWSGlueSyncClient {
     Mockito.when(mockAwsGlue.getTable(any(GetTableRequest.class))).thenReturn(tableResponse);
     CompletableFuture<CreateTableResponse> createTableResponse = CompletableFuture.completedFuture(CreateTableResponse.builder().build());
     Mockito.when(mockAwsGlue.createTable(any(CreateTableRequest.class))).thenReturn(createTableResponse);
-
     awsGlueSyncClient.createOrReplaceTable(tableName, storageSchema, inputFormatClass, outputFormatClass, serdeClass, serdeProperties, tableProperties);
     // Verify that awsGlue.createTable() is called
     verify(mockAwsGlue, times(1)).createTable(any(CreateTableRequest.class));
@@ -353,6 +355,9 @@ class TestAWSGlueSyncClient {
     CompletableFuture<CreateDatabaseResponse> createFuture =
         CompletableFuture.completedFuture(CreateDatabaseResponse.builder().build());
     when(mockAwsGlue.createDatabase(any(CreateDatabaseRequest.class))).thenReturn(createFuture);
+    GlueServiceClientConfiguration mockConfig = mock(GlueServiceClientConfiguration.class);
+    when(mockAwsGlue.serviceClientConfiguration()).thenReturn(mockConfig);
+    when(mockConfig.region()).thenReturn(Region.US_EAST_1);
     awsGlueSyncClient.createDatabase(dbName);
     verify(mockAwsGlue).createDatabase(argThat((CreateDatabaseRequest req) ->
         req.catalogId().equals(CATALOG_ID)
@@ -703,6 +708,70 @@ class TestAWSGlueSyncClient {
     awsGlueSyncClient = new AWSGlueCatalogSyncClient(mockAwsGlue, mockSts, hiveSyncConfig, GlueTestUtil.getMetaClient());
     assertEquals(META_SYNC_DATABASE_NAME.defaultValue(), awsGlueSyncClient.getDatabaseName());
     assertEquals(META_SYNC_TABLE_NAME.defaultValue(), awsGlueSyncClient.getTableName());
+  }
+
+  @Test
+  void testResourceTagging() throws ExecutionException, InterruptedException {
+    // Setup test properties with resource tags
+    TypedProperties props = GlueTestUtil.getHiveSyncConfig().getProps();
+    props.setProperty(GlueCatalogSyncClientConfig.GLUE_SYNC_RESOURCE_TAGS.key(), "CostCenter:SomeCenter,Environment:Production");
+    
+    when(mockSts.getCallerIdentity(GetCallerIdentityRequest.builder().build()))
+        .thenReturn(GetCallerIdentityResponse.builder().account(CATALOG_ID).build());
+    
+    // Mock the service configuration and region using deep nested mocks
+    GlueServiceClientConfiguration mockConfig = mock(GlueServiceClientConfiguration.class);
+    when(mockAwsGlue.serviceClientConfiguration()).thenReturn(mockConfig);
+    when(mockConfig.region()).thenReturn(Region.US_EAST_1);
+    
+    AWSGlueCatalogSyncClient clientWithTags = new AWSGlueCatalogSyncClient(mockAwsGlue, mockSts, 
+        new HiveSyncConfig(props), GlueTestUtil.getMetaClient());
+
+    // Mock table does not exist (for createTable to proceed)
+    CompletableFuture<GetTableResponse> tableNotFoundFuture = mock(CompletableFuture.class);
+    ExecutionException tableNotFoundEx = new ExecutionException(EntityNotFoundException.builder().build());
+    when(tableNotFoundFuture.get()).thenThrow(tableNotFoundEx);
+    when(mockAwsGlue.getTable(any(GetTableRequest.class))).thenReturn(tableNotFoundFuture);
+    
+    // Mock successful createTable response
+    when(mockAwsGlue.createTable(any(CreateTableRequest.class)))
+        .thenReturn(CompletableFuture.completedFuture(CreateTableResponse.builder().build()));
+    
+    // Mock successful tagResource response
+    when(mockAwsGlue.tagResource(any(TagResourceRequest.class)))
+        .thenReturn(CompletableFuture.completedFuture(TagResourceResponse.builder().build()));
+    
+    // Mock database does not exist (for createDatabase to proceed)
+    CompletableFuture<GetDatabaseResponse> dbNotFoundFuture = mock(CompletableFuture.class);
+    ExecutionException dbNotFoundEx = new ExecutionException(EntityNotFoundException.builder().build());
+    when(dbNotFoundFuture.get()).thenThrow(dbNotFoundEx);
+    when(mockAwsGlue.getDatabase(any(GetDatabaseRequest.class))).thenReturn(dbNotFoundFuture);
+    
+    when(mockAwsGlue.createDatabase(any(CreateDatabaseRequest.class)))
+        .thenReturn(CompletableFuture.completedFuture(CreateDatabaseResponse.builder().build()));
+
+    // Test table creation with tagging
+    String tableName = "test_table";
+    MessageType storageSchema = GlueTestUtil.getSimpleSchema();
+    clientWithTags.createTable(tableName, storageSchema, "inputFormat", "outputFormat", 
+        "serdeClass", new HashMap<>(), new HashMap<>());
+
+    // Test database creation with tagging
+    String dbName = "test_db";
+    clientWithTags.createDatabase(dbName);
+
+    // Verify tagResource was called once (only for database, table tagging was removed)
+    ArgumentCaptor<TagResourceRequest> tagCaptor = ArgumentCaptor.forClass(TagResourceRequest.class);
+    verify(mockAwsGlue, times(1)).tagResource(tagCaptor.capture());
+    
+    List<TagResourceRequest> tagRequests = tagCaptor.getAllValues();
+    
+    // Verify database tagging (table tagging functionality was removed)
+    TagResourceRequest dbTagRequest = tagRequests.get(0);
+    assertTrue(dbTagRequest.resourceArn().contains("database"));
+    assertTrue(dbTagRequest.resourceArn().contains(dbName));
+    assertEquals("SomeCenter", dbTagRequest.tagsToAdd().get("CostCenter"));
+    assertEquals("Production", dbTagRequest.tagsToAdd().get("Environment"));
   }
 
   private CompletableFuture<GetTableResponse> getTableWithDefaultProps(String tableName, List<Column> columns, List<Column> partitionColumns) {

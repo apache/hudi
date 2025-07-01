@@ -127,4 +127,12 @@ public class GlueCatalogSyncClientConfig extends HoodieConfig {
           .or(() -> Option.ofNullable(cfg.getString(HOODIE_WRITE_TABLE_NAME_KEY))))
       .markAdvanced()
       .withDocumentation("The name of the destination table that we should sync the hudi table to.");
+
+  public static final ConfigProperty<String> GLUE_SYNC_RESOURCE_TAGS = ConfigProperty
+      .key(GLUE_CLIENT_PROPERTY_PREFIX + "resource_tags")
+      .noDefaultValue()
+      .sinceVersion("1.1.0")
+      .markAdvanced()
+      .withDocumentation("Tags to be applied to AWS Glue databases and tables during sync. Format: key1:value1,key2:value2");
+
 }
