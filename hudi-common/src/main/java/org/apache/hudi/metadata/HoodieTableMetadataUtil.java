@@ -55,7 +55,6 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.function.SerializableBiFunction;
-import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.FileSlice;
@@ -1374,17 +1373,17 @@ public class HoodieTableMetadataUtil {
    * @param useSecondaryKeyForHashing whether to extract secondary key from composite keys (should be determined by caller)
    * @return function that maps record keys to file group indices
    */
-  public static SerializableFunction<String, SerializableFunction<Integer, Integer>> getRecordKeyToFileGroupIndexFunction(
+  public static SerializableBiFunction<String, Integer, Integer> getRecordKeyToFileGroupIndexFunction(
       String partitionName, HoodieIndexVersion version, boolean useSecondaryKeyForHashing) {
     if (MetadataPartitionType.SECONDARY_INDEX.matchesPartitionPath(partitionName)
         && version.greaterThanOrEquals(HoodieIndexVersion.V2)
         && useSecondaryKeyForHashing) {
-      return recordKey -> {
+      return (recordKey, numFileGroups) -> {
         String secondaryKey = SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey(recordKey);
-        return numFileGroups -> mapRecordKeyToFileGroupIndex(secondaryKey, numFileGroups);
+        return mapRecordKeyToFileGroupIndex(secondaryKey, numFileGroups);
       };
     }
-    return recordKey -> numFileGroups -> mapRecordKeyToFileGroupIndex(recordKey, numFileGroups);
+    return HoodieTableMetadataUtil::mapRecordKeyToFileGroupIndex;
   }
 
   // change to configurable larger group
