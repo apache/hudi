@@ -142,10 +142,22 @@ public class TestHoodieIndexVersion {
             true),
 
         // Table version 9, non-SI with any version is allowed
-        Arguments.of("Table version 9 with non-SI v1", 
-            HoodieTableVersion.NINE, 
-            createIndexDefinition("column_stats", HoodieIndexVersion.V1), 
-            true)
+        Arguments.of("Table version 9 with non-SI v1",
+            HoodieTableVersion.NINE,
+            createIndexDefinition("column_stats", HoodieIndexVersion.V1),
+            true),
+
+        // Table version 9, non-SI with any version is allowed
+        Arguments.of("Table version 9 with null version",
+            HoodieTableVersion.NINE,
+            createIndexDefinition("column_stats", null),
+            false),
+
+        // Table version 9, non-SI with any version is allowed
+        Arguments.of("Table version 9 with v1",
+            HoodieTableVersion.NINE,
+            createIndexDefinition("secondary_index_idx_test", null),
+            false)
     );
   }
 

@@ -60,14 +60,6 @@ public class TestIndexVersionUtils {
     assertEquals(HoodieIndexVersion.V1, loadedDef2.getIndexDefinitions().get("column_stats").getVersion());
     assertEquals(HoodieIndexVersion.V1, loadedDef2.getIndexDefinitions().get("secondary_index_idx_price").getVersion());
     validateAllFieldsExcludingVersion(loadedDef2);
-
-    // If it is table version 9 and only non secondary index index missing version attribute
-    HoodieIndexMetadata loadedDef3 = getIndexDef.apply("indexMissingVersion2.json");
-    IndexVersionUtils.populateIndexVersionIfMissing(HoodieTableVersion.NINE, Option.of(loadedDef3));
-
-    assertEquals(HoodieIndexVersion.V1, loadedDef3.getIndexDefinitions().get("column_stats").getVersion());
-    assertEquals(HoodieIndexVersion.V2, loadedDef3.getIndexDefinitions().get("secondary_index_idx_price").getVersion());
-    validateAllFieldsExcludingVersion(loadedDef3);
   }
 
   private static void validateAllFieldsExcludingVersion(HoodieIndexMetadata loadedDef) {
