@@ -199,12 +199,12 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     assertTrue(metaClient.getTableConfig().getMetadataPartitions().contains(FILES.getPartitionPath()));
 
     // build RLI with the indexer
-    indexMetadataPartitionsAndAssert(RECORD_INDEX.getPartitionPath(), Collections.singletonList(FILES), Arrays.asList(new MetadataPartitionType[] {COLUMN_STATS, BLOOM_FILTERS}), tableName,
+    indexMetadataPartitionsAndAssert(RECORD_INDEX.getPartitionPath(), Collections.singletonList(FILES), Arrays.asList(COLUMN_STATS, BLOOM_FILTERS), tableName,
         "streamer-config/indexer-record-index.properties");
     // build SI with the indexer
-    String indexName = "idx_name";
-    indexMetadataPartitionsAndAssert(SECONDARY_INDEX.getPartitionPath() + indexName, Arrays.asList(new MetadataPartitionType[] {FILES, RECORD_INDEX}),
-        Arrays.asList(new MetadataPartitionType[] {COLUMN_STATS, BLOOM_FILTERS}), tableName, "streamer-config/indexer-secondary-index.properties");
+    String indexName = "idx_rider";
+    indexMetadataPartitionsAndAssert(SECONDARY_INDEX.getPartitionPath() + indexName, Arrays.asList(FILES, RECORD_INDEX),
+        Arrays.asList(COLUMN_STATS, BLOOM_FILTERS), tableName, "streamer-config/indexer-secondary-index.properties");
     // validate the secondary index is built
     assertTrue(metadataPartitionExists(basePath(), context(), SECONDARY_INDEX.getPartitionPath() + indexName));
   }
