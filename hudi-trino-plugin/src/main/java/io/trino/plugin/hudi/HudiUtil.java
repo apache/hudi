@@ -11,7 +11,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package io.trino.plugin.hudi;
 
 import com.google.common.collect.ImmutableList;
@@ -19,34 +18,50 @@ import com.google.common.collect.ImmutableMap;
 import io.trino.filesystem.FileIterator;
 import io.trino.filesystem.Location;
 import io.trino.filesystem.TrinoFileSystem;
-import io.trino.metastore.Column;
 import io.trino.metastore.HivePartition;
+import io.trino.metastore.HiveType;
 import io.trino.plugin.hive.HiveColumnHandle;
 import io.trino.plugin.hive.HivePartitionKey;
 import io.trino.plugin.hive.HivePartitionManager;
-import io.trino.plugin.hudi.storage.TrinoHudiStorage;
+import io.trino.plugin.hive.avro.AvroHiveFileUtils;
+import io.trino.plugin.hudi.storage.HudiTrinoStorage;
 import io.trino.plugin.hudi.storage.TrinoStorageConfiguration;
 import io.trino.spi.TrinoException;
 import io.trino.spi.connector.SchemaTableName;
 import io.trino.spi.predicate.Domain;
 import io.trino.spi.predicate.NullableValue;
 import io.trino.spi.predicate.TupleDomain;
+import io.trino.spi.type.VarcharType;
+import org.apache.avro.Schema;
+import org.apache.avro.SchemaBuilder;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieFileGroupId;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.exception.TableNotFoundException;
+import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.storage.StoragePath;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static io.trino.plugin.hive.HiveErrorCode.HIVE_INVALID_METADATA;
 import static io.trino.plugin.hive.util.HiveUtil.checkCondition;
+import static io.trino.plugin.hudi.HudiErrorCode.HUDI_BAD_DATA;
 import static io.trino.plugin.hudi.HudiErrorCode.HUDI_FILESYSTEM_ERROR;
+import static io.trino.plugin.hudi.HudiErrorCode.HUDI_META_CLIENT_ERROR;
 import static io.trino.plugin.hudi.HudiErrorCode.HUDI_UNSUPPORTED_FILE_FORMAT;
-import static org.apache.hudi.common.model.HoodieFileFormat.HFILE;
-import static org.apache.hudi.common.model.HoodieFileFormat.HOODIE_LOG;
-import static org.apache.hudi.common.model.HoodieFileFormat.ORC;
-import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
-import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
+import static org.apache.hudi.common.model.HoodieRecord.HOODIE_META_COLUMNS;
 
 public final class HudiUtil
 {
@@ -55,17 +70,17 @@ public final class HudiUtil
     public static HoodieFileFormat getHudiFileFormat(String path)
     {
         String extension = getFileExtension(path);
-        if (extension.equals(PARQUET.getFileExtension())) {
-            return PARQUET;
+        if (extension.equals(HoodieFileFormat.PARQUET.getFileExtension())) {
+            return HoodieFileFormat.PARQUET;
         }
-        if (extension.equals(HOODIE_LOG.getFileExtension())) {
-            return HOODIE_LOG;
+        if (extension.equals(HoodieFileFormat.HOODIE_LOG.getFileExtension())) {
+            return HoodieFileFormat.HOODIE_LOG;
         }
-        if (extension.equals(ORC.getFileExtension())) {
-            return ORC;
+        if (extension.equals(HoodieFileFormat.ORC.getFileExtension())) {
+            return HoodieFileFormat.ORC;
         }
-        if (extension.equals(HFILE.getFileExtension())) {
-            return HFILE;
+        if (extension.equals(HoodieFileFormat.HFILE.getFileExtension())) {
+            return HoodieFileFormat.HFILE;
         }
         throw new TrinoException(HUDI_UNSUPPORTED_FILE_FORMAT, "Hoodie InputFormat not implemented for base file of type " + extension);
     }
@@ -80,7 +95,7 @@ public final class HudiUtil
     public static boolean hudiMetadataExists(TrinoFileSystem trinoFileSystem, Location baseLocation)
     {
         try {
-            Location metaLocation = baseLocation.appendPath(METAFOLDER_NAME);
+            Location metaLocation = baseLocation.appendPath(HoodieTableMetaClient.METAFOLDER_NAME);
             FileIterator iterator = trinoFileSystem.listFiles(metaLocation);
             // If there is at least one file in the .hoodie directory, it's a valid Hudi table
             return iterator.hasNext();
@@ -118,7 +133,7 @@ public final class HudiUtil
         return true;
     }
 
-    public static List<HivePartitionKey> buildPartitionKeys(List<Column> keys, List<String> values)
+    public static List<HivePartitionKey> buildPartitionKeys(List<HiveColumnHandle> keys, List<String> values)
     {
         checkCondition(keys.size() == values.size(), HIVE_INVALID_METADATA,
                 "Expected %s partition key values, but got %s. Keys: %s, Values: %s.",
@@ -134,11 +149,126 @@ public final class HudiUtil
 
     public static HoodieTableMetaClient buildTableMetaClient(
             TrinoFileSystem fileSystem,
+            String tableName,
             String basePath)
     {
-        return HoodieTableMetaClient.builder()
-                .setStorage(new TrinoHudiStorage(fileSystem, new TrinoStorageConfiguration()))
-                .setBasePath(basePath)
-                .build();
+        try {
+            return HoodieTableMetaClient.builder()
+                    .setStorage(new HudiTrinoStorage(fileSystem, new TrinoStorageConfiguration()))
+                    .setBasePath(basePath)
+                    .build();
+        }
+        catch (TableNotFoundException e) {
+            throw new TrinoException(HUDI_BAD_DATA,
+                    "Location of table %s does not contain Hudi table metadata: %s".formatted(tableName, basePath));
+        }
+        catch (Throwable e) {
+            throw new TrinoException(HUDI_META_CLIENT_ERROR,
+                    "Unable to load Hudi meta client for table %s (%s)".formatted(tableName, basePath));
+        }
+    }
+
+    public static Schema constructSchema(List<String> columnNames, List<HiveType> columnTypes)
+    {
+        // create instance of this class to keep nested record naming consistent for any given inputs
+        AvroHiveFileUtils recordIncrementingUtil = new AvroHiveFileUtils();
+        SchemaBuilder.RecordBuilder<Schema> schemaBuilder = SchemaBuilder.record("baseRecord");
+        SchemaBuilder.FieldAssembler<Schema> fieldBuilder = schemaBuilder.fields();
+
+        for (int i = 0; i < columnNames.size(); ++i) {
+            Schema fieldSchema = recordIncrementingUtil.avroSchemaForHiveType(columnTypes.get(i));
+            fieldBuilder = fieldBuilder
+                    .name(columnNames.get(i))
+                    .type(fieldSchema)
+                    .withDefault(null);
+        }
+        return fieldBuilder.endRecord();
+    }
+
+    public static Schema constructSchema(Schema dataSchema, List<String> columnNames)
+    {
+        SchemaBuilder.RecordBuilder<Schema> schemaBuilder = SchemaBuilder.record("baseRecord");
+        SchemaBuilder.FieldAssembler<Schema> fieldBuilder = schemaBuilder.fields();
+        for (String columnName : columnNames) {
+            Schema originalFieldSchema = dataSchema.getField(columnName).schema();
+            Schema typeForNewField;
+
+            // Check if the original field schema is already nullable (i.e., a UNION containing NULL)
+            if (originalFieldSchema.isNullable()) {
+                typeForNewField = originalFieldSchema;
+            }
+            else {
+                typeForNewField = Schema.createUnion(Schema.create(Schema.Type.NULL), originalFieldSchema);
+            }
+
+            fieldBuilder = fieldBuilder
+                    .name(columnName)
+                    .type(typeForNewField)
+                    .withDefault(null);
+        }
+        return fieldBuilder.endRecord();
+    }
+
+    public static List<HiveColumnHandle> prependHudiMetaColumns(List<HiveColumnHandle> dataColumns)
+    {
+        //For efficient lookup
+        Set<String> dataColumnNames = dataColumns.stream()
+                .map(HiveColumnHandle::getName)
+                .collect(Collectors.toSet());
+
+        // If all Hudi meta columns are already present, return the original list
+        if (dataColumnNames.containsAll(HOODIE_META_COLUMNS)) {
+            return dataColumns;
+        }
+
+        // Identify only the meta columns that are missing from dataColumns to avoid duplicates
+        List<String> missingMetaColumns = HOODIE_META_COLUMNS.stream()
+                .filter(metaColumn -> !dataColumnNames.contains(metaColumn))
+                .toList();
+
+        List<HiveColumnHandle> columns = new ArrayList<>();
+
+        // Create and prepend the new HiveColumnHandles for the missing meta columns
+        columns.addAll(IntStream.range(0, missingMetaColumns.size())
+                .boxed()
+                .map(i -> new HiveColumnHandle(
+                        missingMetaColumns.get(i),
+                        i,
+                        HiveType.HIVE_STRING,
+                        VarcharType.VARCHAR,
+                        Optional.empty(),
+                        HiveColumnHandle.ColumnType.REGULAR,
+                        Optional.empty()))
+                .toList());
+
+        // Add all the original data columns after the new meta columns
+        columns.addAll(dataColumns);
+
+        return columns;
+    }
+
+    public static FileSlice convertToFileSlice(HudiSplit split, String basePath)
+    {
+        String dataFilePath = split.getBaseFile().isPresent()
+                ? split.getBaseFile().get().getPath()
+                : split.getLogFiles().getFirst().getPath();
+        String fileId = FSUtils.getFileIdFromFileName(new StoragePath(dataFilePath).getName());
+        HoodieBaseFile baseFile = split.getBaseFile().isPresent()
+                ? new HoodieBaseFile(dataFilePath, fileId, split.getCommitTime(), null)
+                : null;
+
+        return new FileSlice(
+                new HoodieFileGroupId(FSUtils.getRelativePartitionPath(new StoragePath(basePath), new StoragePath(dataFilePath)), fileId),
+                split.getCommitTime(),
+                baseFile,
+                split.getLogFiles().stream().map(lf -> new HoodieLogFile(lf.getPath())).toList());
+    }
+
+    public static HoodieTableFileSystemView getFileSystemView(
+            HoodieTableMetadata tableMetadata,
+            HoodieTableMetaClient metaClient)
+    {
+        return new HoodieTableFileSystemView(
+                tableMetadata, metaClient, metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants());
     }
 }

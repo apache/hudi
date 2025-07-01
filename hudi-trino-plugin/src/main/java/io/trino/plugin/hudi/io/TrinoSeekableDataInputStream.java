@@ -11,7 +11,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package io.trino.plugin.hudi.io;
 
 import io.trino.filesystem.TrinoInputStream;
@@ -19,9 +18,6 @@ import org.apache.hudi.io.SeekableDataInputStream;
 
 import java.io.IOException;
 
-/**
- * {@link SeekableDataInputStream} implementation based on {@link TrinoInputStream}
- */
 public class TrinoSeekableDataInputStream
         extends SeekableDataInputStream
 {
