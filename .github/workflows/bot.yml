@@ -1236,8 +1236,8 @@ jobs:
       - name: Build hudi-trino-plugin with JDK 23
         working-directory: ./hudi-trino-plugin
         run: |
-          mvn dependency:tree
-          mvn clean install -DskipTests -U
+          rm -rf ~/.m2/repository/io/trino
+          mvn clean install -DskipTests
       - name: Test hudi-trino-plugin with JDK 23
         working-directory: ./hudi-trino-plugin
         run:
