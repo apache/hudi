@@ -159,7 +159,7 @@ import static java.util.stream.Collectors.toList;
 import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
 import static org.apache.hudi.avro.HoodieAvroUtils.addMetadataFields;
 import static org.apache.hudi.avro.HoodieAvroUtils.getNestedFieldSchemaFromWriteSchema;
-import static org.apache.hudi.avro.HoodieAvroUtils.getSchemaForFields;
+import static org.apache.hudi.avro.HoodieAvroUtils.projectSchema;
 import static org.apache.hudi.avro.HoodieAvroUtils.unwrapAvroValueWrapper;
 import static org.apache.hudi.avro.HoodieAvroUtils.wrapValueIntoAvro;
 import static org.apache.hudi.common.config.HoodieCommonConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES;
@@ -2457,7 +2457,7 @@ public class HoodieTableMetadataUtil {
     List<String> mergedFields = new ArrayList<>(partitionFields.size() + sourceFields.size());
     mergedFields.addAll(partitionFields);
     mergedFields.addAll(sourceFields);
-    return addMetadataFields(getSchemaForFields(tableSchema, mergedFields));
+    return addMetadataFields(projectSchema(tableSchema, mergedFields));
   }
 
   /**

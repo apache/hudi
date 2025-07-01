@@ -179,6 +179,10 @@ public class TestHoodieAvroUtils {
       + "{\"name\":\"doubleField\",\"type\":\"double\"},"
       + "{\"name\":\"bytesField\",\"type\":\"bytes\"},"
       + "{\"name\":\"stringField\",\"type\":\"string\"},"
+      + "{\"name\":\"secondLevelField\",\"type\":[\"null\", {\"name\":\"secondLevelField\",\"type\":\"record\",\"fields\":["
+      + "{\"name\":\"firstname\",\"type\":[\"null\",\"string\"],\"default\":null},"
+      + "{\"name\":\"lastname\",\"type\":[\"null\",\"string\"],\"default\":null}"
+      + "]}],\"default\":null},"
       // Logical types
       + "{\"name\":\"decimalField\",\"type\":\"bytes\",\"logicalType\":\"decimal\",\"precision\":20,\"scale\":5},"
       + "{\"name\":\"timeMillisField\",\"type\":\"int\",\"logicalType\":\"time-millis\"},"
@@ -189,7 +193,6 @@ public class TestHoodieAvroUtils {
       + "{\"name\":\"localTimestampMicrosField\",\"type\":\"long\",\"logicalType\":\"local-timestamp-micros\"}"
       + "]}";
 
-  private static final Schema SCHEMA_WITH_NESTED_FIELD = new Schema.Parser().parse(SCHEMA_WITH_NESTED_FIELD_STR);
   private static final Schema SCHEMA_WITH_AVRO_TYPES = new Schema.Parser().parse(SCHEMA_WITH_AVRO_TYPES_STR);
 
   // Define schema with a nested field containing a union type
@@ -218,7 +221,7 @@ public class TestHoodieAvroUtils {
   public static String SCHEMA_WITH_NESTED_FIELD_LARGE_STR = "{\"name\":\"MyClass\",\"type\":\"record\",\"namespace\":\"com.acme.avro\",\"fields\":["
       + "{\"name\":\"firstname\",\"type\":\"string\"},"
       + "{\"name\":\"lastname\",\"type\":\"string\"},"
-      + "{\"name\":\"nested_field\",\"type\":" + SCHEMA_WITH_AVRO_TYPES_STR + "},"
+      + "{\"name\":\"nested_field\",\"type\":[\"null\"," + SCHEMA_WITH_AVRO_TYPES_STR + "],\"default\":null},"
       + "{\"name\":\"student\",\"type\":{\"name\":\"student\",\"type\":\"record\",\"fields\":["
       + "{\"name\":\"firstname\",\"type\":[\"null\" ,\"string\"],\"default\": null},{\"name\":\"lastname\",\"type\":[\"null\" ,\"string\"],\"default\": null}]}}]}";
 
@@ -640,6 +643,8 @@ public class TestHoodieAvroUtils {
     BinaryDecoder decoder = DecoderFactory.get().binaryDecoder(data, 0, data.length, null);
     GenericRecord deserializedRecord = reader.read(null, decoder);
     Map<String, Object> fieldValueMapping = deserializedRecord.getSchema().getFields().stream()
+        // filtering out nested record field
+        .filter(field -> !field.schema().getType().equals(Schema.Type.UNION))
         .collect(Collectors.toMap(
             Schema.Field::name,
             field -> deserializedRecord.get(field.name())
@@ -929,5 +934,150 @@ public class TestHoodieAvroUtils {
     Pair<String, Schema.Field> actualColNameAndSchemaFile = HoodieAvroUtils.getSchemaForField(SCHEMA_WITH_NESTED_FIELD_LARGE, colName);
     assertEquals(colName, actualColNameAndSchemaFile.getKey());
     assertEquals(schemaType, resolveNullableSchema(actualColNameAndSchemaFile.getValue().schema()).getType());
+  }
+
+  public static Stream<Arguments> getExpectedSchemaForFields() {
+    // Projection of two nested fields. secondLevelField is entirely projected since both its fields are included
+    List<String> fields1 = Arrays.asList("nested_field.secondLevelField.firstname", "nested_field.secondLevelField.lastname");
+    // Expected schema - top level field and one nested field
+    String expectedSchema1 =
+        "{\n"
+            + "  \"type\": \"record\",\n"
+            + "  \"name\": \"MyClass\",\n"
+            + "  \"doc\": \"\",\n"
+            + "  \"namespace\": \"com.acme.avro\",\n"
+            + "  \"fields\": [\n"
+            + "    { \"name\": \"nested_field\", \"type\": [\"null\", {\n"
+            + "      \"type\": \"record\",\n"
+            + "      \"name\": \"TestRecordAvroTypes\",\n"
+            + "      \"fields\": [\n"
+            + "        { \"name\": \"secondLevelField\", \"type\": [\"null\", {\n"
+            + "          \"type\": \"record\",\n"
+            + "          \"name\": \"secondLevelField\",\n"
+            + "          \"fields\": [\n"
+            + "            { \"name\": \"firstname\", \"type\": [\"null\", \"string\"], \"default\": null },\n"
+            + "            { \"name\": \"lastname\", \"type\": [\"null\", \"string\"], \"default\": null }\n"
+            + "          ]\n"
+            + "        }], \"default\": null }\n"
+            + "      ]\n"
+            + "    }], \"default\": null }\n"
+            + "  ]\n"
+            + "}";
+
+    // Projection of first level nested field and top level field which contains the nested field
+    // Also include the nested field twice
+    // Expected schema - top level field
+    List<String> fields2 = Arrays.asList("nested_field.secondLevelField.lastname", "nested_field",
+        "nested_field.secondLevelField.lastname");
+    String expectedSchema2 =
+        "{\n"
+            + "  \"type\": \"record\",\n"
+            + "  \"name\": \"MyClass\",\n"
+            + "  \"doc\": \"\",\n"
+            + "  \"namespace\": \"com.acme.avro\",\n"
+            + "  \"fields\": [\n"
+            + "    { \"name\": \"nested_field\", \"type\": [\"null\", " + SCHEMA_WITH_AVRO_TYPES_STR + "], \"default\": null }\n"
+            + "  ]\n"
+            + "}";
+
+    // Projection of non overlapping nested field and top level field with nested fields
+    // Expected schema - top level field and one nested field
+    List<String> fields3 = Arrays.asList("student.lastname", "nested_field");
+    String expectedSchema3 =
+        "{\n"
+            + "  \"type\": \"record\",\n"
+            + "  \"name\": \"MyClass\",\n"
+            + "  \"doc\": \"\",\n"
+            + "  \"namespace\": \"com.acme.avro\",\n"
+            + "  \"fields\": [\n"
+            + "    { \"name\": \"nested_field\", \"type\": [\"null\", " + SCHEMA_WITH_AVRO_TYPES_STR + "], \"default\": null },\n"
+            + "    { \"name\": \"student\", \"type\": {\n"
+            + "      \"type\": \"record\",\n"
+            + "      \"name\": \"student\",\n"
+            + "      \"fields\": [\n"
+            + "        { \"name\": \"lastname\", \"type\": [\"null\", \"string\"], \"default\": null }\n"
+            + "      ]\n"
+            + "    }}\n"
+            + "  ]\n"
+            + "}";
+
+    // Projection of two nested fields
+    // Expected schema - two nested fields
+    List<String> fields4 = Arrays.asList("student.lastname", "nested_field.secondLevelField.lastname");
+    String expectedSchema4 =
+        "{\n"
+            + "  \"type\": \"record\",\n"
+            + "  \"name\": \"MyClass\",\n"
+            + "  \"doc\": \"\",\n"
+            + "  \"namespace\": \"com.acme.avro\",\n"
+            + "  \"fields\": [\n"
+            + "    { \"name\": \"nested_field\", \"type\": [\"null\", {\n"
+            + "      \"type\": \"record\",\n"
+            + "      \"name\": \"TestRecordAvroTypes\",\n"
+            + "      \"fields\": [\n"
+            + "        { \"name\": \"secondLevelField\", \"type\": [\"null\", {\n"
+            + "          \"type\": \"record\",\n"
+            + "          \"name\": \"secondLevelField\",\n"
+            + "          \"fields\": [\n"
+            + "            { \"name\": \"lastname\", \"type\": [\"null\", \"string\"], \"default\": null }\n"
+            + "          ]\n"
+            + "        }], \"default\": null }\n"
+            + "      ]\n"
+            + "    }], \"default\": null },\n"
+            + "    { \"name\": \"student\", \"type\": {\n"
+            + "      \"type\": \"record\",\n"
+            + "      \"name\": \"student\",\n"
+            + "      \"namespace\": \"com.acme.avro\","
+            + "      \"fields\": [\n"
+            + "        { \"name\": \"lastname\", \"type\": [\"null\", \"string\"], \"default\": null }\n"
+            + "      ]\n"
+            + "    }}\n"
+            + "  ]\n"
+            + "}";
+
+    // Projection of top level field and nested field column
+    List<String> fields5 = Arrays.asList("firstname", "nested_field.secondLevelField.lastname", "nested_field.longField");
+    // Expected schema - top level field and one nested field
+    String expectedSchema5 =
+        "{\n"
+            + "  \"type\": \"record\",\n"
+            + "  \"name\": \"MyClass\",\n"
+            + "  \"doc\": \"\",\n"
+            + "  \"namespace\": \"com.acme.avro\",\n"
+            + "  \"fields\": [\n"
+            + "    { \"name\": \"firstname\", \"type\": \"string\" },\n"
+            + "    { \"name\": \"nested_field\", \"type\": [\"null\", {\n"
+            + "      \"type\": \"record\",\n"
+            + "      \"name\": \"TestRecordAvroTypes\",\n"
+            + "      \"fields\": [\n"
+            + "        { \"name\": \"longField\", \"type\": \"long\" },\n"
+            + "        { \"name\": \"secondLevelField\", \"type\": [\"null\", {\n"
+            + "          \"type\": \"record\",\n"
+            + "          \"name\": \"secondLevelField\",\n"
+            + "          \"fields\": [\n"
+            + "            { \"name\": \"lastname\", \"type\": [\"null\", \"string\"], \"default\": null }\n"
+            + "          ]\n"
+            + "        }], \"default\": null }\n"
+            + "      ]\n"
+            + "    }], \"default\": null }\n"
+            + "  ]\n"
+            + "}";
+
+    Object[][] data = new Object[][] {
+        {fields1, expectedSchema1},
+        {fields2, expectedSchema2},
+        {fields3, expectedSchema3},
+        {fields4, expectedSchema4},
+        {fields5, expectedSchema5}};
+    return Stream.of(data).map(Arguments::of);
+  }
+
+  @ParameterizedTest
+  @MethodSource("getExpectedSchemaForFields")
+  public void testProjectSchemaWithNullableAndNestedFields(List<String> projectedFields, String expectedSchemaStr) {
+    Schema expectedSchema = Schema.parse(expectedSchemaStr);
+    Schema projectedSchema = HoodieAvroUtils.projectSchema(SCHEMA_WITH_NESTED_FIELD_LARGE, projectedFields);
+    assertEquals(expectedSchema, projectedSchema);
+    assertTrue(AvroSchemaUtils.isSchemaCompatible(projectedSchema, expectedSchema, false));
   }
 }
