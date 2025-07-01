@@ -20,6 +20,10 @@ package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.HoodieIndexMetadata;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.IndexVersionUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
@@ -32,8 +36,20 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
   public Map<ConfigProperty, String> upgrade(HoodieWriteConfig config, HoodieEngineContext context,
                                              String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
-    UpgradeDowngradeUtils.dropSecondaryIndexPartitions(
-        config, context, table, upgradeDowngradeHelper, "upgrading to table version 9");
+    HoodieTableMetaClient metaClient = table.getMetaClient();
+
+    // Populate missing index versions indexes
+    Option<HoodieIndexMetadata> indexMetadataOpt = metaClient.getIndexMetadata();
+    if (indexMetadataOpt.isPresent()) {
+      IndexVersionUtils.populateIndexVersionIfMissing(metaClient.getTableConfig().getTableVersion(), indexMetadataOpt);
+
+      // Write the updated index metadata back to storage
+      HoodieTableMetaClient.writeIndexMetadataToStorage(
+          metaClient.getStorage(),
+          metaClient.getIndexDefinitionPath(),
+          indexMetadataOpt.get());
+    }
+    
     return Collections.emptyMap();
   }
 }
