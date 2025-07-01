@@ -189,4 +189,11 @@ public final class HoodieLocalEngineContext extends HoodieEngineContext {
   public ReaderContextFactory<IndexedRecord> getReaderContextFactory(HoodieTableMetaClient metaClient) {
     return new AvroReaderContextFactory(metaClient);
   }
+
+  @Override
+  public <R> HoodieData<R> processValuesOfTheSameShards(
+      HoodiePairData<Integer, String> data, SerializableFunction<Iterator<String>, Iterator<R>> func, Integer maxShardIndex, boolean presevesPartiitioning) {
+    // Group values by key and apply the function to each group
+    return data.groupByKey().values().flatMap(it -> func.apply(it.iterator()));
+  }
 }
