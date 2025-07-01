@@ -288,15 +288,11 @@ public abstract class HoodieReaderContext<T> {
   public void initRecordMerger(TypedProperties properties) {
     RecordMergeMode recordMergeMode = tableConfig.getRecordMergeMode();
     String mergeStrategyId = tableConfig.getRecordMergeStrategyId();
-    if (!tableConfig.getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
-      Triple<RecordMergeMode, String, String> triple = HoodieTableConfig.inferCorrectMergingBehavior(
-          recordMergeMode, tableConfig.getPayloadClass(),
-          mergeStrategyId, null, tableConfig.getTableVersion());
-      recordMergeMode = triple.getLeft();
-      mergeStrategyId = triple.getRight();
-    }
-    this.mergeMode = recordMergeMode;
-    this.recordMerger = getRecordMerger(recordMergeMode, mergeStrategyId,
+    Triple<RecordMergeMode, String, String> triple = HoodieTableConfig.inferCorrectMergingBehavior(
+        recordMergeMode, tableConfig.getPayloadClass(),
+        mergeStrategyId, null, tableConfig.getTableVersion());
+    this.mergeMode = triple.getLeft();
+    this.recordMerger = getRecordMerger(recordMergeMode, triple.getRight(),
         properties.getString(RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY,
             properties.getString(RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY, "")));
   }
