@@ -11,7 +11,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package io.trino.plugin.hudi.testing;
 
 import com.google.common.collect.ImmutableList;
@@ -43,6 +42,7 @@ import io.trino.tpch.TpchTable;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.HoodieJavaWriteClient;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
@@ -53,22 +53,23 @@ import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.marker.MarkerType;
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.intellij.lang.annotations.Language;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoField;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -167,7 +168,8 @@ public class TpchHudiTablesInitializer
                     .map(MaterializedRow::getFields)
                     .map(recordConverter::toRecord)
                     .collect(Collectors.toList());
-            String timestamp = writeClient.startCommit();
+            String timestamp = HoodieInstantTimeGenerator.formatDate(Date.from(Instant.now()));
+            writeClient.startCommitWithTime(timestamp);
             writeClient.insert(records, timestamp);
         }
     }
@@ -212,17 +214,17 @@ public class TpchHudiTablesInitializer
     private static HoodieJavaWriteClient<HoodieAvroPayload> createWriteClient(TpchTable<?> table, HdfsEnvironment hdfsEnvironment, Path tablePath)
     {
         Schema schema = createAvroSchema(table);
-        StorageConfiguration<?> conf = new HadoopStorageConfiguration(hdfsEnvironment.getConfiguration(CONTEXT, tablePath));
+        Configuration conf = hdfsEnvironment.getConfiguration(CONTEXT, tablePath);
 
         try {
             HoodieTableMetaClient.newTableBuilder()
                     .setTableType(COPY_ON_WRITE)
                     .setTableName(table.getTableName())
-                    .setTableVersion(HoodieTableVersion.SIX)
+                    .setTimelineLayoutVersion(1)
                     .setBootstrapIndexClass(NoOpBootstrapIndex.class.getName())
                     .setPayloadClassName(HoodieAvroPayload.class.getName())
                     .setRecordKeyFields(FIELD_UUID)
-                    .initTable(conf, tablePath.toString());
+                    .initTable(new HadoopStorageConfiguration(conf), tablePath.toString());
         }
         catch (IOException e) {
             throw new RuntimeException("Could not init table " + table.getTableName(), e);
@@ -242,9 +244,10 @@ public class TpchHudiTablesInitializer
                 .withMarkersType(MarkerType.DIRECT.name())
                 // Disabling Hudi metadata table (MDT) in tests as the support of
                 // reading MDT is broken after removal of Hudi dependencies from compile time
+                // IMPORTANT: Writing to MDT requires hbase dependencies, which is not available in Trino runtime
                 .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
                 .build();
-        return new HoodieJavaWriteClient<>(new HoodieJavaEngineContext(conf), cfg);
+        return new HoodieJavaWriteClient<>(new HoodieJavaEngineContext(new HadoopStorageConfiguration(conf)), cfg);
     }
 
     private static RecordConverter createRecordConverter(TpchTable<?> table)

@@ -5,7 +5,7 @@
     <parent>
         <groupId>io.trino</groupId>
         <artifactId>trino-root</artifactId>
-        <version>475</version>
+        <version>472</version>
     </parent>
 
     <artifactId>trino-hudi</artifactId>
@@ -14,7 +14,7 @@
 
     <properties>
         <air.compiler.fail-warnings>true</air.compiler.fail-warnings>
-        <dep.hudi.version>1.1.0-SNAPSHOT</dep.hudi.version>
+        <dep.hudi.version>1.0.2</dep.hudi.version>
     </properties>
 
     <dependencies>
