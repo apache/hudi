@@ -866,3 +866,7 @@ f5824e51ca7 [ENG-28779][INTERNAL] Add parallelism configs to AwsGlueSync (#1428)
 --- [2025-06-30 15:58:35] [release-v1.141.0] ---
 [ENG-26567][HUDI-9528] Support database and table name for Glue/ Datahub catalog (#1432)
 [AUDIT-1483]: Changelog for release-v1.140.0 (#1431)
+
+--- [2025-07-01 16:04:09] [release-v1.143.0] ---
+[ENG-28737][INTERNAL] Tweak storage based lock metric reporting (#1435)
+[AUDIT-1483]: Changelog for release-v1.141.0 (#1433)
