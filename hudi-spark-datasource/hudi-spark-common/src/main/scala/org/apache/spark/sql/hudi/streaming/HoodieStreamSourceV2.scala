@@ -133,10 +133,10 @@ class HoodieStreamSourceV2(sqlContext: SQLContext,
         if (useNewParquetFileFormat) {
           val relation = if (tableType == HoodieTableType.COPY_ON_WRITE) {
             new HoodieCopyOnWriteCDCHadoopFsRelationFactory(
-              sqlContext, metaClient, parameters ++ cdcOptions, Option(CDCRelation.FULL_CDC_SPARK_SCHEMA), false, rangeType).build()
+              sqlContext, metaClient, parameters ++ cdcOptions, None, false, rangeType).build()
           } else {
             new HoodieMergeOnReadCDCHadoopFsRelationFactory(
-              sqlContext, metaClient, parameters ++ cdcOptions, Option(CDCRelation.FULL_CDC_SPARK_SCHEMA), false, rangeType).build()
+              sqlContext, metaClient, parameters ++ cdcOptions, None, false, rangeType).build()
           }
           relationToDataFrame(relation, CDCRelation.FULL_CDC_SPARK_SCHEMA)
         } else {
