@@ -242,6 +242,27 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   }
 
   @Override
+  public ArrayWritable constructEngineRecord(Schema schema, List<Object> values) {
+    List<Schema.Field> fields = schema.getFields();
+    if (fields.size() != values.size()) {
+      throw new IllegalArgumentException("Schema field count and values size must match.");
+    }
+
+    Writable[] writables = new Writable[values.size()];
+    for (int i = 0; i < values.size(); i++) {
+      Object value = values.get(i);
+      if (value == null) {
+        writables[i] = NullWritable.get();
+      } else if (value instanceof Writable) {
+        writables[i] = (Writable) value;
+      } else {
+        throw new IllegalArgumentException("Expected Writable at index " + i + ", but got " + value.getClass());
+      }
+    }
+    return new ArrayWritable(Writable.class, writables);
+  }
+
+  @Override
   public ArrayWritable seal(ArrayWritable record) {
     return new ArrayWritable(Writable.class, Arrays.copyOf(record.get(), record.get().length));
   }

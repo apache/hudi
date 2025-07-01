@@ -40,6 +40,7 @@ import org.apache.hadoop.io.ArrayWritable;
 import org.apache.spark.sql.HoodieInternalRowUtils;
 import org.apache.spark.sql.HoodieUnsafeRowUtils;
 import org.apache.spark.sql.catalyst.InternalRow;
+import org.apache.spark.sql.catalyst.expressions.GenericInternalRow;
 import org.apache.spark.sql.catalyst.expressions.UnsafeProjection;
 import org.apache.spark.sql.catalyst.expressions.UnsafeRow;
 import org.apache.spark.sql.types.StructType;
@@ -120,6 +121,14 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
     Schema schema = getSchemaFromBufferRecord(bufferedRecord);
     InternalRow row = bufferedRecord.getRecord();
     return new HoodieSparkRecord(hoodieKey, row, HoodieInternalRowUtils.getCachedSchema(schema), false);
+  }
+
+  @Override
+  public InternalRow constructEngineRecord(Schema schema, List<Object> values) {
+    if (schema.getFields().size() != values.size()) {
+      throw new IllegalArgumentException("Schema field count and values size must match.");
+    }
+    return new GenericInternalRow(values.toArray());
   }
 
   @Override
