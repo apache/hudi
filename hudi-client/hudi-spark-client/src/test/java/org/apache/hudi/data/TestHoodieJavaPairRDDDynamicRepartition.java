@@ -40,6 +40,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 
 import scala.Tuple2;
 import scala.Tuple3;
@@ -294,9 +295,9 @@ public class TestHoodieJavaPairRDDDynamicRepartition {
 
     // Apply range-based repartitioning
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
+    List<Integer> shardIndices = new ArrayList<>(maxValueByKey.keySet());
     HoodiePairData<Integer, String> repartitionedRdd = engineContext.rangeBasedRepartitionForEachKey(
-        hoodieRdd, 30,  // keyRange
-        1.0, // Use the full data for computing the optimal partitioner
+        hoodieRdd, shardIndices, 1.0, // Use the full data for computing the optimal partitioner
         6,   // maxKeyPerBucket
         42L  // fixed seed to ensure deterministic result for validation
     );
@@ -335,9 +336,9 @@ public class TestHoodieJavaPairRDDDynamicRepartition {
 
     // Apply range-based repartitioning
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
+    List<Integer> shardIndices = new ArrayList<>(maxValueByKey.keySet());
     HoodiePairData<Integer, String> repartitionedRdd = engineContext.rangeBasedRepartitionForEachKey(
-        hoodieRdd, 30,  // keyRange
-        0.0625, // per key only sample at max 1 value
+        hoodieRdd, shardIndices, 0.0625, // per key only sample at max 1 value
         4,   // need to split into 4 buckets per key per value
         42L  // seed
     );
@@ -407,8 +408,9 @@ public class TestHoodieJavaPairRDDDynamicRepartition {
 
     // Repartition
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
+    List<Integer> shardIndices = new ArrayList<>(maxValueByKey.keySet());
     HoodiePairData<Integer, String> repartitionedRdd = engineContext.rangeBasedRepartitionForEachKey(
-        hoodieRdd, maxKeyVal,
+        hoodieRdd, shardIndices,
         sampleRate,
         maxKeyPerBucket,
         rand.nextLong()
@@ -423,7 +425,7 @@ public class TestHoodieJavaPairRDDDynamicRepartition {
     HoodiePairData<Integer, String> pairRdd = HoodieJavaPairRDD.of(rdd);
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
     HoodiePairData<Integer, String> repartitionedRdd = engineContext.rangeBasedRepartitionForEachKey(
-        pairRdd, 100,
+        pairRdd, Collections.emptyList(),
         1.0,
         10,
         System.nanoTime()

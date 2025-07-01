@@ -302,7 +302,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
           return lookupRecordsWithMappingIter(partitionName, keysList, fileSlice, !isSecondaryIndex, keyEncodingFn);
         };
 
-    Set<Integer> shardIndices = IntStream.range(0, numFileSlices).boxed().collect(Collectors.toSet());
+    List<Integer> shardIndices = IntStream.range(0, numFileSlices).boxed().collect(Collectors.toList());
     HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> result =
         getEngineContext().processValuesOfTheSameShards(persistedInitialPairData, processFunction, shardIndices, true)
             .mapToPair(p -> Pair.of(p.getLeft(), p.getRight()));
@@ -345,7 +345,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
           FileSlice fileSlice = fileSlices.get(mappingFunction.apply(keysList.get(0), numFileSlices));
           return lookupRecordsWithoutMappingIter(partitionName, keysList, fileSlice, !isSecondaryIndex, keyEncodingFn);
         };
-    Set<Integer> shardIndices = IntStream.range(0, numFileSlices).boxed().collect(Collectors.toSet());
+    List<Integer> shardIndices = IntStream.range(0, numFileSlices).boxed().collect(Collectors.toList());
     HoodieData<HoodieRecord<HoodieMetadataPayload>> result =
         getEngineContext().processValuesOfTheSameShards(persistedInitialPairData, processFunction, shardIndices, true);
     

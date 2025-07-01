@@ -44,7 +44,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -189,12 +188,5 @@ public final class HoodieLocalEngineContext extends HoodieEngineContext {
   @Override
   public ReaderContextFactory<IndexedRecord> getReaderContextFactory(HoodieTableMetaClient metaClient) {
     return new AvroReaderContextFactory(metaClient);
-  }
-
-  @Override
-  public <V extends Comparable<V>, R> HoodieData<R> processValuesOfTheSameShards(
-      HoodiePairData<Integer, V> data, SerializableFunction<Iterator<V>, Iterator<R>> func, Set<Integer> shardIndices, boolean presevesPartiitioning) {
-    // Group values by key and apply the function to each group
-    return data.groupByKey().values().flatMap(it -> func.apply(it.iterator()));
   }
 }

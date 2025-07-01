@@ -42,7 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class TestConditionalRangePartitioner {
   private JavaSparkContext jsc;
   private Map<Integer, List<String>> splitPoints;
-  private ConditionalRangePartitioner<String> partitioner;
+  private ConditionalRangePartitioner<Integer, String> partitioner;
 
   @BeforeEach
   public void setUp() {
@@ -122,7 +122,7 @@ public class TestConditionalRangePartitioner {
 
   @Test
   public void testCompositeKeyComparator() {
-    ConditionalRangePartitioner.CompositeKeyComparator<String> comparator =
+    ConditionalRangePartitioner.CompositeKeyComparator<Integer, String> comparator =
         new ConditionalRangePartitioner.CompositeKeyComparator<>();
 
     // Test different keys

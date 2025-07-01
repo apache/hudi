@@ -68,8 +68,6 @@ import java.util.stream.Stream;
 
 import scala.Tuple2;
 
-import static org.apache.hudi.data.partitioner.ConditionalRangePartitioner.computeSplitPointMapDistributed;
-
 /**
  * A Spark engine implementation of HoodieEngineContext.
  */
@@ -274,6 +272,14 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
     return javaSparkContext.emptyRDD();
   }
 
+  @Override
+  public <S extends Comparable<S>, V extends Comparable<V>, R> HoodieData<R> processValuesOfTheSameShards(
+      HoodiePairData<S, V> data, SerializableFunction<Iterator<V>, Iterator<R>> func, List<S> shardIndices, boolean preservesPartitioning) {
+    HoodiePairData<S, V> repartitionedData = rangeBasedRepartitionForEachKey(
+        data, shardIndices, 0.1, 100000, System.nanoTime());
+    return repartitionedData.values().mapPartitions(func, preservesPartitioning);
+  }
+
   /**
    * Performs range-based repartitioning of data based on key distribution to optimize partition sizes.
    *
@@ -291,7 +297,7 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
    * <p>The method is particularly useful for: Balancing workload across partitions for better parallel processing</p>
    *
    * @param data The input data as key-value pairs where keys are integers and values are of type V
-   * @param keyRange The maximum key value (inclusive) in the dataset, used to determine sampling strategy
+   * @param shardIndices The set must cover all possible keys of the given data
    * @param sampleFraction The fraction of data to sample for each key (between 0 and 1).
    *                       A higher fraction provides better distribution analysis but increases sampling overhead.
    *                       It typically should be smaller than 0.05 for large datasets.
@@ -301,34 +307,22 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
    * @return A repartitioned and sorted HoodiePairData with optimized key distribution across partitions
    * @throws IllegalArgumentException if sampleFraction is not between 0 and 1
    */
-  public <V extends Comparable<V>> HoodiePairData<Integer, V> rangeBasedRepartitionForEachKey(
-      HoodiePairData<Integer, V> data, int keyRange, double sampleFraction, int maxKeyPerBucket, long seed) {
+  public <S extends Comparable<S>, V extends Comparable<V>> HoodiePairData<S, V> rangeBasedRepartitionForEachKey(
+      HoodiePairData<S, V> data, List<S> shardIndices, double sampleFraction, int maxKeyPerBucket, long seed) {
     ValidationUtils.checkState(sampleFraction > 0 && sampleFraction <= 1, "sampleFraction must be between 0 and 1");
-    Map<Integer, Double> samplingFractions = new HashMap<>();
-    // For each key, sample with the given probability. All possible keys must be given up front.
-    for (int i = 0; i <= keyRange; i++) {
-      samplingFractions.put(i, sampleFraction);
+    Map<S, Double> samplingFractions = new HashMap<>();
+    for (S s : shardIndices) {
+      samplingFractions.put(s, sampleFraction);
     }
-    // Caller must ensure that the RDD is of <Integer, V> type.
-    JavaPairRDD<Integer, V> pairRddDataIntKV = HoodieJavaPairRDD.getJavaPairRDD(data);
-    // For each key, sampleFraction of total entries with that key are sampled. If it is < 1, then at least 1 entry is sampled.
-    JavaPairRDD<Integer, V> sampled = pairRddDataIntKV.sampleByKeyExact(false, samplingFractions, seed);
-    // Based on the sampled RDD, decide optimal num of partitions and value ranges for each partition.
-    Map<Integer, List<V>> splitPointsMap = computeSplitPointMapDistributed(sampled, sampleFraction, maxKeyPerBucket);
-    ConditionalRangePartitioner<V> partitioner = new ConditionalRangePartitioner<>(splitPointsMap);
-    JavaPairRDD<Tuple2<Integer, V>, V> compositeKeyRdd = pairRddDataIntKV.mapToPair(t -> new Tuple2<>(t, null));
+    JavaPairRDD<S, V> pairRddDataSKV = HoodieJavaPairRDD.getJavaPairRDD(data);
+    JavaPairRDD<S, V> sampled = pairRddDataSKV.sampleByKeyExact(false, samplingFractions, seed);
+    Map<S, List<V>> splitPointsMap = ConditionalRangePartitioner.computeSplitPointMapDistributed(sampled, sampleFraction, maxKeyPerBucket);
+    ConditionalRangePartitioner<S, V> partitioner = new ConditionalRangePartitioner<>(splitPointsMap);
+    JavaPairRDD<Tuple2<S, V>, V> compositeKeyRdd = pairRddDataSKV.mapToPair(t -> new Tuple2<>(t, null));
     return HoodieJavaPairRDD.of(
         compositeKeyRdd.repartitionAndSortWithinPartitions(
-                partitioner, new ConditionalRangePartitioner.CompositeKeyComparator<V>())
+                partitioner,
+                new ConditionalRangePartitioner.CompositeKeyComparator<>())
             .mapToPair(e -> e._1));
-  }
-
-  @Override
-  public <V extends Comparable<V>, R> HoodieData<R> processValuesOfTheSameShards(HoodiePairData<Integer, V> data, SerializableFunction<Iterator<V>, Iterator<R>> func, Set<Integer> shardIndices,
-                                                                                 boolean preservesPartitioning) {
-    int maxShardIndex = shardIndices.stream().mapToInt(Integer::intValue).max().orElse(0);
-    HoodiePairData<Integer, V> repartitionedData = rangeBasedRepartitionForEachKey(
-        data, maxShardIndex, 0.1, 100000, System.nanoTime());
-    return repartitionedData.values().mapPartitions(func, preservesPartitioning);
   }
 }
