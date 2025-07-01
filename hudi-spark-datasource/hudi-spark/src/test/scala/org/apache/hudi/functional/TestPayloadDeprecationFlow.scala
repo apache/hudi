@@ -118,7 +118,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
   }
 }
 
-// TODO: Add COPY_ON_WRITE table type tests when write path is updated accordingly.
+// TODO: Add COPY_ON_WRITE table type tests when write path is updated accordingly.s
 object TestPayloadDeprecationFlow {
   def provideParams(): java.util.List[Arguments] = {
     java.util.Arrays.asList(
