@@ -163,25 +163,6 @@ public interface HoodiePairData<K, V> extends Serializable {
   List<Pair<K, V>> collectAsList();
 
   /**
-   * WARNING: It is caller's responsibility to ensure that it is of <Integer, String> type.
-   *
-   * Repartitions the data object based on key ranges so that:
-   * 1. The keys are sorted within each partition.
-   * 2. There is at most only 1 entry per key per partition.
-   * 3. For partitions containing entries of the same key, the value ranges are not overlapping.
-   * 4. Aim to keep number of keys per partition to at most maxKeyPerBucket.
-   *
-   * @param keyRange The range of keys to partition across (0 to keyRange inclusive). It must cover all possible keys.
-   *                 Keys covered in range but not in the RDD are ignored.
-   * @param sampleFraction Fraction of data to sample for determining value range per bucket points (between 0 and 1).
-   * @param maxKeyPerBucket Maximum number of keys allowed per partition bucket
-   * @param seed Random seed for sampling
-   * @return Repartitioned data object
-   */
-  HoodiePairData<Integer, String> rangeBasedRepartitionForEachKey(
-      int keyRange, double sampleFraction, int maxKeyPerBucket, long seed);
-
-  /**
    * @return the deduce number of shuffle partitions
    */
   int deduceNumPartitions();

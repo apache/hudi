@@ -129,4 +129,21 @@ public abstract class HoodieEngineContext {
   public abstract <I, O> O aggregate(HoodieData<I> data, O zeroValue, Functions.Function2<O, I, O> seqOp, Functions.Function2<O, O, O> combOp);
 
   public abstract <T> ReaderContextFactory<T> getReaderContextFactory(HoodieTableMetaClient metaClient);
+
+  /**
+   * Groups values by key and applies a function to each group of values.
+   * [1 iterator maps to 1 key] It only guarantees that items returned by the same iterator shares to the same key.
+   * [exact once across iterators] The item returned by the same iterator will not be returned by other iterators.
+   * [1 key maps to >= 1 iterators] Items belong to the same shard can be load-balanced across multiple iterators. It's up to API implementations to decide
+   *                                load balancing pattern and how many iterators to split into.
+   *
+   * @param data The input pair<ShardIndex, Item> to process.
+   * @param func Function to apply to each group of items with the same shard
+   * @param maxShardIndex The range of ShardIndex in data parameter. If data contain ShardIndex 1,2,6, any maxShardIndex >=6 is valid.
+   * @param preservesPartitioning whether to preserve partitioning in the resulting collection.
+   * @param <R> Type of the result
+   * @return Result of applying the function to each group
+   */
+  public abstract <R> HoodieData<R> processValuesOfTheSameShards(
+      HoodiePairData<Integer, String> data, SerializableFunction<Iterator<String>, Iterator<R>> func, Integer maxShardIndex, boolean preservesPartitioning);
 }

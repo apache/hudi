@@ -280,39 +280,32 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
     SerializableBiFunction<String, Integer, Integer> mappingFunction = HoodieTableMetadataUtil::mapRecordKeyToFileGroupIndex;
     keys = repartitioningIfNeeded(keys, partitionName, numFileSlices);
-    if (keys instanceof HoodieListData) {
-      Map<String, HoodieRecord<HoodieMetadataPayload>> result = new HashMap<>();
-      List<String> keyList = keys.collectAsList();
-      ArrayList<ArrayList<String>> partitionedKeys = partitionKeysByFileSlices(keyList, numFileSlices);
-      List<HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>>> partialResults =
-              getEngineContext().map(partitionedKeys, keysList -> {
-                if (keysList.isEmpty()) {
-                  return HoodieListPairData.eager(Collections.emptyList());
-                }
-                int shardIndex = mappingFunction.apply(keysList.get(0), numFileSlices);
-                Collections.sort(keysList);
-                return lookupRecordsWithMapping(partitionName, keysList, fileSlices.get(shardIndex), !isSecondaryIndex, keyEncodingFn);
-              }, partitionedKeys.size());
+    HoodiePairData<Integer, String> persistedInitialPairData = keys
+        // Tag key with file group index
+        .mapToPair(recordKey -> new ImmutablePair<>(
+            mappingFunction.apply(recordKey, numFileSlices),
+            recordKey));
+    persistedInitialPairData.persist("MEMORY_AND_DISK_SER");
+    // Use the new processValuesOfTheSameShards API instead of explicit rangeBasedRepartitionForEachKey
+    SerializableFunction<Iterator<String>, Iterator<Pair<String, HoodieRecord<HoodieMetadataPayload>>>> processFunction =
+        sortedKeys -> {
+          List<String> keysList = new ArrayList<>();
+          // Decorate with sorted stream deduplication.
+          try (ClosableSortedDedupingIterator<String> distinctSortedKeyIter = new ClosableSortedDedupingIterator<>(sortedKeys)) {
+            if (!distinctSortedKeyIter.hasNext()) {
+              return Collections.emptyIterator();
+            }
+            distinctSortedKeyIter.forEachRemaining(keysList::add);
+          }
+          FileSlice fileSlice = fileSlices.get(mappingFunction.apply(keysList.get(0), numFileSlices));
+          return lookupRecordsWithMappingIter(partitionName, keysList, fileSlice, !isSecondaryIndex, keyEncodingFn);
+        };
 
-      partialResults.stream()
-              .flatMap(p -> p.collectAsList().stream())
-              .forEach(pair -> result.put(pair.getKey(), pair.getValue()));
-      return HoodieDataUtils.eagerMapKV(result)
-              .filter((String k, HoodieRecord<HoodieMetadataPayload> v) -> !v.getData().isDeleted());
-    } else {
-      keys = adaptiveSortDedupRepartition(keys, numFileSlices, metadataConfig);
-      return keys.mapPartitions(iter -> {
-        if (!iter.hasNext()) {
-          return Collections.emptyIterator();
-        }
-        List<String> sortedKeys = new ArrayList<>();
-        iter.forEachRemaining(sortedKeys::add);
-        FileSlice fileSlice = fileSlices.get(mappingFunction.apply(sortedKeys.get(0), numFileSlices));
-        return lookupRecordsWithMappingIter(partitionName, sortedKeys, fileSlice, !isSecondaryIndex, keyEncodingFn);
-      }, false)
-      .mapToPair(e -> new ImmutablePair<>(e.getKey(), e.getValue()))
-      .filter((String k, HoodieRecord<HoodieMetadataPayload> v) -> !v.getData().isDeleted());
-    }
+    HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> result =
+        getEngineContext().processValuesOfTheSameShards(persistedInitialPairData, processFunction, numFileSlices, true)
+            .mapToPair(p -> Pair.of(p.getLeft(), p.getRight()));
+
+    return result.filter((String k, HoodieRecord<HoodieMetadataPayload> v) -> !v.getData().isDeleted());
   }
 
   private HoodieData<HoodieRecord<HoodieMetadataPayload>> doLookupWithoutMapping(
@@ -329,36 +322,31 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     SerializableBiFunction<String, Integer, Integer> mappingFunction = MetadataPartitionType.fromPartitionPath(partitionName)
         .getFileGroupIndexFunction(indexVersion);
     keys = repartitioningIfNeeded(keys, partitionName, numFileSlices);
-    if (keys instanceof HoodieListData) {
-      List<String> keyList = keys.collectAsList();
-      List<HoodieRecord<HoodieMetadataPayload>> result = new ArrayList<>();
-      ArrayList<ArrayList<String>> partitionedKeys = partitionKeysByFileSlices(keyList, numFileSlices);
-      List<HoodieListData<HoodieRecord<HoodieMetadataPayload>>> partialResults =
-          getEngineContext().map(partitionedKeys, keysList -> {
-            if (keysList.isEmpty()) {
-              return HoodieListData.eager(Collections.emptyList());
+    HoodiePairData<Integer, String> persistedInitialPairData = keys
+        // Tag key with file group index
+        .mapToPair(recordKey -> new ImmutablePair<>(
+            mappingFunction.apply(recordKey, numFileSlices),
+            recordKey));
+    persistedInitialPairData.persist("MEMORY_AND_DISK_SER");
+
+    // Use the new processValuesOfTheSameShards API instead of explicit rangeBasedRepartitionForEachKey
+    SerializableFunction<Iterator<String>, Iterator<HoodieRecord<HoodieMetadataPayload>>> processFunction =
+        sortedKeys -> {
+          List<String> keysList = new ArrayList<>();
+          // Decorate with sorted stream deduplication.
+          try (ClosableSortedDedupingIterator<String> distinctSortedKeyIter = new ClosableSortedDedupingIterator<>(sortedKeys)) {
+            if (!distinctSortedKeyIter.hasNext()) {
+              return Collections.emptyIterator();
             }
-            int shardIndex = mappingFunction.apply(keysList.get(0), numFileSlices);
-            return lookupRecordsWithoutMapping(
-                partitionName, keysList.stream().sorted().distinct().collect(Collectors.toList()), fileSlices.get(shardIndex), !isSecondaryIndex, keyEncodingFn);
-          }, partitionedKeys.size());
-
-      partialResults.forEach(data -> result.addAll(data.collectAsList()));
-      return HoodieListData.eager(result)
-          .filter((HoodieRecord<HoodieMetadataPayload> v) -> !v.getData().isDeleted());
-    }
-
-    keys = adaptiveSortDedupRepartition(keys, numFileSlices, metadataConfig);
-    return keys.mapPartitions(iter -> {
-      if (!iter.hasNext()) {
-        return Collections.emptyIterator();
-      }
-      List<String> sortedKeys = new ArrayList<>();
-      iter.forEachRemaining(sortedKeys::add);
-      FileSlice fileSlice = fileSlices.get(mappingFunction.apply(sortedKeys.get(0), numFileSlices));
-      return lookupRecordsWithoutMappingIter(partitionName, sortedKeys, fileSlice, !isSecondaryIndex, keyEncodingFn);
-    }, false)
-        .filter((HoodieRecord<HoodieMetadataPayload> v) -> !v.getData().isDeleted());
+            distinctSortedKeyIter.forEachRemaining(keysList::add);
+          }
+          FileSlice fileSlice = fileSlices.get(mappingFunction.apply(keysList.get(0), numFileSlices));
+          return lookupRecordsWithoutMappingIter(partitionName, keysList, fileSlice, !isSecondaryIndex, keyEncodingFn);
+        };
+    HoodieData<HoodieRecord<HoodieMetadataPayload>> result =
+        getEngineContext().processValuesOfTheSameShards(persistedInitialPairData, processFunction, numFileSlices - 1, true);
+    
+    return result.filter((HoodieRecord<HoodieMetadataPayload> v) -> !v.getData().isDeleted());
   }
 
   /**
@@ -488,30 +476,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     return doLookupWithoutMapping(keys, partitionName, fileSlices, isSecondaryIndex, keyEncodingFn);
   }
 
-  static HoodieData<String> adaptiveSortDedupRepartition(
-      HoodieData<String> keys, int numFileSlices, HoodieMetadataConfig metadataConfig) {
-    SerializableBiFunction<String, Integer, Integer> mappingFunction = HoodieTableMetadataUtil::mapRecordKeyToFileGroupIndex;
-    HoodiePairData<Integer, String> persistedInitialPairData = keys
-        // Tag key with file group index
-        .mapToPair(recordKey -> new ImmutablePair<>(
-            mappingFunction.apply(recordKey, numFileSlices),
-            recordKey));
-    persistedInitialPairData.persist("MEMORY_AND_DISK_SER");
-    // Split into dynamic number of partitions, it guarantees that
-    // - keys in each partition is sorted
-    // - each partition only looks up 1 file index group
-    // - for partitions that look up the same file index group, the value range they look up does not overlap
-    keys = persistedInitialPairData
-        // Actions are triggered implicitly for sampling
-        .rangeBasedRepartitionForEachKey(numFileSlices, metadataConfig.getRangeRepartitionSamplingFraction(), 
-            metadataConfig.getRangeRepartitionTargetRecordsPerPartition(), metadataConfig.getRangeRepartitionRandomSeed())
-        .values()
-        // Deduplicate sorted data, the lookup key set is prepared by unknown source so we should avoid making
-        // assumptions.
-        .mapPartitions(ClosableSortedDedupingIterator::new, true /* deduplicating data does not change data partitioning integrity */);
-    return keys;
-  }
-
   // When testing we noticed that the parallelism can be very low which hurts the performance. so we should start with a reasonable
   // level of parallelism in that case.
   private HoodieData<String> repartitioningIfNeeded(
@@ -529,24 +493,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       keys = keys.repartition(metadataConfig.getRepartitionDefaultPartitions());
     }
     return keys;
-  }
-
-  private static ArrayList<ArrayList<String>> partitionKeysByFileSlices(List<String> keys, int numFileSlices) {
-    ArrayList<ArrayList<String>> partitionedKeys = new ArrayList<>(numFileSlices);
-    for (int i = 0; i < numFileSlices; ++i) {
-      partitionedKeys.add(new ArrayList<>());
-    }
-    SerializableBiFunction<String, Integer, Integer> mappingFunction = HoodieTableMetadataUtil::mapRecordKeyToFileGroupIndex;
-    keys.forEach(key -> {
-      int shardIndex;
-      try {
-        shardIndex = mappingFunction.apply(key, numFileSlices);
-      } catch (Exception e) {
-        throw new HoodieException("Error applying partitionKeysByFileSlices mapping function", e);
-      }
-      partitionedKeys.get(shardIndex).add(key);
-    });
-    return partitionedKeys;
   }
 
   private HoodieFileGroupReader<IndexedRecord> buildFileGroupReader(List<String> sortedKeys,
@@ -615,7 +561,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     return HoodieDataUtils.eagerMapKV(map);
   }
 
-  private HoodieListData<HoodieRecord<HoodieMetadataPayload>> lookupRecordsWithoutMapping(
+  private HoodieData<HoodieRecord<HoodieMetadataPayload>> lookupRecordsWithoutMapping(
       String partitionName,
       List<String> sortedKeys,
       FileSlice fileSlice,
@@ -624,9 +570,9 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     List<HoodieRecord<HoodieMetadataPayload>> res = new ArrayList<>();
     try (ClosableIterator<HoodieRecord<HoodieMetadataPayload>> iterator =
              lookupRecordsWithoutMappingIter(partitionName, sortedKeys, fileSlice, isFullKey, keyEncodingFn)) {
-      iterator.forEachRemaining(entry -> res.add(entry));
+      iterator.forEachRemaining(res::add);
     }
-    return HoodieListData.eager(res);
+    return HoodieListData.lazy(res);
   }
 
   private ClosableIterator<Pair<String, HoodieRecord<HoodieMetadataPayload>>> lookupRecordsWithMappingIter(
