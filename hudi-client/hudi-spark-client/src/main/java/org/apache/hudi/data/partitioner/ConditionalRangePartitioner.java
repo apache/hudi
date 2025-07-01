@@ -45,20 +45,20 @@ import scala.Tuple2;
  * 2. There is at most only 1 key per partition.
  * 3. For partitions containing entries of the same key, the value ranges are not overlapping.
  */
-public class ConditionalRangePartitioner<V extends Comparable<V>> extends Partitioner {
+public class ConditionalRangePartitioner<S extends Comparable<S>, V extends Comparable<V>> extends Partitioner {
   private static final Logger LOG = LoggerFactory.getLogger(ConditionalRangePartitioner.class);
 
-  private final Map<Integer, List<V>> splitPoints;
-  private final Map<Integer, Integer> startIndex;
+  private final Map<S, List<V>> splitPoints;
+  private final Map<S, Integer> startIndex;
   private final int totalPartitions;
 
-  public ConditionalRangePartitioner(Map<Integer, List<V>> splitPoints) {
+  public ConditionalRangePartitioner(Map<S, List<V>> splitPoints) {
     this.splitPoints = splitPoints;
     this.startIndex = new HashMap<>();
     int idx = 0;
     // Sort the key to ensure consistent key processing order across executors.
-    List<Integer> sortedKeys = splitPoints.keySet().stream().sorted().collect(Collectors.toList());
-    for (Integer sortedKey : sortedKeys) {
+    List<S> sortedKeys = splitPoints.keySet().stream().sorted().collect(Collectors.toList());
+    for (S sortedKey : sortedKeys) {
       startIndex.put(sortedKey, idx);
       idx += splitPoints.get(sortedKey).size() + 1;
     }
@@ -73,8 +73,8 @@ public class ConditionalRangePartitioner<V extends Comparable<V>> extends Partit
 
   @Override
   public int getPartition(Object keyObject) {
-    Tuple2<Integer, V> compositeKey = (Tuple2<Integer, V>) keyObject;
-    int key = compositeKey._1();
+    Tuple2<S, V> compositeKey = (Tuple2<S, V>) keyObject;
+    S key = compositeKey._1();
     V value = compositeKey._2();
     ValidationUtils.checkArgument(startIndex.containsKey(key),
         "ConditionalRangePartitioner does not expect key " + key);
@@ -92,14 +92,14 @@ public class ConditionalRangePartitioner<V extends Comparable<V>> extends Partit
   /**
    * Comparator that sort first on key, then on value.
    */
-  public static class CompositeKeyComparator<V extends Comparable<V>> implements Comparator<Tuple2<Integer, V>>, Serializable {
+  public static class CompositeKeyComparator<S extends Comparable<S>, V extends Comparable<V>> implements Comparator<Tuple2<S, V>>, Serializable {
     @Override
-    public int compare(Tuple2<Integer, V> o1, Tuple2<Integer, V> o2) {
-      int cmp = Long.compare(o1._1(), o2._1());
+    public int compare(Tuple2<S, V> o1, Tuple2<S, V> o2) {
+      int cmp = o1._1().compareTo(o2._1());
       if (cmp != 0) {
         return cmp;
       }
-      return (o1._2()).compareTo(o2._2());
+      return o1._2().compareTo(o2._2());
     }
   }
 
@@ -113,8 +113,8 @@ public class ConditionalRangePartitioner<V extends Comparable<V>> extends Partit
    * @param <V> Type of the value in the input data
    * @return Map of key -> list of split points specifying value range per partition.
    */
-  public static <V extends Comparable<V>> Map<Integer, List<V>> computeSplitPointMapDistributed(
-      JavaPairRDD<Integer, V> sampled,
+  public static <S extends Comparable<S>, V extends Comparable<V>> Map<S, List<V>> computeSplitPointMapDistributed(
+      JavaPairRDD<S, V> sampled,
       double sampleFraction,
       int maxKeyPerBucket) {
 
@@ -155,9 +155,9 @@ public class ConditionalRangePartitioner<V extends Comparable<V>> extends Partit
     return splits;
   }
 
-  public static <V extends Comparable<V>> JavaPairRDD<Tuple2<Integer, V>, V> repartitionWithSplits(
-      JavaPairRDD<Integer, V> baseRdd, ConditionalRangePartitioner<V> partitioner) {
-    JavaPairRDD<Tuple2<Integer, V>, V> compositeKeyRdd = baseRdd.mapToPair(t -> new Tuple2<>(t, t._2()));
-    return compositeKeyRdd.repartitionAndSortWithinPartitions(partitioner, new CompositeKeyComparator<V>());
+  public static <S extends Comparable<S>, V extends Comparable<V>> JavaPairRDD<Tuple2<S, V>, V> repartitionWithSplits(
+      JavaPairRDD<S, V> baseRdd, ConditionalRangePartitioner<S, V> partitioner) {
+    JavaPairRDD<Tuple2<S, V>, V> compositeKeyRdd = baseRdd.mapToPair(t -> new Tuple2<>(t, t._2()));
+    return compositeKeyRdd.repartitionAndSortWithinPartitions(partitioner, new CompositeKeyComparator<S, V>());
   }
 }

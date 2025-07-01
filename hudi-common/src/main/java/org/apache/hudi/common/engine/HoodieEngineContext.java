@@ -142,10 +142,14 @@ public abstract class HoodieEngineContext {
    * @param func Function to apply to each group of items with the same shard
    * @param shardIndices Set of all possible shard indices that may appear in the data. This is used for efficient partitioning and load balancing.
    * @param preservesPartitioning whether to preserve partitioning in the resulting collection.
+   * @param <S> Type of the shard index (must be Comparable)
    * @param <V> Type of the value in the input data (must be Comparable)
    * @param <R> Type of the result
    * @return Result of applying the function to each group
    */
-  public abstract <V extends Comparable<V>, R> HoodieData<R> processValuesOfTheSameShards(
-      HoodiePairData<Integer, V> data, SerializableFunction<Iterator<V>, Iterator<R>> func, Set<Integer> shardIndices, boolean preservesPartitioning);
+  public <S extends Comparable<S>, V extends Comparable<V>, R> HoodieData<R> processValuesOfTheSameShards(
+      HoodiePairData<S, V> data, SerializableFunction<Iterator<V>, Iterator<R>> func, List<S> shardIndices, boolean preservesPartitioning) {
+    // Group values by key and apply the function to each group
+    return data.groupByKey().values().flatMap(it -> func.apply(it.iterator()));
+  }
 }
