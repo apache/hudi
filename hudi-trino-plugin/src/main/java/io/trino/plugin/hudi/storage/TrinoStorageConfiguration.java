@@ -13,7 +13,7 @@
  */
 package io.trino.plugin.hudi.storage;
 
-import io.trino.plugin.hudi.io.TrinoHudiIoFactory;
+import io.trino.plugin.hudi.io.HudiTrinoIOFactory;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.StorageConfiguration;
 
@@ -23,65 +23,61 @@ import java.util.Map;
 import static org.apache.hudi.common.config.HoodieStorageConfig.HOODIE_IO_FACTORY_CLASS;
 import static org.apache.hudi.common.config.HoodieStorageConfig.HOODIE_STORAGE_CLASS;
 
-/**
- * {@link StorageConfiguration} implementation based on a config map
- */
 public class TrinoStorageConfiguration
-        extends StorageConfiguration<Map<String, String>>
+        extends StorageConfiguration
 {
-    private final Map<String, String> config;
+    private final Map<String, String> configMap;
 
     public TrinoStorageConfiguration()
     {
         this(getDefaultConfigs());
     }
 
-    TrinoStorageConfiguration(Map<String, String> config)
+    public TrinoStorageConfiguration(Map<String, String> configMap)
     {
-        this.config = getDefaultConfigs();
-        this.config.putAll(config);
+        this.configMap = configMap;
     }
 
-    private static Map<String, String> getDefaultConfigs()
+    public static Map<String, String> getDefaultConfigs()
     {
-        Map<String, String> config = new HashMap<>();
-        config.put(HOODIE_IO_FACTORY_CLASS.key(), TrinoHudiIoFactory.class.getName());
-        config.put(HOODIE_STORAGE_CLASS.key(), TrinoHudiStorage.class.getName());
-        return config;
-    }
-
-    @Override
-    public TrinoStorageConfiguration newInstance()
-    {
-        return new TrinoStorageConfiguration(new HashMap<>(config));
+        Map<String, String> configMap = new HashMap<>();
+        configMap.put(HOODIE_IO_FACTORY_CLASS.key(), HudiTrinoIOFactory.class.getName());
+        configMap.put(HOODIE_STORAGE_CLASS.key(), HudiTrinoStorage.class.getName());
+        return configMap;
     }
 
     @Override
-    public Map<String, String> unwrap()
+    public StorageConfiguration newInstance()
     {
-        return config;
+        return new TrinoStorageConfiguration(new HashMap<>(configMap));
     }
 
     @Override
-    public Map<String, String> unwrapCopy()
+    public Object unwrap()
     {
-        return new HashMap<>(config);
+        return configMap;
+    }
+
+    @Override
+    public Object unwrapCopy()
+    {
+        return new HashMap<>(configMap);
     }
 
     @Override
     public void set(String key, String value)
     {
-        config.put(key, value);
+        configMap.put(key, value);
     }
 
     @Override
     public Option<String> getString(String key)
     {
-        return Option.ofNullable(config.get(key));
+        return Option.ofNullable(configMap.get(key));
     }
 
     @Override
-    public TrinoStorageConfiguration getInline()
+    public StorageConfiguration getInline()
     {
         return newInstance();
     }

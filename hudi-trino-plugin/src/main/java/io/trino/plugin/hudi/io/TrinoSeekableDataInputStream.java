@@ -18,9 +18,6 @@ import org.apache.hudi.io.SeekableDataInputStream;
 
 import java.io.IOException;
 
-/**
- * {@link SeekableDataInputStream} implementation based on {@link TrinoInputStream}
- */
 public class TrinoSeekableDataInputStream
         extends SeekableDataInputStream
 {
