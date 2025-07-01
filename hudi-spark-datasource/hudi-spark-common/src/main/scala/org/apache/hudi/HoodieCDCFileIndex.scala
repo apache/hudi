@@ -43,7 +43,7 @@ class HoodieCDCFileIndex(override val spark: SparkSession,
                          override val shouldEmbedFileSlices: Boolean,
                          override val rangeType: RangeType = RangeType.OPEN_CLOSED)
   extends HoodieIncrementalFileIndex(
-    spark, metaClient, schemaSpec, options, fileStatusCache, includeLogFiles, shouldEmbedFileSlices, rangeType
+    spark, metaClient, schemaSpec, options, fileStatusCache, includeLogFiles, shouldEmbedFileSlices
   ) with FileIndex {
   private val emptyPartitionPath: String = "empty_partition_path";
   val cdcRelation: CDCRelation = CDCRelation.getCDCRelation(spark.sqlContext, metaClient, options, rangeType)
