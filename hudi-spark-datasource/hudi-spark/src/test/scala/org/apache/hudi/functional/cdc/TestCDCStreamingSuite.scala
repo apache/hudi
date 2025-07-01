@@ -22,10 +22,9 @@ import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode
 import org.apache.hudi.config.HoodieWriteConfig
 
-import org.apache.spark.sql.{Column, Dataset, ExpressionColumnNodeWrapper, Row, SaveMode}
+import org.apache.spark.sql.{Dataset, Row, SaveMode}
 import org.apache.spark.sql.QueryTest.checkAnswer
 import org.apache.spark.sql.catalyst.expressions.{Add, If, Literal}
-import org.apache.spark.sql.classic.ColumnConversions.toRichColumn
 import org.apache.spark.sql.execution.streaming.MemoryStream
 import org.apache.spark.sql.functions._
 import org.junit.jupiter.params.ParameterizedTest
@@ -107,11 +106,11 @@ class TestCDCStreamingSuite extends HoodieCDCTestBase with SparkAdapterSupport {
       .start()
 
     // stream2: extract the change data from user_to_country_tbl and merge into country_to_population_tbl
-    val dec = typedLit(-1).expr
-    val inc = typedLit(1).expr
-    val zero = typedLit(0).expr
-    val beforeCntExpr = If(isnull(col("bcountry")).expr, zero, dec)
-    val afterCntExpr = If(isnull(col("acountry")).expr, zero, inc)
+    val dec = sparkAdapter.getExpressionFromColumn(typedLit(-1))
+    val inc = sparkAdapter.getExpressionFromColumn(typedLit(1))
+    val zero = sparkAdapter.getExpressionFromColumn(typedLit(0))
+    val beforeCntExpr = If(sparkAdapter.getExpressionFromColumn(isnull(col("bcountry"))), zero, dec)
+    val afterCntExpr = If(sparkAdapter.getExpressionFromColumn(isnull(col("acountry"))), zero, inc)
     val stream2 = spark.readStream.format("hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
       .option(DataSourceReadOptions.INCREMENTAL_FORMAT.key, DataSourceReadOptions.INCREMENTAL_FORMAT_CDC_VAL)
@@ -143,7 +142,8 @@ class TestCDCStreamingSuite extends HoodieCDCTestBase with SparkAdapterSupport {
           .select(
             col("country"),
             sparkAdapter.createColumnFromExpression(
-              Add(col("sum(cnt)").expr, If(isnull(col("population")).expr, Literal(0), col("population").expr))).as("population"),
+              Add(sparkAdapter.getExpressionFromColumn(col("sum(cnt)")), If(sparkAdapter.getExpressionFromColumn(isnull(col("population"))),
+                Literal(0), sparkAdapter.getExpressionFromColumn(col("population"))))).as("population"),
             col("max(ts)").as("ts")
           )
           .write.format("hudi")

@@ -25,7 +25,6 @@ import org.apache.hudi.testutils.HoodieSparkClientTestHarness
 
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.expressions._
-import org.apache.spark.sql.classic.ColumnConversions.toRichColumn
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
@@ -38,7 +37,7 @@ class TestSparkFilterHelper extends HoodieSparkClientTestHarness with SparkAdapt
   @Test
   def testConvertInExpression(): Unit = {
     val filterExpr = sparkAdapter.translateFilter(
-      expr("col1 IN (1, 2, 3)").expr.transformUp {
+      sparkAdapter.getExpressionFromColumn(expr("col1 IN (1, 2, 3)")).transformUp {
         case UnresolvedAttribute(nameParts) => AttributeReference(nameParts.mkString("."), IntegerType)()
       })
 

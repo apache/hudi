@@ -18,9 +18,10 @@
 package org.apache.hudi
 
 import org.apache.hudi.ColumnStatsIndexSupport.composeIndexSchema
+import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 
-import org.apache.spark.sql.{Column, ExpressionColumnNodeWrapper, Row, SparkSession}
+import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.resolveExpr
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.encoders.DummyExpressionHolder
@@ -28,7 +29,6 @@ import org.apache.spark.sql.catalyst.expressions.{Expression, InSet, Not}
 import org.apache.spark.sql.catalyst.optimizer.OptimizeIn
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.rules.Rule
-import org.apache.spark.sql.classic.ColumnConversions.toRichColumn
 import org.apache.spark.sql.functions.{col, lower}
 import org.apache.spark.sql.hudi.DataSkippingUtils
 import org.apache.spark.sql.internal.SQLConf.SESSION_LOCAL_TIMEZONE
@@ -172,7 +172,7 @@ object TestDataSkippingUtils {
   def testStringsLookupFilterExpressionsSource(): java.util.stream.Stream[Arguments] = {
     java.util.stream.Stream.of(
       arguments(
-        col("B").startsWith("abc").expr,
+        sparkAdapter.getExpressionFromColumn(col("B").startsWith("abc")),
         Seq(
           IndexRow("file_1", valueCount = 1, B_minValue = "aba", B_maxValue = "adf", B_nullCount = 1), // may contain strings starting w/ "abc"
           IndexRow("file_2", valueCount = 1, B_minValue = "adf", B_maxValue = "azy", B_nullCount = 0),
@@ -180,7 +180,7 @@ object TestDataSkippingUtils {
         ),
         Seq("file_1")),
       arguments(
-        Not(col("B").startsWith("abc").expr),
+        Not(sparkAdapter.getExpressionFromColumn(col("B").startsWith("abc"))),
         Seq(
           IndexRow("file_1", valueCount = 1, B_minValue = "aba", B_maxValue = "adf", B_nullCount = 1), // may contain strings starting w/ "abc"
           IndexRow("file_2", valueCount = 1, B_minValue = "adf", B_maxValue = "azy", B_nullCount = 0),
@@ -190,7 +190,7 @@ object TestDataSkippingUtils {
         Seq("file_1", "file_2", "file_3")),
       arguments(
         // Composite expression
-        Not(lower(col("B")).startsWith("abc").expr),
+        Not(sparkAdapter.getExpressionFromColumn(lower(col("B")).startsWith("abc"))),
         Seq(
           IndexRow("file_1", valueCount = 1, B_minValue = "ABA", B_maxValue = "ADF", B_nullCount = 1), // may contain strings starting w/ "ABC" (after upper)
           IndexRow("file_2", valueCount = 1, B_minValue = "ADF", B_maxValue = "AZY", B_nullCount = 0),

@@ -170,6 +170,8 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
 
   override def createColumnFromExpression(expression: Expression): Column = new Column(expression)
 
+  override def getExpressionFromColumn(column: Column): Expression = column.expr
+
   override def getHoodieUnsafeUtils: HoodieUnsafeUtils = Spark3HoodieUnsafeUtils
 
   override def getDataFrameUtil: DataFrameUtil = Spark3DataFrameUtil

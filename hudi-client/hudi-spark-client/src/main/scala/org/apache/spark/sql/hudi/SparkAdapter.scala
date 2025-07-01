@@ -285,6 +285,8 @@ trait SparkAdapter extends Serializable {
 
   def createColumnFromExpression(expression: Expression): Column
 
+  def getExpressionFromColumn(column: Column): Expression
+
   def getHoodieUnsafeUtils: HoodieUnsafeUtils
 
   def getDataFrameUtil: DataFrameUtil

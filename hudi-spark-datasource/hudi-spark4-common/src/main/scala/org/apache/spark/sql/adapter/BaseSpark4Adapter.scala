@@ -42,6 +42,7 @@ import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.trees.Origin
 import org.apache.spark.sql.catalyst.util.DateFormatter
+import org.apache.spark.sql.classic.ColumnConversions
 import org.apache.spark.sql.execution.{PartitionedFileUtil, QueryExecution, SQLExecution}
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.hudi.{ColumnStatsExpressionUtils, Spark4ColumnStatsExpressionUtils, SparkAdapter}
@@ -187,6 +188,8 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
   override def createColumnFromExpression(expression: Expression): Column = {
     new Column(ExpressionColumnNodeWrapper.apply(expression))
   }
+
+  override def getExpressionFromColumn(column: Column): Expression = ColumnConversions.expression(column)
 
   override def getHoodieUnsafeUtils: HoodieUnsafeUtils = Spark4HoodieUnsafeUtils
 
