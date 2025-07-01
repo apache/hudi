@@ -37,6 +37,7 @@ import org.apache.hudi.storage.StorageConfiguration;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Stream;
 
 /**
@@ -139,11 +140,12 @@ public abstract class HoodieEngineContext {
    *
    * @param data The input pair<ShardIndex, Item> to process.
    * @param func Function to apply to each group of items with the same shard
-   * @param maxShardIndex The range of ShardIndex in data parameter. If data contain ShardIndex 1,2,6, any maxShardIndex >=6 is valid.
+   * @param shardIndices Set of all possible shard indices that may appear in the data. This is used for efficient partitioning and load balancing.
    * @param preservesPartitioning whether to preserve partitioning in the resulting collection.
+   * @param <V> Type of the value in the input data (must be Comparable)
    * @param <R> Type of the result
    * @return Result of applying the function to each group
    */
-  public abstract <R> HoodieData<R> processValuesOfTheSameShards(
-      HoodiePairData<Integer, String> data, SerializableFunction<Iterator<String>, Iterator<R>> func, Integer maxShardIndex, boolean preservesPartitioning);
+  public abstract <V extends Comparable<V>, R> HoodieData<R> processValuesOfTheSameShards(
+      HoodiePairData<Integer, V> data, SerializableFunction<Iterator<V>, Iterator<R>> func, Set<Integer> shardIndices, boolean preservesPartitioning);
 }

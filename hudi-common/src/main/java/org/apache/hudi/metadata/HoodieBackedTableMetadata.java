@@ -91,6 +91,7 @@ import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED;
 import static org.apache.hudi.common.config.HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE;
@@ -301,8 +302,9 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
           return lookupRecordsWithMappingIter(partitionName, keysList, fileSlice, !isSecondaryIndex, keyEncodingFn);
         };
 
+    Set<Integer> shardIndices = IntStream.range(0, numFileSlices).boxed().collect(Collectors.toSet());
     HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> result =
-        getEngineContext().processValuesOfTheSameShards(persistedInitialPairData, processFunction, numFileSlices, true)
+        getEngineContext().processValuesOfTheSameShards(persistedInitialPairData, processFunction, shardIndices, true)
             .mapToPair(p -> Pair.of(p.getLeft(), p.getRight()));
 
     return result.filter((String k, HoodieRecord<HoodieMetadataPayload> v) -> !v.getData().isDeleted());
@@ -343,8 +345,9 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
           FileSlice fileSlice = fileSlices.get(mappingFunction.apply(keysList.get(0), numFileSlices));
           return lookupRecordsWithoutMappingIter(partitionName, keysList, fileSlice, !isSecondaryIndex, keyEncodingFn);
         };
+    Set<Integer> shardIndices = IntStream.range(0, numFileSlices).boxed().collect(Collectors.toSet());
     HoodieData<HoodieRecord<HoodieMetadataPayload>> result =
-        getEngineContext().processValuesOfTheSameShards(persistedInitialPairData, processFunction, numFileSlices - 1, true);
+        getEngineContext().processValuesOfTheSameShards(persistedInitialPairData, processFunction, shardIndices, true);
     
     return result.filter((HoodieRecord<HoodieMetadataPayload> v) -> !v.getData().isDeleted());
   }
