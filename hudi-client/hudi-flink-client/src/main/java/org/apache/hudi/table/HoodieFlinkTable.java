@@ -18,8 +18,6 @@
 
 package org.apache.hudi.table;
 
-import org.apache.hudi.client.BaseHoodieWriteClient;
-import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.data.HoodieData;
@@ -119,12 +117,6 @@ public abstract class HoodieFlinkTable<T>
     Option<InternalSchema> internalSchema = new TableSchemaResolver(metaClient).getTableInternalSchemaFromCommitMetadata();
     if (internalSchema.isPresent()) {
       config.setInternalSchemaString(SerDeHelper.toJson(internalSchema.get()));
-    }
-  }
-
-  public void dropIndex(HoodieWriteConfig config, HoodieEngineContext context, List<String> secIdxPartitions) {
-    try (BaseHoodieWriteClient client = new HoodieFlinkWriteClient(context, config)) {
-      client.dropIndex(secIdxPartitions);
     }
   }
 }

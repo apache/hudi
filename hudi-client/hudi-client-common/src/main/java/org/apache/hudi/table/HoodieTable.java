@@ -1215,6 +1215,4 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
       HoodieMergeHelper.newInstance().runMerge(this, upsertHandle);
     }
   }
-
-  public abstract void dropIndex(HoodieWriteConfig config, HoodieEngineContext context, List<String> secIdxPartitions);
 }

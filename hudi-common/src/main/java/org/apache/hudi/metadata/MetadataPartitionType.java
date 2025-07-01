@@ -24,6 +24,7 @@ import org.apache.hudi.avro.model.HoodieMetadataFileInfo;
 import org.apache.hudi.avro.model.HoodieRecordIndexInfo;
 import org.apache.hudi.avro.model.HoodieSecondaryIndexInfo;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.StringUtils;
@@ -226,6 +227,11 @@ public enum MetadataPartitionType {
       checkArgument(metaClient.getIndexMetadata().isPresent(), "Index definition is not present for index: " + indexName);
       return metaClient.getIndexMetadata().get().getIndexDefinitions().get(indexName).getIndexName();
     }
+
+    @Override
+    public SerializableBiFunction<String, Integer, Integer> getFileGroupIndexFunction(HoodieIndexVersion indexVersion) {
+      return HoodieTableMetadataUtil.getRecordKeyToFileGroupIndexFunction(indexVersion.greaterThanOrEquals(HoodieIndexVersion.V2));
+    }
   },
   PARTITION_STATS(HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS, "partition-stats-", 6) {
     @Override
@@ -389,6 +395,13 @@ public enum MetadataPartitionType {
    */
   public void constructMetadataPayload(HoodieMetadataPayload payload, GenericRecord record) {
     throw new UnsupportedOperationException("MetadataPayload construction not supported for partition type: " + this);
+  }
+
+  /**
+   * Returns the key to file group mapping function.
+   */
+  public SerializableBiFunction<String, Integer, Integer> getFileGroupIndexFunction(HoodieIndexVersion indexVersion) {
+    return HoodieTableMetadataUtil::mapRecordKeyToFileGroupIndex;
   }
 
   /**

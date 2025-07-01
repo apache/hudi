@@ -34,7 +34,6 @@ import org.apache.hudi.data.HoodieJavaPairRDD;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.TableNotFoundException;
-import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.table.HoodieTable;
@@ -53,7 +52,6 @@ import java.util.Map;
 import scala.Tuple2;
 
 import static org.apache.hudi.index.HoodieIndexUtils.tagGlobalLocationBackToRecords;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.existingIndexVersionOrDefault;
 
 /**
  * Hoodie Index implementation backed by the record index present in the Metadata Table.
@@ -98,10 +96,7 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
     }
 
     // Partition the record keys to lookup such that each partition looks up one record index shard
-    String partitionPath = MetadataPartitionType.RECORD_INDEX.getPartitionPath();
-    HoodieIndexVersion indexVersion = existingIndexVersionOrDefault(partitionPath, hoodieTable.getMetaClient());
-    SerializableBiFunction<String, Integer, Integer> mappingFunction =
-        HoodieTableMetadataUtil.getRecordKeyToFileGroupIndexFunction(partitionPath, indexVersion, false);
+    SerializableBiFunction<String, Integer, Integer> mappingFunction = HoodieTableMetadataUtil::mapRecordKeyToFileGroupIndex;
     JavaRDD<String> partitionedKeyRDD = HoodieJavaRDD.getJavaRDD(records)
         .map(HoodieRecord::getRecordKey)
         .keyBy(k -> mappingFunction.apply(k, numFileGroups))

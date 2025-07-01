@@ -1266,12 +1266,9 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       HoodieIndexVersion indexVersion = existingIndexVersionOrDefault(mdtPartition, metadataMetaClient);
       // For streaming writes, we can determine the key format based on partition type
       // Secondary index partitions will always have composite keys, others will have simple keys
-      boolean useSecondaryKeyForHashing = MetadataPartitionType.SECONDARY_INDEX.matchesPartitionPath(mdtPartition)
-          && indexVersion.greaterThanOrEquals(HoodieIndexVersion.V2);
-      partitionMappingFunctions.put(mdtPartition,
-          HoodieTableMetadataUtil.getRecordKeyToFileGroupIndexFunction(mdtPartition, indexVersion, useSecondaryKeyForHashing));
+      partitionMappingFunctions.put(mdtPartition, MetadataPartitionType.fromPartitionPath(mdtPartition).getFileGroupIndexFunction(indexVersion));
     });
-    
+
     HoodieData<HoodieRecord> taggedRecords = untaggedRecords.map(mdtRecord -> {
       String mdtPartition = mdtRecord.getPartitionPath();
       List<FileSlice> latestFileSlices = partitionToLatestFileSlices.get(mdtPartition);
@@ -1711,9 +1708,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
         HoodieIndexVersion indexVersion = existingIndexVersionOrDefault(partitionName, metadataMetaClient);
 
         // Determine key format once per partition to avoid repeated checks
-        boolean useSecondaryKeyForHashing = MetadataPartitionType.SECONDARY_INDEX.matchesPartitionPath(partitionName) && indexVersion.greaterThanOrEquals(HoodieIndexVersion.V2);
-        SerializableBiFunction<String, Integer, Integer> mappingFunction =
-            HoodieTableMetadataUtil.getRecordKeyToFileGroupIndexFunction(partitionName, indexVersion, useSecondaryKeyForHashing);
+        SerializableBiFunction<String, Integer, Integer> mappingFunction = MetadataPartitionType.fromPartitionPath(partitionName).getFileGroupIndexFunction(indexVersion);
         HoodieData<HoodieRecord> rddSinglePartitionRecords = records.map(r -> {
           FileSlice slice = finalFileSlices.get(mappingFunction.apply(r.getRecordKey(), fileGroupCount));
           r.unseal();

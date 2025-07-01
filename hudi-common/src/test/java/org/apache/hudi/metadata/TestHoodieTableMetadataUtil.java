@@ -28,15 +28,12 @@ public class TestHoodieTableMetadataUtil {
 
   @Test
   public void testGetRecordKeyToFileGroupIndexFunctionOptimized() {
-    String partitionName = "secondary_index_test_index";
-    HoodieIndexVersion version = HoodieIndexVersion.V2;
-
     // Test with secondary key format
     String compositeKey = "secondaryKey$recordKey";
     boolean useSecondaryKeyForHashing = true;
 
     SerializableBiFunction<String, Integer, Integer> optimizedFunction =
-        HoodieTableMetadataUtil.getRecordKeyToFileGroupIndexFunction(partitionName, version, useSecondaryKeyForHashing);
+        HoodieTableMetadataUtil.getRecordKeyToFileGroupIndexFunction(useSecondaryKeyForHashing);
 
     int result1 = optimizedFunction.apply(compositeKey, 10);
     int result2 = optimizedFunction.apply("anotherSecondaryKey$anotherRecordKey", 10);
@@ -46,7 +43,7 @@ public class TestHoodieTableMetadataUtil {
 
     // Test with regular key format
     useSecondaryKeyForHashing = false;
-    optimizedFunction = HoodieTableMetadataUtil.getRecordKeyToFileGroupIndexFunction(partitionName, version, useSecondaryKeyForHashing);
+    optimizedFunction = HoodieTableMetadataUtil.getRecordKeyToFileGroupIndexFunction(useSecondaryKeyForHashing);
 
     int result3 = optimizedFunction.apply("simpleKey", 10);
     int result4 = optimizedFunction.apply("anotherSimpleKey", 10);
