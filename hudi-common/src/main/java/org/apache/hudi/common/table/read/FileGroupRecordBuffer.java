@@ -268,6 +268,24 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
     return bufferedRecordMerger.deltaMerge(newRecord, existingRecord);
   }
 
+  static boolean isStringTyped(Schema.Field field) {
+    return hasType(field.schema(), Schema.Type.STRING);
+  }
+
+  static boolean isBytesTyped(Schema.Field field) {
+    return hasType(field.schema(), Schema.Type.BYTES);
+  }
+
+  static boolean hasType(Schema schema, Schema.Type targetType) {
+    if (schema.getType() == targetType) {
+      return true;
+    } else if (schema.getType() == Schema.Type.UNION) {
+      // Stream is lazy, so this is efficient even with multiple types
+      return schema.getTypes().stream().anyMatch(s -> s.getType() == targetType);
+    }
+    return false;
+  }
+
   /**
    * Merge a delete record with another record (data, or delete).
    *
