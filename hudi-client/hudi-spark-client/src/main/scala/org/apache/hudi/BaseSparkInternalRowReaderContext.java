@@ -93,17 +93,6 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
   }
 
   @Override
-  public void setValue(InternalRow row, Schema schema, String fieldName, Object value) {
-    Schema.Field field = schema.getField(fieldName);
-    if (field == null) {
-      throw new IllegalArgumentException("Field '" + fieldName + "' not found in schema.");
-    }
-    int index = field.pos();
-    // Assumes type of 'value' matches expected type in InternalRow
-    row.update(index, value);
-  }
-
-  @Override
   public String getMetaFieldValue(InternalRow record, int pos) {
     return record.getString(pos);
   }
