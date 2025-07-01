@@ -32,6 +32,7 @@ Here is the list of PMC and Committers who have contributed to the project. For 
 | Udit Mehrotra               | umehrot2            | [uditme](https://people.apache.org/committer-index.html#uditme)       |
 | Vinoth Chandar              | vinothchandar       | [vinoth](https://people.apache.org/committer-index.html#vinoth)       |
 | vinoyang                    | yanghua             | [vinoyang](https://people.apache.org/committer-index.html#vinoyang)   |
+| Yue Zhang                   | zhangyue19921010    | [zhangyue19921010](https://people.apache.org/committer-index.html#zhangyue19921010) |
 
 
 ### Committers
@@ -56,7 +57,6 @@ Here is the list of PMC and Committers who have contributed to the project. For 
 | Wenning Ding         | zhedoubushishi   | [wenningd](https://people.apache.org/committer-index.html#wenningd)                 |
 | Xianghu Wang         | wangxianghu      | [wangxianghu](https://people.apache.org/committer-index.html#wangxianghu)           |
 | Yann Byron           | YannByron        | [biyan](https://people.apache.org/committer-index.html#biyan)                       |
-| Yue Zhang            | zhangyue19921010 | [zhangyue19921010](https://people.apache.org/committer-index.html#zhangyue19921010) |
 | Zhaojing Yu          | yuzhaojing       | [yuzhaojing](https://people.apache.org/committer-index.html#yuzhaojing)             |
 | Zhiwei Peng          | pengzhiwei2018   | [zhiwei](https://people.apache.org/committer-index.html#zhiwei)                     |
 
