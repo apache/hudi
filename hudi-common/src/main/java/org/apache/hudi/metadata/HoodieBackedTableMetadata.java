@@ -404,7 +404,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     HoodieIndexVersion indexVersion = existingIndexVersionOrDefault(partitionName, metadataMetaClient);
 
     if (indexVersion.equals(HoodieIndexVersion.V1)) {
-      return readSecondaryIndexV1(secondaryKeys, partitionName);
+      return readSecondaryIndexV1Result(secondaryKeys, partitionName);
     } else if (indexVersion.equals(HoodieIndexVersion.V2)) {
       return readSecondaryIndexV2(secondaryKeys, partitionName);
     } else {
@@ -424,9 +424,9 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     HoodieIndexVersion indexVersion = existingIndexVersionOrDefault(partitionName, metadataMetaClient);
 
     if (indexVersion.equals(HoodieIndexVersion.V1)) {
-      return readSecondaryIndexV1(secondaryKeys, partitionName).values();
+      return readSecondaryIndexV1Result(secondaryKeys, partitionName).values();
     } else if (indexVersion.equals(HoodieIndexVersion.V2)) {
-      return readRecordIndexResult(getRecordKeysFromSecondaryIndexV2(secondaryKeys, partitionName));
+      return readRecordIndexResult(getRecordKeysFromSecondaryIndexV2Result(secondaryKeys, partitionName));
     } else {
       throw new IllegalArgumentException("readSecondaryIndexResult does not support index with version " + indexVersion);
     }
@@ -443,16 +443,16 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     return doLookup(keys, partitionName, fileSlices, isSecondaryIndex, keyEncodingFn);
   }
 
-  public HoodieData<String> getRecordKeysFromSecondaryIndexV2(HoodieData<String> secondaryKeys, String partitionName) {
+  public HoodieData<String> getRecordKeysFromSecondaryIndexV2Result(HoodieData<String> secondaryKeys, String partitionName) {
     return readIndexResult(secondaryKeys, partitionName, Option.of(SecondaryIndexKeyUtils::escapeSpecialChars)).map(
         hoodieRecord -> SecondaryIndexKeyUtils.getRecordKeyFromSecondaryIndexKey(hoodieRecord.getRecordKey()));
   }
 
   private HoodiePairData<String, HoodieRecordGlobalLocation> readSecondaryIndexV2(HoodieData<String> secondaryKeys, String partitionName) {
-    return readRecordIndex(getRecordKeysFromSecondaryIndexV2(secondaryKeys, partitionName));
+    return readRecordIndex(getRecordKeysFromSecondaryIndexV2Result(secondaryKeys, partitionName));
   }
 
-  private HoodiePairData<String, HoodieRecordGlobalLocation> readSecondaryIndexV1(HoodieData<String> secondaryKeys, String partitionName) {
+  private HoodiePairData<String, HoodieRecordGlobalLocation> readSecondaryIndexV1Result(HoodieData<String> secondaryKeys, String partitionName) {
     // For secondary index v1 we keep the old implementation.
     ValidationUtils.checkState(secondaryKeys instanceof HoodieListData, "readSecondaryIndex only support HoodieListData at the moment");
     ValidationUtils.checkState(dataMetaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX),
@@ -846,29 +846,53 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   }
 
   @Override
-  public HoodiePairData<String, Set<String>> getSecondaryIndexRecords(HoodieData<String> keys, String partitionName) {
+  public HoodiePairData<String, Set<String>> getSecondaryIndexRecords(HoodieData<String> secondaryKeys, String partitionName) {
+    HoodieIndexVersion indexVersion = existingIndexVersionOrDefault(partitionName, metadataMetaClient);
+
+    if (indexVersion.equals(HoodieIndexVersion.V1)) {
+      return getSecondaryIndexRecordsV1(secondaryKeys, partitionName);
+    } else if (indexVersion.equals(HoodieIndexVersion.V2)) {
+      return getSecondaryIndexRecordsV2(secondaryKeys, partitionName);
+    } else {
+      throw new IllegalArgumentException("getSecondaryIndexRecords does not support index with version " + indexVersion);
+    }
+  }
+
+  private HoodiePairData<String, Set<String>> getSecondaryIndexRecordsV1(HoodieData<String> keys, String partitionName) {
     if (keys.isEmpty()) {
       return HoodieListPairData.eager(Collections.emptyList());
     }
 
-    List<Pair<String, String>> pairs = getRecordsByKeyPrefixes(keys, partitionName, false, Option.of(SecondaryIndexKeyUtils::escapeSpecialChars)).map(
-            record -> {
-              if (!record.getData().isDeleted()) {
-                String recordKey = SecondaryIndexKeyUtils.getRecordKeyFromSecondaryIndexKey(record.getRecordKey());
-                String secondaryKey = SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey(record.getRecordKey());
-                return Pair.of(secondaryKey, recordKey);
-              }
-              return null;
-            })
+    Map<String, Set<String>> res = getRecordsByKeyPrefixes(keys, partitionName, false, Option.of(SecondaryIndexKeyUtils::escapeSpecialChars))
+        .map(record -> {
+          if (!record.getData().isDeleted()) {
+            return SecondaryIndexKeyUtils.getSecondaryKeyRecordKeyPair(record.getRecordKey());
+          }
+          return null;
+        })
         .filter(Objects::nonNull)
-        .collectAsList();
+        .collectAsList()
+        .stream()
+        .collect(HashMap::new,
+            (map, pair) -> map.computeIfAbsent(pair.getKey(), k -> new HashSet<>()).add(pair.getValue()),
+            (map1, map2) -> map2.forEach((k, v) -> map1.computeIfAbsent(k, key -> new HashSet<>()).addAll(v)));
 
-    Map<String, Set<String>> res = new HashMap<>();
-    for (Pair<String, String> pair : pairs) {
-      String key = pair.getKey();
-      res.computeIfAbsent(key, k -> new HashSet<>()).add(pair.getValue());
-    }
     return HoodieDataUtils.eagerMapKV(res);
+  }
+
+  private HoodiePairData<String, Set<String>> getSecondaryIndexRecordsV2(HoodieData<String> secondaryKeys, String partitionName) {
+    if (secondaryKeys.isEmpty()) {
+      return HoodieListPairData.eager(Collections.emptyList());
+    }
+    return readIndexResult(secondaryKeys, partitionName, Option.of(SecondaryIndexKeyUtils::escapeSpecialChars))
+        .filter(hoodieRecord -> !hoodieRecord.getData().isDeleted())
+        .mapToPair(hoodieRecord -> SecondaryIndexKeyUtils.getRecordKeySecondaryKeyPair(hoodieRecord.getRecordKey()))
+        .groupByKey()
+        .mapToPair(p -> {
+          HashSet<String> secKeys = new HashSet<>();
+          p.getValue().iterator().forEachRemaining(secKeys::add);
+          return Pair.of(p.getKey(), secKeys);
+        });
   }
 
   /**
