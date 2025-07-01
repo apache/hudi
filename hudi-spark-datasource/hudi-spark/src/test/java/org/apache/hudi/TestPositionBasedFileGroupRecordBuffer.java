@@ -107,7 +107,7 @@ public class TestPositionBasedFileGroupRecordBuffer extends SparkClientFunctiona
       writeConfigs.put(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key(), CustomPayloadForTesting.class.getName());
       writeConfigs.put(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key(), HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID);
     }
-    commitToTable(dataGen.generateInserts("001", 100), INSERT.value(), writeConfigs, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA);
+    commitToTable(dataGen.generateInserts("001", 100), INSERT.value(), writeConfigs);
 
     String[] partitionPaths = dataGen.getPartitionPaths();
     String[] partitionValues = new String[1];
