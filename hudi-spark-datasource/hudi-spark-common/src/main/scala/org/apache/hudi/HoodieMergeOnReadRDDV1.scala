@@ -72,7 +72,7 @@ class HoodieMergeOnReadRDDV1(@transient sc: SparkContext,
     val partition = split.asInstanceOf[HoodieMergeOnReadPartition]
     val iter = partition.split match {
       case dataFileOnlySplit if dataFileOnlySplit.logFiles.isEmpty =>
-        val projectedReader = projectReader(fileReaders.requiredSchemaReaderSkipMerging, requiredSchema.structTypeSchema)
+        val projectedReader = projectReader(fileReaders.requiredSchemaReader, requiredSchema.structTypeSchema)
         projectedReader(dataFileOnlySplit.dataFile.get)
 
       case logFileOnlySplit if logFileOnlySplit.dataFile.isEmpty =>
@@ -81,7 +81,7 @@ class HoodieMergeOnReadRDDV1(@transient sc: SparkContext,
       case split =>
         mergeType match {
           case DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL =>
-            val reader = fileReaders.requiredSchemaReaderSkipMerging
+            val reader = fileReaders.requiredSchemaReader
             new SkipMergeIterator(split, reader, tableSchema, requiredSchema, tableState, getHadoopConf)
 
           case DataSourceReadOptions.REALTIME_PAYLOAD_COMBINE_OPT_VAL =>
@@ -143,7 +143,7 @@ class HoodieMergeOnReadRDDV1(@transient sc: SparkContext,
     //       Record Payload classes then we can avoid reading and parsing the records w/ _full_ schema,
     //       and instead only rely on projected one, nevertheless being able to perform merging correctly
     if (isProjectionCompatible(tableState)) {
-      fileReaders.requiredSchemaReader
+      fileReaders.optionalSchemaReader
     } else {
       fileReaders.fullSchemaReader
     }
