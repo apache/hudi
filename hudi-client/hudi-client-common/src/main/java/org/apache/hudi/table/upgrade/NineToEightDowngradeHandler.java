@@ -33,7 +33,7 @@ public class NineToEightDowngradeHandler implements DowngradeHandler {
   @Override
   public Pair<Map<ConfigProperty, String>, List<ConfigProperty>> downgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
-    UpgradeDowngradeUtils.dropSecondaryIndexPartitions(
+    UpgradeDowngradeUtils.dropNonV1SecondaryIndexPartitions(
         config, context, table, upgradeDowngradeHelper, "downgrading from table version nine to eight");
     return Pair.of(Collections.emptyMap(), Collections.emptyList());
   }

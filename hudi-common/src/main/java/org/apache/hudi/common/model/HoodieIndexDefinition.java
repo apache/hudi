@@ -234,7 +234,6 @@ public class HoodieIndexDefinition implements Serializable {
     public HoodieIndexDefinition build() {
       ValidationUtils.checkArgument(indexName != null, "Could not build index definition with a null index name");
       ValidationUtils.checkArgument(indexType != null, "Could not build index definition with a null index type");
-      ValidationUtils.checkArgument(version != null, "Could not build index definition with a null index version");
       return new HoodieIndexDefinition(
           indexName,
           indexType,

@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -44,6 +45,7 @@ import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
@@ -219,23 +221,33 @@ public class UpgradeDowngradeUtils {
   }
 
   /**
-   * Drops secondary index partitions from metadata table.
+   * Drops secondary index partitions from metadata table that are V2 or higher.
    *
    * @param config        Write config
    * @param context       Engine context
    * @param table         Hoodie table
    * @param operationType Type of operation (upgrade/downgrade)
    */
-  public static void dropSecondaryIndexPartitions(HoodieWriteConfig config, HoodieEngineContext context,
-                                                  HoodieTable table, SupportsUpgradeDowngrade upgradeDowngradeHelper, String operationType) {
+  public static void dropNonV1SecondaryIndexPartitions(HoodieWriteConfig config, HoodieEngineContext context,
+                                                       HoodieTable table, SupportsUpgradeDowngrade upgradeDowngradeHelper, String operationType) {
     HoodieTableMetaClient metaClient = table.getMetaClient();
     try (BaseHoodieWriteClient writeClient = upgradeDowngradeHelper.getWriteClient(config, context)) {
-      List<String> secIdxPartitions = metaClient.getTableConfig().getMetadataPartitions()
+      List<String> mdtPartitions = metaClient.getTableConfig().getMetadataPartitions()
           .stream()
-          .filter(partition -> partition.startsWith(MetadataPartitionType.SECONDARY_INDEX.getPartitionPath()))
+          .filter(partition -> {
+            // Only drop secondary indexes that are not V1
+            if (metaClient.getIndexMetadata().isPresent()) {
+              HoodieIndexDefinition indexDef = metaClient.getIndexMetadata().get().getIndexDefinitions().get(partition);
+              return MetadataPartitionType.fromPartitionPath(indexDef.getIndexName()).equals(MetadataPartitionType.SECONDARY_INDEX)
+                  && HoodieIndexVersion.V1.lowerThan(indexDef.getVersion());
+            }
+            return false;
+          })
           .collect(Collectors.toList());
-      LOG.info("Dropping {} from MDT for {}: {}", MetadataPartitionType.SECONDARY_INDEX.getPartitionPath(), operationType, secIdxPartitions);
-      writeClient.dropIndex(secIdxPartitions);
+      LOG.info("Dropping from MDT partitions for {}: {}", operationType, mdtPartitions);
+      if (!mdtPartitions.isEmpty()) {
+        writeClient.dropIndex(mdtPartitions);
+      }
     }
   }
 }

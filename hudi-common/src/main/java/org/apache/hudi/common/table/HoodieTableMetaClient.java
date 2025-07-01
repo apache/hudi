@@ -55,14 +55,12 @@ import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
-import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.HoodieStorage;
@@ -97,7 +95,6 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
-import static org.apache.hudi.metadata.HoodieIndexVersion.getCurrentVersion;
 
 /**
  * <code>HoodieTableMetaClient</code> allows to access meta-data about a hoodie table It returns meta-data about
@@ -237,7 +234,6 @@ public class HoodieTableMetaClient implements Serializable {
    */
   public boolean buildIndexDefinition(HoodieIndexDefinition indexDefinition) {
     String indexName = indexDefinition.getIndexName();
-    String indexMetaPath = getIndexDefinitionPath();
     boolean updateIndexDefn = true;
     if (indexMetadataOpt.isPresent()) {
       // if index definition is present, lets check for difference and only update if required.
@@ -258,13 +254,7 @@ public class HoodieTableMetaClient implements Serializable {
       indexMetadataOpt = Option.of(new HoodieIndexMetadata(indexDefinitionMap));
     }
     if (updateIndexDefn) {
-      try {
-        // TODO[HUDI-9094]: should not write byte array directly
-        FileIOUtils.createFileInPath(storage, new StoragePath(indexMetaPath),
-            Option.of(HoodieInstantWriter.convertByteArrayToWriter(getUTF8Bytes(indexMetadataOpt.get().toJson()))));
-      }  catch (IOException e) {
-        throw new HoodieIOException("Could not write expression index metadata at path: " + indexMetaPath, e);
-      }
+      writeIndexMetadataToStorage();
     }
     return updateIndexDefn;
   }
@@ -277,13 +267,49 @@ public class HoodieTableMetaClient implements Serializable {
   public void deleteIndexDefinition(String indexName) {
     checkState(indexMetadataOpt.isPresent(), "Index metadata is not present");
     indexMetadataOpt.get().getIndexDefinitions().remove(indexName);
+    writeIndexMetadataToStorage();
+  }
+
+  /**
+   * Writes the current index metadata to storage.
+   */
+  public void writeIndexMetadataToStorage() {
+    if (!indexMetadataOpt.isPresent()) {
+      return;
+    }
+    writeIndexMetadataToStorage(indexMetadataOpt.get());
+  }
+
+  /**
+   * Writes the provided index metadata to storage.
+   *
+   * @param indexMetadata the index metadata to write
+   */
+  public void writeIndexMetadataToStorage(HoodieIndexMetadata indexMetadata) {
     String indexMetaPath = getIndexDefinitionPath();
     try {
       // TODO[HUDI-9094]: should not write byte array directly
       FileIOUtils.createFileInPath(storage, new StoragePath(indexMetaPath),
-          Option.of(HoodieInstantWriter.convertByteArrayToWriter(getUTF8Bytes(indexMetadataOpt.get().toJson()))));
-    }  catch (IOException e) {
-      throw new HoodieIOException("Could not write expression index metadata at path: " + indexMetaPath, e);
+          Option.of(HoodieInstantWriter.convertByteArrayToWriter(getUTF8Bytes(indexMetadata.toJson()))));
+    } catch (IOException e) {
+      throw new HoodieIOException("Could not write index metadata at path: " + indexMetaPath, e);
+    }
+  }
+
+  /**
+   * Static method to write index metadata to storage.
+   *
+   * @param storage the storage to write to
+   * @param indexDefinitionPath the path where the index metadata should be written
+   * @param indexMetadata the index metadata to write
+   */
+  public static void writeIndexMetadataToStorage(HoodieStorage storage, String indexDefinitionPath, HoodieIndexMetadata indexMetadata) {
+    try {
+      // TODO[HUDI-9094]: should not write byte array directly
+      FileIOUtils.createFileInPath(storage, new StoragePath(indexDefinitionPath),
+          Option.of(HoodieInstantWriter.convertByteArrayToWriter(getUTF8Bytes(indexMetadata.toJson()))));
+    } catch (IOException e) {
+      throw new HoodieIOException("Could not write index metadata at path: " + indexDefinitionPath, e);
     }
   }
 
@@ -298,24 +324,7 @@ public class HoodieTableMetaClient implements Serializable {
     if (tableConfig.getRelativeIndexDefinitionPath().isPresent() && StringUtils.nonEmpty(tableConfig.getRelativeIndexDefinitionPath().get())) {
       indexDefOption = loadIndexDefFromStorage(basePath, tableConfig.getRelativeIndexDefinitionPath().get(), storage);
     }
-    populateIndexVersionIfMissing(tableConfig.getTableVersion(), indexDefOption);
     return indexDefOption;
-  }
-
-  public static void populateIndexVersionIfMissing(HoodieTableVersion tableVersion, Option<HoodieIndexMetadata> indexDefOption) {
-    indexDefOption.ifPresent(idxDefs ->
-        idxDefs.getIndexDefinitions().replaceAll((indexName, idxDef) -> {
-          ValidationUtils.checkArgument(HoodieIndexVersion.isValidIndexDefinition(tableVersion, idxDef),
-              String.format("Table version %s, index definition %s", tableVersion, idxDef));
-          if (idxDef.getVersion() == null) {
-            // If version field is missing, it implies either of the cases (validated by isValidIndexDefinition):
-            // - It is table version 8, because we don't write version attributes in some hudi releases
-            // - It is table version 9, and it is not secondary index. Since we drop SI on upgrade and we always write version attributes.
-            return idxDef.toBuilder().withVersion(getCurrentVersion(tableVersion, idxDef.getIndexName())).build();
-          } else {
-            return idxDef;
-          }
-        }));
   }
 
   public static Option<HoodieIndexMetadata> loadIndexDefFromStorage(
