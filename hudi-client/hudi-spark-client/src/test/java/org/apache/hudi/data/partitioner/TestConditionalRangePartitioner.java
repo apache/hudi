@@ -39,7 +39,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class ConditionalRangePartitionerTest {
+public class TestConditionalRangePartitioner {
   private JavaSparkContext jsc;
   private Map<Integer, List<String>> splitPoints;
   private ConditionalRangePartitioner partitioner;

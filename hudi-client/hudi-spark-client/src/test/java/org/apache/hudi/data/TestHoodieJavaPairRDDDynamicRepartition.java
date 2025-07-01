@@ -45,7 +45,7 @@ import scala.Tuple3;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class HoodieJavaPairRDDTest {
+public class TestHoodieJavaPairRDDDynamicRepartition {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieBackedTestDelayedTableMetadata.class);
 
