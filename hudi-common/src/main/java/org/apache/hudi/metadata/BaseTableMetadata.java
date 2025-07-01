@@ -429,21 +429,21 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
   protected abstract Option<HoodieRecord<HoodieMetadataPayload>> getRecordByKey(String key, String partitionName);
 
   /**
-   * Retrieves a map of (key -> record) from the metadata table by its keys.
+   * Retrieves a collection of pairs (key -> record) from the metadata table by its keys.
    *
    * @param keys The to look up in the metadata table
    * @param partitionName The partition name where the records are stored
-   * @return A map of (key -> record)
+   * @return A collection of pairs (key -> record)
    */
   public abstract HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> getRecordsByKeys(
           HoodieData<String> keys, String partitionName, Option<SerializableFunction<String, String>> keyEncodingFn);
 
   /**
-   * Returns a map of (secondary-key -> set-of-record-keys) for the provided secondary keys.
+   * Returns a collection of pairs (secondary-key -> set-of-record-keys) for the provided secondary keys.
    *
    * @param keys The unescaped/decoded secondary keys to look up in the metadata table
    * @param partitionName The partition name where the secondary index records are stored
-   * @return A map where each key is a secondary key and the value is a set of record keys that are indexed by that secondary key
+   * @return A collection of pairs where each key is a secondary key and the value is a set of record keys that are indexed by that secondary key
    */
   public abstract HoodiePairData<String, Set<String>> getSecondaryIndexRecords(HoodieData<String> keys, String partitionName);
 
