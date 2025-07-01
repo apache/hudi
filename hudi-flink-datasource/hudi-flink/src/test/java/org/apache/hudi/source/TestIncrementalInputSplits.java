@@ -391,7 +391,7 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
                 DataTypes.BOOLEAN())));
 
     PartitionPruners.PartitionPruner partitionPruner =
-        PartitionPruners.builder().rowType(TestConfigurations.ROW_TYPE).basePath(basePath).conf(conf).columnStatsProbe(columnStatsProbe).build();
+        PartitionPruners.builder().rowType(TestConfigurations.ROW_TYPE).basePath(basePath).metaClient(metaClient).conf(conf).columnStatsProbe(columnStatsProbe).build();
     IncrementalInputSplits iis = IncrementalInputSplits.builder()
         .conf(conf)
         .path(new Path(basePath))

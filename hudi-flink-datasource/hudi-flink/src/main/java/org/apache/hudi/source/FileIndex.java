@@ -86,7 +86,7 @@ public class FileIndex implements Serializable {
     this.metadataConfig = StreamerUtil.metadataConfig(conf);
     this.colStatsProbe = isDataSkippingFeasible(conf.get(FlinkOptions.READ_DATA_SKIPPING_ENABLED)) ? colStatsProbe : null;
     this.partitionPruner = partitionPruner;
-    this.fileStatsIndex = new FileStatsIndex(path.toString(), rowType, metadataConfig);
+    this.fileStatsIndex = new FileStatsIndex(path.toString(), rowType, conf, metaClient);
     this.partitionBucketIdFunc = partitionBucketIdFunc;
     this.metaClient = metaClient;
   }

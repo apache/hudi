@@ -357,6 +357,7 @@ public class HoodieTableSource implements
     return PartitionPruners.builder()
         .basePath(path.toString())
         .rowType(tableRowType)
+        .metaClient(metaClient)
         .conf(conf)
         .columnStatsProbe(columnStatsProbe)
         .partitionEvaluators(evaluators)

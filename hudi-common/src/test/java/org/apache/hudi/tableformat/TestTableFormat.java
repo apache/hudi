@@ -33,6 +33,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Supplier;
 
 /**
  * Test implementation of HoodieTableFormat that records all Hoodie instants in memory.
@@ -40,7 +41,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
  */
 public class TestTableFormat implements HoodieTableFormat {
 
-  private static final Map<String,List<HoodieInstant>> RECORDED_INSTANTS = new ConcurrentHashMap<>();
+  private static final Map<String, List<HoodieInstant>> RECORDED_INSTANTS = new ConcurrentHashMap<>();
   
   public TestTableFormat() {
   }
@@ -74,9 +75,9 @@ public class TestTableFormat implements HoodieTableFormat {
   }
 
   @Override
-  public void archive(List<HoodieInstant> archivedInstants, HoodieEngineContext engineContext, 
-                     HoodieTableMetaClient metaClient, FileSystemViewManager viewManager) {
-    RECORDED_INSTANTS.get(metaClient.getBasePath().toString()).removeAll(archivedInstants);
+  public void archive(Supplier<List<HoodieInstant>> archivedInstants, HoodieEngineContext engineContext,
+                      HoodieTableMetaClient metaClient, FileSystemViewManager viewManager) {
+    RECORDED_INSTANTS.get(metaClient.getBasePath().toString()).removeAll(archivedInstants.get());
   }
 
   @Override

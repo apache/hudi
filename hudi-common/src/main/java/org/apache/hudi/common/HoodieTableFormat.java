@@ -30,6 +30,7 @@ import org.apache.hudi.metadata.TableMetadataFactory;
 import java.io.Serializable;
 import java.util.List;
 import java.util.Properties;
+import java.util.function.Supplier;
 
 /**
  * External Table Format needs to implement this interface
@@ -92,7 +93,7 @@ public interface HoodieTableFormat extends Serializable {
    * @param viewManager  viewManager from HoodieTable.
    */
   default void archive(
-      List<HoodieInstant> archivedInstants,
+      Supplier<List<HoodieInstant>> archivedInstants,
       HoodieEngineContext engineContext,
       HoodieTableMetaClient metaClient,
       FileSystemViewManager viewManager) {
