@@ -6,6 +6,8 @@
         <groupId>io.trino</groupId>
         <artifactId>trino-root</artifactId>
         <version>472</version>
+        <!-- Stop looking for the parent on local file system -->
+        <relativePath />
     </parent>
 
     <artifactId>trino-hudi</artifactId>
