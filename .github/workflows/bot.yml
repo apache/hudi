@@ -1211,7 +1211,7 @@ jobs:
   #    matrix:
   #      include:
   #        - sparkProfile: 'spark4.0'
-  #          sparkArchive: 'spark-4.0.0-preview1/spark-4.0.0-preview1-bin-hadoop3.tgz'
+  #          sparkArchive: 'spark-4.0.0/spark-4.0.0-bin-hadoop3.tgz'
   #          scalaProfile: '-Dscala-2.13 -Dscala.binary.version=2.13'
 
   #  steps:

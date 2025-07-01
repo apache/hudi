@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.hudi.procedure
 
+import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.util.CollectionUtils.createImmutableList
 
 import org.apache.spark.sql.catalyst.expressions.Literal
@@ -80,7 +81,7 @@ class TestCallCommandParser extends HoodieSparkSqlTestBase {
   }
 
   test("Test Call Parse Error") {
-    checkParseExceptionContain("CALL cat.system radish kebab")("Syntax error at or near 'radish'")
+    checkParseExceptionContain("CALL cat.system radish kebab")(s"Syntax error at or near '${if (HoodieSparkUtils.gteqSpark4_0) "radish" else "CALL"}'")
   }
 
   test("Test Call Produce with semicolon") {
