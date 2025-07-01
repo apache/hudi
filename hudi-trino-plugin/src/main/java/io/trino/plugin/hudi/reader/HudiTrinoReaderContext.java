@@ -138,7 +138,7 @@ public class HudiTrinoReaderContext
     @Override
     public GenericRecord convertToAvroRecord(IndexedRecord record, Schema schema)
     {
-        GenericRecord ret = new Record(schema);
+        GenericRecord ret = new GenericData.Record(schema);
         for (Schema.Field field : schema.getFields()) {
             ret.put(field.name(), record.get(field.pos()));
         }
