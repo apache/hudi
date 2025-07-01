@@ -245,7 +245,7 @@ public abstract class SchemaHandlerTestBase {
       // NOTE: in this test custom doesn't have any meta cols because it is more interesting of a test case
       when(hoodieTableConfig.getTableVersion()).thenReturn(HoodieTableVersion.EIGHT);
       HoodieRecordMerger merger = mockRecordMerger(isProjectionCompatible,
-          isBootstrap && isProjectionCompatible ? new String[] {"begin_lat", "begin_lon", "_hoodie_record_key", "timestamp"} : new String[] {"begin_lat", "begin_lon", "timestamp"});
+          isBootstrap ? new String[] {"begin_lat", "begin_lon", "timestamp"} : new String[] {"begin_lat", "begin_lon", "_hoodie_record_key", "timestamp"});
       when(readerContext.getRecordMerger()).thenReturn((Option.of(merger)));
     }
   }
@@ -266,6 +266,7 @@ public abstract class SchemaHandlerTestBase {
     when(readerContext.getHasBootstrapBaseFile()).thenReturn(hasBootstrapBaseFile);
     when(readerContext.getShouldMergeUseRecordPosition()).thenReturn(mergeUseRecordPosition);
     when(readerContext.getRecordMerger()).thenReturn(Option.ofNullable(merger));
+    when(readerContext.getInstantRange()).thenReturn(Option.empty());
     return readerContext;
   }
 

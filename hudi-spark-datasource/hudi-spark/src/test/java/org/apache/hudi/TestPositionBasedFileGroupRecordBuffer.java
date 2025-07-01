@@ -38,7 +38,7 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.read.CustomPayloadForTesting;
 import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.table.read.PositionBasedFileGroupRecordBuffer;
-import org.apache.hudi.common.table.read.PositionBasedSchemaHandler;
+import org.apache.hudi.common.table.read.ParquetRowIndexBasedSchemaHandler;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
