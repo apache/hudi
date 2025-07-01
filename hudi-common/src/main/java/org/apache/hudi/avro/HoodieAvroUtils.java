@@ -472,6 +472,9 @@ public class HoodieAvroUtils {
       LinkedList<String> path = new LinkedList<>(originalPath); // Avoid mutating the original
       String head = path.poll(); // Remove first element
       Field topField = originalSchema.getField(head);
+      if (topField == null) {
+        throw new IllegalArgumentException("Field `" + head + "` not found in schema: " + originalSchema.getFields());
+      }
       groupedByTop.compute(topField, (ignored, list) -> {
         if (path.isEmpty() || (list != null && list.isEmpty())) {
           // Case 1: where path is empty indicating the entire field needs to be included.
