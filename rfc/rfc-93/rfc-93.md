@@ -27,7 +27,7 @@
 
 ## Status
 
-JIRA: <TBD>
+JIRA: https://issues.apache.org/jira/browse/HUDI-9332 
 
 ## Abstract
 
@@ -57,7 +57,7 @@ Some non-technical reasons:
   
 ## **Implementation**
 
-The main implementation step here is to create abstraction called TableFormatPlugin which handles table format operations such as 
+The main implementation step here is to create abstraction called `HoodieTableFormat` which handles table format operations such as 
 
 
 1. Committing writes 
@@ -68,7 +68,8 @@ The main implementation step here is to create abstraction called TableFormatPlu
 6. Rollbacks
 
 
-The Hudi platform is responsible for managing the data path and can be configured with the table format plugin by default using Hudi native table format. Other table formats will have their own implementation of this abstraction.  
+The Hudi platform is responsible for managing the data path and can be configured with the table format plugin or by default it continues to use Hudi's native table format. 
+Other table formats will have their own implementation of this abstraction.  
 
 ### Commit Protocol:
 
@@ -80,7 +81,7 @@ Hudi uses the creation of an action-complete file (e:g .commit, .deltacommit, .c
 The Hudi timeline is still very much used for all internal operations and the table format's commit metadata will be an overlay on top of this.
 With this, the action is only completed when both the above steps are completed. The plugin provided timeline needs to fence the timeline ensuring the definition of complete stays consistent.  This ensures the snapshot isolation is maintained.
 
-There will be a hudi table-property "hudi.table.format.plugin" to identify the table format with default being "native". This allows consistency in plugin behaviors across all hudi writers.
+There will be a hudi table-property "hudi.table.format" to identify the table format with default being "native". This allows consistency in plugin behaviors across all hudi writers.
 
 ### Metadata:
 
