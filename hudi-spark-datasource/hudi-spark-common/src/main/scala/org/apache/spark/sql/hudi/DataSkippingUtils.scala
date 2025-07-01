@@ -19,6 +19,7 @@ package org.apache.spark.sql.hudi
 
 import org.apache.hudi.ColumnStatsIndexSupport.{getMaxColumnNameFor, getMinColumnNameFor, getNullCountColumnNameFor, getValueCountColumnNameFor}
 import org.apache.hudi.SparkAdapterSupport
+import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 import org.apache.hudi.common.util.ValidationUtils.checkState
 
 import org.apache.spark.internal.Logging
@@ -26,7 +27,6 @@ import org.apache.spark.sql.{AnalysisException, HoodieCatalystExpressionUtils}
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.expressions.{Alias, And, Attribute, AttributeReference, EqualNullSafe, EqualTo, Expression, ExtractValue, GetStructField, GreaterThan, GreaterThanOrEqual, In, InSet, IsNotNull, IsNull, LessThan, LessThanOrEqual, Literal, Not, Or, StartsWith, SubqueryExpression}
 import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
-import org.apache.spark.sql.classic.ColumnConversions.toRichColumn
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.hudi.ColumnStatsExpressionUtils._
 import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
@@ -474,10 +474,10 @@ object DataSkippingUtils extends Logging {
 
 object ColumnStatsExpressionUtils {
 
-  @inline def genColMinValueExpr(colName: String): Expression = col(getMinColumnNameFor(colName)).expr
-  @inline def genColMaxValueExpr(colName: String): Expression = col(getMaxColumnNameFor(colName)).expr
-  @inline def genColNumNullsExpr(colName: String): Expression = col(getNullCountColumnNameFor(colName)).expr
-  @inline def genColValueCountExpr: Expression = col(getValueCountColumnNameFor).expr
+  @inline def genColMinValueExpr(colName: String): Expression = sparkAdapter.getExpressionFromColumn(col(getMinColumnNameFor(colName)))
+  @inline def genColMaxValueExpr(colName: String): Expression = sparkAdapter.getExpressionFromColumn(col(getMaxColumnNameFor(colName)))
+  @inline def genColNumNullsExpr(colName: String): Expression = sparkAdapter.getExpressionFromColumn(col(getNullCountColumnNameFor(colName)))
+  @inline def genColValueCountExpr: Expression = sparkAdapter.getExpressionFromColumn(col(getValueCountColumnNameFor))
 
   @inline def genColumnValuesEqualToExpression(colName: String,
                                                value: Expression,
