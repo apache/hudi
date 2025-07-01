@@ -1263,7 +1263,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     // For each partition, determine the key format once and create the appropriate mapping function
     Map<String, SerializableBiFunction<String, Integer, Integer>> partitionMappingFunctions = new HashMap<>();
     partitionToLatestFileSlices.keySet().forEach(mdtPartition -> {
-      HoodieIndexVersion indexVersion = existingIndexVersionOrDefault(mdtPartition, metadataMetaClient);
+      HoodieIndexVersion indexVersion = existingIndexVersionOrDefault(mdtPartition, dataMetaClient);
       // For streaming writes, we can determine the key format based on partition type
       // Secondary index partitions will always have composite keys, others will have simple keys
       partitionMappingFunctions.put(mdtPartition, MetadataPartitionType.fromPartitionPath(mdtPartition).getFileGroupIndexFunction(indexVersion));
@@ -1705,7 +1705,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
         hoodieFileGroupIdList.addAll(fileSlices.stream().map(fileSlice -> new HoodieFileGroupId(partitionName, fileSlice.getFileId())).collect(Collectors.toList()));
 
         List<FileSlice> finalFileSlices = fileSlices;
-        HoodieIndexVersion indexVersion = existingIndexVersionOrDefault(partitionName, metadataMetaClient);
+        HoodieIndexVersion indexVersion = existingIndexVersionOrDefault(partitionName, dataMetaClient);
 
         // Determine key format once per partition to avoid repeated checks
         SerializableBiFunction<String, Integer, Integer> mappingFunction = MetadataPartitionType.fromPartitionPath(partitionName).getFileGroupIndexFunction(indexVersion);
