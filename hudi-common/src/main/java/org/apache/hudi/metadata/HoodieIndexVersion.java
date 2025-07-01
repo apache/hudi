@@ -127,6 +127,10 @@ public enum HoodieIndexVersion {
     if (tv == HoodieTableVersion.EIGHT && iv == null) {
       return true;
     }
+    // Table version 9, missing version attribute NOT is allowed.
+    if (tv.greaterThanOrEquals(HoodieTableVersion.NINE) && iv == null) {
+      return false;
+    }
     // Table version eight, SI only v1 is allowed.
     if (tv == HoodieTableVersion.EIGHT && MetadataPartitionType.SECONDARY_INDEX.equals(metadataPartitionType) && iv != HoodieIndexVersion.V1) {
       return false;
