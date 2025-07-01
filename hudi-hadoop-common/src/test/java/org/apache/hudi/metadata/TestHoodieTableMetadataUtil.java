@@ -23,7 +23,7 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
-import org.apache.hudi.common.function.SerializableFunction;
+import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
@@ -757,9 +757,9 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
       HoodieIndexVersion version, int expectedIndex) throws Exception {
     boolean useSecondaryKeyForHashing = MetadataPartitionType.SECONDARY_INDEX.matchesPartitionPath(partitionName)
         && version.greaterThanOrEquals(HoodieIndexVersion.V2);
-    SerializableFunction<String, SerializableFunction<Integer, Integer>> mappingFunction =
+    SerializableBiFunction<String, Integer, Integer> mappingFunction =
         HoodieTableMetadataUtil.getRecordKeyToFileGroupIndexFunction(partitionName, version, useSecondaryKeyForHashing);
-    int index = mappingFunction.apply(recordKey).apply(numFileGroups);
+    int index = mappingFunction.apply(recordKey, numFileGroups);
     assertEquals(expectedIndex, index, "File group index should match expected value");
   }
 

@@ -22,7 +22,7 @@ package org.apache.hudi.index.bloom;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.function.SerializableFunction;
+import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroupId;
@@ -321,10 +321,10 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
       //       actual file-groups in the Bloom Index in MT
       String bloomPartitionPath = BLOOM_FILTERS.getPartitionPath();
       HoodieIndexVersion indexVersion = HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.current(), bloomPartitionPath);
-      SerializableFunction<String, SerializableFunction<Integer, Integer>> mappingFunction =
+      SerializableBiFunction<String, Integer, Integer> mappingFunction =
           HoodieTableMetadataUtil.getRecordKeyToFileGroupIndexFunction(bloomPartitionPath, indexVersion, false);
       try {
-        return mappingFunction.apply(bloomIndexEncodedKey).apply(targetPartitions);
+        return mappingFunction.apply(bloomIndexEncodedKey, targetPartitions);
       } catch (Exception e) {
         throw new HoodieException("Error apply bloom index partitioner mapping function", e);
       }

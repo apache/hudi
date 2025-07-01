@@ -23,7 +23,7 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.function.SerializableFunction;
+import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.util.HoodieDataUtils;
@@ -100,11 +100,11 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
     // Partition the record keys to lookup such that each partition looks up one record index shard
     String partitionPath = MetadataPartitionType.RECORD_INDEX.getPartitionPath();
     HoodieIndexVersion indexVersion = existingIndexVersionOrDefault(partitionPath, hoodieTable.getMetaClient());
-    SerializableFunction<String, SerializableFunction<Integer, Integer>> mappingFunction =
+    SerializableBiFunction<String, Integer, Integer> mappingFunction =
         HoodieTableMetadataUtil.getRecordKeyToFileGroupIndexFunction(partitionPath, indexVersion, false);
     JavaRDD<String> partitionedKeyRDD = HoodieJavaRDD.getJavaRDD(records)
         .map(HoodieRecord::getRecordKey)
-        .keyBy(k -> mappingFunction.apply(k).apply(numFileGroups))
+        .keyBy(k -> mappingFunction.apply(k, numFileGroups))
         .partitionBy(new PartitionIdPassthrough(numFileGroups))
         .map(t -> t._2);
     ValidationUtils.checkState(partitionedKeyRDD.getNumPartitions() <= numFileGroups);

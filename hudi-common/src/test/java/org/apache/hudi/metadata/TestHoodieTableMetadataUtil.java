@@ -18,7 +18,7 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.hudi.common.function.SerializableFunction;
+import org.apache.hudi.common.function.SerializableBiFunction;
 
 import org.junit.jupiter.api.Test;
 
@@ -27,30 +27,30 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 public class TestHoodieTableMetadataUtil {
 
   @Test
-  public void testGetRecordKeyToFileGroupIndexFunctionOptimized() throws Exception {
+  public void testGetRecordKeyToFileGroupIndexFunctionOptimized() {
     String partitionName = "secondary_index_test_index";
     HoodieIndexVersion version = HoodieIndexVersion.V2;
-    
+
     // Test with secondary key format
     String compositeKey = "secondaryKey$recordKey";
     boolean useSecondaryKeyForHashing = true;
 
-    SerializableFunction<String, SerializableFunction<Integer, Integer>> optimizedFunction =
+    SerializableBiFunction<String, Integer, Integer> optimizedFunction =
         HoodieTableMetadataUtil.getRecordKeyToFileGroupIndexFunction(partitionName, version, useSecondaryKeyForHashing);
-    
-    int result1 = optimizedFunction.apply(compositeKey).apply(10);
-    int result2 = optimizedFunction.apply("anotherSecondaryKey$anotherRecordKey").apply(10);
-    
+
+    int result1 = optimizedFunction.apply(compositeKey, 10);
+    int result2 = optimizedFunction.apply("anotherSecondaryKey$anotherRecordKey", 10);
+
     // Both should hash the secondary key portion
     assertNotEquals(result1, result2);
-    
+
     // Test with regular key format
     useSecondaryKeyForHashing = false;
     optimizedFunction = HoodieTableMetadataUtil.getRecordKeyToFileGroupIndexFunction(partitionName, version, useSecondaryKeyForHashing);
-    
-    int result3 = optimizedFunction.apply("simpleKey").apply(10);
-    int result4 = optimizedFunction.apply("anotherSimpleKey").apply(10);
-    
+
+    int result3 = optimizedFunction.apply("simpleKey", 10);
+    int result4 = optimizedFunction.apply("anotherSimpleKey", 10);
+
     // Both should hash the full key
     assertNotEquals(result3, result4);
   }
