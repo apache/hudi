@@ -105,12 +105,12 @@ class NoOpTableMetadata implements HoodieTableMetadata {
   }
 
   @Override
-  public HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndexWithMapping(HoodieData<String> recordKeys) {
+  public HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndex(HoodieData<String> recordKeys) {
     throw new HoodieMetadataException("Unsupported operation: readRecordIndex!");
   }
 
   @Override
-  public HoodiePairData<String, HoodieRecordGlobalLocation> readSecondaryIndexWithMapping(HoodieData<String> secondaryKeys, String partitionName) {
+  public HoodiePairData<String, HoodieRecordGlobalLocation> readSecondaryIndex(HoodieData<String> secondaryKeys, String partitionName) {
     return HoodieListPairData.eager(Collections.emptyMap());
   }
 
@@ -129,7 +129,7 @@ class NoOpTableMetadata implements HoodieTableMetadata {
 
   @Override
   public Option<String> getLatestCompactionTime() {
-    throw new HoodieMetadataException("Unsupported operation: readRecordIndexWithMapping!");
+    throw new HoodieMetadataException("Unsupported operation: getLatestCompactionTime!");
   }
 
   @Override
@@ -139,12 +139,12 @@ class NoOpTableMetadata implements HoodieTableMetadata {
 
   @Override
   public int getNumFileGroupsForPartition(MetadataPartitionType partition) {
-    throw new HoodieMetadataException("Unsupported operation: readRecordIndexWithMapping!");
+    throw new HoodieMetadataException("Unsupported operation: getNumFileGroupsForPartition!");
   }
 
   @Override
   public Map<Pair<String, StoragePath>, List<StoragePathInfo>> listPartitions(List<Pair<String, StoragePath>> partitionPathList) throws IOException {
-    throw new HoodieMetadataException("Unsupported operation: readRecordIndexWithMapping!");
+    throw new HoodieMetadataException("Unsupported operation: listPartitions!");
   }
 
   @Override

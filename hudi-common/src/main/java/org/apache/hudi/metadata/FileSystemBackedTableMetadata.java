@@ -319,13 +319,13 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
   }
 
   @Override
-  public HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndexWithMapping(HoodieData<String> recordKeys) {
-    throw new HoodieMetadataException("Unsupported operation: readRecordIndexWithMapping!");
+  public HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndex(HoodieData<String> recordKeys) {
+    throw new HoodieMetadataException("Unsupported operation: readRecordIndex!");
   }
 
   @Override
-  public HoodiePairData<String, HoodieRecordGlobalLocation> readSecondaryIndexWithMapping(HoodieData<String> secondaryKeys, String partitionName) {
-    throw new HoodieMetadataException("Unsupported operation: readSecondaryIndexWithMapping!");
+  public HoodiePairData<String, HoodieRecordGlobalLocation> readSecondaryIndex(HoodieData<String> secondaryKeys, String partitionName) {
+    throw new HoodieMetadataException("Unsupported operation: readSecondaryIndex!");
   }
 
   @Override
