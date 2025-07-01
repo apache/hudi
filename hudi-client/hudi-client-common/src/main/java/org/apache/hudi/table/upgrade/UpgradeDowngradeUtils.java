@@ -229,12 +229,13 @@ public class UpgradeDowngradeUtils {
   public static void dropSecondaryIndexPartitions(HoodieWriteConfig config, HoodieEngineContext context,
                                                   HoodieTable table, SupportsUpgradeDowngrade upgradeDowngradeHelper, String operationType) {
     HoodieTableMetaClient metaClient = table.getMetaClient();
-    BaseHoodieWriteClient writeClient = upgradeDowngradeHelper.getWriteClient(config, context);
-    List<String> secIdxPartitions = metaClient.getTableConfig().getMetadataPartitions()
-            .stream()
-            .filter(partition -> partition.startsWith(MetadataPartitionType.SECONDARY_INDEX.getPartitionPath()))
-            .collect(Collectors.toList());
-    LOG.info("Dropping {} from MDT for {}: {}", MetadataPartitionType.SECONDARY_INDEX.getPartitionPath(), operationType, secIdxPartitions);
-    writeClient.dropIndex(secIdxPartitions);
+    try (BaseHoodieWriteClient writeClient = upgradeDowngradeHelper.getWriteClient(config, context)) {
+      List<String> secIdxPartitions = metaClient.getTableConfig().getMetadataPartitions()
+          .stream()
+          .filter(partition -> partition.startsWith(MetadataPartitionType.SECONDARY_INDEX.getPartitionPath()))
+          .collect(Collectors.toList());
+      LOG.info("Dropping {} from MDT for {}: {}", MetadataPartitionType.SECONDARY_INDEX.getPartitionPath(), operationType, secIdxPartitions);
+      writeClient.dropIndex(secIdxPartitions);
+    }
   }
 }

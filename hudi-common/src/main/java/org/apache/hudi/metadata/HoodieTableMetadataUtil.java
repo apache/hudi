@@ -1368,16 +1368,11 @@ public class HoodieTableMetadataUtil {
    * For secondary index partitions (version >= 2), if the record keys contain the secondary index separator,
    * the secondary key portion is used for hashing. Otherwise, the full record key is used.
    *
-   * @param partitionName name of the partition
-   * @param version index version to determine hashing behavior
    * @param useSecondaryKeyForHashing whether to extract secondary key from composite keys (should be determined by caller)
    * @return function that maps record keys to file group indices
    */
-  public static SerializableBiFunction<String, Integer, Integer> getRecordKeyToFileGroupIndexFunction(
-      String partitionName, HoodieIndexVersion version, boolean useSecondaryKeyForHashing) {
-    if (MetadataPartitionType.SECONDARY_INDEX.matchesPartitionPath(partitionName)
-        && version.greaterThanOrEquals(HoodieIndexVersion.V2)
-        && useSecondaryKeyForHashing) {
+  public static SerializableBiFunction<String, Integer, Integer> getRecordKeyToFileGroupIndexFunction(boolean useSecondaryKeyForHashing) {
+    if (useSecondaryKeyForHashing) {
       return (recordKey, numFileGroups) -> {
         String secondaryKey = SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey(recordKey);
         return mapRecordKeyToFileGroupIndex(secondaryKey, numFileGroups);
@@ -1387,7 +1382,7 @@ public class HoodieTableMetadataUtil {
   }
 
   // change to configurable larger group
-  private static int mapRecordKeyToFileGroupIndex(String recordKey, int numFileGroups) {
+  public static int mapRecordKeyToFileGroupIndex(String recordKey, int numFileGroups) {
     int h = 0;
     for (int i = 0; i < recordKey.length(); ++i) {
       h = 31 * h + recordKey.charAt(i);

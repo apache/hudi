@@ -278,14 +278,12 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       return lookupRecordsWithMapping(partitionName, new ArrayList<>(distinctSortedKeys), fileSlices.get(0), !isSecondaryIndex, keyEncodingFn);
     }
 
-    HoodieIndexVersion indexVersion = existingIndexVersionOrDefault(partitionName, metadataMetaClient);
-    SerializableBiFunction<String, Integer, Integer> mappingFunction =
-            HoodieTableMetadataUtil.getRecordKeyToFileGroupIndexFunction(partitionName, indexVersion, false);
-    keys = repartitioningIfNeeded(keys, partitionName, numFileSlices, indexVersion);
+    SerializableBiFunction<String, Integer, Integer> mappingFunction = HoodieTableMetadataUtil::mapRecordKeyToFileGroupIndex;
+    keys = repartitioningIfNeeded(keys, partitionName, numFileSlices);
     if (keys instanceof HoodieListData) {
       Map<String, HoodieRecord<HoodieMetadataPayload>> result = new HashMap<>();
       List<String> keyList = keys.collectAsList();
-      ArrayList<ArrayList<String>> partitionedKeys = partitionKeysByFileSlices(keyList, numFileSlices, partitionName, indexVersion);
+      ArrayList<ArrayList<String>> partitionedKeys = partitionKeysByFileSlices(keyList, numFileSlices);
       List<HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>>> partialResults =
               getEngineContext().map(partitionedKeys, keysList -> {
                 if (keysList.isEmpty()) {
@@ -302,7 +300,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       return HoodieDataUtils.eagerMapKV(result)
               .filter((String k, HoodieRecord<HoodieMetadataPayload> v) -> !v.getData().isDeleted());
     } else {
-      keys = adaptiveSortDedupRepartition(keys, partitionName, numFileSlices, indexVersion, metadataConfig);
+      keys = adaptiveSortDedupRepartition(keys, numFileSlices, metadataConfig);
       return keys.mapPartitions(iter -> {
         if (!iter.hasNext()) {
           return Collections.emptyIterator();
@@ -327,14 +325,14 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       return lookupRecordsWithoutMapping(partitionName, new ArrayList<>(distinctSortedKeys), fileSlices.get(0), !isSecondaryIndex, keyEncodingFn);
     }
 
-    HoodieIndexVersion indexVersion = existingIndexVersionOrDefault(partitionName, metadataMetaClient);
-    SerializableBiFunction<String, Integer, Integer> mappingFunction =
-        HoodieTableMetadataUtil.getRecordKeyToFileGroupIndexFunction(partitionName, indexVersion, false);
-    keys = repartitioningIfNeeded(keys, partitionName, numFileSlices, indexVersion);
+    HoodieIndexVersion indexVersion = existingIndexVersionOrDefault(partitionName, dataMetaClient);
+    SerializableBiFunction<String, Integer, Integer> mappingFunction = MetadataPartitionType.fromPartitionPath(partitionName)
+        .getFileGroupIndexFunction(indexVersion);
+    keys = repartitioningIfNeeded(keys, partitionName, numFileSlices);
     if (keys instanceof HoodieListData) {
       List<String> keyList = keys.collectAsList();
       List<HoodieRecord<HoodieMetadataPayload>> result = new ArrayList<>();
-      ArrayList<ArrayList<String>> partitionedKeys = partitionKeysByFileSlices(keyList, numFileSlices, partitionName, indexVersion);
+      ArrayList<ArrayList<String>> partitionedKeys = partitionKeysByFileSlices(keyList, numFileSlices);
       List<HoodieListData<HoodieRecord<HoodieMetadataPayload>>> partialResults =
           getEngineContext().map(partitionedKeys, keysList -> {
             if (keysList.isEmpty()) {
@@ -350,7 +348,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
           .filter((HoodieRecord<HoodieMetadataPayload> v) -> !v.getData().isDeleted());
     }
 
-    keys = adaptiveSortDedupRepartition(keys, partitionName, numFileSlices, indexVersion, metadataConfig);
+    keys = adaptiveSortDedupRepartition(keys, numFileSlices, metadataConfig);
     return keys.mapPartitions(iter -> {
       if (!iter.hasNext()) {
         return Collections.emptyIterator();
@@ -491,9 +489,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   }
 
   static HoodieData<String> adaptiveSortDedupRepartition(
-      HoodieData<String> keys, String partitionName, int numFileSlices, HoodieIndexVersion tableVersion, HoodieMetadataConfig metadataConfig) {
-    SerializableBiFunction<String, Integer, Integer> mappingFunction =
-        HoodieTableMetadataUtil.getRecordKeyToFileGroupIndexFunction(partitionName, tableVersion, false);
+      HoodieData<String> keys, int numFileSlices, HoodieMetadataConfig metadataConfig) {
+    SerializableBiFunction<String, Integer, Integer> mappingFunction = HoodieTableMetadataUtil::mapRecordKeyToFileGroupIndex;
     HoodiePairData<Integer, String> persistedInitialPairData = keys
         // Tag key with file group index
         .mapToPair(recordKey -> new ImmutablePair<>(
@@ -518,10 +515,9 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   // When testing we noticed that the parallelism can be very low which hurts the performance. so we should start with a reasonable
   // level of parallelism in that case.
   private HoodieData<String> repartitioningIfNeeded(
-      HoodieData<String> keys, String partitionName, int numFileSlices, HoodieIndexVersion version) {
+      HoodieData<String> keys, String partitionName, int numFileSlices) {
     if (keys instanceof HoodieListData) {
-      SerializableBiFunction<String, Integer, Integer> mappingFunction =
-          HoodieTableMetadataUtil.getRecordKeyToFileGroupIndexFunction(partitionName, version, false);
+      SerializableBiFunction<String, Integer, Integer> mappingFunction = HoodieTableMetadataUtil::mapRecordKeyToFileGroupIndex;
       int parallelism = (int) keys.map(k -> mappingFunction.apply(k, numFileSlices)).distinct().count();
       // In case of empty lookup set, we should avoid RDD with 0 partitions.
       parallelism = Math.max(parallelism, 1);
@@ -535,13 +531,12 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     return keys;
   }
 
-  private static ArrayList<ArrayList<String>> partitionKeysByFileSlices(List<String> keys, int numFileSlices, String partitionName, HoodieIndexVersion version) {
+  private static ArrayList<ArrayList<String>> partitionKeysByFileSlices(List<String> keys, int numFileSlices) {
     ArrayList<ArrayList<String>> partitionedKeys = new ArrayList<>(numFileSlices);
     for (int i = 0; i < numFileSlices; ++i) {
       partitionedKeys.add(new ArrayList<>());
     }
-    SerializableBiFunction<String, Integer, Integer> mappingFunction =
-        HoodieTableMetadataUtil.getRecordKeyToFileGroupIndexFunction(partitionName, version, false);
+    SerializableBiFunction<String, Integer, Integer> mappingFunction = HoodieTableMetadataUtil::mapRecordKeyToFileGroupIndex;
     keys.forEach(key -> {
       int shardIndex;
       try {
