@@ -292,6 +292,4 @@ trait SparkAdapter extends Serializable {
   def getDataFrameUtil: DataFrameUtil
 
   def internalCreateDataFrame(spark: SparkSession, rdd: RDD[InternalRow], schema: StructType, isStreaming: Boolean = false): DataFrame
-
-  def getColumnStatsExpressionUtils: ColumnStatsExpressionUtils
 }
