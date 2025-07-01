@@ -28,7 +28,6 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.OrderedProperties;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.AWSDmsAvroPayload;
 import org.apache.hudi.common.model.BootstrapIndexType;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
@@ -57,7 +56,6 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
-import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -123,11 +121,7 @@ public class HoodieTableConfig extends HoodieConfig {
   public static final String HOODIE_WRITE_TABLE_NAME_KEY = "hoodie.datasource.write.table.name";
   public static final String HOODIE_TABLE_NAME_KEY = "hoodie.table.name";
   public static final String PARTIAL_UPDATE_CUSTOM_MARKER = "hoodie.write.partial.update.custom.marker";
-<<<<<<< HEAD
   public static final String DEBEZIUM_UNAVAILABLE_VALUE = "__debezium_unavailable_value";
-=======
-  public static final String DEBEZIUM_UNAVALABLE_VALUE = "__debezium_unavailable_value";
->>>>>>> 76428002ccea (Add partial upate mode)
 
   public static final ConfigProperty<String> DATABASE_NAME = ConfigProperty
       .key("hoodie.database.name")
@@ -335,12 +329,8 @@ public class HoodieTableConfig extends HoodieConfig {
       .noDefaultValue()
       .sinceVersion("1.1.0")
       .withDocumentation("The value of this property is in the format of 'K1=V1,K2=V2,...,Ki=Vi,...'."
-<<<<<<< HEAD
           + "Each (Ki, Vi) pair represents a property used by partial update scenarios "
           + "leveraging 'hoodie.write.partial.update.mode'.");
-=======
-          + "Each (Ki, Vi) pair presents a property used by partial update.");
->>>>>>> 76428002ccea (Add partial upate mode)
 
   public static final ConfigProperty<String> URL_ENCODE_PARTITIONING = KeyGeneratorOptions.URL_ENCODE_PARTITIONING;
   public static final ConfigProperty<String> HIVE_STYLE_PARTITIONING_ENABLE = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE;
