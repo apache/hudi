@@ -18,10 +18,32 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.common.util.collection.Pair;
+
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.SECONDARY_INDEX_RECORD_KEY_SEPARATOR;
 
 public class SecondaryIndexKeyUtils {
+
+  /**
+   * Use this function if you want to get both record key and secondary key.
+   *
+   * @returns pair of secondary key, record key.
+   * */
+  public static Pair<String, String> getSecondaryKeyRecordKeyPair(String key) {
+    int delimiterIndex = getSecondaryIndexKeySeparatorPosition(key);
+    return Pair.of(unescapeSpecialChars(key.substring(0, delimiterIndex)), unescapeSpecialChars(key.substring(delimiterIndex + 1)));
+  }
+
+  /**
+   * Use this function if you want to get both record key and secondary key.
+   *
+   * @returns pair of secondary key, record key.
+   * */
+  public static Pair<String, String> getRecordKeySecondaryKeyPair(String key) {
+    int delimiterIndex = getSecondaryIndexKeySeparatorPosition(key);
+    return Pair.of(unescapeSpecialChars(key.substring(delimiterIndex + 1)), unescapeSpecialChars(key.substring(0, delimiterIndex)));
+  }
 
   public static String getRecordKeyFromSecondaryIndexKey(String key) {
     // the payload key is in the format of "secondaryKey$primaryKey"
