@@ -1189,10 +1189,10 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieTableMetadata metadataReader = metaClient.getTableFormat().getMetadataFactory().create(
         context, storage, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
     Map<String, HoodieRecordGlobalLocation> result = HoodieDataUtils.collectAsMapWithOverwriteStrategy(metadataReader
-        .readRecordIndexWithMapping(HoodieListData.eager(records1.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()))));
+        .readRecordIndex(HoodieListData.eager(records1.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()))));
     assertEquals(0, result.size(), "RI should not return entries that are rolled back.");
     result = HoodieDataUtils.collectAsMapWithOverwriteStrategy(metadataReader
-        .readRecordIndexWithMapping(HoodieListData.eager(records2.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()))));
+        .readRecordIndex(HoodieListData.eager(records2.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()))));
     assertEquals(records2.size(), result.size(), "RI should return entries in the commit.");
   }
 
@@ -3644,7 +3644,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       HoodieTableMetadata metadataReader = metaClient.getTableFormat().getMetadataFactory().create(
           context, storage, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
       Map<String, HoodieRecordGlobalLocation> result = HoodieDataUtils.collectAsMapWithOverwriteStrategy(
-          metadataReader.readRecordIndexWithMapping(
+          metadataReader.readRecordIndex(
               HoodieListData.eager(allRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()))));
       assertEquals(allRecords.size(), result.size(), "RI should have mapping for all the records in firstCommit");
 
@@ -3661,7 +3661,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       // RI should not return mappings for deleted records
       metadataReader = metaClient.getTableFormat().getMetadataFactory().create(
           context, storage, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
-      result = HoodieDataUtils.collectAsMapWithOverwriteStrategy(metadataReader.readRecordIndexWithMapping(
+      result = HoodieDataUtils.collectAsMapWithOverwriteStrategy(metadataReader.readRecordIndex(
           HoodieListData.eager(allRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()))));
       assertEquals(allRecords.size() - recordsToDelete.size(), result.size(), "RI should not have mapping for deleted records");
       result.keySet().forEach(mappingKey -> assertFalse(keysToDelete.contains(mappingKey), "RI should not have mapping for deleted records"));
@@ -3682,6 +3682,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       // RI should not return mappings for deleted records
       metadataReader = metaClient.getTableFormat().getMetadataFactory().create(context, storage, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
           HoodieDataUtils.collectAsMapWithOverwriteStrategy(metadataReader.readRecordIndexWithMapping(
+      Map<String, HoodieRecordGlobalLocation> result =
+          HoodieDataUtils.collectAsMapWithOverwriteStrategy(metadataReader.readRecordIndex(
               HoodieListData.eager(allRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()))));
       assertEquals(allRecords.size() - keysToDelete.size(), result.size(), "RI should not have mapping for deleted records");
 
@@ -3692,7 +3694,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
       // New mappings should have been created for re-inserted records and should map to the new commit time
       metadataReader = metaClient.getTableFormat().getMetadataFactory().create(context, storage, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
-      result = HoodieDataUtils.collectAsMapWithOverwriteStrategy(metadataReader.readRecordIndexWithMapping(
+      result = HoodieDataUtils.collectAsMapWithOverwriteStrategy(metadataReader.readRecordIndex(
           HoodieListData.eager(allRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()))));
       assertEquals(allRecords.size(), result.size(), "RI should have mappings for re-inserted records");
       for (String reInsertedKey : keysToDelete) {
