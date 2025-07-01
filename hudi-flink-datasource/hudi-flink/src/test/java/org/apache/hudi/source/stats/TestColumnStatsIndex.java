@@ -57,10 +57,6 @@ public class TestColumnStatsIndex {
     conf.set(FlinkOptions.METADATA_ENABLED, true);
     conf.setString("hoodie.metadata.index.partition.stats.enable", "true");
     conf.setString("hoodie.metadata.index.column.stats.enable", "true");
-    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
-        .enable(true)
-        .withMetadataIndexColumnStats(true)
-        .build();
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
 
     String[] queryColumns = {"uuid", "age"};
