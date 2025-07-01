@@ -97,4 +97,46 @@ public class GlueCatalogSyncClientConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("Glue sync may fail if the Glue table exists with partitions differing from the Hoodie table or if schema evolution is not supported by Glue."
           + "Enabling this configuration will drop and create the table to match the Hoodie config");
+
+
+  public static final ConfigProperty<String> GLUE_SYNC_DATABASE_NAME = ConfigProperty
+      .key(GLUE_CLIENT_PROPERTY_PREFIX + "database_name")
+      .noDefaultValue()
+      .markAdvanced()
+      .withDocumentation("The name of the destination database that we should sync the hudi table to.");
+
+  public static final ConfigProperty<String> GLUE_CATALOG_ID = ConfigProperty
+      .key(GLUE_CLIENT_PROPERTY_PREFIX + "catalogId")
+      .noDefaultValue()
+      .sinceVersion("0.15.0")
+      .markAdvanced()
+      .withDocumentation("The catalogId needs to be populated for syncing hoodie tables in a different AWS account");
+
+  public static final ConfigProperty<String> GLUE_SYNC_TABLE_NAME = ConfigProperty
+      .key(GLUE_CLIENT_PROPERTY_PREFIX + "table_name")
+      .noDefaultValue()
+      .markAdvanced()
+      .withDocumentation("The name of the destination table that we should sync the hudi table to.");
+
+  public static final ConfigProperty<Integer> GLUE_SYNC_MAX_PARTITIONS_PER_REQUEST = ConfigProperty
+      .key(GLUE_CLIENT_PROPERTY_PREFIX + "max_partitions_per_request")
+      .defaultValue(100)
+      .sinceVersion("1.1.0")
+      .markAdvanced()
+      .withDocumentation("The maximum number of partitions to be synced in a single request to Glue.");
+
+  public static final ConfigProperty<Integer> GLUE_SYNC_MAX_CONCURRENT_REQUESTS = ConfigProperty
+      .key(GLUE_CLIENT_PROPERTY_PREFIX + "max_concurrent_requests")
+      .defaultValue(100)
+      .sinceVersion("1.1.0")
+      .markAdvanced()
+      .withDocumentation("The maximum number of requests that can be run concurrently. Helps prevent throttling when syncing tables with many partitions.");
+
+  public static final ConfigProperty<String> GLUE_SYNC_RESOURCE_TAGS = ConfigProperty
+      .key(GLUE_CLIENT_PROPERTY_PREFIX + "resource_tags")
+      .noDefaultValue()
+      .sinceVersion("1.1.0")
+      .markAdvanced()
+      .withDocumentation("Tags to be applied to AWS Glue databases and tables during sync. Format: key1:value1,key2:value2");
+
 }
