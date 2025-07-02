@@ -32,6 +32,7 @@ import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.util.collection.ClosableSortingIterator;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import java.util.Iterator;
@@ -136,6 +137,7 @@ public abstract class HoodieEngineContext {
    * [exact once across iterators] The item returned by the same iterator will not be returned by other iterators.
    * [1 key maps to >= 1 iterators] Items belong to the same shard can be load-balanced across multiple iterators. It's up to API implementations to decide
    *                                load balancing pattern and how many iterators to split into.
+   * [iterator return sorted values] Values returned via iterator is sorted.
    *
    * @param data The input pair<ShardIndex, Item> to process.
    * @param func Function to apply to each group of items with the same shard
@@ -149,6 +151,6 @@ public abstract class HoodieEngineContext {
   public <S extends Comparable<S>, V extends Comparable<V>, R> HoodieData<R> processValuesOfTheSameShards(
       HoodiePairData<S, V> data, SerializableFunction<Iterator<V>, Iterator<R>> func, List<S> shardIndices, boolean preservesPartitioning) {
     // Group values by key and apply the function to each group
-    return data.groupByKey().values().flatMap(it -> func.apply(it.iterator()));
+    return data.groupByKey().values().flatMap(it -> func.apply(new ClosableSortingIterator<>(it.iterator())));
   }
 }
