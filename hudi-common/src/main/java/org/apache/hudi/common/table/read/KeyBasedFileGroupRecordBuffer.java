@@ -54,8 +54,9 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
                                        TypedProperties props,
                                        HoodieReadStats readStats,
                                        Option<String> orderingFieldName,
+                                       boolean enablePartialMerging,
                                        boolean emitDelete) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, orderingFieldName, emitDelete);
+    super(readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, orderingFieldName, enablePartialMerging, emitDelete);
   }
 
   @Override
@@ -67,12 +68,6 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
   public void processDataBlock(HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt) throws IOException {
     Pair<ClosableIterator<T>, Schema> recordsIteratorSchemaPair =
         getRecordsIterator(dataBlock, keySpecOpt);
-    if (dataBlock.containsPartialUpdates()) {
-      // When a data block contains partial updates, subsequent record merging must always use
-      // partial merging.
-      enablePartialMerging = true;
-    }
-
     Schema schema = AvroSchemaCache.intern(recordsIteratorSchemaPair.getRight());
 
     try (ClosableIterator<T> recordIterator = recordsIteratorSchemaPair.getLeft()) {

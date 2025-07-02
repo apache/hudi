@@ -156,6 +156,7 @@ public class TestPositionBasedFileGroupRecordBuffer extends SparkClientFunctiona
         props,
         readStats,
         Option.of("timestamp"),
+        false,
         false);
   }
 

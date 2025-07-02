@@ -41,8 +41,8 @@ import org.apache.avro.generic.IndexedRecord;
 import java.io.IOException;
 import java.util.Objects;
 
-public class BufferedRecordMergers {
-  public static <T> BufferedRecordMerger<T> createMerger(
+public class BufferedRecordMergerFactory {
+  public static <T> BufferedRecordMerger<T> create(
       HoodieReaderContext<T> readerContext,
       RecordMergeMode recordMergeMode,
       boolean enablePartialMerging,
@@ -52,7 +52,7 @@ public class BufferedRecordMergers {
       Schema readerSchema,
       TypedProperties props) {
     if (enablePartialMerging) {
-      BufferedRecordMerger<T> deleteRecordMerger = createMerger(
+      BufferedRecordMerger<T> deleteRecordMerger = create(
           readerContext, recordMergeMode, false, recordMerger, orderingFieldName, payloadClass, readerSchema, props);
       return new PartialUpdateMerger<>(readerContext, recordMerger, deleteRecordMerger, readerSchema, props);
     }

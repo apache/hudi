@@ -78,7 +78,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   protected ClosableIterator<T> baseFileIterator;
   protected Iterator<BufferedRecord<T>> logRecordIterator;
   protected T nextRecord;
-  protected boolean enablePartialMerging = false;
+  protected final boolean enablePartialMerging;
   protected InternalSchema internalSchema;
   protected HoodieTableMetaClient hoodieTableMetaClient;
   private final BufferedRecordMerger<T> bufferedRecordMerger;
@@ -90,6 +90,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
                                   TypedProperties props,
                                   HoodieReadStats readStats,
                                   Option<String> orderingFieldName,
+                                  boolean enablePartialMerging,
                                   boolean emitDelete) {
     this.readerContext = readerContext;
     this.readerSchema = AvroSchemaCache.intern(readerContext.getSchemaHandler().getRequiredSchema());
@@ -118,6 +119,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
     boolean isBitCaskDiskMapCompressionEnabled = props.getBoolean(DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(),
         DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue());
     this.readStats = readStats;
+    this.enablePartialMerging = enablePartialMerging;
     this.emitDelete = emitDelete;
     try {
       // Store merged records for all versions for this log file, set the in-memory footprint to maxInMemoryMapSize
@@ -130,7 +132,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
         readerContext.getSchemaHandler().getCustomDeleteMarkerKeyValue().isPresent();
     this.shouldCheckBuiltInDeleteMarker =
         readerContext.getSchemaHandler().hasBuiltInDelete();
-    this.bufferedRecordMerger = BufferedRecordMergers.createMerger(
+    this.bufferedRecordMerger = BufferedRecordMergerFactory.create(
         readerContext, recordMergeMode, enablePartialMerging, recordMerger, orderingFieldName, payloadClass, readerSchema, props);
   }
 
