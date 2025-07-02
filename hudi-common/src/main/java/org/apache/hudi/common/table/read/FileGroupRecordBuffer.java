@@ -78,6 +78,7 @@ import static org.apache.hudi.common.model.HoodieRecord.HOODIE_IS_DELETED_FIELD;
 import static org.apache.hudi.common.model.HoodieRecord.OPERATION_METADATA_FIELD;
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.INSTANT_TIME;
+import static org.apache.hudi.keygen.constant.KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED;
 
 public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T> {
   private static final String PARTIAL_UPDATE_CUSTOM_MARKER = "hoodie.write.partial.update.custom.marker";
@@ -93,6 +94,9 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   protected final HoodieReadStats readStats;
   protected final boolean shouldCheckCustomDeleteMarker;
   protected final boolean shouldCheckBuiltInDeleteMarker;
+  protected final boolean shouldKeepEventTimeMetadata;
+  protected final Option<String> eventTimeFieldOpt;
+  protected final boolean shouldKeepConsistentLogicalTimestamp;
   protected final boolean emitDelete;
   protected Map<String, String> partialUpdateProperties;
   protected ClosableIterator<T> baseFileIterator;
@@ -151,7 +155,15 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
         readerContext.getSchemaHandler().getCustomDeleteMarkerKeyValue().isPresent();
     this.shouldCheckBuiltInDeleteMarker =
         readerContext.getSchemaHandler().hasBuiltInDelete();
+    this.shouldKeepEventTimeMetadata = shouldKeepEventTimeMetadata(props);
+    this.shouldKeepConsistentLogicalTimestamp = shouldKeepEventTimeMetadata(props);
     this.partialUpdateProperties = parsePartialUpdateProperties(props);
+    if (shouldKeepEventTimeMetadata) {
+      this.eventTimeFieldOpt = Option.ofNullable(
+          props.getProperty(HoodiePayloadProps.PAYLOAD_EVENT_TIME_FIELD_PROP_KEY));
+    } else {
+      this.eventTimeFieldOpt = Option.empty();
+    }
   }
 
   public static Map<String, String> parsePartialUpdateProperties(TypedProperties props) {
@@ -442,6 +454,19 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
     }
   }
 
+  static boolean shouldKeepEventTimeMetadata(TypedProperties props) {
+    return props.getBoolean("hoodie.write.event.time.watermark.metadata.enabled");
+  }
+
+  /**
+   * Should keep logical timestamp consistent.
+   */
+  static boolean shouldKeepConsistentLogicalTimestamp(TypedProperties props) {
+    return Boolean.parseBoolean(props.getProperty(
+        KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
+        KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()));
+  }
+
   static boolean isStringTyped(Schema.Field field) {
     return hasType(field.schema(), Schema.Type.STRING);
   }
@@ -580,6 +605,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
           return Pair.of(newerRecord.isDelete(), newerRecord.getRecord());
         case EVENT_TIME_ORDERING:
           if (newerRecord.isCommitTimeOrderingDelete()) {
+            // No need to do partial update for delete record.
             return Pair.of(true, newerRecord.getRecord());
           }
           Comparable newOrderingValue = newerRecord.getOrderingValue();
@@ -588,10 +614,12 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
               && oldOrderingValue.compareTo(newOrderingValue) > 0) {
             olderRecord = updatePartiallyIfNeeded(
                 olderRecord, newerRecord, readerSchema, readerSchema, partialUpdateMode);
+            extractAndStoreEventTimeIfNeeded(olderRecord);
             return Pair.of(olderRecord.isDelete(), olderRecord.getRecord());
           }
           newerRecord = updatePartiallyIfNeeded(
               newerRecord, olderRecord, readerSchema, readerSchema, partialUpdateMode);
+          extractAndStoreEventTimeIfNeeded(newerRecord);
           return Pair.of(newerRecord.isDelete(), newerRecord.getRecord());
         case CUSTOM:
         default:
@@ -644,6 +672,23 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
             }
             return Pair.of(true, null);
           }
+      }
+    }
+  }
+
+  /**
+   * Extract and store event_time value for the record, which should be stored
+   * to WriteStatus. This function should be only called when merge base record and log record.
+   */
+  private void extractAndStoreEventTimeIfNeeded(BufferedRecord<T> newRecord) {
+    if (shouldKeepEventTimeMetadata) {
+      Option<Object> eventTimeOpt = readerContext.getEventTime(
+          newRecord.getRecord(), readerSchema, eventTimeFieldOpt);
+      if (eventTimeOpt.isPresent()) {
+        Schema.Field field = readerSchema.getField(eventTimeFieldOpt.get());
+        Object eventTime = readerContext.getTypeHandler().convertValueForAvroLogicalTypes(
+            field.schema(), eventTimeOpt.get(), shouldKeepConsistentLogicalTimestamp);
+        newRecord.setEventTime(String.valueOf(eventTime));
       }
     }
   }
