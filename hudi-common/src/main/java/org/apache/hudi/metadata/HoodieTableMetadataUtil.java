@@ -1368,11 +1368,12 @@ public class HoodieTableMetadataUtil {
    * For secondary index partitions (version >= 2), if the record keys contain the secondary index separator,
    * the secondary key portion is used for hashing. Otherwise, the full record key is used.
    *
-   * @param useSecondaryKeyForHashing whether to extract secondary key from composite keys (should be determined by caller)
-   * @return function that maps record keys to file group indices
+   * @param needsSecondaryKeyExtraction Whether to extract secondary key from composite keys (should be determined by caller)
+   *
+   * @return function that maps secondary keys to file group indices.
    */
-  public static SerializableBiFunction<String, Integer, Integer> getRecordKeyToFileGroupIndexFunction(boolean useSecondaryKeyForHashing) {
-    if (useSecondaryKeyForHashing) {
+  public static SerializableBiFunction<String, Integer, Integer> getSecondaryKeyToFileGroupMappingFunction(boolean needsSecondaryKeyExtraction) {
+    if (needsSecondaryKeyExtraction) {
       return (recordKey, numFileGroups) -> {
         String secondaryKey = SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey(recordKey);
         return mapRecordKeyToFileGroupIndex(secondaryKey, numFileGroups);

@@ -81,7 +81,6 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_EX
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_EXPRESSION_INDEX_PREFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.combineFileSystemMetadata;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.mergeColumnStatsRecords;
 
 /**
@@ -230,15 +229,8 @@ public enum MetadataPartitionType {
     }
 
     @Override
-    public SerializableBiFunction<String, Integer, Integer> getFileGroupIndexFunction(HoodieIndexVersion indexVersion, boolean shouldExtractSecondaryKeyForHashing) {
-      // For some use case, the key is concatenation of (secondary key $ record key), so caller needs to specify if this is the case.
-      if (indexVersion.greaterThanOrEquals(HoodieIndexVersion.V2) && shouldExtractSecondaryKeyForHashing) {
-        return (recordKey, numFileGroups) -> {
-          String secondaryKey = SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey(recordKey);
-          return mapRecordKeyToFileGroupIndex(secondaryKey, numFileGroups);
-        };
-      }
-      return super.getFileGroupIndexFunction(indexVersion, shouldExtractSecondaryKeyForHashing);
+    public SerializableBiFunction<String, Integer, Integer> getFileGroupMappingFunction(HoodieIndexVersion indexVersion) {
+      return HoodieTableMetadataUtil.getSecondaryKeyToFileGroupMappingFunction(indexVersion.greaterThanOrEquals(HoodieIndexVersion.V2));
     }
   },
   PARTITION_STATS(HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS, "partition-stats-", 6) {
@@ -409,10 +401,8 @@ public enum MetadataPartitionType {
    * Returns the key to file group mapping function.
    *
    * @param indexVersion version of the index
-   * @param shouldExtractSecondaryKeyForHashing index type specific context - for secondary index, decide if we should extract sec key before hash first or we can
-   *                                            directly hash the given key.
    */
-  public SerializableBiFunction<String, Integer, Integer> getFileGroupIndexFunction(HoodieIndexVersion indexVersion, boolean shouldExtractSecondaryKeyForHashing) {
+  public SerializableBiFunction<String, Integer, Integer> getFileGroupMappingFunction(HoodieIndexVersion indexVersion) {
     return HoodieTableMetadataUtil::mapRecordKeyToFileGroupIndex;
   }
 

@@ -760,10 +760,10 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
       String partitionName,
       HoodieIndexVersion version,
       int expectedIndex) throws Exception {
-    boolean useSecondaryKeyForHashing = MetadataPartitionType.SECONDARY_INDEX.matchesPartitionPath(partitionName)
+    boolean needsSecondaryKeyExtraction = MetadataPartitionType.SECONDARY_INDEX.matchesPartitionPath(partitionName)
         && version.greaterThanOrEquals(HoodieIndexVersion.V2);
     SerializableBiFunction<String, Integer, Integer> mappingFunction =
-        HoodieTableMetadataUtil.getRecordKeyToFileGroupIndexFunction(useSecondaryKeyForHashing);
+        HoodieTableMetadataUtil.getSecondaryKeyToFileGroupMappingFunction(needsSecondaryKeyExtraction);
     int index = mappingFunction.apply(recordKey, numFileGroups);
     assertEquals(expectedIndex, index, "File group index should match expected value");
   }
