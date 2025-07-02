@@ -387,18 +387,6 @@ class HoodieBackedTableMetadataIndexLookupV8TestBase extends HoodieBackedTableMe
     "10"
   }
 
-  test("Unit test Index join API - Version 8") {
-    testGetSecondaryIndexRecords()
-  }
-
-  test("Exhaustive test for readRecordIndex - Version 8") {
-    testReadRecordIndex()
-  }
-
-  test("Exhaustive test for readSecondaryIndexResult - Version 8") {
-    testReadSecondaryIndexResult()
-  }
-
   override protected def testVersionSpecificBehavior(): Unit = {
     // For version 1, test that it only supports HoodieListData
     val secondaryIndexName = "secondary_index_idx_name"
@@ -415,11 +403,36 @@ class HoodieBackedTableMetadataIndexLookupV8Test1Fg extends HoodieBackedTableMet
   override protected def getNumFileIndexGroup: String = {
     "1"
   }
+
+  test("Unit test Index join API - Version 8") {
+    testGetSecondaryIndexRecords()
+  }
+
+  test("Exhaustive test for readRecordIndex - Version 8") {
+    testReadRecordIndex()
+  }
+
+  test("Exhaustive test for readSecondaryIndexResult - Version 8") {
+    testReadSecondaryIndexResult()
+  }
+
 }
 
 class HoodieBackedTableMetadataIndexLookupV8Test10Fg extends HoodieBackedTableMetadataIndexLookupV8TestBase {
   override protected def getNumFileIndexGroup: String = {
     "10"
+  }
+
+  test("Unit test Index join API - Version 8") {
+    testGetSecondaryIndexRecords()
+  }
+
+  test("Exhaustive test for readRecordIndex - Version 8") {
+    testReadRecordIndex()
+  }
+
+  test("Exhaustive test for readSecondaryIndexResult - Version 8") {
+    testReadSecondaryIndexResult()
   }
 }
 
@@ -431,18 +444,6 @@ class HoodieBackedTableMetadataIndexLookupV9TestBase extends HoodieBackedTableMe
   override protected def getTableVersion: String = "9"
 
   override protected def getExpectedIndexVersion: String = "V2"
-
-  test("Unit test Index join API - Version 9") {
-    testGetSecondaryIndexRecords()
-  }
-
-  test("Exhaustive test for readRecordIndex - Version 9") {
-    testReadRecordIndex()
-  }
-
-  test("Exhaustive test for readSecondaryIndexResult - Version 9") {
-    testReadSecondaryIndexResult()
-  }
 
   override protected def testVersionSpecificBehavior(): Unit = {
     // For version 2, test that it supports both HoodieListData and RDD
@@ -459,10 +460,34 @@ class HoodieBackedTableMetadataIndexLookupV9Test1Fg extends HoodieBackedTableMet
   override protected def getNumFileIndexGroup: String = {
     "1"
   }
+
+  test("Unit test Index join API - Version 9") {
+    testGetSecondaryIndexRecords()
+  }
+
+  test("Exhaustive test for readRecordIndex - Version 9") {
+    testReadRecordIndex()
+  }
+
+  test("Exhaustive test for readSecondaryIndexResult - Version 9") {
+    testReadSecondaryIndexResult()
+  }
 }
 
 class HoodieBackedTableMetadataIndexLookupV9Test10Fg extends HoodieBackedTableMetadataIndexLookupV9TestBase {
   override protected def getNumFileIndexGroup: String = {
     "10"
+  }
+
+  test("Unit test Index join API - Version 9") {
+    testGetSecondaryIndexRecords()
+  }
+
+  test("Exhaustive test for readRecordIndex - Version 9") {
+    testReadRecordIndex()
+  }
+
+  test("Exhaustive test for readSecondaryIndexResult - Version 9") {
+    testReadSecondaryIndexResult()
   }
 }
