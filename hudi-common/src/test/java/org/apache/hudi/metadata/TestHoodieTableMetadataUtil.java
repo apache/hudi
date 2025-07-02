@@ -30,10 +30,9 @@ public class TestHoodieTableMetadataUtil {
   public void testGetRecordKeyToFileGroupIndexFunctionOptimized() {
     // Test with secondary key format
     String compositeKey = "secondaryKey$recordKey";
-    boolean useSecondaryKeyForHashing = true;
 
     SerializableBiFunction<String, Integer, Integer> optimizedFunction =
-        HoodieTableMetadataUtil.getRecordKeyToFileGroupIndexFunction(useSecondaryKeyForHashing);
+        HoodieTableMetadataUtil.getSecondaryKeyToFileGroupMappingFunction(true);
 
     int result1 = optimizedFunction.apply(compositeKey, 10);
     int result2 = optimizedFunction.apply("anotherSecondaryKey$anotherRecordKey", 10);
@@ -42,8 +41,7 @@ public class TestHoodieTableMetadataUtil {
     assertNotEquals(result1, result2);
 
     // Test with regular key format
-    useSecondaryKeyForHashing = false;
-    optimizedFunction = HoodieTableMetadataUtil.getRecordKeyToFileGroupIndexFunction(useSecondaryKeyForHashing);
+    optimizedFunction = HoodieTableMetadataUtil.getSecondaryKeyToFileGroupMappingFunction(false);
 
     int result3 = optimizedFunction.apply("simpleKey", 10);
     int result4 = optimizedFunction.apply("anotherSimpleKey", 10);
