@@ -937,6 +937,10 @@ jobs:
             flinkProfile: 'flink1.20'
             sparkProfile: 'spark3.4'
             sparkRuntime: 'spark3.4.0'
+          - scalaProfile: 'scala-2.13'
+            flinkProfile: 'flink1.20'
+            sparkProfile: 'spark4.0'
+            sparkRuntime: 'spark4.0.0'
 
     steps:
       - uses: actions/checkout@v3
@@ -998,6 +1002,12 @@ jobs:
             flinkParquetVersion: '1.12.2'
             sparkProfile: 'spark3.3'
             sparkRuntime: 'spark3.3.4'
+          - scalaProfile: 'scala-2.13'
+            flinkProfile: 'flink1.20'
+            flinkAvroVersion: '1.11.4'
+            flinkParquetVersion: '1.13.1'
+            sparkProfile: 'spark4.0'
+            sparkRuntime: 'spark4.0.0'
     steps:
       - uses: actions/checkout@v3
       - name: Set up JDK 8
