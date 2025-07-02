@@ -870,3 +870,7 @@ f5824e51ca7 [ENG-28779][INTERNAL] Add parallelism configs to AwsGlueSync (#1428)
 --- [2025-07-01 16:04:09] [release-v1.143.0] ---
 [ENG-28737][INTERNAL] Tweak storage based lock metric reporting (#1435)
 [AUDIT-1483]: Changelog for release-v1.141.0 (#1433)
+
+--- [2025-07-02 16:04:13] [release-v1.144.0] ---
+[ENG-28935][HUDI-9563] Add resource tags for AWS Glue database and tables (#1436)
+[AUDIT-1071]: Changelog for release-v1.143.0 (#1437)
