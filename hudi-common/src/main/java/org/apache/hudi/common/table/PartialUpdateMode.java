@@ -41,11 +41,5 @@ public enum PartialUpdateMode {
   @EnumFieldDescription(
       "For columns having marker values in the current record, pick value from previous version of the record."
       + "Marker value can be defined using hoodie.write.partial.custom.marker, which is a table property.")
-  IGNORE_MARKERS,
-
-  @EnumFieldDescription(
-      "Columns can be grouped into multiple groups and each group will get partially merged based on ordering field"
-      + "defined for each group. Columns groups need to be defined using hoodie.write.partial.update.column.groups"
-      + "config which will be added to table property as well")
-  COLUMN_FAMILY
+  IGNORE_MARKERS
 }

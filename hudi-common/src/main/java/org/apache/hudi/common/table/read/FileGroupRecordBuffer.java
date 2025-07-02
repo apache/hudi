@@ -390,7 +390,6 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
       case NONE:
       case KEEP_VALUES:
       case FILL_DEFAULTS:
-      case COLUMN_FAMILY:
         return newRecord;
 
       case IGNORE_DEFAULTS:
