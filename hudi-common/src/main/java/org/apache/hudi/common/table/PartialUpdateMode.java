@@ -1,0 +1,51 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+package org.apache.hudi.common.table;
+
+import org.apache.hudi.common.config.EnumFieldDescription;
+
+public enum PartialUpdateMode {
+  @EnumFieldDescription(
+      "No partial update logic should be employed.")
+  NONE,
+
+  @EnumFieldDescription(
+      "For any column values missing in current record, pick value from previous version of the record.")
+  KEEP_VALUES,
+
+  @EnumFieldDescription(
+      "For columns values missing in current record, pick the default value from the schema.")
+  FILL_DEFAULTS,
+
+  @EnumFieldDescription(
+      "For columns having default values set in current record, pick the value from previous version of the record.")
+  IGNORE_DEFAULTS,
+
+  @EnumFieldDescription(
+      "For columns having marker values in the current record, pick value from previous version of the record."
+      + "Marker value can be defined using hoodie.write.partial.custom.marker, which is a table property.")
+  IGNORE_MARKERS,
+
+  @EnumFieldDescription(
+      "Columns can be grouped into multiple groups and each group will get partially merged based on ordering field"
+      + "defined for each group. Columns groups need to be defined using hoodie.write.partial.update.column.groups"
+      + "config which will be added to table property as well")
+  COLUMN_FAMILY
+}
