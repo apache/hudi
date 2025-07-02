@@ -289,7 +289,7 @@ public abstract class HoodieReaderContext<T> {
         recordMergeMode, tableConfig.getPayloadClass(),
         mergeStrategyId, null, tableConfig.getTableVersion());
     this.mergeMode = triple.getLeft();
-    this.recordMerger = getRecordMerger(recordMergeMode, triple.getRight(),
+    this.recordMerger = getRecordMerger(triple.getLeft(), triple.getRight(),
         properties.getString(RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY,
             properties.getString(RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY, "")));
   }
