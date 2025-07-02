@@ -20,6 +20,7 @@ package org.apache.hudi.table.action.rollback;
 
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.common.HoodieRollbackStat;
+import org.apache.hudi.common.NativeTableFormat;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -76,7 +77,7 @@ public class CopyOnWriteRollbackActionExecutor<T, I, K, O> extends BaseRollbackA
     }
 
     // If instant is inflight but marked as completed in native format, delete the completed instant from storage.
-    if (instantToRollback.isInflight()) {
+    if (instantToRollback.isInflight() && !table.getMetaClient().getTableFormat().getName().equals(NativeTableFormat.TABLE_FORMAT)) {
       HoodieActiveTimeline activeTimelineForNativeFormat = table.getMetaClient().getActiveTimelineForNativeFormat();
       Option<HoodieInstant> instantToRollbackInNativeFormat = activeTimelineForNativeFormat.filter(instant -> instant.requestedTime().equals(instantToRollback.requestedTime())).lastInstant();
       if (instantToRollbackInNativeFormat.isPresent() && instantToRollbackInNativeFormat.get().isCompleted()) {
