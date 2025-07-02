@@ -54,14 +54,13 @@ public class SkewAdjustingTimeGenerator extends TimeGeneratorBase {
   }
 
   @Override
-  public long consumeTime(boolean skipLocking, Consumer<Long> func) {
+  public void consumeTime(boolean skipLocking, Consumer<Long> func) {
     try {
       if (!skipLocking) {
         lock();
       }
       long currentTimeMillis = generateTime(true);
       func.accept(currentTimeMillis);
-      return currentTimeMillis;
     } finally {
       if (!skipLocking) {
         unlock();

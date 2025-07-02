@@ -62,6 +62,7 @@ import java.util.Date;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.TimelineUtils.getHoodieInstantWriterOption;
@@ -562,7 +563,7 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
         ValidationUtils.checkArgument(
             metaClient.getStorage().exists(getInstantFileNamePath(fromInstantFileName)),
             "File " + getInstantFileNamePath(fromInstantFileName) + " does not exist!");
-        String completionTime = HoodieInstantTimeGenerator.formatDateBasedOnTimeZone(new Date(createCompleteFileInMetaPath(shouldLock, toInstant, metadata)));
+        String completionTime = createCompleteFileInMetaPath(shouldLock, toInstant, metadata);
         return new HoodieInstant(toInstant.getState(), toInstant.getAction(), toInstant.requestedTime(), completionTime, instantComparator.requestedTimeOrderedComparator());
       }
     } catch (IOException e) {
@@ -742,11 +743,12 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
     }
   }
 
-  protected <T> long createCompleteFileInMetaPath(boolean shouldLock, HoodieInstant instant, Option<T> metadata) {
+  protected <T> String createCompleteFileInMetaPath(boolean shouldLock, HoodieInstant instant, Option<T> metadata) {
     Option<HoodieInstantWriter> writerOption = getHoodieInstantWriterOption(this, metadata);
     TimeGenerator timeGenerator = TimeGenerators
         .getTimeGenerator(metaClient.getTimeGeneratorConfig(), metaClient.getStorageConf());
-    return timeGenerator.consumeTime(!shouldLock, currentTimeMillis -> {
+    final AtomicReference<String> completionTimeRef = new AtomicReference<>();
+    timeGenerator.consumeTime(!shouldLock, currentTimeMillis -> {
       String completionTime = HoodieInstantTimeGenerator.formatDateBasedOnTimeZone(new Date(currentTimeMillis));
       String fileName = instantFileNameGenerator.getFileName(completionTime, instant);
       StoragePath fullPath = getInstantFileNamePath(fileName);
@@ -755,8 +757,10 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
       } else {
         metaClient.getStorage().createImmutableFileInPath(fullPath, writerOption);
       }
-      LOG.info("Created new file for toInstant ?{}", fullPath);
+      completionTimeRef.set(completionTime);
+      LOG.info("Created new file for toInstant: {}", fullPath);
     });
+    return completionTimeRef.get();
   }
 
   protected Option<byte[]> readDataFromPath(StoragePath detailPath) {
