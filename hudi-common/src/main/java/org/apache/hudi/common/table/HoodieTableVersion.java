@@ -72,7 +72,7 @@ public enum HoodieTableVersion {
   }
 
   public static HoodieTableVersion current() {
-    return NINE;
+    return EIGHT;
   }
 
   public static HoodieTableVersion fromVersionCode(int versionCode) {
