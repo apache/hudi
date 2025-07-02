@@ -1266,7 +1266,9 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       HoodieIndexVersion indexVersion = existingIndexVersionOrDefault(mdtPartition, dataMetaClient);
       // For streaming writes, we can determine the key format based on partition type
       // Secondary index partitions will always have composite keys, others will have simple keys
-      partitionMappingFunctions.put(mdtPartition, MetadataPartitionType.fromPartitionPath(mdtPartition).getFileGroupIndexFunction(indexVersion));
+      boolean useSecondaryKeyForHashing = MetadataPartitionType.SECONDARY_INDEX.matchesPartitionPath(mdtPartition)
+          && indexVersion.greaterThanOrEquals(HoodieIndexVersion.V2);
+      partitionMappingFunctions.put(mdtPartition, MetadataPartitionType.fromPartitionPath(mdtPartition).getFileGroupIndexFunction(indexVersion, useSecondaryKeyForHashing));
     });
 
     HoodieData<HoodieRecord> taggedRecords = untaggedRecords.map(mdtRecord -> {
@@ -1708,7 +1710,8 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
         HoodieIndexVersion indexVersion = existingIndexVersionOrDefault(partitionName, dataMetaClient);
 
         // Determine key format once per partition to avoid repeated checks
-        SerializableBiFunction<String, Integer, Integer> mappingFunction = MetadataPartitionType.fromPartitionPath(partitionName).getFileGroupIndexFunction(indexVersion);
+        boolean useSecondaryKeyForHashing = MetadataPartitionType.SECONDARY_INDEX.matchesPartitionPath(partitionName) && indexVersion.greaterThanOrEquals(HoodieIndexVersion.V2);
+        SerializableBiFunction<String, Integer, Integer> mappingFunction = MetadataPartitionType.fromPartitionPath(partitionName).getFileGroupIndexFunction(indexVersion, useSecondaryKeyForHashing);
         HoodieData<HoodieRecord> rddSinglePartitionRecords = records.map(r -> {
           FileSlice slice = finalFileSlices.get(mappingFunction.apply(r.getRecordKey(), fileGroupCount));
           r.unseal();
