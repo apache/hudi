@@ -29,7 +29,7 @@ import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.function.SerializableFunction;
+import org.apache.hudi.common.function.SerializableFunctionUnchecked;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -436,7 +436,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
    * @return A collection of pairs (key -> record)
    */
   public abstract HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> getRecordsByKeys(
-          HoodieData<String> keys, String partitionName, Option<SerializableFunction<String, String>> keyEncodingFn);
+          HoodieData<String> keys, String partitionName, Option<SerializableFunctionUnchecked<String, String>> keyEncodingFn);
 
   /**
    * Returns a collection of pairs (secondary-key -> set-of-record-keys) for the provided secondary keys.
