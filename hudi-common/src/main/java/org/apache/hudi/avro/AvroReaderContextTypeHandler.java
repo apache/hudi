@@ -22,7 +22,15 @@ package org.apache.hudi.avro;
 import org.apache.hudi.common.engine.ReaderContextTypeHandler;
 import org.apache.hudi.common.util.StringUtils;
 
+import org.apache.avro.Conversions;
+import org.apache.avro.LogicalTypes;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericFixed;
+
+import java.math.BigDecimal;
 import java.nio.ByteBuffer;
+import java.sql.Timestamp;
+import java.time.LocalDate;
 
 public class AvroReaderContextTypeHandler extends ReaderContextTypeHandler {
   @Override
@@ -39,5 +47,34 @@ public class AvroReaderContextTypeHandler extends ReaderContextTypeHandler {
     }
     // Fallback toString for unexpected types (e.g., Integer, Boolean)
     return value.toString();
+  }
+
+  @Override
+  public Object convertValueForAvroLogicalTypes(Schema fieldSchema,
+                                                Object fieldValue,
+                                                boolean consistentLogicalTimestampEnabled) {
+    if (fieldSchema.getLogicalType() == LogicalTypes.date()) {
+      return LocalDate.ofEpochDay(Long.parseLong(fieldValue.toString()));
+    } else if (fieldSchema.getLogicalType() == LogicalTypes.timestampMillis()
+        && consistentLogicalTimestampEnabled) {
+      return new Timestamp(Long.parseLong(fieldValue.toString()));
+    } else if (fieldSchema.getLogicalType() == LogicalTypes.timestampMicros()
+        && consistentLogicalTimestampEnabled) {
+      return new Timestamp(Long.parseLong(fieldValue.toString()) / 1000);
+    } else if (fieldSchema.getLogicalType() instanceof LogicalTypes.Decimal) {
+      LogicalTypes.Decimal dc = (LogicalTypes.Decimal) fieldSchema.getLogicalType();
+      Conversions.DecimalConversion decimalConversion = new Conversions.DecimalConversion();
+      if (fieldSchema.getType() == Schema.Type.FIXED) {
+        return decimalConversion.fromFixed((GenericFixed) fieldValue, fieldSchema,
+            LogicalTypes.decimal(dc.getPrecision(), dc.getScale()));
+      } else if (fieldSchema.getType() == Schema.Type.BYTES) {
+        ByteBuffer byteBuffer = (ByteBuffer) fieldValue;
+        BigDecimal convertedValue = decimalConversion.fromBytes(byteBuffer, fieldSchema,
+            LogicalTypes.decimal(dc.getPrecision(), dc.getScale()));
+        byteBuffer.rewind();
+        return convertedValue;
+      }
+    }
+    return fieldValue;
   }
 }

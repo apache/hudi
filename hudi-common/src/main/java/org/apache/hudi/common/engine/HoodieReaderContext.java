@@ -520,4 +520,16 @@ public abstract class HoodieReaderContext<T> {
   protected Schema decodeAvroSchema(Object versionId) {
     return this.localAvroSchemaCache.getSchema((Integer) versionId).orElse(null);
   }
+
+  /**
+   * Extract event time field.
+   */
+  public Option<Object> getEventTime(T record, Schema schema, Option<String> eventTimeFieldOpt) {
+    if (eventTimeFieldOpt == null || eventTimeFieldOpt.isEmpty()) {
+      return Option.empty();
+    }
+
+    Object rawValue = getValue(record, schema, eventTimeFieldOpt.get());
+    return Option.ofNullable(rawValue);
+  }
 }

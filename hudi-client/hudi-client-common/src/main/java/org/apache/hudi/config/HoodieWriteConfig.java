@@ -843,7 +843,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> EVENT_TIME_WATERMARK_METADATA_ENABLED = ConfigProperty
       .key("hoodie.write.event.time.watermark.metadata.enabled")
-      .defaultValue(true)
+      .defaultValue(false)
       .markAdvanced()
       .sinceVersion("1.1.0")
       .withDocumentation("Record event time in record metadata during runtime.");
