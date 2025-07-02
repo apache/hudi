@@ -45,13 +45,28 @@ public class BufferedRecord<T> implements Serializable {
   private T record;
   private final Integer schemaId;
   private final boolean isDelete;
+  private Option<String> eventTimeOpt;
 
-  public BufferedRecord(String recordKey, Comparable orderingValue, T record, Integer schemaId, boolean isDelete) {
+  public BufferedRecord(String recordKey,
+                        Comparable orderingValue,
+                        T record,
+                        Integer schemaId,
+                        boolean isDelete) {
+    this(recordKey, orderingValue, record, schemaId, isDelete, Option.empty());
+  }
+
+  public BufferedRecord(String recordKey,
+                        Comparable orderingValue,
+                        T record,
+                        Integer schemaId,
+                        boolean isDelete,
+                        Option<String> eventTimeOpt) {
     this.recordKey = recordKey;
     this.orderingValue = orderingValue;
     this.record = record;
     this.schemaId = schemaId;
     this.isDelete = isDelete;
+    this.eventTimeOpt = eventTimeOpt;
   }
 
   public static <T> BufferedRecord<T> forRecordWithContext(HoodieRecord<T> record, Schema schema, HoodieReaderContext<T> readerContext, Properties props) {
@@ -100,6 +115,14 @@ public class BufferedRecord<T> implements Serializable {
 
   public boolean isCommitTimeOrderingDelete() {
     return isDelete && getOrderingValue().equals(DEFAULT_ORDERING_VALUE);
+  }
+
+  public Option<String> getEventTimeOpt() {
+    return eventTimeOpt;
+  }
+
+  public void setEventTime(String eventTime) {
+    eventTimeOpt = Option.ofNullable(eventTime);
   }
 
   public BufferedRecord<T> toBinary(HoodieReaderContext<T> readerContext) {

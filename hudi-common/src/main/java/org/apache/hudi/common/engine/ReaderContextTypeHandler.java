@@ -19,6 +19,8 @@
 
 package org.apache.hudi.common.engine;
 
+import org.apache.avro.Schema;
+
 /**
  * Helper class that handle cell level operation.
  */
@@ -44,5 +46,15 @@ public class ReaderContextTypeHandler {
       return value.toString();
     }
     return null;
+  }
+
+  /**
+   * convert value for Avro logical types.
+   */
+  public Object convertValueForAvroLogicalTypes(Schema fieldSchema,
+                                                Object fieldValue,
+                                                boolean consistentLogicalTimestampEnabled) {
+    throw new UnsupportedOperationException(
+        "Not implemented method: convertValueForAvroLogicalTypes");
   }
 }

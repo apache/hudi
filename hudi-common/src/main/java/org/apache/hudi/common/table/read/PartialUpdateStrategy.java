@@ -21,11 +21,15 @@ package org.apache.hudi.common.table.read;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.PartialUpdateMode;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 
 import org.apache.avro.Schema;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.List;
@@ -33,10 +37,15 @@ import java.util.Map;
 
 import static org.apache.hudi.common.model.HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_CUSTOM_MARKER;
+import static org.apache.hudi.keygen.constant.KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED;
 
 public class PartialUpdateStrategy<T> {
+  private static final Logger LOG = LoggerFactory.getLogger(PartialUpdateStrategy.class);
   private final HoodieReaderContext<T> readerContext;
   private final PartialUpdateMode partialUpdateMode;
+  protected final boolean shouldKeepEventTimeMetadata;
+  protected final Option<String> eventTimeFieldOpt;
+  protected final boolean shouldKeepConsistentLogicalTimestamp;
   private Map<String, String> partialUpdateProperties;
 
   public PartialUpdateStrategy(HoodieReaderContext<T> readerContext,
@@ -45,6 +54,15 @@ public class PartialUpdateStrategy<T> {
     this.readerContext = readerContext;
     this.partialUpdateMode = partialUpdateMode;
     this.partialUpdateProperties = parsePartialUpdateProperties(props);
+    this.shouldKeepEventTimeMetadata = shouldKeepEventTimeMetadata(props);
+    this.shouldKeepConsistentLogicalTimestamp = shouldKeepEventTimeMetadata(props);
+    if (shouldKeepEventTimeMetadata) {
+      this.eventTimeFieldOpt = Option.ofNullable(
+          props.getProperty(HoodiePayloadProps.PAYLOAD_EVENT_TIME_FIELD_PROP_KEY));
+    } else {
+      this.eventTimeFieldOpt = Option.empty();
+      LOG.warn("No event time field is found when event time watermarker is enabled");
+    }
   }
 
   /**
@@ -93,10 +111,10 @@ public class PartialUpdateStrategy<T> {
                                            BufferedRecord<T> oldRecord,
                                            Schema newSchema,
                                            Schema oldSchema,
-                                           boolean keepOldMetadataColumns) {
+                                           boolean keepOldMetadataColumns,
+                                           boolean keepEventTimeMetadata) {
     List<Schema.Field> fields = newSchema.getFields();
     Map<Integer, Object> updateValues = new HashMap<>();
-    T engineRecord;
     // The default value only from the top-level data type is validated. That means,
     // for nested columns, we do not check the leaf level data type defaults.
     for (Schema.Field field : fields) {
@@ -109,25 +127,39 @@ public class PartialUpdateStrategy<T> {
         updateValues.put(field.pos(), readerContext.getValue(oldRecord.getRecord(), oldSchema, fieldName));
       }
     }
+
+    T engineRecord;
+    BufferedRecord<T> reconciledRecord;
     if (updateValues.isEmpty()) {
-      return newRecord;
+      engineRecord = newRecord.getRecord();
+      reconciledRecord = newRecord;
+    } else {
+      engineRecord = readerContext.constructEngineRecord(newSchema, updateValues, newRecord);
+      reconciledRecord = new BufferedRecord<>(
+          newRecord.getRecordKey(),
+          newRecord.getOrderingValue(),
+          engineRecord,
+          newRecord.getSchemaId(),
+          newRecord.isDelete());
     }
-    engineRecord = readerContext.constructEngineRecord(newSchema, updateValues, newRecord);
-    return new BufferedRecord<>(
-        newRecord.getRecordKey(),
-        newRecord.getOrderingValue(),
-        engineRecord,
-        newRecord.getSchemaId(),
-        newRecord.isDelete());
+
+    // Add event_time watermarker is specified.
+    if (keepEventTimeMetadata && shouldKeepEventTimeMetadata && eventTimeFieldOpt.isPresent()) {
+      Option<Object> eventTimeOpt = extractEventTime(engineRecord, newSchema);
+      if (eventTimeOpt.isPresent()) {
+        reconciledRecord.setEventTime(eventTimeOpt.get().toString());
+      }
+    }
+    return reconciledRecord;
   }
 
   BufferedRecord<T> reconcileMarkerValues(BufferedRecord<T> newRecord,
                                           BufferedRecord<T> oldRecord,
                                           Schema newSchema,
-                                          Schema oldSchema) {
+                                          Schema oldSchema,
+                                          boolean keepEventTimeMetadata) {
     List<Schema.Field> fields = newSchema.getFields();
     Map<Integer, Object> updateValues = new HashMap<>();
-    T engineRecord;
     String partialUpdateCustomMarker = partialUpdateProperties.get(PARTIAL_UPDATE_CUSTOM_MARKER);
     for (Schema.Field field : fields) {
       String fieldName = field.name();
@@ -137,16 +169,30 @@ public class PartialUpdateStrategy<T> {
         updateValues.put(field.pos(), readerContext.getValue(oldRecord.getRecord(), oldSchema, fieldName));
       }
     }
+
+    T engineRecord;
+    BufferedRecord<T> reconciledRecord;
     if (updateValues.isEmpty()) {
-      return newRecord;
+      engineRecord = newRecord.getRecord();
+      reconciledRecord = newRecord;
+    } else {
+      engineRecord = readerContext.constructEngineRecord(newSchema, updateValues, newRecord);
+      reconciledRecord = new BufferedRecord<>(
+          newRecord.getRecordKey(),
+          newRecord.getOrderingValue(),
+          engineRecord,
+          newRecord.getSchemaId(),
+          newRecord.isDelete());
     }
-    engineRecord = readerContext.constructEngineRecord(newSchema, updateValues, newRecord);
-    return new BufferedRecord<>(
-        newRecord.getRecordKey(),
-        newRecord.getOrderingValue(),
-        engineRecord,
-        newRecord.getSchemaId(),
-        newRecord.isDelete());
+
+    // Add event_time watermarker is specified.
+    if (keepEventTimeMetadata && shouldKeepEventTimeMetadata && eventTimeFieldOpt.isPresent()) {
+      Option<Object> eventTimeOpt = extractEventTime(engineRecord, newSchema);
+      if (eventTimeOpt.isPresent()) {
+        reconciledRecord.setEventTime(eventTimeOpt.get().toString());
+      }
+    }
+    return reconciledRecord;
   }
 
   static boolean isStringTyped(Schema.Field field) {
@@ -192,5 +238,37 @@ public class PartialUpdateStrategy<T> {
       }
     }
     return properties;
+  }
+
+  static boolean shouldKeepEventTimeMetadata(TypedProperties props) {
+    return props.getBoolean("hoodie.write.event.time.watermark.metadata.enabled");
+  }
+
+  /**
+   * Should keep logical timestamp consistent.
+   */
+  static boolean shouldKeepConsistentLogicalTimestamp(TypedProperties props) {
+    return Boolean.parseBoolean(props.getProperty(
+        KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
+        KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()));
+  }
+
+  /**
+   * Extract and store event_time value for the record; later this information will be
+   * stored to WriteStats.
+   * This function should be only called when merge base record and log record.
+   */
+  private Option<Object> extractEventTime(T engineRecord, Schema readerSchema) {
+    if (shouldKeepEventTimeMetadata) {
+      Option<Object> eventTimeOpt = readerContext.getEventTime(
+          engineRecord, readerSchema, eventTimeFieldOpt);
+      if (eventTimeOpt.isPresent()) {
+        Schema.Field field = readerSchema.getField(eventTimeFieldOpt.get());
+        Object eventTime = readerContext.getTypeHandler().convertValueForAvroLogicalTypes(
+            field.schema(), eventTimeOpt.get(), shouldKeepConsistentLogicalTimestamp);
+        return Option.of(eventTime);
+      }
+    }
+    return Option.empty();
   }
 }
