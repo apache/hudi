@@ -274,26 +274,10 @@ public class HoodieTableMetaClient implements Serializable {
    * Writes the current index metadata to storage.
    */
   public void writeIndexMetadataToStorage() {
-    if (!indexMetadataOpt.isPresent()) {
-      return;
-    }
-    writeIndexMetadataToStorage(indexMetadataOpt.get());
-  }
-
-  /**
-   * Writes the provided index metadata to storage.
-   *
-   * @param indexMetadata the index metadata to write
-   */
-  public void writeIndexMetadataToStorage(HoodieIndexMetadata indexMetadata) {
-    String indexMetaPath = getIndexDefinitionPath();
-    try {
-      // TODO[HUDI-9094]: should not write byte array directly
-      FileIOUtils.createFileInPath(storage, new StoragePath(indexMetaPath),
-          Option.of(HoodieInstantWriter.convertByteArrayToWriter(getUTF8Bytes(indexMetadata.toJson()))));
-    } catch (IOException e) {
-      throw new HoodieIOException("Could not write index metadata at path: " + indexMetaPath, e);
-    }
+    indexMetadataOpt.ifPresent(indexMetadata -> {
+      String indexMetaPath = getIndexDefinitionPath();
+      writeIndexMetadataToStorage(storage, indexMetaPath, indexMetadata);
+    });
   }
 
   /**
