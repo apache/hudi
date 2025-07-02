@@ -156,7 +156,6 @@ public class HoodieTestDataGenerator implements AutoCloseable {
       + "{\"name\":\"height\",\"type\":{\"type\":\"fixed\",\"name\":\"abc\",\"size\":5,\"logicalType\":\"decimal\",\"precision\":10,\"scale\":6}},";
 
   public static final String EXTRA_COL_SCHEMA1 = "{\"name\": \"extra_column1\", \"type\": [\"null\", \"string\"], \"default\": null },";
-  public static final String EXTRA_COL_SCHEMA2 = "{\"name\": \"extra_column2\", \"type\": [\"null\", \"\"], \"default\": null},";
   public static final String TRIP_EXAMPLE_SCHEMA =
       TRIP_SCHEMA_PREFIX + EXTRA_TYPE_SCHEMA + MAP_TYPE_SCHEMA + FARE_NESTED_SCHEMA + TIP_NESTED_SCHEMA + TRIP_SCHEMA_SUFFIX;
   public static final String TRIP_EXAMPLE_SCHEMA_EVOLVED_1 =
@@ -1122,7 +1121,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
    * @return list of hoodie record updates
    */
   public List<HoodieRecord> generateUniqueUpdates(String instantTime, Integer n) {
-    return generateUniqueUpdatesStream(instantTime, n, TRIP_EXAMPLE_SCHEMA_EVOLVED_3).collect(Collectors.toList());
+    return generateUniqueUpdatesStream(instantTime, n, TRIP_EXAMPLE_SCHEMA).collect(Collectors.toList());
   }
 
   public List<HoodieRecord> generateUniqueUpdates(String instantTime, Integer n, String schemaStr) {

@@ -239,17 +239,16 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
         getCommonConfigs(EVENT_TIME_ORDERING, true));
 
     try (HoodieTestDataGenerator baseFileDataGen =
-             new HoodieTestDataGenerator(TRIP_EXAMPLE_SCHEMA_EVOLVED_3, 0xDEEF)) {
-      List<HoodieRecord> firstRecords = baseFileDataGen.generateInsertsForPartitionWithSchema(
-          "001", 100, TRIP_EXAMPLE_SCHEMA_EVOLVED_3, "any_partition");
-      commitToTable(firstRecords, INSERT.value(), writeConfigs, TRIP_EXAMPLE_SCHEMA_EVOLVED_3);
+             new HoodieTestDataGenerator(TRIP_EXAMPLE_SCHEMA, 0xDEEF)) {
+      List<HoodieRecord> firstRecords = baseFileDataGen.generateInsertsAsPerSchema("001", 100, TRIP_EXAMPLE_SCHEMA);
+      commitToTable(firstRecords, INSERT.value(), writeConfigs, TRIP_EXAMPLE_SCHEMA);
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(),
           true, 0, EVENT_TIME_ORDERING,
           firstRecords, firstRecords);
 
       List<HoodieRecord> secondRecords = baseFileDataGen.generateUniqueUpdates("002", 100);
-      commitToTable(secondRecords, UPSERT.value(), writeConfigs, TRIP_EXAMPLE_SCHEMA_EVOLVED_3);
+      commitToTable(secondRecords, UPSERT.value(), writeConfigs, TRIP_EXAMPLE_SCHEMA);
       List<HoodieRecord> mergedRecords = mergeRecordLists(secondRecords, firstRecords);
       List<HoodieRecord> unmergedRecords = CollectionUtils.combine(firstRecords, secondRecords);
       validateOutputFromFileGroupReader(
@@ -258,8 +257,8 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
           mergedRecords, CollectionUtils.combine(firstRecords, secondRecords));
 
       List<HoodieRecord> thirdRecords = baseFileDataGen.generateUniqueUpdatesForSchemaEvolution(
-          "003", 100, TRIP_EXAMPLE_SCHEMA_EVOLVED_3, TRIP_FLATTENED_SCHEMA);
-      commitToTable(thirdRecords, UPSERT.value(), writeConfigs, TRIP_FLATTENED_SCHEMA);
+          "003", 100, TRIP_EXAMPLE_SCHEMA, TRIP_EXAMPLE_SCHEMA_EVOLVED_3);
+      commitToTable(thirdRecords, UPSERT.value(), writeConfigs, TRIP_EXAMPLE_SCHEMA_EVOLVED_3);
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(),
           true, 2, EVENT_TIME_ORDERING,
