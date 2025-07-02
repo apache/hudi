@@ -19,6 +19,9 @@
 
 package org.apache.hudi.common.engine;
 
+/**
+ * Helper class that handle cell level operation.
+ */
 public class ReaderContextTypeHandler {
   /**
    * Cast to Java boolean value.
