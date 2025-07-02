@@ -289,8 +289,10 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       return lookupRecords(partitionName, new ArrayList<>(distinctSortedKeys), fileSlices.get(0), !isSecondaryIndex);
     }
 
-    SerializableBiFunction<String, Integer, Integer> mappingFunction = HoodieTableMetadataUtil::mapRecordKeyToFileGroupIndex;
-    keys = repartitioningIfNeeded(keys, partitionName, numFileSlices);
+    HoodieIndexVersion indexVersion = existingIndexVersionOrDefault(partitionName, dataMetaClient);
+    SerializableBiFunction<String, Integer, Integer> mappingFunction = MetadataPartitionType.fromPartitionPath(partitionName)
+        .getFileGroupIndexFunction(indexVersion, false);
+    keys = repartitioningIfNeeded(keys, partitionName, numFileSlices, mappingFunction);
     HoodiePairData<Integer, String> persistedInitialPairData = keys
         // Tag key with file group index and apply key encoding
         .mapToPair(recordKey -> new ImmutablePair<>(
@@ -334,8 +336,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
     HoodieIndexVersion indexVersion = existingIndexVersionOrDefault(partitionName, dataMetaClient);
     SerializableBiFunction<String, Integer, Integer> mappingFunction = MetadataPartitionType.fromPartitionPath(partitionName)
-        .getFileGroupIndexFunction(indexVersion);
-    keys = repartitioningIfNeeded(keys, partitionName, numFileSlices);
+        .getFileGroupIndexFunction(indexVersion, false);
+    keys = repartitioningIfNeeded(keys, partitionName, numFileSlices, mappingFunction);
     HoodiePairData<Integer, String> persistedInitialPairData = keys
         // Tag key with file group index
         .mapToPair(recordKey -> new ImmutablePair<>(
@@ -494,9 +496,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   // When testing we noticed that the parallelism can be very low which hurts the performance. so we should start with a reasonable
   // level of parallelism in that case.
   private HoodieData<String> repartitioningIfNeeded(
-      HoodieData<String> keys, String partitionName, int numFileSlices) {
+      HoodieData<String> keys, String partitionName, int numFileSlices, SerializableBiFunction<String, Integer, Integer> mappingFunction) {
     if (keys instanceof HoodieListData) {
-      SerializableBiFunction<String, Integer, Integer> mappingFunction = HoodieTableMetadataUtil::mapRecordKeyToFileGroupIndex;
       int parallelism = (int) keys.map(k -> mappingFunction.apply(k, numFileSlices)).distinct().count();
       // In case of empty lookup set, we should avoid RDD with 0 partitions.
       parallelism = Math.max(parallelism, 1);
