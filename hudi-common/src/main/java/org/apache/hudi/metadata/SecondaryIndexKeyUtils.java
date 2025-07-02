@@ -94,7 +94,7 @@ public class SecondaryIndexKeyUtils {
     return delimiterIndex;
   }
 
-  private static String unescapeSpecialChars(String str) {
+  static String unescapeSpecialChars(String str) {
     StringBuilder unescaped = new StringBuilder();
     boolean isEscape = false;
     for (char c : str.toCharArray()) {

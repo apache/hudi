@@ -426,7 +426,9 @@ class TestEightToNineUpgradeHandler {
     assertEquals("column_stats", colStatsDef.getIndexFunction());
     assertEquals(Collections.emptyMap(), colStatsDef.getIndexOptions());
     assertEquals(Arrays.asList(
-        "_hoodie_commit_time", "_hoodie_partition_path", "_hoodie_record_key", "key", "secKey", "partition", "intField", "city", "textField1", "textField2", "textField3", "textField4", "decimalField", "longField", "incrLongField", "round"), colStatsDef.getSourceFields());
+        "_hoodie_commit_time", "_hoodie_partition_path", "_hoodie_record_key", "key", "secKey", "partition", "intField",
+        "city", "textField1", "textField2", "textField3", "textField4", "decimalField", "longField", "incrLongField", "round"),
+        colStatsDef.getSourceFields());
 
     HoodieIndexDefinition secIdxDef = loadedDef.getIndexDefinitions().get("secondary_index_idx_price");
     assertEquals("secondary_index_idx_price", secIdxDef.getIndexName());

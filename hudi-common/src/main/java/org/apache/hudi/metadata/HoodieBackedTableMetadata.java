@@ -106,6 +106,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_CO
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_FILES;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.existingIndexVersionOrDefault;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getFileSystemViewForMetadataTable;
+import static org.apache.hudi.metadata.SecondaryIndexKeyUtils.unescapeSpecialChars;
 
 /**
  * Table metadata provided by an internal DFS backed Hudi metadata table.
@@ -226,7 +227,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     ValidationUtils.checkState(keyPrefixes instanceof HoodieListData, "getRecordsByKeyPrefixes only support HoodieListData at the moment");
     // Sort the prefixes so that keys are looked up in order
     List<String> sortedKeyPrefixes = new ArrayList<>(keyPrefixes.collectAsList());
-    Collections.sort(sortedKeyPrefixes);
 
     // NOTE: Since we partition records to a particular file-group by full key, we will have
     //       to scan all file-groups for all key-prefixes as each of these might contain some
@@ -235,26 +235,27 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         k -> HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metadataMetaClient, getMetadataFileSystemView(), partitionName));
     checkState(!partitionFileSlices.isEmpty(), "Number of file slices for partition " + partitionName + " should be > 0");
 
-    return (shouldLoadInMemory ? HoodieListData.lazy(partitionFileSlices) :
-        getEngineContext().parallelize(partitionFileSlices))
-        .flatMap(
-            (SerializableFunction<FileSlice, Iterator<HoodieRecord<HoodieMetadataPayload>>>) fileSlice -> {
-              return getByKeyPrefixes(fileSlice, sortedKeyPrefixes, partitionName, keyEncodingFn);
-            });
-  }
-
-  private Iterator<HoodieRecord<HoodieMetadataPayload>> getByKeyPrefixes(FileSlice fileSlice,
-                                                                         List<String> sortedKeyPrefixes,
-                                                                         String partitionName,
-                                                                         Option<SerializableFunctionUnchecked<String, String>> keyEncodingFn) throws IOException {
     // Apply key encoding if present
-    List<String> encodedKeyPrefixes = sortedKeyPrefixes;
     if (keyEncodingFn.isPresent()) {
-      encodedKeyPrefixes = sortedKeyPrefixes.stream()
+      sortedKeyPrefixes = sortedKeyPrefixes.stream()
           .map(k -> keyEncodingFn.get().apply(k))
           .collect(Collectors.toList());
     }
-    HoodieFileGroupReader<IndexedRecord> fileGroupReader = buildFileGroupReader(encodedKeyPrefixes, fileSlice, false);
+    // Sort must come after encoding.
+    Collections.sort(sortedKeyPrefixes);
+
+    List<String> finalSortedKeyPrefixes = sortedKeyPrefixes;
+    return (shouldLoadInMemory ? HoodieListData.lazy(partitionFileSlices) :
+        getEngineContext().parallelize(partitionFileSlices))
+        .flatMap(
+            (SerializableFunction<FileSlice, Iterator<HoodieRecord<HoodieMetadataPayload>>>) fileSlice ->
+                getByKeyPrefixes(fileSlice, finalSortedKeyPrefixes, partitionName));
+  }
+
+  private Iterator<HoodieRecord<HoodieMetadataPayload>> getByKeyPrefixes(FileSlice fileSlice,
+                                                                         List<String> sortedEncodedKeyPrefixes,
+                                                                         String partitionName) throws IOException {
+    HoodieFileGroupReader<IndexedRecord> fileGroupReader = buildFileGroupReader(sortedEncodedKeyPrefixes, fileSlice, false);
     ClosableIterator<IndexedRecord> it = fileGroupReader.getClosableIterator();
     return new CloseableMappingIterator<>(
         it,
@@ -309,7 +310,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
             }
             distinctSortedKeyIter.forEachRemaining(keysList::add);
           }
-          FileSlice fileSlice = fileSlices.get(mappingFunction.apply(keysList.get(0), numFileSlices));
+          FileSlice fileSlice = fileSlices.get(mappingFunction.apply(unescapeSpecialChars(keysList.get(0)), numFileSlices));
           return lookupKeyRecordPairsItr(partitionName, keysList, fileSlice, !isSecondaryIndex);
         };
 
@@ -354,7 +355,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
             }
             distinctSortedKeyIter.forEachRemaining(keysList::add);
           }
-          FileSlice fileSlice = fileSlices.get(mappingFunction.apply(keysList.get(0), numFileSlices));
+          FileSlice fileSlice = fileSlices.get(mappingFunction.apply(unescapeSpecialChars(keysList.get(0)), numFileSlices));
           return lookupRecordsItr(partitionName, keysList, fileSlice, !isSecondaryIndex);
         };
     List<Integer> shardIndices = IntStream.range(0, numFileSlices).boxed().collect(Collectors.toList());
@@ -747,10 +748,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       metadataFileSystemView = getFileSystemViewForMetadataTable(metadataMetaClient);
     }
     return metadataFileSystemView;
-  }
-
-  public HoodieMetadataConfig getMetadataConfig() {
-    return metadataConfig;
   }
 
   public Map<String, String> stats() {
