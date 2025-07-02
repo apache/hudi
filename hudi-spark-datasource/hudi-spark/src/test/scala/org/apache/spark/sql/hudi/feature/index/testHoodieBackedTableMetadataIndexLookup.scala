@@ -60,7 +60,6 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
    */
   protected def getTableVersion: String
 
-
   protected def getNumFileIndexGroup: String = {
     "1"
   }
@@ -317,7 +316,8 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
 
     // Case 6: Test with different secondary index (price column)
     val priceIndexName = "secondary_index_idx_price"
-    val priceKeys = HoodieListData.eager(List("10", "20", "30").asJava)
+    // TODO[HUDI-9566]: We must give the exact string that a double number will generate. If we give "10"/"10.00" it will fail.
+    val priceKeys = HoodieListData.eager(List("10.0", "20.0", "30.0").asJava)
     val priceResult = hoodieBackedTableMetadata.readSecondaryIndexLocations(priceKeys, priceIndexName).collectAsList().asScala
     assert(priceResult.size == 3, s"Should return 3 results for price secondary keys in table version ${getTableVersion}")
 

@@ -179,7 +179,7 @@ class TestMetadataRecordIndex extends HoodieSparkClientTestBase {
     val readDf = spark.read.format("hudi").load(basePath)
     val rowArr = readDf.collect()
     val recordIndexMap = HoodieDataUtils.collectAsMapWithOverwriteStrategy(metadata.readRecordIndex(
-      HoodieListData.`lazy`(rowArr.map(row => row.getAs("_hoodie_record_key").toString).toList.asJava)))
+      HoodieListData.eager(rowArr.map(row => row.getAs("_hoodie_record_key").toString).toList.asJava)))
 
     assertTrue(rowArr.length > 0)
     for (row <- rowArr) {
