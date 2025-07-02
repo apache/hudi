@@ -118,27 +118,27 @@ public class TestHoodieIndexVersion {
   private static Stream<Arguments> isValidIndexDefinitionTestCases() {
     return Stream.of(
         // Table version 8, SI only v1 is allowed
-        Arguments.of("Table version 8 with SI v1", 
-            HoodieTableVersion.EIGHT, 
-            createIndexDefinition("secondary_index_idx_test", HoodieIndexVersion.V1), 
+        Arguments.of("Table version 8 with SI v1",
+            HoodieTableVersion.EIGHT,
+            createIndexDefinition("secondary_index_idx_test", HoodieIndexVersion.V1),
             true),
         
         // Table version 8, SI v2 is not allowed
-        Arguments.of("Table version 8 with SI v2", 
-            HoodieTableVersion.EIGHT, 
-            createIndexDefinition("secondary_index_idx_test", HoodieIndexVersion.V2), 
+        Arguments.of("Table version 8 with SI v2",
+            HoodieTableVersion.EIGHT,
+            createIndexDefinition("secondary_index_idx_test", HoodieIndexVersion.V2),
             false),
 
-        // Table version 9, SI must be v2 or above
-        Arguments.of("Table version 9 with SI v1", 
-            HoodieTableVersion.NINE, 
-            createIndexDefinition("secondary_index_idx_test", HoodieIndexVersion.V1), 
-            false),
+        // Table version 9, SI can be v1 or v2
+        Arguments.of("Table version 9 with SI v1",
+            HoodieTableVersion.NINE,
+            createIndexDefinition("secondary_index_idx_test", HoodieIndexVersion.V1),
+            true),
         
         // Table version 9, SI v2 is allowed
-        Arguments.of("Table version 9 with SI v2", 
-            HoodieTableVersion.NINE, 
-            createIndexDefinition("secondary_index_idx_test", HoodieIndexVersion.V2), 
+        Arguments.of("Table version 9 with SI v2",
+            HoodieTableVersion.NINE,
+            createIndexDefinition("secondary_index_idx_test", HoodieIndexVersion.V2),
             true),
 
         // Table version 9, non-SI with any version is allowed
@@ -147,13 +147,13 @@ public class TestHoodieIndexVersion {
             createIndexDefinition("column_stats", HoodieIndexVersion.V1),
             true),
 
-        // Table version 9, non-SI with any version is allowed
+        // Table version 9, non-SI with no version is not allowed
         Arguments.of("Table version 9 with null version",
             HoodieTableVersion.NINE,
             createIndexDefinition("column_stats", null),
             false),
 
-        // Table version 9, non-SI with any version is allowed
+        // Table version 9, SI with no version is not allowed
         Arguments.of("Table version 9 with v1",
             HoodieTableVersion.NINE,
             createIndexDefinition("secondary_index_idx_test", null),

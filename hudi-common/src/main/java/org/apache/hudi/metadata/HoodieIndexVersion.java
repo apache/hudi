@@ -135,14 +135,7 @@ public enum HoodieIndexVersion {
     if (tv == HoodieTableVersion.EIGHT && MetadataPartitionType.SECONDARY_INDEX.equals(metadataPartitionType) && iv != HoodieIndexVersion.V1) {
       return false;
     }
-    // Table version 9, SI must have none null version.
-    if (tv == HoodieTableVersion.NINE && MetadataPartitionType.SECONDARY_INDEX.equals(metadataPartitionType) && iv == null) {
-      return false;
-    }
-    // Table version 9, SI must be v2 or above.
-    if (tv == HoodieTableVersion.NINE && MetadataPartitionType.SECONDARY_INDEX.equals(metadataPartitionType) && !iv.greaterThanOrEquals(HoodieIndexVersion.V2)) {
-      return false;
-    }
+
     return true;
   }
 

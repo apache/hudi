@@ -55,6 +55,7 @@ import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.exception.HoodieException;
@@ -95,6 +96,7 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
+import static org.apache.hudi.metadata.HoodieIndexVersion.isValidIndexDefinition;
 
 /**
  * <code>HoodieTableMetaClient</code> allows to access meta-data about a hoodie table It returns meta-data about
@@ -276,7 +278,7 @@ public class HoodieTableMetaClient implements Serializable {
   public void writeIndexMetadataToStorage() {
     indexMetadataOpt.ifPresent(indexMetadata -> {
       String indexMetaPath = getIndexDefinitionPath();
-      writeIndexMetadataToStorage(storage, indexMetaPath, indexMetadata);
+      writeIndexMetadataToStorage(storage, indexMetaPath, indexMetadata, getTableConfig().getTableVersion());
     });
   }
 
@@ -287,8 +289,12 @@ public class HoodieTableMetaClient implements Serializable {
    * @param indexDefinitionPath the path where the index metadata should be written
    * @param indexMetadata the index metadata to write
    */
-  public static void writeIndexMetadataToStorage(HoodieStorage storage, String indexDefinitionPath, HoodieIndexMetadata indexMetadata) {
+  public static void writeIndexMetadataToStorage(
+      HoodieStorage storage, String indexDefinitionPath, HoodieIndexMetadata indexMetadata, HoodieTableVersion tableVersion) {
     try {
+      // Ensure we write out valid index metadata.
+      indexMetadata.getIndexDefinitions().values().forEach(d ->
+          ValidationUtils.checkArgument(isValidIndexDefinition(tableVersion, d), "Found invalid index definition " + d));
       // TODO[HUDI-9094]: should not write byte array directly
       FileIOUtils.createFileInPath(storage, new StoragePath(indexDefinitionPath),
           Option.of(HoodieInstantWriter.convertByteArrayToWriter(getUTF8Bytes(indexMetadata.toJson()))));
@@ -311,7 +317,7 @@ public class HoodieTableMetaClient implements Serializable {
     return indexDefOption;
   }
 
-  public static Option<HoodieIndexMetadata> loadIndexDefFromStorage(
+  private static Option<HoodieIndexMetadata> loadIndexDefFromStorage(
       StoragePath basePath, String relativeIndexDefinitionPath, HoodieStorage storage) {
     StoragePath indexDefinitionPath =
         new StoragePath(basePath, relativeIndexDefinitionPath);

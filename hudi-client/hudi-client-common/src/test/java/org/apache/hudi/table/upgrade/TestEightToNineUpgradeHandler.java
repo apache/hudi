@@ -45,10 +45,12 @@ import org.mockito.quality.Strictness;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
@@ -362,5 +364,75 @@ class TestEightToNineUpgradeHandler {
     indexDefinitions.put("secondary_index_idx_price", secondaryIndexDef);
     
     return new HoodieIndexMetadata(indexDefinitions);
+  }
+
+  @Test
+  void testPopulateIndexVersionIfMissing() {
+    // Test with table version 8 - should populate missing versions with V1
+    HoodieIndexMetadata indexMetadata = loadIndexDefFromResource("indexMissingVersion1.json");
+    
+    // Verify initial state - no versions
+    assertNull(indexMetadata.getIndexDefinitions().get("column_stats").getVersion());
+    assertNull(indexMetadata.getIndexDefinitions().get("secondary_index_idx_price").getVersion());
+    
+    // Apply the method
+    EightToNineUpgradeHandler.populateIndexVersionIfMissing(Option.of(indexMetadata));
+    
+    // Verify versions are populated with V1
+    assertEquals(HoodieIndexVersion.V1, indexMetadata.getIndexDefinitions().get("column_stats").getVersion());
+    assertEquals(HoodieIndexVersion.V1, indexMetadata.getIndexDefinitions().get("secondary_index_idx_price").getVersion());
+    
+    // Verify other fields remain unchanged
+    validateAllFieldsExcludingVersion(indexMetadata);
+  }
+
+  @Test
+  void testPopulateIndexVersionIfMissingWithMixedVersions() {
+    // Test with indexMissingVersion2.json which has some versions already set
+    HoodieIndexMetadata indexMetadata = loadIndexDefFromResource("indexMissingVersion2.json");
+    
+    // Verify initial state - column_stats has no version, secondary_index has V2
+    assertNull(indexMetadata.getIndexDefinitions().get("column_stats").getVersion());
+    assertEquals(HoodieIndexVersion.V2, indexMetadata.getIndexDefinitions().get("secondary_index_idx_price").getVersion());
+    
+    // Apply the method with table version 8
+    EightToNineUpgradeHandler.populateIndexVersionIfMissing(Option.of(indexMetadata));
+    
+    // Verify column_stats gets V1, secondary_index remains V2 (since it already had a version)
+    assertEquals(HoodieIndexVersion.V1, indexMetadata.getIndexDefinitions().get("column_stats").getVersion());
+    assertEquals(HoodieIndexVersion.V2, indexMetadata.getIndexDefinitions().get("secondary_index_idx_price").getVersion());
+  }
+
+  @Test
+  void testPopulateIndexVersionIfMissingWithEmptyOption() {
+    // Test with empty option - should not throw exception
+    assertDoesNotThrow(() -> 
+        EightToNineUpgradeHandler.populateIndexVersionIfMissing(Option.empty()));
+  }
+
+  private static HoodieIndexMetadata loadIndexDefFromResource(String resourceName) {
+    try {
+      String resourcePath = TestEightToNineUpgradeHandler.class.getClassLoader().getResource(resourceName).toString();
+      return HoodieIndexMetadata.fromJson(new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(new java.net.URI(resourcePath)))));
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  private static void validateAllFieldsExcludingVersion(HoodieIndexMetadata loadedDef) {
+    HoodieIndexDefinition colStatsDef = loadedDef.getIndexDefinitions().get("column_stats");
+    assertEquals("column_stats", colStatsDef.getIndexName());
+    assertEquals("column_stats", colStatsDef.getIndexType());
+    assertEquals("column_stats", colStatsDef.getIndexFunction());
+    assertEquals(Collections.emptyMap(), colStatsDef.getIndexOptions());
+    assertEquals(Arrays.asList(
+        "_hoodie_commit_time", "_hoodie_partition_path", "_hoodie_record_key", "key", "secKey", "partition", "intField", "city", "textField1", "textField2", "textField3", "textField4", "decimalField", "longField", "incrLongField", "round"), colStatsDef.getSourceFields());
+
+    HoodieIndexDefinition secIdxDef = loadedDef.getIndexDefinitions().get("secondary_index_idx_price");
+    assertEquals("secondary_index_idx_price", secIdxDef.getIndexName());
+    assertEquals("secondary_index", secIdxDef.getIndexType());
+    assertEquals("identity", secIdxDef.getIndexFunction());
+    assertEquals(Collections.singletonList("price"), secIdxDef.getSourceFields());
+    assertEquals(Collections.emptyMap(), secIdxDef.getIndexOptions());
   }
 } 
