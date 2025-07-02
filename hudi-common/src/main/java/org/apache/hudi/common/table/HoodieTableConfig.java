@@ -902,8 +902,8 @@ public class HoodieTableConfig extends HoodieConfig {
     if (isNullOrEmpty(payloadClassName)) {
       return null;
     }
-    // For table version > 8.
-    if (tableVersion.greaterThan(HoodieTableVersion.EIGHT)) {
+    // TODO: make this only for version > 8 after upgrade table version.
+    if (tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
       if (PartialUpdateAvroPayload.class.getName().equals(payloadClassName)
           || PostgresDebeziumAvroPayload.class.getName().equals(payloadClassName)) {
         return EVENT_TIME_ORDERING;
