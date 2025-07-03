@@ -21,6 +21,7 @@ package org.apache.hudi.common.table.read;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import org.apache.avro.Schema;
 import org.junit.jupiter.api.Test;
@@ -33,6 +34,20 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestPartialUpdateStrategy {
+  private static final String TRACK_EVENT_TIME_WATERMARK = "hoodie.write.track.event.time.watermark";
+  private String schemaString = "{"
+      + "\"type\": \"record\","
+      + "\"name\": \"EventRecord\","
+      + "\"namespace\": \"com.example.avro\","
+      + "\"fields\": ["
+      + "{\"name\": \"id\", \"type\": \"string\"},"
+      + "{\"name\": \"ts\", \"type\": \"long\"},"
+      + "{\"name\": \"op\", \"type\": \"string\"},"
+      + "{\"name\": \"_hoodie_is_deleted\", \"type\": \"boolean\"}"
+      + "]"
+      + "}";
+  private Schema schema = new Schema.Parser().parse(schemaString);
+
   @Test
   void testParseValidProperties() {
     TypedProperties props = new TypedProperties();
@@ -123,5 +138,66 @@ class TestPartialUpdateStrategy {
   void testNonUnionNonTargetType() {
     Schema intSchema = Schema.create(Schema.Type.INT);
     assertFalse(PartialUpdateStrategy.hasTargetType(intSchema, Schema.Type.STRING));
+  }
+
+  @Test
+  void testShouldKeepEventTimeMetadataWithoutPropertySet() {
+    TypedProperties props = new TypedProperties();
+    assertFalse(PartialUpdateStrategy.shouldKeepEventTimeMetadata(props));
+  }
+
+  @Test
+  void testShouldKeepEventTimeMetadataWithPropertySetFalse() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(TRACK_EVENT_TIME_WATERMARK, "false");
+    assertFalse(PartialUpdateStrategy.shouldKeepEventTimeMetadata(props));
+  }
+
+  @Test
+  void testShouldKeepEventTimeMetadataWithPropertySetTrue() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(TRACK_EVENT_TIME_WATERMARK, "true");
+    assertTrue(PartialUpdateStrategy.shouldKeepEventTimeMetadata(props));
+  }
+
+  @Test
+  void testPropertySetToTrue() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(
+        KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(), "true");
+
+    boolean result = PartialUpdateStrategy.shouldKeepConsistentLogicalTimestamp(props);
+    assertTrue(result);
+  }
+
+  @Test
+  void testPropertySetToFalse() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(
+        KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(), "false");
+
+    boolean result = PartialUpdateStrategy.shouldKeepConsistentLogicalTimestamp(props);
+    assertFalse(result);
+  }
+
+  @Test
+  void testPropertyMissingUsesDefault() {
+    TypedProperties props = new TypedProperties();
+
+    boolean result = PartialUpdateStrategy.shouldKeepConsistentLogicalTimestamp(props);
+    boolean expected = Boolean.parseBoolean(
+        KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue());
+
+    assertEquals(expected, result);
+  }
+
+  @Test
+  void testPropertySetToInvalidBooleanFallsBackToFalse() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(
+        KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(), "notABoolean");
+
+    boolean result = PartialUpdateStrategy.shouldKeepConsistentLogicalTimestamp(props);
+    assertFalse(result);
   }
 }

@@ -74,7 +74,8 @@ public class PartialUpdateStrategy<T> {
                                                  BufferedRecord<T> oldRecord,
                                                  Schema newSchema,
                                                  Schema oldSchema,
-                                                 boolean keepOldMetadataColumns) {
+                                                 boolean keepOldMetadataColumns,
+                                                 boolean keepEventTimeMetadata) {
     // Note that: When either newRecord or oldRecord is a delete record,
     //            skip partial update since delete records do not have meaningful columns.
     if (partialUpdateMode == PartialUpdateMode.NONE
@@ -90,10 +91,10 @@ public class PartialUpdateStrategy<T> {
         return newRecord;
       case IGNORE_DEFAULTS:
         return reconcileDefaultValues(
-            newRecord, oldRecord, newSchema, oldSchema, keepOldMetadataColumns);
+            newRecord, oldRecord, newSchema, oldSchema, keepOldMetadataColumns, keepEventTimeMetadata);
       case IGNORE_MARKERS:
         return reconcileMarkerValues(
-            newRecord, oldRecord, newSchema, oldSchema);
+            newRecord, oldRecord, newSchema, oldSchema, keepEventTimeMetadata);
       default:
         return newRecord;
     }

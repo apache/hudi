@@ -100,7 +100,7 @@ public class BufferedRecordMergerFactory {
     public Option<BufferedRecord<T>> deltaMerge(BufferedRecord<T> newRecord,
                                                 BufferedRecord<T> existingRecord) {
       newRecord = partialUpdateStrategy.reconcileFieldsWithOldRecord(
-          newRecord, existingRecord, readerSchema, readerSchema, false);
+          newRecord, existingRecord, readerSchema, readerSchema, false, false);
       return Option.of(newRecord);
     }
 
@@ -116,7 +116,7 @@ public class BufferedRecordMergerFactory {
       }
 
       newerRecord = partialUpdateStrategy.reconcileFieldsWithOldRecord(
-          newerRecord, olderRecord, readerSchema, readerSchema, false);
+          newerRecord, olderRecord, readerSchema, readerSchema, false, false);
       return Pair.of(newerRecord.isDelete(), newerRecord.getRecord());
     }
   }
@@ -141,11 +141,11 @@ public class BufferedRecordMergerFactory {
     public Option<BufferedRecord<T>> deltaMerge(BufferedRecord<T> newRecord, BufferedRecord<T> existingRecord) {
       if (existingRecord == null || shouldKeepNewerRecord(existingRecord, newRecord)) {
         newRecord = partialUpdateStrategy.reconcileFieldsWithOldRecord(
-            newRecord, existingRecord, readerSchema, readerSchema, false);
+            newRecord, existingRecord, readerSchema, readerSchema, false, false);
         return Option.of(newRecord);
       } else {
         existingRecord = partialUpdateStrategy.reconcileFieldsWithOldRecord(
-            existingRecord, newRecord, readerSchema, readerSchema, true);
+            existingRecord, newRecord, readerSchema, readerSchema, true, false);
         return Option.of(existingRecord);
       }
     }
@@ -166,12 +166,12 @@ public class BufferedRecordMergerFactory {
       if (!olderRecord.isCommitTimeOrderingDelete()
           && oldOrderingValue.compareTo(newOrderingValue) > 0) {
         olderRecord = partialUpdateStrategy.reconcileFieldsWithOldRecord(
-            olderRecord, newerRecord, readerSchema, readerSchema, true);
+            olderRecord, newerRecord, readerSchema, readerSchema, true, true);
         return Pair.of(olderRecord.isDelete(), olderRecord.getRecord());
       }
 
       newerRecord = partialUpdateStrategy.reconcileFieldsWithOldRecord(
-          newerRecord, olderRecord, readerSchema, readerSchema, false);
+          newerRecord, olderRecord, readerSchema, readerSchema, false, true);
       return Pair.of(newerRecord.isDelete(), newerRecord.getRecord());
     }
   }
