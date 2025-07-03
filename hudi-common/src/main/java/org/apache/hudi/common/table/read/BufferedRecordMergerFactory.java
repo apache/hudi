@@ -45,15 +45,14 @@ import java.util.Objects;
  * Factory to create a {@link BufferedRecordMerger}.
  */
 public class BufferedRecordMergerFactory {
-  public static <T> BufferedRecordMerger<T> create(
-      HoodieReaderContext<T> readerContext,
-      RecordMergeMode recordMergeMode,
-      boolean enablePartialMerging,
-      Option<HoodieRecordMerger> recordMerger,
-      Option<String> orderingFieldName,
-      Option<String> payloadClass,
-      Schema readerSchema,
-      TypedProperties props) {
+  public static <T> BufferedRecordMerger<T> create(HoodieReaderContext<T> readerContext,
+                                                   RecordMergeMode recordMergeMode,
+                                                   boolean enablePartialMerging,
+                                                   Option<HoodieRecordMerger> recordMerger,
+                                                   Option<String> orderingFieldName,
+                                                   Option<String> payloadClass,
+                                                   Schema readerSchema,
+                                                   TypedProperties props) {
     if (enablePartialMerging) {
       BufferedRecordMerger<T> deleteRecordMerger = create(
           readerContext, recordMergeMode, false, recordMerger, orderingFieldName, payloadClass, readerSchema, props);

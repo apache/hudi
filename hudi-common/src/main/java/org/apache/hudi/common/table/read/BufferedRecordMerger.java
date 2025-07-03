@@ -25,13 +25,18 @@ import org.apache.hudi.common.util.collection.Pair;
 import java.io.IOException;
 
 /**
- * {@link BufferedRecordMerger} provides the capabilities to merge two log records
- * or log record and base record based on the configured merge mode.
+ * A {@link BufferedRecord} merger that covers three core merging scenarios within {@link FileGroupRecordBuffer}:
+ *
+ * <ol>
+ *   <li>log & log merging;</li>
+ *   <li>log & delete record merging;</li>
+ *   <li>base & log merging.</li>
+ * </ol>
  */
 public interface BufferedRecordMerger<T> {
 
   /**
-   * Merging incoming record from log file with existing record in record buffer.
+   * Merges incoming record from log file with existing record in record buffer.
    *
    * @param newRecord      Incoming record from log file
    * @param existingRecord Existing record in record buffer
@@ -41,7 +46,7 @@ public interface BufferedRecordMerger<T> {
   Option<BufferedRecord<T>> deltaMerge(BufferedRecord<T> newRecord, BufferedRecord<T> existingRecord) throws IOException;
 
   /**
-   * Merging incoming delete record from log file with existing record in record buffer.
+   * Merges incoming delete record from log file with existing record in record buffer.
    *
    * @param deleteRecord   Incoming delete record from log file
    * @param existingRecord Existing record in record buffer
@@ -51,7 +56,7 @@ public interface BufferedRecordMerger<T> {
   Option<DeleteRecord> deltaMerge(DeleteRecord deleteRecord, BufferedRecord<T> existingRecord);
 
   /**
-   * Merging newer record from log file with old record from base file.
+   * Merges newer record from log file with old record from base file.
    *
    * @param olderRecord Older record from base file
    * @param newerRecord Newer record from log file
