@@ -873,8 +873,7 @@ public class HoodieTableConfig extends HoodieConfig {
     if (isNullOrEmpty(payloadClassName)) {
       return null;
     }
-    // TODO: make this only for version > 8 after upgrade table version.
-    if (tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
+    if (tableVersion.greaterThanOrEquals(HoodieTableVersion.NINE)) {
       if (PartialUpdateAvroPayload.class.getName().equals(payloadClassName)
           || PostgresDebeziumAvroPayload.class.getName().equals(payloadClassName)) {
         return EVENT_TIME_ORDERING;
@@ -1090,6 +1089,10 @@ public class HoodieTableConfig extends HoodieConfig {
     } else {
       return PartialUpdateMode.valueOf(getStringOrDefault(PARTIAL_UPDATE_MODE));
     }
+  }
+
+  public String getPartialUpdateProperties() {
+    return getString(PARTIAL_UPDATE_PROPERTIES);
   }
 
   /**
