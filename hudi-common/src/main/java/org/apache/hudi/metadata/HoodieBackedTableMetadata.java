@@ -225,8 +225,13 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
                                                                                  boolean shouldLoadInMemory,
                                                                                  Option<SerializableFunctionUnchecked<String, String>> keyEncodingFn) {
     ValidationUtils.checkState(keyPrefixes instanceof HoodieListData, "getRecordsByKeyPrefixes only support HoodieListData at the moment");
+    // Apply key encoding if present
+    List<String> sortedKeyPrefixes = keyEncodingFn.isPresent()
+        ? new ArrayList<>(keyPrefixes.map(k -> keyEncodingFn.get().apply(k)).collectAsList())
+        : new ArrayList<>(keyPrefixes.collectAsList());
     // Sort the prefixes so that keys are looked up in order
-    List<String> sortedKeyPrefixes = new ArrayList<>(keyPrefixes.collectAsList());
+    // Sort must come after encoding.
+    Collections.sort(sortedKeyPrefixes);
 
     // NOTE: Since we partition records to a particular file-group by full key, we will have
     //       to scan all file-groups for all key-prefixes as each of these might contain some
@@ -235,21 +240,11 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         k -> HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metadataMetaClient, getMetadataFileSystemView(), partitionName));
     checkState(!partitionFileSlices.isEmpty(), "Number of file slices for partition " + partitionName + " should be > 0");
 
-    // Apply key encoding if present
-    if (keyEncodingFn.isPresent()) {
-      sortedKeyPrefixes = sortedKeyPrefixes.stream()
-          .map(k -> keyEncodingFn.get().apply(k))
-          .collect(Collectors.toList());
-    }
-    // Sort must come after encoding.
-    Collections.sort(sortedKeyPrefixes);
-
-    List<String> finalSortedKeyPrefixes = sortedKeyPrefixes;
     return (shouldLoadInMemory ? HoodieListData.lazy(partitionFileSlices) :
         getEngineContext().parallelize(partitionFileSlices))
         .flatMap(
             (SerializableFunction<FileSlice, Iterator<HoodieRecord<HoodieMetadataPayload>>>) fileSlice ->
-                getByKeyPrefixes(fileSlice, finalSortedKeyPrefixes, partitionName));
+                getByKeyPrefixes(fileSlice, sortedKeyPrefixes, partitionName));
   }
 
   private Iterator<HoodieRecord<HoodieMetadataPayload>> getByKeyPrefixes(FileSlice fileSlice,
@@ -269,12 +264,12 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   }
 
   private Predicate transformKeysToPredicate(List<String> keys) {
-    List<Expression> right = keys.stream().map(k -> Literal.from(k)).collect(Collectors.toList());
+    List<Expression> right = keys.stream().map(Literal::from).collect(Collectors.toList());
     return Predicates.in(null, right);
   }
 
   private Predicate transformKeyPrefixesToPredicate(List<String> keyPrefixes) {
-    List<Expression> right = keyPrefixes.stream().map(kp -> Literal.from(kp)).collect(Collectors.toList());
+    List<Expression> right = keyPrefixes.stream().map(Literal::from).collect(Collectors.toList());
     return Predicates.startsWithAny(null, right);
   }
 
