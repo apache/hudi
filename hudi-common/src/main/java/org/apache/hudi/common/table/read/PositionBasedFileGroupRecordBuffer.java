@@ -72,9 +72,8 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
                                             TypedProperties props,
                                             HoodieReadStats readStats,
                                             Option<String> orderingFieldName,
-                                            boolean enablePartialMerging,
                                             boolean emitDelete) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, orderingFieldName, enablePartialMerging, emitDelete);
+    super(readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, orderingFieldName, emitDelete);
     this.baseFileInstantTime = baseFileInstantTime;
   }
 
@@ -105,6 +104,14 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
         keys = new HashSet<>(keySpecOpt.get().getKeys());
       }
       isFullKey = keySpecOpt.get().isFullKey();
+    }
+
+    if (dataBlock.containsPartialUpdates() && !enablePartialMerging) {
+      // When a data block contains partial updates, subsequent record merging must always use
+      // partial merging.
+      enablePartialMerging = true;
+      bufferedRecordMerger = BufferedRecordMergerFactory.create(
+          readerContext, recordMergeMode, true, recordMerger, orderingFieldName, payloadClass, readerSchema, props);
     }
 
     Pair<Function<T, T>, Schema> schemaTransformerWithEvolvedSchema = getSchemaTransformerWithEvolvedSchema(dataBlock);

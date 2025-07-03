@@ -126,7 +126,7 @@ class TestSortedKeyBasedFileGroupRecordBuffer {
     HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class);
     RecordMergeMode recordMergeMode = RecordMergeMode.COMMIT_TIME_ORDERING;
     TypedProperties props = new TypedProperties();
-    return new SortedKeyBasedFileGroupRecordBuffer<>(mockReaderContext, mockMetaClient, recordMergeMode, props, readStats, Option.empty(), false, false);
+    return new SortedKeyBasedFileGroupRecordBuffer<>(mockReaderContext, mockMetaClient, recordMergeMode, props, readStats, Option.empty(), false);
   }
 
   private static List<TestRecord> getActualRecords(SortedKeyBasedFileGroupRecordBuffer<TestRecord> fileGroupRecordBuffer) throws IOException {

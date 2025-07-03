@@ -107,11 +107,6 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
     return baos;
   }
 
-  public boolean containsPartialUpdates() {
-    return getLogBlockHeader().containsKey(HeaderMetadataType.IS_PARTIAL)
-        && Boolean.parseBoolean(getLogBlockHeader().get(HeaderMetadataType.IS_PARTIAL));
-  }
-
   public DeleteRecord[] getRecordsToDelete() {
     try {
       if (recordsToDelete == null) {

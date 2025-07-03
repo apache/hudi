@@ -78,10 +78,10 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   protected ClosableIterator<T> baseFileIterator;
   protected Iterator<BufferedRecord<T>> logRecordIterator;
   protected T nextRecord;
-  protected final boolean enablePartialMerging;
+  protected boolean enablePartialMerging = false;
   protected InternalSchema internalSchema;
   protected HoodieTableMetaClient hoodieTableMetaClient;
-  private final BufferedRecordMerger<T> bufferedRecordMerger;
+  protected BufferedRecordMerger<T> bufferedRecordMerger;
   private long totalLogRecords = 0;
 
   protected FileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
@@ -90,7 +90,6 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
                                   TypedProperties props,
                                   HoodieReadStats readStats,
                                   Option<String> orderingFieldName,
-                                  boolean enablePartialMerging,
                                   boolean emitDelete) {
     this.readerContext = readerContext;
     this.readerSchema = AvroSchemaCache.intern(readerContext.getSchemaHandler().getRequiredSchema());
@@ -119,7 +118,6 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
     boolean isBitCaskDiskMapCompressionEnabled = props.getBoolean(DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(),
         DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue());
     this.readStats = readStats;
-    this.enablePartialMerging = enablePartialMerging;
     this.emitDelete = emitDelete;
     try {
       // Store merged records for all versions for this log file, set the in-memory footprint to maxInMemoryMapSize

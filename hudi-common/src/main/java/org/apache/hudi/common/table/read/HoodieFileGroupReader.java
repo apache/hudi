@@ -153,10 +153,9 @@ public final class HoodieFileGroupReader<T> implements Closeable {
           return Option.of(preCombineField);
         });
     this.readStats = new HoodieReadStats();
-    boolean enablePartialMerging = ConfigUtils.isPartialMergingEnabled(storage, logFiles, readerContext.getSchemaHandler().getRequiredSchema());
     this.recordBuffer = getRecordBuffer(readerContext, hoodieTableMetaClient,
         readerContext.getMergeMode(), props, hoodieBaseFileOption, this.logFiles.isEmpty(),
-        isSkipMerge, enablePartialMerging, shouldUseRecordPosition, readStats, emitDelete, sortOutput);
+        isSkipMerge, shouldUseRecordPosition, readStats, emitDelete, sortOutput);
     this.allowInflightInstants = allowInflightInstants;
   }
 
@@ -170,7 +169,6 @@ public final class HoodieFileGroupReader<T> implements Closeable {
                                                    Option<HoodieBaseFile> baseFileOption,
                                                    boolean hasNoLogFiles,
                                                    boolean isSkipMerge,
-                                                   boolean enablePartialMerging,
                                                    boolean shouldUseRecordPosition,
                                                    HoodieReadStats readStats,
                                                    boolean emitDelete,
@@ -179,16 +177,16 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       return null;
     } else if (isSkipMerge) {
       return new UnmergedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, enablePartialMerging, emitDelete);
+          readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, emitDelete);
     } else if (sortOutput) {
       return new SortedKeyBasedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, orderingFieldName, enablePartialMerging, emitDelete);
+          readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, orderingFieldName, emitDelete);
     } else if (shouldUseRecordPosition && baseFileOption.isPresent()) {
       return new PositionBasedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, recordMergeMode, baseFileOption.get().getCommitTime(), props, readStats, orderingFieldName, enablePartialMerging, emitDelete);
+          readerContext, hoodieTableMetaClient, recordMergeMode, baseFileOption.get().getCommitTime(), props, readStats, orderingFieldName, emitDelete);
     } else {
       return new KeyBasedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, orderingFieldName, enablePartialMerging, emitDelete);
+          readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, orderingFieldName, emitDelete);
     }
   }
 

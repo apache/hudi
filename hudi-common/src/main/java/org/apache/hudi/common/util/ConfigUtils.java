@@ -22,15 +22,9 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.PropertiesConfig;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.table.log.HoodieLogFormat;
-import org.apache.hudi.common.table.log.block.HoodieDataBlock;
-import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
-import org.apache.hudi.common.table.log.block.HoodieLogBlock;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.exception.TableNotFoundException;
@@ -38,7 +32,6 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
-import org.apache.avro.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -615,28 +608,6 @@ public class ConfigUtils {
     } else {
       throw new HoodieIOException("Could not load Hoodie properties from " + cfgPath);
     }
-  }
-
-  /**
-   * Check whether partial merging is enabled by reading block header in log file.
-   */
-  public static boolean isPartialMergingEnabled(HoodieStorage storage, List<HoodieLogFile> logFiles, Schema readerSchema) {
-    for (HoodieLogFile file: logFiles) {
-      try (HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(storage, new HoodieLogFile(file.getPath()), readerSchema, false)) {
-        while (reader.hasNext()) {
-          HoodieLogBlock block = reader.next();
-          // When a data block contains partial updates, subsequent record merging must always use partial merging.
-          if (block instanceof HoodieDataBlock) {
-            return ((HoodieDataBlock) block).containsPartialUpdates();
-          } else if (block instanceof HoodieDeleteBlock) {
-            return ((HoodieDeleteBlock) block).containsPartialUpdates();
-          }
-        }
-      } catch (IOException e) {
-        throw new HoodieException("Failed to read log file: " + file.getPath(), e);
-      }
-    }
-    return false;
   }
 
   public static void recoverIfNeeded(HoodieStorage storage, StoragePath cfgPath,

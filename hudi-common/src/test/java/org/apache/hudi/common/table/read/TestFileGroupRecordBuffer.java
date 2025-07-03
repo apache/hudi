@@ -296,7 +296,6 @@ class TestFileGroupRecordBuffer {
             props,
             readStats,
             Option.empty(),
-            false,
             false
         );
     when(readerContext.getValue(any(), any(), any())).thenReturn(null);
@@ -311,7 +310,6 @@ class TestFileGroupRecordBuffer {
             props,
             readStats,
             Option.empty(),
-            false,
             false
     );
     when(readerContext.getValue(any(), any(), any())).thenReturn("i");
@@ -335,7 +333,6 @@ class TestFileGroupRecordBuffer {
             props,
             readStats,
             Option.empty(),
-            false,
             false
         );
 
