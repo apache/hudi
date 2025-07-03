@@ -174,13 +174,13 @@ public class UpgradeDowngradeUtils {
       properties.putAll(config.getProps());
       // TimeGenerators are cached and re-used based on table base path. Since here we are changing the lock configurations, avoiding the cache use
       // for upgrade code block.
-      properties.put(HoodieTimeGeneratorConfig.TIME_GENERATOR_REUSE_ENABLE.key(),"false");
+      properties.put(HoodieTimeGeneratorConfig.TIME_GENERATOR_REUSE_ENABLE.key(), "false");
       // override w/ NoopLock Provider to avoid re-entrant locking. already upgrade is happening within the table level lock.
       // Below we do trigger rollback and compaction which might again try to acquire the lock. So, here we are explicitly overriding to
       // NoopLockProvider for just the upgrade code block.
       properties.put(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(), NoopLockProvider.class.getName());
       // if auto adjust it not disabled, chances that InProcessLockProvider will get overridden for single writer use-cases.
-      properties.put(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key(),"false");
+      properties.put(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key(), "false");
       HoodieWriteConfig rollbackWriteConfig = HoodieWriteConfig.newBuilder()
           .withProps(properties)
           .withWriteTableVersion(tableVersion.versionCode())
