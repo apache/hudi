@@ -29,6 +29,7 @@ import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.StoragePath;
 
@@ -267,6 +268,7 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
         .withIndexName(indexName)
         .withIndexType("column_stats")
         .withIndexFunction("identity")
+        .withVersion(HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.current(), indexName))
         .withSourceFields(new ArrayList<>(columnsMap.keySet()))
         .withIndexOptions(Collections.emptyMap())
         .build();
