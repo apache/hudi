@@ -30,68 +30,92 @@
 
 JIRA: HUDI-9560
 
+---
+
 # Motivation
 
-During read, currently Hudi supports three paths to merge records during runtime:
+During reads, Hudi currently supports three distinct mechanisms to merge records at runtime:
 
-* By APIs provided by `HoodieRecordPayload`
-* By various merger instances inherited from `HoodieRecordMerger`
-* Through merge mode, when the semantic is standard commit time or event time based
+* **Via APIs provided by `HoodieRecordPayload`** – Legacy interface enabling users to plug in merge logic.
+* **Through pluggable merger implementations inheriting from `HoodieRecordMerger`** – Newer and more composable approach introduced to separate merge semantics from payload definitions.
+* **By configuring merge modes such as `COMMIT_TIME_ORDERING` or `EVENT_TIME_ORDERING`** – Recommended declarative approach for most standard use cases.
 
-Unified APIs should be desired to simplify the Hudi repo. This RFC proposes to deprecate the usage of `HoodieRecordPayload` in Hudi.
+The `HoodieRecordPayload` abstraction was once necessary to encapsulate merge semantics, especially before Hudi had consistent event time handling, watermark metadata, and standard schema evolution support. However, over the years, the payload interface has become a limiting factor:
+
+* It’s tightly coupled with the write path, making it hard to optimize read/write independently.
+* Many of the behaviors (e.g., null handling, default values) are re-implemented inconsistently in various payloads.
+* It breaks composability — writers like HoodieStreamer, DeltaStreamer, and Spark SQL have different expectations about payload behavior.
+* It’s difficult to evolve and maintain, especially with increasing user needs (e.g., CDC ingestion, partial updates, deduplication).
+
+This RFC proposes to **deprecate the usage of `HoodieRecordPayload`**, encourage standard declarative merge modes, and move towards cleanly defined, testable `HoodieRecordMerger` implementations for custom logic. This aligns Hudi with modern lakehouse expectations and simplifies the ecosystem significantly.
 
 ---
 
 # Requirements
 
-* Standard merge logic is handled by setting `RecordMergeMode` (i.e., `COMMIT_TIME_ORDERING`, `EVENT_TIME_ORDERING`)
-* Partial merge logic is natively handled within each of the merge modes – it is **not** a separate merge mode
-* Custom merge logic (if absolutely needed) can be handled by merger classes inherited from `HoodieRecordMerger`
-* Our goal is to deprecate legacy payloads as much as possible
-* Several OSS users are using custom payloads, and these should continue to work
+* **Declarative merge semantics** are enforced via `RecordMergeMode`, which cover 90%+ of industry use cases.
+* **Partial update semantics** (null-handling, default-filling, etc.) are captured as part of merge mode behavior via `hoodie.write.partial.update.mode`.
+* **Custom merge logic**, when required, is implemented through `HoodieRecordMerger` instances and configured via table properties.
+* **Legacy payloads must still function**, especially for large installations using Hudi for multi-year tables (e.g., in fintech, retail, health tech).
+* **All writers (SQL, HoodieStreamer, Flink, Java client)** should migrate toward payload-less workflows, even if they need a transition layer.
+* **Minimal to no changes for readers** (Presto/Trino/Spark SQL) reading table version <9.
 
 ---
 
 ## Payload and Writer Usages Callout
 
-* Not all payloads can be used across all different writers: Spark SQL, Spark DataSource, and HoodieStreamer
-* `MySqlDebeziumAvroPayload` and `PostgresDebeziumAvroPayload` need a transformer and can only be used with HoodieStreamer
-* `ExpressionPayload` is only used for Spark SQL writes
+Payload-based write paths today are highly fragmented:
 
-**TL;DR:** Some payloads require a transformer, which only works with HoodieStreamer
+* **`MySqlDebeziumAvroPayload` / `PostgresDebeziumAvroPayload`** are often used with HoodieStreamer + Avro transformer. They assume CDC structure and extract metadata from nested fields. These aren’t portable to Spark SQL or Java client directly.
+* **`ExpressionPayload`** is used only within Spark SQL engine (e.g., `update(...) set ... where ...`). It doesn’t work in HoodieStreamer or bulk insert paths.
+* **Some payloads like `AWSDmsAvroPayload`** have table-specific logic for delete markers and are only functional with certain MoR writers.
+
+These inconsistencies lead to bugs, surprises during upgrades, and poor UX for new users. By eliminating the need for payloads, we can:
+
+* Decouple writers from tightly-coupled logic embedded in payloads.
+* Consolidate test coverage and semantics around well-defined `RecordMergeMode`s and `PartialUpdateMode`s.
+* Improve future features like lakehouse-wide CDC ingestion, Iceberg interoperability, and schema-less streaming.
 
 ---
 
 ## Partial Update Mode
 
-A new table config `hoodie.write.partial.update.mode=<value>` will control partial update behavior.
+The new table property `hoodie.write.partial.update.mode=<value>` now controls how missing columns are interpreted in a record. This enables flexible logic without writing a custom payload or merger.
 
-| Mode              | Description                                                             |
-| ----------------- | ----------------------------------------------------------------------- |
-| `KEEP_VALUES`     | (default) Use previous value if column is missing in the current record |
-| `FILL_DEFAULTS`   | Use schema default if column is missing in current record               |
-| `IGNORE_DEFAULTS` | Use previous value if current value equals schema default               |
-| `IGNORE_MARKERS`  | Use previous value if current column equals a marker value              |
+| Mode              | Description                                                     |
+| ----------------- | --------------------------------------------------------------- |
+| `KEEP_VALUES`     | (default) Use value from previous record if column is missing   |
+| `FILL_DEFAULTS`   | Fill missing columns with default values from Avro schema       |
+| `IGNORE_DEFAULTS` | Skip update if current record has schema default value          |
+| `IGNORE_MARKERS`  | Skip update if current record matches a configured marker value |
 
-**Note**: Marker value is set via `hoodie.write.partial.custom.marker` table property.
+This config supports:
+
+* Use cases like **Debezium/CDC**, where marker values signify unknown/unavailable fields.
+* **Sparse updates** from streaming systems like Kafka, Flink.
+* **Backward-compatible upserts** during schema evolution.
+
+This behavior is now decoupled from merge mode, and supports all ingestion sources uniformly.
 
 ---
 
 # Payload Migration Table
 
-| Payload Class                               | Merge Mode + Partial Update Mode           | Changes Proposed                                                                                   | Recommendations to User                                    | Behavior / Notes                                                                                                                         |
-| ------------------------------------------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `OverwriteWithLatestAvroPayload`            | `COMMIT_TIME_ORDERING`                     | Set merge mode and remove payload class config                                                     | None                                                       | Custom delete markers will start working. Migration doesn't retain exact old behavior to reduce complexity.                              |
-| `DefaultHoodieRecordPayload`                | `EVENT_TIME_ORDERING`                      | Set merge mode and remove payload class config                                                     | No action                                                  | No change in behavior                                                                                                                    |
-| `EventTimeAvroPayload`                      | `EVENT_TIME_ORDERING`                      | Set `hoodie.write.enable.event.time.watermark.in.commit.metadata=true`                             | Set config true if this payload is detected                | Only writers are impacted (post table version 9). Event time metadata is written for this payload, not for `DefaultHoodieRecordPayload`. |
-| `FirstValueAvroPayload`                     | N/A                                        | Stop support unless explicit merger class is defined                                               | Recommend users define their own merger class              | Deprecated. Previously returned old record if ordering values matched.                                                                   |
-| `OverwriteNonDefaultsWithLatestAvroPayload` | `COMMIT_TIME_ORDERING` + `IGNORE_DEFAULTS` | Set partial update mode                                                                            | Add partial update mode support                            | Default values compared using schema. Writers require table version 9.                                                                   |
-| `PartialUpdateAvroPayload`                  | `EVENT_TIME_ORDERING` + `KEEP_VALUES`      | Set partial update mode                                                                            | Add partial update mode support                            | Missing columns use values from the previous record                                                                                      |
-| `AWSDmsAvroPayload`                         | `COMMIT_TIME_ORDERING`                     | Serialize delete marker configs into table property                                                | Upgrade readers before writers                             | Fixes for MoR readers; writer support requires table version 9                                                                           |
-| `MySqlDebeziumAvroPayload`                  | `EVENT_TIME_ORDERING`                      | Create `LegacyMySqlDebeziumAvroMerger` for existing tables; new transformer for new tables         | Existing tables need no action; update transformer for new | Uses custom comparison logic for `_event_seq` like "002.3" vs "02.12" where string comparison fails but numeric parsing works            |
-| `PostgresDebeziumAvroPayload`               | `EVENT_TIME_ORDERING` + `IGNORE_MARKERS`   | Set `hoodie.write.partial.update.mode=IGNORE_MARKERS` and marker as `__debezium_unavailable_value` | Full compaction and rollback of pending commits required   | Readers backward-compatible; payload logic: if column == marker → use old value, else → new value                                        |
-| `ExpressionPayload`                         | N/A                                        | Leave unchanged                                                                                    | None                                                       | Under new workflow implementation; specific to Spark                                                                                     |
-| `HoodieMetadataPayload`                     | N/A                                        | Create and configure specific merger class                                                         | No action                                                  | Highly custom logic; treated separately                                                                                                  |
+*(Expanded with context on industry usage and reasoning)*
+
+| Payload Class                               | Merge Mode + Partial Update Mode           | Changes Proposed                                                                                                                                                                                                                                                                                   | Recommendations to User                                                                | Behavior / Notes                                                                                                 |
+| ------------------------------------------- | ------------------------------------------ |----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------|
+| `OverwriteWithLatestAvroPayload`            | `COMMIT_TIME_ORDERING`                     | Upgrade process sets right merge mode and add legacy payload class from table config.                                                                                                                                                                                                              | No action                                                                              | Most common for bulk ingest. Removing payload makes delete marker support consistent across COW/MOR.             |
+| `DefaultHoodieRecordPayload`                | `EVENT_TIME_ORDERING`                      | Upgrade process sets right merge mode and remove payload class from table config. Set `hoodie.write.enable.event.time.watermark.in.commit.metadata=true` to produce event time watermarks commit metadata.                                                                                         | No action                                                                              | Default since Hudi 0.5.0; behavior unchanged.                                                                    |
+| `EventTimeAvroPayload`                      | `EVENT_TIME_ORDERING`                      | Set merge mode and remove payload class config                                                                                                                                                                                                                                                     | No action                                                                              | Needed for out-of-order ingestion from Kafka, Pulsar, Flink. Deprecated in favor of `EVENT_TIME_ORDERING`.       |
+| `FirstValueAvroPayload`                     | N/A                                        | Stop support unless explicit merger class is defined                                                                                                                                                                                                                                               | Users should implement explicit merger logic                                           | Rarely used in OSS. If multiple rows have same ordering value, older wins. Use case: dedup based on first-write. |
+| `OverwriteNonDefaultsWithLatestAvroPayload` | `COMMIT_TIME_ORDERING` + `IGNORE_DEFAULTS` | Upgrade process automatically sets the partial update mode to table property. Add support for "Partial update mode" feature in general.                                                                                                                                                            | Upgrade Readers before writers. (Writer changes will only kick in for table version 9)                                    | Solves issues like empty strings treated as valid values. Cleaner than previous manual null checks.              |
+| `PartialUpdateAvroPayload`                  | `EVENT_TIME_ORDERING` + `KEEP_VALUES`      | Upgrade process automatically sets the partial update mode in table property. Add support for "Partial update mode" feature in general.                                                                                                                                                            | Upgrade Readers before writers. (Writer changes will only kick in for table version 9)                                                                 | Common in streaming UPSERT. Used in streaming CDC pipelines.                                                     |
+| `AWSDmsAvroPayload`                         | `COMMIT_TIME_ORDERING`                     | Upgrade process sets custom delete marker properties (hoodie.payload.delete.field = 'Op'  and hoodie.payload.delete.marker = 'D'  ) in table property                                                                                                                                              | Upgrade Readers before writers. (Writer changes will only kick in for table version 9) | Fixes delete handling in MoR read paths; used in AWS DMS-based ingestion.                                        |
+| `MySqlDebeziumAvroPayload`                  | `EVENT_TIME_ORDERING`                      | Add support for multi-ordering values feature in general. Upgrade automatically sets the merge mode in table property.                                                                                                                                                                             | For existing tables: update `hoodie.table.precombine.field` config for multiple ordering fields. | Important in banking/transactional ingestion.                                                                    |
+| `PostgresDebeziumAvroPayload`               | `EVENT_TIME_ORDERING` + `IGNORE_MARKERS`   | a.  Upgrade automatically sets `hoodie.write.partial.update.mode` to `IGNORE_MARKERS`  table property and b. Upgrade automatically sets `hoodie.write.partial.update.custom.marker`  as `__debezium_unavailable_value` c. Rollback any pending commits and trigger full compaction during upgrade. | No action                                                                              | CDC systems like Debezium mark unavailable fields. Full compaction is needed to migrate.                         |
+| `ExpressionPayload`                         | N/A                                        | Leave unchanged                                                                                                                                                                                                                                                                                    | No action                                                                              | Used in `Merge into (...) where` logic in SQL. Will eventually be rewritten into a merger.                       |
+| `HoodieMetadataPayload`                     | N/A                                        | An explicit merger class is provided during the upgrade                                                                                                                                                                                                                                            | No action                                                                              | Not impacted. Handles metadata table compactions. Merges handled explicitly for performance and correctness.     |
 
 ---
 
@@ -99,19 +123,35 @@ A new table config `hoodie.write.partial.update.mode=<value>` will control parti
 
 ### How do we support old Hudi version readers?
 
-Retain old table properties including payload class configs and **also** add new merge mode properties.
-This ensures:
+To maintain compatibility with older table versions and readers:
 
-* Old readers (e.g., Trino/Presto) that read table version 8 will continue to work
-* New readers will switch to merge mode-based reads (table version 9)
+* Writers will retain the existing `hoodie.payload.class` property in metadata
+* New properties (`hoodie.write.partial.update.mode`) will be added
+* Table version will be bumped to 9 only when necessary (e.g., watermark handling, partial update logic)
+
+This enables:
+
+* **Backward compatibility** with Presto, Hive, Trino, Spark <3.2 etc.
+* Smooth upgrade path for large enterprises with dozens of readers
+* Incremental migration and testing at table-level granularity
 
 ---
 
 # Open Items
 
-* Should writers fully abandon mergers for standard merge modes?
+* **Should writers fully abandon mergers for standard merge modes?**
 
-    * Only `CopyOnWrite` merge handle may need update
-    * Other paths either don’t need merger or already use `FileGroupReader`
+  * Recommendation: Yes, for standard use cases like bulk insert, streaming UPSERT, and log compaction
+  * Only fallback to `HoodieRecordMerger` when advanced use cases are needed (e.g., custom dedup logic, schema-aware merge with metadata)
+  * `CopyOnWriteMergeHandle` may still need a light wrapper to resolve nulls/defaults during record rewrite
+
+* **Do we need to retain payload interface for Flink integration?**
+
+  * Flink support is evolving rapidly, and migrating to merger-based design aligns better with unified data plane
+  * Current Flink connectors may require a thin compatibility layer
+
+* **Should `ExpressionPayload` also be migrated?**
+
+  * Likely in a separate proposal. Needs a compiler step to translate SQL expressions to merge plan, not inline payload code.
 
 ---
