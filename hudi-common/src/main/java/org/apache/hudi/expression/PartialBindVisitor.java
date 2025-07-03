@@ -133,6 +133,24 @@ public class PartialBindVisitor extends BindVisitor {
       }
     }
 
+    if (predicate instanceof Predicates.SecondaryIndexKeyMatcher) {
+      Predicates.SecondaryIndexKeyMatcher v2Matcher = (Predicates.SecondaryIndexKeyMatcher) predicate;
+      Expression left = v2Matcher.getLeft().accept(this);
+      if (left == null) {
+        return alwaysTrue();
+      } else {
+        List<Expression> right = v2Matcher.getRightChildren().stream()
+            .map(expr -> expr.accept(this))
+            .filter(Objects::nonNull)
+            .collect(Collectors.toList());
+        if (right.isEmpty()) {
+          return alwaysTrue();
+        }
+
+        return Predicates.secondaryIndexKeyMatcher(left, right);
+      }
+    }
+
     if (predicate instanceof Predicates.StringContains) {
       Predicates.StringContains contains = (Predicates.StringContains) predicate;
       Expression left = contains.getLeft().accept(this);

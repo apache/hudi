@@ -146,7 +146,8 @@ public class HoodieWriteConfig extends HoodieConfig {
       .defaultValue(HoodieTableVersion.current().versionCode())
       .withValidValues(
           String.valueOf(HoodieTableVersion.SIX.versionCode()),
-          String.valueOf(HoodieTableVersion.current().versionCode())
+          String.valueOf(HoodieTableVersion.EIGHT.versionCode()),
+          String.valueOf(HoodieTableVersion.NINE.versionCode())
       )
       .sinceVersion("1.0.0")
       .withDocumentation("The table version this writer is storing the table in. This should match the current table version.");

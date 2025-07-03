@@ -139,4 +139,10 @@ public class HoodieAvroOrcReader extends HoodieAvroFileReader {
                                                                               Schema readerSchema) {
     throw new UnsupportedOperationException("Not supported operation: getIndexedRecordsByKeyPrefixIterator");
   }
+
+  @Override
+  public ClosableIterator<IndexedRecord> getIndexedRecordsBySecondaryIndexKeyMatcherIterator(List<String> sortedLookupKeys,
+                                                                                             Schema readerSchema) {
+    throw new UnsupportedOperationException("Not supported operation: getIndexedRecordsBySecondaryIndexKeyMatcherIterator");
+  }
 }

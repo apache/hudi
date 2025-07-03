@@ -19,6 +19,7 @@
 package org.apache.hudi.expression;
 
 import org.apache.hudi.internal.schema.Type;
+import org.apache.hudi.metadata.SecondaryIndexKeyUtils;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -91,6 +92,10 @@ public class Predicates {
 
   public static StringStartsWithAny startsWithAny(Expression left, List<Expression> right) {
     return new StringStartsWithAny(left, right);
+  }
+
+  public static SecondaryIndexKeyMatcher secondaryIndexKeyMatcher(Expression left, List<Expression> right) {
+    return new SecondaryIndexKeyMatcher(left, right);
   }
 
   public static class TrueExpression extends LeafExpression implements Predicate {
@@ -452,6 +457,80 @@ public class Predicates {
 
     public List<Expression> getRightChildren() {
       return right;
+    }
+  }
+
+  public static class SecondaryIndexKeyMatcher implements Predicate {
+    private final Operator operator;
+    private final Expression left;
+    private final List<Expression> right;
+
+    public SecondaryIndexKeyMatcher(Expression left, List<Expression> right) {
+      this.left = left;
+      this.operator = Operator.SECONDARY_INDEX_KEY_MATCH;
+      this.right = right;
+    }
+
+    @Override
+    public List<Expression> getChildren() {
+      List<Expression> children = new ArrayList<>();
+      children.add(left);
+      children.addAll(right);
+      return children;
+    }
+
+    @Override
+    public Operator getOperator() {
+      return operator;
+    }
+
+    @Override
+    public Object eval(StructLike data) {
+      // If right list is empty, it should match everything (like an empty prefix)
+      if (right.isEmpty()) {
+        return true;
+      }
+      // For SecondaryIndexKeyMatcher, we use a hybrid approach:
+      // - For basic cases, we use simple prefix matching
+      // - For secondary index v2 specific cases, we use the old key matcher logic
+      if (left == null) {
+        return false;
+      }
+      
+      String recordKey = (String) left.eval(data);
+      if (recordKey == null) {
+        return false;
+      }
+      
+      for (Expression e : right) {
+        String lookupKey = (String) e.eval(null);
+        if (lookupKey == null) {
+          continue;
+        }
+        
+        // Check if this is a secondary index v2 specific case (contains $ or \)
+        if (matchesSecondaryIndexV2Key(recordKey, lookupKey)) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    private boolean matchesSecondaryIndexV2Key(String recordKey, String lookupKey) {
+      return SecondaryIndexKeyUtils.getUnescapedSecondaryKeyFromSecondaryIndexKey(recordKey).equals(lookupKey);
+    }
+
+    public List<Expression> getRightChildren() {
+      return right;
+    }
+
+    @Override
+    public String toString() {
+      return (left != null ? left.toString() : "null") + " SECONDARY_INDEX_KEY_MATCH " + right.toString();
+    }
+
+    public Expression getLeft() {
+      return left;
     }
   }
 }

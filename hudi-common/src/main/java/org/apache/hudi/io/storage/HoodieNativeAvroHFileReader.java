@@ -69,6 +69,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 import static org.apache.hudi.io.hfile.HFileUtils.isPrefixOfKey;
+import static org.apache.hudi.metadata.SecondaryIndexKeyUtils.getUnescapedSecondaryKeyFromSecondaryIndexKey;
 
 /**
  * An implementation of {@link HoodieAvroHFileReaderImplBase} using native {@link HFileReader}.
@@ -238,6 +239,15 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
   }
 
   @Override
+  public ClosableIterator<HoodieRecord<IndexedRecord>> getRecordsBySecondaryIndexKeyMatcherIterator(
+      List<String> sortedLookupKeys, Schema schema) throws IOException {
+    HFileReader reader = newHFileReader();
+    ClosableIterator<IndexedRecord> iterator =
+        new RecordBySecondaryIndexKeyMatcherIterator(reader, sortedLookupKeys, getSchema(), schema);
+    return new CloseableMappingIterator<>(iterator, data -> unsafeCast(new HoodieAvroIndexedRecord(data)));
+  }
+
+  @Override
   public boolean supportKeyPredicate() {
     return true;
   }
@@ -268,6 +278,12 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
     if (keyFilterOpt.isPresent()
         && keyFilterOpt.get().getOperator().equals(Expression.Operator.STARTS_WITH)) {
       List<Expression> children = ((Predicates.StringStartsWithAny) keyFilterOpt.get()).getRightChildren();
+      keyPrefixes = children.stream()
+          .map(e -> (String) e.eval(null)).collect(Collectors.toList());
+    } else if (keyFilterOpt.isPresent()
+        && keyFilterOpt.get().getOperator().equals(Expression.Operator.SECONDARY_INDEX_KEY_MATCH)) {
+      // Secondary index key match is a special type of prefix matching. It match prefix with a certain suffix.
+      List<Expression> children = ((Predicates.SecondaryIndexKeyMatcher) keyFilterOpt.get()).getRightChildren();
       keyPrefixes = children.stream()
           .map(e -> (String) e.eval(null)).collect(Collectors.toList());
     }
@@ -349,6 +365,13 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
                                                                               Schema readerSchema) throws IOException {
     HFileReader reader = newHFileReader();
     return new RecordByKeyPrefixIterator(reader, sortedKeyPrefixes, getSchema(), readerSchema);
+  }
+
+  @Override
+  public ClosableIterator<IndexedRecord> getIndexedRecordsBySecondaryIndexKeyMatcherIterator(List<String> sortedLookupKeys,
+                                                                                             Schema readerSchema) throws IOException {
+    HFileReader reader = newHFileReader();
+    return new RecordBySecondaryIndexKeyMatcherIterator(reader, sortedLookupKeys, getSchema(), readerSchema);
   }
 
   private static class RecordIterator implements ClosableIterator<IndexedRecord> {
@@ -477,26 +500,64 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
     }
   }
 
-  private static class RecordByKeyPrefixIterator implements ClosableIterator<IndexedRecord> {
-    private final Iterator<String> sortedKeyPrefixesIterator;
+  // Strategy interface for key matching
+  private interface KeyMatcher {
+    // Once hfile seek the right data block, compare keys to see if there is a match against the key
+    // being looked up.
+    boolean matches(String recordKey, String lookupKey);
+
+    // Get the key used for seek in hfile. It is not necessarily the key we look up.
+    UTF8StringKey getSeekKey(String lookupKey);
+  }
+
+  // Key prefix matcher strategy
+  private static class KeyPrefixMatcher implements KeyMatcher {
+    @Override
+    public boolean matches(String recordKey, String lookupKey) {
+      return recordKey.startsWith(lookupKey);
+    }
+
+    @Override
+    public UTF8StringKey getSeekKey(String lookupKey) {
+      return new UTF8StringKey(lookupKey);
+    }
+  }
+
+  // Secondary index V2 key matcher strategy
+  private static class SecondaryIndexKeyMatcher implements KeyMatcher {
+    @Override
+    public boolean matches(String recordKey, String lookupKey) {
+      return getUnescapedSecondaryKeyFromSecondaryIndexKey(recordKey).equals(lookupKey);
+    }
+
+    @Override
+    public UTF8StringKey getSeekKey(String lookupKey) {
+      // For secondary index key matcher, we match prefix of lookupKey plus the separator.
+      return new UTF8StringKey(lookupKey + '$');
+    }
+  }
+
+  // Common base iterator class to reduce duplication
+  private static class RecordByKeyMatcherIterator implements ClosableIterator<IndexedRecord> {
+    private final Iterator<String> sortedLookupKeysIterator;
     private Iterator<IndexedRecord> recordsIterator;
 
     private final HFileReader reader;
-
     private final Schema writerSchema;
     private final Schema readerSchema;
+    private final KeyMatcher keyMatcher;
 
     private IndexedRecord next = null;
-    private boolean isFirstKeyPrefix = true;
+    private boolean isFirstLookupKey = true;
 
-    RecordByKeyPrefixIterator(HFileReader reader, List<String> sortedKeyPrefixes,
-                              Schema writerSchema, Schema readerSchema) throws IOException {
-      this.sortedKeyPrefixesIterator = sortedKeyPrefixes.iterator();
+    RecordByKeyMatcherIterator(HFileReader reader, List<String> sortedLookupKeys,
+                               Schema writerSchema, Schema readerSchema, KeyMatcher keyMatcher) throws IOException {
+      this.sortedLookupKeysIterator = sortedLookupKeys.iterator();
       this.reader = reader;
       this.reader.seekTo(); // position at the beginning of the file
-
       this.writerSchema = writerSchema;
       this.readerSchema = readerSchema;
+      this.keyMatcher = keyMatcher;
     }
 
     @Override
@@ -509,10 +570,10 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
           } else if (recordsIterator != null && recordsIterator.hasNext()) {
             next = recordsIterator.next();
             return true;
-          } else if (sortedKeyPrefixesIterator.hasNext()) {
-            recordsIterator = getRecordByKeyPrefixIteratorInternal(
-                reader, isFirstKeyPrefix, sortedKeyPrefixesIterator.next(), writerSchema, readerSchema);
-            isFirstKeyPrefix = false;
+          } else if (sortedLookupKeysIterator.hasNext()) {
+            recordsIterator = getRecordByKeyMatcherIteratorInternal(
+                reader, isFirstLookupKey, sortedLookupKeysIterator.next(), writerSchema, readerSchema, keyMatcher);
+            isFirstLookupKey = false;
           } else {
             return false;
           }
@@ -538,29 +599,27 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
       }
     }
 
-    private static Iterator<IndexedRecord> getRecordByKeyPrefixIteratorInternal(HFileReader reader,
-                                                                                boolean isFirstKeyPrefix,
-                                                                                String keyPrefix,
-                                                                                Schema writerSchema,
-                                                                                Schema readerSchema)
-        throws IOException {
-      UTF8StringKey lookUpKeyPrefix = new UTF8StringKey(keyPrefix);
-      if (!isFirstKeyPrefix) {
-        // For the subsequent key prefixes after the first, do special handling to
+    private static Iterator<IndexedRecord> getRecordByKeyMatcherIteratorInternal(
+        HFileReader reader, boolean isFirstLookupKey, String lookupKey,
+        Schema writerSchema, Schema readerSchema, KeyMatcher keyMatcher) throws IOException {
+      UTF8StringKey seekKey = keyMatcher.getSeekKey(lookupKey);
+
+      if (!isFirstLookupKey) {
+        // For the subsequent lookup keys after the first, do special handling to
         // avoid potential backward seeks.
         Option<KeyValue> keyValue = reader.getKeyValue();
         if (!keyValue.isPresent()) {
           return Collections.emptyIterator();
         }
-        if (!isPrefixOfKey(lookUpKeyPrefix, keyValue.get().getKey())) {
-          // If the key at current cursor does not start with the lookup prefix.
-          if (lookUpKeyPrefix.compareTo(keyValue.get().getKey()) < 0) {
-            // Prefix is less than the current key, no key found for the prefix.
+        if (!isPrefixOfKey(seekKey, keyValue.get().getKey())) {
+          // If the key at current cursor does not start with the lookup key.
+          if (seekKey.compareTo(keyValue.get().getKey()) < 0) {
+            // Lookup key is less than the current key, no key found for the lookup key.
             return Collections.emptyIterator();
           } else {
-            // Prefix is greater than the current key. Call seekTo to move the cursor.
-            if (reader.seekTo(lookUpKeyPrefix) >= HFileReader.SEEK_TO_IN_RANGE) {
-              // Try moving to next entry, matching the prefix key; if we're at the EOF,
+            // Lookup key is greater than the current key. Call seekTo to move the cursor.
+            if (reader.seekTo(seekKey) >= HFileReader.SEEK_TO_IN_RANGE) {
+              // Try moving to next entry, matching the lookup key; if we're at the EOF,
               // `next()` will return false
               if (!reader.next()) {
                 return Collections.emptyIterator();
@@ -568,12 +627,12 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
             }
           }
         }
-        // If the key current cursor starts with the lookup prefix,
-        // do not call seekTo. Continue with reading the keys with the prefix.
+        // If the key current cursor starts with the lookup key,
+        // do not call seekTo. Continue with reading the keys with the lookup key.
       } else {
-        // For the first key prefix, directly do seekTo.
-        if (reader.seekTo(lookUpKeyPrefix) >= HFileReader.SEEK_TO_IN_RANGE) {
-          // Try moving to next entry, matching the prefix key; if we're at the EOF,
+        // For the first lookup key, directly do seekTo.
+        if (reader.seekTo(seekKey) >= HFileReader.SEEK_TO_IN_RANGE) {
+          // Try moving to next entry, matching the lookup key; if we're at the EOF,
           // `next()` will return false
           if (!reader.next()) {
             return Collections.emptyIterator();
@@ -581,7 +640,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
         }
       }
 
-      class KeyPrefixIterator implements Iterator<IndexedRecord> {
+      class KeyMatcherIterator implements Iterator<IndexedRecord> {
         private IndexedRecord next = null;
         private boolean eof = false;
 
@@ -596,8 +655,10 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
           // Extract the byte value before releasing the lock since we cannot hold on to the returned cell afterwards
           try {
             KeyValue keyValue = reader.getKeyValue().get();
-            // Check whether we're still reading records corresponding to the key-prefix
-            if (!isPrefixOfKey(lookUpKeyPrefix, keyValue.getKey())) {
+            String recordKey = keyValue.getKey().getContentInString();
+            
+            // Check whether we're still reading records corresponding to the lookup key
+            if (!keyMatcher.matches(recordKey, lookupKey)) {
               return false;
             }
             byte[] bytes = keyValue.getBytes();
@@ -623,7 +684,56 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
         }
       }
 
-      return new KeyPrefixIterator();
+      return new KeyMatcherIterator();
+    }
+  }
+
+  private static class RecordByKeyPrefixIterator implements ClosableIterator<IndexedRecord> {
+    private final RecordByKeyMatcherIterator delegate;
+
+    RecordByKeyPrefixIterator(HFileReader reader, List<String> sortedKeyPrefixes,
+                              Schema writerSchema, Schema readerSchema) throws IOException {
+      this.delegate = new RecordByKeyMatcherIterator(reader, sortedKeyPrefixes, writerSchema, readerSchema, new KeyPrefixMatcher());
+    }
+
+    @Override
+    public boolean hasNext() {
+      return delegate.hasNext();
+    }
+
+    @Override
+    public IndexedRecord next() {
+      return delegate.next();
+    }
+
+    @Override
+    public void close() {
+      delegate.close();
+    }
+  }
+
+  private static class RecordBySecondaryIndexKeyMatcherIterator implements ClosableIterator<IndexedRecord> {
+    private final RecordByKeyMatcherIterator delegate;
+
+    RecordBySecondaryIndexKeyMatcherIterator(HFileReader reader, List<String> sortedLookupKeys,
+                                             Schema writerSchema, Schema readerSchema) throws IOException {
+      this.delegate = new RecordByKeyMatcherIterator(reader, sortedLookupKeys, writerSchema, readerSchema, new SecondaryIndexKeyMatcher());
+    }
+
+    @Override
+    public boolean hasNext() {
+      return delegate.hasNext();
+    }
+
+    @Override
+    public IndexedRecord next() {
+      return delegate.next();
+    }
+
+    @Override
+    public void close() {
+      delegate.close();
     }
   }
 }
+
