@@ -82,6 +82,7 @@ import static org.apache.hudi.keygen.constant.KeyGeneratorOptions.KEYGENERATOR_C
 
 public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T> {
   private static final String PARTIAL_UPDATE_CUSTOM_MARKER = "hoodie.write.partial.update.custom.marker";
+  static final String EVENT_TIME_WATERMARK_METADATA_ENABLED = "hoodie.write.event.time.watermark.metadata.enabled";
   protected final HoodieReaderContext<T> readerContext;
   protected final Schema readerSchema;
   protected final Option<String> orderingFieldName;
@@ -156,7 +157,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
     this.shouldCheckBuiltInDeleteMarker =
         readerContext.getSchemaHandler().hasBuiltInDelete();
     this.shouldKeepEventTimeMetadata = shouldKeepEventTimeMetadata(props);
-    this.shouldKeepConsistentLogicalTimestamp = shouldKeepEventTimeMetadata(props);
+    this.shouldKeepConsistentLogicalTimestamp = shouldKeepConsistentLogicalTimestamp(props);
     this.partialUpdateProperties = parsePartialUpdateProperties(props);
     if (shouldKeepEventTimeMetadata) {
       this.eventTimeFieldOpt = Option.ofNullable(
@@ -455,7 +456,11 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   }
 
   static boolean shouldKeepEventTimeMetadata(TypedProperties props) {
-    return props.getBoolean("hoodie.write.event.time.watermark.metadata.enabled");
+    String enabled = props.getProperty(EVENT_TIME_WATERMARK_METADATA_ENABLED);
+    if (enabled == null) {
+      return false;
+    }
+    return Boolean.parseBoolean(enabled);
   }
 
   /**
@@ -680,7 +685,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
    * Extract and store event_time value for the record, which should be stored
    * to WriteStatus. This function should be only called when merge base record and log record.
    */
-  private void extractAndStoreEventTimeIfNeeded(BufferedRecord<T> newRecord) {
+  void extractAndStoreEventTimeIfNeeded(BufferedRecord<T> newRecord) {
     if (shouldKeepEventTimeMetadata) {
       Option<Object> eventTimeOpt = readerContext.getEventTime(
           newRecord.getRecord(), readerSchema, eventTimeFieldOpt);

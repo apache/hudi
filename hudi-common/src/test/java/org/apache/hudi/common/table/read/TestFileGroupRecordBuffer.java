@@ -19,9 +19,11 @@
 
 package org.apache.hudi.common.table.read;
 
+import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.engine.ReaderContextTypeHandler;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -37,11 +39,13 @@ import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -56,7 +60,9 @@ import java.util.Map;
 
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
+import static org.apache.hudi.common.model.HoodiePayloadProps.PAYLOAD_EVENT_TIME_FIELD_PROP_KEY;
 import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
+import static org.apache.hudi.common.table.read.FileGroupRecordBuffer.EVENT_TIME_WATERMARK_METADATA_ENABLED;
 import static org.apache.hudi.common.table.read.FileGroupRecordBuffer.getOrderingValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -64,7 +70,11 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -371,5 +381,146 @@ class TestFileGroupRecordBuffer {
     deleteRecord = records.get("54321");
     assertNull(deleteRecord.getRecordKey(), "The record key metadata field is missing");
     assertEquals(1, deleteRecord.getOrderingValue());
+  }
+
+  @Test
+  void testShouldKeepEventTimeMetadataWithoutPropertySet() {
+    TypedProperties props = new TypedProperties();
+    assertFalse(FileGroupRecordBuffer.shouldKeepEventTimeMetadata(props));
+  }
+
+  @Test
+  void testShouldKeepEventTimeMetadataWithPropertySetFalse() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(EVENT_TIME_WATERMARK_METADATA_ENABLED, "false");
+    assertFalse(FileGroupRecordBuffer.shouldKeepEventTimeMetadata(props));
+  }
+
+  @Test
+  void testShouldKeepEventTimeMetadataWithPropertySetTrue() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(EVENT_TIME_WATERMARK_METADATA_ENABLED, "true");
+    assertTrue(FileGroupRecordBuffer.shouldKeepEventTimeMetadata(props));
+  }
+
+  @Test
+  void testPropertySetToTrue() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(
+        KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(), "true");
+
+    boolean result = FileGroupRecordBuffer.shouldKeepConsistentLogicalTimestamp(props);
+    assertTrue(result);
+  }
+
+  @Test
+  void testPropertySetToFalse() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(
+        KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(), "false");
+
+    boolean result = FileGroupRecordBuffer.shouldKeepConsistentLogicalTimestamp(props);
+    assertFalse(result);
+  }
+
+  @Test
+  void testPropertyMissingUsesDefault() {
+    TypedProperties props = new TypedProperties();
+
+    boolean result = FileGroupRecordBuffer.shouldKeepConsistentLogicalTimestamp(props);
+    boolean expected = Boolean.parseBoolean(
+        KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue());
+
+    assertEquals(expected, result);
+  }
+
+  @Test
+  void testPropertySetToInvalidBooleanFallsBackToFalse() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(
+        KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(), "notABoolean");
+
+    boolean result = FileGroupRecordBuffer.shouldKeepConsistentLogicalTimestamp(props);
+    assertFalse(result);
+  }
+
+  @Test
+  public void testEventTimeExtractedAndStored() {
+    String customDeleteKey = "op";
+    String customDeleteValue = "d";
+    when(schemaHandler.getCustomDeleteMarkerKeyValue())
+        .thenReturn(Option.of(Pair.of(customDeleteKey, customDeleteValue)));
+    when(schemaHandler.hasBuiltInDelete()).thenReturn(true);
+    ReaderContextTypeHandler typeHandler = mock(ReaderContextTypeHandler.class);
+    BufferedRecord newRecord = mock(BufferedRecord.class);
+    IndexedRecord record = mock(IndexedRecord.class);
+    schema = mock(Schema.class);
+    Schema.Field schemaField = mock(Schema.Field.class);
+
+    props.setProperty(EVENT_TIME_WATERMARK_METADATA_ENABLED, "true");
+    props.setProperty(PAYLOAD_EVENT_TIME_FIELD_PROP_KEY, "ts");
+    AvroSchemaCache.intern(schema);
+    KeyBasedFileGroupRecordBuffer<IndexedRecord> keyBasedBuffer =
+        new KeyBasedFileGroupRecordBuffer<IndexedRecord>(
+            readerContext,
+            hoodieTableMetaClient,
+            RecordMergeMode.COMMIT_TIME_ORDERING,
+            PartialUpdateMode.NONE,
+            props,
+            readStats,
+            Option.empty(),
+            false
+        );
+    Object rawEventTime = 12345L;
+    Object convertedEventTime = "2024-01-01T00:00:00Z";
+    when(newRecord.getRecord()).thenReturn(record);
+    when(readerContext.getEventTime(any(), any(), any())).thenReturn(Option.of(rawEventTime));
+    when(schema.getField("ts")).thenReturn(schemaField);
+    when(schemaField.schema()).thenReturn(mock(Schema.class));
+    when(readerContext.getTypeHandler()).thenReturn(typeHandler);
+    when(typeHandler.convertValueForAvroLogicalTypes(any(), eq(rawEventTime), eq(true)))
+        .thenReturn(convertedEventTime);
+    keyBasedBuffer.extractAndStoreEventTimeIfNeeded(newRecord);
+    verify(newRecord).setEventTime(any());
+  }
+
+  @Test
+  public void testEventTimeNotSetIfMetadataDisabled() {
+    String customDeleteKey = "op";
+    String customDeleteValue = "d";
+    when(schemaHandler.getCustomDeleteMarkerKeyValue())
+        .thenReturn(Option.of(Pair.of(customDeleteKey, customDeleteValue)));
+    when(schemaHandler.hasBuiltInDelete()).thenReturn(true);
+    ReaderContextTypeHandler typeHandler = mock(ReaderContextTypeHandler.class);
+    BufferedRecord newRecord = mock(BufferedRecord.class);
+    IndexedRecord record = mock(IndexedRecord.class);
+    schema = mock(Schema.class);
+    Schema.Field schemaField = mock(Schema.Field.class);
+
+    props.setProperty(PAYLOAD_EVENT_TIME_FIELD_PROP_KEY, "ts");
+    AvroSchemaCache.intern(schema);
+    KeyBasedFileGroupRecordBuffer<IndexedRecord> keyBasedBuffer =
+        new KeyBasedFileGroupRecordBuffer<IndexedRecord>(
+            readerContext,
+            hoodieTableMetaClient,
+            RecordMergeMode.COMMIT_TIME_ORDERING,
+            PartialUpdateMode.NONE,
+            props,
+            readStats,
+            Option.empty(),
+            false
+        );
+
+    Object rawEventTime = 12345L;
+    Object convertedEventTime = "2024-01-01T00:00:00Z";
+    when(newRecord.getRecord()).thenReturn(record);
+    when(readerContext.getEventTime(any(), any(), any())).thenReturn(Option.of(rawEventTime));
+    when(schema.getField("ts")).thenReturn(schemaField);
+    when(schemaField.schema()).thenReturn(mock(Schema.class));
+    when(readerContext.getTypeHandler()).thenReturn(typeHandler);
+    when(typeHandler.convertValueForAvroLogicalTypes(any(), eq(rawEventTime), eq(true)))
+        .thenReturn(convertedEventTime);
+    keyBasedBuffer.extractAndStoreEventTimeIfNeeded(newRecord);
+    verify(newRecord, never()).setEventTime(anyString());
   }
 }
