@@ -29,7 +29,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_PROPERTIES;
 
 public class NineToEightDowngradeHandler implements DowngradeHandler {
@@ -41,8 +40,6 @@ public class NineToEightDowngradeHandler implements DowngradeHandler {
                                                                            SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     Map<ConfigProperty, String> propertiesToAdd = new HashMap<>();
     List<ConfigProperty> propertiesToRemove = new ArrayList<>();
-
-    propertiesToRemove.add(PARTIAL_UPDATE_MODE);
     propertiesToRemove.add(PARTIAL_UPDATE_PROPERTIES);
     return Pair.of(propertiesToAdd, propertiesToRemove);
   }
