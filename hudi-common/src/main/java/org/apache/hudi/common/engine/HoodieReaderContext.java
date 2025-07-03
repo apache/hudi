@@ -27,7 +27,6 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.serialization.CustomSerializer;
 import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
@@ -94,6 +93,7 @@ public abstract class HoodieReaderContext<T> {
   protected String partitionPath;
   protected Option<InstantRange> instantRangeOpt = Option.empty();
   private RecordMergeMode mergeMode;
+  protected ReaderContextTypeHandler typeHandler;
 
   // for encoding and decoding schemas to the spillable map
   private final LocalAvroSchemaCache localAvroSchemaCache = LocalAvroSchemaCache.getInstance();
@@ -109,6 +109,7 @@ public abstract class HoodieReaderContext<T> {
     this.baseFileFormat = tableConfig.getBaseFileFormat();
     this.instantRangeOpt = instantRangeOpt;
     this.keyFilterOpt = keyFilterOpt;
+    this.typeHandler = new ReaderContextTypeHandler();
   }
 
   // Getter and Setter for schemaHandler
@@ -203,6 +204,10 @@ public abstract class HoodieReaderContext<T> {
     return new DefaultSerializer<>();
   }
 
+  public ReaderContextTypeHandler getTypeHandler() {
+    return typeHandler;
+  }
+
   /**
    * Gets the record iterator based on the type of engine-specific record representation from the
    * file.
@@ -280,15 +285,11 @@ public abstract class HoodieReaderContext<T> {
   public void initRecordMerger(TypedProperties properties) {
     RecordMergeMode recordMergeMode = tableConfig.getRecordMergeMode();
     String mergeStrategyId = tableConfig.getRecordMergeStrategyId();
-    if (!tableConfig.getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
-      Triple<RecordMergeMode, String, String> triple = HoodieTableConfig.inferCorrectMergingBehavior(
-          recordMergeMode, tableConfig.getPayloadClass(),
-          mergeStrategyId, null, tableConfig.getTableVersion());
-      recordMergeMode = triple.getLeft();
-      mergeStrategyId = triple.getRight();
-    }
-    this.mergeMode = recordMergeMode;
-    this.recordMerger = getRecordMerger(recordMergeMode, mergeStrategyId,
+    Triple<RecordMergeMode, String, String> triple = HoodieTableConfig.inferCorrectMergingBehavior(
+        recordMergeMode, tableConfig.getPayloadClass(),
+        mergeStrategyId, null, tableConfig.getTableVersion());
+    this.mergeMode = triple.getLeft();
+    this.recordMerger = getRecordMerger(triple.getLeft(), triple.getRight(),
         properties.getString(RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY,
             properties.getString(RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY, "")));
   }
@@ -316,19 +317,6 @@ public abstract class HoodieReaderContext<T> {
    * @return The value for the target metadata field.
    */
   public abstract String getMetaFieldValue(T record, int pos);
-
-  /**
-   * Cast to Java boolean value.
-   * If the object is not compatible with boolean type, throws.
-   */
-  public boolean castToBoolean(Object value) {
-    if (value instanceof Boolean) {
-      return (boolean) value;
-    } else {
-      throw new IllegalArgumentException(
-          "Input value type " + value.getClass() + ", cannot be cast to boolean");
-    }
-  }
 
   /**
    * Get the {@link InstantRange} filter.
@@ -409,6 +397,15 @@ public abstract class HoodieReaderContext<T> {
    * @return A new instance of {@link HoodieRecord}.
    */
   public abstract HoodieRecord<T> constructHoodieRecord(BufferedRecord<T> bufferedRecord);
+
+  /**
+   * Constructs a new Engine based record based on a list of values from each field.
+   *
+   * @param schema    The schema of the new record.
+   * @param values    The list of values for fields specified by the schema.
+   * @return A new instance of engine record type {@link T}.
+   */
+  public abstract T constructEngineRecord(Schema schema, List<Object> values);
 
   /**
    * Seals the engine-specific record to make sure the data referenced in memory do not change.
