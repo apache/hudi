@@ -68,7 +68,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 
 @SuppressWarnings("unchecked")
-public class TestHoodieMergeHandle extends HoodieSparkClientTestHarness {
+public class TestHoodieDefaultMergeHandle extends HoodieSparkClientTestHarness {
 
   @BeforeEach
   public void setUp() throws Exception {

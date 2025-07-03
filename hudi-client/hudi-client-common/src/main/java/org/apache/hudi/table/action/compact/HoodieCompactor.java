@@ -49,7 +49,8 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.io.FileGroupReaderBasedAppendHandle;
-import org.apache.hudi.io.FileGroupReaderBasedMergeHandle;
+import org.apache.hudi.io.HoodieMergeHandle;
+import org.apache.hudi.io.HoodieMergeHandleFactory;
 import org.apache.hudi.io.IOUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -290,9 +291,9 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
                                    HoodieTable table,
                                    String maxInstantTime,
                                    TaskContextSupplier taskContextSupplier) throws IOException {
-    FileGroupReaderBasedMergeHandle<T, ?, ?, ?> mergeHandle = new FileGroupReaderBasedMergeHandle<>(writeConfig,
+    HoodieMergeHandle<T, ?, ?, ?> mergeHandle = HoodieMergeHandleFactory.create(writeConfig,
         instantTime, table, getFileSliceFromOperation(operation, writeConfig.getBasePath()), operation, taskContextSupplier, hoodieReaderContext, maxInstantTime, getEngineRecordType());
-    mergeHandle.write();
+    mergeHandle.doMerge();
     return mergeHandle.close();
   }
 
