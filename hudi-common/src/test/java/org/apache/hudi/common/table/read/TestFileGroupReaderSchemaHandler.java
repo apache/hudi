@@ -37,6 +37,8 @@ import java.util.List;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -44,8 +46,9 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
 
   @Test
   public void testCow() {
-    HoodieReaderContext<String> readerContext = mockReaderContext(false, false, false, false, null);
     HoodieTableConfig hoodieTableConfig = mock(HoodieTableConfig.class);
+    when(hoodieTableConfig.populateMetaFields()).thenReturn(Boolean.TRUE);
+    HoodieReaderContext<String> readerContext = createReaderContext(hoodieTableConfig, false, false, false, false, null);
     Schema requestedSchema = DATA_SCHEMA;
     FileGroupReaderSchemaHandler schemaHandler = createSchemaHandler(readerContext, DATA_SCHEMA, requestedSchema, hoodieTableConfig, false);
     assertEquals(requestedSchema, schemaHandler.getRequiredSchema());
@@ -54,18 +57,19 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
     requestedSchema = generateProjectionSchema("begin_lat", "tip_history", "rider");
     schemaHandler = createSchemaHandler(readerContext, DATA_SCHEMA, requestedSchema, hoodieTableConfig, false);
     assertEquals(requestedSchema, schemaHandler.getRequiredSchema());
-    when(readerContext.getNeedsBootstrapMerge()).thenReturn(false);
+    assertFalse(readerContext.getNeedsBootstrapMerge());
   }
 
   @Test
   public void testCowBootstrap() {
-    HoodieReaderContext<String> readerContext = mockReaderContext(false, false, true, false, null);
     HoodieTableConfig hoodieTableConfig = mock(HoodieTableConfig.class);
+    when(hoodieTableConfig.populateMetaFields()).thenReturn(Boolean.TRUE);
+    HoodieReaderContext<String> readerContext = createReaderContext(hoodieTableConfig, false, false, true, false, null);
     Schema requestedSchema = generateProjectionSchema("begin_lat", "tip_history", "_hoodie_record_key", "rider");
 
     //meta cols must go first in the required schema
-    when(readerContext.getNeedsBootstrapMerge()).thenReturn(true);
     FileGroupReaderSchemaHandler schemaHandler = createSchemaHandler(readerContext, DATA_SCHEMA, requestedSchema, hoodieTableConfig, false);
+    assertTrue(readerContext.getNeedsBootstrapMerge());
     Schema expectedRequiredSchema = generateProjectionSchema("_hoodie_record_key", "begin_lat", "tip_history", "rider");
     assertEquals(expectedRequiredSchema, schemaHandler.getRequiredSchema());
     Pair<List<Schema.Field>, List<Schema.Field>> bootstrapFields = schemaHandler.getBootstrapRequiredFields();

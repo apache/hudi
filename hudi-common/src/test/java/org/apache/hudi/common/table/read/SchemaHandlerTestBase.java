@@ -23,20 +23,28 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.params.provider.Arguments;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+import java.util.function.UnaryOperator;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.config.RecordMergeMode.COMMIT_TIME_ORDERING;
@@ -44,6 +52,8 @@ import static org.apache.hudi.common.config.RecordMergeMode.CUSTOM;
 import static org.apache.hudi.common.config.RecordMergeMode.EVENT_TIME_ORDERING;
 import static org.apache.hudi.common.table.read.ParquetRowIndexBasedSchemaHandler.addPositionalMergeCol;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -77,16 +87,19 @@ public abstract class SchemaHandlerTestBase {
                       boolean supportsParquetRowIndex,
                       boolean hasBuiltInDelete) throws IOException {
     Schema dataSchema = hasBuiltInDelete ? DATA_SCHEMA : DATA_SCHEMA_NO_DELETE;
-    HoodieReaderContext<String> readerContext = mockReaderContext(supportsParquetRowIndex, true, false, mergeUseRecordPosition, null);
     HoodieTableConfig hoodieTableConfig = mock(HoodieTableConfig.class);
-    setupMORTable(mergeMode, hasPrecombine, isProjectionCompatible, hoodieTableConfig, readerContext, false);
+    setupMORTable(mergeMode, hasPrecombine, hoodieTableConfig);
+    HoodieRecordMerger merger = mockRecordMerger(isProjectionCompatible,
+        isProjectionCompatible ? new String[] {"begin_lat", "begin_lon", "_hoodie_record_key", "timestamp"} : new String[] {"begin_lat", "begin_lon", "timestamp"});
+    HoodieReaderContext<String> readerContext = createReaderContext(hoodieTableConfig, supportsParquetRowIndex, true, false, mergeUseRecordPosition, merger);
+    readerContext.setRecordMerger(Option.of(merger));
     Schema requestedSchema = dataSchema;
     FileGroupReaderSchemaHandler schemaHandler = createSchemaHandler(readerContext, dataSchema, requestedSchema, hoodieTableConfig, supportsParquetRowIndex);
     Schema expectedRequiredFullSchema = supportsParquetRowIndex && mergeUseRecordPosition
         ? ParquetRowIndexBasedSchemaHandler.addPositionalMergeCol(requestedSchema)
         : requestedSchema;
     assertEquals(expectedRequiredFullSchema, schemaHandler.getRequiredSchema());
-    when(readerContext.getNeedsBootstrapMerge()).thenReturn(false);
+    assertFalse(readerContext.getNeedsBootstrapMerge());
 
     //read subset of columns
     requestedSchema = DATA_COLS_ONLY_SCHEMA;
@@ -105,7 +118,7 @@ public abstract class SchemaHandlerTestBase {
       expectedRequiredSchema = addPositionalMergeCol(expectedRequiredSchema);
     }
     assertEquals(expectedRequiredSchema, schemaHandler.getRequiredSchema());
-    when(readerContext.getNeedsBootstrapMerge()).thenReturn(false);
+    assertFalse(readerContext.getNeedsBootstrapMerge());
   }
 
   public void testMorBootstrap(RecordMergeMode mergeMode,
@@ -115,16 +128,19 @@ public abstract class SchemaHandlerTestBase {
                                boolean supportsParquetRowIndex,
                                boolean hasBuiltInDelete) throws IOException {
     Schema dataSchema = hasBuiltInDelete ? DATA_SCHEMA : DATA_SCHEMA_NO_DELETE;
-    HoodieReaderContext<String> readerContext = mockReaderContext(supportsParquetRowIndex, true, true, mergeUseRecordPosition, null);
     HoodieTableConfig hoodieTableConfig = mock(HoodieTableConfig.class);
-    setupMORTable(mergeMode, hasPrecombine, isProjectionCompatible, hoodieTableConfig, readerContext, true);
+    setupMORTable(mergeMode, hasPrecombine, hoodieTableConfig);
+    HoodieRecordMerger merger = mockRecordMerger(isProjectionCompatible,
+        isProjectionCompatible ? new String[] {"begin_lat", "begin_lon", "_hoodie_record_key", "timestamp"} : new String[] {"begin_lat", "begin_lon", "timestamp"});
+    HoodieReaderContext<String> readerContext = createReaderContext(hoodieTableConfig, supportsParquetRowIndex, true, true, mergeUseRecordPosition, merger);
+    readerContext.setRecordMerger(Option.of(merger));
     Schema requestedSchema = dataSchema;
     FileGroupReaderSchemaHandler schemaHandler = createSchemaHandler(readerContext, dataSchema, requestedSchema, hoodieTableConfig, supportsParquetRowIndex);
     Schema expectedRequiredFullSchema = supportsParquetRowIndex && mergeUseRecordPosition
         ? ParquetRowIndexBasedSchemaHandler.addPositionalMergeCol(requestedSchema)
         : requestedSchema;
     assertEquals(expectedRequiredFullSchema, schemaHandler.getRequiredSchema());
-    when(readerContext.getNeedsBootstrapMerge()).thenReturn(true);
+    assertTrue(readerContext.getNeedsBootstrapMerge());
     Pair<List<Schema.Field>, List<Schema.Field>> bootstrapFields = schemaHandler.getBootstrapRequiredFields();
     Pair<List<Schema.Field>, List<Schema.Field>> expectedBootstrapFields = FileGroupReaderSchemaHandler.getDataAndMetaCols(expectedRequiredFullSchema);
     if (supportsParquetRowIndex) {
@@ -151,7 +167,7 @@ public abstract class SchemaHandlerTestBase {
       expectedRequiredSchema = addPositionalMergeCol(expectedRequiredSchema);
     }
     assertEquals(expectedRequiredSchema, schemaHandler.getRequiredSchema());
-    when(readerContext.getNeedsBootstrapMerge()).thenReturn(true);
+    assertTrue(readerContext.getNeedsBootstrapMerge());
     bootstrapFields = schemaHandler.getBootstrapRequiredFields();
     expectedBootstrapFields = FileGroupReaderSchemaHandler.getDataAndMetaCols(expectedRequiredSchema);
     if (supportsParquetRowIndex) {
@@ -163,23 +179,23 @@ public abstract class SchemaHandlerTestBase {
 
     // request only data cols
     requestedSchema = DATA_COLS_ONLY_SCHEMA;
+    schemaHandler = createSchemaHandler(readerContext, dataSchema, requestedSchema, hoodieTableConfig, supportsParquetRowIndex);
     if (mergeMode == EVENT_TIME_ORDERING && hasPrecombine) {
       expectedRequiredSchema = generateProjectionSchema(hasBuiltInDelete, "_hoodie_record_key", "begin_lat", "tip_history", "rider", "timestamp");
-      when(readerContext.getNeedsBootstrapMerge()).thenReturn(true);
+      assertTrue(readerContext.getNeedsBootstrapMerge());
     } else if (mergeMode == EVENT_TIME_ORDERING || mergeMode == COMMIT_TIME_ORDERING) {
       expectedRequiredSchema = generateProjectionSchema(hasBuiltInDelete, "_hoodie_record_key", "begin_lat", "tip_history", "rider");
-      when(readerContext.getNeedsBootstrapMerge()).thenReturn(true);
+      assertTrue(readerContext.getNeedsBootstrapMerge());
     } else if (mergeMode == CUSTOM && isProjectionCompatible) {
       expectedRequiredSchema = generateProjectionSchema("begin_lat", "tip_history", "rider", "begin_lon", "timestamp");
-      when(readerContext.getNeedsBootstrapMerge()).thenReturn(false);
+      assertFalse(readerContext.getNeedsBootstrapMerge());
     } else {
-      when(readerContext.getNeedsBootstrapMerge()).thenReturn(true);
+      assertTrue(readerContext.getNeedsBootstrapMerge());
       expectedRequiredSchema = dataSchema;
     }
     if (supportsParquetRowIndex && mergeUseRecordPosition) {
       expectedRequiredSchema = addPositionalMergeCol(expectedRequiredSchema);
     }
-    schemaHandler = createSchemaHandler(readerContext, dataSchema, requestedSchema, hoodieTableConfig, supportsParquetRowIndex);
     assertEquals(expectedRequiredSchema, schemaHandler.getRequiredSchema());
     bootstrapFields = schemaHandler.getBootstrapRequiredFields();
     expectedBootstrapFields = FileGroupReaderSchemaHandler.getDataAndMetaCols(expectedRequiredSchema);
@@ -198,23 +214,23 @@ public abstract class SchemaHandlerTestBase {
 
     // request only meta cols
     requestedSchema = META_COLS_ONLY_SCHEMA;
+    schemaHandler = createSchemaHandler(readerContext, dataSchema, requestedSchema, hoodieTableConfig, supportsParquetRowIndex);
     if (mergeMode == EVENT_TIME_ORDERING && hasPrecombine) {
       expectedRequiredSchema = generateProjectionSchema(hasBuiltInDelete, "_hoodie_commit_seqno", "_hoodie_record_key", "timestamp");
-      when(readerContext.getNeedsBootstrapMerge()).thenReturn(true);
+      assertTrue(readerContext.getNeedsBootstrapMerge());
     } else if (mergeMode == EVENT_TIME_ORDERING || mergeMode == COMMIT_TIME_ORDERING) {
       expectedRequiredSchema = generateProjectionSchema(hasBuiltInDelete, "_hoodie_commit_seqno", "_hoodie_record_key");
-      when(readerContext.getNeedsBootstrapMerge()).thenReturn(hasBuiltInDelete);
+      assertEquals(hasBuiltInDelete, readerContext.getNeedsBootstrapMerge());
     } else if (mergeMode == CUSTOM && isProjectionCompatible) {
       expectedRequiredSchema = generateProjectionSchema("_hoodie_commit_seqno", "_hoodie_record_key", "begin_lat", "begin_lon", "timestamp");
-      when(readerContext.getNeedsBootstrapMerge()).thenReturn(true);
+      assertTrue(readerContext.getNeedsBootstrapMerge());
     } else {
       expectedRequiredSchema = dataSchema;
-      when(readerContext.getNeedsBootstrapMerge()).thenReturn(true);
+      assertTrue(readerContext.getNeedsBootstrapMerge());
     }
     if (supportsParquetRowIndex && mergeUseRecordPosition) {
       expectedRequiredSchema = addPositionalMergeCol(expectedRequiredSchema);
     }
-    schemaHandler = createSchemaHandler(readerContext, dataSchema, requestedSchema, hoodieTableConfig, supportsParquetRowIndex);
     assertEquals(expectedRequiredSchema, schemaHandler.getRequiredSchema());
     bootstrapFields = schemaHandler.getBootstrapRequiredFields();
     expectedBootstrapFields = FileGroupReaderSchemaHandler.getDataAndMetaCols(expectedRequiredSchema);
@@ -230,9 +246,7 @@ public abstract class SchemaHandlerTestBase {
     assertEquals(expectedBootstrapFields.getRight(), bootstrapFields.getRight());
   }
 
-  private static void setupMORTable(RecordMergeMode mergeMode, boolean hasPrecombine, boolean isProjectionCompatible, HoodieTableConfig hoodieTableConfig, HoodieReaderContext<String> readerContext,
-                                    boolean isBootstrap)
-      throws IOException {
+  private static void setupMORTable(RecordMergeMode mergeMode, boolean hasPrecombine, HoodieTableConfig hoodieTableConfig) {
     when(hoodieTableConfig.populateMetaFields()).thenReturn(Boolean.TRUE);
     when(hoodieTableConfig.getRecordMergeMode()).thenReturn(mergeMode);
     if (hasPrecombine) {
@@ -244,9 +258,6 @@ public abstract class SchemaHandlerTestBase {
       when(hoodieTableConfig.getRecordMergeStrategyId()).thenReturn("asdf");
       // NOTE: in this test custom doesn't have any meta cols because it is more interesting of a test case
       when(hoodieTableConfig.getTableVersion()).thenReturn(HoodieTableVersion.EIGHT);
-      HoodieRecordMerger merger = mockRecordMerger(isProjectionCompatible,
-          isBootstrap ? new String[] {"begin_lat", "begin_lon", "timestamp"} : new String[] {"begin_lat", "begin_lon", "_hoodie_record_key", "timestamp"});
-      when(readerContext.getRecordMerger()).thenReturn((Option.of(merger)));
     }
   }
 
@@ -258,15 +269,13 @@ public abstract class SchemaHandlerTestBase {
     return merger;
   }
 
-  static HoodieReaderContext<String> mockReaderContext(boolean supportsParquetRowIndex, boolean hasLogFiles,
-                                                       boolean hasBootstrapBaseFile, boolean mergeUseRecordPosition, HoodieRecordMerger merger) {
-    HoodieReaderContext<String> readerContext = mock(HoodieReaderContext.class);
-    when(readerContext.supportsParquetRowIndex()).thenReturn(supportsParquetRowIndex);
-    when(readerContext.getHasLogFiles()).thenReturn(hasLogFiles);
-    when(readerContext.getHasBootstrapBaseFile()).thenReturn(hasBootstrapBaseFile);
-    when(readerContext.getShouldMergeUseRecordPosition()).thenReturn(mergeUseRecordPosition);
-    when(readerContext.getRecordMerger()).thenReturn(Option.ofNullable(merger));
-    when(readerContext.getInstantRange()).thenReturn(Option.empty());
+  static HoodieReaderContext<String> createReaderContext(HoodieTableConfig hoodieTableConfig, boolean supportsParquetRowIndex, boolean hasLogFiles,
+                                                         boolean hasBootstrapBaseFile, boolean mergeUseRecordPosition, HoodieRecordMerger merger) {
+    HoodieReaderContext<String> readerContext = new MockReaderContext(hoodieTableConfig, supportsParquetRowIndex);
+    readerContext.setHasLogFiles(hasLogFiles);
+    readerContext.setHasBootstrapBaseFile(hasBootstrapBaseFile);
+    readerContext.setShouldMergeUseRecordPosition(mergeUseRecordPosition);
+    readerContext.setRecordMerger(Option.ofNullable(merger));
     return readerContext;
   }
 
@@ -295,5 +304,80 @@ public abstract class SchemaHandlerTestBase {
 
   Schema.Field getField(String fieldName) {
     return DATA_SCHEMA.getField(fieldName);
+  }
+
+  static class MockReaderContext extends HoodieReaderContext<String> {
+    private final boolean supportsParquetRowIndex;
+
+    protected MockReaderContext(HoodieTableConfig hoodieTableConfig, boolean supportsParquetRowIndex) {
+      super(null, hoodieTableConfig, Option.empty(), Option.empty());
+      this.supportsParquetRowIndex = supportsParquetRowIndex;
+    }
+
+    @Override
+    public boolean supportsParquetRowIndex() {
+      return this.supportsParquetRowIndex;
+    }
+
+    @Override
+    public ClosableIterator<String> getFileRecordIterator(StoragePath filePath, long start, long length, Schema dataSchema, Schema requiredSchema, HoodieStorage storage) throws IOException {
+      return null;
+    }
+
+    @Override
+    public String convertAvroRecord(IndexedRecord avroRecord) {
+      return "";
+    }
+
+    @Override
+    public GenericRecord convertToAvroRecord(String record, Schema schema) {
+      return null;
+    }
+
+    @Override
+    public String getDeleteRow(String record, String recordKey) {
+      return "";
+    }
+
+    @Override
+    public Option<HoodieRecordMerger> getRecordMerger(RecordMergeMode mergeMode, String mergeStrategyId, String mergeImplClasses) {
+      return null;
+    }
+
+    @Override
+    public Object getValue(String record, Schema schema, String fieldName) {
+      return null;
+    }
+
+    @Override
+    public String getMetaFieldValue(String record, int pos) {
+      return "";
+    }
+
+    @Override
+    public HoodieRecord<String> constructHoodieRecord(BufferedRecord<String> bufferedRecord) {
+      return null;
+    }
+
+    @Override
+    public String seal(String record) {
+      return "";
+    }
+
+    @Override
+    public String toBinaryRow(Schema avroSchema, String record) {
+      return "";
+    }
+
+    @Override
+    public ClosableIterator<String> mergeBootstrapReaders(ClosableIterator<String> skeletonFileIterator, Schema skeletonRequiredSchema, ClosableIterator<String> dataFileIterator,
+                                                          Schema dataRequiredSchema, List<Pair<String, Object>> requiredPartitionFieldAndValues) {
+      return null;
+    }
+
+    @Override
+    public UnaryOperator<String> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns) {
+      return null;
+    }
   }
 }
