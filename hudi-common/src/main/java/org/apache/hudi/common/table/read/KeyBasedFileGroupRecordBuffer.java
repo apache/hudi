@@ -67,10 +67,12 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
   public void processDataBlock(HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt) throws IOException {
     Pair<ClosableIterator<T>, Schema> recordsIteratorSchemaPair =
         getRecordsIterator(dataBlock, keySpecOpt);
-    if (dataBlock.containsPartialUpdates()) {
+    if (dataBlock.containsPartialUpdates() && !enablePartialMerging) {
       // When a data block contains partial updates, subsequent record merging must always use
       // partial merging.
       enablePartialMerging = true;
+      bufferedRecordMerger = BufferedRecordMergerFactory.create(
+          readerContext, recordMergeMode, true, recordMerger, orderingFieldName, payloadClass, readerSchema, props);
     }
 
     Schema schema = AvroSchemaCache.intern(recordsIteratorSchemaPair.getRight());
