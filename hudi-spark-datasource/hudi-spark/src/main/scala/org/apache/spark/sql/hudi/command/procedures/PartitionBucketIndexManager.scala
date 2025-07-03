@@ -146,7 +146,7 @@ class PartitionBucketIndexManager extends BaseProcedure
     val mdtEnable = metaClient.getStorage().exists(new StoragePath(metaClient.getBasePath, HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH))
 
     // get all partition paths
-    val allPartitions = FSUtils.getAllPartitionPaths(context, metaClient.getStorage, metaClient.getBasePath, mdtEnable)
+    val allPartitions = FSUtils.getAllPartitionPaths(context, metaClient, mdtEnable)
     val usePartitionBucketIndexBefore = PartitionBucketIndexUtils.isPartitionSimpleBucketIndex(context.getStorageConf, basePath.toString)
 
     var partition2BucketWithLatestHashingConfig: util.Map[String, Integer] = null
@@ -195,8 +195,8 @@ class PartitionBucketIndexManager extends BaseProcedure
       logInfo("Perform OVERWRITE with dry-run disabled.")
       val partitionsToRescale = rescalePartitionsMap.keys
       // get all fileSlices need to read
-      val allFilesMap = FSUtils.getFilesInPartitions(context, metaClient.getStorage(), HoodieMetadataConfig.newBuilder.enable(mdtEnable).build,
-        metaClient.getBasePath.toString, partitionsToRescale.map(relative => {
+      val allFilesMap = FSUtils.getFilesInPartitions(context, metaClient, HoodieMetadataConfig.newBuilder.enable(mdtEnable).build,
+        partitionsToRescale.map(relative => {
           new StoragePath(basePath, relative)
         }).map(storagePath => storagePath.toString).toArray)
       val files = allFilesMap.values().asScala.flatMap(x => x.asScala).toList

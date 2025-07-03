@@ -20,9 +20,9 @@ package org.apache.hudi.source.stats;
 
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
-import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
@@ -33,13 +33,13 @@ import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.source.prune.ColumnStatsProbe;
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.util.AvroToRowDataConverters;
 import org.apache.hudi.util.DataTypeUtils;
-import org.apache.hudi.util.FlinkClientUtil;
 import org.apache.hudi.util.RowDataProjection;
+import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.avro.generic.GenericRecord;
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
@@ -82,16 +82,19 @@ public class FileStatsIndex implements ColumnStatsIndex {
   private static final Logger LOG = LoggerFactory.getLogger(FileStatsIndex.class);
   private final RowType rowType;
   private final String basePath;
-  private final HoodieMetadataConfig metadataConfig;
+  private final Configuration conf;
+  private HoodieTableMetaClient metaClient;
   private HoodieTableMetadata metadataTable;
 
   public FileStatsIndex(
       String basePath,
       RowType rowType,
-      HoodieMetadataConfig metadataConfig) {
+      Configuration conf,
+      @Nullable HoodieTableMetaClient metaClient) {
     this.basePath = basePath;
     this.rowType = rowType;
-    this.metadataConfig = metadataConfig;
+    this.conf = conf;
+    this.metaClient = metaClient;
   }
 
   @Override
@@ -102,13 +105,20 @@ public class FileStatsIndex implements ColumnStatsIndex {
   public HoodieTableMetadata getMetadataTable() {
     // initialize the metadata table lazily
     if (this.metadataTable == null) {
-      this.metadataTable = HoodieTableMetadata.create(
+      initMetaClient();
+      this.metadataTable = metaClient.getTableFormat().getMetadataFactory().create(
           HoodieFlinkEngineContext.DEFAULT,
-          new HoodieHadoopStorage(basePath, FlinkClientUtil.getHadoopConf()),
-          metadataConfig,
+          metaClient.getStorage(),
+          StreamerUtil.metadataConfig(conf),
           basePath);
     }
     return this.metadataTable;
+  }
+
+  private void initMetaClient() {
+    if (this.metaClient == null) {
+      this.metaClient = StreamerUtil.createMetaClient(conf);
+    }
   }
 
   @Override

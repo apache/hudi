@@ -58,7 +58,6 @@ public class WriteClientTestUtils {
 
     @Override
     public void consumeTime(boolean skipLocking, Consumer<Long> func) {
-
     }
   }
 }

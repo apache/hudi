@@ -134,15 +134,33 @@ class TestEightToSevenDowngradeHandler {
     String baseTablePath = baseDir.toString();
     HoodieStorage hoodieStorage = HoodieStorageUtils.getStorage(getDefaultStorageConf());
     StoragePath basePath = new StoragePath(baseTablePath);
+
+    HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
     when(metaClient.getBasePath()).thenReturn(basePath);
+    when(metaClient.getTableConfig()).thenReturn(tableConfig);
+    when(metaClient.getStorage()).thenReturn(hoodieStorage);
 
     Map<ConfigProperty, String> tablePropsToAdd = new HashMap<>();
     try (MockedStatic<FSUtils> mockedFSUtils = mockStatic(FSUtils.class);
-         MockedStatic<HoodieTableMetadataUtil> mockedMetadataUtils = mockStatic(HoodieTableMetadataUtil.class)) {
+         MockedStatic<HoodieTableMetaClient> mockedStaticMetaClient = mockStatic(HoodieTableMetaClient.class)) {
       StoragePath mdtBasePath = HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath());
+
+      // Mock FSUtils.getAllPartitionPaths to return SAMPLE_METADATA_PATHS
       mockedFSUtils
-          .when(() -> FSUtils.getAllPartitionPaths(context, hoodieStorage, mdtBasePath, false))
+          .when(() -> FSUtils.getAllPartitionPaths(context, metaClient, false))
           .thenReturn(SAMPLE_METADATA_PATHS);
+
+      // Mock HoodieTableMetaClient.builder() to return a builder that returns a mock metaClient
+      HoodieTableMetaClient.Builder mockBuilder = mock(HoodieTableMetaClient.Builder.class);
+      when(mockBuilder.setBasePath(mdtBasePath.toUri().toString())).thenReturn(mockBuilder);
+      when(mockBuilder.setConf(hoodieStorage.getConf())).thenReturn(mockBuilder);
+      when(mockBuilder.build()).thenReturn(metaClient);
+      mockedStaticMetaClient.when(HoodieTableMetaClient::builder).thenReturn(mockBuilder);
+
+      // Mock FSUtils.isTableExists to return true
+      mockedFSUtils
+          .when(() -> FSUtils.isTableExists(mdtBasePath.toString(), hoodieStorage))
+          .thenReturn(true);
 
       EightToSevenDowngradeHandler.downgradeMetadataPartitions(context, hoodieStorage, metaClient, tablePropsToAdd);
 

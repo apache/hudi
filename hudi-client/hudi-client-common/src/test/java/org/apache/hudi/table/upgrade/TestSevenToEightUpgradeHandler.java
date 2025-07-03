@@ -61,8 +61,6 @@ class TestSevenToEightUpgradeHandler {
   private HoodieWriteConfig config;
   @Mock
   private HoodieTableConfig tableConfig;
-  @Mock
-  private SupportsUpgradeDowngrade upgradeDowngradeHelper;
 
   private SevenToEightUpgradeHandler upgradeHandler;
 

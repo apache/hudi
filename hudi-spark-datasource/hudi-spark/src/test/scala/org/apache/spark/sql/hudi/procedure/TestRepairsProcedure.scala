@@ -144,6 +144,7 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
           |[hoodie.record.merge.strategy.id,eeb8d96f-b1e4-49fd-bbf8-28ac514178e5,null]
           |[hoodie.table.checksum,,]
           |[hoodie.table.create.schema,,]
+          |[hoodie.table.format,native,null]
           |[hoodie.table.initial.version,8,8]
           |[hoodie.table.keygenerator.type,NON_PARTITION,null]
           |[hoodie.table.name,,]

@@ -122,8 +122,7 @@ public class SavepointActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
                   return latestFiles;
                 }));
       } else {
-        List<String> partitions = FSUtils.getAllPartitionPaths(
-            context, table.getStorage(), config.getMetadataConfig(), table.getMetaClient().getBasePath());
+        List<String> partitions = FSUtils.getAllPartitionPaths(context, table.getMetaClient(), config.getMetadataConfig());
         latestFilesMap = context.mapToPair(partitions, partitionPath -> {
           // Scan all partitions files with this commit time
           LOG.info("Collecting latest files in partition path " + partitionPath);
@@ -143,8 +142,9 @@ public class SavepointActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
       table.getActiveTimeline().createNewInstant(
           instantGenerator.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.SAVEPOINT_ACTION, instantTime));
       table.getActiveTimeline()
-          .saveAsComplete(instantGenerator.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.SAVEPOINT_ACTION, instantTime),
-              Option.of(metadata));
+          .saveAsComplete(
+              true, instantGenerator.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.SAVEPOINT_ACTION, instantTime), Option.of(metadata),
+              savepointCompletedInstant -> table.getMetaClient().getTableFormat().savepoint(savepointCompletedInstant, table.getContext(), table.getMetaClient(), table.getViewManager()));
       LOG.info("Savepoint " + instantTime + " created");
       return metadata;
     } catch (HoodieIOException e) {

@@ -1419,7 +1419,7 @@ public class HoodieTableMetadataUtil {
     // default FileSystemView will not return any file slices even
     // though we may have initialized them.
     HoodieTimeline timeline = metaClient.getActiveTimeline();
-    TimelineFactory factory = metaClient.getTimelineLayout().getTimelineFactory();
+    TimelineFactory factory = metaClient.getTableFormat().getTimelineFactory();
     if (timeline.empty()) {
       final HoodieInstant instant = metaClient.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION,
           HoodieInstantTimeGenerator.getCurrentInstantTimeStr());

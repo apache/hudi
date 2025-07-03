@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.table;
 
+import org.apache.hudi.common.HoodieTableFormat;
+import org.apache.hudi.common.NativeTableFormat;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetaserverConfig;
@@ -165,6 +167,7 @@ public class HoodieTableMetaClient implements Serializable {
   protected HoodieMetaserverConfig metaserverConfig;
   private HoodieTimeGeneratorConfig timeGeneratorConfig;
   private Option<HoodieIndexMetadata> indexMetadataOpt = Option.empty();
+  private HoodieTableFormat tableFormat;
 
   /**
    * Instantiate HoodieTableMetaClient.
@@ -195,6 +198,7 @@ public class HoodieTableMetaClient implements Serializable {
       throw new TableNotFoundException("Table does not exist");
     }
     this.timelineLayoutVersion = layoutVersion.orElseGet(tableConfigVersion::get);
+    this.tableFormat = tableConfig.getTableFormat(timelineLayoutVersion);
     this.timelineLayout = TimelineLayout.fromVersion(timelineLayoutVersion);
     this.timelinePath = timelineLayout.getTimelinePathProvider().getTimelinePath(tableConfig, this.basePath);
     this.timelineHistoryPath = timelineLayout.getTimelinePathProvider().getTimelineHistoryPath(tableConfig, this.basePath);
@@ -357,6 +361,10 @@ public class HoodieTableMetaClient implements Serializable {
     return timelinePath;
   }
 
+  public HoodieTableFormat getTableFormat() {
+    return tableFormat;
+  }
+
   /**
    * @return schema folder path
    */
@@ -501,7 +509,7 @@ public class HoodieTableMetaClient implements Serializable {
    */
   public synchronized HoodieActiveTimeline getActiveTimeline() {
     if (activeTimeline == null) {
-      activeTimeline = timelineLayout.getTimelineFactory().createActiveTimeline(this);
+      activeTimeline = tableFormat.getTimelineFactory().createActiveTimeline(this);
     }
     return activeTimeline;
   }
@@ -515,12 +523,21 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   /**
+   * Get the active instants as a timeline in native format.
+   *
+   * @return Active instants timeline
+   */
+  public synchronized HoodieActiveTimeline getActiveTimelineForNativeFormat() {
+    return new NativeTableFormat(activeTimeline.getTimelineLayoutVersion()).getTimelineFactory().createActiveTimeline(this);
+  }
+
+  /**
    * Reload ActiveTimeline and cache.
    *
    * @return Active instants timeline
    */
   public synchronized HoodieActiveTimeline reloadActiveTimeline() {
-    activeTimeline = timelineLayout.getTimelineFactory().createActiveTimeline(this);
+    activeTimeline = tableFormat.getTimelineFactory().createActiveTimeline(this);
     return activeTimeline;
   }
 
@@ -538,6 +555,7 @@ public class HoodieTableMetaClient implements Serializable {
   private void reloadTimelineLayoutAndPath() {
     this.timelineLayoutVersion = tableConfig.getTimelineLayoutVersion().get();
     this.timelineLayout = TimelineLayout.fromVersion(timelineLayoutVersion);
+    this.tableFormat = tableConfig.getTableFormat(timelineLayoutVersion);
     this.timelinePath = timelineLayout.getTimelinePathProvider().getTimelinePath(tableConfig, basePath);
     this.timelineHistoryPath = timelineLayout.getTimelinePathProvider().getTimelineHistoryPath(tableConfig, basePath);
   }
@@ -619,8 +637,8 @@ public class HoodieTableMetaClient implements Serializable {
 
   private HoodieArchivedTimeline instantiateArchivedTimeline(String startTs) {
     return StringUtils.isNullOrEmpty(startTs)
-        ? timelineLayout.getTimelineFactory().createArchivedTimeline(this)
-        : timelineLayout.getTimelineFactory().createArchivedTimeline(this, startTs);
+        ? tableFormat.getTimelineFactory().createArchivedTimeline(this)
+        : tableFormat.getTimelineFactory().createArchivedTimeline(this, startTs);
   }
 
   public static void createTableLayoutOnStorage(StorageConfiguration<?> storageConf,
@@ -1035,6 +1053,7 @@ public class HoodieTableMetaClient implements Serializable {
     private Boolean multipleBaseFileFormatsEnabled;
 
     private String indexDefinitionPath;
+    private String tableFormat;
 
     /**
      * Persist the configs that is written at the first time, and should not be changed.
@@ -1234,6 +1253,11 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
+    public TableBuilder setTableFormat(String tableFormat) {
+      this.tableFormat = tableFormat;
+      return this;
+    }
+
     public TableBuilder set(Map<String, Object> props) {
       for (ConfigProperty<String> configProperty : HoodieTableConfig.PERSISTED_CONFIG_LIST) {
         if (containsConfigProperty(props, configProperty)) {
@@ -1250,6 +1274,7 @@ public class HoodieTableMetaClient implements Serializable {
       return setTableType(metaClient.getTableType())
           .setTableName(metaClient.getTableConfig().getTableName())
           .setTableVersion(metaClient.getTableConfig().getTableVersion())
+          .setTableFormat(metaClient.getTableConfig().getTableFormat(metaClient.getTimelineLayoutVersion()).getName())
           .setTimelinePath(metaClient.getTableConfig().getTimelinePath())
           .setArchiveLogFolder(metaClient.getTableConfig().getTimelineHistoryPath())
           .setRecordMergeMode(metaClient.getTableConfig().getRecordMergeMode())
@@ -1278,6 +1303,10 @@ public class HoodieTableMetaClient implements Serializable {
 
       if (hoodieConfig.contains(VERSION)) {
         setTableVersion(hoodieConfig.getInt(VERSION));
+      }
+
+      if (hoodieConfig.contains(HoodieTableConfig.TABLE_FORMAT)) {
+        setTableFormat(hoodieConfig.getString(HoodieTableConfig.TABLE_FORMAT));
       }
 
       if (hoodieConfig.contains(TIMELINE_PATH)) {
@@ -1514,6 +1543,9 @@ public class HoodieTableMetaClient implements Serializable {
       }
       if (null != indexDefinitionPath) {
         tableConfig.setValue(HoodieTableConfig.RELATIVE_INDEX_DEFINITION_PATH, indexDefinitionPath);
+      }
+      if (null != tableFormat) {
+        tableConfig.setValue(HoodieTableConfig.TABLE_FORMAT, tableFormat);
       }
       return tableConfig.getProps();
     }

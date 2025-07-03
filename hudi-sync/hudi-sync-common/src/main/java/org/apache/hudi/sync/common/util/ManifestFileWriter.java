@@ -104,7 +104,7 @@ public class ManifestFileWriter {
   @VisibleForTesting
   static Stream<String> getLatestBaseFiles(boolean canUseMetadataTable, HoodieEngineContext engContext, HoodieTableMetaClient metaClient,
                                            boolean useAbsolutePath) {
-    List<String> partitions = FSUtils.getAllPartitionPaths(engContext, metaClient.getStorage(), metaClient.getBasePath(), canUseMetadataTable);
+    List<String> partitions = FSUtils.getAllPartitionPaths(engContext, metaClient, canUseMetadataTable);
     LOG.info("Retrieve all partitions: {}", partitions.size());
     HoodieTableFileSystemView fsView = null;
     try {

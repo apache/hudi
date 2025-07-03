@@ -18,15 +18,19 @@
 
 package org.apache.hudi.common.table.timeline;
 
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.Serializable;
 import java.security.MessageDigest;
@@ -113,6 +117,14 @@ public abstract class BaseHoodieTimeline implements HoodieTimeline {
     this.instants = mergeInstants(newInstants, this.instants);
     this.timelineHash = computeTimelineHash(this.instants);
     clearState();
+  }
+
+  protected List<HoodieInstant> getInstantsFromFileSystem(HoodieTableMetaClient metaClient, Set<String> includedExtensions, boolean applyLayoutFilters) {
+    try {
+      return metaClient.scanHoodieInstantsFromFileSystem(metaClient.getTimelinePath(), includedExtensions, applyLayoutFilters);
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to scan metadata", e);
+    }
   }
 
   @Override

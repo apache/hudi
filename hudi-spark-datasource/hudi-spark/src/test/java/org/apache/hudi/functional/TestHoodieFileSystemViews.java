@@ -143,7 +143,7 @@ public class TestHoodieFileSystemViews extends HoodieClientTestBase {
       HoodieTableFileSystemView actualFileSystemView = (HoodieTableFileSystemView) FileSystemViewManager
           .createViewManager(context, config.getMetadataConfig(), viewStorageConfig, config.getCommonConfig(),
               (SerializableFunctionUnchecked<HoodieTableMetaClient, HoodieTableMetadata>) v1 ->
-                  HoodieTableMetadata.create(context, metaClient.getStorage(), config.getMetadataConfig(), config.getBasePath()))
+                  metaClient.getTableFormat().getMetadataFactory().create(context, metaClient.getStorage(), config.getMetadataConfig(), config.getBasePath()))
           .getFileSystemView(basePath);
 
       assertFileSystemViews(config, enableMdt, storageType);
@@ -224,7 +224,7 @@ public class TestHoodieFileSystemViews extends HoodieClientTestBase {
     HoodieTableFileSystemView actualFileSystemView = (HoodieTableFileSystemView) FileSystemViewManager
         .createViewManager(context, writeConfig.getMetadataConfig(), viewStorageConfig, writeConfig.getCommonConfig(),
             (SerializableFunctionUnchecked<HoodieTableMetaClient, HoodieTableMetadata>) v1 ->
-                HoodieTableMetadata.create(context, metaClient.getStorage(), writeConfig.getMetadataConfig(), writeConfig.getBasePath()))
+                metaClient.getTableFormat().getMetadataFactory().create(context, metaClient.getStorage(), writeConfig.getMetadataConfig(), writeConfig.getBasePath()))
         .getFileSystemView(basePath);
     try {
       assertForFSVEquality(expectedFileSystemView, actualFileSystemView, enableMdt, Option.empty());

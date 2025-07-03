@@ -19,11 +19,14 @@
 package org.apache.hudi.source.stats;
 
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
-import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.source.prune.ColumnStatsProbe;
 
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.types.logical.RowType;
+
+import javax.annotation.Nullable;
 
 import java.util.List;
 import java.util.Set;
@@ -37,8 +40,9 @@ public class PartitionStatsIndex extends FileStatsIndex {
   public PartitionStatsIndex(
       String basePath,
       RowType tableRowType,
-      HoodieMetadataConfig metadataConfig) {
-    super(basePath, tableRowType, metadataConfig);
+      Configuration conf,
+      @Nullable HoodieTableMetaClient metaClient) {
+    super(basePath, tableRowType, conf, metaClient);
   }
 
   @Override
