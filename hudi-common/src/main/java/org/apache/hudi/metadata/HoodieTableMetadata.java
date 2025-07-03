@@ -21,6 +21,8 @@ package org.apache.hudi.metadata;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodiePairData;
+import org.apache.hudi.common.function.SerializableFunctionUnchecked;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -213,7 +215,6 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
   Map<Pair<String, String>, HoodieMetadataColumnStats> getColumnStats(final List<Pair<String, String>> partitionNameFileNameList, final String columnName)
       throws HoodieMetadataException;
 
-
   /**
    * Get column stats for files from the metadata table index.
    *
@@ -226,16 +227,32 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
       throws HoodieMetadataException;
 
   /**
+   * Returns pairs of (record key, location of record key) which are found in the record index.
+   * Records that are not found are ignored and wont be part of map object that is returned.
+   */
+  HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndex(HoodieData<String> recordKeys);
+
+  /**
    * Returns the location of record keys which are found in the record index.
    * Records that are not found are ignored and wont be part of map object that is returned.
    */
-  Map<String, HoodieRecordGlobalLocation> readRecordIndex(List<String> recordKeys);
+  default HoodieData<HoodieRecordGlobalLocation> readRecordIndexLocations(HoodieData<String> recordKeys) {
+    return readRecordIndex(recordKeys).values();
+  }
 
   /**
-   * Returns the location of records which the provided secondary keys maps to.
+   * Returns pairs of (secondary key, location of secondary key) which the provided secondary keys maps to.
    * Records that are not found are ignored and won't be part of map object that is returned.
    */
-  Map<String, HoodieRecordGlobalLocation> readSecondaryIndex(List<String> secondaryKeys, String partitionName);
+  HoodiePairData<String, HoodieRecordGlobalLocation> readSecondaryIndex(HoodieData<String> secondaryKeys, String partitionName);
+
+  /**
+   * Returns the location of secondary keys which are found in the secondary index.
+   * Records that are not found are ignored and won't be part of map object that is returned.
+   */
+  default HoodieData<HoodieRecordGlobalLocation> readSecondaryIndexLocations(HoodieData<String> secondaryKeys, String partitionName) {
+    return readSecondaryIndex(secondaryKeys, partitionName).values();
+  }
 
   /**
    * Fetch records by key prefixes. Key prefix passed is expected to match the same prefix as stored in Metadata table partitions. For eg, in case of col stats partition,
@@ -245,9 +262,10 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    * @param partitionName partition name in metadata table where the records are looked up for.
    * @return {@link HoodieData} of {@link HoodieRecord}s with records matching the passed in key prefixes.
    */
-  HoodieData<HoodieRecord<HoodieMetadataPayload>> getRecordsByKeyPrefixes(List<String> keyPrefixes,
+  HoodieData<HoodieRecord<HoodieMetadataPayload>> getRecordsByKeyPrefixes(HoodieData<String> keyPrefixes,
                                                                           String partitionName,
-                                                                          boolean shouldLoadInMemory);
+                                                                          boolean shouldLoadInMemory,
+                                                                          Option<SerializableFunctionUnchecked<String, String>> keyEncoder);
 
   /**
    * Get the instant time to which the metadata is synced w.r.t data timeline.

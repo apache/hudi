@@ -155,5 +155,4 @@ public abstract class HoodieSparkTable<T>
       HoodieMergeHelper.newInstance().runMerge(this, upsertHandle);
     }
   }
-
 }

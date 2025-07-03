@@ -18,16 +18,21 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.avro.Schema;
-
+import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodieListData;
+import org.apache.hudi.common.data.HoodieListPairData;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.common.util.HoodieDataUtils;
+
+import org.apache.avro.Schema;
 
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -76,16 +81,18 @@ public class HoodieMetadataLogRecordReader implements Closeable {
   }
 
   @SuppressWarnings("unchecked")
-  public Map<String, HoodieRecord<HoodieMetadataPayload>> getRecordsByKeyPrefixes(List<String> sortedKeyPrefixes) {
+  public Map<String, HoodieRecord<HoodieMetadataPayload>> getRecordsByKeyPrefixes(HoodieData<String> sortedKeyPrefixes) {
     if (sortedKeyPrefixes.isEmpty()) {
       return Collections.emptyMap();
     }
 
+    List<String> sortedKeyPrefixesList = sortedKeyPrefixes.collectAsList();
+
     // NOTE: Locking is necessary since we're accessing [[HoodieMetadataLogRecordReader]]
     //       materialized state, to make sure there's no concurrent access
     synchronized (this) {
-      logRecordScanner.scanByKeyPrefixes(sortedKeyPrefixes);
-      Predicate<String> p = createPrefixMatchingPredicate(sortedKeyPrefixes);
+      logRecordScanner.scanByKeyPrefixes(sortedKeyPrefixesList);
+      Predicate<String> p = createPrefixMatchingPredicate(sortedKeyPrefixesList);
       return logRecordScanner.getRecords().entrySet()
           .stream()
           .filter(r -> r != null && p.test(r.getKey()))
@@ -99,20 +106,24 @@ public class HoodieMetadataLogRecordReader implements Closeable {
    * the delta-log blocks
    */
   @SuppressWarnings("unchecked")
-  public Map<String, HoodieRecord<HoodieMetadataPayload>> getRecordsByKeys(List<String> sortedKeys) {
+  public HoodieListPairData<String, HoodieRecord<HoodieMetadataPayload>> getRecordsByKeys(HoodieData<String> sortedKeys) {
+    ValidationUtils.checkState(sortedKeys instanceof HoodieListData, "readRecordIndex only support HoodieListData at the moment");
+
     if (sortedKeys.isEmpty()) {
-      return Collections.emptyMap();
+      return HoodieListPairData.eager(Collections.emptyList());
     }
 
     // NOTE: Locking is necessary since we're accessing [[HoodieMetadataLogRecordReader]]
     //       materialized state, to make sure there's no concurrent access
+    List<String> sortedKeyList = sortedKeys.collectAsList();
     synchronized (this) {
-      logRecordScanner.scanByFullKeys(sortedKeys);
+      logRecordScanner.scanByFullKeys(sortedKeyList);
       Map<String, HoodieRecord> allRecords = logRecordScanner.getRecords();
-      return sortedKeys.stream()
+      Map<String, HoodieRecord<HoodieMetadataPayload>> res = sortedKeyList.stream()
           .map(key -> (HoodieRecord<HoodieMetadataPayload>) allRecords.get(key))
           .filter(Objects::nonNull)
           .collect(Collectors.toMap(HoodieRecord::getRecordKey, r -> r));
+      return HoodieDataUtils.eagerMapKV(res);
     }
   }
 
