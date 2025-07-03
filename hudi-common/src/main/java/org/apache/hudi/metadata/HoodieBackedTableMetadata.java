@@ -409,7 +409,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
    */
   @Override
   public HoodiePairData<String, HoodieRecordGlobalLocation> readSecondaryIndex(HoodieData<String> secondaryKeys, String partitionName) {
-    HoodieIndexVersion indexVersion = existingIndexVersionOrDefault(partitionName, metadataMetaClient);
+    HoodieIndexVersion indexVersion = existingIndexVersionOrDefault(partitionName, dataMetaClient);
 
     if (indexVersion.equals(HoodieIndexVersion.V1)) {
       return readSecondaryIndexV1(secondaryKeys, partitionName);
@@ -429,7 +429,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
    */
   @Override
   public HoodieData<HoodieRecordGlobalLocation> readSecondaryIndexLocations(HoodieData<String> secondaryKeys, String partitionName) {
-    HoodieIndexVersion indexVersion = existingIndexVersionOrDefault(partitionName, metadataMetaClient);
+    HoodieIndexVersion indexVersion = existingIndexVersionOrDefault(partitionName, dataMetaClient);
 
     if (indexVersion.equals(HoodieIndexVersion.V1)) {
       return readSecondaryIndexV1(secondaryKeys, partitionName).values();
@@ -815,7 +815,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
   @Override
   public HoodiePairData<String, Set<String>> getSecondaryIndexRecords(HoodieData<String> secondaryKeys, String partitionName) {
-    HoodieIndexVersion indexVersion = existingIndexVersionOrDefault(partitionName, metadataMetaClient);
+    HoodieIndexVersion indexVersion = existingIndexVersionOrDefault(partitionName, dataMetaClient);
 
     if (indexVersion.equals(HoodieIndexVersion.V1)) {
       return getSecondaryIndexRecordsV1(secondaryKeys, partitionName);

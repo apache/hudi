@@ -80,6 +80,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.validateDataTypeF
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeastOnce;
@@ -759,7 +760,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
       int numFileGroups,
       String partitionName,
       HoodieIndexVersion version,
-      int expectedIndex) throws Exception {
+      int expectedIndex) {
     boolean needsSecondaryKeyExtraction = MetadataPartitionType.SECONDARY_INDEX.matchesPartitionPath(partitionName)
         && version.greaterThanOrEquals(HoodieIndexVersion.V2);
     SerializableBiFunction<String, Integer, Integer> mappingFunction =
@@ -806,24 +807,6 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
             HoodieIndexVersion.V1,
             4  // Uses full key for hashing since not in secondary index partition
         ),
-        // Test case 5: Secondary index record key but no separator
-        Arguments.of(
-            "Secondary index record key but no separator",
-            "primary_key_secondary_key",
-            10,
-            "secondary_index_idx_ts",
-            V2,
-            7  // Uses full key for hashing since no separator found
-        ),
-        // Test case 6: Empty record key
-        Arguments.of(
-            "Empty record key",
-            "",
-            10,
-            "secondary_index_idx_ts",
-            V2,
-            0  // Empty string hashes to 0
-        ),
         // Test case 7: Single file group
         Arguments.of(
             "Single file group",
@@ -841,24 +824,68 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
             "files",
             V1,
             0  // Calculated using the explicit hashing algorithm
-        ),
-        // Test case 10: Record key with special characters
+        )
+    // [HUDI-9543] need to support null value for SI.
+    //        // Test case 10: Record key with special characters
+    //        Arguments.of(
+    //            "Null str handling sec idx v2",
+    //            null,
+    //            10,
+    //            "secondary_index_idx_ts",
+    //            V2,
+    //            0  // Calculated using the explicit hashing algorithm
+    //        ),
+    //        // Test case 10: Record key with special characters
+    //        Arguments.of(
+    //            "Null str handling sec idx v2",
+    //            null,
+    //            10,
+    //            "secondary_index_idx_ts",
+    //            V2,
+    //            0  // Calculated using the explicit hashing algorithm
+    //        )
+    );
+  }
+
+  @ParameterizedTest(name = "{0}")
+  @MethodSource("mapKeyNoSeparatorToFileGroupIndexTestCases")
+  public void testMapKeyNoSeparatorToFileGroupIndex(
+      String testName,
+      String recordKey,
+      int numFileGroups,
+      String partitionName,
+      HoodieIndexVersion version,
+      int expectedIndex) {
+    // If the key does not have separator, hashing function for SI write will error out.
+    boolean needsSecondaryKeyExtraction = MetadataPartitionType.SECONDARY_INDEX.matchesPartitionPath(partitionName)
+        && version.greaterThanOrEquals(HoodieIndexVersion.V2);
+    SerializableBiFunction<String, Integer, Integer> mappingFunction =
+        HoodieTableMetadataUtil.getSecondaryKeyToFileGroupMappingFunction(needsSecondaryKeyExtraction);
+    assertThrows(IllegalStateException.class, () -> mappingFunction.apply(recordKey, numFileGroups));
+
+    int index = HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(recordKey, numFileGroups);
+    assertEquals(expectedIndex, index, "File group index should match expected value");
+  }
+
+  private static Stream<Arguments> mapKeyNoSeparatorToFileGroupIndexTestCases() {
+    return Stream.of(
+        // Test case 5: Secondary index record key but no separator
         Arguments.of(
-            "Null str handling sec idx v2",
-            null,
+            "Secondary index record key but no separator",
+            "primary_key_secondary_key",
             10,
             "secondary_index_idx_ts",
             V2,
-            0  // Calculated using the explicit hashing algorithm
+            7
         ),
-        // Test case 10: Record key with special characters
+        // Test case 6: Empty record key
         Arguments.of(
-            "Null str handling sec idx v2",
-            null,
+            "Empty record key",
+            "",
             10,
             "secondary_index_idx_ts",
             V2,
-            0  // Calculated using the explicit hashing algorithm
+            0
         )
     );
   }

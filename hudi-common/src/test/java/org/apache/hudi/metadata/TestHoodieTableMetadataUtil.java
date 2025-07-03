@@ -49,4 +49,4 @@ public class TestHoodieTableMetadataUtil {
     // Both should hash the full key
     assertNotEquals(result3, result4);
   }
-} 
+}

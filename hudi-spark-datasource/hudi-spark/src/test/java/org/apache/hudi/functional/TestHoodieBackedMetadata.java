@@ -3681,7 +3681,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
       // RI should not return mappings for deleted records
       metadataReader = metaClient.getTableFormat().getMetadataFactory().create(context, storage, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
-          HoodieDataUtils.collectAsMapWithOverwriteStrategy(metadataReader.readRecordIndexWithMapping(
       Map<String, HoodieRecordGlobalLocation> result =
           HoodieDataUtils.collectAsMapWithOverwriteStrategy(metadataReader.readRecordIndex(
               HoodieListData.eager(allRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()))));
