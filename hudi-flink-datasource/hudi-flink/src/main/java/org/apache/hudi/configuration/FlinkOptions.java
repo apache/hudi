@@ -420,6 +420,13 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(HoodieWriteConfig.WRITE_TABLE_VERSION.defaultValue())
       .withDescription("Table version produced by this writer.");
 
+  @AdvancedConfig
+  public static final ConfigOption<String> WRITE_TABLE_FORMAT = ConfigOptions
+          .key(HoodieTableConfig.TABLE_FORMAT.key())
+          .stringType()
+          .defaultValue(HoodieTableConfig.TABLE_FORMAT.defaultValue())
+          .withDescription("Table format produced by this writer.");
+
   /**
    * Flag to indicate whether to drop duplicates before insert/upsert.
    * By default false to gain extra performance.
@@ -458,6 +465,14 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("Flag to indicate whether to ignore any non exception error (e.g. writestatus error). within a checkpoint batch. \n"
           + "By default false. Turning this on, could hide the write status errors while the flink checkpoint moves ahead. \n"
           + "So, would recommend users to use this with caution.");
+
+  @AdvancedConfig
+  public static final ConfigOption<Boolean> WRITE_FAIL_FAST = ConfigOptions
+          .key("write.fail.fast")
+          .booleanType()
+          .defaultValue(false)
+          .withDescription("Flag to indicate whether to fail job immediately when an error record is detected. \n"
+                  + "Currently, this option is only applied to Flink append write functions.");
 
   public static final ConfigOption<String> RECORD_KEY_FIELD = ConfigOptions
       .key(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())
@@ -663,7 +678,7 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<Long> WRITE_COMMIT_ACK_TIMEOUT = ConfigOptions
       .key("write.commit.ack.timeout")
       .longType()
-      .defaultValue(-1L) // default at least once
+      .defaultValue(300_000L)
       .withDescription("Timeout limit for a writer task after it finishes a checkpoint and\n"
           + "waits for the instant commit success, only for internal use");
 

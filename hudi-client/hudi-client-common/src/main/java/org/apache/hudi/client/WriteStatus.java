@@ -57,8 +57,6 @@ public class WriteStatus implements Serializable {
 
   private final HashMap<HoodieKey, Throwable> errors = new HashMap<>();
 
-  private final List<HoodieRecordDelegate> writtenRecordDelegates = new ArrayList<>();
-
   private final List<Pair<HoodieRecordDelegate, Throwable>> failedRecords = new ArrayList<>();
 
   // true if this WriteStatus refers to a write happening in metadata table.
@@ -77,6 +75,7 @@ public class WriteStatus implements Serializable {
   private final double failureFraction;
   private final boolean trackSuccessRecords;
   private final transient Random random;
+  private IndexStats indexStats = new IndexStats();
 
   public WriteStatus(Boolean trackSuccessRecords, Double failureFraction, Boolean isMetadataTable) {
     this.trackSuccessRecords = trackSuccessRecords;
@@ -105,7 +104,7 @@ public class WriteStatus implements Serializable {
    */
   public void markSuccess(HoodieRecord record, Option<Map<String, String>> optionalRecordMetadata) {
     if (trackSuccessRecords) {
-      writtenRecordDelegates.add(HoodieRecordDelegate.fromHoodieRecord(record));
+      indexStats.addHoodieRecordDelegate(HoodieRecordDelegate.fromHoodieRecord(record));
     }
     updateStatsForSuccess(optionalRecordMetadata);
   }
@@ -118,7 +117,7 @@ public class WriteStatus implements Serializable {
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public void markSuccess(HoodieRecordDelegate recordDelegate, Option<Map<String, String>> optionalRecordMetadata) {
     if (trackSuccessRecords) {
-      writtenRecordDelegates.add(Objects.requireNonNull(recordDelegate));
+      indexStats.addHoodieRecordDelegate(Objects.requireNonNull(recordDelegate));
     }
     updateStatsForSuccess(optionalRecordMetadata);
   }
@@ -189,19 +188,9 @@ public class WriteStatus implements Serializable {
     totalErrorRecords++;
   }
 
-  public WriteStatus removeMetadataIndexStatsAndErrorRecordsTracking() {
-    removeMetadataStats();
-    dropGranularErrorRecordsTracking();
-    return this;
-  }
-
   public WriteStatus removeMetadataStats() {
-    this.writtenRecordDelegates.clear();
+    this.indexStats = null;
     return this;
-  }
-
-  public void dropGranularErrorRecordsTracking() {
-    failedRecords.clear();
   }
 
   public String getFileId() {
@@ -236,8 +225,12 @@ public class WriteStatus implements Serializable {
     this.globalError = t;
   }
 
+  public IndexStats getIndexStats() {
+    return indexStats;
+  }
+
   public List<HoodieRecordDelegate> getWrittenRecordDelegates() {
-    return writtenRecordDelegates;
+    return indexStats.getWrittenRecordDelegates();
   }
 
   public List<Pair<HoodieRecordDelegate, Throwable>> getFailedRecords() {

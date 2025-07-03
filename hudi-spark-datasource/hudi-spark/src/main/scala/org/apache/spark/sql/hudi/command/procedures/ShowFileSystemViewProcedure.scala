@@ -115,7 +115,7 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
       instants = instants.filter(instant => predicate.test(maxInstant, instant.requestedTime))
     }
 
-    val filteredTimeline = metaClient.getTimelineLayout.getTimelineFactory.createDefaultTimeline(
+    val filteredTimeline = metaClient.getTableFormat.getTimelineFactory.createDefaultTimeline(
       new JArrayList[HoodieInstant](instants.toList.asJava).stream(), metaClient.getActiveTimeline.getInstantReader)
     new HoodieTableFileSystemView(metaClient, filteredTimeline, statuses)
   }
@@ -148,7 +148,7 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
                                    maxInstant: String,
                                    merge: Boolean): JList[Row] = {
     var fileSliceStream: JStream[FileSlice] = JStream.empty()
-    val completionTimeQueryView =metaClient.getTimelineLayout().getTimelineFactory().createCompletionTimeQueryView(metaClient)
+    val completionTimeQueryView =metaClient.getTableFormat.getTimelineFactory.createCompletionTimeQueryView(metaClient)
     if (merge) {
       partitions.foreach(p => fileSliceStream = JStream.concat(fileSliceStream, fsView.getLatestMergedFileSlicesBeforeOrOn(p, maxInstant)))
     } else {

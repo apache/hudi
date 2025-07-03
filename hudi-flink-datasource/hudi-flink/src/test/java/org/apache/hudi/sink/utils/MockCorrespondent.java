@@ -27,7 +27,6 @@ import org.apache.hudi.sink.event.Correspondent;
  */
 public class MockCorrespondent extends Correspondent {
   private final StreamWriteOperatorCoordinator coordinator;
-
   public MockCorrespondent(StreamWriteOperatorCoordinator coordinator) {
     this.coordinator = coordinator;
   }
@@ -35,7 +34,7 @@ public class MockCorrespondent extends Correspondent {
   @Override
   public String requestInstantTime(long checkpointId) {
     try {
-      InstantTimeResponse response = CoordinationResponseSeDe.unwrap(this.coordinator.handleCoordinationRequest(InstantTimeRequest.getInstance(checkpointId)).get());
+      InstantTimeResponse response = CoordinationResponseSerDe.unwrap(this.coordinator.handleCoordinationRequest(InstantTimeRequest.getInstance(checkpointId)).get());
       return response.getInstant();
     } catch (Exception e) {
       throw new HoodieException("Error requesting the instant time from the coordinator", e);

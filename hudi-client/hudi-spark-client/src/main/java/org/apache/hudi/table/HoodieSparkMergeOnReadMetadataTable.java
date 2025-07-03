@@ -25,10 +25,10 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
-import org.apache.hudi.table.action.commit.SparkMetadataTableUpsertCommitActionExecutor;
+import org.apache.hudi.table.action.commit.SparkMetadataTableSecondaryDeltaCommitActionExecutor;
+import org.apache.hudi.table.action.commit.SparkMetadataTableFirstDeltaCommitActionExecutor;
 
 import java.util.List;
 
@@ -45,10 +45,19 @@ public class HoodieSparkMergeOnReadMetadataTable<T> extends HoodieSparkMergeOnRe
 
   public HoodieWriteMetadata<HoodieData<WriteStatus>> upsertPrepped(HoodieEngineContext context, String instantTime,
                                                                     HoodieData<HoodieRecord<T>> preppedRecords,
-                                                                    Option<List<HoodieFileGroupId>> hoodieFileGroupIdListOpt,
+                                                                    List<HoodieFileGroupId> hoodieFileGroupIdListOpt) {
+    // upsert partitioner for metadata table when all records are upsert and locations are known upfront.
+    // this is expected to be invoked first during streaming writes to metadata table.
+    return new SparkMetadataTableFirstDeltaCommitActionExecutor<>((HoodieSparkEngineContext) context, config, this, instantTime,
+        preppedRecords, hoodieFileGroupIdListOpt).execute();
+  }
+
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> upsertPrepped(HoodieEngineContext context, String instantTime,
+                                                                    HoodieData<HoodieRecord<T>> preppedRecords,
                                                                     boolean initialCall) {
-    // upsert partitioner for metadata table when all records are upsert and locations are known upfront
-    return new SparkMetadataTableUpsertCommitActionExecutor<>((HoodieSparkEngineContext) context, config, this, instantTime, preppedRecords,
-        hoodieFileGroupIdListOpt.get(), initialCall).execute();
+    // upsert partitioner for metadata table when all records are upsert and locations are known upfront.
+    // this is expected to be invoked second during streaming writes to metadata table.
+    return new SparkMetadataTableSecondaryDeltaCommitActionExecutor<>((HoodieSparkEngineContext) context, config, this, instantTime,
+        preppedRecords, initialCall).execute();
   }
 }

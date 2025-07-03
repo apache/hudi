@@ -446,6 +446,8 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
         assertEquals(updatedRecords.size(), rows.size());
         for (Row row : rows) {
           assertEquals(row.getAs(HoodieRecord.COMMIT_TIME_METADATA_FIELD), newCommitTime);
+          // check that file names metadata is updated
+          assertTrue(row.getString(HoodieRecord.FILENAME_META_FIELD_ORD).contains(compactionInstantTime));
         }
       }
     }
@@ -571,14 +573,14 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
       String commitActionType = table.getMetaClient().getCommitActionType();
       List<String> instants = new ArrayList<>();
-      String instant0 = metaClient.createNewInstantTime();
+      String instant0 = WriteClientTestUtils.createNewInstantTime();
       HoodieInstant instant = INSTANT_GENERATOR.createNewInstant(State.REQUESTED, commitActionType, instant0);
       activeTimeline.createNewInstant(instant);
       activeTimeline.transitionRequestedToInflight(instant, Option.empty());
       instant = INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, commitActionType, instant0);
       activeTimeline.saveAsComplete(instant, Option.empty());
 
-      String instant1 = metaClient.createNewInstantTime();
+      String instant1 = WriteClientTestUtils.createNewInstantTime();
       WriteClientTestUtils.startCommitWithTime(client, instant1);
 
       List<HoodieRecord> records = dataGen.generateInserts(instant1, 200);
@@ -600,7 +602,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       }
       assertEquals(200, inserts);
 
-      String instant2 = metaClient.createNewInstantTime();
+      String instant2 = WriteClientTestUtils.createNewInstantTime();
       WriteClientTestUtils.startCommitWithTime(client, instant2);
       records = dataGen.generateUpdates(instant2, records);
       writeRecords = jsc().parallelize(records, 1);

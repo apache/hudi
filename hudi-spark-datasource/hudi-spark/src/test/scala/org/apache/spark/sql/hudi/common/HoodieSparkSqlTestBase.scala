@@ -404,7 +404,7 @@ object HoodieSparkSqlTestBase {
       engineContext, metadataConfig, FileSystemViewStorageConfig.newBuilder.build,
       HoodieCommonConfig.newBuilder.build,
       (_: HoodieTableMetaClient) => {
-        HoodieTableMetadata.create(
+        metaClient.getTableFormat.getMetadataFactory.create(
           engineContext, metaClient.getStorage, metadataConfig, metaClient.getBasePath.toString)
       }
     )

@@ -180,6 +180,7 @@ public class FlinkWriteClients {
                     .withClusteringPartitionRegexPattern(conf.get(FlinkOptions.CLUSTERING_PLAN_STRATEGY_PARTITION_REGEX_PATTERN))
                     .withClusteringPartitionSelected(conf.get(FlinkOptions.CLUSTERING_PLAN_STRATEGY_PARTITION_SELECTED))
                     .withAsyncClusteringMaxCommits(conf.getInteger(FlinkOptions.CLUSTERING_DELTA_COMMITS))
+                    .withClusteringSortColumns(conf.getString(FlinkOptions.CLUSTERING_SORT_COLUMNS))
                     .withScheduleInlineClustering(conf.getBoolean(FlinkOptions.CLUSTERING_SCHEDULE_ENABLED))
                     .withAsyncClustering(conf.getBoolean(FlinkOptions.CLUSTERING_ASYNC_ENABLED))
                     .build())
@@ -243,9 +244,11 @@ public class FlinkWriteClients {
     }
 
     HoodieWriteConfig writeConfig = builder.build();
-    // always LAZY for non-blocking instant time generation.
-    writeConfig.setValue(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key(),
-        HoodieFailedWritesCleaningPolicy.LAZY.name());
+    if (!OptionsResolver.isBlockingInstantGeneration(conf)) {
+      // always LAZY for non-blocking instant time generation.
+      writeConfig.setValue(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key(),
+          HoodieFailedWritesCleaningPolicy.LAZY.name());
+    }
     if (loadFsViewStorageConfig && !conf.containsKey(FileSystemViewStorageConfig.REMOTE_HOST_NAME.key())) {
       // do not use the builder to give a change for recovering the original fs view storage config
       FileSystemViewStorageConfig viewStorageConfig = ViewStorageProperties.loadFromProperties(conf.getString(FlinkOptions.PATH), conf);

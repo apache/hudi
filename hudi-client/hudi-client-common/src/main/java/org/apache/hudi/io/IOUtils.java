@@ -51,7 +51,12 @@ public class IOUtils {
       double memoryFraction = Double.parseDouble(memoryFractionOpt.get());
       double maxMemoryFractionForMerge = Double.parseDouble(maxMemoryFraction);
       long executorCores = Long.parseLong(totalCoresOpt.get());
-      double userAvailableMemory = executorMemoryInBytes * (1 - memoryFraction) / executorCores;
+      Option<String> singleTaskCoresOpt = context.getProperty(EngineProperty.SINGLE_TASK_CORES);
+      long executorTaskNum = executorCores;
+      if (singleTaskCoresOpt.isPresent()) {
+        executorTaskNum = executorCores / Long.parseLong(singleTaskCoresOpt.get());
+      }
+      double userAvailableMemory = executorMemoryInBytes * (1 - memoryFraction) / executorTaskNum;
       long maxMemoryForMerge = (long) Math.floor(userAvailableMemory * maxMemoryFractionForMerge);
       return Math.max(DEFAULT_MIN_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES, maxMemoryForMerge);
     } else {

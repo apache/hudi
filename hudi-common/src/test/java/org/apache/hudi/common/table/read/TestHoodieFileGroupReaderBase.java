@@ -52,7 +52,6 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
-import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -95,6 +94,7 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.getLogFileListFro
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 
 /**
@@ -225,7 +225,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       Schema avroSchema = new TableSchemaResolver(metaClient).getTableAvroSchema();
       List<FileSlice> fileSlices = getFileSlicesToRead(getStorageConf(), getBasePath(), metaClient, true, 0);
       List<T> records = readRecordsFromFileGroup(getStorageConf(), getBasePath(), metaClient, fileSlices,
-          avroSchema, RecordMergeMode.COMMIT_TIME_ORDERING, false);
+          avroSchema, RecordMergeMode.COMMIT_TIME_ORDERING, false, false);
       HoodieReaderContext<T> readerContext = getHoodieReaderContext(getBasePath(), avroSchema, getStorageConf(), metaClient);
       for (Boolean isCompressionEnabled : new boolean[] {true, false}) {
         try (ExternalSpillableMap<Serializable, BufferedRecord<T>> spillableMap =
@@ -313,8 +313,9 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     // use reader context for conversion to engine specific objects
     HoodieReaderContext<T> readerContext = getHoodieReaderContext(tablePath, avroSchema, getStorageConf(), metaClient);
     List<FileSlice> fileSlices = getFileSlicesToRead(storageConf, tablePath, metaClient, containsBaseFile, expectedLogFileNum);
+    boolean sortOutput = !containsBaseFile;
     List<HoodieTestDataGenerator.RecordIdentifier> actualRecordList = convertEngineRecords(
-        readRecordsFromFileGroup(storageConf, tablePath, metaClient, fileSlices, avroSchema, recordMergeMode, false),
+        readRecordsFromFileGroup(storageConf, tablePath, metaClient, fileSlices, avroSchema, recordMergeMode, false, sortOutput),
         avroSchema, readerContext);
     // validate size is equivalent to ensure no duplicates are returned
     assertEquals(expectedRecords.size(), actualRecordList.size());
@@ -327,7 +328,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     assertEquals(new HashSet<>(expectedRecords), new HashSet<>(actualRecordList));
     // validate unmerged records
     actualRecordList = convertEngineRecords(
-        readRecordsFromFileGroup(storageConf, tablePath, metaClient, fileSlices, avroSchema, recordMergeMode, true),
+        readRecordsFromFileGroup(storageConf, tablePath, metaClient, fileSlices, avroSchema, recordMergeMode, true, false),
         avroSchema, readerContext);
     assertEquals(expectedUnmergedRecords.size(), actualRecordList.size());
     assertEquals(new HashSet<>(expectedUnmergedRecords), new HashSet<>(actualRecordList));
@@ -345,13 +346,11 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
         metadataConfig,
         FileSystemViewStorageConfig.newBuilder().build(),
         HoodieCommonConfig.newBuilder().build(),
-        mc -> HoodieTableMetadata.create(
+        mc -> metaClient.getTableFormat().getMetadataFactory().create(
             engineContext, mc.getStorage(), metadataConfig, tablePath));
     HoodieTableFileSystemView fsView =
         (HoodieTableFileSystemView) viewManager.getFileSystemView(metaClient);
-    List<String> relativePartitionPathList = FSUtils.getAllPartitionPaths(
-        engineContext, metaClient.getStorage(),
-        metadataConfig, metaClient.getBasePath().toString());
+    List<String> relativePartitionPathList = FSUtils.getAllPartitionPaths(engineContext, metaClient, metadataConfig);
     List<FileSlice> fileSlices =
         relativePartitionPathList.stream().flatMap(fsView::getAllFileSlices)
             .collect(Collectors.toList());
@@ -377,7 +376,8 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
                                            List<FileSlice> fileSlices,
                                            Schema avroSchema,
                                            RecordMergeMode recordMergeMode,
-                                           boolean isSkipMerge) {
+                                           boolean isSkipMerge,
+                                           boolean sortOutput) {
 
     List<T> actualRecordList = new ArrayList<>();
     TypedProperties props = buildProperties(metaClient, recordMergeMode);
@@ -386,10 +386,10 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     }
     fileSlices.forEach(fileSlice -> {
       if (shouldValidatePartialRead(fileSlice, avroSchema)) {
-        assertThrows(IllegalArgumentException.class, () -> getHoodieFileGroupReader(storageConf, tablePath, metaClient, avroSchema, fileSlice, 1, props));
+        assertThrows(IllegalArgumentException.class, () -> getHoodieFileGroupReader(storageConf, tablePath, metaClient, avroSchema, fileSlice, 1, props, sortOutput));
       }
-      try (HoodieFileGroupReader<T> fileGroupReader = getHoodieFileGroupReader(storageConf, tablePath, metaClient, avroSchema, fileSlice, 0, props)) {
-        readWithFileGroupReader(fileGroupReader, actualRecordList, avroSchema);
+      try (HoodieFileGroupReader<T> fileGroupReader = getHoodieFileGroupReader(storageConf, tablePath, metaClient, avroSchema, fileSlice, 0, props, sortOutput)) {
+        readWithFileGroupReader(fileGroupReader, actualRecordList, avroSchema, getHoodieReaderContext(tablePath, avroSchema, storageConf, metaClient), sortOutput);
       } catch (Exception ex) {
         throw new RuntimeException(ex);
       }
@@ -398,7 +398,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
   }
 
   private HoodieFileGroupReader<T> getHoodieFileGroupReader(StorageConfiguration<?> storageConf, String tablePath, HoodieTableMetaClient metaClient, Schema avroSchema, FileSlice fileSlice,
-                                                            int start, TypedProperties props) {
+                                                            int start, TypedProperties props, boolean sortOutput) {
     return HoodieFileGroupReader.<T>newBuilder()
         .withReaderContext(getHoodieReaderContext(tablePath, avroSchema, storageConf, metaClient))
         .withHoodieTableMetaClient(metaClient)
@@ -411,16 +411,26 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
         .withLength(fileSlice.getTotalFileSize())
         .withShouldUseRecordPosition(false)
         .withAllowInflightInstants(false)
+        .withSortOutput(sortOutput)
         .build();
   }
 
   protected void readWithFileGroupReader(
       HoodieFileGroupReader<T> fileGroupReader,
       List<T> recordList,
-      Schema recordSchema) throws IOException {
+      Schema avroSchema,
+      HoodieReaderContext<T> readerContext,
+      boolean sortOutput) throws IOException {
+    String lastKey = null;
     try (ClosableIterator<T> fileGroupReaderIterator = fileGroupReader.getClosableIterator()) {
       while (fileGroupReaderIterator.hasNext()) {
-        recordList.add(fileGroupReaderIterator.next());
+        T next = fileGroupReaderIterator.next();
+        if (sortOutput) {
+          String currentKey = readerContext.getRecordKey(next, avroSchema);
+          assertTrue(lastKey == null || lastKey.compareTo(currentKey) < 0, "Record keys should be sorted within the file group");
+          lastKey = currentKey;
+        }
+        recordList.add(next);
       }
     }
   }
@@ -435,7 +445,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     List<HoodieRecord<T>> actualRecordList = new ArrayList<>();
     TypedProperties props = buildProperties(metaClient, recordMergeMode);
     fileSlices.forEach(fileSlice -> {
-      try (HoodieFileGroupReader<T> fileGroupReader = getHoodieFileGroupReader(storageConf, tablePath, metaClient, avroSchema, fileSlice, 0, props);
+      try (HoodieFileGroupReader<T> fileGroupReader = getHoodieFileGroupReader(storageConf, tablePath, metaClient, avroSchema, fileSlice, 0, props, false);
            ClosableIterator<HoodieRecord<T>> iter = fileGroupReader.getClosableHoodieRecordIterator()) {
         while (iter.hasNext()) {
           actualRecordList.add(iter.next());

@@ -340,7 +340,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     int numRecords = 200;
     //set wrong value for expected number of rows
     HoodieWriteConfig config = getConfigBuilder().withPreCommitValidatorConfig(createPreCommitValidatorConfig(500)).build();
-    String newCommitTime = metaClient.createNewInstantTime();
+    String newCommitTime = WriteClientTestUtils.createNewInstantTime();
     try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
       Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieRecord>, String> writeFn = (writeClient, recordRDD, instantTime) ->
           writeClient.bulkInsert(recordRDD, instantTime, Option.empty());
@@ -1012,6 +1012,14 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     initMetaClient(getPropertiesForKeyGen(populateMetaFields));
     testInsertAndClustering(createClusteringBuilder(true, 1).build(), populateMetaFields, true,
             false, SqlQueryEqualityPreCommitValidator.class.getName(), COUNT_SQL_QUERY_FOR_VALIDATION, "");
+  }
+
+  @Test
+  public void testBinaryCopyClustering() throws Exception {
+    String strategy = "org.apache.hudi.client.clustering.run.strategy.SparkBinaryCopyClusteringExecutionStrategy";
+    HoodieClusteringConfig config = createClusteringBuilder(true, 1).withClusteringExecutionStrategyClass(strategy).build();
+    testInsertAndClustering(config, true, true,
+        false, SqlQueryEqualityPreCommitValidator.class.getName(), COUNT_SQL_QUERY_FOR_VALIDATION, "");
   }
 
   @Test

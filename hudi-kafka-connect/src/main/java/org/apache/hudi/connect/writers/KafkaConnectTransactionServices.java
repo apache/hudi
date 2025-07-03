@@ -26,6 +26,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -100,6 +101,7 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
           .setRecordKeyFields(recordKeyFields)
           .setPartitionFields(partitionColumns)
           .setTableVersion(writeConfig.getWriteVersion())
+          .setTableFormat(connectConfigs.getStringOrDefault(HoodieTableConfig.TABLE_FORMAT))
           .setKeyGeneratorClassProp(writeConfig.getKeyGeneratorClass())
           .fromProperties(connectConfigs.getProps())
           .initTable(storageConf.newInstance(), tableBasePath));

@@ -22,7 +22,6 @@ import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.commands.TableCommand;
 import org.apache.hudi.cli.testutils.HoodieCLIIntegrationTestBase;
 import org.apache.hudi.client.SparkRDDWriteClient;
-import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.model.HoodieAvroPayload;
@@ -192,11 +191,11 @@ public class ITTestTableCommand extends HoodieCLIIntegrationTestBase {
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build()).build();
 
     try (SparkRDDWriteClient<HoodieAvroPayload> client = new SparkRDDWriteClient<>(new HoodieSparkEngineContext(jsc), cfg)) {
-      String instantTime = client.createNewInstantTime();
+      String instantTime = client.startCommit();
       List<HoodieRecord> records = dataGen.generateInserts(instantTime, 2);
       upsert(jsc, client, records, instantTime);
 
-      instantTime = client.createNewInstantTime();
+      instantTime = client.startCommit();
       List<HoodieRecord> recordsToUpdate = dataGen.generateUpdates(instantTime, 2);
       records.addAll(recordsToUpdate);
       upsert(jsc, client, records, instantTime);
@@ -205,7 +204,6 @@ public class ITTestTableCommand extends HoodieCLIIntegrationTestBase {
 
   private void upsert(JavaSparkContext jsc, SparkRDDWriteClient<HoodieAvroPayload> client,
                       List<HoodieRecord> records, String newCommitTime) throws IOException {
-    WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
     JavaRDD<WriteStatus> result = operateFunc(SparkRDDWriteClient::upsert, client, writeRecords, newCommitTime);
     client.commit(newCommitTime, result);

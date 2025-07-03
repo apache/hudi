@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.table;
 
+import org.apache.hudi.common.HoodieTableFormat;
+import org.apache.hudi.common.NativeTableFormat;
 import org.apache.hudi.common.bootstrap.index.hfile.HFileBootstrapIndex;
 import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
@@ -72,6 +74,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
@@ -198,7 +201,12 @@ public class HoodieTableConfig extends HoodieConfig {
       .key("hoodie.timeline.layout.version")
       .noDefaultValue()
       .withDocumentation("Version of timeline used, by the table.");
-  
+
+  public static final ConfigProperty<String> TABLE_FORMAT = ConfigProperty
+      .key("hoodie.table.format")
+      .defaultValue(NativeTableFormat.TABLE_FORMAT)
+      .withDocumentation("Table format name used when writing to the table.");
+
   public static final ConfigProperty<RecordMergeMode> RECORD_MERGE_MODE = ConfigProperty
       .key("hoodie.record.merge.mode")
       .defaultValue((RecordMergeMode) null,
@@ -718,6 +726,20 @@ public class HoodieTableConfig extends HoodieConfig {
     return contains(TIMELINE_LAYOUT_VERSION)
         ? Option.of(new TimelineLayoutVersion(getInt(TIMELINE_LAYOUT_VERSION)))
         : Option.empty();
+  }
+
+  public HoodieTableFormat getTableFormat(TimelineLayoutVersion layoutVersion) {
+    String tableFormat = getStringOrDefault(TABLE_FORMAT);
+    if (!tableFormat.equals(NativeTableFormat.TABLE_FORMAT)) {
+      ServiceLoader<HoodieTableFormat> loader = ServiceLoader.load(HoodieTableFormat.class);
+      for (HoodieTableFormat tableFormatImpl : loader) {
+        if (getString(TABLE_FORMAT).equals(tableFormatImpl.getName())) {
+          tableFormatImpl.init(props);
+          return tableFormatImpl;
+        }
+      }
+    }
+    return new NativeTableFormat(layoutVersion);
   }
 
   /**

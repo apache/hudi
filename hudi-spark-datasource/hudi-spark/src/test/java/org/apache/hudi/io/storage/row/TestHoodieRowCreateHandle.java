@@ -170,11 +170,8 @@ public class TestHoodieRowCreateHandle extends HoodieSparkClientTestHarness {
         ? "class java.lang.String cannot be cast to class org.apache.spark.unsafe.types.UTF8String"
         : "java.lang.String cannot be cast to org.apache.spark.unsafe.types.UTF8String";
 
-    try {
-      assertTrue(writeStatus.getGlobalError().getMessage().contains(expectedError));
-    } catch (Throwable e) {
-      fail("Expected error to contain: " + expectedError + ", the actual error message: " + writeStatus.getGlobalError().getMessage());
-    }
+    assertTrue(writeStatus.getGlobalError() instanceof ClassCastException);
+    assertTrue(writeStatus.getGlobalError().getMessage().contains(expectedError), "Expected error to contain: " + expectedError + ", the actual error message: " + writeStatus.getGlobalError());
 
     assertEquals(writeStatus.getFileId(), fileId);
     assertEquals(writeStatus.getPartitionPath(), partitionPath);

@@ -20,6 +20,7 @@ package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.clustering.update.strategy.SparkAllowUpdateStrategy;
+import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.client.utils.SparkValidatorUtils;
 import org.apache.hudi.common.data.HoodieData;
@@ -59,6 +60,7 @@ import org.apache.hudi.table.action.cluster.strategy.UpdateStrategy;
 import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.broadcast.Broadcast;
 import org.apache.spark.storage.StorageLevel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -280,11 +282,14 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
       // Partition only
       partitionedRDD = mappedRDD.partitionBy(partitioner);
     }
+
+    Broadcast<SparkBucketInfoGetter> bucketInfoGetter = ((HoodieSparkEngineContext) this.context)
+        .getJavaSparkContext().broadcast(((SparkHoodiePartitioner) partitioner).getSparkBucketInfoGetter());
     return HoodieJavaRDD.of(partitionedRDD.map(Tuple2::_2).mapPartitionsWithIndex((partition, recordItr) -> {
       if (WriteOperationType.isChangingRecords(operationType)) {
-        return handleUpsertPartition(instantTime, partition, recordItr, partitioner);
+        return handleUpsertPartition(instantTime, partition, recordItr, bucketInfoGetter);
       } else {
-        return handleInsertPartition(instantTime, partition, recordItr, partitioner);
+        return handleInsertPartition(instantTime, partition, recordItr, bucketInfoGetter);
       }
     }, true).flatMap(List::iterator));
   }
@@ -334,9 +339,8 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
 
   @SuppressWarnings("unchecked")
   protected Iterator<List<WriteStatus>> handleUpsertPartition(String instantTime, Integer partition, Iterator recordItr,
-                                                              Partitioner partitioner) {
-    SparkHoodiePartitioner upsertPartitioner = (SparkHoodiePartitioner) partitioner;
-    BucketInfo binfo = upsertPartitioner.getBucketInfo(partition);
+                                                              Broadcast<SparkBucketInfoGetter> bucketInfoGetter) {
+    BucketInfo binfo = bucketInfoGetter.getValue().getBucketInfo(partition);
     BucketType btype = binfo.bucketType;
     try {
       if (btype.equals(BucketType.INSERT)) {
@@ -354,8 +358,8 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
   }
 
   protected Iterator<List<WriteStatus>> handleInsertPartition(String instantTime, Integer partition, Iterator recordItr,
-                                                              Partitioner partitioner) {
-    return handleUpsertPartition(instantTime, partition, recordItr, partitioner);
+                                                              Broadcast<SparkBucketInfoGetter> bucketInfoGetter) {
+    return handleUpsertPartition(instantTime, partition, recordItr, bucketInfoGetter);
   }
 
   @Override
