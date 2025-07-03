@@ -1343,7 +1343,7 @@ public class HoodieTableMetadataUtil {
    * (either all containing the secondary index separator or none containing it).
    * <p>
    * For secondary index partitions (version >= 2), if the record keys contain the secondary index separator,
-   * the secondary key portion is used for hashing. Otherwise, the full record key is used.
+   * the unescaped secondary key portion is used for hashing. Otherwise, the full record key is used.
    *
    * @param needsSecondaryKeyExtraction Whether to extract secondary key from composite keys (should be determined by caller)
    *
@@ -1352,7 +1352,7 @@ public class HoodieTableMetadataUtil {
   public static SerializableBiFunction<String, Integer, Integer> getSecondaryKeyToFileGroupMappingFunction(boolean needsSecondaryKeyExtraction) {
     if (needsSecondaryKeyExtraction) {
       return (recordKey, numFileGroups) -> {
-        String secondaryKey = SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey(recordKey);
+        String secondaryKey = SecondaryIndexKeyUtils.getUnescapedSecondaryKeyFromSecondaryIndexKey(recordKey);
         return mapRecordKeyToFileGroupIndex(secondaryKey, numFileGroups);
       };
     }
