@@ -45,4 +45,12 @@ public interface HoodieSeekingFileReader<T> extends HoodieFileReader<T> {
     return getRecordsByKeyPrefixIterator(sortedKeyPrefixes, getSchema());
   }
 
+  default ClosableIterator<HoodieRecord<T>> getRecordsBySecondaryIndexKeyMatcherIterator(List<String> sortedLookupKeys, Schema schema) throws IOException {
+    throw new UnsupportedOperationException();
+  }
+
+  default ClosableIterator<HoodieRecord<T>> getRecordsBySecondaryIndexKeyMatcherIterator(List<String> sortedLookupKeys) throws IOException {
+    return getRecordsBySecondaryIndexKeyMatcherIterator(sortedLookupKeys, getSchema());
+  }
+
 }

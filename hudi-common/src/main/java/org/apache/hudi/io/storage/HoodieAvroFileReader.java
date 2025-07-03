@@ -57,6 +57,9 @@ public abstract class HoodieAvroFileReader implements HoodieFileReader<IndexedRe
   public abstract ClosableIterator<IndexedRecord> getIndexedRecordsByKeyPrefixIterator(
       List<String> sortedKeyPrefixes, Schema readerSchema) throws IOException;
 
+  public abstract ClosableIterator<IndexedRecord> getIndexedRecordsBySecondaryIndexKeyMatcherIterator(
+      List<String> sortedLookupKeys, Schema readerSchema) throws IOException;
+
   // No key predicate support by default.
   public boolean supportKeyPredicate() {
     return false;

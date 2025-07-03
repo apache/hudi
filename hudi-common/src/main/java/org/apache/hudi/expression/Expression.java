@@ -40,7 +40,8 @@ public interface Expression extends Serializable {
     IS_NULL(null, null),
     IS_NOT_NULL(null, null),
     IN("IN", "IN"),
-    NOT("NOT", "NOT");
+    NOT("NOT", "NOT"),
+    SECONDARY_INDEX_KEY_MATCH(null, null);
 
     public final String sqlOperator;
     public final String symbol;

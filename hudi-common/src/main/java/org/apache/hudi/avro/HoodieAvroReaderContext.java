@@ -41,6 +41,7 @@ import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.expression.Expression;
 import org.apache.hudi.expression.Predicate;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.io.storage.HoodieIOFactory;
@@ -94,9 +95,17 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       return reader.getIndexedRecordIterator(dataSchema, requiredSchema);
     }
     if (reader.supportKeyPredicate()) {
-      List<String> keys = reader.extractKeys(keyFilterOpt);
-      if (!keys.isEmpty()) {
-        return reader.getIndexedRecordsByKeysIterator(keys, requiredSchema);
+      // Support for SecondaryIndexKeyMatcher - uses custom iterator with old key matcher logic
+      if (keyFilterOpt.isPresent() && keyFilterOpt.get().getOperator().equals(Expression.Operator.SECONDARY_INDEX_KEY_MATCH)) {
+        List<String> lookupKeys = reader.extractKeyPrefixes(keyFilterOpt);
+        if (!lookupKeys.isEmpty()) {
+          return reader.getIndexedRecordsBySecondaryIndexKeyMatcherIterator(lookupKeys, requiredSchema);
+        }
+      } else {
+        List<String> keys = reader.extractKeys(keyFilterOpt);
+        if (!keys.isEmpty()) {
+          return reader.getIndexedRecordsByKeysIterator(keys, requiredSchema);
+        }
       }
     }
     if (reader.supportKeyPrefixPredicate()) {

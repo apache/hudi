@@ -175,6 +175,15 @@ public class BindVisitor implements ExpressionVisitor<Expression>  {
       return Predicates.startsWith(left, right);
     }
 
+    if (predicate instanceof Predicates.SecondaryIndexKeyMatcher) {
+      Predicates.SecondaryIndexKeyMatcher v2Matcher = (Predicates.SecondaryIndexKeyMatcher) predicate;
+      Expression left = v2Matcher.getLeft().accept(this);
+      List<Expression> right = v2Matcher.getRightChildren().stream()
+          .map(expr -> expr.accept(this))
+          .collect(Collectors.toList());
+      return Predicates.secondaryIndexKeyMatcher(left, right);
+    }
+
     if (predicate instanceof Predicates.StringContains) {
       Predicates.StringContains contains = (Predicates.StringContains) predicate;
       Expression left = contains.getLeft().accept(this);
