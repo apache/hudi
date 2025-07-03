@@ -35,14 +35,12 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.expression.Expression;
 import org.apache.hudi.expression.Predicate;
 import org.apache.hudi.expression.Predicates;
-import org.apache.hudi.index.secondary.SecondaryIndexUtils;
 import org.apache.hudi.io.ByteArraySeekableDataInputStream;
 import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.io.hfile.HFileReader;
 import org.apache.hudi.io.hfile.HFileReaderImpl;
 import org.apache.hudi.io.hfile.KeyValue;
 import org.apache.hudi.io.hfile.UTF8StringKey;
-import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.Lazy;
@@ -71,6 +69,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 import static org.apache.hudi.io.hfile.HFileUtils.isPrefixOfKey;
+import static org.apache.hudi.metadata.SecondaryIndexKeyUtils.getUnescapedSecondaryKeyFromSecondaryIndexKey;
 
 /**
  * An implementation of {@link HoodieAvroHFileReaderImplBase} using native {@link HFileReader}.
@@ -528,8 +527,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
   private static class SecondaryIndexKeyMatcher implements KeyMatcher {
     @Override
     public boolean matches(String recordKey, String lookupKey) {
-      /// fdss todo
-      return HoodieTableMetadataUtil(recordKey, lookupKey);
+      return getUnescapedSecondaryKeyFromSecondaryIndexKey(recordKey).equals(lookupKey);
     }
 
     @Override

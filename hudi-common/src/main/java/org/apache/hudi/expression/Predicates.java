@@ -19,7 +19,7 @@
 package org.apache.hudi.expression;
 
 import org.apache.hudi.internal.schema.Type;
-import org.apache.hudi.common.util.SecondaryIndexKeyMatcherUtils;
+import org.apache.hudi.metadata.SecondaryIndexKeyUtils;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -517,7 +517,7 @@ public class Predicates {
     }
 
     private boolean matchesSecondaryIndexV2Key(String recordKey, String lookupKey) {
-      return SecondaryIndexKeyMatcherUtils.matchesSecondaryIndexKey(recordKey, lookupKey);
+      return SecondaryIndexKeyUtils.getUnescapedSecondaryKeyFromSecondaryIndexKey(recordKey).equals(lookupKey);
     }
 
     public List<Expression> getRightChildren() {

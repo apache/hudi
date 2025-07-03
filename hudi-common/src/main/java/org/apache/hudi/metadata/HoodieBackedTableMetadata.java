@@ -243,13 +243,13 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         getEngineContext().parallelize(partitionFileSlices))
         .flatMap(
             (SerializableFunction<FileSlice, Iterator<HoodieRecord<HoodieMetadataPayload>>>) fileSlice ->
-                getByKeyPrefixes(fileSlice, sortedKeyPrefixes, partitionName));
+                getBySecKey(fileSlice, sortedKeyPrefixes, partitionName));
   }
 
-  private Iterator<HoodieRecord<HoodieMetadataPayload>> getByKeyPrefixes(FileSlice fileSlice,
+  private Iterator<HoodieRecord<HoodieMetadataPayload>> getBySecKey(FileSlice fileSlice,
                                                                          List<String> sortedEncodedKeyPrefixes,
                                                                          String partitionName) throws IOException {
-    HoodieFileGroupReader<IndexedRecord> fileGroupReader = buildFileGroupReader(sortedEncodedKeyPrefixes, fileSlice, Expression.Operator.STARTS_WITH);
+    HoodieFileGroupReader<IndexedRecord> fileGroupReader = buildFileGroupReader(sortedEncodedKeyPrefixes, fileSlice, Expression.Operator.SECONDARY_INDEX_KEY_MATCH);
     ClosableIterator<IndexedRecord> it = fileGroupReader.getClosableIterator();
     return new CloseableMappingIterator<>(
         it,
@@ -262,18 +262,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         });
   }
 
-  private Predicate transformKeysToPredicate(List<String> keys) {
-    List<Expression> right = keys.stream().map(Literal::from).collect(Collectors.toList());
-    return Predicates.in(null, right);
-  }
-
-  private Predicate transformKeyPrefixesToPredicate(List<String> keyPrefixes) {
-    List<Expression> right = keyPrefixes.stream().map(Literal::from).collect(Collectors.toList());
-    return Predicates.startsWithAny(null, right);
-  }
-
   private Predicate transformKeysToPredicateByOperator(List<String> keys, Expression.Operator operator) {
-    List<Expression> right = keys.stream().map(k -> Literal.from(k)).collect(Collectors.toList());
+    List<Expression> right = keys.stream().map(Literal::from).collect(Collectors.toList());
     switch (operator) {
       case IN:
         return Predicates.in(null, right);
@@ -346,7 +336,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
             .mapToPair(p -> Pair.of(p.getLeft(), p.getRight()));
     return result.filter((String k, HoodieRecord<HoodieMetadataPayload> v) -> !v.getData().isDeleted());
   }
-
 
   /**
    * All keys to be looked up go through the following steps:
@@ -571,7 +560,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         storageConf,
         metadataMetaClient.getTableConfig(),
         Option.of(instantRange),
-        Option.of(transformKeysToPredicateByOperator(encodedKeys, predicateOperator)));
+        Option.of(transformKeysToPredicateByOperator(sortedKeys, predicateOperator)));
     return HoodieFileGroupReader.<IndexedRecord>newBuilder()
         .withReaderContext(readerContext)
         .withHoodieTableMetaClient(metadataMetaClient)
