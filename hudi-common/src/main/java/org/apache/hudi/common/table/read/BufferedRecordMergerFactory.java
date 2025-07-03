@@ -41,6 +41,9 @@ import org.apache.avro.generic.IndexedRecord;
 import java.io.IOException;
 import java.util.Objects;
 
+/**
+ * Factory to create a {@link BufferedRecordMerger}.
+ */
 public class BufferedRecordMergerFactory {
   public static <T> BufferedRecordMerger<T> create(
       HoodieReaderContext<T> readerContext,
@@ -54,23 +57,27 @@ public class BufferedRecordMergerFactory {
     if (enablePartialMerging) {
       BufferedRecordMerger<T> deleteRecordMerger = create(
           readerContext, recordMergeMode, false, recordMerger, orderingFieldName, payloadClass, readerSchema, props);
-      return new PartialUpdateMerger<>(readerContext, recordMerger, deleteRecordMerger, readerSchema, props);
+      return new PartialUpdateBufferedRecordMerger<>(readerContext, recordMerger, deleteRecordMerger, readerSchema, props);
     }
     switch (recordMergeMode) {
       case COMMIT_TIME_ORDERING:
-        return new CommitTimeOrderingMerger<>();
+        return new CommitTimeBufferedRecordMerger<>();
       case EVENT_TIME_ORDERING:
-        return new EventTimeOrderingMerger<>();
+        return new EventTimeBufferedRecordMerger<>();
       default:
         if (payloadClass.isPresent()) {
-          return new CustomPayloadMerger<>(readerContext, recordMerger, orderingFieldName, payloadClass.get(), readerSchema, props);
+          return new CustomPayloadBufferedRecordMerger<>(readerContext, recordMerger, orderingFieldName, payloadClass.get(), readerSchema, props);
         } else {
-          return new CustomMerger<>(readerContext, recordMerger, readerSchema, props);
+          return new CustomBufferedRecordMerger<>(readerContext, recordMerger, readerSchema, props);
         }
     }
   }
 
-  private static class CommitTimeOrderingMerger<T> implements BufferedRecordMerger<T> {
+  /**
+   * An implementation of {@link BufferedRecordMerger} which merges {@link BufferedRecord}s
+   * based on {@code COMMIT_TIME_ORDERING} merge mode.
+   */
+  private static class CommitTimeBufferedRecordMerger<T> implements BufferedRecordMerger<T> {
     @Override
     public Option<BufferedRecord<T>> deltaMerge(BufferedRecord<T> newRecord, BufferedRecord<T> existingRecord) {
       return Option.of(newRecord);
@@ -87,7 +94,11 @@ public class BufferedRecordMergerFactory {
     }
   }
 
-  private static class EventTimeOrderingMerger<T> implements BufferedRecordMerger<T> {
+  /**
+   * An implementation of {@link BufferedRecordMerger} which merges {@link BufferedRecord}s
+   * based on {@code EVENT_TIME_ORDERING} merge mode.
+   */
+  private static class EventTimeBufferedRecordMerger<T> implements BufferedRecordMerger<T> {
     @Override
     public Option<BufferedRecord<T>> deltaMerge(BufferedRecord<T> newRecord, BufferedRecord<T> existingRecord) {
       if (existingRecord == null || shouldKeepNewerRecord(existingRecord, newRecord)) {
@@ -116,14 +127,18 @@ public class BufferedRecordMergerFactory {
     }
   }
 
-  private static class PartialUpdateMerger<T> implements BufferedRecordMerger<T> {
+  /**
+   * An implementation of {@link BufferedRecordMerger} which merges {@link BufferedRecord}s
+   * based on partial update merging.
+   */
+  private static class PartialUpdateBufferedRecordMerger<T> implements BufferedRecordMerger<T> {
     private final HoodieReaderContext<T> readerContext;
     private final Option<HoodieRecordMerger> recordMerger;
     private final BufferedRecordMerger<T> deleteRecordMerger;
     private final Schema readerSchema;
     private final TypedProperties props;
 
-    public PartialUpdateMerger(
+    public PartialUpdateBufferedRecordMerger(
         HoodieReaderContext<T> readerContext,
         Option<HoodieRecordMerger> recordMerger,
         BufferedRecordMerger<T> deleteRecordMerger,
@@ -191,8 +206,12 @@ public class BufferedRecordMergerFactory {
     }
   }
 
-  private static class CustomMerger<T> extends BaseCustomMerger<T> {
-    public CustomMerger(
+  /**
+   * An implementation of {@link BufferedRecordMerger} which merges {@link BufferedRecord}s
+   * based on {@code CUSTOM} merge mode.
+   */
+  private static class CustomBufferedRecordMerger<T> extends BaseCustomMerger<T> {
+    public CustomBufferedRecordMerger(
         HoodieReaderContext<T> readerContext,
         Option<HoodieRecordMerger> recordMerger,
         Schema readerSchema,
@@ -240,11 +259,15 @@ public class BufferedRecordMergerFactory {
     }
   }
 
-  private static class CustomPayloadMerger<T> extends BaseCustomMerger<T> {
+  /**
+   * An implementation of {@link BufferedRecordMerger} which merges {@link BufferedRecord}s
+   * based on {@code CUSTOM} merge mode and a given record payload class.
+   */
+  private static class CustomPayloadBufferedRecordMerger<T> extends BaseCustomMerger<T> {
     private final Option<String> orderingFieldName;
     private final String payloadClass;
 
-    public CustomPayloadMerger(
+    public CustomPayloadBufferedRecordMerger(
         HoodieReaderContext<T> readerContext,
         Option<HoodieRecordMerger> recordMerger,
         Option<String> orderingFieldName,
@@ -317,6 +340,10 @@ public class BufferedRecordMergerFactory {
     }
   }
 
+  /**
+   * A base implementation of {@link BufferedRecordMerger} which merges {@link BufferedRecord}s
+   * based on {@code CUSTOM} merge mode.
+   */
   private abstract static class BaseCustomMerger<T> implements BufferedRecordMerger<T> {
     protected final HoodieReaderContext<T> readerContext;
     protected final Option<HoodieRecordMerger> recordMerger;

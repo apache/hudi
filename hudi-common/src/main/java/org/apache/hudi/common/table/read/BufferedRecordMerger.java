@@ -25,7 +25,8 @@ import org.apache.hudi.common.util.collection.Pair;
 import java.io.IOException;
 
 /**
- * {@link BufferedRecordMerger} defines how to merge two {@link BufferedRecord} or {@link DeleteRecord}.
+ * {@link BufferedRecordMerger} provides the capabilities to merge two log records
+ * or log record and base record based on the configured merge mode.
  */
 public interface BufferedRecordMerger<T> {
 
