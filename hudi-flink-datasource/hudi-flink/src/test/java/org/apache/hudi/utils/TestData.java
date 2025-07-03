@@ -44,6 +44,7 @@ import org.apache.hudi.sink.utils.TestFunctionWrapper;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.format.FormatUtils;
 import org.apache.hudi.table.format.InternalSchemaManager;
+import org.apache.hudi.util.AvroToRowDataConverters;
 import org.apache.hudi.util.RowDataAvroQueryContexts;
 
 import org.apache.avro.Schema;
@@ -822,6 +823,38 @@ public class TestData {
       readBuffer.sort(Comparator.naturalOrder());
       assertThat(readBuffer.toString(), is(expected.get(partitionDir.getName())));
     }
+  }
+
+  public static List<GenericRecord> readAllData(
+      File baseFile, RowType rowType, int partitions) throws IOException {
+    assert baseFile.isDirectory();
+    FileFilter filter = file -> !file.getName().startsWith(".");
+    File[] partitionDirs = baseFile.listFiles(filter);
+
+    assertNotNull(partitionDirs);
+    assertThat(partitionDirs.length, is(partitions));
+
+    List<GenericRecord> result = new ArrayList<>();
+    AvroToRowDataConverters.AvroToRowDataConverter converter =
+        AvroToRowDataConverters.createConverter(rowType, true);
+
+    for (File partitionDir : partitionDirs) {
+      File[] dataFiles = partitionDir.listFiles(filter);
+      assertNotNull(dataFiles);
+
+      for (File dataFile : dataFiles) {
+        ParquetReader<GenericRecord> reader = AvroParquetReader
+            .<GenericRecord>builder(new Path(dataFile.getAbsolutePath())).build();
+
+        GenericRecord nextRecord = reader.read();
+        while (nextRecord != null) {
+          result.add(nextRecord);
+          nextRecord = reader.read();
+        }
+      }
+    }
+
+    return result;
   }
 
   /**
