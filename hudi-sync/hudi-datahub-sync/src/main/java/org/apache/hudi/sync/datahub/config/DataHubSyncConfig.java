@@ -115,6 +115,17 @@ public class DataHubSyncConfig extends HoodieSyncConfig {
       .defaultValue(true)
       .markAdvanced()
       .withDocumentation("Suppress exceptions during DataHub sync. This is true by default to ensure that when running inline with other jobs, the sync does not fail the job.");
+  public static final ConfigProperty<String> META_SYNC_DATAHUB_DATABASE_NAME = ConfigProperty
+      .key("hoodie.meta.sync.datahub.database.name")
+      .noDefaultValue()
+      .markAdvanced()
+      .withDocumentation("The name of the destination database that we should sync the hudi table to.");
+
+  public static final ConfigProperty<String> META_SYNC_DATAHUB_TABLE_NAME = ConfigProperty
+      .key("hoodie.meta.sync.datahub.table.name")
+      .noDefaultValue()
+      .markAdvanced()
+      .withDocumentation("The name of the destination table that we should sync the hudi table to.");
 
   public DataHubSyncConfig(Properties props) {
     super(props);
@@ -188,6 +199,12 @@ public class DataHubSyncConfig extends HoodieSyncConfig {
     @Parameter(names = {"--dataset-env"}, description = "Which Datahub Environment to use when pushing entities")
     public String datasetEnv;
 
+    @Parameter(names = {"--database-name"}, description = "Database name to use for datahub sync")
+    public String databaseName;
+
+    @Parameter(names = {"--table-name"}, description = "Table name to use for datahub sync")
+    public String tableName;
+
     @Parameter(names = {
         "--domain"}, description = "Domain identifier for the dataset. When provided all datasets will be attached to the provided domain. Must be in urn form (e.g., urn:li:domain:_domain_id).")
     public String domainIdentifier;
@@ -216,6 +233,8 @@ public class DataHubSyncConfig extends HoodieSyncConfig {
       } else {
         props.setProperty(META_SYNC_DATAHUB_SYNC_SUPPRESS_EXCEPTIONS.key(), String.valueOf(suppressExceptions));
       }
+      props.setPropertyIfNonNull(META_SYNC_DATAHUB_DATABASE_NAME.key(), databaseName);
+      props.setPropertyIfNonNull(META_SYNC_DATAHUB_TABLE_NAME.key(), tableName);
       return props;
     }
   }
