@@ -36,8 +36,10 @@ import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.SerializableSchema;
 import org.apache.hudi.util.StreamerUtil;
 
+import org.apache.flink.api.common.RuntimeExecutionMode;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.configuration.ExecutionOptions;
 import org.apache.flink.configuration.ReadableConfig;
 import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.table.api.constraints.UniqueConstraint;
@@ -86,7 +88,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
         new ValidationException("Option [path] should not be empty.")));
     setupTableOptions(conf.getString(FlinkOptions.PATH), conf);
     ResolvedSchema schema = context.getCatalogTable().getResolvedSchema();
-    setupConfOptions(conf, context.getObjectIdentifier(), context.getCatalogTable(), schema);
+    setupConfOptions(conf, context.getConfiguration(), context.getObjectIdentifier(), context.getCatalogTable(), schema);
     return new HoodieTableSource(
         SerializableSchema.create(schema),
         path,
@@ -103,7 +105,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     setupTableOptions(conf.getString(FlinkOptions.PATH), conf);
     ResolvedSchema schema = context.getCatalogTable().getResolvedSchema();
     sanityCheck(conf, schema);
-    setupConfOptions(conf, context.getObjectIdentifier(), context.getCatalogTable(), schema);
+    setupConfOptions(conf, context.getConfiguration(), context.getObjectIdentifier(), context.getCatalogTable(), schema);
     setupSortOptions(conf, context.getConfiguration());
     return new HoodieTableSink(conf, schema);
   }
@@ -237,13 +239,15 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
   /**
    * Sets up the config options based on the table definition, for e.g, the table name, primary key.
    *
-   * @param conf      The configuration to set up
-   * @param tablePath The table path
-   * @param table     The catalog table
-   * @param schema    The physical schema
+   * @param conf          The configuration to set up
+   * @param contextConfig The configuration of context
+   * @param tablePath     The table path
+   * @param table         The catalog table
+   * @param schema        The physical schema
    */
   private static void setupConfOptions(
       Configuration conf,
+      ReadableConfig contextConfig,
       ObjectIdentifier tablePath,
       CatalogTable table,
       ResolvedSchema schema) {
@@ -258,7 +262,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     // hive options
     setupHiveOptions(conf, tablePath);
     // read options
-    setupReadOptions(conf);
+    setupReadOptions(conf, contextConfig);
     // write options
     setupWriteOptions(conf);
     // infer avro schema from physical DDL schema
@@ -391,7 +395,12 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
   /**
    * Sets up the read options from the table definition.
    */
-  private static void setupReadOptions(Configuration conf) {
+  private static void setupReadOptions(Configuration conf, ReadableConfig contextConfig) {
+    if (!conf.getOptional(FlinkOptions.READ_AS_STREAMING).isPresent()
+        && contextConfig.getOptional(ExecutionOptions.RUNTIME_MODE).isPresent()) {
+      conf.setBoolean(FlinkOptions.READ_AS_STREAMING,
+          contextConfig.get(ExecutionOptions.RUNTIME_MODE) == RuntimeExecutionMode.STREAMING);
+    }
     if (OptionsResolver.isIncrementalQuery(conf)) {
       conf.setString(FlinkOptions.QUERY_TYPE, FlinkOptions.QUERY_TYPE_INCREMENTAL);
     }
