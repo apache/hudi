@@ -58,6 +58,7 @@ import org.apache.hudi.util.RecordKeyToRowDataConverter;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.binary.BinaryRowData;
 import org.apache.flink.table.data.utils.JoinedRowData;
@@ -193,6 +194,18 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
     RowData rowData = bufferedRecord.getRecord();
     HoodieOperation operation = HoodieOperation.fromValue(rowData.getRowKind().toByteValue());
     return new HoodieFlinkRecord(hoodieKey, operation, bufferedRecord.getOrderingValue(), rowData);
+  }
+
+  @Override
+  public RowData constructEngineRecord(Schema schema, List<Object> values) {
+    if (schema.getFields().size() != values.size()) {
+      throw new IllegalArgumentException("Schema field count and values size must match.");
+    }
+    GenericRowData row = new GenericRowData(RowKind.INSERT, values.size());
+    for (int i = 0; i < values.size(); i++) {
+      row.setField(i, values.get(i));  // Must be internal Flink types
+    }
+    return row;
   }
 
   @Override

@@ -34,6 +34,7 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.log.KeySpec;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
@@ -42,6 +43,7 @@ import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
@@ -58,7 +60,10 @@ import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
@@ -73,12 +78,15 @@ import static org.apache.hudi.common.model.HoodieRecord.HOODIE_IS_DELETED_FIELD;
 import static org.apache.hudi.common.model.HoodieRecord.OPERATION_METADATA_FIELD;
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.INSTANT_TIME;
+import static org.apache.hudi.keygen.constant.KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED;
 
 public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T> {
+  private static final String PARTIAL_UPDATE_CUSTOM_MARKER = "hoodie.write.partial.update.custom.marker";
   protected final HoodieReaderContext<T> readerContext;
   protected final Schema readerSchema;
   protected final Option<String> orderingFieldName;
   protected final RecordMergeMode recordMergeMode;
+  protected final PartialUpdateMode partialUpdateMode;
   protected final Option<HoodieRecordMerger> recordMerger;
   protected final Option<String> payloadClass;
   protected final TypedProperties props;
@@ -86,7 +94,11 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   protected final HoodieReadStats readStats;
   protected final boolean shouldCheckCustomDeleteMarker;
   protected final boolean shouldCheckBuiltInDeleteMarker;
+  protected final boolean shouldKeepEventTimeMetadata;
+  protected final Option<String> eventTimeFieldOpt;
+  protected final boolean shouldKeepConsistentLogicalTimestamp;
   protected final boolean emitDelete;
+  protected Map<String, String> partialUpdateProperties;
   protected ClosableIterator<T> baseFileIterator;
   protected Iterator<BufferedRecord<T>> logRecordIterator;
   protected T nextRecord;
@@ -98,6 +110,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   protected FileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
                                   HoodieTableMetaClient hoodieTableMetaClient,
                                   RecordMergeMode recordMergeMode,
+                                  PartialUpdateMode partialUpdateMode,
                                   TypedProperties props,
                                   HoodieReadStats readStats,
                                   Option<String> orderingFieldName,
@@ -105,6 +118,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
     this.readerContext = readerContext;
     this.readerSchema = AvroSchemaCache.intern(readerContext.getSchemaHandler().getRequiredSchema());
     this.recordMergeMode = recordMergeMode;
+    this.partialUpdateMode = partialUpdateMode;
     this.recordMerger = readerContext.getRecordMerger();
     if (recordMerger.isPresent() && recordMerger.get().getMergingStrategy().equals(PAYLOAD_BASED_MERGE_STRATEGY_UUID)) {
       this.payloadClass = Option.of(hoodieTableMetaClient.getTableConfig().getPayloadClass());
@@ -141,6 +155,38 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
         readerContext.getSchemaHandler().getCustomDeleteMarkerKeyValue().isPresent();
     this.shouldCheckBuiltInDeleteMarker =
         readerContext.getSchemaHandler().hasBuiltInDelete();
+    this.shouldKeepEventTimeMetadata = shouldKeepEventTimeMetadata(props);
+    this.shouldKeepConsistentLogicalTimestamp = shouldKeepEventTimeMetadata(props);
+    this.partialUpdateProperties = parsePartialUpdateProperties(props);
+    if (shouldKeepEventTimeMetadata) {
+      this.eventTimeFieldOpt = Option.ofNullable(
+          props.getProperty(HoodiePayloadProps.PAYLOAD_EVENT_TIME_FIELD_PROP_KEY));
+    } else {
+      this.eventTimeFieldOpt = Option.empty();
+    }
+  }
+
+  public static Map<String, String> parsePartialUpdateProperties(TypedProperties props) {
+    Map<String, String> properties = new HashMap<>();
+    String raw = props.getProperty(HoodieTableConfig.PARTIAL_UPDATE_PROPERTIES.key());
+    if (StringUtils.isNullOrEmpty(raw)) {
+      return properties;
+    }
+    String[] entries = raw.split(",");
+    for (String entry : entries) {
+      String trimmed = entry.trim();
+      if (!trimmed.isEmpty()) {
+        String[] kv = trimmed.split("=", 2);
+        if (kv.length == 2) {
+          String key = kv[0].trim();
+          String value = kv[1].trim();
+          if (!key.isEmpty()) {
+            properties.put(key, value);
+          }
+        }
+      }
+    }
+    return properties;
   }
 
   /**
@@ -170,7 +216,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
 
     Object columnValue = readerContext.getValue(
         record, readerSchema, HOODIE_IS_DELETED_FIELD);
-    return columnValue != null && readerContext.castToBoolean(columnValue);
+    return columnValue != null && readerContext.getTypeHandler().castToBoolean(columnValue);
   }
 
   /**
@@ -236,8 +282,8 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   /**
    * Merge two log data records if needed.
    *
-   * @param newRecord                  The new incoming record
-   * @param existingRecord             The existing record
+   * @param newRecord      The new incoming record
+   * @param existingRecord The existing record
    * @return the {@link BufferedRecord} that needs to be updated, returns empty to skip the update.
    */
   protected Option<BufferedRecord<T>> doProcessNextDataRecord(BufferedRecord<T> newRecord, BufferedRecord<T> existingRecord)
@@ -263,15 +309,20 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
 
         // If pre-combine returns existing record, no need to update it
         if (combinedRecord.getData() != existingRecord.getRecord()) {
-          return Option.of(BufferedRecord.forRecordWithContext(combinedRecord, combinedRecordAndSchema.getRight(), readerContext, props));
+          return Option.of(BufferedRecord.forRecordWithContext(
+              combinedRecord, combinedRecordAndSchema.getRight(), readerContext, props));
         }
         return Option.empty();
       } else {
         switch (recordMergeMode) {
           case COMMIT_TIME_ORDERING:
+            newRecord = updatePartiallyIfNeeded(
+                newRecord, existingRecord, readerSchema, readerSchema, partialUpdateMode);
             return Option.of(newRecord);
           case EVENT_TIME_ORDERING:
             if (shouldKeepNewerRecord(existingRecord, newRecord)) {
+              newRecord = updatePartiallyIfNeeded(
+                  newRecord, existingRecord, readerSchema, readerSchema, partialUpdateMode);
               return Option.of(newRecord);
             }
             return Option.empty();
@@ -306,7 +357,6 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
                   readerContext.constructHoodieRecord(newRecord),
                   readerContext.getSchemaFromBufferRecord(newRecord),
                   props);
-
               if (!combinedRecordAndSchemaOpt.isPresent()) {
                 return Option.empty();
               }
@@ -329,6 +379,111 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
       //       it since these records will be put into records(Map).
       return Option.of(newRecord);
     }
+  }
+
+  /**
+   * Merge records based on partial update mode.
+   * Note that {@param newRecord} refers to the record with higher commit time
+   * if COMMIT_TIME_ORDERING mode is used, or higher event time if EVENT_TIME_ORDERING mode us used.
+   */
+  private BufferedRecord<T> updatePartiallyIfNeeded(BufferedRecord<T> newRecord,
+                                                    BufferedRecord<T> oldRecord,
+                                                    Schema newSchema,
+                                                    Schema oldSchema,
+                                                    PartialUpdateMode partialUpdateMode) {
+    if (newRecord.isDelete()) {
+      return newRecord;
+    }
+
+    List<Schema.Field> fields = newSchema.getFields();
+    List<Object> values = new ArrayList<>();
+    T engineRecord;
+    switch (partialUpdateMode) {
+      case NONE:
+      case KEEP_VALUES:
+      case FILL_DEFAULTS:
+      case COLUMN_FAMILY:
+        return newRecord;
+
+      case IGNORE_DEFAULTS:
+        for (Schema.Field field : fields) {
+          String fieldName = field.name();
+          Object defaultValue = field.defaultVal();
+          Object newValue = readerContext.getValue(
+              newRecord.getRecord(), newSchema, fieldName);
+          if (defaultValue == newValue) {
+            values.add(readerContext.getValue(oldRecord.getRecord(), oldSchema, fieldName));
+          } else {
+            values.add(readerContext.getValue(newRecord.getRecord(), newSchema, fieldName));
+          }
+        }
+        engineRecord = readerContext.constructEngineRecord(newSchema, values);
+        return new BufferedRecord<>(
+            newRecord.getRecordKey(),
+            newRecord.getOrderingValue(),
+            engineRecord,
+            newRecord.getSchemaId(),
+            newRecord.isDelete());
+
+      case IGNORE_MARKERS:
+        String partialUpdateCustomMarker = partialUpdateProperties.get(PARTIAL_UPDATE_CUSTOM_MARKER);
+        if (StringUtils.isNullOrEmpty(partialUpdateCustomMarker)) {
+          throw new IllegalStateException(
+              "For 'IGNORE_MARKERS' mode, custom marker '"
+                  + PARTIAL_UPDATE_CUSTOM_MARKER + "' must be configured");
+        }
+        for (Schema.Field field : fields) {
+          String fieldName = field.name();
+          Object newValue = readerContext.getValue(newRecord.getRecord(), newSchema, fieldName);
+          if ((isStringTyped(field) || isBytesTyped(field))
+              && partialUpdateCustomMarker.equals(readerContext.getTypeHandler().castToString(newValue))) {
+            values.add(readerContext.getValue(oldRecord.getRecord(), oldSchema, fieldName));
+          } else {
+            values.add(readerContext.getValue(newRecord.getRecord(), newSchema, fieldName));
+          }
+        }
+        engineRecord = readerContext.constructEngineRecord(newSchema, values);
+        return new BufferedRecord<>(
+            newRecord.getRecordKey(),
+            newRecord.getOrderingValue(),
+            engineRecord,
+            newRecord.getSchemaId(),
+            newRecord.isDelete());
+
+      default:
+        return newRecord;
+    }
+  }
+
+  static boolean shouldKeepEventTimeMetadata(TypedProperties props) {
+    return props.getBoolean("hoodie.write.event.time.watermark.metadata.enabled");
+  }
+
+  /**
+   * Should keep logical timestamp consistent.
+   */
+  static boolean shouldKeepConsistentLogicalTimestamp(TypedProperties props) {
+    return Boolean.parseBoolean(props.getProperty(
+        KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
+        KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()));
+  }
+
+  static boolean isStringTyped(Schema.Field field) {
+    return hasType(field.schema(), Schema.Type.STRING);
+  }
+
+  static boolean isBytesTyped(Schema.Field field) {
+    return hasType(field.schema(), Schema.Type.BYTES);
+  }
+
+  static boolean hasType(Schema schema, Schema.Type targetType) {
+    if (schema.getType() == targetType) {
+      return true;
+    } else if (schema.getType() == Schema.Type.UNION) {
+      // Stream is lazy, so this is efficient even with multiple types
+      return schema.getTypes().stream().anyMatch(s -> s.getType() == targetType);
+    }
+    return false;
   }
 
   /**
@@ -446,17 +601,26 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
     } else {
       switch (recordMergeMode) {
         case COMMIT_TIME_ORDERING:
+          newerRecord = updatePartiallyIfNeeded(
+              newerRecord, olderRecord, readerSchema, readerSchema, partialUpdateMode);
           return Pair.of(newerRecord.isDelete(), newerRecord.getRecord());
         case EVENT_TIME_ORDERING:
           if (newerRecord.isCommitTimeOrderingDelete()) {
+            // No need to do partial update for delete record.
             return Pair.of(true, newerRecord.getRecord());
           }
           Comparable newOrderingValue = newerRecord.getOrderingValue();
           Comparable oldOrderingValue = olderRecord.getOrderingValue();
           if (!olderRecord.isCommitTimeOrderingDelete()
               && oldOrderingValue.compareTo(newOrderingValue) > 0) {
+            olderRecord = updatePartiallyIfNeeded(
+                olderRecord, newerRecord, readerSchema, readerSchema, partialUpdateMode);
+            extractAndStoreEventTimeIfNeeded(olderRecord);
             return Pair.of(olderRecord.isDelete(), olderRecord.getRecord());
           }
+          newerRecord = updatePartiallyIfNeeded(
+              newerRecord, olderRecord, readerSchema, readerSchema, partialUpdateMode);
+          extractAndStoreEventTimeIfNeeded(newerRecord);
           return Pair.of(newerRecord.isDelete(), newerRecord.getRecord());
         case CUSTOM:
         default:
@@ -477,7 +641,8 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
                 && !mergedRecord.get().getLeft().isDelete(mergedRecord.get().getRight(), props)) {
               IndexedRecord indexedRecord;
               if (!mergedRecord.get().getRight().equals(readerSchema)) {
-                indexedRecord = (IndexedRecord) mergedRecord.get().getLeft().rewriteRecordWithNewSchema(mergedRecord.get().getRight(), null, readerSchema).getData();
+                indexedRecord = (IndexedRecord) mergedRecord.get().getLeft().rewriteRecordWithNewSchema(
+                    mergedRecord.get().getRight(), null, readerSchema).getData();
               } else {
                 indexedRecord = (IndexedRecord) mergedRecord.get().getLeft().getData();
               }
@@ -508,6 +673,23 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
             }
             return Pair.of(true, null);
           }
+      }
+    }
+  }
+
+  /**
+   * Extract and store event_time value for the record, which should be stored
+   * to WriteStatus. This function should be only called when merge base record and log record.
+   */
+  private void extractAndStoreEventTimeIfNeeded(BufferedRecord<T> newRecord) {
+    if (shouldKeepEventTimeMetadata) {
+      Option<Object> eventTimeOpt = readerContext.getEventTime(
+          newRecord.getRecord(), readerSchema, eventTimeFieldOpt);
+      if (eventTimeOpt.isPresent()) {
+        Schema.Field field = readerSchema.getField(eventTimeFieldOpt.get());
+        Object eventTime = readerContext.getTypeHandler().convertValueForAvroLogicalTypes(
+            field.schema(), eventTimeOpt.get(), shouldKeepConsistentLogicalTimestamp);
+        newRecord.setEventTime(String.valueOf(eventTime));
       }
     }
   }

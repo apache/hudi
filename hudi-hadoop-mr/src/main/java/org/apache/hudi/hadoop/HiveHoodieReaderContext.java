@@ -104,6 +104,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     this.partitionColSet = new HashSet<>(this.partitionCols);
     this.objectInspectorCache = objectInspectorCache;
     this.columnTypeMap = objectInspectorCache.getColumnTypeMap();
+    this.typeHandler = new HiveReaderContextTypeHandler();
   }
 
   private void setSchemas(JobConf jobConf, Schema dataSchema, Schema requiredSchema) {
@@ -216,16 +217,6 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   }
 
   @Override
-  public boolean castToBoolean(Object value) {
-    if (value instanceof BooleanWritable) {
-      return ((BooleanWritable) value).get();
-    } else {
-      throw new IllegalArgumentException(
-          "Expected BooleanWritable but got " + value.getClass());
-    }
-  }
-
-  @Override
   public HoodieRecord<ArrayWritable> constructHoodieRecord(BufferedRecord<ArrayWritable> bufferedRecord) {
     HoodieKey key = new HoodieKey(bufferedRecord.getRecordKey(), partitionPath);
     if (bufferedRecord.isDelete()) {
@@ -236,6 +227,27 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     Schema schema = getSchemaFromBufferRecord(bufferedRecord);
     ArrayWritable writable = bufferedRecord.getRecord();
     return new HoodieHiveRecord(key, writable, schema, objectInspectorCache);
+  }
+
+  @Override
+  public ArrayWritable constructEngineRecord(Schema schema, List<Object> values) {
+    List<Schema.Field> fields = schema.getFields();
+    if (fields.size() != values.size()) {
+      throw new IllegalArgumentException("Schema field count and values size must match.");
+    }
+
+    Writable[] writables = new Writable[values.size()];
+    for (int i = 0; i < values.size(); i++) {
+      Object value = values.get(i);
+      if (value == null) {
+        writables[i] = NullWritable.get();
+      } else if (value instanceof Writable) {
+        writables[i] = (Writable) value;
+      } else {
+        throw new IllegalArgumentException("Expected Writable at index " + i + ", but got " + value.getClass());
+      }
+    }
+    return new ArrayWritable(Writable.class, writables);
   }
 
   @Override
