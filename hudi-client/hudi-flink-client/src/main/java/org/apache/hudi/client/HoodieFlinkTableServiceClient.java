@@ -142,7 +142,8 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
           false,
           clusteringInstant,
           metadata,
-          table.getActiveTimeline());
+          table.getActiveTimeline(),
+          completedInstant -> table.getMetaClient().getTableFormat().commit(metadata, completedInstant, table.getContext(), table.getMetaClient(), table.getViewManager()));
     } catch (HoodieIOException e) {
       throw new HoodieClusteringException(
           "Failed to commit " + table.getMetaClient().getBasePath() + " at time " + clusteringCommitTime, e);

@@ -77,7 +77,7 @@ public class TestCompletionTimeQueryView {
         HoodieTestUtils.getDefaultStorageConf(), tablePath, HoodieTableType.COPY_ON_WRITE, tableName);
     prepareTimeline(tablePath, metaClient);
     try (CompletionTimeQueryView view =
-             metaClient.getTimelineLayout().getTimelineFactory().createCompletionTimeQueryView(metaClient, String.format("%08d", 3))) {
+             metaClient.getTableFormat().getTimelineFactory().createCompletionTimeQueryView(metaClient, String.format("%08d", 3))) {
       // query completion time from LSM timeline
       for (int i = 3; i < 7; i++) {
         assertThat(view.getCompletionTime(String.format("%08d", i)).orElse(""), is(String.format("%08d", i + 1000)));
@@ -108,7 +108,7 @@ public class TestCompletionTimeQueryView {
         HoodieTestUtils.getDefaultStorageConf(), tablePath, HoodieTableType.COPY_ON_WRITE, tableName);
     prepareTimeline(tablePath, metaClient);
     try (CompletionTimeQueryView view =
-             metaClient.getTimelineLayout().getTimelineFactory().createCompletionTimeQueryView(metaClient, String.format("%08d", 3))) {
+             metaClient.getTableFormat().getTimelineFactory().createCompletionTimeQueryView(metaClient, String.format("%08d", 3))) {
       // query start time from LSM timeline
       assertThat(getInstantTimeSetFormattedString(view, 3 + 1000, 6 + 1000), is("00000003,00000004,00000005,00000006"));
       // query start time from active timeline

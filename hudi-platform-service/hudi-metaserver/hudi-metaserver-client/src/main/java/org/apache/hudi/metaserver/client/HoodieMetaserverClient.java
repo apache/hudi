@@ -45,7 +45,7 @@ public interface HoodieMetaserverClient extends Serializable, AutoCloseable {
 
   void createNewInstant(String db, String tb, HoodieInstant instant, Option<byte[]> content);
 
-  void transitionInstantState(String db, String tb, HoodieInstant fromInstant, HoodieInstant toInstant, Option<byte[]> content);
+  HoodieInstant transitionInstantState(String db, String tb, HoodieInstant fromInstant, HoodieInstant toInstant, Option<byte[]> content);
 
   void deleteInstant(String db, String tb, HoodieInstant instant);
 

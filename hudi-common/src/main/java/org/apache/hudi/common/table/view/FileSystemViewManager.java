@@ -206,7 +206,7 @@ public class FileSystemViewManager {
       HoodieTimeline timeline) {
     LOG.info("Creating InMemory based view for basePath {}.", metaClient.getBasePath());
     HoodieTableMetadata tableMetadata = getTableMetadata(engineContext, metaClient, metadataConfig.isEnabled(),
-        unused -> HoodieTableMetadata.create(engineContext, metaClient.getStorage(), metadataConfig, metaClient.getBasePath().toString()));
+        unused -> metaClient.getTableFormat().getMetadataFactory().create(engineContext, metaClient.getStorage(), metadataConfig, metaClient.getBasePath().toString()));
 
     if (metaClient.getMetaserverConfig().isMetaserverEnabled()) {
       return (HoodieTableFileSystemView) ReflectionUtils.loadClass(HOODIE_METASERVER_FILE_SYSTEM_VIEW_CLASS,
@@ -236,7 +236,7 @@ public class FileSystemViewManager {
       final FileSystemViewStorageConfig config,
       final HoodieCommonConfig commonConfig) {
     return createViewManager(context, metadataConfig, config, commonConfig,
-        metaClient -> HoodieTableMetadata.create(context, metaClient.getStorage(), metadataConfig, metaClient.getBasePath().toString(), true));
+        metaClient -> metaClient.getTableFormat().getMetadataFactory().create(context, metaClient.getStorage(), metadataConfig, metaClient.getBasePath().toString(), true));
   }
 
   public static FileSystemViewManager createViewManager(final HoodieEngineContext context,

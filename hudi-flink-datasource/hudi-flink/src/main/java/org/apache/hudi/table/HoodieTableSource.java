@@ -113,7 +113,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 import java.util.StringJoiner;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -191,16 +190,16 @@ public class HoodieTableSource implements
     this.partitionKeys = partitionKeys;
     this.defaultPartName = defaultPartName;
     this.conf = conf;
-    this.predicates = Optional.ofNullable(predicates).orElse(Collections.emptyList());
+    this.predicates = Option.ofNullable(predicates).orElse(Collections.emptyList());
     this.columnStatsProbe = columnStatsProbe;
     this.partitionPruner = partitionPruner;
     this.dataBucketFunc = dataBucketFunc;
-    this.requiredPos = Optional.ofNullable(requiredPos).orElseGet(() -> IntStream.range(0, this.tableRowType.getFieldCount()).toArray());
-    this.limit = Optional.ofNullable(limit).orElse(NO_LIMIT_CONSTANT);
+    this.requiredPos = Option.ofNullable(requiredPos).orElseGet(() -> IntStream.range(0, this.tableRowType.getFieldCount()).toArray());
+    this.limit = Option.ofNullable(limit).orElse(NO_LIMIT_CONSTANT);
     this.hadoopConf = new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(conf));
-    this.metaClient = Optional.ofNullable(metaClient).orElseGet(() -> StreamerUtil.metaClientForReader(conf, this.hadoopConf.unwrap()));
+    this.metaClient = Option.ofNullable(metaClient).orElseGet(() -> StreamerUtil.metaClientForReader(conf, this.hadoopConf.unwrap()));
     this.maxCompactionMemoryInBytes = StreamerUtil.getMaxCompactionMemoryInBytes(conf);
-    this.internalSchemaManager = Optional.ofNullable(internalSchemaManager).orElseGet(() -> InternalSchemaManager.get(this.conf, this.metaClient));
+    this.internalSchemaManager = Option.ofNullable(internalSchemaManager).orElseGet(() -> InternalSchemaManager.get(this.conf, this.metaClient));
   }
 
   @Override
@@ -358,6 +357,7 @@ public class HoodieTableSource implements
     return PartitionPruners.builder()
         .basePath(path.toString())
         .rowType(tableRowType)
+        .metaClient(metaClient)
         .conf(conf)
         .columnStatsProbe(columnStatsProbe)
         .partitionEvaluators(evaluators)
@@ -610,6 +610,7 @@ public class HoodieTableSource implements
           .path(this.path)
           .conf(this.conf)
           .rowType(this.tableRowType)
+          .metaClient(metaClient)
           .columnStatsProbe(this.columnStatsProbe)
           .partitionPruner(this.partitionPruner)
           .partitionBucketIdFunc(PartitionBucketIdFunc.create(this.dataBucketFunc,

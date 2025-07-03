@@ -136,11 +136,12 @@ public class HoodieMetaserverClientImp implements HoodieMetaserverClient {
   }
 
   @Override
-  public void transitionInstantState(String db, String tb, HoodieInstant fromInstant, HoodieInstant toInstant, Option<byte[]> content) {
+  public HoodieInstant transitionInstantState(String db, String tb, HoodieInstant fromInstant, HoodieInstant toInstant, Option<byte[]> content) {
     exceptionWrapper(() -> this.client.transitionInstantState(db, tb,
         EntityConversions.toTHoodieInstant(fromInstant),
         EntityConversions.toTHoodieInstant(toInstant),
         getByteBuffer(content))).get();
+    return toInstant;
   }
 
   @Override

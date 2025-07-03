@@ -183,7 +183,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
 
   protected abstract HoodieIndex<?, ?> getIndex(HoodieWriteConfig config, HoodieEngineContext context);
 
-  private synchronized FileSystemViewManager getViewManager() {
+  public synchronized FileSystemViewManager getViewManager() {
     if (null == viewManager) {
       viewManager = FileSystemViewManager.createViewManager(getContext(), config.getMetadataConfig(), config.getViewStorageConfig(), config.getCommonConfig(), unused -> getMetadataTable());
     }
@@ -1166,12 +1166,16 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
 
   public HoodieTableMetadata getMetadataTable() {
     if (metadata == null) {
-      HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
-          .fromProperties(config.getMetadataConfig().getProps())
-          .build();
-      metadata = HoodieTableMetadata.create(context, metaClient.getStorage(), metadataConfig, config.getBasePath());
+      metadata = refreshAndGetTableMetadata();
     }
     return metadata;
+  }
+
+  public HoodieTableMetadata refreshAndGetTableMetadata() {
+    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
+        .fromProperties(config.getMetadataConfig().getProps())
+        .build();
+    return metaClient.getTableFormat().getMetadataFactory().create(context, metaClient.getStorage(), metadataConfig, config.getBasePath());
   }
 
   /**

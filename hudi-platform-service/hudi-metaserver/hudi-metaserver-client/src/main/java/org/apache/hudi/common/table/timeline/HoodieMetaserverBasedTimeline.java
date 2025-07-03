@@ -60,9 +60,9 @@ public class HoodieMetaserverBasedTimeline extends ActiveTimelineV2 {
   }
 
   @Override
-  protected <T> void transitionStateToComplete(boolean shouldLock, HoodieInstant fromInstant, HoodieInstant toInstant, Option<T> metadata) {
+  protected <T> HoodieInstant transitionStateToComplete(boolean shouldLock, HoodieInstant fromInstant, HoodieInstant toInstant, Option<T> metadata) {
     ValidationUtils.checkArgument(fromInstant.requestedTime().equals(toInstant.requestedTime()));
-    metaserverClient.transitionInstantState(databaseName, tableName, fromInstant, toInstant,
+    return metaserverClient.transitionInstantState(databaseName, tableName, fromInstant, toInstant,
         metadata.map(m -> convertMetadataToByteArray(m, metadataSerDeV2)));
   }
 
