@@ -106,7 +106,6 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_CO
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_FILES;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.existingIndexVersionOrDefault;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getFileSystemViewForMetadataTable;
-import static org.apache.hudi.metadata.SecondaryIndexKeyUtils.unescapeSpecialChars;
 
 /**
  * Table metadata provided by an internal DFS backed Hudi metadata table.
@@ -273,6 +272,13 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     return Predicates.startsWithAny(null, right);
   }
 
+  /**
+   * All keys to be looked up go through the following steps:
+   * 1. [encode] escape/encode the key if needed
+   * 2. [hash to file group] compute the hash of the key to
+   * 3. [lookup within file groups] lookup the key in the file group
+   * 4. the record is returned
+   */
   private HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> doLookup(HoodieData<String> keys, String partitionName, List<FileSlice> fileSlices,
                                                                                boolean isSecondaryIndex, Option<SerializableFunctionUnchecked<String, String>> keyEncodingFn) {
 
@@ -287,12 +293,14 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     // SI write path concatenates secKey$recordKey, the secKey needs extracted for hashing;
     // SI read path gives secKey only, no need for secKey extraction.
     SerializableBiFunction<String, Integer, Integer> mappingFunction = HoodieTableMetadataUtil::mapRecordKeyToFileGroupIndex;
-    keys = repartitioningIfNeeded(keys, partitionName, numFileSlices, mappingFunction);
+    keys = repartitioningIfNeeded(keys, partitionName, numFileSlices, mappingFunction, keyEncodingFn);
     HoodiePairData<Integer, String> persistedInitialPairData = keys
-        // Tag key with file group index and apply key encoding
-        .mapToPair(recordKey -> new ImmutablePair<>(
-            mappingFunction.apply(recordKey, numFileSlices),
-            keyEncodingFn.isPresent() ? keyEncodingFn.get().apply(recordKey) : recordKey));
+        // Tag key with file group index
+        .mapToPair(recordKey -> {
+          String encodedKey = keyEncodingFn.isPresent() ? keyEncodingFn.get().apply(recordKey) : recordKey;
+          // Always encode the key before apply mapping.
+          return new ImmutablePair<>(mappingFunction.apply(encodedKey, numFileSlices), encodedKey);
+        });
     persistedInitialPairData.persist("MEMORY_AND_DISK_SER");
     // Use the new processValuesOfTheSameShards API instead of explicit rangeBasedRepartitionForEachKey
     SerializableFunction<Iterator<String>, Iterator<Pair<String, HoodieRecord<HoodieMetadataPayload>>>> processFunction =
@@ -305,7 +313,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
             }
             distinctSortedKeyIter.forEachRemaining(keysList::add);
           }
-          FileSlice fileSlice = fileSlices.get(mappingFunction.apply(unescapeSpecialChars(keysList.get(0)), numFileSlices));
+          FileSlice fileSlice = fileSlices.get(mappingFunction.apply(keysList.get(0), numFileSlices));
           return lookupKeyRecordPairsItr(partitionName, keysList, fileSlice, !isSecondaryIndex);
         };
 
@@ -317,6 +325,13 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     return result.filter((String k, HoodieRecord<HoodieMetadataPayload> v) -> !v.getData().isDeleted());
   }
 
+  /**
+   * All keys to be looked up go through the following steps:
+   * 1. [encode] escape/encode the key if needed
+   * 2. [hash to file group] compute the hash of the key to
+   * 3. [lookup within file groups] lookup the key in the file group
+   * 4. the record is returned
+   */
   private HoodieData<HoodieRecord<HoodieMetadataPayload>> doLookupIndexRecords(HoodieData<String> keys, String partitionName, List<FileSlice> fileSlices,
                                                                                boolean isSecondaryIndex, Option<SerializableFunctionUnchecked<String, String>> keyEncodingFn) {
 
@@ -331,12 +346,14 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     // SI write path concatenates secKey$recordKey, the secKey needs extracted for hashing;
     // SI read path gives secKey only, no need for secKey extraction.
     SerializableBiFunction<String, Integer, Integer> mappingFunction = HoodieTableMetadataUtil::mapRecordKeyToFileGroupIndex;
-    keys = repartitioningIfNeeded(keys, partitionName, numFileSlices, mappingFunction);
+    keys = repartitioningIfNeeded(keys, partitionName, numFileSlices, mappingFunction, keyEncodingFn);
     HoodiePairData<Integer, String> persistedInitialPairData = keys
         // Tag key with file group index
-        .mapToPair(recordKey -> new ImmutablePair<>(
-            mappingFunction.apply(recordKey, numFileSlices),
-            keyEncodingFn.isPresent() ? keyEncodingFn.get().apply(recordKey) : recordKey));
+        .mapToPair(recordKey -> {
+          String encodedKey = keyEncodingFn.isPresent() ? keyEncodingFn.get().apply(recordKey) : recordKey;
+          // Always encode the key before apply mapping.
+          return new ImmutablePair<>(mappingFunction.apply(encodedKey, numFileSlices), encodedKey);
+        });
     persistedInitialPairData.persist("MEMORY_AND_DISK_SER");
 
     // Use the new processValuesOfTheSameShards API instead of explicit rangeBasedRepartitionForEachKey
@@ -350,7 +367,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
             }
             distinctSortedKeyIter.forEachRemaining(keysList::add);
           }
-          FileSlice fileSlice = fileSlices.get(mappingFunction.apply(unescapeSpecialChars(keysList.get(0)), numFileSlices));
+          FileSlice fileSlice = fileSlices.get(mappingFunction.apply(keysList.get(0), numFileSlices));
           return lookupRecordsItr(partitionName, keysList, fileSlice, !isSecondaryIndex);
         };
     List<Integer> shardIndices = IntStream.range(0, numFileSlices).boxed().collect(Collectors.toList());
@@ -491,9 +508,15 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   // When testing we noticed that the parallelism can be very low which hurts the performance. so we should start with a reasonable
   // level of parallelism in that case.
   private HoodieData<String> repartitioningIfNeeded(
-      HoodieData<String> keys, String partitionName, int numFileSlices, SerializableBiFunction<String, Integer, Integer> mappingFunction) {
+      HoodieData<String> keys, String partitionName, int numFileSlices, SerializableBiFunction<String, Integer, Integer> mappingFunction,
+      Option<SerializableFunctionUnchecked<String, String>> keyEncodingFn) {
     if (keys instanceof HoodieListData) {
-      int parallelism = (int) keys.map(k -> mappingFunction.apply(k, numFileSlices)).distinct().count();
+      int parallelism;
+      if (keyEncodingFn.isEmpty()) {
+        parallelism = (int) keys.map(k -> mappingFunction.apply(k, numFileSlices)).distinct().count();
+      } else {
+        parallelism = (int) keys.map(k -> mappingFunction.apply(keyEncodingFn.get().apply(k), numFileSlices)).distinct().count();
+      }
       // In case of empty lookup set, we should avoid RDD with 0 partitions.
       parallelism = Math.max(parallelism, 1);
       LOG.info("getRecordFast repartition HoodieListData to JavaRDD: exit, partitionName {}, num partitions: {}",
