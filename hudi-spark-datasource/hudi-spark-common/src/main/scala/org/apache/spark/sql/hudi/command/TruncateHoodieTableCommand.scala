@@ -25,12 +25,13 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
 
-import org.apache.spark.sql.{AnalysisException, Row, SaveMode, SparkSession}
+import org.apache.spark.sql.{Row, SaveMode, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.{CatalogTableType, HoodieCatalogTable}
 import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{getPartitionPathToDrop, normalizePartitionSpec}
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
+import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 
 /**
  * Command for truncate hudi table.
@@ -51,12 +52,12 @@ case class TruncateHoodieTableCommand(
     val tableId = table.identifier.quotedString
 
     if (table.tableType == CatalogTableType.VIEW) {
-      throw new AnalysisException(
+      throw new HoodieAnalysisException(
         s"Operation not allowed: TRUNCATE TABLE on views: $tableId")
     }
 
     if (table.partitionColumnNames.isEmpty && partitionSpec.isDefined) {
-      throw new AnalysisException(
+      throw new HoodieAnalysisException(
         s"Operation not allowed: TRUNCATE TABLE ... PARTITION is not supported " +
           s"for tables that are not partitioned: $tableId")
     }

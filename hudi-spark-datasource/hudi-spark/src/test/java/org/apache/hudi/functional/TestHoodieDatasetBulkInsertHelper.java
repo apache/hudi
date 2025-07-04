@@ -41,7 +41,6 @@ import org.apache.spark.scheduler.SparkListener;
 import org.apache.spark.scheduler.SparkListenerStageSubmitted;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Encoders;
-import org.apache.spark.sql.HoodieUnsafeUtils;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder;
 import org.apache.spark.sql.types.StructType;
@@ -365,7 +364,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieSparkClientTestBase
     sqlContext.sparkContext().addSparkListener(stageCheckBulkParallelismListener);
     List<Row> inserts = DataSourceTestUtils.generateRandomRows(10);
     Dataset<Row> dataset = sqlContext.createDataFrame(inserts, structType).repartition(3);
-    assertNotEquals(checkParallelism, HoodieUnsafeUtils.getNumPartitions(dataset));
+    assertNotEquals(checkParallelism, SparkAdapterSupport$.MODULE$.sparkAdapter().getHoodieUnsafeUtils().getNumPartitions(dataset));
     assertNotEquals(checkParallelism, sqlContext.sparkContext().defaultParallelism());
     Dataset<Row> result = HoodieDatasetBulkInsertHelper.prepareForBulkInsert(dataset, config,
         new NonSortPartitionerWithRows(), "000001111");

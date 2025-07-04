@@ -34,6 +34,7 @@ parameters:
       - 'hudi-spark-datasource'
       - 'hudi-spark-datasource/hudi-spark'
       - 'hudi-spark-datasource/hudi-spark3.5.x'
+      - 'hudi-spark-datasource/hudi-spark3-common'
       - 'hudi-spark-datasource/hudi-spark-common'
   - name: job10UTModules
     type: object
@@ -51,6 +52,7 @@ parameters:
       - '!hudi-spark-datasource'
       - '!hudi-spark-datasource/hudi-spark'
       - '!hudi-spark-datasource/hudi-spark3.5.x'
+      - '!hudi-spark-datasource/hudi-spark3-common'
       - '!hudi-spark-datasource/hudi-spark-common'
       - '!hudi-utilities'
   - name: job10FTModules

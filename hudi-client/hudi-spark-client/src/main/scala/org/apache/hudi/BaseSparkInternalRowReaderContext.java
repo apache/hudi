@@ -174,6 +174,19 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
     if (record != null) {
       return record;
     }
-    return new HoodieInternalRow(null, null, UTF8String.fromString(recordKey), UTF8String.fromString(partitionPath), null, null, false);
+    UTF8String[] metaFields = new UTF8String[] {
+        null,
+        null,
+        UTF8String.fromString(recordKey),
+        UTF8String.fromString(partitionPath),
+        null
+    };
+    return SparkAdapterSupport$.MODULE$.sparkAdapter().createInternalRow(metaFields, null, false);
+  }
+
+  @Override
+  public int compareValues(Comparable a, Comparable b) {
+    // [SPARK-46832] UTF8String doesn't support compareTo anymore
+    return SparkAdapterSupport$.MODULE$.sparkAdapter().compareValues(a, b, o -> (Comparable)o);
   }
 }
