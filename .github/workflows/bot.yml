@@ -1160,54 +1160,6 @@ jobs:
           docker system prune --all --force
           mvn verify $SCALA_PROFILE -D"$SPARK_PROFILE" -Pintegration-tests -pl !hudi-flink-datasource/hudi-flink $MVN_ARGS
 
-  # TODO (HUDI-9409)
-  #integration-tests-java17:
-  #  runs-on: ubuntu-latest
-  #  strategy:
-  #    matrix:
-  #      include:
-  #        - sparkProfile: 'spark4.0'
-  #          sparkArchive: 'spark-4.0.0/spark-4.0.0-bin-hadoop3.tgz'
-  #          scalaProfile: '-Dscala-2.13 -Dscala.binary.version=2.13'
-
-  #  steps:
-  #    - uses: actions/checkout@v3
-  #    - name: Set up JDK 17
-  #      uses: actions/setup-java@v3
-  #      with:
-  #        java-version: '17'
-  #        distribution: 'temurin'
-  #        architecture: x64
-  #    - name: Check disk space
-  #      run: df -h
-  #    - name: Build Project
-  #      env:
-  #        SPARK_PROFILE: ${{ matrix.sparkProfile }}
-  #        SCALA_PROFILE: ${{ matrix.scalaProfile }}
-  #      run:
-  #        mvn clean install -T 2 -Pjava17 $SCALA_PROFILE -D"$SPARK_PROFILE" -Pintegration-tests -DskipTests=true $MVN_ARGS
-  #    - name: 'UT integ-test'
-  #      env:
-  #        SPARK_PROFILE: ${{ matrix.sparkProfile }}
-  #        SCALA_PROFILE: ${{ matrix.scalaProfile }}
-  #      run:
-  #        mvn test -Pjava17 $SCALA_PROFILE -D"$SPARK_PROFILE" -Pintegration-tests -DskipUTs=false -DskipITs=true -pl hudi-integ-test $MVN_ARGS
-  #    - name: 'IT'
-  #      env:
-  #        SPARK_PROFILE: ${{ matrix.sparkProfile }}
-  #        SPARK_ARCHIVE: ${{ matrix.sparkArchive }}
-  #        SCALA_PROFILE: ${{ matrix.scalaProfile }}
-  #      run: |
-  #        echo "Downloading $SPARK_ARCHIVE"
-  #        curl https://archive.apache.org/dist/spark/$SPARK_ARCHIVE --create-dirs -o $GITHUB_WORKSPACE/$SPARK_ARCHIVE
-  #        tar -xvf $GITHUB_WORKSPACE/$SPARK_ARCHIVE -C $GITHUB_WORKSPACE/
-  #        mkdir /tmp/spark-events/
-  #        SPARK_ARCHIVE_BASENAME=$(basename $SPARK_ARCHIVE)
-  #       export SPARK_HOME=$GITHUB_WORKSPACE/${SPARK_ARCHIVE_BASENAME%.*}
-  #       rm -f $GITHUB_WORKSPACE/$SPARK_ARCHIVE
-  #        docker system prune --all --force
-  #        mvn verify -Pjava17 $SCALA_PROFILE -D"$SPARK_PROFILE" -Pintegration-tests -pl !hudi-flink-datasource/hudi-flink $MVN_ARGS
-
   build-spark-java17:
     runs-on: ubuntu-latest
     strategy:
