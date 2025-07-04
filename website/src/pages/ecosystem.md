@@ -4,7 +4,7 @@ title: Ecosystem
 
 # Ecosystem Support
 
-While Apache Hudi works seamlessly with various application frameworks, SQL query engines, and data warehouses, some systems might only offer read capabilities. 
+While Apache Hudi works seamlessly with various application frameworks, SQL query engines, and data warehouses, some systems might only offer read capabilities.
 In such cases, you can leverage another tool like Apache Spark or Apache Flink to write data to Hudi tables and then use the read-compatible system for querying.
 
 | Project / Product | Apache Hudi (as of June 2024)                                                                                            | Comments    |
@@ -37,5 +37,5 @@ In such cases, you can leverage another tool like Apache Spark or Apache Flink t
 | Apache Doris      | [Read](https://doris.apache.org/docs/ecosystem/external-table/hudi-external-table/)                                      |             |
 | Starrocks         | [Read](https://docs.starrocks.io/docs/data_source/catalog/hudi_catalog/)                                                 | [Demo with HMS + Min.IO](https://github.com/StarRocks/demo/tree/master/documentation-samples/hudi)            |
 | Dremio            |                                                                                                                          |             |
-| Daft              | [Read](https://www.getdaft.io/projects/docs/en/stable/integrations/hudi/)                                                |             |
+| Daft              | [Read](https://docs.daft.ai/en/stable/io/hudi/)                                                |             |
 | Ray Data          | [Read](https://docs.ray.io/en/master/data/api/input_output.html#hudi)                                                    |             |

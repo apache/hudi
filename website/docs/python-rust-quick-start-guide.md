@@ -80,7 +80,7 @@ hudi_table = (
 #### Rust
 
 ```rust
-let hudi_table = 
+let hudi_table =
     HudiTableBuilder::from_base_uri("/tmp/trips_table")
     .with_option("hoodie.read.use.read_optimized.mode", "true")
     .build().await?;
@@ -105,7 +105,7 @@ batches = (
 #### Rust
 
 ```rust
-let batches = 
+let batches =
     hudi_table
     .read_snapshot_as_of("20241231123456789", &[("city", "=", "san_francisco")]).await?;
 ```
@@ -165,7 +165,7 @@ Create a Hudi file group reader instance using its constructor or the Hudi table
 
 ### Apache DataFusion
 
-Enabling the `hudi` crate with `datafusion` feature will provide a [DataFusion](https://datafusion.apache.org/) 
+Enabling the `hudi` crate with `datafusion` feature will provide a [DataFusion](https://datafusion.apache.org/)
 extension to query Hudi tables.
 
 <details>
@@ -205,7 +205,7 @@ async fn main() -> Result<()> {
 
 Hudi is also integrated with
 
-- [Daft](https://www.getdaft.io/projects/docs/en/stable/integrations/hudi/)
+- [Daft](https://docs.daft.ai/en/stable/io/hudi/)
 - [Ray](https://docs.ray.io/en/latest/data/api/doc/ray.data.read_hudi.html#ray.data.read_hudi)
 
 ### Work with cloud storage
@@ -235,7 +235,7 @@ hudi_table = (
 use hudi::table::builder::TableBuilder as HudiTableBuilder;
 
 async fn main() -> Result<()> {
-    let hudi_table = 
+    let hudi_table =
         HudiTableBuilder::from_base_uri("s3://bucket/trips_table")
         .with_option("aws_region", "us-west-2")
         .build().await?;
