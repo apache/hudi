@@ -148,7 +148,7 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
     bucketAssignerFunction.open(conf);
     bucketAssignerFunction.initializeState(this.stateInitializationContext);
 
-    if (conf.getBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED)) {
+    if (conf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED)) {
       bootstrapOperator = new BootstrapOperator(conf);
       CollectOutputAdapter<HoodieFlinkInternalRow> output = new CollectOutputAdapter<>();
       bootstrapOperator.setup(streamTask, streamConfig, output);
@@ -200,7 +200,7 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
   public void checkpointFunction(long checkpointId) throws Exception {
     // checkpoint the coordinator first
     this.coordinator.checkpointCoordinator(checkpointId, new CompletableFuture<>());
-    if (conf.getBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED)) {
+    if (conf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED)) {
       bootstrapOperator.snapshotState(null);
     }
     bucketAssignerFunction.snapshotState(null);

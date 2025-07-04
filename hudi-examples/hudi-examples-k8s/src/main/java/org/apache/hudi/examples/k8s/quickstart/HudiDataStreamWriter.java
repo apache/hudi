@@ -22,11 +22,12 @@ import org.apache.flink.streaming.api.CheckpointingMode;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
 import org.apache.flink.streaming.api.environment.CheckpointConfig;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.streaming.api.functions.source.SourceFunction;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.types.RowKind;
+
+import org.apache.hudi.adapter.SourceFunctionAdapter;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.examples.k8s.quickstart.utils.DataGenerator;
@@ -135,7 +136,7 @@ public class HudiDataStreamWriter {
   /**
    * Sample data source for generating RowData objects.
    */
-  static class SampleDataSource implements SourceFunction<RowData> {
+  static class SampleDataSource implements SourceFunctionAdapter<RowData> {
     private volatile boolean isRunning = true;
 
     @Override

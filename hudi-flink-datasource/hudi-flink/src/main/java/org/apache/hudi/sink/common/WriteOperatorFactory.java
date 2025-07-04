@@ -57,14 +57,15 @@ public class WriteOperatorFactory<I>
   @Override
   @SuppressWarnings("unchecked")
   public <T extends StreamOperator<RowData>> T createStreamOperator(StreamOperatorParameters<RowData> parameters) {
+    // necessary setting for the operator.
+    super.createStreamOperator(parameters);
+
     final OperatorID operatorID = parameters.getStreamConfig().getOperatorID();
     final OperatorEventDispatcher eventDispatcher = parameters.getOperatorEventDispatcher();
 
     this.operator.setCorrespondent(Correspondent.getInstance(operatorID,
         parameters.getContainingTask().getEnvironment().getOperatorCoordinatorEventGateway()));
     this.operator.setOperatorEventGateway(eventDispatcher.getOperatorEventGateway(operatorID));
-    this.operator.setup(parameters.getContainingTask(), parameters.getStreamConfig(), parameters.getOutput());
-    this.operator.setProcessingTimeService(this.processingTimeService);
     eventDispatcher.registerEventHandler(operatorID, operator);
     return (T) operator;
   }
