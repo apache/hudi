@@ -18,30 +18,39 @@
 
 package org.apache.hudi.common.table.timeline;
 
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.util.Option;
 
+import java.io.Serializable;
 import java.util.List;
 import java.util.function.Function;
 
-public interface CompletionTimeQueryView extends AutoCloseable {
+public abstract class CompletionTimeQueryView implements AutoCloseable, Serializable {
 
-  boolean isCompleted(String beginInstantTime);
+  protected HoodieTableMetaClient metaClient;
+
+  public CompletionTimeQueryView(HoodieTableMetaClient metaClient) {
+    this.metaClient = metaClient;
+  }
+
+  public abstract boolean isCompleted(String beginInstantTime);
 
   /**
    * Returns whether the instant is archived.
    */
-  boolean isArchived(String instantTime);
+  public abstract boolean isArchived(String instantTime);
 
   /**
    * Returns whether the give instant time {@code instantTime} completed before the base instant {@code baseInstant}.
    */
-  boolean isCompletedBefore(String baseInstant, String instantTime);
+  public abstract boolean isCompletedBefore(String baseInstant, String instantTime);
 
   /**
    * Returns whether the given instant time {@code instantTime} is sliced after or on the base instant {@code baseInstant}.
    */
-  boolean isSlicedAfterOrOn(String baseInstant, String instantTime);
+  public abstract boolean isSlicedAfterOrOn(String baseInstant, String instantTime);
 
   /**
    * Get completion time with a base instant time as a reference to fix the compatibility.
@@ -51,7 +60,7 @@ public interface CompletionTimeQueryView extends AutoCloseable {
    *
    * @return Probability fixed completion time.
    */
-  Option<String> getCompletionTime(String baseInstant, String instantTime);
+  public abstract Option<String> getCompletionTime(String baseInstant, String instantTime);
 
   /**
    * Queries the completion time with given instant time.
@@ -60,7 +69,7 @@ public interface CompletionTimeQueryView extends AutoCloseable {
    *
    * @return The completion time if the instant finished or empty if it is still pending.
    */
-  Option<String> getCompletionTime(String beginTime);
+  public abstract Option<String> getCompletionTime(String beginTime);
 
   /**
    * Queries the instant times with given completion time range.
@@ -74,7 +83,7 @@ public interface CompletionTimeQueryView extends AutoCloseable {
    *
    * @return The sorted instant time list.
    */
-  List<String> getInstantTimes(
+  public abstract List<String> getInstantTimes(
       HoodieTimeline timeline,
       Option<String> startCompletionTime,
       Option<String> endCompletionTime,
@@ -90,7 +99,7 @@ public interface CompletionTimeQueryView extends AutoCloseable {
    *
    * @return The sorted instant time list.
    */
-  List<String> getInstantTimes(
+  public abstract List<String> getInstantTimes(
       String startCompletionTime,
       String endCompletionTime,
       Function<String, String> earliestInstantTimeFunc);
@@ -99,11 +108,15 @@ public interface CompletionTimeQueryView extends AutoCloseable {
    *  Get Cursor Instant
    * @return
    */
-  String getCursorInstant();
+  public abstract String getCursorInstant();
 
   /**
    * Return true if the table is empty.
    * @return
    */
-  boolean isEmptyTable();
+  public abstract boolean isEmptyTable();
+
+  public HoodieTableVersion getTableVersion() {
+    return metaClient.getTableConfig().getTableVersion();
+  }
 }

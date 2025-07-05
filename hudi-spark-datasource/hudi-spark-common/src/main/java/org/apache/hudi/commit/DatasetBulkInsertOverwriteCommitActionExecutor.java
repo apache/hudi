@@ -77,7 +77,7 @@ public class DatasetBulkInsertOverwriteCommitActionExecutor extends BaseDatasetB
   }
 
   protected List<String> getAllExistingFileIds(String partitionPath) {
-    // because new commit is not complete. it is safe to mark all existing file Ids as old files
-    return table.getSliceView().getLatestFileSlices(partitionPath).map(FileSlice::getFileId).distinct().collect(Collectors.toList());
+    // we should only fetch the latest merged file slices with committed data
+    return table.getSliceView().getLatestMergedFileSlicesBeforeOrOn(partitionPath, instantTime).map(FileSlice::getFileId).distinct().collect(Collectors.toList());
   }
 }
