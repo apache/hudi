@@ -193,8 +193,8 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
 
     assertEquals(0, partBFiles.length);
     assertEquals(1, partAFiles.length);
-    assertEquals(2, stats.stream().mapToInt(r -> r.getSuccessDeleteFiles().size()).sum());
-    assertEquals(1, stats.stream().mapToInt(r -> r.getFailedDeleteFiles().size()).sum());
+    assertEquals(3, stats.stream().mapToInt(r -> r.getSuccessDeleteFiles().size()).sum());
+    assertEquals(0, stats.stream().mapToInt(r -> r.getFailedDeleteFiles().size()).sum());
   }
 
   @ParameterizedTest(name = TEST_NAME_WITH_PARAMS)

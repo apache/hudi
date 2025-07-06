@@ -21,7 +21,11 @@ package org.apache.hudi.table.action.rollback;
 
 import org.apache.hudi.avro.model.HoodieRollbackRequest;
 import org.apache.hudi.common.HoodieRollbackStat;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
+import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.FileCreateUtils;
@@ -29,12 +33,17 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.Triple;
+import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -48,10 +57,13 @@ import java.util.stream.IntStream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class TestBaseRollbackHelper extends HoodieRollbackTestBase {
   private static final int ROLLBACK_LOG_VERSION = 20;
+  private static final Logger LOG = LoggerFactory.getLogger(TestBaseRollbackHelper.class);
 
   @Override
   @BeforeEach
@@ -192,6 +204,100 @@ class TestBaseRollbackHelper extends HoodieRollbackTestBase {
             .build()
     ));
     assertRollbackStatsEquals(expected, rollbackStats);
+  }
+
+  @Test
+  void testFailedDeletionsWithRollbackExecution() throws IOException {
+    HoodieTableMetaClient mockedMetaClient = mock(HoodieTableMetaClient.class);
+    HoodieTable<?, ?, ?, ?> mockHoodieTable = mock(HoodieTable.class);
+    when(mockHoodieTable.getMetaClient()).thenReturn(mockedMetaClient);
+    when(mockedMetaClient.getBasePathV2()).thenReturn(basePath);
+    HoodieTableConfig tableConfig = new HoodieTableConfig();
+    when(mockedMetaClient.getTableConfig()).thenReturn(tableConfig);
+    HoodieWrapperFileSystem fs = mock(HoodieWrapperFileSystem.class);
+    when(mockedMetaClient.getFs()).thenReturn(fs);
+    when(fs.getConf()).thenReturn(HoodieTestUtils.getDefaultHadoopConf());
+    HoodieEngineContext context = new HoodieLocalEngineContext(HoodieTestUtils.getDefaultHadoopConf());
+
+    String rollbackInstantTime = "003";
+    String instantToRollback = "002";
+    BaseRollbackHelper rollbackHelper = new BaseRollbackHelper(mockHoodieTable, config);
+
+    List<SerializableHoodieRollbackRequest> rollbackRequests = new ArrayList<>();
+    String partition1 = "partition1";
+    String baseFileId1 = UUID.randomUUID().toString();
+    String baseFileId2 = UUID.randomUUID().toString();
+    String baseFileId3 = UUID.randomUUID().toString();
+
+    // Base files to roll back
+    Path baseFilePath1 = addRollbackRequestForBaseFile(rollbackRequests, partition1, baseFileId1, instantToRollback);
+    Path baseFilePath2 = addRollbackRequestForBaseFile(rollbackRequests, partition1, baseFileId2, instantToRollback);
+    Path baseFilePath3 = addRollbackRequestForBaseFile(rollbackRequests, partition1, baseFileId3, instantToRollback);
+
+    // test all diff combinations where rollback execution will succeed
+    // deletion succeeds
+    when(fs.delete(baseFilePath1)).thenReturn(true);
+    // fs.delete -> false, fs.exists -> false
+    when(fs.delete(baseFilePath2)).thenReturn(false);
+    when(fs.exists(baseFilePath2)).thenReturn(false);
+    // fs.delete throws FileNotFoundException
+    when(fs.delete(baseFilePath3)).thenThrow(new FileNotFoundException("File does not exist"));
+
+    when(timeline.lastInstant()).thenReturn(Option.of(new HoodieInstant(
+        true, HoodieTimeline.ROLLBACK_ACTION, rollbackInstantTime)));
+
+    List<Pair<String, HoodieRollbackStat>> rollbackStats = rollbackHelper.maybeDeleteAndCollectStats(
+        context,
+        rollbackInstantTime,
+        new HoodieInstant(true, HoodieTimeline.DELTA_COMMIT_ACTION, instantToRollback),
+        rollbackRequests, true, 5);
+
+    List<Pair<String, HoodieRollbackStat>> expected = new ArrayList<>();
+    expected.add(Pair.of(partition1,
+        HoodieRollbackStat.newBuilder()
+            .withPartitionPath(partition1)
+            .withDeletedFileResult(baseFilePath1.toString(), true)
+            .build()));
+    expected.add(Pair.of(partition1,
+        HoodieRollbackStat.newBuilder()
+            .withPartitionPath(partition1)
+            .withDeletedFileResult(baseFilePath2.toString(), true)
+            .build()));
+    expected.add(Pair.of(partition1,
+        HoodieRollbackStat.newBuilder()
+            .withPartitionPath(partition1)
+            .withDeletedFileResult(baseFilePath3.toString(), true)
+            .build()));
+    assertRollbackStatsEquals(expected, rollbackStats);
+
+    // error case, where fs.delete returned false and fs.exists returned true
+    rollbackRequests.clear();
+    String baseFileId4 = UUID.randomUUID().toString();
+    Path baseFilePath4 = addRollbackRequestForBaseFile(rollbackRequests, partition1, baseFileId4, instantToRollback);
+
+    // fs.delete -> false, fs.exists -> true
+    when(fs.delete(baseFilePath4)).thenReturn(false);
+    when(fs.exists(baseFilePath4)).thenReturn(true);
+    // execute and assert failure
+    assertFailedDeletion(rollbackHelper, context, rollbackInstantTime, instantToRollback, rollbackRequests, baseFilePath4.toString());
+  }
+
+  private void assertFailedDeletion(BaseRollbackHelper rollbackHelper, HoodieEngineContext context, String rollbackInstantTime, String instantToRollback,
+                                    List<SerializableHoodieRollbackRequest> rollbackRequests, String expectedFileToFailOnDeletion) {
+    try {
+      rollbackHelper.maybeDeleteAndCollectStats(
+          context,
+          rollbackInstantTime,
+          new HoodieInstant(true, HoodieTimeline.DELTA_COMMIT_ACTION, instantToRollback),
+          rollbackRequests, true, 5);
+      fail("Should not have reached here");
+    } catch (Throwable t) {
+      if (!(t.getCause() instanceof HoodieIOException)) {
+        LOG.error("Expected HoodieIOException to be thrown, but found {}, w/ error msg {}", t.getCause(), t.getCause().getMessage());
+      }
+      assertTrue(t.getCause() instanceof HoodieIOException);
+      assertTrue(t.getCause().getMessage().contains("Failing to delete file during rollback execution failed : " + expectedFileToFailOnDeletion));
+    }
   }
 
   private void assertRollbackStatsEquals(List<Pair<String, HoodieRollbackStat>> expected,
