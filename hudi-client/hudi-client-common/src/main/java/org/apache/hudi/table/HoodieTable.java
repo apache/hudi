@@ -94,6 +94,7 @@ import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -690,21 +691,30 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @throws HoodieIOException if some paths can't be finalized on storage
    */
   public void finalizeWrite(HoodieEngineContext context, String instantTs, List<HoodieWriteStat> stats) throws HoodieIOException {
-    reconcileAgainstMarkers(context, instantTs, stats, config.getConsistencyGuardConfig().isConsistencyCheckEnabled(), config.shouldFailOnDuplicateDataFileDetection());
+    reconcileAgainstMarkers(context, metaClient, instantTs, stats, config.getConsistencyGuardConfig().isConsistencyCheckEnabled(), config.shouldFailOnDuplicateDataFileDetection());
   }
 
-  private void deleteInvalidFilesByPartitions(HoodieEngineContext context, Map<String, List<Pair<String, String>>> invalidFilesByPartition) {
+  private void deleteInvalidFilesByPartitions(HoodieEngineContext context, HoodieTableMetaClient localMetaClient,
+                                              Map<String, List<Pair<String, String>>> invalidFilesByPartition) {
     // Now delete partially written files
     context.setJobStatus(this.getClass().getSimpleName(), "Delete invalid files generated during the write operation: " + config.getTableName());
     context.map(invalidFilesByPartition.values().stream()
             .flatMap(Collection::stream)
             .collect(Collectors.toList()),
         partitionFilePair -> {
-          final FileSystem fileSystem = metaClient.getFs();
+          final FileSystem fileSystem = localMetaClient.getFs();
           LOG.info("Deleting invalid data file=" + partitionFilePair);
           // Delete
           try {
-            fileSystem.delete(new Path(partitionFilePair.getValue()), false);
+            Path pathToDelete = new Path(partitionFilePair.getValue());
+            boolean deletionStatus = fileSystem.delete(pathToDelete, false);
+            if (!deletionStatus) {
+              if (fileSystem.exists(pathToDelete)) {
+                throw new HoodieIOException("Failed to delete invalid paths during marker reconciliaton " + pathToDelete);
+              }
+            }
+          } catch (FileNotFoundException fnfe) {
+            // no op
           } catch (IOException e) {
             throw new HoodieIOException(e.getMessage(), e);
           }
@@ -736,15 +746,17 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @param consistencyCheckEnabled Consistency Check Enabled
    * @throws HoodieIOException
    */
-  protected void reconcileAgainstMarkers(HoodieEngineContext context,
-                                         String instantTs,
-                                         List<HoodieWriteStat> stats,
-                                         boolean consistencyCheckEnabled,
-                                         boolean shouldFailOnDuplicateDataFileDetection) throws HoodieIOException {
+  @VisibleForTesting
+  public void reconcileAgainstMarkers(HoodieEngineContext context,
+                                      HoodieTableMetaClient metaClient,
+                                      String instantTs,
+                                      List<HoodieWriteStat> stats,
+                                      boolean consistencyCheckEnabled,
+                                      boolean shouldFailOnDuplicateDataFileDetection) throws HoodieIOException {
     try {
       // Reconcile marker and data files with WriteStats so that partially written data-files due to failed
       // (but succeeded on retry) tasks are removed.
-      String basePath = getMetaClient().getBasePath();
+      String basePath = metaClient.getBasePath();
       Set<String> invalidDataPaths = getInvalidDataFilePaths(instantTs, stats, false, "MarkerReconciliation");
 
       if (!invalidDataPaths.isEmpty()) {
@@ -766,7 +778,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
 
         // Now delete partially written files
         context.setJobStatus(this.getClass().getSimpleName(), "Delete all partially written files: " + config.getTableName());
-        deleteInvalidFilesByPartitions(context, invalidPathsByPartition);
+        deleteInvalidFilesByPartitions(context, metaClient, invalidPathsByPartition);
 
         // Now ensure the deleted files disappear
         if (consistencyCheckEnabled) {
