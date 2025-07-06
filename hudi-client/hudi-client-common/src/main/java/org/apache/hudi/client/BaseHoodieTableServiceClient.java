@@ -371,7 +371,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       // commit to data table after committing to metadata table.
       writeToMetadataTable(table, compactionCommitTime, metadata, partialMetadataWriteStats);
       LOG.info("Committing Compaction {}", compactionCommitTime);
-      CompactHelpers.getInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
+      CompactHelpers.getInstance().completeInflightCompaction(table, compactionCommitTime, metadata, txnManager.createCompletionInstant());
       LOG.debug("Compaction {} finished with result: {}", compactionCommitTime, metadata);
     } finally {
       this.txnManager.endStateChange(Option.of(compactionInstant));
@@ -438,7 +438,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       // commit to data table after committing to metadata table.
       writeToMetadataTable(table, logCompactionCommitTime, metadata, partialMetadataWriteStats);
       LOG.info("Committing Log Compaction {}", logCompactionCommitTime);
-      CompactHelpers.getInstance().completeInflightLogCompaction(table, logCompactionCommitTime, metadata);
+      CompactHelpers.getInstance().completeInflightLogCompaction(table, logCompactionCommitTime, metadata, txnManager.createCompletionInstant());
       LOG.debug("Log Compaction {} finished with result {}", logCompactionCommitTime, metadata);
     } finally {
       this.txnManager.endStateChange(Option.of(logCompactionInstant));
@@ -575,8 +575,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
 
       LOG.info("Committing Clustering {} for table {}", clusteringCommitTime, table.getConfig().getBasePath());
 
-      ClusteringUtils.transitionClusteringOrReplaceInflightToComplete(false, clusteringInstant, replaceCommitMetadata, table.getActiveTimeline(),
-          completedInstant -> table.getMetaClient().getTableFormat().commit(replaceCommitMetadata, completedInstant, table.getContext(), table.getMetaClient(), table.getViewManager()));
+      ClusteringUtils.transitionClusteringOrReplaceInflightToComplete(clusteringInstant, replaceCommitMetadata, table.getActiveTimeline(), txnManager.createCompletionInstant(), completedInstant -> table.getMetaClient().getTableFormat().commit(replaceCommitMetadata, completedInstant, table.getContext(), table.getMetaClient(), table.getViewManager()));
       LOG.debug("Clustering {} finished with result {}", clusteringCommitTime, replaceCommitMetadata);
     } catch (Exception e) {
       throw new HoodieClusteringException("unable to transition clustering inflight to complete: " + clusteringCommitTime, e);

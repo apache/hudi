@@ -203,7 +203,7 @@ public class TestClusteringUtils extends HoodieCommonTestHarness {
     String clusterTime1 = "1";
     HoodieInstant requestedInstant1 = createRequestedClusterInstant(partitionPath1, clusterTime1, fileIds1);
     HoodieInstant inflightInstant1 = metaClient.getActiveTimeline().transitionClusterRequestedToInflight(requestedInstant1, Option.empty());
-    metaClient.getActiveTimeline().transitionClusterInflightToComplete(true, inflightInstant1, new HoodieReplaceCommitMetadata());
+    metaClient.getActiveTimeline().transitionClusterInflightToComplete(inflightInstant1, new HoodieReplaceCommitMetadata(), );
 
     String cleanTime1 = "2";
     HoodieInstant requestedInstant2 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, cleanTime1);
