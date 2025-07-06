@@ -26,6 +26,7 @@ import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TableFormatCompletionAction;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
@@ -126,12 +127,7 @@ public abstract class BaseRestoreActionExecutor<T, I, K, O> extends BaseActionEx
     HoodieRestoreMetadata restoreMetadata = TimelineMetadataUtils.convertRestoreMetadata(
         instantTime, durationInMs, instantsRolledBack, instantToMetadata);
     HoodieInstant restoreInflightInstant = instantGenerator.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.RESTORE_ACTION, instantTime);
-    writeToMetadata(restoreMetadata, restoreInflightInstant);
-    table.getActiveTimeline().saveAsComplete(
-        true,
-        restoreInflightInstant,
-        Option.of(restoreMetadata),
-        restoreCompletedInstant -> table.getMetaClient().getTableFormat().restore(restoreCompletedInstant, table.getContext(), table.getMetaClient(), table.getViewManager()));
+    writeToMetadataAndCompleteCommit(restoreMetadata, restoreInflightInstant);
     // get all pending rollbacks instants after restore instant time and delete them.
     // if not, rollbacks will be considered not completed and might hinder metadata table compaction.
     List<HoodieInstant> instantsToRollback = table.getActiveTimeline().getRollbackTimeline()
@@ -154,10 +150,13 @@ public abstract class BaseRestoreActionExecutor<T, I, K, O> extends BaseActionEx
    *
    * @param restoreMetadata instance of {@link HoodieRestoreMetadata} to be applied to metadata.
    */
-  private void writeToMetadata(HoodieRestoreMetadata restoreMetadata, HoodieInstant restoreInflightInstant) {
+  private void writeToMetadataAndCompleteCommit(HoodieRestoreMetadata restoreMetadata, HoodieInstant restoreInflightInstant) {
     try {
       this.txnManager.beginStateChange(Option.of(restoreInflightInstant), Option.empty());
       writeTableMetadata(restoreMetadata);
+      TableFormatCompletionAction formatCompletionAction = restoreCompletedInstant -> table.getMetaClient().getTableFormat()
+          .restore(restoreCompletedInstant, table.getContext(), table.getMetaClient(), table.getViewManager());
+      table.getActiveTimeline().saveAsComplete(restoreInflightInstant, Option.of(restoreMetadata), txnManager.createCompletionInstant(), formatCompletionAction);
     } finally {
       this.txnManager.endStateChange(Option.of(restoreInflightInstant));
     }
