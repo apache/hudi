@@ -365,7 +365,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   protected BufferedRecord<T> applyOutputSchemaConversion(BufferedRecord<T> bufferedRecord) {
     if (bufferedRecord.getRecord() != null && outputConverter.isPresent()) {
       return new BufferedRecord<>(bufferedRecord.getRecordKey(), bufferedRecord.getOrderingValue(),
-          outputConverter.get().apply(bufferedRecord.getRecord()), readerContext.encodeAvroSchema(readerContext.getSchemaHandler().getRequestedSchema()), bufferedRecord.isDelete());
+          outputConverter.get().apply(bufferedRecord.getRecord()), readerContext.getSchemaHandler().getRequestedSchemaEncoding(), bufferedRecord.isDelete());
     }
     return bufferedRecord;
   }

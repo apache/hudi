@@ -64,6 +64,8 @@ public class FileGroupReaderSchemaHandler<T> {
 
   // requestedSchema: the schema that the caller requests
   protected final Schema requestedSchema;
+  // requestedSchemaEncoding: the cached encoding of the requestedSchema
+  private final Integer requestedSchemaEncoding;
 
   // requiredSchema: the requestedSchema with any additional columns required for merging etc
   protected final Schema requiredSchema;
@@ -92,6 +94,7 @@ public class FileGroupReaderSchemaHandler<T> {
     this.readerContext = readerContext;
     this.tableSchema = tableSchema;
     this.requestedSchema = AvroSchemaCache.intern(requestedSchema);
+    this.requestedSchemaEncoding = readerContext.encodeAvroSchema(requestedSchema);
     this.hoodieTableConfig = hoodieTableConfig;
     Pair<Option<Pair<String, String>>, Boolean> deleteConfigs = getDeleteConfigs(properties, tableSchema);
     this.customDeleteMarkerKeyValue = deleteConfigs.getLeft();
@@ -108,6 +111,10 @@ public class FileGroupReaderSchemaHandler<T> {
 
   public Schema getRequestedSchema() {
     return this.requestedSchema;
+  }
+
+  public Integer getRequestedSchemaEncoding() {
+    return requestedSchemaEncoding;
   }
 
   public Schema getRequiredSchema() {
