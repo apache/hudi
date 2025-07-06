@@ -21,10 +21,29 @@ package org.apache.hudi.common.table.read;
 
 import org.apache.hudi.common.model.HoodieRecord;
 
+/**
+ * Callback interface for handling updates to the base file of the file group.
+ * @param <T> Type of the record payload.
+ */
 public interface FileGroupUpdateCallback<T> {
+  /**
+   * Callback method to handle updates to a record already present in the base file.
+   * @param previousRecord the record in the base file before the update
+   * @param newRecord the incoming record
+   * @param mergedRecord the result of merging the previous and new records
+   */
   void onUpdate(HoodieRecord<T> previousRecord, HoodieRecord<T> newRecord, HoodieRecord<T> mergedRecord);
 
+  /**
+   * Callback method to handle insertion of a new record into the base file.
+   * @param newRecord the new record being added to the base file
+   */
   void onInsert(HoodieRecord<T> newRecord);
 
+  /**
+   * Callback method to handle deletion of a record from the base file.
+   * @param previousRecord the record in the base file before deletion
+   * @param inputRecord the record that triggered the deletion
+   */
   void onDelete(HoodieRecord<T> previousRecord, HoodieRecord<T> inputRecord);
 }
