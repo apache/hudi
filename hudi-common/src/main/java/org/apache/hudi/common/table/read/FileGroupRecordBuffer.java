@@ -79,7 +79,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   protected final boolean shouldCheckCustomDeleteMarker;
   protected final boolean shouldCheckBuiltInDeleteMarker;
   protected final boolean emitDelete;
-  protected final Option<FileGroupUpdateCallback<T>> callbackOption;
+  protected final Option<BaseFileUpdateCallback<T>> callbackOption;
   protected ClosableIterator<T> baseFileIterator;
   protected Iterator<BufferedRecord<T>> logRecordIterator;
   protected T nextRecord;
@@ -97,7 +97,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
                                   HoodieReadStats readStats,
                                   Option<String> orderingFieldName,
                                   boolean emitDelete,
-                                  Option<FileGroupUpdateCallback<T>> updateCallback) {
+                                  Option<BaseFileUpdateCallback<T>> updateCallback) {
     this.readerContext = readerContext;
     this.outputConverter = readerContext.getSchemaHandler().getOutputConverter();
     this.callbackOption = updateCallback;

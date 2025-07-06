@@ -25,7 +25,7 @@ import org.apache.hudi.common.model.HoodieRecord;
  * Callback interface for handling updates to the base file of the file group.
  * @param <T> Type of the record payload.
  */
-public interface FileGroupUpdateCallback<T> {
+public interface BaseFileUpdateCallback<T> {
   /**
    * Callback method to handle updates to a record already present in the base file.
    * @param previousRecord the record in the base file before the update

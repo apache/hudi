@@ -98,7 +98,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   // considers the log records which are inflight.
   private final boolean allowInflightInstants;
   // Callback to run custom logic on updates to the base files for the file group
-  private final Option<FileGroupUpdateCallback<T>> fileGroupUpdateCallback;
+  private final Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback;
 
   /**
    * Constructs an instance of the HoodieFileGroupReader.
@@ -120,7 +120,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
                                 String latestCommitTime, FileSlice fileSlice, Schema dataSchema, Schema requestedSchema,
                                 Option<InternalSchema> internalSchemaOpt, HoodieTableMetaClient hoodieTableMetaClient, TypedProperties props,
                                 long start, long length, boolean shouldUseRecordPosition, boolean allowInflightInstants, boolean emitDelete, boolean sortOutput,
-                                Option<FileGroupUpdateCallback<T>> updateCallback) {
+                                Option<BaseFileUpdateCallback<T>> updateCallback) {
     this.readerContext = readerContext;
     this.fileGroupUpdateCallback = updateCallback;
     this.metaClient = hoodieTableMetaClient;
@@ -463,7 +463,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     private boolean allowInflightInstants = false;
     private boolean emitDelete;
     private boolean sortOutput = false;
-    private Option<FileGroupUpdateCallback<T>> fileGroupUpdateCallback = Option.empty();
+    private Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback = Option.empty();
 
     public Builder<T> withReaderContext(HoodieReaderContext<T> readerContext) {
       this.readerContext = readerContext;
@@ -531,7 +531,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       return this;
     }
 
-    public Builder<T> withFileGroupUpdateCallback(Option<FileGroupUpdateCallback<T>> fileGroupUpdateCallback) {
+    public Builder<T> withFileGroupUpdateCallback(Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback) {
       this.fileGroupUpdateCallback = fileGroupUpdateCallback;
       return this;
     }
