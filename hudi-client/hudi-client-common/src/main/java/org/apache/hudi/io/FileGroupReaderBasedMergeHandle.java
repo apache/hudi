@@ -32,7 +32,7 @@ import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
-import org.apache.hudi.common.table.read.FileGroupUpdateCallback;
+import org.apache.hudi.common.table.read.BaseFileUpdateCallback;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.util.Option;
@@ -246,7 +246,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieMergeHand
     }
   }
 
-  private static class CDCHandler<T> implements FileGroupUpdateCallback<T> {
+  private static class CDCHandler<T> implements BaseFileUpdateCallback<T> {
     private final HoodieCDCLogger cdcLogger;
     private final Schema schema;
     private final TypedProperties properties;
