@@ -510,9 +510,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
       .withReverseReader(false)
       .withBufferSize(HoodieMetadataConfig.MAX_READER_BUFFER_SIZE_PROP.defaultValue)
       .withPartition(partitionPath)
-      .withAllowInflightInstants(true)
       .withMetaClient(metaClient)
-      .withAllowInflightInstants(true)
       .withRecordBuffer(recordBuffer)
       .build
 
