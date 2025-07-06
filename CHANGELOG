@@ -874,3 +874,8 @@ f5824e51ca7 [ENG-28779][INTERNAL] Add parallelism configs to AwsGlueSync (#1428)
 --- [2025-07-02 16:04:13] [release-v1.144.0] ---
 [ENG-28935][HUDI-9563] Add resource tags for AWS Glue database and tables (#1436)
 [AUDIT-1071]: Changelog for release-v1.143.0 (#1437)
+
+--- [2025-07-06 05:11:54] [release-v1.145.0] ---
+[ENG-27166][HUDI-9559] Account for failed deletion with rollback execution (#1418)
+[ENG-15951][INTERNAL] Making marker reconciliation robust on file deletion failures. (#987)
+[AUDIT-1071]: Changelog for release-v1.144.0 (#1438)
