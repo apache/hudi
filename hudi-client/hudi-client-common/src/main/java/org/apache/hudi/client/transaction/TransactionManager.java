@@ -25,6 +25,7 @@ import org.apache.hudi.common.table.timeline.TimeGenerators;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieLockException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 
@@ -44,6 +45,7 @@ public class TransactionManager implements Serializable, AutoCloseable {
   protected final LockManager lockManager;
   protected final boolean isLockRequired;
   private final transient TimeGenerator timeGenerator;
+  protected boolean hasLock;
   protected Option<HoodieInstant> changeActionInstant = Option.empty();
   private Option<HoodieInstant> lastCompletedActionInstant = Option.empty();
 
@@ -59,6 +61,13 @@ public class TransactionManager implements Serializable, AutoCloseable {
     this.lockManager = lockManager;
     this.isLockRequired = isLockRequired;
     this.timeGenerator = timeGenerator;
+  }
+
+  public String createCompletionInstant() {
+    if (!hasLock && isLockRequired) {
+      throw new HoodieLockException("Cannot create completion instant without acquiring a lock first.");
+    }
+    return TimelineUtils.generateInstantTime(false, timeGenerator);
   }
 
   /**
@@ -109,7 +118,7 @@ public class TransactionManager implements Serializable, AutoCloseable {
   private  <T> T executeStateChangeWithInstant(boolean requiresLock, Option<String> providedInstantTime,
                                                Option<HoodieInstant> lastCompletedActionInstant, Function<String, T> instantTimeConsumingAction) {
     if (requiresLock && isLockRequired()) {
-      lockManager.lock();
+      acquireLock();
     }
     String requestedInstant = providedInstantTime.orElseGet(() -> TimelineUtils.generateInstantTime(false, timeGenerator));
     try {
@@ -121,7 +130,7 @@ public class TransactionManager implements Serializable, AutoCloseable {
       return instantTimeConsumingAction.apply(requestedInstant);
     } finally {
       if (requiresLock && isLockRequired()) {
-        lockManager.unlock();
+        releaseLock();
         LOG.info("State change ended for {}", requestedInstant);
       }
     }
@@ -136,7 +145,7 @@ public class TransactionManager implements Serializable, AutoCloseable {
     if (isLockRequired) {
       LOG.info("State change starting for {} with latest completed action instant {}",
           changeActionInstant, lastCompletedActionInstant);
-      lockManager.lock();
+      acquireLock();
       reset(this.changeActionInstant, changeActionInstant, lastCompletedActionInstant);
       LOG.info("State change started for {} with latest completed action instant {}",
           changeActionInstant, lastCompletedActionInstant);
@@ -147,11 +156,23 @@ public class TransactionManager implements Serializable, AutoCloseable {
     endStateChange(Option.empty());
   }
 
+  private void acquireLock() {
+    lockManager.lock();
+    hasLock = true;
+  }
+
+  private void releaseLock() {
+    if (hasLock) {
+      lockManager.unlock();
+      hasLock = false;
+    }
+  }
+
   public void endStateChange(Option<HoodieInstant> changeActionInstant) {
     if (isLockRequired) {
       LOG.info("State change ending for action instant {}", changeActionInstant);
       if (reset(changeActionInstant, Option.empty(), Option.empty())) {
-        lockManager.unlock();
+        releaseLock();
         LOG.info("State change ended for action instant {}", changeActionInstant);
       }
     }
