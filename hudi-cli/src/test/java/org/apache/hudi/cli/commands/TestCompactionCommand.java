@@ -24,6 +24,7 @@ import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
 import org.apache.hudi.cli.testutils.HoodieTestCommitMetadataGenerator;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.timeline.HoodieTimelineArchiver;
 import org.apache.hudi.client.timeline.versioning.v2.TimelineArchiverV2;
 import org.apache.hudi.common.model.HoodieAvroPayload;
@@ -157,8 +158,8 @@ public class TestCompactionCommand extends CLIFunctionalTestHarness {
     HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().reloadActiveTimeline();
     // Create six commits
     Arrays.asList("001", "003", "005", "007").forEach(timestamp -> {
-      activeTimeline.transitionCompactionInflightToComplete(true,
-          INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, COMPACTION_ACTION, timestamp), new HoodieCommitMetadata());
+      activeTimeline.transitionCompactionInflightToComplete(
+          INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, COMPACTION_ACTION, timestamp), new HoodieCommitMetadata(), WriteClientTestUtils.createNewInstantTime());
     });
     // Simulate a compaction commit in metadata table timeline
     // so the archival in data table can happen

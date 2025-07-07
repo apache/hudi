@@ -255,7 +255,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
         INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, firstEmptyInstantTs));
     metaClient.getActiveTimeline().saveAsComplete(
         INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, firstEmptyInstantTs),
-        Option.of(metadata));
+        Option.of(metadata), HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
 
     view.sync();
     assertTrue(view.getLastInstant().isPresent());
@@ -298,7 +298,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
         INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, firstEmptyInstantTs));
     metaClient.getActiveTimeline().saveAsComplete(
         INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, firstEmptyInstantTs),
-        Option.of(metadata));
+        Option.of(metadata), HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
 
     view.sync();
     assertTrue(view.getLastInstant().isPresent());
@@ -638,7 +638,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     HoodieInstant cleanInflightInstant = INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.CLEAN_ACTION, cleanInstant);
     metaClient.getActiveTimeline().createNewInstant(cleanInflightInstant);
     HoodieCleanMetadata cleanMetadata = CleanerUtils.convertCleanMetadata(cleanInstant, Option.empty(), cleanStats, Collections.EMPTY_MAP);
-    metaClient.getActiveTimeline().saveAsComplete(cleanInflightInstant, Option.of(cleanMetadata));
+    metaClient.getActiveTimeline().saveAsComplete(cleanInflightInstant, Option.of(cleanMetadata), HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
   }
 
   /**
@@ -670,13 +670,13 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
       HoodieInstant restoreInstant =
           INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.RESTORE_ACTION, rollbackInstant);
       metaClient.getActiveTimeline().createNewInstant(restoreInstant);
-      metaClient.getActiveTimeline().saveAsComplete(restoreInstant, Option.of(metadata));
+      metaClient.getActiveTimeline().saveAsComplete(restoreInstant, Option.of(metadata), HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
     } else {
       metaClient.getActiveTimeline().createNewInstant(
           INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.ROLLBACK_ACTION, rollbackInstant));
       metaClient.getActiveTimeline().saveAsComplete(
           INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.ROLLBACK_ACTION, rollbackInstant),
-          Option.of(rollbackMetadata));
+          Option.of(rollbackMetadata), HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
     }
     StoragePath instantPath = HoodieTestUtils
         .getCompleteInstantPath(metaClient.getStorage(),
@@ -1003,7 +1003,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     HoodieInstant inflightInstant = INSTANT_GENERATOR.createNewInstant(State.INFLIGHT,
         deltaCommit ? HoodieTimeline.DELTA_COMMIT_ACTION : HoodieTimeline.COMMIT_ACTION, instant);
     metaClient.getActiveTimeline().createNewInstant(inflightInstant);
-    metaClient.getActiveTimeline().saveAsComplete(inflightInstant, Option.of(metadata));
+    metaClient.getActiveTimeline().saveAsComplete(inflightInstant, Option.of(metadata), HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
     return writeStats.stream().map(e -> e.getValue().getPath()).collect(Collectors.toList());
   }
 
@@ -1025,7 +1025,8 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     replaceCommitMetadata.setPartitionToReplaceFileIds(partitionToReplaceFileIds);
     metaClient.getActiveTimeline().saveAsComplete(
         inflightInstant,
-        Option.of(replaceCommitMetadata));
+        Option.of(replaceCommitMetadata),
+        HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
     return writeStats.stream().map(e -> e.getValue().getPath()).collect(Collectors.toList());
   }
 

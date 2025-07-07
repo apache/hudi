@@ -575,7 +575,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
 
       LOG.info("Committing Clustering {} for table {}", clusteringCommitTime, table.getConfig().getBasePath());
 
-      ClusteringUtils.transitionClusteringOrReplaceInflightToComplete(clusteringInstant, replaceCommitMetadata, table.getActiveTimeline(), txnManager.createCompletionInstant(), completedInstant -> table.getMetaClient().getTableFormat().commit(replaceCommitMetadata, completedInstant, table.getContext(), table.getMetaClient(), table.getViewManager()));
+      ClusteringUtils.transitionClusteringOrReplaceInflightToComplete(clusteringInstant, replaceCommitMetadata, table.getActiveTimeline(), txnManager.createCompletionInstant(),
+          completedInstant -> table.getMetaClient().getTableFormat().commit(replaceCommitMetadata, completedInstant, table.getContext(), table.getMetaClient(), table.getViewManager()));
       LOG.debug("Clustering {} finished with result {}", clusteringCommitTime, replaceCommitMetadata);
     } catch (Exception e) {
       throw new HoodieClusteringException("unable to transition clustering inflight to complete: " + clusteringCommitTime, e);

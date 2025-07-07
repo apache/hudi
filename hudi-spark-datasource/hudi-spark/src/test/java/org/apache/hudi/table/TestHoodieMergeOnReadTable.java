@@ -644,13 +644,12 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       // Create a commit without metadata stats in metadata to test backwards compatibility
       HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
       String commitActionType = table.getMetaClient().getCommitActionType();
-      List<String> instants = new ArrayList<>();
       String instant0 = WriteClientTestUtils.createNewInstantTime();
       HoodieInstant instant = INSTANT_GENERATOR.createNewInstant(State.REQUESTED, commitActionType, instant0);
       activeTimeline.createNewInstant(instant);
       activeTimeline.transitionRequestedToInflight(instant, Option.empty());
       instant = INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, commitActionType, instant0);
-      activeTimeline.saveAsComplete(instant, Option.empty());
+      activeTimeline.saveAsComplete(instant, Option.empty(), WriteClientTestUtils.createNewInstantTime());
 
       String instant1 = client.startCommit();
 

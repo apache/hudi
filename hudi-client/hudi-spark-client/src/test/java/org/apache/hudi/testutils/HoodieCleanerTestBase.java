@@ -29,6 +29,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
 import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
@@ -213,7 +214,7 @@ public class HoodieCleanerTestBase extends HoodieClientTestBase {
       metadataWriter.update(commitMeta, instantTime);
       metaClient.getActiveTimeline().saveAsComplete(
           INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, instantTime),
-          Option.of(commitMeta));
+          Option.of(commitMeta), HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
       metaClient = HoodieTableMetaClient.reload(metaClient);
     }
   }

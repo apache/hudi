@@ -31,6 +31,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
@@ -116,11 +117,11 @@ class TestTimelineUtils extends HoodieCommonTestHarness {
     if (withReplace) {
       activeTimeline.saveAsComplete(instant1,
           Option.of(getReplaceCommitMetadata(basePath, ts1, replacePartition, 2,
-              newFilePartition, 0, Collections.emptyMap(), WriteOperationType.CLUSTER)));
+              newFilePartition, 0, Collections.emptyMap(), WriteOperationType.CLUSTER)), HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
     } else {
-      activeTimeline.transitionClusterInflightToComplete(true, instant1,
+      activeTimeline.transitionClusterInflightToComplete(instant1,
           getReplaceCommitMetadata(basePath, ts1, replacePartition, 2,
-              newFilePartition, 0, Collections.emptyMap(), WriteOperationType.CLUSTER));
+              newFilePartition, 0, Collections.emptyMap(), WriteOperationType.CLUSTER), HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
     }
     metaClient.reloadActiveTimeline();
 
@@ -136,11 +137,11 @@ class TestTimelineUtils extends HoodieCommonTestHarness {
     if (withReplace) {
       activeTimeline.saveAsComplete(instant2,
           Option.of(getReplaceCommitMetadata(basePath, ts2, replacePartition, 0,
-              newFilePartition, 3, Collections.emptyMap(), WriteOperationType.CLUSTER)));
+              newFilePartition, 3, Collections.emptyMap(), WriteOperationType.CLUSTER)), HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
     } else {
-      activeTimeline.transitionClusterInflightToComplete(true, instant2,
+      activeTimeline.transitionClusterInflightToComplete(instant2,
           getReplaceCommitMetadata(basePath, ts2, replacePartition, 0,
-              newFilePartition, 3, Collections.emptyMap(), WriteOperationType.CLUSTER));
+              newFilePartition, 3, Collections.emptyMap(), WriteOperationType.CLUSTER), HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
     }
     metaClient.reloadActiveTimeline();
     partitions = TimelineUtils.getAffectedPartitions(metaClient.getActiveTimeline().findInstantsAfter("1", 10));
@@ -164,11 +165,11 @@ class TestTimelineUtils extends HoodieCommonTestHarness {
       String ts = i + "";
       HoodieInstant instant = new HoodieInstant(INFLIGHT, COMMIT_ACTION, ts, InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
       activeTimeline.createNewInstant(instant);
-      activeTimeline.saveAsComplete(instant, getCommitMetadata(basePath, ts, ts, 2, Collections.emptyMap()));
+      activeTimeline.saveAsComplete(instant, getCommitMetadata(basePath, ts, ts, 2, Collections.emptyMap()), HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
 
       HoodieInstant cleanInstant = INSTANT_GENERATOR.createNewInstant(INFLIGHT, CLEAN_ACTION, ts);
       activeTimeline.createNewInstant(cleanInstant);
-      activeTimeline.saveAsComplete(cleanInstant, getCleanMetadata(olderPartition, ts, false));
+      activeTimeline.saveAsComplete(cleanInstant, getCleanMetadata(olderPartition, ts, false), HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
     }
 
     metaClient.reloadActiveTimeline();
@@ -203,11 +204,11 @@ class TestTimelineUtils extends HoodieCommonTestHarness {
       String ts = i + "";
       HoodieInstant instant = new HoodieInstant(INFLIGHT, COMMIT_ACTION, ts, InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
       activeTimeline.createNewInstant(instant);
-      activeTimeline.saveAsComplete(instant, getCommitMetadata(basePath, partitionPath, ts, 2, Collections.emptyMap()));
+      activeTimeline.saveAsComplete(instant, getCommitMetadata(basePath, partitionPath, ts, 2, Collections.emptyMap()), HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
 
       HoodieInstant cleanInstant = new HoodieInstant(INFLIGHT, CLEAN_ACTION, ts, InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
       activeTimeline.createNewInstant(cleanInstant);
-      activeTimeline.saveAsComplete(cleanInstant, getCleanMetadata(partitionPath, ts, false));
+      activeTimeline.saveAsComplete(cleanInstant, getCleanMetadata(partitionPath, ts, false), HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
     }
 
     metaClient.reloadActiveTimeline();
@@ -230,7 +231,7 @@ class TestTimelineUtils extends HoodieCommonTestHarness {
       String ts = i + "";
       HoodieInstant instant = new HoodieInstant(INFLIGHT, HoodieTimeline.RESTORE_ACTION, ts, InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
       activeTimeline.createNewInstant(instant);
-      activeTimeline.saveAsComplete(instant, Option.of(getRestoreMetadata(basePath, ts, ts, 2, COMMIT_ACTION)));
+      activeTimeline.saveAsComplete(instant, Option.of(getRestoreMetadata(basePath, ts, ts, 2, COMMIT_ACTION)), HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
     }
 
     metaClient.reloadActiveTimeline();
@@ -255,14 +256,14 @@ class TestTimelineUtils extends HoodieCommonTestHarness {
     String ts = "0";
     HoodieInstant instant = new HoodieInstant(INFLIGHT, COMMIT_ACTION, ts, InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
     activeTimeline.createNewInstant(instant);
-    activeTimeline.saveAsComplete(instant, getCommitMetadata(basePath, ts, ts, 2, Collections.emptyMap()));
+    activeTimeline.saveAsComplete(instant, getCommitMetadata(basePath, ts, ts, 2, Collections.emptyMap()), HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
 
     ts = "1";
     instant = new HoodieInstant(INFLIGHT, COMMIT_ACTION, ts, InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
     activeTimeline.createNewInstant(instant);
     Map<String, String> extraMetadata = new HashMap<>();
     extraMetadata.put(extraMetadataKey, extraMetadataValue1);
-    activeTimeline.saveAsComplete(instant, getCommitMetadata(basePath, ts, ts, 2, extraMetadata));
+    activeTimeline.saveAsComplete(instant, getCommitMetadata(basePath, ts, ts, 2, extraMetadata), HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
 
     metaClient.reloadActiveTimeline();
 
@@ -276,9 +277,9 @@ class TestTimelineUtils extends HoodieCommonTestHarness {
     activeTimeline.createNewInstant(instant2);
     String newValueForMetadata = "newValue2";
     extraMetadata.put(extraMetadataKey, newValueForMetadata);
-    activeTimeline.transitionClusterInflightToComplete(true, instant2,
+    activeTimeline.transitionClusterInflightToComplete(instant2,
         getReplaceCommitMetadata(basePath, ts2, "p2", 0,
-            "p2", 3, extraMetadata, WriteOperationType.CLUSTER));
+            "p2", 3, extraMetadata, WriteOperationType.CLUSTER), HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
     metaClient.reloadActiveTimeline();
 
     verifyExtraMetadataLatestValue(extraMetadataKey, extraMetadataValue1, false);
@@ -589,7 +590,7 @@ class TestTimelineUtils extends HoodieCommonTestHarness {
     // first insert to the older partition
     HoodieInstant instant1 = new HoodieInstant(INFLIGHT, COMMIT_ACTION, "00001", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
     activeTimeline.createNewInstant(instant1);
-    activeTimeline.saveAsComplete(instant1, getCommitMetadata(basePath, olderPartition, "00001", 2, Collections.emptyMap()));
+    activeTimeline.saveAsComplete(instant1, getCommitMetadata(basePath, olderPartition, "00001", 2, Collections.emptyMap()), HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
 
     metaClient.reloadActiveTimeline();
     List<String> droppedPartitions = TimelineUtils.getDroppedPartitions(metaClient, Option.empty(), Option.empty());
@@ -599,7 +600,7 @@ class TestTimelineUtils extends HoodieCommonTestHarness {
     // another commit inserts to new partition
     HoodieInstant instant2 = new HoodieInstant(INFLIGHT, COMMIT_ACTION, "00002", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
     activeTimeline.createNewInstant(instant2);
-    activeTimeline.saveAsComplete(instant2, getCommitMetadata(basePath, "p2", "00002", 2, Collections.emptyMap()));
+    activeTimeline.saveAsComplete(instant2, getCommitMetadata(basePath, "p2", "00002", 2, Collections.emptyMap()), HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
 
     metaClient.reloadActiveTimeline();
     droppedPartitions = TimelineUtils.getDroppedPartitions(metaClient, Option.empty(), Option.empty());
@@ -609,7 +610,7 @@ class TestTimelineUtils extends HoodieCommonTestHarness {
     // clean commit deletes older partition
     HoodieInstant cleanInstant = new HoodieInstant(INFLIGHT, CLEAN_ACTION, "00003", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
     activeTimeline.createNewInstant(cleanInstant);
-    activeTimeline.saveAsComplete(cleanInstant, getCleanMetadata(olderPartition, "00003", true));
+    activeTimeline.saveAsComplete(cleanInstant, getCleanMetadata(olderPartition, "00003", true), HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
 
     metaClient.reloadActiveTimeline();
     droppedPartitions = TimelineUtils.getDroppedPartitions(metaClient, Option.empty(), Option.empty());

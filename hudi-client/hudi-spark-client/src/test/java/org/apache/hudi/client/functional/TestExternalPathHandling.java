@@ -37,6 +37,7 @@ import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CleanerUtils;
@@ -170,7 +171,7 @@ public class TestExternalPathHandling extends HoodieClientTestBase {
         Collections.EMPTY_MAP);
     try (HoodieTableMetadataWriter hoodieTableMetadataWriter = (HoodieTableMetadataWriter) writeClient.initTable(WriteOperationType.UPSERT, Option.of(cleanTime)).getMetadataWriter(cleanTime).get()) {
       hoodieTableMetadataWriter.update(cleanMetadata, cleanTime);
-      metaClient.getActiveTimeline().transitionCleanInflightToComplete(true, inflightClean, Option.of(cleanMetadata));
+      metaClient.getActiveTimeline().transitionCleanInflightToComplete(inflightClean, Option.of(cleanMetadata), HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
       // make sure we still get the same results as before
       assertFileGroupCorrectness(instantTime2, partitionPath1, filePath2, fileId2, partitionPath2.isEmpty() ? 2 : 1);
       assertFileGroupCorrectness(instantTime3, partitionPath2, filePath3, fileId3, partitionPath2.isEmpty() ? 2 : 1);
