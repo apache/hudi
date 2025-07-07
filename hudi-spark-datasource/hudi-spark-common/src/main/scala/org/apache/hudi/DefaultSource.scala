@@ -338,24 +338,34 @@ object DefaultSource {
               val writeTableVersion = Integer.parseInt(parameters(INCREMENTAL_READ_TABLE_VERSION.key))
               if (writeTableVersion >= HoodieTableVersion.EIGHT.versionCode()) {
                 if (useNewParquetFileFormat) {
-                  new HoodieCopyOnWriteIncrementalHadoopFsRelationFactory(
-                    sqlContext, metaClient, parameters, userSchema, isBootstrappedTable).build()
+                  new HoodieCopyOnWriteIncrementalHadoopFsRelationFactoryV2(
+                    sqlContext, metaClient, parameters, userSchema, isBootstrappedTable, RangeType.CLOSED_CLOSED).build()
                 } else {
                   new IncrementalRelationV2(sqlContext, parameters, userSchema, metaClient, RangeType.CLOSED_CLOSED)
                 }
               } else {
-                new IncrementalRelationV1(sqlContext, parameters, userSchema, metaClient)
+                if (useNewParquetFileFormat) {
+                  new HoodieCopyOnWriteIncrementalHadoopFsRelationFactoryV1(
+                    sqlContext, metaClient, parameters, userSchema, isBootstrappedTable).build()
+                } else {
+                  new IncrementalRelationV1(sqlContext, parameters, userSchema, metaClient)
+                }
               }
             } else {
               if (metaClient.getTableConfig.getTableVersion.versionCode() >= HoodieTableVersion.EIGHT.versionCode()) {
                 if (useNewParquetFileFormat) {
-                  new HoodieCopyOnWriteIncrementalHadoopFsRelationFactory(
-                    sqlContext, metaClient, parameters, userSchema, isBootstrappedTable).build()
+                  new HoodieCopyOnWriteIncrementalHadoopFsRelationFactoryV2(
+                    sqlContext, metaClient, parameters, userSchema, isBootstrappedTable, RangeType.CLOSED_CLOSED).build()
                 } else {
                   new IncrementalRelationV2(sqlContext, parameters, userSchema, metaClient, RangeType.CLOSED_CLOSED)
                 }
               } else {
-                new IncrementalRelationV1(sqlContext, parameters, userSchema, metaClient)
+                if (useNewParquetFileFormat) {
+                  new HoodieCopyOnWriteIncrementalHadoopFsRelationFactoryV1(
+                    sqlContext, metaClient, parameters, userSchema, isBootstrappedTable).build()
+                } else {
+                  new IncrementalRelationV1(sqlContext, parameters, userSchema, metaClient)
+                }
               }
             }
 
@@ -380,24 +390,34 @@ object DefaultSource {
               val writeTableVersion = Integer.parseInt(parameters(INCREMENTAL_READ_TABLE_VERSION.key))
               if (writeTableVersion >= HoodieTableVersion.EIGHT.versionCode()) {
                 if (useNewParquetFileFormat) {
-                  new HoodieMergeOnReadIncrementalHadoopFsRelationFactory(
+                  new HoodieMergeOnReadIncrementalHadoopFsRelationFactoryV2(
                     sqlContext, metaClient, parameters, userSchema, isBootstrappedTable).build()
                 } else {
                   MergeOnReadIncrementalRelationV2(sqlContext, parameters, metaClient, userSchema)
                 }
               } else {
-                MergeOnReadIncrementalRelationV1(sqlContext, parameters, metaClient, userSchema)
+                if (useNewParquetFileFormat) {
+                  new HoodieMergeOnReadIncrementalHadoopFsRelationFactoryV1(
+                    sqlContext, metaClient, parameters, userSchema, isBootstrappedTable).build()
+                } else {
+                  MergeOnReadIncrementalRelationV1(sqlContext, parameters, metaClient, userSchema)
+                }
               }
             } else {
               if (metaClient.getTableConfig.getTableVersion.versionCode() >= HoodieTableVersion.EIGHT.versionCode()) {
                 if (useNewParquetFileFormat) {
-                  new HoodieMergeOnReadIncrementalHadoopFsRelationFactory(
+                  new HoodieMergeOnReadIncrementalHadoopFsRelationFactoryV2(
                     sqlContext, metaClient, parameters, userSchema, isBootstrappedTable).build()
                 } else {
                   MergeOnReadIncrementalRelationV2(sqlContext, parameters, metaClient, userSchema)
                 }
               } else {
-                MergeOnReadIncrementalRelationV1(sqlContext, parameters, metaClient, userSchema)
+                if (useNewParquetFileFormat) {
+                  new HoodieMergeOnReadIncrementalHadoopFsRelationFactoryV1(
+                    sqlContext, metaClient, parameters, userSchema, isBootstrappedTable).build()
+                } else {
+                  MergeOnReadIncrementalRelationV1(sqlContext, parameters, metaClient, userSchema)
+                }
               }
             }
 
