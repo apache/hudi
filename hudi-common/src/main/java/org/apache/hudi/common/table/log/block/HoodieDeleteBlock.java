@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.log.block;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieDeleteRecord;
 import org.apache.hudi.avro.model.HoodieDeleteRecordList;
 import org.apache.hudi.common.fs.SizeAwareDataInputStream;
@@ -55,7 +56,6 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.avro.HoodieAvroUtils.unwrapAvroValueWrapper;
-import static org.apache.hudi.avro.HoodieAvroUtils.wrapValueIntoAvro;
 
 /**
  * Delete block contains a list of keys to be deleted from scanning the blocks so far.
@@ -143,10 +143,10 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
     HoodieDeleteRecord.Builder recordBuilder = HOODIE_DELETE_RECORD_BUILDER_STUB.get();
     List<HoodieDeleteRecord> deleteRecordList = Arrays.stream(getRecordsToDelete())
         .map(record -> HoodieDeleteRecord.newBuilder(recordBuilder)
-            .setRecordKey(record.getRecordKey())
-            .setPartitionPath(record.getPartitionPath())
-            .setOrderingVal(wrapValueIntoAvro(record.getOrderingValue()))
-            .build())
+          .setRecordKey(record.getRecordKey())
+          .setPartitionPath(record.getPartitionPath())
+          .setOrderingVal(HoodieAvroUtils.wrapValueIntoAvro(record.getOrderingValue()))
+          .build())
         .collect(Collectors.toList());
     writer.write(HoodieDeleteRecordList.newBuilder(recordListBuilder)
         .setDeleteRecordList(deleteRecordList)

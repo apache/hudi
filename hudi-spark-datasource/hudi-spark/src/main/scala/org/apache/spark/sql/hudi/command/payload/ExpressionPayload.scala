@@ -24,11 +24,12 @@ import org.apache.hudi.avro.AvroSchemaUtils.{isNullable, resolveNullableSchema}
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.avro.HoodieAvroUtils.bytesToAvro
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodiePayloadProps, HoodieRecord, HoodieRecordPayload, OverwriteWithLatestAvroPayload}
-import org.apache.hudi.common.util.{BinaryUtil, ConfigUtils, HoodieRecordUtils, Option => HOption, StringUtils, ValidationUtils}
+import org.apache.hudi.common.util.{BinaryUtil, ConfigUtils, HoodieRecordUtils, Option => HOption, OrderingValues, StringUtils, ValidationUtils}
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
+import org.apache.hudi.util.JFunction
 
 import com.github.benmanes.caffeine.cache.{Cache, Caffeine}
 import org.apache.avro.Schema
@@ -66,7 +67,7 @@ class ExpressionPayload(@transient record: GenericRecord,
   extends DefaultHoodieRecordPayload(record, orderingVal) with Logging {
 
   def this(recordOpt: HOption[GenericRecord]) {
-    this(recordOpt.orElse(null), HoodieRecord.DEFAULT_ORDERING_VALUE)
+    this(recordOpt.orElse(null), OrderingValues.getDefault)
   }
 
   override def combineAndGetUpdateValue(currentValue: IndexedRecord,
@@ -180,16 +181,20 @@ class ExpressionPayload(@transient record: GenericRecord,
       }
     } else {
       // For customized payload, create the payload class and merge.
-      val orderingField = ConfigUtils.getOrderingField(properties)
-      if (StringUtils.isNullOrEmpty(orderingField)) {
+      val orderingFields = ConfigUtils.getOrderingFields(properties)
+      if (orderingFields == null) {
         HOption.of(incomingRecord)
       } else {
         val consistentLogicalTimestampEnabled = properties.getProperty(
           KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key,
           KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue).toBoolean
-        val incomingRecordPayload = HoodieRecordUtils.loadPayload(originalPayload, incomingRecord,
-          HoodieAvroUtils.getNestedFieldVal(incomingRecord, orderingField, true, consistentLogicalTimestampEnabled)
-            .asInstanceOf[Comparable[_]]).asInstanceOf[HoodieRecordPayload[_ <: HoodieRecordPayload[_]]]
+        val orderingValue = OrderingValues.create(
+          orderingFields,
+          JFunction.toJavaFunction[String, Comparable[_]](
+            field => HoodieAvroUtils.getNestedFieldVal(incomingRecord, field, true,
+              consistentLogicalTimestampEnabled).asInstanceOf[Comparable[_]]))
+        val incomingRecordPayload = HoodieRecordUtils.loadPayload(originalPayload, incomingRecord, orderingValue)
+          .asInstanceOf[HoodieRecordPayload[_ <: HoodieRecordPayload[_]]]
         incomingRecordPayload.combineAndGetUpdateValue(existingRecord, schema, properties)
       }
     }

@@ -234,7 +234,7 @@ public class HoodieMultiTableStreamer {
       tableConfig.enableMetaSync = globalConfig.enableMetaSync;
       tableConfig.syncClientToolClassNames = globalConfig.syncClientToolClassNames;
       tableConfig.schemaProviderClassName = globalConfig.schemaProviderClassName;
-      tableConfig.sourceOrderingField = globalConfig.sourceOrderingField;
+      tableConfig.sourceOrderingFields = globalConfig.sourceOrderingField;
       tableConfig.sourceClassName = globalConfig.sourceClassName;
       tableConfig.tableType = globalConfig.tableType;
       tableConfig.targetTableName = globalConfig.targetTableName;

@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
@@ -45,6 +46,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 import java.util.Set;
@@ -113,7 +115,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
   void testUpdate() throws IOException {
     Properties updatedProps = new Properties();
     updatedProps.setProperty(HoodieTableConfig.NAME.key(), "test-table2");
-    updatedProps.setProperty(HoodieTableConfig.PRECOMBINE_FIELD.key(), "new_field");
+    updatedProps.setProperty(HoodieTableConfig.PRECOMBINE_FIELDS.key(), "new_field");
     HoodieTableConfig.update(storage, metaPath, updatedProps);
 
     assertTrue(storage.exists(cfgPath));
@@ -121,7 +123,8 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
     HoodieTableConfig config = new HoodieTableConfig(storage, metaPath, null, null, null);
     assertEquals(8, config.getProps().size());
     assertEquals("test-table2", config.getTableName());
-    assertEquals("new_field", config.getPreCombineField());
+    assertEquals(Collections.singletonList("new_field"), config.getPreCombineFields());
+    assertEquals(Option.of("new_field"), config.getPreCombineFieldsStr());
   }
 
   @Test
@@ -211,7 +214,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
       for (int i = 0; i < 100; i++) {
         Properties updatedProps = new Properties();
         updatedProps.setProperty(HoodieTableConfig.NAME.key(), "test-table" + i);
-        updatedProps.setProperty(HoodieTableConfig.PRECOMBINE_FIELD.key(), "new_field" + i);
+        updatedProps.setProperty(HoodieTableConfig.PRECOMBINE_FIELDS.key(), "new_field" + i);
         HoodieTableConfig.update(storage, metaPath, updatedProps);
       }
     });

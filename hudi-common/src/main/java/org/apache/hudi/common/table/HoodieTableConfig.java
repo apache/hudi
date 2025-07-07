@@ -70,6 +70,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -151,11 +152,12 @@ public class HoodieTableConfig extends HoodieConfig {
           + "when the table is initially setup.");
 
   // TODO: is this this called precombine in 1.0. ..
-  public static final ConfigProperty<String> PRECOMBINE_FIELD = ConfigProperty
+  public static final ConfigProperty<String> PRECOMBINE_FIELDS = ConfigProperty
       .key("hoodie.table.precombine.field")
       .noDefaultValue()
-      .withDocumentation("Field used in preCombining before actual write. By default, when two records have the same key value, "
-          + "the largest value for the precombine field determined by Object.compareTo(..), is picked.");
+      .withDocumentation("Comma separated fields used in preCombining before actual write. By default, when two records have the same key value, "
+          + "the largest value for the precombine field determined by Object.compareTo(..), is picked. If there are multiple fields configured, "
+          + "comparison is made on the first field. If the first field values are same, comparison is made on the second field and so on.");
 
   public static final ConfigProperty<String> PARTITION_FIELDS = ConfigProperty
       .key("hoodie.table.partition.fields")
@@ -814,7 +816,7 @@ public class HoodieTableConfig extends HoodieConfig {
   public static Triple<RecordMergeMode, String, String> inferCorrectMergingBehavior(RecordMergeMode recordMergeMode,
                                                                                     String payloadClassName,
                                                                                     String recordMergeStrategyId,
-                                                                                    String orderingFieldName,
+                                                                                    String orderingFieldNamesAsString,
                                                                                     HoodieTableVersion tableVersion) {
     RecordMergeMode inferredRecordMergeMode;
     String inferredPayloadClassName;
@@ -826,7 +828,7 @@ public class HoodieTableConfig extends HoodieConfig {
       // use the default merge mode determined by whether the ordering field name is set.
       inferredRecordMergeMode = recordMergeMode != null
           ? recordMergeMode
-          : (isNullOrEmpty(orderingFieldName) ? COMMIT_TIME_ORDERING : EVENT_TIME_ORDERING);
+          : (isNullOrEmpty(orderingFieldNamesAsString) ? COMMIT_TIME_ORDERING : EVENT_TIME_ORDERING);
     } else {
       // Infer the merge mode from either the payload class or record merge strategy ID
       RecordMergeMode modeBasedOnPayload = inferRecordMergeModeFromPayloadClass(payloadClassName);
@@ -858,12 +860,12 @@ public class HoodieTableConfig extends HoodieConfig {
 
     // Check ordering field name based on record merge mode
     if (inferredRecordMergeMode == COMMIT_TIME_ORDERING) {
-      if (nonEmpty(orderingFieldName)) {
+      if (nonEmpty(orderingFieldNamesAsString)) {
         LOG.warn("The precombine or ordering field ({}) is specified. COMMIT_TIME_ORDERING "
-            + "merge mode does not use precombine or ordering field anymore.", orderingFieldName);
+            + "merge mode does not use precombine or ordering field anymore.", orderingFieldNamesAsString);
       }
     } else if (inferredRecordMergeMode == EVENT_TIME_ORDERING) {
-      if (isNullOrEmpty(orderingFieldName)) {
+      if (isNullOrEmpty(orderingFieldNamesAsString)) {
         LOG.warn("The precombine or ordering field is not specified. EVENT_TIME_ORDERING "
             + "merge mode requires precombine or ordering field to be set for getting the "
             + "event time. Using commit time-based ordering now.");
@@ -926,8 +928,14 @@ public class HoodieTableConfig extends HoodieConfig {
     }
   }
 
-  public String getPreCombineField() {
-    return getString(PRECOMBINE_FIELD);
+  public List<String> getPreCombineFields() {
+    return getPreCombineFieldsStr()
+        .map(preCombine -> Arrays.stream(preCombine.split(",")).filter(StringUtils::nonEmpty).collect(Collectors.toList()))
+        .orElse(Collections.emptyList());
+  }
+
+  public Option<String> getPreCombineFieldsStr() {
+    return Option.ofNullable(getString(PRECOMBINE_FIELDS));
   }
 
   public Option<String[]> getRecordKeyFields() {
@@ -1230,10 +1238,10 @@ public class HoodieTableConfig extends HoodieConfig {
   @Deprecated
   public static final String HOODIE_TABLE_VERSION_PROP_NAME = VERSION.key();
   /**
-   * @deprecated Use {@link #PRECOMBINE_FIELD} and its methods.
+   * @deprecated Use {@link #PRECOMBINE_FIELDS} and its methods.
    */
   @Deprecated
-  public static final String HOODIE_TABLE_PRECOMBINE_FIELD = PRECOMBINE_FIELD.key();
+  public static final String HOODIE_TABLE_PRECOMBINE_FIELD = PRECOMBINE_FIELDS.key();
   /**
    * @deprecated Use {@link #BASE_FILE_FORMAT} and its methods.
    */

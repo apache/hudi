@@ -135,8 +135,8 @@ class DefaultSource extends RelationProvider
       .setBasePath(tablePath).build()
 
     // Add preCombineField to options for buildReaderWithPartitionValues properly
-    val options = if (metaClient.getTableConfig.getPreCombineField != null) {
-      parameters ++ Map(HoodieTableConfig.PRECOMBINE_FIELD.key -> metaClient.getTableConfig.getPreCombineField)
+    val options = if (metaClient.getTableConfig.getPreCombineFieldsStr.isPresent) {
+      parameters ++ Map(HoodieTableConfig.PRECOMBINE_FIELDS.key -> metaClient.getTableConfig.getPreCombineFieldsStr.orElse(null))
     } else {
       parameters
     }

@@ -41,6 +41,7 @@ public class TestDataSource extends AbstractBaseTestSource {
 
   private static final Logger LOG = LoggerFactory.getLogger(TestDataSource.class);
   public static boolean returnEmptyBatch = false;
+  public static Option<String> recordInstantTime = Option.empty();
   private static int counter = 0;
 
   public TestDataSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
@@ -67,7 +68,7 @@ public class TestDataSource extends AbstractBaseTestSource {
     counter++;
 
     List<GenericRecord> records =
-        fetchNextBatch(props, (int) sourceLimit, instantTime, DEFAULT_PARTITION_NUM).collect(Collectors.toList());
+        fetchNextBatch(props, (int) sourceLimit, recordInstantTime.orElse(instantTime), DEFAULT_PARTITION_NUM).collect(Collectors.toList());
     JavaRDD<GenericRecord> avroRDD = sparkContext.<GenericRecord>parallelize(records, 4);
     return new InputBatch<>(Option.of(avroRDD), instantTime);
   }

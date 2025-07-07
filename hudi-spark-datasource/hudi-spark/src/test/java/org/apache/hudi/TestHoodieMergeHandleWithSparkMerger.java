@@ -86,7 +86,7 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
     properties.setProperty(
         HoodieTableConfig.BASE_FILE_FORMAT.key(),
         HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().toString());
-    properties.setProperty(HoodieTableConfig.PRECOMBINE_FIELD.key(), "record_key");
+    properties.setProperty(HoodieTableConfig.PRECOMBINE_FIELDS.key(), "record_key");
     properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(),"partition_path");
     properties.setProperty(HoodieTableConfig.PARTITION_FIELDS.key(), "partition_path");
     metaClient = getHoodieMetaClient(storageConf(), basePath(), HoodieTableType.MERGE_ON_READ, properties);

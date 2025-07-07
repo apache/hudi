@@ -21,7 +21,6 @@ package org.apache.hudi.hadoop.realtime;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.UseFileSplitsFromInputFormat;
@@ -115,10 +114,7 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat {
           List<String> fieldsToAdd = new ArrayList<>();
           if (!realtimeSplit.getDeltaLogPaths().isEmpty()) {
             HoodieRealtimeInputFormatUtils.addVirtualKeysProjection(jobConf, realtimeSplit.getVirtualKeyInfo());
-            String preCombineKey = tableConfig.getPreCombineField();
-            if (!StringUtils.isNullOrEmpty(preCombineKey)) {
-              fieldsToAdd.add(preCombineKey);
-            }
+            fieldsToAdd.addAll(tableConfig.getPreCombineFields());
           }
 
           Option<String[]> partitions = tableConfig.getPartitionFields();

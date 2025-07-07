@@ -23,7 +23,7 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.client.transaction.PreferWriterConflictResolutionStrategy
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model._
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, InProcessTimeGenerator}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings

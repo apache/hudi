@@ -23,8 +23,8 @@ import org.apache.hudi.common.config._
 import org.apache.hudi.common.fs.ConsistencyGuardConfig
 import org.apache.hudi.common.model.{HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.common.util.{Option, StringUtils}
 import org.apache.hudi.common.util.ConfigUtils.{DELTA_STREAMER_CONFIG_PREFIX, IS_QUERY_AS_RO_TABLE, STREAMER_CONFIG_PREFIX}
-import org.apache.hudi.common.util.Option
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncConfigHolder, HiveSyncTool}
@@ -1031,8 +1031,8 @@ object DataSourceOptionsHelper {
     if (!params.contains(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key()) && tableConfig.getKeyGeneratorClassName != null) {
       missingWriteConfigs ++= Map(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key() -> tableConfig.getKeyGeneratorClassName)
     }
-    if (!params.contains(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key()) && tableConfig.getPreCombineField != null) {
-      missingWriteConfigs ++= Map(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key -> tableConfig.getPreCombineField)
+    if (!params.contains(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key()) && tableConfig.getPreCombineFieldsStr.isPresent) {
+      missingWriteConfigs ++= Map(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key -> tableConfig.getPreCombineFieldsStr.orElse(null))
     }
     if (!params.contains(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key()) && tableConfig.getPayloadClass != null) {
       missingWriteConfigs ++= Map(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key() -> tableConfig.getPayloadClass)
@@ -1068,6 +1068,17 @@ object DataSourceOptionsHelper {
 
   def inferKeyGenClazz(recordsKeyFields: String, partitionFields: String): String = {
     getKeyGeneratorClassNameFromType(inferKeyGeneratorType(Option.ofNullable(recordsKeyFields), partitionFields))
+  }
+
+  /**
+   * Returns optional list of precombine fields from the provided parameteres.
+   */
+  def getPreCombineFields(params: Map[String, String]): Option[java.util.List[String]] = params.get(DataSourceWriteOptions.PRECOMBINE_FIELD.key) match {
+    // NOTE: This is required to compensate for cases when empty string is used to stub
+    //       property value to avoid it being set with the default value
+    // TODO(HUDI-3456) cleanup
+    case Some(f) if !StringUtils.isNullOrEmpty(f) => Option.of(java.util.Arrays.asList(f.split(","): _*))
+    case _ => Option.empty()
   }
 
   implicit def convert[T, U](prop: ConfigProperty[T])(implicit converter: T => U): ConfigProperty[U] = {

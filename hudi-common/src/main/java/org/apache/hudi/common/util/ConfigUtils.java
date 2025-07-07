@@ -35,6 +35,8 @@ import org.apache.hudi.storage.StoragePath;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nullable;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -77,16 +79,30 @@ public class ConfigUtils {
   /**
    * Get ordering field.
    */
-  public static String getOrderingField(Properties properties) {
+  @Nullable
+  public static String[] getOrderingFields(Properties properties) {
     String orderField = null;
     if (properties.containsKey("hoodie.datasource.write.precombine.field")) {
       orderField = properties.getProperty("hoodie.datasource.write.precombine.field");
-    } else if (properties.containsKey(HoodieTableConfig.PRECOMBINE_FIELD.key())) {
-      orderField = properties.getProperty(HoodieTableConfig.PRECOMBINE_FIELD.key());
+    } else if (properties.containsKey(HoodieTableConfig.PRECOMBINE_FIELDS.key())) {
+      orderField = properties.getProperty(HoodieTableConfig.PRECOMBINE_FIELDS.key());
     } else if (properties.containsKey(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY)) {
       orderField = properties.getProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY);
     }
-    return orderField;
+    return orderField == null ? null : orderField.split(",");
+  }
+
+  /**
+   * Ensures that ordering field is populated for mergers and legacy payloads.
+   *
+   * <p> See also {@link #getOrderingFields(Properties)}.
+   */
+  public static TypedProperties supplementOrderingFields(TypedProperties props, List<String> orderingFields) {
+    String orderingFieldsAsString = String.join(",", orderingFields);
+    props.putIfAbsent(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, orderingFieldsAsString);
+    props.putIfAbsent(HoodieTableConfig.PRECOMBINE_FIELDS.key(), orderingFieldsAsString);
+    props.putIfAbsent("hoodie.datasource.write.precombine.field", orderingFieldsAsString);
+    return props;
   }
 
   /**
