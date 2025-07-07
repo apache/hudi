@@ -89,7 +89,7 @@ public class HoodieInlineTestSuiteWriter extends HoodieTestSuiteWriter {
   @Override
   public Option<String> startCommit() {
     if (cfg.useDeltaStreamer) {
-      return Option.of(writeClient.createNewInstantTime());
+      return Option.of(writeClient.createNewInstantTime(true));
     } else {
       return Option.of(writeClient.startCommit());
     }
