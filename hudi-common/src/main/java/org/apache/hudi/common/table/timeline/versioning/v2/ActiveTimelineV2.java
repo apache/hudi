@@ -33,11 +33,10 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstantReader;
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
 import org.apache.hudi.common.table.timeline.TableFormatCompletionAction;
-import org.apache.hudi.common.table.timeline.TimeGenerator;
-import org.apache.hudi.common.table.timeline.TimeGenerators;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
@@ -60,7 +59,6 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.TimelineUtils.getHoodieInstantWriterOption;
@@ -131,7 +129,7 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
   @Override
   public void createCompleteInstant(HoodieInstant instant) {
     LOG.info("Creating a new complete instant {}", instant);
-    createCompleteFileInMetaPath(instant, Option.empty());
+    createCompleteFileInMetaPath(instant, Option.empty(), HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
   }
 
   @Override
@@ -151,13 +149,20 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
   }
 
   @Override
-  public <T> void saveAsComplete(HoodieInstant instant, Option<T> metadata, String completionTime) {
+  public <T> HoodieInstant saveAsComplete(HoodieInstant instant, Option<T> metadata, String completionTime) {
     LOG.info("Marking instant complete {}", instant);
     ValidationUtils.checkArgument(instant.isInflight(),
         "Could not mark an already completed instant as complete again " + instant);
     HoodieInstant commitInstant = instantGenerator.createNewInstant(HoodieInstant.State.COMPLETED, instant.getAction(), instant.requestedTime());
     HoodieInstant completedInstant = transitionStateToComplete(instant, commitInstant, metadata, completionTime);
     LOG.info("Completed {}", instant);
+    return completedInstant;
+  }
+
+  @Override
+  public <T> HoodieInstant saveAsComplete(HoodieInstant instant, Option<T> metadata, String completionTime, TableFormatCompletionAction tableFormatCompletionAction) {
+    HoodieInstant completedInstant = saveAsComplete(instant, metadata, completionTime);
+    tableFormatCompletionAction.execute(completedInstant);
     return completedInstant;
   }
 
@@ -402,9 +407,9 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
   }
 
   @Override
-  public HoodieInstant transitionCleanInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, Option<HoodieCleanMetadata> metadata,
+  public HoodieInstant transitionCleanInflightToComplete(HoodieInstant inflightInstant, Option<HoodieCleanMetadata> metadata, String completionInstant,
                                                          TableFormatCompletionAction tableFormatCompletionAction) {
-    HoodieInstant completedInstant = transitionCleanInflightToComplete(shouldLock, inflightInstant, metadata);
+    HoodieInstant completedInstant = transitionCleanInflightToComplete(inflightInstant, metadata, completionInstant);
     tableFormatCompletionAction.execute(completedInstant);
     return completedInstant;
   }
@@ -428,9 +433,9 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
   }
 
   @Override
-  public HoodieInstant transitionRollbackInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieRollbackMetadata metadata,
+  public HoodieInstant transitionRollbackInflightToComplete(HoodieInstant inflightInstant, HoodieRollbackMetadata metadata, String completionInstant,
                                                             TableFormatCompletionAction tableFormatCompletionAction) {
-    HoodieInstant completedInstant = transitionRollbackInflightToComplete(shouldLock, inflightInstant, metadata);
+    HoodieInstant completedInstant = transitionRollbackInflightToComplete(inflightInstant, metadata, completionInstant);
     tableFormatCompletionAction.execute(completedInstant);
     return completedInstant;
   }
@@ -485,9 +490,9 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
   }
 
   @Override
-  public HoodieInstant transitionReplaceInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieReplaceCommitMetadata metadata,
+  public HoodieInstant transitionReplaceInflightToComplete(HoodieInstant inflightInstant, HoodieReplaceCommitMetadata metadata, String completionInstant,
                                                            TableFormatCompletionAction tableFormatCompletionAction) {
-    HoodieInstant completedInstant = transitionReplaceInflightToComplete(shouldLock, inflightInstant, metadata);
+    HoodieInstant completedInstant = transitionReplaceInflightToComplete(inflightInstant, metadata, completionInstant);
     tableFormatCompletionAction.execute(completedInstant);
     return completedInstant;
   }
@@ -503,9 +508,9 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
   }
 
   @Override
-  public HoodieInstant transitionClusterInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieReplaceCommitMetadata metadata,
+  public HoodieInstant transitionClusterInflightToComplete(HoodieInstant inflightInstant, HoodieReplaceCommitMetadata metadata, String completionInstant,
                                                            TableFormatCompletionAction tableFormatCompletionAction) {
-    HoodieInstant completedInstant = transitionClusterInflightToComplete(shouldLock, inflightInstant, metadata);
+    HoodieInstant completedInstant = transitionClusterInflightToComplete(inflightInstant, metadata, completionInstant);
     tableFormatCompletionAction.execute(completedInstant);
     return completedInstant;
   }

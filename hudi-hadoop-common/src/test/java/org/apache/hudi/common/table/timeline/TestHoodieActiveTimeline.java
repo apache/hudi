@@ -110,19 +110,19 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     timeline.transitionRequestedToInflight(instant1, Option.empty());
     // Won't lock here since InProcessLockProvider is not in hudi-common
     timeline.saveAsComplete(instantGenerator.createNewInstant(State.INFLIGHT, instant1.getAction(), instant1.requestedTime()),
-        Option.empty());
+        Option.empty(), HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
     timeline.createNewInstant(instant2);
     timeline.transitionRequestedToInflight(instant2, Option.empty());
     timeline.saveAsComplete(instantGenerator.createNewInstant(State.INFLIGHT, instant2.getAction(), instant2.requestedTime()),
-        Option.empty());
+        Option.empty(), HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
     timeline.createNewInstant(instant3);
     timeline.transitionRequestedToInflight(instant3, Option.empty());
     timeline.saveAsComplete(instantGenerator.createNewInstant(State.INFLIGHT, instant3.getAction(), instant3.requestedTime()),
-        Option.empty());
+        Option.empty(), HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
     timeline.createNewInstant(instant4);
     timeline.transitionRequestedToInflight(instant4, Option.empty());
     timeline.saveAsComplete(instantGenerator.createNewInstant(State.INFLIGHT, instant4.getAction(), instant4.requestedTime()),
-        Option.empty());
+        Option.empty(), HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
     timeline.createNewInstant(instant5);
     timeline = timeline.reload();
 
@@ -211,7 +211,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
       timeline.createNewInstant(instant1);
 
       timeline.saveAsComplete(INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, instant1.getAction(),
-          instant1.requestedTime()), Option.of(new HoodieCommitMetadata()));
+          instant1.requestedTime()), Option.of(new HoodieCommitMetadata()), HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
 
       timeline = timeline.reload();
 
@@ -252,8 +252,8 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     assertTrue(timeline.getContiguousCompletedWriteTimeline().lastInstant().isPresent());
     assertEquals(instant4.requestedTime(), timeline.getContiguousCompletedWriteTimeline().lastInstant().get().requestedTime());
     // transition both inflight instants to complete
-    timeline.saveAsComplete(INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, instant5.getAction(), instant5.requestedTime()), Option.empty());
-    timeline.saveAsComplete(INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, instant8.getAction(), instant8.requestedTime()), Option.empty());
+    timeline.saveAsComplete(INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, instant5.getAction(), instant5.requestedTime()), Option.empty(), HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
+    timeline.saveAsComplete(INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, instant8.getAction(), instant8.requestedTime()), Option.empty(), HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
     timeline = timeline.reload();
     // instant8 in not considered in write timeline, so last completed instant in timeline should be instant7
     assertTrue(timeline.getContiguousCompletedWriteTimeline().lastInstant().isPresent());
@@ -426,7 +426,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     assertFalse(timeline.filterPendingExcludingCompaction().containsInstant(compaction));
     assertTrue(timeline.filterPendingCompactionTimeline().containsInstant(compaction));
     assertTrue(timeline.filterPendingMajorOrMinorCompactionTimeline().containsInstant(compaction));
-    compaction = timeline.transitionCompactionInflightToComplete(false, inflight, new HoodieCommitMetadata());
+    compaction = timeline.transitionCompactionInflightToComplete(inflight, new HoodieCommitMetadata(), HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
     timeline = timeline.reload();
     assertTrue(timeline.containsInstant(compaction));
     assertFalse(timeline.containsInstant(inflight));
@@ -442,7 +442,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     timeline = timeline.reload();
     assertFalse(timeline.containsInstant(clean));
     assertTrue(timeline.containsInstant(inflight));
-    clean = timeline.transitionCleanInflightToComplete(true, inflight, Option.empty());
+    clean = timeline.transitionCleanInflightToComplete(inflight, Option.empty(), HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
     timeline = timeline.reload();
     assertTrue(timeline.containsInstant(clean));
     assertFalse(timeline.containsInstant(inflight));
@@ -637,7 +637,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     timeline.createNewInstant(commitInstant);
     timeline.transitionRequestedToInflight(commitInstant, Option.empty());
     HoodieInstant completeCommitInstant = metaClient.createNewInstant(State.INFLIGHT, commitInstant.getAction(), commitInstant.requestedTime());
-    timeline.saveAsComplete(completeCommitInstant, Option.of(commitMetadata));
+    timeline.saveAsComplete(completeCommitInstant, Option.of(commitMetadata), HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
     HoodieActiveTimeline timelineAfterFirstInstant = timeline.reload();
 
     HoodieInstant completedCommitInstant = timelineAfterFirstInstant.lastInstant().get();
