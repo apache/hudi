@@ -76,8 +76,7 @@ public class SortedKeyBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupRec
         // and queue the base record, which is already read from the iterator, for the next iteration
         BufferedRecord<T> transformedLogRecord = applyOutputSchemaConversion(nextLogRecord);
         nextRecord = readerContext.seal(transformedLogRecord.getRecord());
-        baseFileUpdateCallbackOption.ifPresent(callback -> callback.onInsert(transformedLogRecord.getRecordKey(),
-            readerContext.convertToAvroRecord(transformedLogRecord.getRecord(), readerContext.getSchemaHandler().getRequestedSchema())));
+        handleBaseFileInsert(transformedLogRecord.getRecordKey(), transformedLogRecord.getRecord());
         queuedBaseFileRecord = Option.of(baseRecord);
         readStats.incrementNumInserts();
         return true;

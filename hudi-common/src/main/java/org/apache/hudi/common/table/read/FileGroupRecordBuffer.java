@@ -79,7 +79,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   protected final boolean shouldCheckCustomDeleteMarker;
   protected final boolean shouldCheckBuiltInDeleteMarker;
   protected final boolean emitDelete;
-  protected final Option<BaseFileUpdateCallback> baseFileUpdateCallbackOption;
+  private final Option<BaseFileUpdateCallback> baseFileUpdateCallbackOption;
   protected ClosableIterator<T> baseFileIterator;
   protected Iterator<BufferedRecord<T>> logRecordIterator;
   protected T nextRecord;
@@ -330,17 +330,14 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
         baseFileUpdateCallbackOption.ifPresent(callback -> {
           // If the record is not the same as the base record, we can emit an update
           if (isDeleteAndRecord.getRight() != baseRecord) {
-            Schema requestedSchema = readerContext.getSchemaHandler().getRequestedSchema();
-            callback.onUpdate(logRecordInfo.getRecordKey(), readerContext.convertToAvroRecord(baseRecord, requestedSchema),
-                readerContext.convertToAvroRecord(nextRecord, requestedSchema));
+            handleBaseFileUpdate(logRecordInfo.getRecordKey(), baseRecord, nextRecord);
           }
         });
         readStats.incrementNumUpdates();
         return true;
       } else {
         // emit Deletes
-        baseFileUpdateCallbackOption.ifPresent(callback -> callback.onDelete(logRecordInfo.getRecordKey(),
-            readerContext.convertToAvroRecord(baseRecord, readerContext.getSchemaHandler().getRequestedSchema())));
+        handleBaseFileDelete(logRecordInfo.getRecordKey(), baseRecord);
         readStats.incrementNumDeletes();
         if (emitDelete) {
           nextRecord = applyOutputSchemaConversion(readerContext.getDeleteRow(isDeleteAndRecord.getRight(), baseRecordInfo.getRecordKey()));
@@ -396,8 +393,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
       if (!nextRecordInfo.isDelete()) {
         BufferedRecord<T> convertedBufferedRecord = applyOutputSchemaConversion(nextRecordInfo);
         nextRecord = convertedBufferedRecord.getRecord();
-        baseFileUpdateCallbackOption.ifPresent(callback ->
-            callback.onInsert(nextRecordInfo.getRecordKey(), readerContext.convertToAvroRecord(nextRecordInfo.getRecord(), readerContext.getSchemaHandler().getRequestedSchema())));
+        handleBaseFileInsert(nextRecordInfo.getRecordKey(), nextRecord);
         readStats.incrementNumInserts();
         return true;
       } else if (emitDelete) {
@@ -411,6 +407,24 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
       }
     }
     return false;
+  }
+
+  protected void handleBaseFileInsert(String recordKey, T record) {
+    baseFileUpdateCallbackOption.ifPresent(callback ->
+        callback.onInsert(recordKey, readerContext.convertToAvroRecord(record, readerContext.getSchemaHandler().getRequestedSchema())));
+  }
+
+  protected void handleBaseFileUpdate(String recordKey, T oldRecord, T newRecord) {
+    baseFileUpdateCallbackOption.ifPresent(callback -> {
+      Schema requestedSchema = readerContext.getSchemaHandler().getRequestedSchema();
+      callback.onUpdate(recordKey, readerContext.convertToAvroRecord(oldRecord, requestedSchema),
+          readerContext.convertToAvroRecord(newRecord, requestedSchema));
+    });
+  }
+
+  protected void handleBaseFileDelete(String recordKey, T record) {
+    baseFileUpdateCallbackOption.ifPresent(callback ->
+        callback.onDelete(recordKey, readerContext.convertToAvroRecord(record, readerContext.getSchemaHandler().getRequestedSchema())));
   }
 
   protected Pair<Function<T, T>, Schema> getSchemaTransformerWithEvolvedSchema(HoodieDataBlock dataBlock) {
