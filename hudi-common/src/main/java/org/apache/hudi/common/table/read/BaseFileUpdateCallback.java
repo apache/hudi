@@ -19,31 +19,31 @@
 
 package org.apache.hudi.common.table.read;
 
-import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.avro.generic.GenericRecord;
 
 /**
  * Callback interface for handling updates to the base file of the file group.
- * @param <T> Type of the record payload.
  */
-public interface BaseFileUpdateCallback<T> {
+public interface BaseFileUpdateCallback {
   /**
    * Callback method to handle updates to a record already present in the base file.
+   * @param recordKey the key of the record being updated
    * @param previousRecord the record in the base file before the update
-   * @param newRecord the incoming record
    * @param mergedRecord the result of merging the previous and new records
    */
-  void onUpdate(HoodieRecord<T> previousRecord, HoodieRecord<T> newRecord, HoodieRecord<T> mergedRecord);
+  void onUpdate(String recordKey, GenericRecord previousRecord, GenericRecord mergedRecord);
 
   /**
    * Callback method to handle insertion of a new record into the base file.
+   * @param recordKey the key of the record being inserted
    * @param newRecord the new record being added to the base file
    */
-  void onInsert(HoodieRecord<T> newRecord);
+  void onInsert(String recordKey, GenericRecord newRecord);
 
   /**
    * Callback method to handle deletion of a record from the base file.
+   * @param recordKey the key of the record being deleted
    * @param previousRecord the record in the base file before deletion
-   * @param inputRecord the record that triggered the deletion
    */
-  void onDelete(HoodieRecord<T> previousRecord, HoodieRecord<T> inputRecord);
+  void onDelete(String recordKey, GenericRecord previousRecord);
 }

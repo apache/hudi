@@ -79,7 +79,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   protected final boolean shouldCheckCustomDeleteMarker;
   protected final boolean shouldCheckBuiltInDeleteMarker;
   protected final boolean emitDelete;
-  protected final Option<BaseFileUpdateCallback<T>> callbackOption;
+  protected final Option<BaseFileUpdateCallback> baseFileUpdateCallbackOption;
   protected ClosableIterator<T> baseFileIterator;
   protected Iterator<BufferedRecord<T>> logRecordIterator;
   protected T nextRecord;
@@ -97,10 +97,10 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
                                   HoodieReadStats readStats,
                                   Option<String> orderingFieldName,
                                   boolean emitDelete,
-                                  Option<BaseFileUpdateCallback<T>> updateCallback) {
+                                  Option<BaseFileUpdateCallback> updateCallback) {
     this.readerContext = readerContext;
     this.outputConverter = readerContext.getSchemaHandler().getOutputConverter();
-    this.callbackOption = updateCallback;
+    this.baseFileUpdateCallbackOption = updateCallback;
     this.readerSchema = AvroSchemaCache.intern(readerContext.getSchemaHandler().getRequiredSchema());
     this.recordMergeMode = recordMergeMode;
     this.partialUpdateMode = partialUpdateMode;
@@ -327,20 +327,20 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
       if (!isDeleteAndRecord.getLeft()) {
         // Updates
         nextRecord = readerContext.seal(applyOutputSchemaConversion(isDeleteAndRecord.getRight()));
-        // If the record is not the same as the base record, we can emit an update
-        if (isDeleteAndRecord.getRight() != baseRecord) {
-          callbackOption.ifPresent(callback -> {
-            BufferedRecord<T> mergeResult = BufferedRecord.forRecordWithContext(nextRecord, readerContext.getSchemaHandler().getRequestedSchema(), readerContext, orderingFieldName, false);
-            callback.onUpdate(readerContext.constructHoodieRecord(applyOutputSchemaConversion(baseRecordInfo)), readerContext.constructHoodieRecord(applyOutputSchemaConversion(logRecordInfo)),
-                readerContext.constructHoodieRecord(applyOutputSchemaConversion(mergeResult)));
-          });
-        }
+        baseFileUpdateCallbackOption.ifPresent(callback -> {
+          // If the record is not the same as the base record, we can emit an update
+          if (isDeleteAndRecord.getRight() != baseRecord) {
+            Schema requestedSchema = readerContext.getSchemaHandler().getRequestedSchema();
+            callback.onUpdate(logRecordInfo.getRecordKey(), readerContext.convertToAvroRecord(baseRecord, requestedSchema),
+                readerContext.convertToAvroRecord(nextRecord, requestedSchema));
+          }
+        });
         readStats.incrementNumUpdates();
         return true;
       } else {
         // emit Deletes
-        callbackOption.ifPresent(callback -> callback.onDelete(readerContext.constructHoodieRecord(applyOutputSchemaConversion(baseRecordInfo)),
-            readerContext.constructHoodieRecord(applyOutputSchemaConversion(logRecordInfo))));
+        baseFileUpdateCallbackOption.ifPresent(callback -> callback.onDelete(logRecordInfo.getRecordKey(),
+            readerContext.convertToAvroRecord(baseRecord, readerContext.getSchemaHandler().getRequestedSchema())));
         readStats.incrementNumDeletes();
         if (emitDelete) {
           nextRecord = applyOutputSchemaConversion(readerContext.getDeleteRow(isDeleteAndRecord.getRight(), baseRecordInfo.getRecordKey()));
@@ -396,7 +396,8 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
       if (!nextRecordInfo.isDelete()) {
         BufferedRecord<T> convertedBufferedRecord = applyOutputSchemaConversion(nextRecordInfo);
         nextRecord = convertedBufferedRecord.getRecord();
-        callbackOption.ifPresent(callback -> callback.onInsert(readerContext.constructHoodieRecord(convertedBufferedRecord)));
+        baseFileUpdateCallbackOption.ifPresent(callback ->
+            callback.onInsert(nextRecordInfo.getRecordKey(), readerContext.convertToAvroRecord(nextRecordInfo.getRecord(), readerContext.getSchemaHandler().getRequestedSchema())));
         readStats.incrementNumInserts();
         return true;
       } else if (emitDelete) {

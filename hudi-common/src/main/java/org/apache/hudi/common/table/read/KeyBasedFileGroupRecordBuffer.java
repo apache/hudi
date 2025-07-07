@@ -57,7 +57,7 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
                                        HoodieReadStats readStats,
                                        Option<String> orderingFieldName,
                                        boolean emitDelete,
-                                       Option<BaseFileUpdateCallback<T>> updateCallback) {
+                                       Option<BaseFileUpdateCallback> updateCallback) {
     super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, readStats, orderingFieldName, emitDelete, updateCallback);
   }
 
