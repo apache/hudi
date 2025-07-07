@@ -233,7 +233,9 @@ public class HoodieLogFileCommand {
           HoodieCLI.getTableMetaClient().getTableConfig(),
           Option.empty(),
           Option.empty());
-      FileSlice fileSlice = new FileSlice(new HoodieFileGroupId("", ""), "", null, logFilePaths.stream()
+      StoragePath firstLogFile = new StoragePath(logFilePaths.get(0));
+      HoodieFileGroupId fileGroupId = new HoodieFileGroupId(FSUtils.getRelativePartitionPath(HoodieCLI.getTableMetaClient().getBasePath(), firstLogFile), FSUtils.getFileIdFromLogPath(firstLogFile));
+      FileSlice fileSlice = new FileSlice(fileGroupId, "000", null, logFilePaths.stream()
           .map(l -> new HoodieLogFile(new StoragePath(l))).collect(Collectors.toList()));
       try (HoodieFileGroupReader<IndexedRecord> fileGroupReader = HoodieFileGroupReader.<IndexedRecord>newBuilder()
           .withReaderContext(readerContext)
