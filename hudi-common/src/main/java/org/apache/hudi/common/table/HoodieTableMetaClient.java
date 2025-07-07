@@ -159,10 +159,9 @@ public class HoodieTableMetaClient implements Serializable {
   private StoragePath timelineHistoryPath;
   protected HoodieTableConfig tableConfig;
   protected HoodieActiveTimeline activeTimeline;
-  private ConsistencyGuardConfig consistencyGuardConfig = ConsistencyGuardConfig.newBuilder().build();
-  private FileSystemRetryConfig fileSystemRetryConfig = FileSystemRetryConfig.newBuilder().build();
+  private ConsistencyGuardConfig consistencyGuardConfig;
+  private FileSystemRetryConfig fileSystemRetryConfig;
   protected HoodieMetaserverConfig metaserverConfig;
-  private HoodieTimeGeneratorConfig timeGeneratorConfig;
   private Option<HoodieIndexMetadata> indexMetadataOpt = Option.empty();
   private HoodieTableFormat tableFormat;
 
@@ -171,11 +170,10 @@ public class HoodieTableMetaClient implements Serializable {
    * Can only be called if table already exists
    */
   protected HoodieTableMetaClient(HoodieStorage storage, String basePath, boolean loadActiveTimelineOnLoad,
-                                ConsistencyGuardConfig consistencyGuardConfig, Option<TimelineLayoutVersion> layoutVersion,
-                                RecordMergeMode recordMergeMode, String payloadClassName, String recordMergerStrategy,
-                                  HoodieTimeGeneratorConfig timeGeneratorConfig, FileSystemRetryConfig fileSystemRetryConfig) {
-    LOG.info("Loading HoodieTableMetaClient from " + basePath);
-    this.timeGeneratorConfig = timeGeneratorConfig;
+                                  ConsistencyGuardConfig consistencyGuardConfig, Option<TimelineLayoutVersion> layoutVersion,
+                                  RecordMergeMode recordMergeMode, String payloadClassName, String recordMergerStrategy,
+                                  FileSystemRetryConfig fileSystemRetryConfig) {
+    LOG.info("Loading HoodieTableMetaClient from {}", basePath);
     this.consistencyGuardConfig = consistencyGuardConfig;
     this.fileSystemRetryConfig = fileSystemRetryConfig;
     this.storageConf = storage.getConf();
@@ -314,7 +312,6 @@ public class HoodieTableMetaClient implements Serializable {
         .setLayoutVersion(Option.of(oldMetaClient.timelineLayoutVersion))
         .setPayloadClassName(null)
         .setRecordMergerStrategy(null)
-        .setTimeGeneratorConfig(oldMetaClient.timeGeneratorConfig)
         .setFileSystemRetryConfig(oldMetaClient.fileSystemRetryConfig).build();
   }
 
@@ -555,10 +552,6 @@ public class HoodieTableMetaClient implements Serializable {
     this.tableFormat = tableConfig.getTableFormat(timelineLayoutVersion);
     this.timelinePath = timelineLayout.getTimelinePathProvider().getTimelinePath(tableConfig, basePath);
     this.timelineHistoryPath = timelineLayout.getTimelinePathProvider().getTimelineHistoryPath(tableConfig, basePath);
-  }
-
-  public HoodieTimeGeneratorConfig getTimeGeneratorConfig() {
-    return timeGeneratorConfig;
   }
 
   public ConsistencyGuardConfig getConsistencyGuardConfig() {
@@ -849,7 +842,7 @@ public class HoodieTableMetaClient implements Serializable {
           Option.ofNullable(metaserverConfig.getDatabaseName()), Option.ofNullable(metaserverConfig.getTableName()), metaserverConfig);
     } else {
       return new HoodieTableMetaClient(storage, basePath, loadActiveTimelineOnLoad, consistencyGuardConfig, layoutVersion, recordMergeMode, payloadClassName, recordMergerStrategy,
-          timeGeneratorConfig, fileSystemRetryConfig);
+          fileSystemRetryConfig);
     }
   }
 

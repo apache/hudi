@@ -530,7 +530,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     } else {
       metaClient.getActiveTimeline().saveAsComplete(
           INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, commitActiontype, commitTime),
-          Option.of(commitMetadata));
+          Option.of(commitMetadata), WriteClientTestUtils.createNewInstantTime());
     }
   }
 
