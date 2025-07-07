@@ -50,6 +50,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -181,7 +182,7 @@ class TestFileGroupRecordBuffer {
     HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
     when(tableConfig.getRecordMergeMode()).thenReturn(mergeMode);
     when(tableConfig.populateMetaFields()).thenReturn(true);
-    when(tableConfig.getPreCombineField()).thenReturn(setPrecombine ? preCombineField : StringUtils.EMPTY_STRING);
+    when(tableConfig.getPreCombineFieldList()).thenReturn(Option.ofNullable(Collections.singletonList(setPrecombine ? preCombineField : StringUtils.EMPTY_STRING)));
     when(tableConfig.getTableVersion()).thenReturn(tableVersion);
     if (tableConfig.getTableVersion() == HoodieTableVersion.SIX) {
       if (mergeMode == RecordMergeMode.EVENT_TIME_ORDERING) {
@@ -344,7 +345,7 @@ class TestFileGroupRecordBuffer {
     record.put("_hoodie_is_deleted", false);
     when(readerContext.getOrderingValue(any(), any(), any())).thenReturn(1);
     when(readerContext.convertValueToEngineType(any())).thenReturn(1);
-    BufferedRecord<GenericRecord> bufferedRecord = BufferedRecord.forRecordWithContext(record, schema, readerContext, Option.of("ts"), true);
+    BufferedRecord<GenericRecord> bufferedRecord = BufferedRecord.forRecordWithContext(record, schema, readerContext, Option.of(Collections.singletonList("ts")), true);
 
     keyBasedBuffer.processNextDataRecord(bufferedRecord, "12345");
     Map<Serializable, BufferedRecord<GenericRecord>> records = keyBasedBuffer.getLogRecords();
@@ -359,7 +360,7 @@ class TestFileGroupRecordBuffer {
     anotherRecord.put("ts", System.currentTimeMillis());
     anotherRecord.put("op", "i");
     anotherRecord.put("_hoodie_is_deleted", true);
-    bufferedRecord = BufferedRecord.forRecordWithContext(anotherRecord, schema, readerContext, Option.of("ts"), true);
+    bufferedRecord = BufferedRecord.forRecordWithContext(anotherRecord, schema, readerContext, Option.of(Collections.singletonList("ts")), true);
 
     keyBasedBuffer.processNextDataRecord(bufferedRecord, "54321");
     records = keyBasedBuffer.getLogRecords();

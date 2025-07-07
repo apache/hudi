@@ -42,7 +42,7 @@ class TestStreamSourceReadByStateTransitionTime extends TestStreamingSource {
         HoodieTableMetaClient.newTableBuilder()
           .setTableType(tableType)
           .setTableName(s"test_stream_${tableType.name()}")
-          .setPreCombineField("timestamp")
+          .setPreCombineFields("timestamp")
           .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)
 
         val writeConfig = HoodieWriteConfig.newBuilder()

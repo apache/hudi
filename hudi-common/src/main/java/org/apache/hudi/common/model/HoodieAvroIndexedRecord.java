@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.Comparables;
 import org.apache.hudi.avro.HoodieAvroReaderContext;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.ConfigUtils;
@@ -37,11 +38,12 @@ import org.apache.avro.generic.IndexedRecord;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.Properties;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELDS;
-import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 
 /**
  * This only use by reader returning.
@@ -181,8 +183,8 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
       Boolean populateMetaFields,
       Option<Schema> schemaWithoutMetaFields) {
     String payloadClass = ConfigUtils.getPayloadClass(props);
-    String preCombineField = ConfigUtils.getOrderingField(props);
-    return HoodieAvroUtils.createHoodieRecordFromAvro(data, payloadClass, preCombineField, simpleKeyGenFieldsOpt, withOperation, partitionNameOp, populateMetaFields, schemaWithoutMetaFields);
+    Option<String[]> preCombineFields = ConfigUtils.getOrderingFields(props);
+    return HoodieAvroUtils.createHoodieRecordFromAvro(data, payloadClass, preCombineFields, simpleKeyGenFieldsOpt, withOperation, partitionNameOp, populateMetaFields, schemaWithoutMetaFields);
   }
 
   @Override
@@ -211,15 +213,18 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
 
   @Override
   public Comparable<?> doGetOrderingValue(Schema recordSchema, Properties props) {
-    String orderingField = ConfigUtils.getOrderingField(props);
-    if (isNullOrEmpty(orderingField)) {
+    Option<String[]> orderingFieldsOpt = ConfigUtils.getOrderingFields(props);
+    if (orderingFieldsOpt.isEmpty()) {
       return DEFAULT_ORDERING_VALUE;
     }
     boolean consistentLogicalTimestampEnabled = Boolean.parseBoolean(props.getProperty(
         KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
         KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()));
-    return (Comparable<?>) HoodieAvroUtils.getNestedFieldVal((GenericRecord) data,
-        orderingField, true, consistentLogicalTimestampEnabled);
+    return new Comparables(
+        Arrays.stream(orderingFieldsOpt.get())
+            .map(field -> (Comparable<?>) HoodieAvroUtils.getNestedFieldVal((GenericRecord) data, field, true, consistentLogicalTimestampEnabled))
+            .collect(Collectors.toList())
+    );
   }
 
   @Override

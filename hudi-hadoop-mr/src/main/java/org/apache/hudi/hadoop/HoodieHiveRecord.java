@@ -19,6 +19,7 @@
 
 package org.apache.hudi.hadoop;
 
+import org.apache.hudi.Comparables;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
@@ -46,6 +47,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Properties;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 
@@ -103,11 +105,16 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
 
   @Override
   public Comparable<?> doGetOrderingValue(Schema recordSchema, Properties props) {
-    String orderingField = ConfigUtils.getOrderingField(props);
-    if (isNullOrEmpty(orderingField)) {
+    Option<String[]> orderingFields = ConfigUtils.getOrderingFields(props);
+    if (orderingFields.isEmpty()) {
       return DEFAULT_ORDERING_VALUE;
+    } else {
+      return new Comparables(
+          Arrays.stream(orderingFields.get())
+              .map(field -> (Comparable<?>) getValue(field))
+              .collect(Collectors.toList())
+      );
     }
-    return (Comparable<?>) getValue(orderingField);
   }
 
   @Override

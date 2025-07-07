@@ -19,6 +19,7 @@
 
 package org.apache.hudi.common.engine;
 
+import org.apache.hudi.Comparables;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -59,6 +60,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.BiFunction;
 import java.util.function.UnaryOperator;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
@@ -385,21 +387,23 @@ public abstract class HoodieReaderContext<T> {
   /**
    * Gets the ordering value in particular type.
    *
-   * @param record An option of record.
-   * @param schema The Avro schema of the record.
-   * @param orderingFieldName name of the ordering field
+   * @param record             An option of record.
+   * @param schema             The Avro schema of the record.
+   * @param orderingFieldNames name of the ordering field
    * @return The ordering value.
    */
   public Comparable getOrderingValue(T record,
                                      Schema schema,
-                                     Option<String> orderingFieldName) {
-    if (orderingFieldName.isEmpty()) {
+                                     Option<List<String>> orderingFieldNames) {
+    if (orderingFieldNames.isEmpty()) {
       return DEFAULT_ORDERING_VALUE;
     }
 
-    Object value = getValue(record, schema, orderingFieldName.get());
-    Comparable finalOrderingVal = value != null ? convertValueToEngineType((Comparable) value) : DEFAULT_ORDERING_VALUE;
-    return finalOrderingVal;
+    return new Comparables(
+        orderingFieldNames.get().stream().map(field -> {
+          Object value = getValue(record, schema, field);
+          return value != null ? convertValueToEngineType((Comparable) value) : DEFAULT_ORDERING_VALUE;
+        }).collect(Collectors.toList()));
   }
 
   /**

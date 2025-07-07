@@ -86,10 +86,10 @@ class LogFileIterator(logFiles: List[HoodieLogFile],
   }
   private val maxCompactionMemoryInBytes: Long = getMaxCompactionMemoryInBytes(new JobConf(config))
 
-  protected val payloadProps: TypedProperties = tableState.preCombineFieldOpt
+  protected val payloadProps: TypedProperties = tableState.preCombineFieldsOpt
     .map { preCombineField =>
       HoodiePayloadConfig.newBuilder
-        .withPayloadOrderingField(preCombineField)
+        .withPayloadOrderingField(String.join(",", preCombineField: _*))
         .build
         .getProps
     }

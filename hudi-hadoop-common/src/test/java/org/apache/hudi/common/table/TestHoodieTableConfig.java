@@ -121,7 +121,7 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
     HoodieTableConfig config = new HoodieTableConfig(storage, metaPath, null, null, null);
     assertEquals(8, config.getProps().size());
     assertEquals("test-table2", config.getTableName());
-    assertEquals("new_field", config.getPreCombineField());
+    assertEquals("new_field", config.getPreCombineFieldList());
   }
 
   @Test

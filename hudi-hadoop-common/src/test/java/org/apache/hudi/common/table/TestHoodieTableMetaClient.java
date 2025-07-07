@@ -217,7 +217,7 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     // test table name and type and precombine field also match
     assertEquals(metaClient1.getTableConfig().getTableName(), metaClient2.getTableConfig().getTableName());
     assertEquals(metaClient1.getTableConfig().getTableType(), metaClient2.getTableConfig().getTableType());
-    assertEquals(metaClient1.getTableConfig().getPreCombineField(), metaClient2.getTableConfig().getPreCombineField());
+    assertEquals(metaClient1.getTableConfig().getPreCombineFieldList(), metaClient2.getTableConfig().getPreCombineFieldList());
     // default table version should be current version
     assertEquals(HoodieTableVersion.current(), metaClient2.getTableConfig().getTableVersion());
   }

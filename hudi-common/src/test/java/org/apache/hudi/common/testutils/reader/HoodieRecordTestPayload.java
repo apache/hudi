@@ -19,6 +19,7 @@
 
 package org.apache.hudi.common.testutils.reader;
 
+import org.apache.hudi.Comparables;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
@@ -33,12 +34,14 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.util.ConfigUtils.getOrderingField;
+import static org.apache.hudi.common.util.ConfigUtils.getOrderingFields;
 
 public class HoodieRecordTestPayload extends OverwriteWithLatestAvroPayload {
   public static final String METADATA_EVENT_TIME_KEY = "metadata.event_time.key";
@@ -69,14 +72,18 @@ public class HoodieRecordTestPayload extends OverwriteWithLatestAvroPayload {
   public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema, Properties properties) throws IOException {
     // The new record is a delete record.
     if (isDeleted(schema, properties)) {
-      String orderingField = getOrderingField(properties);
+      Option<String[]> orderingFieldsOpt = getOrderingFields(properties);
       // If orderingField cannot be found, we can not do the compare, then use the natural order.
-      if (orderingField == null) {
+      if (orderingFieldsOpt.isEmpty()) {
         return Option.empty();
       }
 
       // Otherwise, we compare their ordering values.
-      Comparable<?> currentOrderingVal = (Comparable<?>) currentValue.get(currentValue.getSchema().getField(orderingField).pos());
+      Comparable<?> currentOrderingVal = new Comparables(
+          Arrays.stream(orderingFieldsOpt.get())
+              .map(field -> (Comparable<?>) currentValue.get(currentValue.getSchema().getField(field).pos()))
+              .collect(Collectors.toList())
+      );
       if (orderingVal.compareTo(currentOrderingVal) >= 0) {
         return Option.empty();
       }
@@ -197,19 +204,23 @@ public class HoodieRecordTestPayload extends OverwriteWithLatestAvroPayload {
      * NOTE: Deletes sent via EmptyHoodieRecordPayload and/or Delete operation type do not hit this code path
      * and need to be dealt with separately.
      */
-    String orderingField = getOrderingField(properties);
-    if (orderingField == null) {
+    Option<String[]> orderingFieldsOpt = getOrderingFields(properties);
+    if (orderingFieldsOpt.isEmpty()) {
       return true;
     }
     boolean consistentLogicalTimestampEnabled = Boolean.parseBoolean(properties.getProperty(
         KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
         KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()));
-    Object persistedOrderingVal = HoodieAvroUtils.getNestedFieldVal((GenericRecord) currentValue,
-        orderingField,
-        true, consistentLogicalTimestampEnabled);
-    Comparable incomingOrderingVal = (Comparable) HoodieAvroUtils.getNestedFieldVal((GenericRecord) incomingRecord,
-        orderingField,
-        true, consistentLogicalTimestampEnabled);
+    Comparable<?> persistedOrderingVal = new Comparables(
+        Arrays.stream(orderingFieldsOpt.get())
+            .map(field -> (Comparable) HoodieAvroUtils.getNestedFieldVal((GenericRecord) currentValue, field, true, consistentLogicalTimestampEnabled))
+            .collect(Collectors.toList())
+    );
+    Comparable<?> incomingOrderingVal = new Comparables(
+        Arrays.stream(orderingFieldsOpt.get())
+            .map(field -> (Comparable) HoodieAvroUtils.getNestedFieldVal((GenericRecord) incomingRecord, field, true, consistentLogicalTimestampEnabled))
+            .collect(Collectors.toList())
+    );
     return persistedOrderingVal == null || ((Comparable) persistedOrderingVal).compareTo(incomingOrderingVal) <= 0;
   }
 }

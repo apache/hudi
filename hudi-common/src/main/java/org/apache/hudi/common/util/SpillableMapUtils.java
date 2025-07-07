@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.Comparables;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.fs.SizeAwareDataOutputStream;
 import org.apache.hudi.common.model.HoodieAvroRecord;
@@ -35,11 +36,12 @@ import org.apache.avro.generic.GenericRecord;
 
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.util.Arrays;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.avro.HoodieAvroUtils.getNullableValAsString;
 import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 import static org.apache.hudi.common.util.BinaryUtil.generateChecksum;
-import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 
 /**
  * A utility class supports spillable map.
@@ -110,18 +112,18 @@ public class SpillableMapUtils {
   /**
    * Utility method to convert bytes to HoodieRecord using schema and payload class.
    */
-  public static <R> HoodieRecord<R> convertToHoodieRecordPayload(GenericRecord rec, String payloadClazz, String preCombineField, boolean withOperationField) {
-    return convertToHoodieRecordPayload(rec, payloadClazz, preCombineField,
+  public static <R> HoodieRecord<R> convertToHoodieRecordPayload(GenericRecord rec, String payloadClazz, Option<String[]> preCombineFields, boolean withOperationField) {
+    return convertToHoodieRecordPayload(rec, payloadClazz, preCombineFields,
         Pair.of(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD),
         withOperationField, Option.empty(), Option.empty());
   }
 
   public static <R> HoodieRecord<R> convertToHoodieRecordPayload(GenericRecord record, String payloadClazz,
-                                                                 String preCombineField,
+                                                                 Option<String[]> preCombineFields,
                                                                  boolean withOperationField,
                                                                  Option<String> partitionName,
                                                                  Option<Schema> schemaWithoutMetaFields) {
-    return convertToHoodieRecordPayload(record, payloadClazz, preCombineField,
+    return convertToHoodieRecordPayload(record, payloadClazz, preCombineFields,
         Pair.of(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD),
         withOperationField, partitionName, schemaWithoutMetaFields);
   }
@@ -130,7 +132,7 @@ public class SpillableMapUtils {
    * Utility method to convert bytes to HoodieRecord using schema and payload class.
    */
   public static <R> HoodieRecord<R> convertToHoodieRecordPayload(GenericRecord record, String payloadClazz,
-                                                                 String preCombineField,
+                                                                 Option<String[]> preCombineFields,
                                                                  Pair<String, String> recordKeyPartitionPathFieldPair,
                                                                  boolean withOperationField,
                                                                  Option<String> partitionName,
@@ -139,7 +141,7 @@ public class SpillableMapUtils {
     final String partitionPath = (partitionName.isPresent() ? partitionName.get() :
         record.get(recordKeyPartitionPathFieldPair.getRight()).toString());
 
-    Comparable preCombineVal = getPreCombineVal(record, preCombineField);
+    Comparable preCombineVal = getPreCombineVal(record, preCombineFields);
     HoodieOperation operation = withOperationField
         ? HoodieOperation.fromName(getNullableValAsString(record, HoodieRecord.OPERATION_METADATA_FIELD)) : null;
 
@@ -162,16 +164,20 @@ public class SpillableMapUtils {
    * Returns the preCombine value with given field name.
    *
    * @param rec The avro record
-   * @param preCombineField The preCombine field name
+   * @param preCombineFields The preCombine field names
    * @return the preCombine field value or 0 if the field does not exist in the avro schema
    */
-  private static Comparable getPreCombineVal(GenericRecord rec, String preCombineField) {
-    if (isNullOrEmpty(preCombineField)) {
+  private static Comparable getPreCombineVal(GenericRecord rec, Option<String[]> preCombineFields) {
+    if (preCombineFields.isEmpty()) {
       return DEFAULT_ORDERING_VALUE;
     }
     // keep consistent with writer side, using Java type for ordering value, see `DefaultHoodieRecordPayload`.
-    Object orderingValue = HoodieAvroUtils.getNestedFieldVal(rec, preCombineField, true, false);
-    return orderingValue == null ? DEFAULT_ORDERING_VALUE : (Comparable) orderingValue;
+    return new Comparables(
+        Arrays.stream(preCombineFields.get()).map(field -> {
+          Object orderingValue = HoodieAvroUtils.getNestedFieldVal(rec, field, true, false);
+          return orderingValue == null ? DEFAULT_ORDERING_VALUE : (Comparable) orderingValue;
+        }).collect(Collectors.toList())
+    );
   }
 
   /**

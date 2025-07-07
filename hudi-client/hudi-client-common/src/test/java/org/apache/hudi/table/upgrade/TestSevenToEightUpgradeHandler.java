@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
@@ -36,6 +37,7 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -138,7 +140,7 @@ class TestSevenToEightUpgradeHandler {
     Map<ConfigProperty, String> tablePropsToAdd = new HashMap<>();
 
     when(tableConfig.getPayloadClass()).thenReturn(payloadClass);
-    when(tableConfig.getPreCombineField()).thenReturn(preCombineField);
+    when(tableConfig.getPreCombineFieldList()).thenReturn(Option.of(Collections.singletonList(preCombineField)));
 
     SevenToEightUpgradeHandler.upgradeMergeMode(tableConfig, tablePropsToAdd);
 

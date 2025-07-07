@@ -39,6 +39,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Iterator;
+import java.util.List;
 
 /**
  * A buffer that is used to store log records by {@link org.apache.hudi.common.table.log.HoodieMergedLogRecordReader}
@@ -53,9 +54,9 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
                                        RecordMergeMode recordMergeMode,
                                        TypedProperties props,
                                        HoodieReadStats readStats,
-                                       Option<String> orderingFieldName,
+                                       Option<List<String>> orderingFieldNames,
                                        boolean emitDelete) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, orderingFieldName, emitDelete);
+    super(readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, orderingFieldNames, emitDelete);
   }
 
   @Override
@@ -72,7 +73,7 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
       // partial merging.
       enablePartialMerging = true;
       bufferedRecordMerger = BufferedRecordMergerFactory.create(
-          readerContext, recordMergeMode, true, recordMerger, orderingFieldName, payloadClass, readerSchema, props);
+          readerContext, recordMergeMode, true, recordMerger, orderingFieldNames, payloadClass, readerSchema, props);
     }
 
     Schema schema = AvroSchemaCache.intern(recordsIteratorSchemaPair.getRight());
@@ -81,7 +82,7 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
       while (recordIterator.hasNext()) {
         T nextRecord = recordIterator.next();
         boolean isDelete = isBuiltInDeleteRecord(nextRecord) || isCustomDeleteRecord(nextRecord) || isDeleteHoodieOperation(nextRecord);
-        BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(nextRecord, schema, readerContext, orderingFieldName, isDelete);
+        BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(nextRecord, schema, readerContext, orderingFieldNames, isDelete);
         processNextDataRecord(bufferedRecord, bufferedRecord.getRecordKey());
       }
     }

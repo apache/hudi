@@ -28,9 +28,9 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.keygen.{BaseKeyGenerator, KeyGenUtils, SparkKeyGeneratorInterface}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
-
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
+import org.apache.hudi.util.JFunction
 import org.apache.spark.TaskContext
 import org.apache.spark.api.java.JavaRDD
 import org.apache.spark.rdd.RDD
@@ -40,6 +40,7 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types.StructType
 import org.slf4j.LoggerFactory
 
+import java.util.stream.Collectors
 import scala.collection.JavaConverters._
 
 /** Utility class for converting dataframe into RDD[HoodieRecord]. */
@@ -124,8 +125,7 @@ object HoodieCreateRecordUtils {
           val consistentLogicalTimestampEnabled = parameters.getOrElse(
             DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
             DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()).toBoolean
-          val precombine = config.getString(PRECOMBINE_FIELD)
-          val precombineEmpty = StringUtils.isNullOrEmpty(precombine)
+          val precombineFields = config.getPreCombineField()
 
           // handle dropping partition columns
           it.map { avroRec =>
@@ -143,9 +143,13 @@ object HoodieCreateRecordUtils {
               avroRecWithoutMeta
             }
 
-            val hoodieRecord = if (shouldCombine && !precombineEmpty) {
-              val orderingVal = HoodieAvroUtils.getNestedFieldVal(avroRec, precombine,
-                false, consistentLogicalTimestampEnabled).asInstanceOf[Comparable[_]]
+            val hoodieRecord = if (shouldCombine && !precombineFields.isEmpty) {
+              val orderingVal = new Comparables(
+                precombineFields.stream()
+                  .map[Comparable[_]](JFunction.toJavaFunction(field => HoodieAvroUtils.getNestedFieldVal(avroRec, field,
+                    false, consistentLogicalTimestampEnabled).asInstanceOf[Comparable[_]]))
+                  .collect(Collectors.toList[Comparable[_]])
+              )
               DataSourceUtils.createHoodieRecord(processedRecord, orderingVal, hoodieKey,
                 config.getPayloadClass, recordLocation)
             } else {

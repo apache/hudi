@@ -33,9 +33,9 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.keygen.constant.{KeyGeneratorOptions, KeyGeneratorType}
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.storage.HoodieStorageUtils
+import org.apache.hudi.util.JavaScalaConverters.convertHudiOptionToScalaOption
 import org.apache.hudi.util.SparkConfigUtils
 import org.apache.hudi.util.SparkConfigUtils.getStringWithAltKeys
-
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{AnalysisException, SparkSession}
 import org.apache.spark.sql.avro.SchemaConverters
@@ -46,7 +46,6 @@ import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.types.{StructField, StructType}
 
 import java.util.Locale
-
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 
@@ -127,9 +126,9 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
   lazy val primaryKeys: Array[String] = tableConfig.getRecordKeyFields.orElse(Array.empty)
 
   /**
-   * PreCombine Field
+   * Comparables Field
    */
-  lazy val preCombineKey: Option[String] = Option(tableConfig.getPreCombineField)
+  lazy val preCombineKey: Option[String] = convertHudiOptionToScalaOption(tableConfig.getPreCombineFields)
 
   /**
    * Partition Fields

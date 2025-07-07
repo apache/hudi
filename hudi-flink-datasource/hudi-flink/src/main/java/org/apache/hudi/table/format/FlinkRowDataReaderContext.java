@@ -199,11 +199,11 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
   public Comparable getOrderingValue(
       RowData record,
       Schema schema,
-      Option<String> orderingFieldName) {
-    if (orderingFieldName.isEmpty() || schema.getField(orderingFieldName.get()) == null) {
+      Option<List<String>> orderingFieldNames) {
+    if (orderingFieldNames.isEmpty() || schema.getField(orderingFieldNames.get()) == null) {
       return DEFAULT_ORDERING_VALUE;
     }
-    RowDataAvroQueryContexts.FieldQueryContext context = RowDataAvroQueryContexts.fromAvroSchema(schema, utcTimezone).getFieldQueryContext(orderingFieldName.get());
+    RowDataAvroQueryContexts.FieldQueryContext context = RowDataAvroQueryContexts.fromAvroSchema(schema, utcTimezone).getFieldQueryContext(orderingFieldNames.get());
     Comparable finalOrderingVal = (Comparable) context.getValAsJava(record, false);
     return finalOrderingVal;
   }

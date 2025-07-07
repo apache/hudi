@@ -71,9 +71,9 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
                                             String baseFileInstantTime,
                                             TypedProperties props,
                                             HoodieReadStats readStats,
-                                            Option<String> orderingFieldName,
+                                            Option<List<String>> orderingFieldNames,
                                             boolean emitDelete) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, orderingFieldName, emitDelete);
+    super(readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, orderingFieldNames, emitDelete);
     this.baseFileInstantTime = baseFileInstantTime;
   }
 
@@ -111,7 +111,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
       // partial merging.
       enablePartialMerging = true;
       bufferedRecordMerger = BufferedRecordMergerFactory.create(
-          readerContext, recordMergeMode, true, recordMerger, orderingFieldName, payloadClass, readerSchema, props);
+          readerContext, recordMergeMode, true, recordMerger, orderingFieldNames, payloadClass, readerSchema, props);
     }
 
     Pair<Function<T, T>, Schema> schemaTransformerWithEvolvedSchema = getSchemaTransformerWithEvolvedSchema(dataBlock);
@@ -134,7 +134,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
         long recordPosition = recordPositions.get(recordIndex++);
         T evolvedNextRecord = schemaTransformerWithEvolvedSchema.getLeft().apply(nextRecord);
         boolean isDelete = isBuiltInDeleteRecord(evolvedNextRecord) || isCustomDeleteRecord(evolvedNextRecord) || isDeleteHoodieOperation(evolvedNextRecord);
-        BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(evolvedNextRecord, schema, readerContext, orderingFieldName, isDelete);
+        BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(evolvedNextRecord, schema, readerContext, orderingFieldNames, isDelete);
         processNextDataRecord(bufferedRecord, recordPosition);
       }
     }
@@ -237,7 +237,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
     final Pair<Boolean, T> isDeleteAndRecord;
     T resultRecord = null;
     if (logRecordInfo != null) {
-      BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(baseRecord, readerSchema, readerContext, orderingFieldName, false);
+      BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(baseRecord, readerSchema, readerContext, orderingFieldNames, false);
       isDeleteAndRecord = merge(bufferedRecord, logRecordInfo);
       if (!isDeleteAndRecord.getLeft()) {
         resultRecord = isDeleteAndRecord.getRight();

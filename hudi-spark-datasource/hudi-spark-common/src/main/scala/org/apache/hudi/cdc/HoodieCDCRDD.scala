@@ -23,7 +23,7 @@ import org.apache.hudi.HoodieBaseRelation.BaseFileReader
 import org.apache.hudi.HoodieConversionUtils._
 import org.apache.hudi.HoodieDataSourceHelper.AvroDeserializerSupport
 import org.apache.hudi.avro.HoodieAvroUtils
-import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.cdc.{HoodieCDCFileSplit, HoodieCDCUtils}
@@ -35,10 +35,11 @@ import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodiePayloadConfig
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.storage.StoragePath
-
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericData, GenericRecord, IndexedRecord}
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.util.JFunction
+import org.apache.hudi.util.JavaScalaConverters.convertHudiOptionToScalaOption
 import org.apache.spark.{Partition, SerializableWritable, TaskContext}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
@@ -53,7 +54,6 @@ import org.apache.spark.unsafe.types.UTF8String
 import java.io.Closeable
 import java.util.Properties
 import java.util.stream.Collectors
-
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.collection.mutable
@@ -91,13 +91,13 @@ class HoodieCDCRDD(
 
   private val props = HoodieFileIndex.getConfigProperties(spark, Map.empty, metaClient.getTableConfig)
 
-  protected val payloadProps: Properties = Option(metaClient.getTableConfig.getPreCombineField)
-    .map { preCombineField =>
+  protected val payloadProps: Properties = metaClient.getTableConfig.getPreCombineFields
+    .map[TypedProperties](JFunction.toJavaFunction(preCombineFields =>
       HoodiePayloadConfig.newBuilder
-        .withPayloadOrderingField(preCombineField)
+        .withPayloadOrderingField(preCombineFields)
         .build
         .getProps
-    }.getOrElse(new Properties())
+    )).orElse(new TypedProperties())
 
   override def compute(split: Partition, context: TaskContext): Iterator[InternalRow] = {
     val cdcPartition = split.asInstanceOf[HoodieCDCFileGroupPartition]
@@ -137,24 +137,14 @@ class HoodieCDCRDD(
       keyFields.head
     }
 
-    private lazy val preCombineFieldOpt: Option[String] = Option(metaClient.getTableConfig.getPreCombineField)
+    private lazy val preCombineFieldsOpt: Option[List[String]] = convertHudiOptionToScalaOption(metaClient.getTableConfig.getPreCombineFieldList
+      .map[List[String]](list => list.asScala.toList))
 
     private lazy val tableState = {
       val metadataConfig = HoodieMetadataConfig.newBuilder()
         .fromProperties(props)
         .build()
-      HoodieTableState(
-        basePath.toUri.toString,
-        Some(split.changes.last.getInstant),
-        recordKeyField,
-        preCombineFieldOpt,
-        usesVirtualKeys = !populateMetaFields,
-        metaClient.getTableConfig.getPayloadClass,
-        metadataConfig,
-        // TODO support CDC with spark record
-        recordMergeImplClasses = List(classOf[HoodieAvroRecordMerger].getName),
-        recordMergeStrategyId = HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID
-      )
+      HoodieTableState(basePath.toUri.toString, Some(split.changes.last.getInstant), recordKeyField, preCombineFieldsOpt, usesVirtualKeys = !populateMetaFields, metaClient.getTableConfig.getPayloadClass, metadataConfig, recordMergeImplClasses = List(classOf[HoodieAvroRecordMerger].getName), recordMergeStrategyId = HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID)
     }
 
     protected override val avroSchema: Schema = new Schema.Parser().parse(originTableSchema.avroSchemaStr)

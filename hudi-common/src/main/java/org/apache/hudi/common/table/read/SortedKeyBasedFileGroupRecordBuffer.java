@@ -28,6 +28,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 
 import java.io.IOException;
 import java.util.Comparator;
+import java.util.List;
 import java.util.PriorityQueue;
 import java.util.Queue;
 import java.util.stream.Collectors;
@@ -47,9 +48,9 @@ public class SortedKeyBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupRec
                                              RecordMergeMode recordMergeMode,
                                              TypedProperties props,
                                              HoodieReadStats readStats,
-                                             Option<String> orderingFieldName,
+                                             Option<List<String>> orderingFieldNames,
                                              boolean emitDelete) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, orderingFieldName, emitDelete);
+    super(readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, orderingFieldNames, emitDelete);
   }
 
   @Override

@@ -69,4 +69,9 @@ object JavaScalaConverters {
   def convertJavaPropertiesToScalaMap(javaProperties: java.util.Properties): Map[String, String] = {
     javaProperties.asScala.toMap
   }
+
+  def convertHudiOptionToScalaOption[A](option: org.apache.hudi.common.util.Option[A]): Option[A] = {
+    option.map[Option[A]](JFunction.toJavaFunction[A, Option[A]](value => Option.apply(value)))
+      .orElse(Option.empty[A])
+  }
 }

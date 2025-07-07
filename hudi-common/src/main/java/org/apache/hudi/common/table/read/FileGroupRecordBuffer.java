@@ -49,6 +49,7 @@ import org.apache.avro.Schema;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.function.Function;
@@ -65,7 +66,7 @@ import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetada
 public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T> {
   protected final HoodieReaderContext<T> readerContext;
   protected final Schema readerSchema;
-  protected final Option<String> orderingFieldName;
+  protected final Option<List<String>> orderingFieldNames;
   protected final RecordMergeMode recordMergeMode;
   protected final Option<HoodieRecordMerger> recordMerger;
   protected final Option<String> payloadClass;
@@ -89,7 +90,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
                                   RecordMergeMode recordMergeMode,
                                   TypedProperties props,
                                   HoodieReadStats readStats,
-                                  Option<String> orderingFieldName,
+                                  Option<List<String>> orderingFieldNames,
                                   boolean emitDelete) {
     this.readerContext = readerContext;
     this.readerSchema = AvroSchemaCache.intern(readerContext.getSchemaHandler().getRequiredSchema());
@@ -100,9 +101,9 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
     } else {
       this.payloadClass = Option.empty();
     }
-    this.orderingFieldName = orderingFieldName;
+    this.orderingFieldNames = orderingFieldNames;
     // Ensure that ordering field is populated for mergers and legacy payloads
-    orderingFieldName.ifPresent(orderingField -> {
+    orderingFieldNames.ifPresent(orderingField -> {
       props.putIfAbsent(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, orderingField);
       props.putIfAbsent(HoodieTableConfig.PRECOMBINE_FIELD.key(), orderingField);
       props.putIfAbsent("hoodie.datasource.write.precombine.field", orderingField);
@@ -131,7 +132,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
     this.shouldCheckBuiltInDeleteMarker =
         readerContext.getSchemaHandler().hasBuiltInDelete();
     this.bufferedRecordMerger = BufferedRecordMergerFactory.create(
-        readerContext, recordMergeMode, enablePartialMerging, recordMerger, orderingFieldName, payloadClass, readerSchema, props);
+        readerContext, recordMergeMode, enablePartialMerging, recordMerger, orderingFieldNames, payloadClass, readerSchema, props);
   }
 
   /**
@@ -312,7 +313,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
 
   protected boolean hasNextBaseRecord(T baseRecord, BufferedRecord<T> logRecordInfo) throws IOException {
     if (logRecordInfo != null) {
-      BufferedRecord<T> baseRecordInfo = BufferedRecord.forRecordWithContext(baseRecord, readerSchema, readerContext, orderingFieldName, false);
+      BufferedRecord<T> baseRecordInfo = BufferedRecord.forRecordWithContext(baseRecord, readerSchema, readerContext, orderingFieldNames, false);
       Pair<Boolean, T> isDeleteAndRecord = merge(baseRecordInfo, logRecordInfo);
       if (!isDeleteAndRecord.getLeft()) {
         // Updates

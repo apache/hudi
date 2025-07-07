@@ -19,6 +19,7 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.Comparables;
 import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.client.model.HoodieInternalRow;
 import org.apache.hudi.common.util.ConfigUtils;
@@ -51,9 +52,11 @@ import org.apache.spark.unsafe.types.UTF8String;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Properties;
+import java.util.stream.Collectors;
 
 import scala.Function1;
 
@@ -343,14 +346,17 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   @Override
   protected Comparable<?> doGetOrderingValue(Schema recordSchema, Properties props) {
     StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
-    String orderingField = ConfigUtils.getOrderingField(props);
-    if (!isNullOrEmpty(orderingField)) {
-      scala.Option<NestedFieldPath> cachedNestedFieldPath =
-          HoodieInternalRowUtils.getCachedPosList(structType, orderingField);
-      if (cachedNestedFieldPath.isDefined()) {
-        NestedFieldPath nestedFieldPath = cachedNestedFieldPath.get();
-        return (Comparable<?>) HoodieUnsafeRowUtils.getNestedInternalRowValue(data, nestedFieldPath);
-      }
+    Option<String[]> orderingFields = ConfigUtils.getOrderingFields(props);
+    if (orderingFields.isPresent()) {
+      return new Comparables(Arrays.stream(orderingFields.get()).map(field -> {
+        scala.Option<NestedFieldPath> cachedNestedFieldPath =
+            HoodieInternalRowUtils.getCachedPosList(structType, field);
+        if (cachedNestedFieldPath.isDefined()) {
+          NestedFieldPath nestedFieldPath = cachedNestedFieldPath.get();
+          return (Comparable<?>) HoodieUnsafeRowUtils.getNestedInternalRowValue(data, nestedFieldPath);
+        }
+        return DEFAULT_ORDERING_VALUE;
+      }).collect(Collectors.toList()));
     }
     return DEFAULT_ORDERING_VALUE;
   }

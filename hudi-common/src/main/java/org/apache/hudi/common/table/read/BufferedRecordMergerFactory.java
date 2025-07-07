@@ -39,6 +39,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -49,13 +50,13 @@ public class BufferedRecordMergerFactory {
                                                    RecordMergeMode recordMergeMode,
                                                    boolean enablePartialMerging,
                                                    Option<HoodieRecordMerger> recordMerger,
-                                                   Option<String> orderingFieldName,
+                                                   Option<List<String>> orderingFieldNames,
                                                    Option<String> payloadClass,
                                                    Schema readerSchema,
                                                    TypedProperties props) {
     if (enablePartialMerging) {
       BufferedRecordMerger<T> deleteRecordMerger = create(
-          readerContext, recordMergeMode, false, recordMerger, orderingFieldName, payloadClass, readerSchema, props);
+          readerContext, recordMergeMode, false, recordMerger, orderingFieldNames, payloadClass, readerSchema, props);
       return new PartialUpdateBufferedRecordMerger<>(readerContext, recordMerger, deleteRecordMerger, readerSchema, props);
     }
     switch (recordMergeMode) {
@@ -65,7 +66,7 @@ public class BufferedRecordMergerFactory {
         return new EventTimeBufferedRecordMerger<>();
       default:
         if (payloadClass.isPresent()) {
-          return new CustomPayloadBufferedRecordMerger<>(readerContext, recordMerger, orderingFieldName, payloadClass.get(), readerSchema, props);
+          return new CustomPayloadBufferedRecordMerger<>(readerContext, recordMerger, orderingFieldNames, payloadClass.get(), readerSchema, props);
         } else {
           return new CustomBufferedRecordMerger<>(readerContext, recordMerger, readerSchema, props);
         }
@@ -263,18 +264,18 @@ public class BufferedRecordMergerFactory {
    * based on {@code CUSTOM} merge mode and a given record payload class.
    */
   private static class CustomPayloadBufferedRecordMerger<T> extends BaseCustomMerger<T> {
-    private final Option<String> orderingFieldName;
+    private final Option<List<String>> orderingFieldNames;
     private final String payloadClass;
 
     public CustomPayloadBufferedRecordMerger(
         HoodieReaderContext<T> readerContext,
         Option<HoodieRecordMerger> recordMerger,
-        Option<String> orderingFieldName,
+        Option<List<String>> orderingFieldNames,
         String payloadClass,
         Schema readerSchema,
         TypedProperties props) {
       super(readerContext, recordMerger, readerSchema, props);
-      this.orderingFieldName = orderingFieldName;
+      this.orderingFieldNames = orderingFieldNames;
       this.payloadClass = payloadClass;
     }
 
@@ -286,7 +287,7 @@ public class BufferedRecordMergerFactory {
         // If pre-combine does not return existing record, update it
         if (combinedRecordData != existingRecord.getRecord()) {
           Pair<HoodieRecord, Schema> combinedRecordAndSchema = combinedRecordAndSchemaOpt.get();
-          return Option.of(BufferedRecord.forRecordWithContext(combinedRecordData, combinedRecordAndSchema.getRight(), readerContext, orderingFieldName, false));
+          return Option.of(BufferedRecord.forRecordWithContext(combinedRecordData, combinedRecordAndSchema.getRight(), readerContext, orderingFieldNames, false));
         }
       }
       return Option.empty();

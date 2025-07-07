@@ -34,7 +34,6 @@ import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.storage.{StorageConfiguration, StoragePath}
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
-
 import org.apache.avro.{Schema, SchemaBuilder}
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.{HoodieSparkKryoRegistrar, SparkConf}
@@ -51,7 +50,7 @@ import org.mockito.Mockito
 import org.mockito.Mockito.when
 
 import java.util
-
+import java.util.Collections
 import scala.collection.JavaConverters._
 
 /**
@@ -255,8 +254,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
                                    avroSchema: Schema,
                                    orderingColumn: String,
                                    expectedOrderingValue: Comparable[_]): Unit = {
-    assertEquals(expectedOrderingValue, sparkReaderContext.getOrderingValue(
-      row, avroSchema, HOption.of(orderingColumn)))
+    assertEquals(expectedOrderingValue, sparkReaderContext.getOrderingValue(row, avroSchema, HOption.of(Collections.singletonList(orderingColumn))))
   }
 
   @Test

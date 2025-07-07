@@ -18,15 +18,18 @@
 
 package org.apache.hudi
 
+import org.apache.avro.Schema
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.mapred.JobConf
 import org.apache.hudi.HoodieBaseRelation.{convertToAvroSchema, isSchemaEvolutionEnabledOnRead}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.HoodieFileIndex.getConfigProperties
-import org.apache.hudi.common.config.{ConfigProperty, HoodieMetadataConfig, HoodieReaderConfig, TypedProperties}
 import org.apache.hudi.common.config.HoodieMetadataConfig.{DEFAULT_METADATA_ENABLE_FOR_READERS, ENABLE}
+import org.apache.hudi.common.config.{ConfigProperty, HoodieMetadataConfig, HoodieReaderConfig, TypedProperties}
 import org.apache.hudi.common.model.HoodieRecord
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.HoodieTimeline
-import org.apache.hudi.common.util.{ConfigUtils, StringUtils}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.util.ConfigUtils
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodieWriteConfig
@@ -35,18 +38,15 @@ import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
 import org.apache.hudi.keygen.{CustomAvroKeyGenerator, CustomKeyGenerator, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.metadata.HoodieTableMetadataUtil
 import org.apache.hudi.storage.StoragePath
-
-import org.apache.avro.Schema
-import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.mapred.JobConf
+import org.apache.hudi.util.JavaScalaConverters.convertHudiOptionToScalaOption
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.{SparkSession, SQLContext}
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.BucketSpec
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.parquet.HoodieFileGroupReaderBasedParquetFileFormat
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.{SQLContext, SparkSession}
 
 import scala.collection.JavaConverters._
 import scala.util.{Failure, Success, Try}
@@ -81,7 +81,7 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
   protected lazy val partitionColumns: Array[String] = tableConfig.getPartitionFields.orElse(Array.empty)
 
   // very much not recommended to use a partition column as the precombine
-  private lazy val partitionColumnsHasPrecombine = preCombineFieldOpt.isDefined && partitionColumns.contains(preCombineFieldOpt.get)
+  private lazy val partitionColumnsHasPrecombine = preCombineFieldsOpt.isPresent && partitionColumns.exists(col => preCombineFieldsOpt.get.contains(col))
 
   private lazy val keygenTypeHasVariablePartitionCols = isTimestampKeygen || isCustomKeygen
 
@@ -93,7 +93,7 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
     (tableConfig.getKeyGeneratorClassName.equals(classOf[CustomKeyGenerator].getName) ||
     tableConfig.getKeyGeneratorClassName.equals(classOf[CustomAvroKeyGenerator].getName))
 
-  private lazy val variableTimestampKeygenPartitionCols = if (isTimestampKeygen) {
+  private lazy val variableTimestampKeygenPartitionCols: Seq[String] = if (isTimestampKeygen) {
     tableConfig.getPartitionFields.orElse(Array.empty).toSeq
   } else if (isCustomKeygen) {
     val timestampFieldsOpt = CustomAvroKeyGenerator.getTimestampFields(tableConfig)
@@ -112,19 +112,19 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
     if (shouldExtractPartitionValuesFromPartitionPath) {
       Seq.empty
     } else if (partitionColumnsHasPrecombine) {
-      logWarning(s"Not recommended for field '${preCombineFieldOpt.get}' to be both precombine and partition")
+      logWarning(s"Not recommended for field '${preCombineFieldsOpt.get}' to be both precombine and partition")
       if (keygenTypeHasVariablePartitionCols) {
         // still need to read any timestamp/custom keygen timestamp columns
-        if (variableTimestampKeygenPartitionCols.contains(preCombineFieldOpt.get)) {
+        if (variableTimestampKeygenPartitionCols.exists(col => preCombineFieldsOpt.get.contains(col))) {
           // precombine is already included in the list
           variableTimestampKeygenPartitionCols
         } else {
           // precombine is not included in the list so we append it
-          variableTimestampKeygenPartitionCols :+ preCombineFieldOpt.get
+          variableTimestampKeygenPartitionCols ++ preCombineFieldsOpt.get
         }
       } else {
         // not timestamp/custom keygen so just need to read precombine
-        Seq(preCombineFieldOpt.get)
+        preCombineFieldsOpt.get
       }
     } else if (keygenTypeHasVariablePartitionCols) {
       variableTimestampKeygenPartitionCols
@@ -187,15 +187,10 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
     })
   }
 
-  protected lazy val preCombineFieldOpt: Option[String] =
-    Option(tableConfig.getPreCombineField)
-      .orElse(optParams.get(DataSourceWriteOptions.PRECOMBINE_FIELD.key)) match {
-      // NOTE: This is required to compensate for cases when empty string is used to stub
-      //       property value to avoid it being set with the default value
-      // TODO(HUDI-3456) cleanup
-      case Some(f) if !StringUtils.isNullOrEmpty(f) => Some(f)
-      case _ => None
-    }
+  protected lazy val preCombineFieldsOpt: common.util.Option[List[String]] =
+    tableConfig.getPreCombineFieldList
+      .or(DataSourceOptionsHelper.getPreCombineFields(optParams))
+      .map(list => list.asScala.toList)
 
   protected lazy val recordKeyField: String =
     if (tableConfig.populateMetaFields()) {
@@ -273,17 +268,15 @@ class HoodieMergeOnReadSnapshotHadoopFsRelationFactory(override val sqlContext: 
       && HoodieTableMetadataUtil.isFilesPartitionAvailable(metaClient)).build
 
   lazy val tableState: HoodieTableState = // Subset of the state of table's configuration as of at the time of the query
-    HoodieTableState(
-      tablePath = basePath.toString,
+    HoodieTableState(tablePath = basePath.toString,
       latestCommitTimestamp = queryTimestamp,
       recordKeyField = recordKeyField,
-      preCombineFieldOpt = preCombineFieldOpt,
+      preCombineFieldsOpt = convertHudiOptionToScalaOption(preCombineFieldsOpt),
       usesVirtualKeys = !tableConfig.populateMetaFields(),
       recordPayloadClassName = tableConfig.getPayloadClass,
       metadataConfig = metadataConfig,
       recordMergeImplClasses = recordMergerImplClasses,
-      recordMergeStrategyId = tableConfig.getRecordMergeStrategyId
-    )
+      recordMergeStrategyId = tableConfig.getRecordMergeStrategyId)
   val mandatoryFields: Seq[String] = partitionColumnsToRead
 
   override def buildFileIndex(): FileIndex = fileIndex
@@ -387,7 +380,7 @@ class HoodieCopyOnWriteIncrementalHadoopFsRelationFactory(override val sqlContex
   extends HoodieCopyOnWriteSnapshotHadoopFsRelationFactory(sqlContext, metaClient, options, schemaSpec, isBootstrap) {
 
   override val mandatoryFields: Seq[String] = Seq(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.COMMIT_TIME_METADATA_FIELD) ++
-    preCombineFieldOpt.map(Seq(_)).getOrElse(Seq()) ++ partitionColumnsToRead
+    preCombineFieldsOpt.orElse(List()) ++ partitionColumnsToRead
 
   override val fileIndex = new HoodieIncrementalFileIndex(
     sparkSession, metaClient, schemaSpec, options, FileStatusCache.getOrCreate(sparkSession), false, true)
