@@ -370,4 +370,66 @@ class TestFileGroupRecordBuffer {
     assertNull(deleteRecord.getRecordKey(), "The record key metadata field is missing");
     assertEquals(1, deleteRecord.getOrderingValue());
   }
+
+  @Test
+  void testParseValidProperties() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(HoodieTableConfig.PARTIAL_UPDATE_PROPERTIES.key(), "a=1,b=2,c=3");
+    Map<String, String> result = FileGroupRecordBuffer.parsePartialUpdateProperties(props);
+
+    assertEquals(3, result.size());
+    assertEquals("1", result.get("a"));
+    assertEquals("2", result.get("b"));
+    assertEquals("3", result.get("c"));
+  }
+
+  @Test
+  void testHandlesWhitespace() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(HoodieTableConfig.PARTIAL_UPDATE_PROPERTIES.key(), " a = 1 , b=  2 ,c=3 ");
+    Map<String, String> result = FileGroupRecordBuffer.parsePartialUpdateProperties(props);
+
+    assertEquals(3, result.size());
+    assertEquals("1", result.get("a"));
+    assertEquals("2", result.get("b"));
+    assertEquals("3", result.get("c"));
+  }
+
+  @Test
+  void testIgnoresEmptyEntriesAndMissingEquals() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(HoodieTableConfig.PARTIAL_UPDATE_PROPERTIES.key(), ",a=1,,b,c=3");
+    Map<String, String> result = FileGroupRecordBuffer.parsePartialUpdateProperties(props);
+
+    assertEquals(2, result.size());
+    assertEquals("1", result.get("a"));
+    assertEquals("3", result.get("c"));
+    assertFalse(result.containsKey("b"));
+  }
+
+  @Test
+  void testEmptyValueIsAccepted() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(HoodieTableConfig.PARTIAL_UPDATE_PROPERTIES.key(), "a=,b=2");
+    Map<String, String> result = FileGroupRecordBuffer.parsePartialUpdateProperties(props);
+
+    assertEquals(2, result.size());
+    assertEquals("", result.get("a"));
+    assertEquals("2", result.get("b"));
+  }
+
+  @Test
+  void testEmptyInputReturnsEmptyMap() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(HoodieTableConfig.PARTIAL_UPDATE_PROPERTIES.key(), "");
+    Map<String, String> result = FileGroupRecordBuffer.parsePartialUpdateProperties(props);
+    assertTrue(result.isEmpty());
+  }
+
+  @Test
+  void testMissingKeyReturnsEmptyMap() {
+    TypedProperties props = new TypedProperties(); // no property set
+    Map<String, String> result = FileGroupRecordBuffer.parsePartialUpdateProperties(props);
+    assertTrue(result.isEmpty());
+  }
 }

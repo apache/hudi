@@ -239,14 +239,14 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   }
 
   static boolean isStringTyped(Schema.Field field) {
-    return hasType(field.schema(), Schema.Type.STRING);
+    return hasTargetType(field.schema(), Schema.Type.STRING);
   }
 
   static boolean isBytesTyped(Schema.Field field) {
-    return hasType(field.schema(), Schema.Type.BYTES);
+    return hasTargetType(field.schema(), Schema.Type.BYTES);
   }
 
-  static boolean hasType(Schema schema, Schema.Type targetType) {
+  static boolean hasTargetType(Schema schema, Schema.Type targetType) {
     if (schema.getType() == targetType) {
       return true;
     } else if (schema.getType() == Schema.Type.UNION) {
