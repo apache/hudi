@@ -852,7 +852,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion("1.1.0")
       .withDocumentation("Records event time watermark metadata in commit metadata when enabled");
-  
+
   public static final ConfigProperty<String> MERGE_HANDLE_CLASS_NAME = ConfigProperty
       .key("hoodie.write.merge.handle.class")
       .defaultValue(HoodieWriteMergeHandle.class.getName())

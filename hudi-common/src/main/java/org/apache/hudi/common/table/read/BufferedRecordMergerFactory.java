@@ -99,7 +99,8 @@ public class BufferedRecordMergerFactory {
    */
   private static class CommitTimeBufferedRecordMerger<T> implements BufferedRecordMerger<T> {
     @Override
-    public Option<BufferedRecord<T>> deltaMerge(BufferedRecord<T> newRecord, BufferedRecord<T> existingRecord) {
+    public Option<BufferedRecord<T>> deltaMerge(BufferedRecord<T> newRecord,
+                                                BufferedRecord<T> existingRecord) {
       return Option.of(newRecord);
     }
 
@@ -166,8 +167,9 @@ public class BufferedRecordMergerFactory {
     public Option<BufferedRecord<T>> deltaMerge(BufferedRecord<T> newRecord, BufferedRecord<T> existingRecord) {
       if (existingRecord == null || shouldKeepNewerRecord(existingRecord, newRecord)) {
         return Option.of(newRecord);
+      } else {
+        return Option.of(existingRecord);
       }
-      return Option.empty();
     }
 
     @Override
