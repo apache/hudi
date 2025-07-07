@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
@@ -183,15 +184,15 @@ public class TestHoodieTableFSViewWithClustering extends HoodieCommonTestHarness
 
   private void saveAsComplete(HoodieActiveTimeline timeline, HoodieInstant inflight, HoodieCommitMetadata metadata) {
     if (inflight.getAction().equals(HoodieTimeline.COMPACTION_ACTION)) {
-      timeline.transitionCompactionInflightToComplete(true, inflight, metadata);
+      timeline.transitionCompactionInflightToComplete(inflight, metadata, HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
     } else {
       HoodieInstant requested = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, inflight.getAction(), inflight.requestedTime());
       timeline.createNewInstant(requested);
       timeline.transitionRequestedToInflight(requested, Option.empty());
       if (inflight.getAction().equals(HoodieTimeline.CLUSTERING_ACTION)) {
-        timeline.transitionClusterInflightToComplete(true, inflight, (HoodieReplaceCommitMetadata) metadata);
+        timeline.transitionClusterInflightToComplete(inflight, (HoodieReplaceCommitMetadata) metadata, HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
       } else {
-        timeline.saveAsComplete(inflight, Option.of(metadata));
+        timeline.saveAsComplete(inflight, Option.of(metadata), HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
       }
     }
   }

@@ -19,6 +19,7 @@
 package org.apache.hudi.table.action.savepoint;
 
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -124,16 +125,18 @@ public class SavepointActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
         }, null);
       }
 
-      HoodieSavepointMetadata metadata = TimelineMetadataUtils.convertSavepointMetadata(user, comment, latestFilesMap);
-      // Nothing to save in the savepoint
-      table.getActiveTimeline().createNewInstant(
-          instantGenerator.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.SAVEPOINT_ACTION, instantTime));
-      table.getActiveTimeline()
-          .saveAsComplete(
-              true, instantGenerator.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.SAVEPOINT_ACTION, instantTime), Option.of(metadata),
-              savepointCompletedInstant -> table.getMetaClient().getTableFormat().savepoint(savepointCompletedInstant, table.getContext(), table.getMetaClient(), table.getViewManager()));
-      LOG.info("Savepoint {} created", instantTime);
-      return metadata;
+      try (TransactionManager transactionManager = new TransactionManager(config, table.getStorage())) {
+        HoodieSavepointMetadata metadata = TimelineMetadataUtils.convertSavepointMetadata(user, comment, latestFilesMap);
+        // Nothing to save in the savepoint
+        table.getActiveTimeline().createNewInstant(
+            instantGenerator.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.SAVEPOINT_ACTION, instantTime));
+        table.getActiveTimeline()
+            .saveAsComplete(instantGenerator.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.SAVEPOINT_ACTION, instantTime), Option.of(metadata),
+                transactionManager.createCompletionInstant(),
+                savepointCompletedInstant -> table.getMetaClient().getTableFormat().savepoint(savepointCompletedInstant, table.getContext(), table.getMetaClient(), table.getViewManager()));
+        LOG.info("Savepoint {} created", instantTime);
+        return metadata;
+      }
     } catch (HoodieIOException e) {
       throw new HoodieSavepointException("Failed to savepoint " + instantTime, e);
     }

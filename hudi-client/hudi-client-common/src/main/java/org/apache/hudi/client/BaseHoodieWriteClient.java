@@ -269,7 +269,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       if (extraPreCommitFunc.isPresent()) {
         extraPreCommitFunc.get().accept(table.getMetaClient(), metadata);
       }
-      commit(table, commitActionType, instantTime, metadata, tableWriteStats, skipStreamingWritesToMetadataTable);
+      commit(table, commitActionType, instantTime, metadata, tableWriteStats, skipStreamingWritesToMetadataTable, txnManager.createCompletionInstant());
       postCommit(table, metadata, instantTime, extraMetadata);
       LOG.info("Committed {}", instantTime);
     } catch (IOException e) {
