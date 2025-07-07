@@ -32,19 +32,19 @@ class TestHiveReaderContextTypeHandler {
   private final HiveReaderContextTypeHandler handler = new HiveReaderContextTypeHandler();
 
   @Test
-  void testCastToBoolean_withValidBooleanWritableTrue() {
+  void testCastToBooleanWithValidBooleanWritableTrue() {
     BooleanWritable input = new BooleanWritable(true);
     assertTrue(handler.castToBoolean(input));
   }
 
   @Test
-  void testCastToBoolean_withValidBooleanWritableFalse() {
+  void testCastToBooleanWithValidBooleanWritableFalse() {
     BooleanWritable input = new BooleanWritable(false);
     assertFalse(handler.castToBoolean(input));
   }
 
   @Test
-  void testCastToBoolean_withInvalidType() {
+  void testCastToBooleanWithInvalidType() {
     Exception exception = assertThrows(IllegalArgumentException.class, () -> {
       handler.castToBoolean("not a BooleanWritable");
     });
@@ -52,13 +52,13 @@ class TestHiveReaderContextTypeHandler {
   }
 
   @Test
-  void testCastToString_withValidText() {
+  void testCastToStringWithValidText() {
     Text input = new Text("test string");
     assertEquals("test string", handler.castToString(input));
   }
 
   @Test
-  void testCastToString_withInvalidType() {
+  void testCastToStringWithInvalidType() {
     Exception exception = assertThrows(IllegalArgumentException.class, () -> {
       handler.castToString(new BooleanWritable(true));
     });
