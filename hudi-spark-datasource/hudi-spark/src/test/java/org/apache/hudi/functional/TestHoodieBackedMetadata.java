@@ -2878,13 +2878,15 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     metaClient = HoodieTableMetaClient.reload(metaClient);
     // Insert/upsert third batch of records
     client = getHoodieWriteClient(cfg);
-    commitTime = client.startCommit();
+    commitTime = WriteClientTestUtils.createNewInstantTime();
     if (performUpsert) {
       records = dataGen.generateUpdates(commitTime, 100);
       records.addAll(dataGen.generateInserts(commitTime, 20));
+      WriteClientTestUtils.startCommitWithTime(client, commitTime);
       writeStatuses = client.upsert(jsc.parallelize(records, 1), commitTime).collect();
     } else {
       records = dataGen.generateInserts(commitTime, 100);
+      WriteClientTestUtils.startCommitWithTime(client, commitTime);
       writeStatuses = client.insert(jsc.parallelize(records, 1), commitTime).collect();
     }
     assertNoWriteErrors(writeStatuses);
