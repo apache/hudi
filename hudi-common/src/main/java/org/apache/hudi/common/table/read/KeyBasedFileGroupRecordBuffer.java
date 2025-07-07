@@ -121,6 +121,11 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
     return records.containsKey(recordKey);
   }
 
+  @Override
+  public HoodieReadStats getStats() {
+    return readStats;
+  }
+
   protected boolean hasNextBaseRecord(T baseRecord) throws IOException {
     String recordKey = readerContext.getRecordKey(baseRecord, readerSchema);
     BufferedRecord<T> logRecordInfo = records.remove(recordKey);
