@@ -113,7 +113,15 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
       // partial merging.
       enablePartialMerging = true;
       bufferedRecordMerger = BufferedRecordMergerFactory.create(
-          readerContext, recordMergeMode, true, recordMerger, orderingFieldName, payloadClass, readerSchema, props);
+          readerContext,
+          recordMergeMode,
+          true,
+          recordMerger,
+          orderingFieldName,
+          payloadClass,
+          readerSchema,
+          props,
+          partialUpdateMode);
     }
 
     Pair<Function<T, T>, Schema> schemaTransformerWithEvolvedSchema = getSchemaTransformerWithEvolvedSchema(dataBlock);
