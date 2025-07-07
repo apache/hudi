@@ -197,15 +197,19 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
   }
 
   @Override
-  public RowData constructEngineRecord(Schema schema, List<Object> values) {
-    if (schema.getFields().size() != values.size()) {
-      throw new IllegalArgumentException("Schema field count and values size must match.");
+  public RowData constructEngineRecord(Schema schema,
+                                       Map<Integer, Object> updateValues,
+                                       BufferedRecord<RowData> baseRecord) {
+    GenericRowData genericRowData = new GenericRowData(schema.getFields().size());
+    for (Schema.Field field : schema.getFields()) {
+      int pos = field.pos();
+      if (updateValues.containsKey(pos)) {
+        genericRowData.setField(pos, updateValues.get(pos));
+      } else {
+        genericRowData.setField(pos, getValue(baseRecord.getRecord(), schema, field.name()));
+      }
     }
-    GenericRowData row = new GenericRowData(RowKind.INSERT, values.size());
-    for (int i = 0; i < values.size(); i++) {
-      row.setField(i, values.get(i));  // Must be internal Flink types
-    }
-    return row;
+    return toBinaryRow(schema, genericRowData);
   }
 
   @Override

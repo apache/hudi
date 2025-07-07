@@ -31,15 +31,19 @@ public enum PartialUpdateMode {
   KEEP_VALUES,
 
   @EnumFieldDescription(
-      "For columns values missing in current record, pick the default value from the schema.")
+      "For column values missing in current record, pick the default value from the schema.")
   FILL_DEFAULTS,
 
   @EnumFieldDescription(
-      "For columns having default values set in current record, pick the value from previous version of the record.")
+      "For columns having default values set in current record, pick the value from previous version of the record."
+      + "Only top level data type default is checked, which means this mode does not check leaf level data type default"
+      + "value for nested data types.")
   IGNORE_DEFAULTS,
 
   @EnumFieldDescription(
-      "For columns having marker values in the current record, pick value from previous version of the record."
-      + "Marker value can be defined using hoodie.write.partial.custom.marker, which is a table property.")
+      "For columns having marker in the current record, pick value from previous version of the record during write."
+      + "Marker value can be defined using `hoodie.write.partial.update.custom.marker`, which should be added to"
+      + "the value of table config `hoodie.write.partial.update.properties`. During upgrade, it could be"
+      + "added automatically for some payload classes, e.g., `PostgresDebeziumAvroPayload`.")
   IGNORE_MARKERS
 }

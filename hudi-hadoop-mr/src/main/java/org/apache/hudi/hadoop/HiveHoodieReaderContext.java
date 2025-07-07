@@ -230,24 +230,14 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   }
 
   @Override
-  public ArrayWritable constructEngineRecord(Schema schema, List<Object> values) {
-    List<Schema.Field> fields = schema.getFields();
-    if (fields.size() != values.size()) {
-      throw new IllegalArgumentException("Schema field count and values size must match.");
+  public ArrayWritable constructEngineRecord(Schema schema,
+                                             Map<Integer, Object> updateValues,
+                                             BufferedRecord<ArrayWritable> baseRecord) {
+    Writable[] engineRecord = baseRecord.getRecord().get();
+    for (Map.Entry<Integer, Object> value : updateValues.entrySet()) {
+      engineRecord[value.getKey()] = (Writable) value.getValue();
     }
-
-    Writable[] writables = new Writable[values.size()];
-    for (int i = 0; i < values.size(); i++) {
-      Object value = values.get(i);
-      if (value == null) {
-        writables[i] = NullWritable.get();
-      } else if (value instanceof Writable) {
-        writables[i] = (Writable) value;
-      } else {
-        throw new IllegalArgumentException("Expected Writable at index " + i + ", but got " + value.getClass());
-      }
-    }
-    return new ArrayWritable(Writable.class, writables);
+    return baseRecord.getRecord();
   }
 
   @Override
@@ -356,5 +346,4 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     }
     throw new IllegalStateException("getProgress() should not be called before a record reader has been initialized");
   }
-
 }

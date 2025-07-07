@@ -47,6 +47,7 @@ import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
 
 import org.apache.avro.Schema;
+import org.apache.parquet.Strings;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -142,22 +143,26 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
         readerContext, recordMergeMode, enablePartialMerging, recordMerger, orderingFieldName, payloadClass, readerSchema, props, partialUpdateMode);
   }
 
-  public static Map<String, String> parsePartialUpdateProperties(TypedProperties props) {
+  static Map<String, String> parsePartialUpdateProperties(TypedProperties props) {
     Map<String, String> properties = new HashMap<>();
-    String raw = props.getProperty(HoodieTableConfig.PARTIAL_UPDATE_PROPERTIES.key());
-    if (StringUtils.isNullOrEmpty(raw)) {
+    String partialUpdateProperties = props.getProperty(HoodieTableConfig.PARTIAL_UPDATE_PROPERTIES.key());
+    if (StringUtils.isNullOrEmpty(partialUpdateProperties)) {
       return properties;
     }
-    String[] entries = raw.split(",");
+    String[] entries = partialUpdateProperties.split(",");
     for (String entry : entries) {
-      String trimmed = entry.trim();
-      if (!trimmed.isEmpty()) {
-        String[] kv = trimmed.split("=", 2);
+      String trimmedEntry = entry.trim();
+      if (!trimmedEntry.isEmpty()) {
+        String[] kv = trimmedEntry.split("=", 2);
         if (kv.length == 2) {
-          String key = kv[0].trim();
+          String property = kv[0].trim();
           String value = kv[1].trim();
-          if (!key.isEmpty()) {
-            properties.put(key, value);
+          if (!property.isEmpty()) {
+            if (Strings.isNullOrEmpty(value)) {
+              throw new IllegalArgumentException(
+                  String.format("For property %s, its value is empty", property));
+            }
+            properties.put(property, value);
           }
         }
       }
@@ -269,14 +274,14 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   }
 
   static boolean isStringTyped(Schema.Field field) {
-    return hasType(field.schema(), Schema.Type.STRING);
+    return hasTargetType(field.schema(), Schema.Type.STRING);
   }
 
   static boolean isBytesTyped(Schema.Field field) {
-    return hasType(field.schema(), Schema.Type.BYTES);
+    return hasTargetType(field.schema(), Schema.Type.BYTES);
   }
 
-  static boolean hasType(Schema schema, Schema.Type targetType) {
+  static boolean hasTargetType(Schema schema, Schema.Type targetType) {
     if (schema.getType() == targetType) {
       return true;
     } else if (schema.getType() == Schema.Type.UNION) {
