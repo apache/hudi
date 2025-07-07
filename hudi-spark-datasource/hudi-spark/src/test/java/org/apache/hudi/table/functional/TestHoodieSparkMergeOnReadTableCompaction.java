@@ -153,10 +153,10 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
     client = getHoodieWriteClient(config);
 
     // write data and commit
-    String instant1 = client.createNewInstantTime();
+    String instant1 = WriteClientTestUtils.createNewInstantTime();
     writeData(instant1, dataGen.generateInserts(instant1, 100), true);
     // write mix of new data and updates, and in the case of bucket index, all records will go into log files (we use a small max_file_size)
-    String instant2 = client.createNewInstantTime();
+    String instant2 = WriteClientTestUtils.createNewInstantTime();
     List<HoodieRecord> updates1 = dataGen.generateUpdates(instant2, 100);
     List<HoodieRecord> newRecords1 = dataGen.generateInserts(instant2, 100);
     writeData(instant2, Stream.concat(newRecords1.stream(), updates1.stream()).collect(Collectors.toList()), true);
@@ -164,7 +164,7 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
     // schedule compaction
     String compactionTime = (String) client.scheduleCompaction(Option.empty()).get();
     // write data, and do not commit. those records should not visible to reader
-    String instant3 = client.createNewInstantTime();
+    String instant3 = WriteClientTestUtils.createNewInstantTime();
     List<HoodieRecord> updates2 = dataGen.generateUpdates(instant3, 200);
     List<HoodieRecord> newRecords2 = dataGen.generateInserts(instant3, 100);
     List<WriteStatus> writeStatuses = writeData(instant3, Stream.concat(newRecords2.stream(), updates2.stream()).collect(Collectors.toList()), false);
@@ -273,13 +273,13 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
     client = getHoodieWriteClient(config);
 
     // instant 1: write inserts and commit, generating base files
-    String instant1 = client.createNewInstantTime();
+    String instant1 = WriteClientTestUtils.createNewInstantTime();
     List<HoodieRecord> recordList = dataGen.generateInserts(instant1, 100);
     writeData(instant1, recordList, true);
     assertEquals(100, readTableTotalRecordsNum());
     validateFileListingInMetadataTable();
     // instant 2: write updates in log files and simulate failed deltacommit
-    String instant2 = client.createNewInstantTime();
+    String instant2 = WriteClientTestUtils.createNewInstantTime();
     recordList = dataGen.generateUpdates(instant2, 100);
     List<WriteStatus> writeStatuses2 = writeData(instant2, recordList, false);
 
@@ -318,7 +318,7 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
     assertEquals(100, readTableTotalRecordsNum());
 
     // instant 3: write updates in log files and make a successful deltacommit
-    String instant3 = client.createNewInstantTime();
+    String instant3 = WriteClientTestUtils.createNewInstantTime();
     recordList = dataGen.generateUpdates(instant3, 100);
     writeData(instant3, recordList, true);
 

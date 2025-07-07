@@ -21,6 +21,7 @@ package org.apache.hudi.client.functional;
 
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -556,60 +557,56 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
     cleanupTimelineService();
     initTimelineService();
 
-    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
-    HoodieWriteConfig writeConfig = getConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER).build();
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
-      String commitTime = client.createNewInstantTime();
-      List<HoodieRecord> inserts = dataGen.generateInserts(commitTime, 100);
-      List<HoodieRecord> deletes = dataGen.generateUniqueDeleteRecords(commitTime, 20);
-      String randomFileId = UUID.randomUUID().toString() + "-0";
-      List<String> deletedRecordKeys = deletes.stream().map(record -> record.getRecordKey()).collect(Collectors.toList());
-      List<HoodieRecord> adjustedInserts = inserts.stream().filter(record -> !deletedRecordKeys.contains(record.getRecordKey())).collect(Collectors.toList());
+    String commitTime = WriteClientTestUtils.createNewInstantTime();
+    List<HoodieRecord> inserts = dataGen.generateInserts(commitTime, 100);
+    List<HoodieRecord> deletes = dataGen.generateUniqueDeleteRecords(commitTime, 20);
+    String randomFileId = UUID.randomUUID().toString() + "-0";
+    List<String> deletedRecordKeys = deletes.stream().map(record -> record.getRecordKey()).collect(Collectors.toList());
+    List<HoodieRecord> adjustedInserts = inserts.stream().filter(record -> !deletedRecordKeys.contains(record.getRecordKey())).collect(Collectors.toList());
 
-      List<HoodieRecord> insertRecords =
-          inserts.stream().map(record -> HoodieMetadataPayload.createRecordIndexUpdate(record.getRecordKey(), "abc", randomFileId, commitTime, 0))
-              .collect(Collectors.toList());
-      List<HoodieRecord> deleteRecords = inserts.stream().map(record -> HoodieMetadataPayload.createRecordIndexDelete(record.getRecordKey()))
-          .collect(Collectors.toList());
+    List<HoodieRecord> insertRecords =
+        inserts.stream().map(record -> HoodieMetadataPayload.createRecordIndexUpdate(record.getRecordKey(), "abc", randomFileId, commitTime, 0))
+            .collect(Collectors.toList());
+    List<HoodieRecord> deleteRecords = inserts.stream().map(record -> HoodieMetadataPayload.createRecordIndexDelete(record.getRecordKey()))
+        .collect(Collectors.toList());
 
-      List<HoodieRecord> recordsToTest = new ArrayList<>();
-      recordsToTest.addAll(adjustedInserts);
-      recordsToTest.addAll(deleteRecords);
-      // happy paths. no dups. in and out are same.
-      List<HoodieRecord> actualRecords = reduceByKeys(context.parallelize(recordsToTest, 2), 2).collectAsList();
-      assertHoodieRecordListEquality(actualRecords, recordsToTest);
+    List<HoodieRecord> recordsToTest = new ArrayList<>();
+    recordsToTest.addAll(adjustedInserts);
+    recordsToTest.addAll(deleteRecords);
+    // happy paths. no dups. in and out are same.
+    List<HoodieRecord> actualRecords = reduceByKeys(context.parallelize(recordsToTest, 2), 2).collectAsList();
+    assertHoodieRecordListEquality(actualRecords, recordsToTest);
 
-      // few records has both inserts and deletes.
-      recordsToTest = new ArrayList<>();
-      recordsToTest.addAll(insertRecords);
-      recordsToTest.addAll(deleteRecords);
-      actualRecords = reduceByKeys(context.parallelize(recordsToTest, 2), 2).collectAsList();
-      List<HoodieRecord> expectedList = new ArrayList<>();
-      expectedList.addAll(insertRecords);
-      assertHoodieRecordListEquality(actualRecords, expectedList);
+    // few records has both inserts and deletes.
+    recordsToTest = new ArrayList<>();
+    recordsToTest.addAll(insertRecords);
+    recordsToTest.addAll(deleteRecords);
+    actualRecords = reduceByKeys(context.parallelize(recordsToTest, 2), 2).collectAsList();
+    List<HoodieRecord> expectedList = new ArrayList<>();
+    expectedList.addAll(insertRecords);
+    assertHoodieRecordListEquality(actualRecords, expectedList);
 
-      // few deletes are duplicates. we are allowed to have duplicate deletes.
-      recordsToTest = new ArrayList<>();
-      recordsToTest.addAll(adjustedInserts);
-      recordsToTest.addAll(deleteRecords);
-      recordsToTest.addAll(deleteRecords.subList(0, 10));
-      actualRecords = reduceByKeys(context.parallelize(recordsToTest, 2), 2).collectAsList();
-      expectedList = new ArrayList<>();
-      expectedList.addAll(adjustedInserts);
-      expectedList.addAll(deleteRecords);
-      assertHoodieRecordListEquality(actualRecords, expectedList);
+    // few deletes are duplicates. we are allowed to have duplicate deletes.
+    recordsToTest = new ArrayList<>();
+    recordsToTest.addAll(adjustedInserts);
+    recordsToTest.addAll(deleteRecords);
+    recordsToTest.addAll(deleteRecords.subList(0, 10));
+    actualRecords = reduceByKeys(context.parallelize(recordsToTest, 2), 2).collectAsList();
+    expectedList = new ArrayList<>();
+    expectedList.addAll(adjustedInserts);
+    expectedList.addAll(deleteRecords);
+    assertHoodieRecordListEquality(actualRecords, expectedList);
 
-      // test failure case. same record having 2 inserts should fail.
-      recordsToTest = new ArrayList<>();
-      recordsToTest.addAll(adjustedInserts);
-      recordsToTest.addAll(adjustedInserts.subList(0, 5));
-      try {
-        reduceByKeys(context.parallelize(recordsToTest, 2), 2).collectAsList();
-        fail("Should not have reached here");
-      } catch (Exception e) {
-        // expected. no-op
-        assertTrue(e.getCause() instanceof HoodieIOException);
-      }
+    // test failure case. same record having 2 inserts should fail.
+    recordsToTest = new ArrayList<>();
+    recordsToTest.addAll(adjustedInserts);
+    recordsToTest.addAll(adjustedInserts.subList(0, 5));
+    try {
+      reduceByKeys(context.parallelize(recordsToTest, 2), 2).collectAsList();
+      fail("Should not have reached here");
+    } catch (Exception e) {
+      // expected. no-op
+      assertTrue(e.getCause() instanceof HoodieIOException);
     }
   }
 

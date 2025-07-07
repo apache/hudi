@@ -19,6 +19,7 @@
 package org.apache.spark.sql.hudi.procedure
 
 import org.apache.hudi.HoodieCLIUtils
+import org.apache.hudi.client.WriteClientTestUtils
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.util.{Option => HOption}
 
@@ -191,7 +192,7 @@ class TestClusteringBinaryCopyStrategy extends HoodieSparkProcedureTestBase {
                |""".stripMargin)
 
           // Generate the first clustering plan
-          val firstScheduleInstant = client.createNewInstantTime()
+          val firstScheduleInstant = WriteClientTestUtils.createNewInstantTime()
           client.scheduleClusteringAtInstant(firstScheduleInstant, HOption.empty())
           checkAnswer(
             s"""
@@ -274,7 +275,7 @@ class TestClusteringBinaryCopyStrategy extends HoodieSparkProcedureTestBase {
           )
 
           // Generate the second clustering plan
-          val secondScheduleInstant = client.createNewInstantTime()
+          val secondScheduleInstant = WriteClientTestUtils.createNewInstantTime()
           client.scheduleClusteringAtInstant(secondScheduleInstant, HOption.empty())
           checkAnswer(
             s"""

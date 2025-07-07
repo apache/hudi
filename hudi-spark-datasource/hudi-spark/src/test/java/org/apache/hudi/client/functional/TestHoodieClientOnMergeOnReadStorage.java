@@ -19,6 +19,7 @@
 package org.apache.hudi.client.functional;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -84,20 +85,20 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
 
     // Do insert and updates thrice one after the other.
     // Insert
-    String commitTime = client.createNewInstantTime();
+    String commitTime = WriteClientTestUtils.createNewInstantTime();
     insertBatch(config, client, commitTime, "000", 100, SparkRDDWriteClient::insert,
         false, false, 100, 100, 1, Option.empty(), INSTANT_GENERATOR);
 
     // Update
     String commitTimeBetweenPrevAndNew = commitTime;
-    commitTime = client.createNewInstantTime();
+    commitTime = WriteClientTestUtils.createNewInstantTime();
     updateBatch(config, client, commitTime, commitTimeBetweenPrevAndNew,
         Option.of(Arrays.asList(commitTimeBetweenPrevAndNew)), "000", 50, SparkRDDWriteClient::upsert,
         false, false, 50, 100, 2, config.populateMetaFields(), INSTANT_GENERATOR);
 
     // Delete 5 records
     String prevCommitTime = commitTime;
-    commitTime = client.createNewInstantTime();
+    commitTime = WriteClientTestUtils.createNewInstantTime();
     deleteBatch(config, client, commitTime, prevCommitTime, "000", 25, false, false,
         0, 100, TIMELINE_FACTORY, INSTANT_GENERATOR);
 
@@ -117,20 +118,20 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
     SparkRDDWriteClient client = getHoodieWriteClient(config);
 
     // Insert
-    String commitTime = client.createNewInstantTime();
+    String commitTime = WriteClientTestUtils.createNewInstantTime();
     insertBatch(config, client, commitTime, "000", 100, SparkRDDWriteClient::insert,
         false, false, 100, 100, 1, Option.empty(), INSTANT_GENERATOR);
 
     // Update
     String commitTimeBetweenPrevAndNew = commitTime;
-    commitTime = client.createNewInstantTime();
+    commitTime = WriteClientTestUtils.createNewInstantTime();
     updateBatch(config, client, commitTime, commitTimeBetweenPrevAndNew,
         Option.of(Arrays.asList(commitTimeBetweenPrevAndNew)), "000", 50, SparkRDDWriteClient::upsert,
         false, false, 5, 100, 2, config.populateMetaFields(), INSTANT_GENERATOR);
 
     // Delete 5 records
     String prevCommitTime = commitTime;
-    commitTime = client.createNewInstantTime();
+    commitTime = WriteClientTestUtils.createNewInstantTime();
     deleteBatch(config, client, commitTime, prevCommitTime, "000", 25, false, false,
         0, 100, TIMELINE_FACTORY, INSTANT_GENERATOR);
 
@@ -155,13 +156,13 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
 
     // Do insert and updates thrice one after the other.
     // Insert
-    String commitTime = client.createNewInstantTime();
+    String commitTime = WriteClientTestUtils.createNewInstantTime();
     insertBatch(config, client, commitTime, "000", 100, SparkRDDWriteClient::insert,
         false, false, 100, 100, 1, Option.empty(), INSTANT_GENERATOR);
 
     // Update
     String commitTimeBetweenPrevAndNew = commitTime;
-    commitTime = client.createNewInstantTime();
+    commitTime = WriteClientTestUtils.createNewInstantTime();
     updateBatch(config, client, commitTime, commitTimeBetweenPrevAndNew,
         Option.of(Arrays.asList(commitTimeBetweenPrevAndNew)), "000", 50, SparkRDDWriteClient::upsert,
         false, false, 5, 100, 2, config.populateMetaFields(), INSTANT_GENERATOR);
@@ -190,7 +191,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
 
     // First insert
     int expectedTotalRecs = 100;
-    String newCommitTime = client.createNewInstantTime();
+    String newCommitTime = WriteClientTestUtils.createNewInstantTime();
     insertBatch(config, client, newCommitTime, "000", expectedTotalRecs,
         SparkRDDWriteClient::insert, false, false, expectedTotalRecs, expectedTotalRecs,
         1, Option.empty(), INSTANT_GENERATOR);
@@ -198,7 +199,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
     String prevCommitTime = newCommitTime;
     for (int i = 0; i < 5; i++) {
       // Upsert
-      newCommitTime = client.createNewInstantTime();
+      newCommitTime = WriteClientTestUtils.createNewInstantTime();
       expectedTotalRecs += 50;
       updateBatch(config, client, newCommitTime, prevCommitTime,
           Option.of(Arrays.asList(prevCommitTime)), "000", 50, SparkRDDWriteClient::upsert,
@@ -216,7 +217,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
     prevCommitTime = compactionTimeStamp.get();
     for (int i = 0; i < 2; i++) {
       // Upsert
-      newCommitTime = client.createNewInstantTime();
+      newCommitTime = WriteClientTestUtils.createNewInstantTime();
       expectedTotalRecs += 50;
       updateBatch(config, client, newCommitTime, prevCommitTime,
           Option.of(Arrays.asList(prevCommitTime)), "000", 50, SparkRDDWriteClient::upsert,
@@ -250,21 +251,21 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
     SparkRDDWriteClient client = getHoodieWriteClient(config);
 
     // First insert 10 records
-    String newCommitTime = client.createNewInstantTime();
+    String newCommitTime = WriteClientTestUtils.createNewInstantTime();
     insertBatch(config, client, newCommitTime, "000", 100,
         SparkRDDWriteClient::insert, false, false, 100, 100,
         1, Option.of(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH), INSTANT_GENERATOR);
 
     // Upsert 5 records
     String prevCommitTime = newCommitTime;
-    newCommitTime = client.createNewInstantTime();
+    newCommitTime = WriteClientTestUtils.createNewInstantTime();
     updateBatch(config, client, newCommitTime, prevCommitTime,
         Option.of(Arrays.asList(prevCommitTime)), "000", 50, SparkRDDWriteClient::upsert,
         false, false, 50, 100, 2, config.populateMetaFields(), INSTANT_GENERATOR);
     prevCommitTime = newCommitTime;
 
     // Delete 3 records
-    newCommitTime = client.createNewInstantTime();
+    newCommitTime = WriteClientTestUtils.createNewInstantTime();
     deleteBatch(config, client, newCommitTime, prevCommitTime, "000", 30, false, false,
         0, 70, TIMELINE_FACTORY, INSTANT_GENERATOR);
 
@@ -293,14 +294,14 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
     SparkRDDWriteClient client = getHoodieWriteClient(config);
 
     // First insert
-    String newCommitTime = client.createNewInstantTime();
+    String newCommitTime = WriteClientTestUtils.createNewInstantTime();
     insertBatch(config, client, newCommitTime, "000", 100,
         SparkRDDWriteClient::insert, false, false, 100, 100,
         1, Option.empty(), INSTANT_GENERATOR);
 
     String prevCommitTime = newCommitTime;
     // Upsert
-    newCommitTime = client.createNewInstantTime();
+    newCommitTime = WriteClientTestUtils.createNewInstantTime();
     updateBatch(config, client, newCommitTime, prevCommitTime,
         Option.of(Arrays.asList(prevCommitTime)), "000", 50, SparkRDDWriteClient::upsert,
         false, false, 50, 100, 2, config.populateMetaFields(), INSTANT_GENERATOR);
@@ -337,14 +338,14 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
         .build();
     SparkRDDWriteClient client = getHoodieWriteClient(config);
     // First insert
-    String newCommitTime = client.createNewInstantTime();
+    String newCommitTime = WriteClientTestUtils.createNewInstantTime();
     insertBatch(config, client, newCommitTime, "000", 100,
         SparkRDDWriteClient::insert, false, false, 10, 100,
         1, Option.empty(), INSTANT_GENERATOR);
 
     String prevCommitTime = newCommitTime;
     // Upsert
-    newCommitTime = client.createNewInstantTime();
+    newCommitTime = WriteClientTestUtils.createNewInstantTime();
     updateBatch(config, client, newCommitTime, prevCommitTime,
         Option.of(Arrays.asList(prevCommitTime)), "000", 50, SparkRDDWriteClient::upsert,
         false, false, 50, 10, 2, config.populateMetaFields(), INSTANT_GENERATOR);
@@ -370,7 +371,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
     SparkRDDWriteClient client = getHoodieWriteClient(config);
 
     // First insert. Here first file slice gets added to file group.
-    String newCommitTime = client.createNewInstantTime();
+    String newCommitTime = WriteClientTestUtils.createNewInstantTime();
     insertBatch(config, client, newCommitTime, "000", 100,
         SparkRDDWriteClient::insert, false, false, 100, 100,
         1, Option.empty(), INSTANT_GENERATOR);
@@ -384,7 +385,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
     String prevCommitTime = compactionTimeStamp.get();
 
     // First upsert on  second file slice.
-    newCommitTime = client.createNewInstantTime();
+    newCommitTime = WriteClientTestUtils.createNewInstantTime();
     updateBatch(config, client, newCommitTime, prevCommitTime,
         Option.of(Arrays.asList(prevCommitTime)), "000", 50, SparkRDDWriteClient::upsert,
         false, false, 50, 100, 2, config.populateMetaFields(), INSTANT_GENERATOR);
@@ -397,7 +398,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
 
     for (int i = 0; i < 6; i++) {
       // First upsert on third file slice.
-      newCommitTime = client.createNewInstantTime();
+      newCommitTime = WriteClientTestUtils.createNewInstantTime();
       updateBatch(config, client, newCommitTime, prevCommitTime,
           Option.of(Arrays.asList(prevCommitTime)), "000", 50, SparkRDDWriteClient::upsert,
           false, false, 50, 100, 2, config.populateMetaFields(), INSTANT_GENERATOR);
@@ -428,14 +429,14 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
          SparkRDDWriteClient client = new SparkRDDWriteClient(context, config)) {
 
       // First insert
-      String newCommitTime = client.createNewInstantTime();
+      String newCommitTime = WriteClientTestUtils.createNewInstantTime();
       insertBatch(config, client, newCommitTime, "000", 100,
           SparkRDDWriteClient::insert, false, false, 100, 100,
           1, Option.empty(), INSTANT_GENERATOR);
       String prevCommitTime = newCommitTime;
 
       // Upsert
-      newCommitTime = client.createNewInstantTime();
+      newCommitTime = WriteClientTestUtils.createNewInstantTime();
       updateBatch(config, client, newCommitTime, prevCommitTime,
           Option.of(Arrays.asList(prevCommitTime)), "000", 10, SparkRDDWriteClient::upsert,
           false, false, 10, 100, 4, config.populateMetaFields(), INSTANT_GENERATOR);
@@ -461,7 +462,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
       prevCommitTime = rollbackInstant.requestedTime();
 
       // Do one more upsert
-      newCommitTime = client.createNewInstantTime();
+      newCommitTime = WriteClientTestUtils.createNewInstantTime();
       updateBatch(config, client, newCommitTime, prevCommitTime,
           Option.of(Arrays.asList(prevCommitTime)), "000", 10, SparkRDDWriteClient::upsert,
           false, false, 10, 100, 4, config.populateMetaFields(), INSTANT_GENERATOR);
@@ -530,7 +531,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
          SparkRDDWriteClient client = new SparkRDDWriteClient(context, config)) {
 
       // First insert
-      String newCommitTime = client.createNewInstantTime();
+      String newCommitTime = WriteClientTestUtils.createNewInstantTime();
       insertBatch(config, client, newCommitTime, "000", 100,
           SparkRDDWriteClient::insert, false, false, 10, 100,
           1, Option.empty(), INSTANT_GENERATOR);
@@ -549,7 +550,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
         }
 
         // Upsert
-        newCommitTime = client.createNewInstantTime();
+        newCommitTime = WriteClientTestUtils.createNewInstantTime();
         updateBatch(config, client, newCommitTime, prevCommitTime,
             Option.of(Arrays.asList(prevCommitTime)), "000", 50, SparkRDDWriteClient::upsert,
             false, false, 50, 10, 0, config.populateMetaFields(), INSTANT_GENERATOR);
