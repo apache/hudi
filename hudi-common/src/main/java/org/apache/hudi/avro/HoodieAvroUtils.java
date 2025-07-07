@@ -1508,9 +1508,7 @@ public class HoodieAvroUtils {
     if (populateMetaFields) {
       return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) data,
           payloadClass, preCombineField, withOperation);
-      // Support HoodieFileSliceReader
     } else if (simpleKeyGenFieldsOpt.isPresent()) {
-      // TODO in HoodieFileSliceReader may partitionName=option#empty
       return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) data,
           payloadClass, preCombineField, simpleKeyGenFieldsOpt.get(), withOperation, partitionNameOp, schemaWithoutMetaFields);
     } else {
