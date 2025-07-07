@@ -113,11 +113,20 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
   }
 
   @Override
-  public InternalRow constructEngineRecord(Schema schema, List<Object> values) {
-    if (schema.getFields().size() != values.size()) {
-      throw new IllegalArgumentException("Schema field count and values size must match.");
+  public InternalRow constructEngineRecord(Schema schema,
+                                           Map<Integer, Object> updateValues,
+                                           BufferedRecord<InternalRow> baseRecord) {
+    List<Schema.Field> fields = schema.getFields();
+    Object[] values = new Object[fields.size()];
+    for (Schema.Field field : fields) {
+      int pos = field.pos();
+      if (updateValues.containsKey(pos)) {
+        values[pos] = updateValues.get(pos);
+      } else {
+        values[pos] = getValue(baseRecord.getRecord(), schema, field.name());
+      }
     }
-    return new GenericInternalRow(values.toArray());
+    return toBinaryRow(schema, new GenericInternalRow(values));
   }
 
   @Override

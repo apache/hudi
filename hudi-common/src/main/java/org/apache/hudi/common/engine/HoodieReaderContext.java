@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.serialization.CustomSerializer;
 import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
@@ -285,11 +286,16 @@ public abstract class HoodieReaderContext<T> {
   public void initRecordMerger(TypedProperties properties) {
     RecordMergeMode recordMergeMode = tableConfig.getRecordMergeMode();
     String mergeStrategyId = tableConfig.getRecordMergeStrategyId();
-    Triple<RecordMergeMode, String, String> triple = HoodieTableConfig.inferCorrectMergingBehavior(
-        recordMergeMode, tableConfig.getPayloadClass(),
-        mergeStrategyId, null, tableConfig.getTableVersion());
-    this.mergeMode = triple.getLeft();
-    this.recordMerger = getRecordMerger(triple.getLeft(), triple.getRight(),
+    if (tableConfig.getTableVersion().greaterThanOrEquals(HoodieTableVersion.NINE)
+        || tableConfig.getTableVersion().lesserThan(HoodieTableVersion.EIGHT)) {
+      Triple<RecordMergeMode, String, String> triple = HoodieTableConfig.inferCorrectMergingBehavior(
+          recordMergeMode, tableConfig.getPayloadClass(),
+          mergeStrategyId, null, tableConfig.getTableVersion());
+      recordMergeMode = triple.getLeft();
+      mergeStrategyId = triple.getRight();
+    }
+    this.mergeMode = recordMergeMode;
+    this.recordMerger = getRecordMerger(recordMergeMode, mergeStrategyId,
         properties.getString(RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY,
             properties.getString(RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY, "")));
   }
@@ -399,13 +405,16 @@ public abstract class HoodieReaderContext<T> {
   public abstract HoodieRecord<T> constructHoodieRecord(BufferedRecord<T> bufferedRecord);
 
   /**
-   * Constructs a new Engine based record based on a list of values from each field.
+   * Constructs a new Engine based record based on a given schema, base record and update values.
    *
-   * @param schema    The schema of the new record.
-   * @param values    The list of values for fields specified by the schema.
+   * @param schema           The schema of the new record.
+   * @param updateValues     The map recording field index and its corresponding update value.
+   * @param baseRecord       The record based on which the engine record is built.
    * @return A new instance of engine record type {@link T}.
    */
-  public abstract T constructEngineRecord(Schema schema, List<Object> values);
+  public abstract T constructEngineRecord(Schema schema,
+                                          Map<Integer, Object> updateValues,
+                                          BufferedRecord<T> baseRecord);
 
   /**
    * Seals the engine-specific record to make sure the data referenced in memory do not change.

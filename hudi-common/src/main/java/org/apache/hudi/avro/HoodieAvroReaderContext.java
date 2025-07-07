@@ -166,17 +166,14 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
   }
 
   @Override
-  public IndexedRecord constructEngineRecord(Schema schema, List<Object> values) {
-    if (schema.getFields().size() != values.size()) {
-      throw new IllegalArgumentException("Schema field count and values size must match.");
+  public IndexedRecord constructEngineRecord(Schema schema,
+                                             Map<Integer, Object> updateValues,
+                                             BufferedRecord<IndexedRecord> baseRecord) {
+    IndexedRecord engineRecord = baseRecord.getRecord();
+    for (Map.Entry<Integer, Object> value : updateValues.entrySet()) {
+      engineRecord.put(value.getKey(), value.getValue());
     }
-    GenericData.Record record = new GenericData.Record(schema);
-    List<Schema.Field> fields = schema.getFields();
-
-    for (int i = 0; i < fields.size(); i++) {
-      record.put(fields.get(i).name(), values.get(i));
-    }
-    return record;
+    return engineRecord;
   }
 
   @Override

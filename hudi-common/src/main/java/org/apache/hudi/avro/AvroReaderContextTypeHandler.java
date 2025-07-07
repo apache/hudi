@@ -30,14 +30,10 @@ public class AvroReaderContextTypeHandler extends ReaderContextTypeHandler {
     if (value == null) {
       return null;
     }
-    if (value instanceof CharSequence) {
-      return value.toString(); // handles Utf8, String, etc.
-    }
     if (value instanceof ByteBuffer) {
       ByteBuffer buffer = (ByteBuffer) value;
       return StringUtils.fromUTF8Bytes(buffer.array());
     }
-    // Fallback toString for unexpected types (e.g., Integer, Boolean)
     return value.toString();
   }
 }

@@ -330,7 +330,8 @@ public class HoodieTableConfig extends HoodieConfig {
       .noDefaultValue()
       .sinceVersion("1.1.0")
       .withDocumentation("The value of this property is in the format of 'K1=V1,K2=V2,...,Ki=Vi,...'."
-          + "Each (Ki, Vi) pair presents a property used by partial update.");
+          + "Each (Ki, Vi) pair represents a property used by partial update scenarios "
+          + "leveraging 'hoodie.write.partial.update.mode'.");
 
   public static final ConfigProperty<String> URL_ENCODE_PARTITIONING = KeyGeneratorOptions.URL_ENCODE_PARTITIONING;
   public static final ConfigProperty<String> HIVE_STYLE_PARTITIONING_ENABLE = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE;
@@ -902,19 +903,23 @@ public class HoodieTableConfig extends HoodieConfig {
     if (isNullOrEmpty(payloadClassName)) {
       return null;
     }
-    // TODO: make this only for version > 8 after upgrade table version.
-    if (tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
+    // Special handling for table version 9.
+    // Due to HUDI RFC-97, more payload classes are mapped to merge mode in table version 9.
+    // Currently the table version 9 is not added yet, so we use >= 8 temporarily.
+    // TODO: We need to change comparison to == 9, instead of >= 8 when tablee version 9 has been enabled.
+    if (tableVersion.versionCode() >= HoodieTableVersion.EIGHT.versionCode()) {
       if (PartialUpdateAvroPayload.class.getName().equals(payloadClassName)
-          || PostgresDebeziumAvroPayload.class.getName().equals(payloadClassName)) {
+          || PostgresDebeziumAvroPayload.class.getName().equals(payloadClassName)
+          || EventTimeAvroPayload.class.getName().equals(payloadClassName)) {
         return EVENT_TIME_ORDERING;
       } else if (OverwriteNonDefaultsWithLatestAvroPayload.class.getName().equals(payloadClassName)
               || AWSDmsAvroPayload.class.getName().equals(payloadClassName)) {
         return COMMIT_TIME_ORDERING;
       }
     }
-    // For table version <= 8.
-    if (DefaultHoodieRecordPayload.class.getName().equals(payloadClassName)
-        || EventTimeAvroPayload.class.getName().equals(payloadClassName)) {
+
+    // For general case.
+    if (DefaultHoodieRecordPayload.class.getName().equals(payloadClassName)) {
       return EVENT_TIME_ORDERING;
     } else if (payloadClassName.equals(OverwriteWithLatestAvroPayload.class.getName())) {
       return COMMIT_TIME_ORDERING;
@@ -1108,16 +1113,20 @@ public class HoodieTableConfig extends HoodieConfig {
   }
 
   public PartialUpdateMode getPartialUpdateMode() {
-    String payloadClass = getPayloadClass();
-    if (StringUtils.isNullOrEmpty(payloadClass)) {
-      return PartialUpdateMode.valueOf(getStringOrDefault(PARTIAL_UPDATE_MODE));
-    } else if (payloadClass.equals(OverwriteNonDefaultsWithLatestAvroPayload.class.getName())
-        || payloadClass.equals(PartialUpdateAvroPayload.class.getName())) {
-      return PartialUpdateMode.IGNORE_DEFAULTS;
-    } else if (payloadClass.equals(PostgresDebeziumAvroPayload.class.getName())) {
-      return PartialUpdateMode.IGNORE_MARKERS;
+    if (getTableVersion().greaterThanOrEquals(HoodieTableVersion.NINE)) {
+      String payloadClass = getPayloadClass();
+      if (StringUtils.isNullOrEmpty(payloadClass)) {
+        return PartialUpdateMode.valueOf(getStringOrDefault(PARTIAL_UPDATE_MODE));
+      } else if (payloadClass.equals(OverwriteNonDefaultsWithLatestAvroPayload.class.getName())
+          || payloadClass.equals(PartialUpdateAvroPayload.class.getName())) {
+        return PartialUpdateMode.IGNORE_DEFAULTS;
+      } else if (payloadClass.equals(PostgresDebeziumAvroPayload.class.getName())) {
+        return PartialUpdateMode.IGNORE_MARKERS;
+      } else {
+        return PartialUpdateMode.valueOf(getStringOrDefault(PARTIAL_UPDATE_MODE));
+      }
     } else {
-      return PartialUpdateMode.valueOf(getStringOrDefault(PARTIAL_UPDATE_MODE));
+      return PartialUpdateMode.NONE;
     }
   }
 

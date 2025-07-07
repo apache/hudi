@@ -60,33 +60,56 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       mode(SaveMode.Overwrite).
       save(basePath)
     // 2. Add an update.
-    val updateData = Seq(
+    val firstUpdateData = Seq(
       (11, "1", "rider-X", "driver-X", 19.10, "d"),
       (11, "2", "rider-Y", "driver-Y", 27.70, "u"))
-    val updates = spark.createDataFrame(updateData).toDF(columns: _*)
-    updates.write.format("hudi").
+    val firstUpdate = spark.createDataFrame(firstUpdateData).toDF(columns: _*)
+    firstUpdate.write.format("hudi").
       option(OPERATION.key(), "upsert").
       option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
       options(opts).
       mode(SaveMode.Append).
       save(basePath)
-    // 3. Validate.
+    // 3. Add an update.
+    val secondUpdateData = Seq(
+      (12, "3", "rider-CC", "driver-CC", 33.90, "i"),
+      (9, "4", "rider-DD", "driver-DD", 34.15, "i"),
+      (12, "5", "rider-EE", "driver-EE", 17.85, "i"))
+    val secondUpdate = spark.createDataFrame(secondUpdateData).toDF(columns: _*)
+    secondUpdate.write.format("hudi").
+      option(OPERATION.key(), "upsert").
+      option(HoodieCompactionConfig.INLINE_COMPACT.key(), "true").
+      option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1").
+      options(opts).
+      mode(SaveMode.Append).
+      save(basePath)
+    // 4. Validate.
     val df = spark.read.format("hudi").options(opts).load(basePath)
     val finalDf = df.select("ts", "key", "rider", "driver", "fare", "Op").sort("key")
 
     val expectedData = if (!payloadClazz.equals(classOf[AWSDmsAvroPayload].getName)) {
-      Seq(
-        (11, "1", "rider-X", "driver-X", 19.10, "d"),
-        (11, "2", "rider-Y", "driver-Y", 27.70, "u"),
-        (10, "3", "rider-C", "driver-C", 33.90, "i"),
-        (10, "4", "rider-D", "driver-D", 34.15, "i"),
-        (10, "5", "rider-E", "driver-E", 17.85, "i"))
+      if (payloadClazz.equals(classOf[PartialUpdateAvroPayload].getName)
+        || payloadClazz.equals(classOf[EventTimeAvroPayload].getName)) {
+        Seq(
+          (11, "1", "rider-X", "driver-X", 19.10, "d"),
+          (11, "2", "rider-Y", "driver-Y", 27.70, "u"),
+          (12, "3", "rider-CC", "driver-CC", 33.90, "i"),
+          (10, "4", "rider-D", "driver-D", 34.15, "i"),
+          (12, "5", "rider-EE", "driver-EE", 17.85, "i"))
+      } else {
+        Seq(
+          (11, "1", "rider-X", "driver-X", 19.10, "d"),
+          (11, "2", "rider-Y", "driver-Y", 27.70, "u"),
+          (12, "3", "rider-CC", "driver-CC", 33.90, "i"),
+          (9, "4", "rider-DD", "driver-DD", 34.15, "i"),
+          (12, "5", "rider-EE", "driver-EE", 17.85, "i"))
+      }
     } else {
       Seq(
         (11, "2", "rider-Y", "driver-Y", 27.70, "u"),
-        (10, "3", "rider-C", "driver-C", 33.90, "i"),
-        (10, "4", "rider-D", "driver-D", 34.15, "i"),
-        (10, "5", "rider-E", "driver-E", 17.85, "i"))
+        (12, "3", "rider-CC", "driver-CC", 33.90, "i"),
+        (9, "4", "rider-DD", "driver-DD", 34.15, "i"),
+        (12, "5", "rider-EE", "driver-EE", 17.85, "i"))
     }
     val expectedDf = spark.createDataFrame(
       spark.sparkContext.parallelize(expectedData)).toDF(columns: _*).sort("key")
@@ -95,6 +118,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
   }
 }
 
+// TODO: Add COPY_ON_WRITE table type tests when write path is updated accordingly.
 object TestPayloadDeprecationFlow {
   def provideParams(): java.util.List[Arguments] = {
     java.util.Arrays.asList(
