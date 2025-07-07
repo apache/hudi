@@ -28,12 +28,10 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -42,8 +40,6 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -71,12 +67,13 @@ public class BufferedRecordMergerFactory {
 
     switch (recordMergeMode) {
       case COMMIT_TIME_ORDERING:
-        return new CommitTimeBufferedRecordMerger<>();
+        return new CommitTimeBufferedRecordMerger<>(readerContext, partialUpdateMode, props, readerSchema);
       case EVENT_TIME_ORDERING:
-        return new EventTimeBufferedRecordMerger<>();
+        return new EventTimeBufferedRecordMerger<>(readerContext, partialUpdateMode, props, readerSchema);
       default:
         if (payloadClass.isPresent()) {
-          return new CustomPayloadBufferedRecordMerger<>(readerContext, recordMerger, orderingFieldName, payloadClass.get(), readerSchema, props);
+          return new CustomPayloadBufferedRecordMerger<>(
+              readerContext, recordMerger, orderingFieldName, payloadClass.get(), readerSchema, props);
         } else {
           return new CustomBufferedRecordMerger<>(readerContext, recordMerger, readerSchema, props);
         }
@@ -88,8 +85,22 @@ public class BufferedRecordMergerFactory {
    * based on {@code COMMIT_TIME_ORDERING} merge mode.
    */
   private static class CommitTimeBufferedRecordMerger<T> implements BufferedRecordMerger<T> {
+    private final PartialUpdateStrategy<T> partialUpdateStrategy;
+    private final Schema readerSchema;
+
+    public CommitTimeBufferedRecordMerger(HoodieReaderContext<T> readerContext,
+                                          PartialUpdateMode partialUpdateMode,
+                                          TypedProperties props,
+                                          Schema readerSchema) {
+      this.partialUpdateStrategy = new PartialUpdateStrategy<>(readerContext, partialUpdateMode, props);
+      this.readerSchema = readerSchema;
+    }
+
     @Override
-    public Option<BufferedRecord<T>> deltaMerge(BufferedRecord<T> newRecord, BufferedRecord<T> existingRecord) {
+    public Option<BufferedRecord<T>> deltaMerge(BufferedRecord<T> newRecord,
+                                                BufferedRecord<T> existingRecord) {
+      newRecord = partialUpdateStrategy.reconcileFieldsWithOldRecord(
+          newRecord, existingRecord, readerSchema, readerSchema, false);
       return Option.of(newRecord);
     }
 
@@ -100,6 +111,8 @@ public class BufferedRecordMergerFactory {
 
     @Override
     public Pair<Boolean, T> finalMerge(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) {
+      newerRecord = partialUpdateStrategy.reconcileFieldsWithOldRecord(
+          newerRecord, olderRecord, readerSchema, readerSchema, false);
       return Pair.of(newerRecord.isDelete(), newerRecord.getRecord());
     }
   }
@@ -109,12 +122,28 @@ public class BufferedRecordMergerFactory {
    * based on {@code EVENT_TIME_ORDERING} merge mode.
    */
   private static class EventTimeBufferedRecordMerger<T> implements BufferedRecordMerger<T> {
+    private final PartialUpdateStrategy<T> partialUpdateStrategy;
+    private final Schema readerSchema;
+
+    public EventTimeBufferedRecordMerger(HoodieReaderContext<T> readerContext,
+                                         PartialUpdateMode partialUpdateMode,
+                                         TypedProperties props,
+                                         Schema readerSchema) {
+      this.partialUpdateStrategy = new PartialUpdateStrategy<>(readerContext, partialUpdateMode, props);
+      this.readerSchema = readerSchema;
+    }
+
     @Override
     public Option<BufferedRecord<T>> deltaMerge(BufferedRecord<T> newRecord, BufferedRecord<T> existingRecord) {
       if (existingRecord == null || shouldKeepNewerRecord(existingRecord, newRecord)) {
+        newRecord = partialUpdateStrategy.reconcileFieldsWithOldRecord(
+            newRecord, existingRecord, readerSchema, readerSchema, false);
         return Option.of(newRecord);
+      } else {
+        existingRecord = partialUpdateStrategy.reconcileFieldsWithOldRecord(
+            existingRecord, newRecord, readerSchema, readerSchema, true);
+        return Option.of(existingRecord);
       }
-      return Option.empty();
     }
 
     @Override
@@ -127,12 +156,18 @@ public class BufferedRecordMergerFactory {
       if (newerRecord.isCommitTimeOrderingDelete()) {
         return Pair.of(true, newerRecord.getRecord());
       }
+
       Comparable newOrderingValue = newerRecord.getOrderingValue();
       Comparable oldOrderingValue = olderRecord.getOrderingValue();
       if (!olderRecord.isCommitTimeOrderingDelete()
           && oldOrderingValue.compareTo(newOrderingValue) > 0) {
+        olderRecord = partialUpdateStrategy.reconcileFieldsWithOldRecord(
+            olderRecord, newerRecord, readerSchema, readerSchema, true);
         return Pair.of(olderRecord.isDelete(), olderRecord.getRecord());
       }
+
+      newerRecord = partialUpdateStrategy.reconcileFieldsWithOldRecord(
+          newerRecord, olderRecord, readerSchema, readerSchema, false);
       return Pair.of(newerRecord.isDelete(), newerRecord.getRecord());
     }
   }
@@ -445,28 +480,5 @@ public class BufferedRecordMergerFactory {
       return true;
     }
     return newRecord.getOrderingValue().compareTo(oldRecord.getOrderingValue()) >= 0;
-  }
-
-  public static Map<String, String> parsePartialUpdateProperties(TypedProperties props) {
-    Map<String, String> properties = new HashMap<>();
-    String raw = props.getString(HoodieTableConfig.PARTIAL_UPDATE_PROPERTIES.key());
-    if (StringUtils.isNullOrEmpty(raw)) {
-      return properties;
-    }
-    String[] entries = raw.split(",");
-    for (String entry : entries) {
-      String trimmed = entry.trim();
-      if (!trimmed.isEmpty()) {
-        String[] kv = trimmed.split("=", 2);
-        if (kv.length == 2) {
-          String key = kv[0].trim();
-          String value = kv[1].trim();
-          if (!key.isEmpty()) {
-            properties.put(key, value);
-          }
-        }
-      }
-    }
-    return properties;
   }
 }

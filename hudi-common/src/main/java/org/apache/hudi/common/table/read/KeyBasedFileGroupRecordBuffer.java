@@ -74,7 +74,15 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
       // partial merging.
       enablePartialMerging = true;
       bufferedRecordMerger = BufferedRecordMergerFactory.create(
-          readerContext, recordMergeMode, true, recordMerger, orderingFieldName, payloadClass, readerSchema, props);
+          readerContext,
+          recordMergeMode,
+          true,
+          recordMerger,
+          orderingFieldName,
+          payloadClass,
+          readerSchema,
+          props,
+          partialUpdateMode);
     }
 
     Schema schema = AvroSchemaCache.intern(recordsIteratorSchemaPair.getRight());

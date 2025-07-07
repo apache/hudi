@@ -36,7 +36,6 @@ import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
@@ -47,11 +46,9 @@ import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
 
 import org.apache.avro.Schema;
-import org.apache.parquet.Strings;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Locale;
 import java.util.Map;
@@ -80,7 +77,6 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   protected final boolean shouldCheckCustomDeleteMarker;
   protected final boolean shouldCheckBuiltInDeleteMarker;
   protected final boolean emitDelete;
-  protected Map<String, String> partialUpdateProperties;
   protected ClosableIterator<T> baseFileIterator;
   protected Iterator<BufferedRecord<T>> logRecordIterator;
   protected T nextRecord;
@@ -138,36 +134,8 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
         readerContext.getSchemaHandler().getCustomDeleteMarkerKeyValue().isPresent();
     this.shouldCheckBuiltInDeleteMarker =
         readerContext.getSchemaHandler().hasBuiltInDelete();
-    this.partialUpdateProperties = parsePartialUpdateProperties(props);
     this.bufferedRecordMerger = BufferedRecordMergerFactory.create(
         readerContext, recordMergeMode, enablePartialMerging, recordMerger, orderingFieldName, payloadClass, readerSchema, props, partialUpdateMode);
-  }
-
-  static Map<String, String> parsePartialUpdateProperties(TypedProperties props) {
-    Map<String, String> properties = new HashMap<>();
-    String partialUpdateProperties = props.getProperty(HoodieTableConfig.PARTIAL_UPDATE_PROPERTIES.key());
-    if (StringUtils.isNullOrEmpty(partialUpdateProperties)) {
-      return properties;
-    }
-    String[] entries = partialUpdateProperties.split(",");
-    for (String entry : entries) {
-      String trimmedEntry = entry.trim();
-      if (!trimmedEntry.isEmpty()) {
-        String[] kv = trimmedEntry.split("=", 2);
-        if (kv.length == 2) {
-          String property = kv[0].trim();
-          String value = kv[1].trim();
-          if (!property.isEmpty()) {
-            if (Strings.isNullOrEmpty(value)) {
-              throw new IllegalArgumentException(
-                  String.format("For property %s, its value is empty", property));
-            }
-            properties.put(property, value);
-          }
-        }
-      }
-    }
-    return properties;
   }
 
   /**
@@ -271,24 +239,6 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
       throws IOException {
     totalLogRecords++;
     return bufferedRecordMerger.deltaMerge(newRecord, existingRecord);
-  }
-
-  static boolean isStringTyped(Schema.Field field) {
-    return hasTargetType(field.schema(), Schema.Type.STRING);
-  }
-
-  static boolean isBytesTyped(Schema.Field field) {
-    return hasTargetType(field.schema(), Schema.Type.BYTES);
-  }
-
-  static boolean hasTargetType(Schema schema, Schema.Type targetType) {
-    if (schema.getType() == targetType) {
-      return true;
-    } else if (schema.getType() == Schema.Type.UNION) {
-      // Stream is lazy, so this is efficient even with multiple types
-      return schema.getTypes().stream().anyMatch(s -> s.getType() == targetType);
-    }
-    return false;
   }
 
   /**
