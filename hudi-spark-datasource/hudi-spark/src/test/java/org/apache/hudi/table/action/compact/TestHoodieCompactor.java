@@ -139,16 +139,18 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
   @Test
   public void testCompactionOnCopyOnWriteFail() throws Exception {
     metaClient = HoodieTestUtils.init(storageConf, basePath, HoodieTableType.COPY_ON_WRITE);
-    HoodieTable table = HoodieSparkTable.create(getConfig(), context, metaClient);
-    String compactionInstantTime = WriteClientTestUtils.createNewInstantTime();
-    assertThrows(HoodieNotSupportedException.class, () -> {
-      table.scheduleCompaction(context, compactionInstantTime, Option.empty());
-      table.compact(context, compactionInstantTime);
-    });
+    try (SparkRDDWriteClient writeClient = getHoodieWriteClient(getConfig());) {
+      HoodieTable table = HoodieSparkTable.create(getConfig(), context, metaClient);
+      String compactionInstantTime = WriteClientTestUtils.createNewInstantTime();
+      assertThrows(HoodieNotSupportedException.class, () -> {
+        table.scheduleCompaction(context, compactionInstantTime, Option.empty());
+        table.compact(context, compactionInstantTime);
+      });
 
-    // Verify compaction.requested, compaction.completed metrics counts.
-    assertEquals(0, getCompactionMetricCount(HoodieTimeline.REQUESTED_COMPACTION_SUFFIX));
-    assertEquals(0, getCompactionMetricCount(HoodieTimeline.COMPLETED_COMPACTION_SUFFIX));
+      // Verify compaction.requested, compaction.completed metrics counts.
+      assertEquals(0, getCompactionMetricCount(HoodieTimeline.REQUESTED_COMPACTION_SUFFIX));
+      assertEquals(0, getCompactionMetricCount(HoodieTimeline.COMPLETED_COMPACTION_SUFFIX));
+    }
   }
 
   @Test
