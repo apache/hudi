@@ -204,6 +204,9 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
 
   @Override
   public void close() throws Exception {
+    if (cachedAllInputFileSlices instanceof ExternalSpillableMap) {
+      ((ExternalSpillableMap<PartitionPath, List<FileSlice>>) cachedAllInputFileSlices).close();
+    }
     resetTableMetadata(null);
   }
 
