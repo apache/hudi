@@ -46,7 +46,6 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -177,7 +176,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieMergeHand
     try (HoodieFileGroupReader<T> fileGroupReader = HoodieFileGroupReader.<T>newBuilder().withReaderContext(readerContext).withHoodieTableMetaClient(hoodieTable.getMetaClient())
         .withLatestCommitTime(maxInstantTime).withFileSlice(fileSlice).withDataSchema(writeSchemaWithMetaFields).withRequestedSchema(writeSchemaWithMetaFields)
         .withInternalSchema(internalSchemaOption).withProps(props).withShouldUseRecordPosition(usePosition).withSortOutput(hoodieTable.requireSortedRecords())
-        .withFileGroupUpdateCallback(cdcLogger.map(logger -> new CDCHandler<>(logger, writeSchemaWithMetaFields, props))).build()) {
+        .withFileGroupUpdateCallback(cdcLogger.map(CDCCallback::new)).build()) {
       // Reads the records from the file slice
       try (ClosableIterator<HoodieRecord<T>> recordIterator = fileGroupReader.getClosableHoodieRecordIterator()) {
         while (recordIterator.hasNext()) {
@@ -246,30 +245,26 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieMergeHand
     }
   }
 
-  private static class CDCHandler<T> implements BaseFileUpdateCallback<T> {
+  private static class CDCCallback implements BaseFileUpdateCallback {
     private final HoodieCDCLogger cdcLogger;
-    private final Schema schema;
-    private final TypedProperties properties;
 
-    public CDCHandler(HoodieCDCLogger cdcLogger, Schema schema, TypedProperties properties) {
+    public CDCCallback(HoodieCDCLogger cdcLogger) {
       this.cdcLogger = cdcLogger;
-      this.schema = schema;
-      this.properties = properties;
     }
 
     @Override
-    public void onUpdate(HoodieRecord<T> previousRecord, HoodieRecord<T> newRecord, HoodieRecord<T> mergedRecord) {
-      cdcLogger.put(newRecord, (GenericRecord) toAvroRecord(previousRecord, schema, properties).get(), toAvroRecord(mergedRecord, schema, properties));
+    public void onUpdate(String recordKey, GenericRecord previousRecord, GenericRecord mergedRecord) {
+      cdcLogger.put(recordKey, previousRecord, Option.of(mergedRecord));
     }
 
     @Override
-    public void onInsert(HoodieRecord<T> newRecord) {
-      cdcLogger.put(newRecord, null, toAvroRecord(newRecord, schema, properties));
+    public void onInsert(String recordKey, GenericRecord newRecord) {
+      cdcLogger.put(recordKey, null, Option.of(newRecord));
     }
 
     @Override
-    public void onDelete(HoodieRecord<T> previousRecord, HoodieRecord<T> inputRecord) {
-      cdcLogger.put(inputRecord, (GenericRecord) toAvroRecord(previousRecord, schema, properties).get(), Option.empty());
+    public void onDelete(String recordKey, GenericRecord previousRecord) {
+      cdcLogger.put(recordKey, previousRecord, Option.empty());
     }
   }
 }

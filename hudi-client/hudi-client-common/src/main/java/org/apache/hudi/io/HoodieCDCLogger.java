@@ -154,7 +154,12 @@ public class HoodieCDCLogger implements Closeable {
   public void put(HoodieRecord hoodieRecord,
                   GenericRecord oldRecord,
                   Option<IndexedRecord> newRecord) {
-    String recordKey = hoodieRecord.getRecordKey();
+    put(hoodieRecord.getRecordKey(), oldRecord, newRecord);
+  }
+
+  public void put(String recordKey,
+                  GenericRecord oldRecord,
+                  Option<IndexedRecord> newRecord) {
     GenericData.Record cdcRecord;
     if (newRecord.isPresent()) {
       GenericRecord record = (GenericRecord) newRecord.get();

@@ -49,7 +49,7 @@ public class SortedKeyBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupRec
                                              HoodieReadStats readStats,
                                              Option<String> orderingFieldName,
                                              boolean emitDelete,
-                                             Option<BaseFileUpdateCallback<T>> updateCallback) {
+                                             Option<BaseFileUpdateCallback> updateCallback) {
     super(readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, orderingFieldName, emitDelete, updateCallback);
   }
 
@@ -74,7 +74,8 @@ public class SortedKeyBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupRec
         // and queue the base record, which is already read from the iterator, for the next iteration
         BufferedRecord<T> transformedLogRecord = applyOutputSchemaConversion(nextLogRecord);
         nextRecord = readerContext.seal(transformedLogRecord.getRecord());
-        callbackOption.ifPresent(callback -> callback.onInsert(readerContext.constructHoodieRecord(transformedLogRecord)));
+        baseFileUpdateCallbackOption.ifPresent(callback -> callback.onInsert(transformedLogRecord.getRecordKey(),
+            readerContext.convertToAvroRecord(transformedLogRecord.getRecord(), readerContext.getSchemaHandler().getRequestedSchema())));
         queuedBaseFileRecord = Option.of(baseRecord);
         readStats.incrementNumInserts();
         return true;
