@@ -19,6 +19,7 @@
 
 package org.apache.hudi.common.table.read;
 
+import org.apache.hudi.Comparables;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -258,7 +259,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
             assertEquals(positionBased.getRecordKey(), recordKey);
             assertEquals(avroSchema, readerContext.getSchemaFromBufferRecord(keyBased));
             // generate field value is hardcoded as 0 for ordering field: timestamp, see HoodieTestDataGenerator#generateRandomValue
-            assertEquals(readerContext.convertValueToEngineType(0L), positionBased.getOrderingValue());
+            assertEquals(new Comparables(readerContext.convertValueToEngineType(0L)), positionBased.getOrderingValue());
           }
         }
       }

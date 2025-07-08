@@ -19,6 +19,7 @@
 
 package org.apache.hudi.common.table.read;
 
+import org.apache.hudi.Comparables;
 import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
@@ -103,10 +104,11 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
     }
     this.orderingFieldNames = orderingFieldNames;
     // Ensure that ordering field is populated for mergers and legacy payloads
-    orderingFieldNames.ifPresent(orderingField -> {
-      props.putIfAbsent(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, orderingField);
-      props.putIfAbsent(HoodieTableConfig.PRECOMBINE_FIELD.key(), orderingField);
-      props.putIfAbsent("hoodie.datasource.write.precombine.field", orderingField);
+    orderingFieldNames.ifPresent(fieldList -> {
+      String orderingFields = String.join(",", fieldList);
+      props.putIfAbsent(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, orderingFields);
+      props.putIfAbsent(HoodieTableConfig.PRECOMBINE_FIELD.key(), orderingFields);
+      props.putIfAbsent("hoodie.datasource.write.precombine.field", orderingFields);
     });
     this.props = props;
 
@@ -382,7 +384,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   }
 
   static boolean isCommitTimeOrderingValue(Comparable orderingValue) {
-    return orderingValue == null || orderingValue.equals(DEFAULT_ORDERING_VALUE);
+    return orderingValue == null || Comparables.isDefault(orderingValue);
   }
 
   static Comparable getOrderingValue(HoodieReaderContext readerContext,

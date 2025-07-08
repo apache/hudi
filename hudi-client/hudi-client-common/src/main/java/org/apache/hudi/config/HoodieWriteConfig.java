@@ -1363,15 +1363,12 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public List<String> getPreCombineField() {
-    List<String> preCombineFields = Option.ofNullable(getString(PRECOMBINE_FIELD_NAME))
+    return Option.ofNullable(getString(PRECOMBINE_FIELD_NAME))
         .map(preCombine -> Arrays.asList(preCombine.split(",")))
-        .orElse(Collections.emptyList());
-    for (String field : preCombineFields) {
-      if (StringUtils.isNullOrEmpty(field)) {
-        throw new IllegalArgumentException("Precombine field should not be empty" + preCombineFields);
-      }
-    }
-    return preCombineFields;
+        .orElse(Collections.emptyList())
+        .stream()
+        .filter(StringUtils::nonEmpty)
+        .collect(Collectors.toList());
   }
 
   public String getKeyGeneratorClass() {

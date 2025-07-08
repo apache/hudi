@@ -477,6 +477,22 @@ public abstract class HoodieReaderContext<T> {
   }
 
   /**
+   * Converts the comparable list in Comparables
+   * <p>
+   * This can be overridden by the reader context implementation on a specific engine to handle
+   * engine-specific field type system.  For example, Spark uses {@code UTF8String} to represent
+   * {@link String} field values, so we need to convert the values to {@code UTF8String} type
+   * in Spark for proper value comparison.
+   *
+   * @param value {@link Comparable} value to be converted.
+   *
+   * @return the converted value in a type representation in a specific engine.
+   */
+  public Comparable convertValueToEngineType(Comparables value) {
+    return value;
+  }
+
+  /**
    * Returns the value to a type representation in a specific engine.
    * <p>
    * This can be overridden by the reader context implementation on a specific engine to handle

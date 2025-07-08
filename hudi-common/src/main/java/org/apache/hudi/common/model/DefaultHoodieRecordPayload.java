@@ -35,6 +35,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
@@ -203,17 +204,19 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
     boolean consistentLogicalTimestampEnabled = Boolean.parseBoolean(properties.getProperty(
         KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
         KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()));
-    Object persistedOrderingVal = new Comparables(
+    Comparables persistedOrderingVal = new Comparables(
         Arrays.stream(orderingFields.get())
             .map(field -> (Comparable) HoodieAvroUtils.getNestedFieldVal((GenericRecord) currentValue, field, true, consistentLogicalTimestampEnabled))
+            .filter(Objects::nonNull)
             .collect(Collectors.toList())
     );
-    Comparable incomingOrderingVal = new Comparables(
+    Comparables incomingOrderingVal = new Comparables(
         Arrays.stream(orderingFields.get())
             .map(field -> (Comparable) HoodieAvroUtils.getNestedFieldVal((GenericRecord) incomingRecord, field, true, consistentLogicalTimestampEnabled))
+            .filter(Objects::nonNull)
             .collect(Collectors.toList())
     );
-    return persistedOrderingVal == null || ((Comparable) persistedOrderingVal).compareTo(incomingOrderingVal) <= 0;
+    return persistedOrderingVal.isEmpty() || ((Comparable) persistedOrderingVal).compareTo(incomingOrderingVal) <= 0;
   }
 
 }

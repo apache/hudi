@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.read;
 
+import org.apache.hudi.Comparables;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieKey;
@@ -100,7 +101,7 @@ public class BufferedRecord<T> implements Serializable {
   }
 
   public boolean isCommitTimeOrderingDelete() {
-    return isDelete && getOrderingValue().equals(DEFAULT_ORDERING_VALUE);
+    return isDelete && Comparables.isDefault(getOrderingValue());
   }
 
   public BufferedRecord<T> toBinary(HoodieReaderContext<T> readerContext) {

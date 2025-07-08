@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.read;
 
+import org.apache.hudi.Comparables;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
@@ -41,6 +42,8 @@ import org.apache.avro.generic.IndexedRecord;
 import java.io.IOException;
 import java.util.List;
 import java.util.Objects;
+
+import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 
 /**
  * Factory to create a {@link BufferedRecordMerger}.
@@ -419,7 +422,7 @@ public class BufferedRecordMergerFactory {
     Comparable deleteOrderingVal = deleteRecord.getOrderingValue();
     // Checks the ordering value does not equal to 0
     // because we use 0 as the default value which means natural order
-    boolean chooseExisting = !deleteOrderingVal.equals(0)
+    boolean chooseExisting = !Comparables.isDefault(deleteOrderingVal)
         && ReflectionUtils.isSameClass(existingOrderingVal, deleteOrderingVal)
         && existingOrderingVal.compareTo(deleteOrderingVal) > 0;
     if (chooseExisting) {

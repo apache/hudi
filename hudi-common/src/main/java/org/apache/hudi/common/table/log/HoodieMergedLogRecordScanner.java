@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.log;
 
+import org.apache.hudi.Comparables;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
@@ -59,6 +60,7 @@ import static java.util.Objects.requireNonNull;
 import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED;
 import static org.apache.hudi.common.config.HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE;
 import static org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath;
+import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 import static org.apache.hudi.common.table.cdc.HoodieCDCUtils.CDC_LOGFILE_SUFFIX;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
@@ -279,7 +281,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
       Comparable deleteOrderingVal = deleteRecord.getOrderingValue();
       // Checks the ordering value does not equal to 0
       // because we use 0 as the default value which means natural order
-      boolean choosePrev = !deleteOrderingVal.equals(0)
+      boolean choosePrev = !Comparables.isDefault(deleteOrderingVal)
           && ReflectionUtils.isSameClass(curOrderingVal, deleteOrderingVal)
           && curOrderingVal.compareTo(deleteOrderingVal) > 0;
       if (choosePrev) {

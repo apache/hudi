@@ -165,6 +165,8 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
       // To foster value comparison, if the value is of String type, e.g., from
       // the delete record, we convert it to UTF8String type.
       return UTF8String.fromString((String) value);
+    } else if (value instanceof Comparables) {
+      return ((Comparables) value).apply(this::convertValueToEngineType);
     }
     return value;
   }
