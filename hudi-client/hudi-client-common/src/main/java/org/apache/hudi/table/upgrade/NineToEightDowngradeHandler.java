@@ -28,10 +28,12 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
-import java.util.Collections;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.hudi.common.table.HoodieTableConfig.MERGE_PROPERTIES;
 import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.rollbackFailedWritesAndCompact;
 
 public class NineToEightDowngradeHandler implements DowngradeHandler {
@@ -55,6 +57,9 @@ public class NineToEightDowngradeHandler implements DowngradeHandler {
       UpgradeDowngradeUtils.updateMetadataTableVersion(context, HoodieTableVersion.EIGHT, metaClient);
     }
 
-    return Pair.of(Collections.emptyMap(), Collections.emptyList());
+    Map<ConfigProperty, String> propertiesToAdd = new HashMap<>();
+    List<ConfigProperty> propertiesToRemove = new ArrayList<>();
+    propertiesToRemove.add(MERGE_PROPERTIES);
+    return Pair.of(propertiesToAdd, propertiesToRemove);
   }
 }

@@ -22,16 +22,25 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.model.AWSDmsAvroPayload;
+import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
-import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
+import static org.apache.hudi.common.table.HoodieTableConfig.DEBEZIUM_UNAVAILABLE_VALUE;
+import static org.apache.hudi.common.table.HoodieTableConfig.MERGE_PROPERTIES;
+import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_CUSTOM_MARKER;
 import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.rollbackFailedWritesAndCompact;
 
 public class EightToNineUpgradeHandler implements UpgradeHandler {
-
   @Override
   public Map<ConfigProperty, String> upgrade(HoodieWriteConfig config,
                                              HoodieEngineContext context,
@@ -43,12 +52,35 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
         table, context, config, upgradeDowngradeHelper,
         HoodieTableType.MERGE_ON_READ.equals(table.getMetaClient().getTableType()),
         HoodieTableVersion.NINE);
+
+    Map<ConfigProperty, String> tablePropsToAdd = new HashMap<>();
+    HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
+    HoodieTableMetaClient metaClient = table.getMetaClient();
+    HoodieTableConfig tableConfig = metaClient.getTableConfig();
+    String payloadClass = tableConfig.getPayloadClass();
+
     // If auto upgrade is disabled, set writer version to 8 and return
     if (!config.autoUpgrade()) {
-      config.setValue(HoodieWriteConfig.WRITE_TABLE_VERSION, String.valueOf(HoodieTableVersion.EIGHT.versionCode()));
-      return Collections.emptyMap();
+      config.setValue(HoodieWriteConfig.WRITE_TABLE_VERSION,
+          String.valueOf(HoodieTableVersion.EIGHT.versionCode()));
+      return tablePropsToAdd;
     }
-    
-    return Collections.emptyMap();
+
+    String partialUpdateProperties = tableConfig.getMergeProperties();
+    if (!StringUtils.isNullOrEmpty(payloadClass)) {
+      if (payloadClass.equals(AWSDmsAvroPayload.class.getName())) {
+        String propertiesToAdd = DELETE_KEY + "=Op," + DELETE_MARKER + "=D";
+        partialUpdateProperties = StringUtils.isNullOrEmpty(partialUpdateProperties)
+            ? propertiesToAdd : partialUpdateProperties + "," + partialUpdateProperties;
+      } else if (payloadClass.equals(PostgresDebeziumAvroPayload.class.getName())) {
+        String propertiesToAdd =
+            PARTIAL_UPDATE_CUSTOM_MARKER + "=" + DEBEZIUM_UNAVAILABLE_VALUE;
+        partialUpdateProperties = StringUtils.isNullOrEmpty(partialUpdateProperties)
+            ? propertiesToAdd : partialUpdateProperties + "," + partialUpdateProperties;
+      }
+    }
+
+    tablePropsToAdd.put(MERGE_PROPERTIES, partialUpdateProperties);
+    return tablePropsToAdd;
   }
 }
