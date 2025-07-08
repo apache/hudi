@@ -150,7 +150,7 @@ public abstract class AbstractStreamWriteFunction<I>
     if (context.isRestored()) {
       initCheckpointId(attemptId, context.getRestoredCheckpointId().orElse(-1L));
     }
-    sendBootstrapEvent(attemptId, context.isRestored());
+    sendBootstrapEvent(context.isRestored());
   }
 
   @Override
@@ -207,29 +207,31 @@ public abstract class AbstractStreamWriteFunction<I>
     this.checkpointId = restoredCheckpointId;
   }
 
-  private void sendBootstrapEvent(int attemptId, boolean isRestored) throws Exception {
-    if (attemptId <= 0) {
-      if (isRestored) {
-        HoodieTimeline pendingTimeline = this.metaClient.getActiveTimeline().filterPendingExcludingCompaction();
-        // if the task is initially started, resend the pending event.
-        for (WriteMetadataEvent event : this.writeMetadataState.get()) {
-          // Must filter out the completed instants in case it is a partial failover,
-          // the write status should not be accumulated in such case.
-          if (pendingTimeline.containsInstant(event.getInstantTime())) {
-            // Reset taskID for event
-            event.setTaskID(taskID);
-            // The checkpoint succeed but the meta does not commit,
-            // re-commit the inflight instant
-            this.eventGateway.sendEventToCoordinator(event);
-            LOG.info("Send uncommitted write metadata event to coordinator, task[{}].", taskID);
-          }
-        }
-      }
-    } else {
-      // otherwise sends an empty bootstrap event instead.
+  private void sendBootstrapEvent(boolean isRestored) throws Exception {
+    if (!isRestored || !sendPendingCommitEvents()) {
       this.eventGateway.sendEventToCoordinator(WriteMetadataEvent.emptyBootstrap(taskID, checkpointId));
       LOG.info("Send bootstrap write metadata event to coordinator, task[{}].", taskID);
     }
+  }
+
+  private boolean sendPendingCommitEvents() throws Exception {
+    boolean eventSent = false;
+    HoodieTimeline pendingTimeline = this.metaClient.getActiveTimeline().filterPendingExcludingCompaction();
+    // if the task is initially started, resend the pending event.
+    for (WriteMetadataEvent event : this.writeMetadataState.get()) {
+      // Must filter out the completed instants in case it is a partial failover,
+      // the write status should not be accumulated in such case.
+      if (pendingTimeline.containsInstant(event.getInstantTime())) {
+        // Reset taskID for event
+        event.setTaskID(taskID);
+        // The checkpoint succeed but the meta does not commit,
+        // re-commit the inflight instant
+        this.eventGateway.sendEventToCoordinator(event);
+        LOG.info("Send uncommitted write metadata event to coordinator, task[{}].", taskID);
+        eventSent = true;
+      }
+    }
+    return eventSent;
   }
 
   /**
