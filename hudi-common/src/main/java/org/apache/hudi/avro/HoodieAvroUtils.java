@@ -18,7 +18,6 @@
 
 package org.apache.hudi.avro;
 
-import org.apache.hudi.Comparables;
 import org.apache.hudi.avro.model.BooleanWrapper;
 import org.apache.hudi.avro.model.BytesWrapper;
 import org.apache.hudi.avro.model.DateWrapper;

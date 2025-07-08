@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.format;
 
+import org.apache.hudi.Comparables;
 import org.apache.hudi.client.model.BootstrapRowData;
 import org.apache.hudi.client.model.CommitTimeFlinkRecordMerger;
 import org.apache.hudi.client.model.EventTimeFlinkRecordMerger;
@@ -200,12 +201,19 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
       RowData record,
       Schema schema,
       Option<List<String>> orderingFieldNames) {
-    if (orderingFieldNames.isEmpty() || schema.getField(orderingFieldNames.get()) == null) {
+    if (orderingFieldNames.isEmpty()) {
       return DEFAULT_ORDERING_VALUE;
     }
-    RowDataAvroQueryContexts.FieldQueryContext context = RowDataAvroQueryContexts.fromAvroSchema(schema, utcTimezone).getFieldQueryContext(orderingFieldNames.get());
-    Comparable finalOrderingVal = (Comparable) context.getValAsJava(record, false);
-    return finalOrderingVal;
+    return new Comparables(
+        orderingFieldNames.get().stream().map(field -> {
+          if (schema.getField(field) == null) {
+            return DEFAULT_ORDERING_VALUE;
+          }
+          RowDataAvroQueryContexts.FieldQueryContext context = RowDataAvroQueryContexts.fromAvroSchema(schema, utcTimezone).getFieldQueryContext(field);
+          Comparable finalOrderingVal = (Comparable) context.getValAsJava(record, false);
+          return finalOrderingVal;
+        }).collect(Collectors.toList())
+    );
   }
 
   @Override

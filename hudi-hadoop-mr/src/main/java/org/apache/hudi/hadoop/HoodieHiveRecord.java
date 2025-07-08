@@ -49,8 +49,6 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
-
 /**
  * {@link HoodieRecord} implementation for Hive records of {@link ArrayWritable}.
  */

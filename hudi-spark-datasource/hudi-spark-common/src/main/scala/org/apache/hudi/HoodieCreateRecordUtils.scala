@@ -28,9 +28,10 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.keygen.{BaseKeyGenerator, KeyGenUtils, SparkKeyGeneratorInterface}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
+import org.apache.hudi.util.JFunction
+
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
-import org.apache.hudi.util.JFunction
 import org.apache.spark.TaskContext
 import org.apache.spark.api.java.JavaRDD
 import org.apache.spark.rdd.RDD
@@ -41,6 +42,7 @@ import org.apache.spark.sql.types.StructType
 import org.slf4j.LoggerFactory
 
 import java.util.stream.Collectors
+
 import scala.collection.JavaConverters._
 
 /** Utility class for converting dataframe into RDD[HoodieRecord]. */

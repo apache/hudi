@@ -73,6 +73,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -235,7 +236,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
           for (T record : records) {
             String recordKey = readerContext.getRecordKey(record, avroSchema);
             //test key based
-            BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(record, avroSchema, readerContext, Option.of("timestamp"), false);
+            BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(record, avroSchema, readerContext, Option.of(Arrays.asList("timestamp")), false);
             spillableMap.put(recordKey, bufferedRecord.toBinary(readerContext));
 
             //test position based

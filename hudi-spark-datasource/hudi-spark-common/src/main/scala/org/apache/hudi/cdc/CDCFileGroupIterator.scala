@@ -41,12 +41,13 @@ import org.apache.hudi.config.HoodiePayloadConfig
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.storage.{StorageConfiguration, StoragePath}
+import org.apache.hudi.util.JavaScalaConverters.convertHudiOptionToScalaOption
+import org.apache.hudi.util.JFunction
+
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericData, GenericRecord, IndexedRecord}
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.util.JFunction
-import org.apache.hudi.util.JavaScalaConverters.convertHudiOptionToScalaOption
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.avro.HoodieAvroDeserializer
 import org.apache.spark.sql.catalyst.InternalRow
@@ -59,6 +60,7 @@ import java.io.Closeable
 import java.util
 import java.util.{Locale, Properties}
 import java.util.stream.Collectors
+
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.collection.mutable

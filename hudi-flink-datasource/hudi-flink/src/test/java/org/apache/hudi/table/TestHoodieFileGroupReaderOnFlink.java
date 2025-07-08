@@ -62,6 +62,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.Mockito;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -182,8 +183,8 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
         .optionalLong("ts")
         .endRecord();
     GenericRowData rowData = GenericRowData.of(StringData.fromString("f1"), StringData.fromString("f2"), 1000L);
-    assertEquals(1000L, readerContext.getOrderingValue(rowData, schema, Option.of("ts")));
-    assertEquals(DEFAULT_ORDERING_VALUE, readerContext.getOrderingValue(rowData, schema, Option.of("non_existent_col")));
+    assertEquals(1000L, readerContext.getOrderingValue(rowData, schema, Option.of(Arrays.asList("ts"))));
+    assertEquals(DEFAULT_ORDERING_VALUE, readerContext.getOrderingValue(rowData, schema, Option.of(Arrays.asList("non_existent_col"))));
   }
 
   @Test

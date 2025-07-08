@@ -88,7 +88,6 @@ import org.apache.hudi.table.action.compact.strategy.CompositeCompactionStrategy
 import org.apache.hudi.table.storage.HoodieStorageLayout;
 
 import org.apache.orc.CompressionKind;
-import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

@@ -431,7 +431,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     Triple<RecordMergeMode, String, String> inferredMergeConfs =
         HoodieTableConfig.inferCorrectMergingBehavior(
             writeConfig.getRecordMergeMode(), writeConfig.getPayloadClass(),
-            writeConfig.getRecordMergeStrategyId(), writeConfig.getPreCombineField(),
+            writeConfig.getRecordMergeStrategyId(), String.join(",", writeConfig.getPreCombineField()),
             metaClient.getTableConfig().getTableVersion());
     HoodieTableConfig hoodieTableConfig =
         new HoodieTableConfig(this.storage, metaClient.getMetaPath(), inferredMergeConfs.getLeft(), inferredMergeConfs.getMiddle(), inferredMergeConfs.getRight());
@@ -454,7 +454,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     Triple<RecordMergeMode, String, String> inferredMergeConfs2 =
         HoodieTableConfig.inferCorrectMergingBehavior(
             writeConfig2.getRecordMergeMode(), writeConfig2.getPayloadClass(),
-            writeConfig2.getRecordMergeStrategyId(), writeConfig2.getPreCombineField(),
+            writeConfig2.getRecordMergeStrategyId(), String.join(",", writeConfig2.getPreCombineField()),
             metaClient.getTableConfig().getTableVersion());
     HoodieTableConfig hoodieTableConfig2 =
         new HoodieTableConfig(this.storage, metaClient.getMetaPath(),
