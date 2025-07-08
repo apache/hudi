@@ -57,6 +57,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
+import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -853,10 +854,12 @@ public class HoodieTableConfig extends HoodieConfig {
       }
     }
     if (recordMergeMode != null) {
-      checkArgument(inferredRecordMergeMode == recordMergeMode,
-          String.format("Configured record merge mode (%s) is inconsistent with payload class (%s) "
-                  + "or record merge strategy ID (%s) configured. Please revisit the configs.",
-              recordMergeMode, payloadClassName, recordMergeStrategyId));
+      if (tableVersion.lesserThan(HoodieTableVersion.NINE)) {
+        checkArgument(inferredRecordMergeMode == recordMergeMode,
+            String.format("Configured record merge mode (%s) is inconsistent with payload class (%s) "
+                    + "or record merge strategy ID (%s) configured. Please revisit the configs.",
+                recordMergeMode, payloadClassName, recordMergeStrategyId));
+      }
     }
 
     // Check ordering field name based on record merge mode
@@ -909,17 +912,17 @@ public class HoodieTableConfig extends HoodieConfig {
     // TODO: We need to change comparison to == 9, instead of >= 8 when tablee version 9 has been enabled.
     if (tableVersion.versionCode() >= HoodieTableVersion.EIGHT.versionCode()) {
       if (PartialUpdateAvroPayload.class.getName().equals(payloadClassName)
-          || PostgresDebeziumAvroPayload.class.getName().equals(payloadClassName)
-          || EventTimeAvroPayload.class.getName().equals(payloadClassName)) {
+          || PostgresDebeziumAvroPayload.class.getName().equals(payloadClassName)) {
         return EVENT_TIME_ORDERING;
-      } else if (OverwriteNonDefaultsWithLatestAvroPayload.class.getName().equals(payloadClassName)
-              || AWSDmsAvroPayload.class.getName().equals(payloadClassName)) {
+      } else if (OverwriteNonDefaultsWithLatestAvroPayload.class.getName().equals(payloadClassName)) {
+        // TODO: Support AWSDmsAvroPayload after write path is fixed; otherwise, some tests would fail.
         return COMMIT_TIME_ORDERING;
       }
     }
 
     // For general case.
-    if (DefaultHoodieRecordPayload.class.getName().equals(payloadClassName)) {
+    if (DefaultHoodieRecordPayload.class.getName().equals(payloadClassName)
+        || EventTimeAvroPayload.class.getName().equals(payloadClassName)) {
       return EVENT_TIME_ORDERING;
     } else if (payloadClassName.equals(OverwriteWithLatestAvroPayload.class.getName())) {
       return COMMIT_TIME_ORDERING;
