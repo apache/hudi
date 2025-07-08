@@ -53,6 +53,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
+import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -850,10 +851,12 @@ public class HoodieTableConfig extends HoodieConfig {
       }
     }
     if (recordMergeMode != null) {
-      checkArgument(inferredRecordMergeMode == recordMergeMode,
-          String.format("Configured record merge mode (%s) is inconsistent with payload class (%s) "
-                  + "or record merge strategy ID (%s) configured. Please revisit the configs.",
-              recordMergeMode, payloadClassName, recordMergeStrategyId));
+      if (tableVersion.lesserThan(HoodieTableVersion.NINE)) {
+        checkArgument(inferredRecordMergeMode == recordMergeMode,
+            String.format("Configured record merge mode (%s) is inconsistent with payload class (%s) "
+                    + "or record merge strategy ID (%s) configured. Please revisit the configs.",
+                recordMergeMode, payloadClassName, recordMergeStrategyId));
+      }
     }
 
     // Check ordering field name based on record merge mode
