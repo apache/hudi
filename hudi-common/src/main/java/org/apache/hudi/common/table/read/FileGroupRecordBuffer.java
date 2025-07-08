@@ -79,7 +79,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   protected final boolean shouldCheckCustomDeleteMarker;
   protected final boolean shouldCheckBuiltInDeleteMarker;
   protected final boolean emitDelete;
-  private final Option<BaseFileUpdateCallback> baseFileUpdateCallbackOption;
+  private final BaseFileUpdateCallback baseFileUpdateCallback;
   protected ClosableIterator<T> baseFileIterator;
   protected Iterator<BufferedRecord<T>> logRecordIterator;
   protected T nextRecord;
@@ -100,7 +100,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
                                   Option<BaseFileUpdateCallback> updateCallback) {
     this.readerContext = readerContext;
     this.outputConverter = readerContext.getSchemaHandler().getOutputConverter();
-    this.baseFileUpdateCallbackOption = updateCallback;
+    this.baseFileUpdateCallback = updateCallback.orElse(null);
     this.readerSchema = AvroSchemaCache.intern(readerContext.getSchemaHandler().getRequiredSchema());
     this.recordMergeMode = recordMergeMode;
     this.partialUpdateMode = partialUpdateMode;
@@ -327,12 +327,10 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
       if (!isDeleteAndRecord.getLeft()) {
         // Updates
         nextRecord = readerContext.seal(applyOutputSchemaConversion(isDeleteAndRecord.getRight()));
-        baseFileUpdateCallbackOption.ifPresent(callback -> {
+        if (baseFileUpdateCallback != null && isDeleteAndRecord.getRight() != baseRecord) {
           // If the record is not the same as the base record, we can emit an update
-          if (isDeleteAndRecord.getRight() != baseRecord) {
-            handleBaseFileUpdate(logRecordInfo.getRecordKey(), baseRecord, nextRecord);
-          }
-        });
+          handleBaseFileUpdate(logRecordInfo.getRecordKey(), baseRecord, nextRecord);
+        }
         readStats.incrementNumUpdates();
         return true;
       } else {
@@ -410,21 +408,23 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   }
 
   protected void handleBaseFileInsert(String recordKey, T record) {
-    baseFileUpdateCallbackOption.ifPresent(callback ->
-        callback.onInsert(recordKey, readerContext.convertToAvroRecord(record, readerContext.getSchemaHandler().getRequestedSchema())));
+    if (baseFileUpdateCallback != null) {
+      baseFileUpdateCallback.onInsert(recordKey, readerContext.convertToAvroRecord(record, readerContext.getSchemaHandler().getRequestedSchema()));
+    }
   }
 
   protected void handleBaseFileUpdate(String recordKey, T oldRecord, T newRecord) {
-    baseFileUpdateCallbackOption.ifPresent(callback -> {
+    if (baseFileUpdateCallback != null) {
       Schema requestedSchema = readerContext.getSchemaHandler().getRequestedSchema();
-      callback.onUpdate(recordKey, readerContext.convertToAvroRecord(oldRecord, requestedSchema),
+      baseFileUpdateCallback.onUpdate(recordKey, readerContext.convertToAvroRecord(oldRecord, requestedSchema),
           readerContext.convertToAvroRecord(newRecord, requestedSchema));
-    });
+    }
   }
 
   protected void handleBaseFileDelete(String recordKey, T record) {
-    baseFileUpdateCallbackOption.ifPresent(callback ->
-        callback.onDelete(recordKey, readerContext.convertToAvroRecord(record, readerContext.getSchemaHandler().getRequestedSchema())));
+    if (baseFileUpdateCallback != null) {
+      baseFileUpdateCallback.onDelete(recordKey, readerContext.convertToAvroRecord(record, readerContext.getSchemaHandler().getRequestedSchema()));
+    }
   }
 
   protected Pair<Function<T, T>, Schema> getSchemaTransformerWithEvolvedSchema(HoodieDataBlock dataBlock) {
