@@ -20,10 +20,17 @@
 package org.apache.hudi.common.table.read;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.engine.ReaderContextTypeHandler;
+import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.PartialUpdateMode;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
@@ -32,6 +39,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class TestPartialUpdateStrategy {
   private static final String TRACK_EVENT_TIME_WATERMARK = "hoodie.write.track.event.time.watermark";
@@ -199,5 +210,51 @@ class TestPartialUpdateStrategy {
 
     boolean result = PartialUpdateStrategy.shouldKeepConsistentLogicalTimestamp(props);
     assertFalse(result);
+  }
+
+  @Test
+  void testExtractEventTimeWhenEventTimePresent() {
+    Object rawEventTime = 18317L; // e.g. days since epoch
+    Object convertedEventTime = "2020-02-01"; // after logical type conversion
+    String eventTimeField = "ts";
+
+    HoodieReaderContext mockContext = mock(HoodieReaderContext.class);
+    ReaderContextTypeHandler mockTypeHandler = mock(ReaderContextTypeHandler.class);
+    GenericRecord record = new GenericData.Record(schema);
+    record.put(eventTimeField, rawEventTime);
+
+    when(mockContext.getEventTime(record, schema, Option.of(eventTimeField)))
+        .thenReturn(Option.of(rawEventTime));
+    when(mockContext.getEventTime(any(), any(), any())).thenReturn(Option.of(18317L));
+    when(mockContext.getTypeHandler()).thenReturn(mockTypeHandler);
+    when(mockTypeHandler.convertValueForAvroLogicalTypes(any(), eq(rawEventTime), eq(true)))
+        .thenReturn(convertedEventTime);
+
+    TypedProperties props = new TypedProperties();
+    props.setProperty(HoodiePayloadProps.PAYLOAD_EVENT_TIME_FIELD_PROP_KEY, "ts");
+    props.setProperty("hoodie.write.track.event.time.watermark", "true");
+    PartialUpdateStrategy partialUpdateStrategy =
+        new PartialUpdateStrategy(mockContext, PartialUpdateMode.KEEP_VALUES, props);
+    Option<Object> result = partialUpdateStrategy.extractEventTime(record, schema);
+
+    assertTrue(result.isPresent());
+    assertEquals(convertedEventTime, result.get());
+  }
+
+  @Test
+  void testExtractEventTime_whenEventTimeMissing() {
+    GenericRecord record = new GenericData.Record(schema);
+    HoodieReaderContext mockContext = mock(HoodieReaderContext.class);
+    when(mockContext.getEventTime(record, schema, Option.of("ts")))
+        .thenReturn(Option.empty());
+
+    TypedProperties props = new TypedProperties();
+    props.setProperty(HoodiePayloadProps.PAYLOAD_EVENT_TIME_FIELD_PROP_KEY, "ts");
+    props.setProperty("hoodie.write.track.event.time.watermark", "true");
+    PartialUpdateStrategy partialUpdateStrategy =
+        new PartialUpdateStrategy(mockContext, PartialUpdateMode.KEEP_VALUES, props);
+    Option<Object> result = partialUpdateStrategy.extractEventTime(record, schema);
+
+    assertTrue(result.isEmpty());
   }
 }

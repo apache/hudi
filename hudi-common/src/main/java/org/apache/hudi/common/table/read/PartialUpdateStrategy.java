@@ -242,7 +242,7 @@ public class PartialUpdateStrategy<T> {
   }
 
   static boolean shouldKeepEventTimeMetadata(TypedProperties props) {
-    return props.getBoolean("hoodie.write.event.time.watermark.metadata.enabled");
+    return props.getBoolean("hoodie.write.track.event.time.watermark", false);
   }
 
   /**
@@ -255,20 +255,18 @@ public class PartialUpdateStrategy<T> {
   }
 
   /**
-   * Extract and store event_time value for the record; later this information will be
-   * stored to WriteStats.
+   * Extract event-time value for the record; later this information will be
+   * aggregated and stored to commit metadata.
    * This function should be only called when merge base record and log record.
    */
-  private Option<Object> extractEventTime(T engineRecord, Schema readerSchema) {
-    if (shouldKeepEventTimeMetadata) {
-      Option<Object> eventTimeOpt = readerContext.getEventTime(
-          engineRecord, readerSchema, eventTimeFieldOpt);
-      if (eventTimeOpt.isPresent()) {
-        Schema.Field field = readerSchema.getField(eventTimeFieldOpt.get());
-        Object eventTime = readerContext.getTypeHandler().convertValueForAvroLogicalTypes(
-            field.schema(), eventTimeOpt.get(), shouldKeepConsistentLogicalTimestamp);
-        return Option.of(eventTime);
-      }
+  Option<Object> extractEventTime(T engineRecord, Schema readerSchema) {
+    Option<Object> eventTimeOpt = readerContext.getEventTime(
+        engineRecord, readerSchema, eventTimeFieldOpt);
+    if (eventTimeOpt.isPresent()) {
+      Schema.Field field = readerSchema.getField(eventTimeFieldOpt.get());
+      Object eventTime = readerContext.getTypeHandler().convertValueForAvroLogicalTypes(
+          field.schema(), eventTimeOpt.get(), shouldKeepConsistentLogicalTimestamp);
+      return Option.of(eventTime);
     }
     return Option.empty();
   }
