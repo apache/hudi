@@ -111,6 +111,10 @@ public class BufferedRecordMergerFactory {
 
     @Override
     public Pair<Boolean, T> finalMerge(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) {
+      if (newerRecord == null) {
+        return Pair.of(olderRecord.isDelete(), olderRecord.getRecord());
+      }
+
       newerRecord = partialUpdateStrategy.reconcileFieldsWithOldRecord(
           newerRecord, olderRecord, readerSchema, readerSchema, false);
       return Pair.of(newerRecord.isDelete(), newerRecord.getRecord());
