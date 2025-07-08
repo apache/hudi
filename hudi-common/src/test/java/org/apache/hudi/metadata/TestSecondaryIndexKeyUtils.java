@@ -28,6 +28,7 @@ import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestSecondaryIndexKeyUtils {
 
@@ -134,5 +135,75 @@ public class TestSecondaryIndexKeyUtils {
     
     extractedRecordKey = SecondaryIndexKeyUtils.getRecordKeyFromSecondaryIndexKey(constructedKey);
     assertEquals(onlySpecialChars, extractedRecordKey);
+  }
+
+  // Test constructSecondaryIndexKeyPrefix method
+  @ParameterizedTest(name = "constructSecondaryIndexKeyPrefix test: escapedKey='{0}', expectedPrefix='{1}'")
+  @MethodSource("constructSecondaryIndexKeyPrefixTestCases")
+  public void testConstructSecondaryIndexKeyPrefix(String escapedKey, String expectedPrefix) {
+    String actualPrefix = SecondaryIndexKeyUtils.constructSecondaryIndexKeyPrefix(escapedKey);
+    assertEquals(expectedPrefix, actualPrefix);
+  }
+
+  private static Stream<Arguments> constructSecondaryIndexKeyPrefixTestCases() {
+    return Stream.of(
+        // Normal cases
+        Arguments.of("user_id", "user_id$"),
+        Arguments.of("simple", "simple$"),
+        Arguments.of("123", "123$"),
+        
+        // Empty string case
+        Arguments.of("", "$"),
+        
+        // Special characters (already escaped)
+        Arguments.of("user\\\\id", "user\\\\id$"),
+        Arguments.of("user\\$id", "user\\$id$"),
+        Arguments.of("user\\\\\\$id", "user\\\\\\$id$"),
+        
+        // Complex escaped sequences
+        Arguments.of("\\\\\\$\\\\0", "\\\\\\$\\\\0$"),
+        Arguments.of("\\\\\\\\\\\\\\$\\\\0", "\\\\\\\\\\\\\\$\\\\0$"),
+        
+        // Unicode characters
+        Arguments.of("用户ID", "用户ID$"),
+        
+        // Single characters
+        Arguments.of("a", "a$"),
+        Arguments.of("\\", "\\$"),
+        Arguments.of("$", "$$"),
+        
+        // Long strings
+        Arguments.of("very_long_secondary_key_with_many_characters", "very_long_secondary_key_with_many_characters$"),
+        
+        // Mixed content
+        Arguments.of("user123\\$id_456", "user123\\$id_456$"),
+        Arguments.of("test\\\\key\\$value", "test\\\\key\\$value$")
+    );
+  }
+
+  @Test
+  public void testConstructSecondaryIndexKeyPrefixConsistency() {
+    // Test that the prefix can be used to match keys constructed with constructSecondaryIndexKey
+    String secondaryKey = "user_id";
+    String recordKey = "record_123";
+    
+    String fullKey = SecondaryIndexKeyUtils.constructSecondaryIndexKey(secondaryKey, recordKey);
+    String escapedSecondaryKey = SecondaryIndexKeyUtils.escapeSpecialChars(secondaryKey);
+    String prefix = SecondaryIndexKeyUtils.constructSecondaryIndexKeyPrefix(escapedSecondaryKey);
+    
+    // The full key should start with the prefix
+    assertTrue(fullKey.startsWith(prefix), 
+        "Full key '" + fullKey + "' should start with prefix '" + prefix + "'");
+    
+    // Test with special characters
+    String specialSecondaryKey = "user\\$id";
+    String specialRecordKey = "rec\\$123";
+    
+    String specialFullKey = SecondaryIndexKeyUtils.constructSecondaryIndexKey(specialSecondaryKey, specialRecordKey);
+    String escapedSpecialSecondaryKey = SecondaryIndexKeyUtils.escapeSpecialChars(specialSecondaryKey);
+    String specialPrefix = SecondaryIndexKeyUtils.constructSecondaryIndexKeyPrefix(escapedSpecialSecondaryKey);
+    
+    assertTrue(specialFullKey.startsWith(specialPrefix),
+        "Special full key '" + specialFullKey + "' should start with special prefix '" + specialPrefix + "'");
   }
 } 
