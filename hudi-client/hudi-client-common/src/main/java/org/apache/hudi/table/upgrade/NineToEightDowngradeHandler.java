@@ -24,14 +24,23 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 
-import java.util.Collections;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_PROPERTIES;
 
 public class NineToEightDowngradeHandler implements DowngradeHandler {
 
   @Override
-  public Pair<Map<ConfigProperty, String>, List<ConfigProperty>> downgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
-    return Pair.of(Collections.emptyMap(), Collections.emptyList());
+  public Pair<Map<ConfigProperty, String>, List<ConfigProperty>> downgrade(HoodieWriteConfig config,
+                                                                           HoodieEngineContext context,
+                                                                           String instantTime,
+                                                                           SupportsUpgradeDowngrade upgradeDowngradeHelper) {
+    Map<ConfigProperty, String> propertiesToAdd = new HashMap<>();
+    List<ConfigProperty> propertiesToRemove = new ArrayList<>();
+    propertiesToRemove.add(PARTIAL_UPDATE_PROPERTIES);
+    return Pair.of(propertiesToAdd, propertiesToRemove);
   }
 }
