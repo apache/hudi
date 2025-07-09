@@ -35,7 +35,7 @@ are provided across both, independent of the table type.
 Following illustrates how this works conceptually, when data is written into copy-on-write table and two queries running on top of it.
 
 <figure>
-    <img className="docimage" src={require("/assets/images/COW_new.png").default} alt="hudi_cow.png" />
+    <img className="docimage" src={require("/assets/images/COW_fix.png").default} alt="hudi_cow.png" />
 </figure>
 
 As data gets written, updates to existing file groups produce a new slice for that file group stamped associated with the commit's requested instant time,
