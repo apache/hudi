@@ -68,6 +68,7 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.streamer.FlinkStreamerConfig;
 
 import org.apache.avro.Schema;
@@ -155,7 +156,7 @@ public class StreamerUtil {
    */
   public static DFSPropertiesConfiguration readConfig(org.apache.hadoop.conf.Configuration hadoopConfig,
                                                       StoragePath cfgPath, List<String> overriddenProps) {
-    DFSPropertiesConfiguration conf = new DFSPropertiesConfiguration(hadoopConfig, cfgPath);
+    DFSPropertiesConfiguration conf = new DFSPropertiesConfiguration(new HadoopStorageConfiguration(hadoopConfig), cfgPath);
     try {
       if (!overriddenProps.isEmpty()) {
         LOG.info("Adding overridden properties to file properties.");

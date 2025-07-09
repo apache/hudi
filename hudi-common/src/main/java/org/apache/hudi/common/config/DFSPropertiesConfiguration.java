@@ -23,13 +23,11 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
-import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -71,9 +69,7 @@ public class DFSPropertiesConfiguration extends PropertiesConfig {
   private static TypedProperties GLOBAL_PROPS = loadGlobalProps();
 
   @Nullable
-  private final Configuration hadoopConfig;
-
-  private final StoragePath mainFilePath;
+  private final HoodieStorage storage;
 
   // props read from user defined configuration file or input stream
   private final HoodieConfig hoodieConfig;
@@ -81,17 +77,16 @@ public class DFSPropertiesConfiguration extends PropertiesConfig {
   // Keep track of files visited, to detect loops
   private final Set<String> visitedFilePaths;
 
-  public DFSPropertiesConfiguration(@Nonnull Configuration hadoopConf, @Nonnull StoragePath filePath) {
-    this.hadoopConfig = hadoopConf;
-    this.mainFilePath = filePath;
+  public DFSPropertiesConfiguration(@Nonnull StorageConfiguration storageConf,
+                                    @Nonnull StoragePath filePath) {
+    this.storage = HoodieStorageUtils.getStorage(storageConf);
     this.hoodieConfig = new HoodieConfig();
     this.visitedFilePaths = new HashSet<>();
     addPropsFromFile(filePath);
   }
 
   public DFSPropertiesConfiguration() {
-    this.hadoopConfig = new Configuration();
-    this.mainFilePath = null;
+    this.storage = HoodieStorageUtils.getStorage();
     this.hoodieConfig = new HoodieConfig();
     this.visitedFilePaths = new HashSet<>();
   }
@@ -147,11 +142,6 @@ public class DFSPropertiesConfiguration extends PropertiesConfig {
       throw new IllegalStateException("Loop detected; file " + filePath + " already referenced");
     }
 
-    HoodieStorage storage = new HoodieHadoopStorage(
-        filePath,
-        HadoopFSUtils.getStorageConf(Option.ofNullable(hadoopConfig).orElseGet(Configuration::new))
-    );
-
     try {
       if (filePath.equals(DEFAULT_PATH) && !storage.exists(filePath)) {
         LOG.warn("Properties file " + filePath + " not found. Ignoring to load props file");
@@ -185,10 +175,8 @@ public class DFSPropertiesConfiguration extends PropertiesConfig {
         String[] split = splitProperty(line);
         if (line.startsWith("include=") || line.startsWith("include =")) {
           StoragePath providedPath = new StoragePath(split[1]);
-          HoodieStorage providedStorage = HoodieStorageUtils.getStorage(
-              split[1], HadoopFSUtils.getStorageConf(hadoopConfig));
           // In the case that only filename is provided, assume it's in the same directory.
-          if ((!providedPath.isAbsolute() || StringUtils.isNullOrEmpty(providedStorage.getScheme()))
+          if ((!providedPath.isAbsolute() || StringUtils.isNullOrEmpty(storage.getScheme()))
               && cfgFilePath != null) {
             providedPath = new StoragePath(cfgFilePath.getParent(), split[1]);
           }

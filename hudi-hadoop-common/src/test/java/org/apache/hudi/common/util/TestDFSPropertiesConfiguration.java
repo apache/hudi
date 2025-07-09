@@ -25,6 +25,7 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
@@ -111,9 +112,9 @@ public class TestDFSPropertiesConfiguration {
   }
 
   @Test
-  public void testParsing() {
+  void testParsing() {
     DFSPropertiesConfiguration cfg = new DFSPropertiesConfiguration(
-        dfs.getConf(), new StoragePath(dfsBasePath + "/t1.props"));
+        new HadoopStorageConfiguration(true), new StoragePath(dfsBasePath + "/t1.props"));
     TypedProperties props = cfg.getProps();
     assertEquals(5, props.size());
     assertThrows(IllegalArgumentException.class, () -> {
@@ -140,9 +141,9 @@ public class TestDFSPropertiesConfiguration {
   }
 
   @Test
-  public void testIncludes() {
+  void testIncludes() {
     DFSPropertiesConfiguration cfg = new DFSPropertiesConfiguration(
-        dfs.getConf(), new StoragePath(dfsBasePath + "/t3.props"));
+        new HadoopStorageConfiguration(true), new StoragePath(dfsBasePath + "/t3.props"));
     TypedProperties props = cfg.getProps();
 
     assertEquals(123, props.getInteger("int.prop"));
@@ -156,9 +157,9 @@ public class TestDFSPropertiesConfiguration {
   }
 
   @Test
-  public void testLocalFileSystemLoading() throws IOException {
+  void testLocalFileSystemLoading() {
     DFSPropertiesConfiguration cfg = new DFSPropertiesConfiguration(
-        dfs.getConf(), new StoragePath(dfsBasePath + "/t1.props"));
+        new HadoopStorageConfiguration(true), new StoragePath(dfsBasePath + "/t1.props"));
 
     cfg.addPropsFromFile(
         new StoragePath(
@@ -181,7 +182,7 @@ public class TestDFSPropertiesConfiguration {
   }
 
   @Test
-  public void testNoGlobalConfFileConfigured() {
+  void testNoGlobalConfFileConfigured() {
     ENVIRONMENT_VARIABLES.clear(DFSPropertiesConfiguration.CONF_FILE_DIR_ENV_NAME);
     DFSPropertiesConfiguration.refreshGlobalProps();
     try {
@@ -195,7 +196,7 @@ public class TestDFSPropertiesConfiguration {
   }
 
   @Test
-  public void testLoadGlobalConfFile() {
+  void testLoadGlobalConfFile() {
     // set HUDI_CONF_DIR
     String testPropsFilePath = new File("src/test/resources/external-config").getAbsolutePath();
     ENVIRONMENT_VARIABLES.set(DFSPropertiesConfiguration.CONF_FILE_DIR_ENV_NAME, testPropsFilePath);
@@ -210,7 +211,7 @@ public class TestDFSPropertiesConfiguration {
   }
 
   @Test
-  public void testDefaultConstructorHandlesIncludes() {
+  void testDefaultConstructorHandlesIncludes() {
     // Use default ctor (hadoopConfig should be non-null internally)
     DFSPropertiesConfiguration cfg = new DFSPropertiesConfiguration();
 
