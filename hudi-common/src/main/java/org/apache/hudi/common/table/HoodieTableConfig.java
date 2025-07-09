@@ -844,7 +844,11 @@ public class HoodieTableConfig extends HoodieConfig {
                 payloadClassName, recordMergeStrategyId));
       }
       if (tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
-        inferredRecordMergeMode = modeBasedOnStrategyId != null ? modeBasedOnStrategyId : modeBasedOnPayload;
+        if (tableVersion.greaterThanOrEquals(HoodieTableVersion.NINE)) {
+          inferredRecordMergeMode = modeBasedOnPayload != null ? modeBasedOnPayload : modeBasedOnStrategyId;
+        } else {
+          inferredRecordMergeMode = modeBasedOnStrategyId != null ? modeBasedOnStrategyId : modeBasedOnPayload;
+        }
       } else {
         inferredRecordMergeMode = modeBasedOnPayload != null ? modeBasedOnPayload : modeBasedOnStrategyId;
       }
