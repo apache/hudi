@@ -35,7 +35,8 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
   @ParameterizedTest
   @MethodSource(Array("provideParams"))
   def testMergerBuiltinPayload(tableType: String,
-                               payloadClazz: String): Unit = {
+                               payloadClazz: String,
+                               tableVersion: String): Unit = {
     val opts: Map[String, String] = Map(
       HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key() -> payloadClazz,
       HoodieTableConfig.MERGE_PROPERTIES.key() ->
@@ -56,6 +57,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       option(TABLE_TYPE.key(), tableType).
       option(DataSourceWriteOptions.TABLE_NAME.key(), "test_table").
       option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
+      option(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), tableVersion).
       options(opts).
       mode(SaveMode.Overwrite).
       save(basePath)
@@ -67,6 +69,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     firstUpdate.write.format("hudi").
       option(OPERATION.key(), "upsert").
       option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
+      option(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), tableVersion).
       options(opts).
       mode(SaveMode.Append).
       save(basePath)
@@ -80,6 +83,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       option(OPERATION.key(), "upsert").
       option(HoodieCompactionConfig.INLINE_COMPACT.key(), "true").
       option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1").
+      option(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), tableVersion).
       options(opts).
       mode(SaveMode.Append).
       save(basePath)
@@ -122,11 +126,21 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
 object TestPayloadDeprecationFlow {
   def provideParams(): java.util.List[Arguments] = {
     java.util.Arrays.asList(
-      Arguments.of("MERGE_ON_READ", classOf[OverwriteWithLatestAvroPayload].getName),
-      Arguments.of("MERGE_ON_READ", classOf[OverwriteNonDefaultsWithLatestAvroPayload].getName),
-      Arguments.of("MERGE_ON_READ", classOf[PartialUpdateAvroPayload].getName),
-      Arguments.of("MERGE_ON_READ", classOf[EventTimeAvroPayload].getName),
-      Arguments.of("MERGE_ON_READ", classOf[AWSDmsAvroPayload].getName)
+      Arguments.of("MERGE_ON_READ", classOf[OverwriteWithLatestAvroPayload].getName, "6"),
+      Arguments.of("MERGE_ON_READ", classOf[OverwriteNonDefaultsWithLatestAvroPayload].getName, "6"),
+      Arguments.of("MERGE_ON_READ", classOf[PartialUpdateAvroPayload].getName, "6"),
+      Arguments.of("MERGE_ON_READ", classOf[EventTimeAvroPayload].getName, "6"),
+      Arguments.of("MERGE_ON_READ", classOf[AWSDmsAvroPayload].getName, "6"),
+      Arguments.of("MERGE_ON_READ", classOf[OverwriteWithLatestAvroPayload].getName, "8"),
+      Arguments.of("MERGE_ON_READ", classOf[OverwriteNonDefaultsWithLatestAvroPayload].getName, "8"),
+      Arguments.of("MERGE_ON_READ", classOf[PartialUpdateAvroPayload].getName, "8"),
+      Arguments.of("MERGE_ON_READ", classOf[EventTimeAvroPayload].getName, "8"),
+      Arguments.of("MERGE_ON_READ", classOf[AWSDmsAvroPayload].getName, "8"),
+      Arguments.of("MERGE_ON_READ", classOf[OverwriteWithLatestAvroPayload].getName, "9"),
+      Arguments.of("MERGE_ON_READ", classOf[OverwriteNonDefaultsWithLatestAvroPayload].getName, "9"),
+      Arguments.of("MERGE_ON_READ", classOf[PartialUpdateAvroPayload].getName, "9"),
+      Arguments.of("MERGE_ON_READ", classOf[EventTimeAvroPayload].getName, "9"),
+      Arguments.of("MERGE_ON_READ", classOf[AWSDmsAvroPayload].getName, "9")
     )
   }
 }
