@@ -879,3 +879,8 @@ f5824e51ca7 [ENG-28779][INTERNAL] Add parallelism configs to AwsGlueSync (#1428)
 [ENG-27166][HUDI-9559] Account for failed deletion with rollback execution (#1418)
 [ENG-15951][INTERNAL] Making marker reconciliation robust on file deletion failures. (#987)
 [AUDIT-1071]: Changelog for release-v1.144.0 (#1438)
+
+--- [2025-07-09 03:00:52] [release-v1.146.0] ---
+[ENG-29314][HUDI-7914] Use internal schema without metadata fields for delete-partitions OP (#1444)
+[ENG-29000][INTERNAL] Allow reflection utils to use the ThreadContextClassLoader (#1440)
+[AUDIT-1071]: Changelog for release-v1.145.0 (#1441)
