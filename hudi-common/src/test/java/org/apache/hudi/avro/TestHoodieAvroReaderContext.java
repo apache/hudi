@@ -235,6 +235,85 @@ class TestHoodieAvroReaderContext {
     assertEquals(2, output.get(2));
   }
 
+  @Test
+  void testConstructEngineRecordWithListValues() {
+    HoodieAvroReaderContext readerContext = getReaderContextWithMetaFields();
+    Schema schema = getSkeletonSchema();
+    List<Object> values = Arrays.asList("field1_value", "field2_value", 42);
+    IndexedRecord output = readerContext.constructEngineRecord(schema, values);
+    assertEquals("field1_value", output.get(0));
+    assertEquals("field2_value", output.get(1));
+    assertEquals(42, output.get(2));
+    assertEquals(schema, output.getSchema());
+  }
+
+  @Test
+  void testConstructEngineRecordWithListValuesDifferentTypes() {
+    HoodieAvroReaderContext readerContext = getReaderContextWithMetaFields();
+    Schema schema = getBaseSchema(); // This schema has nested fields
+    List<Object> values = Arrays.asList("string_value", "another_string", null);
+    IndexedRecord output = readerContext.constructEngineRecord(schema, values);
+    assertEquals("string_value", output.get(0));
+    assertEquals("another_string", output.get(1));
+    assertNull(output.get(2));
+    assertEquals(schema, output.getSchema());
+  }
+
+  @Test
+  void testConstructEngineRecordWithListValuesEmptySchema() {
+    HoodieAvroReaderContext readerContext = getReaderContextWithMetaFields();
+    Schema emptySchema = Schema.createRecord("empty_schema", null, null, false);
+    emptySchema.setFields(Collections.emptyList());
+    List<Object> values = Collections.emptyList();
+    IndexedRecord output = readerContext.constructEngineRecord(emptySchema, values);
+    assertEquals(0, output.getSchema().getFields().size());
+    assertEquals(emptySchema, output.getSchema());
+  }
+
+  @Test
+  void testConstructEngineRecordWithListValuesMismatchedCount() {
+    HoodieAvroReaderContext readerContext = getReaderContextWithMetaFields();
+    Schema schema = getSkeletonSchema(); // Has 3 fields
+    List<Object> values = Arrays.asList("field1_value", "field2_value"); // Only 2 values
+    assertThrows(IllegalArgumentException.class, () -> {
+      readerContext.constructEngineRecord(schema, values);
+    });
+  }
+
+  @Test
+  void testConstructEngineRecordWithListValuesTooManyValues() {
+    HoodieAvroReaderContext readerContext = getReaderContextWithMetaFields();
+    Schema schema = getSkeletonSchema(); // Has 3 fields
+    List<Object> values = Arrays.asList("field1_value", "field2_value", 42, "extra_value"); // 4 values
+    assertThrows(IllegalArgumentException.class, () -> {
+      readerContext.constructEngineRecord(schema, values);
+    });
+  }
+
+  @Test
+  void testConstructEngineRecordWithListValuesNullValues() {
+    HoodieAvroReaderContext readerContext = getReaderContextWithMetaFields();
+    Schema schema = getSkeletonSchema();
+    List<Object> values = Arrays.asList(null, null, null);
+    IndexedRecord output = readerContext.constructEngineRecord(schema, values);
+    assertNull(output.get(0));
+    assertNull(output.get(1));
+    assertNull(output.get(2));
+    assertEquals(schema, output.getSchema());
+  }
+
+  @Test
+  void testConstructEngineRecordWithListValuesMixedNullAndNonNull() {
+    HoodieAvroReaderContext readerContext = getReaderContextWithMetaFields();
+    Schema schema = getSkeletonSchema();
+    List<Object> values = Arrays.asList("non_null_value", null, 123);
+    IndexedRecord output = readerContext.constructEngineRecord(schema, values);
+    assertEquals("non_null_value", output.get(0));
+    assertNull(output.get(1));
+    assertEquals(123, output.get(2));
+    assertEquals(schema, output.getSchema());
+  }
+
   private HoodieAvroReaderContext getReaderContextWithMetaFields() {
     when(tableConfig.populateMetaFields()).thenReturn(true);
     return new HoodieAvroReaderContext(storageConfig, tableConfig, Option.empty(), Option.empty());

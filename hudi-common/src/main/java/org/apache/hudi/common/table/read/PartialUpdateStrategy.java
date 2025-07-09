@@ -70,7 +70,9 @@ public class PartialUpdateStrategy<T> {
                                                BufferedRecord<T> oldRecord,
                                                Schema newSchema,
                                                Schema oldSchema,
-                                               boolean keepOldMetadataColumns) {
+                                               Schema readerSchema,
+                                               boolean keepOldMetadataColumns,
+                                               boolean enablePartialMerging) {
     // Note that: When either newRecord or oldRecord is a delete record,
     //            skip partial update since delete records do not have meaningful columns.
     if (partialUpdateMode == PartialUpdateMode.NONE
@@ -84,6 +86,9 @@ public class PartialUpdateStrategy<T> {
       case FILL_DEFAULTS:
         return Pair.of(newRecord, newSchema);
       case KEEP_VALUES:
+        if (!enablePartialMerging) {
+          return Pair.of(newRecord, newSchema);
+        }
         return mergePartialRecords(
             newRecord, oldRecord, newSchema, oldSchema, readerSchema, readerContext);
       case IGNORE_DEFAULTS:
