@@ -43,8 +43,6 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Objects;
 
-import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
-
 /**
  * Factory to create a {@link BufferedRecordMerger}.
  */

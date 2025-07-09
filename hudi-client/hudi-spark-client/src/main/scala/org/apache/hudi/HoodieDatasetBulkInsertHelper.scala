@@ -233,8 +233,10 @@ object HoodieDatasetBulkInsertHelper
         (rowKey, row.copy())
       }
       .reduceByKey ((oneRow, otherRow) => {
-        val onePreCombineVals = new Comparables(JavaConverters.seqAsJavaList(preCombineFieldPaths.map(preCombineFieldPath => getNestedInternalRowValue(oneRow, preCombineFieldPath).asInstanceOf[Comparable[AnyRef]])))
-        val otherPreCombineVals = new Comparables(JavaConverters.seqAsJavaList(preCombineFieldPaths.map(preCombineFieldPath => getNestedInternalRowValue(otherRow, preCombineFieldPath).asInstanceOf[Comparable[AnyRef]])))
+        val onePreCombineVals = new Comparables(JavaConverters.seqAsJavaList[Comparable[_]](
+          preCombineFieldPaths.map(preCombineFieldPath => getNestedInternalRowValue(oneRow, preCombineFieldPath).asInstanceOf[Comparable[_]])))
+        val otherPreCombineVals = new Comparables(JavaConverters.seqAsJavaList[Comparable[_]](
+          preCombineFieldPaths.map(preCombineFieldPath => getNestedInternalRowValue(otherRow, preCombineFieldPath).asInstanceOf[Comparable[_]])))
         val selectedRow: InternalRow = if (onePreCombineVals.compareTo(otherPreCombineVals) >= 0) {
           oneRow
         } else {

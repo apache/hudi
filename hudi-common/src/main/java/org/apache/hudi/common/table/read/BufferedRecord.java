@@ -34,8 +34,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Properties;
 
-import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
-
 /**
  * Buffered Record used by file group reader.
  *
