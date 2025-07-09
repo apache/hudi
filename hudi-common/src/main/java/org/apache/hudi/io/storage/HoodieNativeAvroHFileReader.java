@@ -206,8 +206,9 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
   public ClosableIterator<HoodieRecord<IndexedRecord>> getRecordsByKeysIterator(
       List<String> sortedKeys, Schema schema) throws IOException {
     HFileReader reader = readerFactory.createHFileReader();
+    Option<BloomFilter> bloomFilter = getBloomFilter();
     ClosableIterator<IndexedRecord> iterator =
-        new RecordByKeyIterator(reader, sortedKeys, getSchema(), schema);
+        new RecordByKeyIterator(reader, sortedKeys, getSchema(), schema, bloomFilter);
     return new CloseableMappingIterator<>(
         iterator, data -> unsafeCast(new HoodieAvroIndexedRecord(data)));
   }
@@ -310,10 +311,24 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
     }
   }
 
+  private Option<BloomFilter> getBloomFilter() {
+    Option<BloomFilter> bloomFilter = Option.empty();
+    if (config.enabled()) {
+      try {
+        bloomFilter = Option.of(readBloomFilter());
+        LOG.info("Successfully read the bloom filter to look up RLI keys");
+      } catch (Throwable ignore) {
+        LOG.error("Exception while reading the bloom filter to look up RLI keys");
+      }
+    }
+    return bloomFilter;
+  }
+
   public ClosableIterator<IndexedRecord> getIndexedRecordsByKeysIterator(List<String> sortedKeys,
                                                                          Schema readerSchema) throws IOException {
     HFileReader reader = readerFactory.createHFileReader();
-    return new RecordByKeyIterator(reader, sortedKeys, getSchema(), readerSchema);
+    Option<BloomFilter> bloomFilter = getBloomFilter();
+    return new RecordByKeyIterator(reader, sortedKeys, getSchema(), readerSchema, bloomFilter);
   }
 
   @Override
@@ -393,17 +408,19 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
 
     private final Schema readerSchema;
     private final Schema writerSchema;
+    private final Option<BloomFilter> bloomFilterOption;
 
     private IndexedRecord next = null;
 
     RecordByKeyIterator(HFileReader reader, List<String> sortedKeys, Schema writerSchema,
-                        Schema readerSchema) throws IOException {
+                        Schema readerSchema, Option<BloomFilter> bloomFilterOption) throws IOException {
       this.sortedKeyIterator = sortedKeys.iterator();
       this.reader = reader;
       this.reader.seekTo(); // position at the beginning of the file
 
       this.writerSchema = writerSchema;
       this.readerSchema = readerSchema;
+      this.bloomFilterOption = bloomFilterOption;
     }
 
     @Override
@@ -415,7 +432,12 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
         }
 
         while (sortedKeyIterator.hasNext()) {
-          UTF8StringKey key = new UTF8StringKey(sortedKeyIterator.next());
+          // First check if the key is present in the file using bloom filter, skip checking hfile if not present.
+          String rawKey = sortedKeyIterator.next();
+          if (bloomFilterOption.isPresent() && !bloomFilterOption.get().mightContain(rawKey)) {
+            continue;
+          }
+          UTF8StringKey key = new UTF8StringKey(rawKey);
           if (reader.seekTo(key) == HFileReader.SEEK_TO_FOUND) {
             // Key is found
             KeyValue keyValue = reader.getKeyValue().get();
