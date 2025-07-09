@@ -55,6 +55,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static java.util.stream.Collectors.toList;
 
@@ -131,7 +132,7 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
     List<HoodieCompactionOperation> operations = engineContext.flatMap(partitionPaths, partitionPath -> fileSystemView
         .getLatestFileSlicesStateless(partitionPath)
         .filter(slice -> filterFileSlice(slice, lastCompletedInstantTime, fgIdsInPendingCompactionAndClustering, instantRange))
-        .map(s -> {
+        .flatMap(s -> {
           List<HoodieLogFile> logFiles = s.getLogFiles()
               // ==============================================================
               // IMPORTANT
@@ -147,14 +148,17 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
               // for both OCC and NB-CC, this is in-correct.
               .filter(logFile -> completionTimeQueryView.isCompletedBefore(compactionInstant, logFile.getDeltaCommitTime()))
               .sorted(HoodieLogFile.getLogFileComparator()).collect(toList());
+          if (logFiles.isEmpty()) {
+            // compaction is not needed if there is no log file.
+            return Stream.empty();
+          }
           totalLogFiles.add(logFiles.size());
           totalFileSlices.add(1L);
           // Avro generated classes are not inheriting Serializable. Using CompactionOperation POJO
           // for Map operations and collecting them finally in Avro generated classes for storing
           // into meta files.
           Option<HoodieBaseFile> dataFile = s.getBaseFile();
-          return new CompactionOperation(dataFile, partitionPath, logFiles,
-              writeConfig.getCompactionStrategy().captureMetrics(writeConfig, s));
+          return Stream.of(new CompactionOperation(dataFile, partitionPath, logFiles, writeConfig.getCompactionStrategy().captureMetrics(writeConfig, s)));
         }), partitionPaths.size()).stream()
         .map(CompactionUtils::buildHoodieCompactionOperation).collect(toList());
 
