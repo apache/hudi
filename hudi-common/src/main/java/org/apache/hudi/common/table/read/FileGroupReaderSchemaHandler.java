@@ -26,7 +26,6 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.util.LocalAvroSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
@@ -65,6 +64,8 @@ public class FileGroupReaderSchemaHandler<T> {
 
   // requestedSchema: the schema that the caller requests
   protected final Schema requestedSchema;
+  // requestedSchemaEncoding: the cached encoding of the requestedSchema
+  private final Integer requestedSchemaEncoding;
 
   // requiredSchema: the requestedSchema with any additional columns required for merging etc
   protected final Schema requiredSchema;
@@ -86,8 +87,6 @@ public class FileGroupReaderSchemaHandler<T> {
 
   protected final boolean needsMORMerge;
 
-  private final LocalAvroSchemaCache localAvroSchemaCache;
-
   private final Option<Pair<String, String>> customDeleteMarkerKeyValue;
   private final boolean hasBuiltInDelete;
   private final int hoodieOperationPos;
@@ -105,6 +104,7 @@ public class FileGroupReaderSchemaHandler<T> {
     this.recordMerger = readerContext.getRecordMerger();
     this.tableSchema = tableSchema;
     this.requestedSchema = AvroSchemaCache.intern(requestedSchema);
+    this.requestedSchemaEncoding = readerContext.encodeAvroSchema(requestedSchema);
     this.hoodieTableConfig = hoodieTableConfig;
     Pair<Option<Pair<String, String>>, Boolean> deleteConfigs = getDeleteConfigs(properties, tableSchema);
     this.customDeleteMarkerKeyValue = deleteConfigs.getLeft();
@@ -114,7 +114,6 @@ public class FileGroupReaderSchemaHandler<T> {
     this.internalSchema = pruneInternalSchema(requiredSchema, internalSchemaOpt);
     this.internalSchemaOpt = getInternalSchemaOpt(internalSchemaOpt);
     readerContext.setNeedsBootstrapMerge(this.needsBootstrapMerge);
-    this.localAvroSchemaCache = LocalAvroSchemaCache.getInstance();
   }
 
   public Schema getTableSchema() {
@@ -123,6 +122,10 @@ public class FileGroupReaderSchemaHandler<T> {
 
   public Schema getRequestedSchema() {
     return this.requestedSchema;
+  }
+
+  public Integer getRequestedSchemaEncoding() {
+    return requestedSchemaEncoding;
   }
 
   public Schema getRequiredSchema() {

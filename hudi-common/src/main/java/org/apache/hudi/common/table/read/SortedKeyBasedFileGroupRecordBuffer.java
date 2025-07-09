@@ -48,8 +48,9 @@ public class SortedKeyBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupRec
                                              TypedProperties props,
                                              HoodieReadStats readStats,
                                              Option<String> orderingFieldName,
-                                             boolean emitDelete) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, orderingFieldName, emitDelete);
+                                             boolean emitDelete,
+                                             Option<BaseFileUpdateCallback> updateCallback) {
+    super(readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, orderingFieldName, emitDelete, updateCallback);
   }
 
   @Override
@@ -71,7 +72,9 @@ public class SortedKeyBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupRec
       if (!nextLogRecord.isDelete() || emitDelete) {
         // If the next log record does not result in a deletion, or we are emitting deletes, we can return it
         // and queue the base record, which is already read from the iterator, for the next iteration
-        nextRecord = nextLogRecord.getRecord();
+        BufferedRecord<T> transformedLogRecord = applyOutputSchemaConversion(nextLogRecord);
+        nextRecord = readerContext.seal(transformedLogRecord.getRecord());
+        handleBaseFileInsert(transformedLogRecord.getRecordKey(), transformedLogRecord.getRecord());
         queuedBaseFileRecord = Option.of(baseRecord);
         readStats.incrementNumInserts();
         return true;

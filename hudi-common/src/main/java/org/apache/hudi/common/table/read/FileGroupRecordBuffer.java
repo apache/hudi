@@ -52,6 +52,7 @@ import java.util.Iterator;
 import java.util.Locale;
 import java.util.Map;
 import java.util.function.Function;
+import java.util.function.UnaryOperator;
 
 import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED;
 import static org.apache.hudi.common.config.HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE;
@@ -63,6 +64,7 @@ import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERG
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.INSTANT_TIME;
 
 public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T> {
+  private final Option<UnaryOperator<T>> outputConverter;
   protected final HoodieReaderContext<T> readerContext;
   protected final Schema readerSchema;
   protected final Option<String> orderingFieldName;
@@ -75,6 +77,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   protected final boolean shouldCheckCustomDeleteMarker;
   protected final boolean shouldCheckBuiltInDeleteMarker;
   protected final boolean emitDelete;
+  private final BaseFileUpdateCallback baseFileUpdateCallback;
   protected ClosableIterator<T> baseFileIterator;
   protected Iterator<BufferedRecord<T>> logRecordIterator;
   protected T nextRecord;
@@ -90,8 +93,11 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
                                   TypedProperties props,
                                   HoodieReadStats readStats,
                                   Option<String> orderingFieldName,
-                                  boolean emitDelete) {
+                                  boolean emitDelete,
+                                  Option<BaseFileUpdateCallback> updateCallback) {
     this.readerContext = readerContext;
+    this.outputConverter = readerContext.getSchemaHandler().getOutputConverter();
+    this.baseFileUpdateCallback = updateCallback.orElse(null);
     this.readerSchema = AvroSchemaCache.intern(readerContext.getSchemaHandler().getRequiredSchema());
     this.recordMergeMode = recordMergeMode;
     this.recordMerger = readerContext.getRecordMerger();
@@ -215,8 +221,8 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   }
 
   @Override
-  public Iterator<BufferedRecord<T>> getLogRecordIterator() {
-    return records.values().iterator();
+  public ClosableIterator<BufferedRecord<T>> getLogRecordIterator() {
+    return new LogRecordIterator<>(this);
   }
 
   @Override
@@ -316,25 +322,55 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
       Pair<Boolean, T> isDeleteAndRecord = merge(baseRecordInfo, logRecordInfo);
       if (!isDeleteAndRecord.getLeft()) {
         // Updates
-        nextRecord = readerContext.seal(isDeleteAndRecord.getRight());
+        nextRecord = readerContext.seal(applyOutputSchemaConversion(isDeleteAndRecord.getRight()));
+        if (baseFileUpdateCallback != null && isDeleteAndRecord.getRight() != baseRecord) {
+          // If the record is not the same as the base record, we can emit an update
+          handleBaseFileUpdate(logRecordInfo.getRecordKey(), baseRecord, nextRecord);
+        }
         readStats.incrementNumUpdates();
         return true;
-      } else if (emitDelete) {
-        // emit Deletes
-        nextRecord = readerContext.getDeleteRow(isDeleteAndRecord.getRight(), baseRecordInfo.getRecordKey());
-        readStats.incrementNumDeletes();
-        return nextRecord != null;
       } else {
-        // not emit Deletes
+        // emit Deletes
+        handleBaseFileDelete(logRecordInfo.getRecordKey(), baseRecord);
         readStats.incrementNumDeletes();
-        return false;
+        if (emitDelete) {
+          nextRecord = applyOutputSchemaConversion(readerContext.getDeleteRow(isDeleteAndRecord.getRight(), baseRecordInfo.getRecordKey()));
+          return nextRecord != null;
+        } else {
+          return false;
+        }
       }
     }
 
     // Inserts
-    nextRecord = readerContext.seal(baseRecord);
+    nextRecord = readerContext.seal(applyOutputSchemaConversion(baseRecord));
     readStats.incrementNumInserts();
     return true;
+  }
+
+  /**
+   * Applies the final output schema conversion to the buffered record if required. This ensures the records match the requested schema.
+   * @param bufferedRecord the buffered record to convert
+   * @return a new buffered record with the converted record and the proper schema ID set
+   */
+  protected BufferedRecord<T> applyOutputSchemaConversion(BufferedRecord<T> bufferedRecord) {
+    if (bufferedRecord.getRecord() != null && outputConverter.isPresent()) {
+      return new BufferedRecord<>(bufferedRecord.getRecordKey(), bufferedRecord.getOrderingValue(),
+          outputConverter.get().apply(bufferedRecord.getRecord()), readerContext.getSchemaHandler().getRequestedSchemaEncoding(), bufferedRecord.isDelete());
+    }
+    return bufferedRecord;
+  }
+
+  /**
+   * Applies the final output schema conversion to the record if required. This ensures the records match the requested schema.
+   * @param record the record to convert
+   * @return a converted record with the updated schema
+   */
+  protected T applyOutputSchemaConversion(T record) {
+    if (record != null && outputConverter.isPresent()) {
+      return outputConverter.get().apply(record);
+    }
+    return record;
   }
 
   protected void initializeLogRecordIterator() {
@@ -349,11 +385,13 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
     while (logRecordIterator.hasNext()) {
       BufferedRecord<T> nextRecordInfo = logRecordIterator.next();
       if (!nextRecordInfo.isDelete()) {
-        nextRecord = nextRecordInfo.getRecord();
+        BufferedRecord<T> convertedBufferedRecord = applyOutputSchemaConversion(nextRecordInfo);
+        nextRecord = convertedBufferedRecord.getRecord();
+        handleBaseFileInsert(nextRecordInfo.getRecordKey(), nextRecord);
         readStats.incrementNumInserts();
         return true;
       } else if (emitDelete) {
-        nextRecord = readerContext.getDeleteRow(nextRecordInfo.getRecord(), nextRecordInfo.getRecordKey());
+        nextRecord = applyOutputSchemaConversion(readerContext.getDeleteRow(nextRecordInfo.getRecord(), nextRecordInfo.getRecordKey()));
         readStats.incrementNumDeletes();
         if (nextRecord != null) {
           return true;
@@ -363,6 +401,26 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
       }
     }
     return false;
+  }
+
+  protected void handleBaseFileInsert(String recordKey, T record) {
+    if (baseFileUpdateCallback != null) {
+      baseFileUpdateCallback.onInsert(recordKey, readerContext.convertToAvroRecord(record, readerContext.getSchemaHandler().getRequestedSchema()));
+    }
+  }
+
+  protected void handleBaseFileUpdate(String recordKey, T oldRecord, T newRecord) {
+    if (baseFileUpdateCallback != null) {
+      Schema requestedSchema = readerContext.getSchemaHandler().getRequestedSchema();
+      baseFileUpdateCallback.onUpdate(recordKey, readerContext.convertToAvroRecord(oldRecord, requestedSchema),
+          readerContext.convertToAvroRecord(newRecord, requestedSchema));
+    }
+  }
+
+  protected void handleBaseFileDelete(String recordKey, T record) {
+    if (baseFileUpdateCallback != null) {
+      baseFileUpdateCallback.onDelete(recordKey, readerContext.convertToAvroRecord(record, readerContext.getSchemaHandler().getRequestedSchema()));
+    }
   }
 
   protected Pair<Function<T, T>, Schema> getSchemaTransformerWithEvolvedSchema(HoodieDataBlock dataBlock) {
@@ -389,5 +447,30 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
     return isCommitTimeOrderingValue(deleteRecord.getOrderingValue())
         ? DEFAULT_ORDERING_VALUE
         : readerContext.convertValueToEngineType(deleteRecord.getOrderingValue());
+  }
+
+  private static class LogRecordIterator<T> implements ClosableIterator<BufferedRecord<T>> {
+    private final FileGroupRecordBuffer<T> fileGroupRecordBuffer;
+    private final Iterator<BufferedRecord<T>> logRecordIterator;
+
+    private LogRecordIterator(FileGroupRecordBuffer<T> fileGroupRecordBuffer) {
+      this.fileGroupRecordBuffer = fileGroupRecordBuffer;
+      this.logRecordIterator = fileGroupRecordBuffer.records.values().iterator();
+    }
+
+    @Override
+    public boolean hasNext() {
+      return logRecordIterator.hasNext();
+    }
+
+    @Override
+    public BufferedRecord<T> next() {
+      return logRecordIterator.next();
+    }
+
+    @Override
+    public void close() {
+      fileGroupRecordBuffer.close();
+    }
   }
 }
