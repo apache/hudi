@@ -64,12 +64,14 @@ public class BufferedRecordMergerFactory {
         if (partialUpdateMode == PartialUpdateMode.NONE) {
           return new CommitTimeBufferedRecordMerger<>();
         }
-        return new CommitTimeBufferedRecordPartialUpdateMerger<>(readerContext, partialUpdateMode, props);
+        return new CommitTimeBufferedRecordPartialUpdateMerger<>(
+            readerContext, partialUpdateMode, props, readerSchema, enablePartialMerging);
       case EVENT_TIME_ORDERING:
         if (partialUpdateMode == PartialUpdateMode.NONE) {
           return new EventTimeBufferedRecordMerger<>();
         }
-        return new EventTimeBufferedRecordPartialUpdateMerger<>(readerContext, partialUpdateMode, props);
+        return new EventTimeBufferedRecordPartialUpdateMerger<>(
+            readerContext, partialUpdateMode, props, readerSchema, enablePartialMerging);
       default:
         if (payloadClass.isPresent()) {
           return new CustomPayloadBufferedRecordMerger<>(
@@ -108,13 +110,19 @@ public class BufferedRecordMergerFactory {
   private static class CommitTimeBufferedRecordPartialUpdateMerger<T> extends CommitTimeBufferedRecordMerger<T> {
     private final PartialUpdateStrategy<T> partialUpdateStrategy;
     private final HoodieReaderContext<T> readerContext;
+    private final Schema readerSchema;
+    private final boolean enablePartialMerging;
 
     public CommitTimeBufferedRecordPartialUpdateMerger(HoodieReaderContext<T> readerContext,
                                                        PartialUpdateMode partialUpdateMode,
-                                                       TypedProperties props) {
+                                                       TypedProperties props,
+                                                       Schema readerSchema,
+                                                       boolean enablePartialMerging) {
       super();
       this.partialUpdateStrategy = new PartialUpdateStrategy<>(readerContext, partialUpdateMode, props);
       this.readerContext = readerContext;
+      this.readerSchema = readerSchema;
+      this.enablePartialMerging = enablePartialMerging;
     }
 
     @Override
@@ -126,7 +134,10 @@ public class BufferedRecordMergerFactory {
             existingRecord,
             readerContext.getSchemaFromBufferRecord(newRecord),
             readerContext.getSchemaFromBufferRecord(existingRecord),
-            false);
+            readerSchema,
+            false,
+            enablePartialMerging)
+            .getLeft();
       }
       return Option.of(newRecord);
     }
@@ -139,7 +150,10 @@ public class BufferedRecordMergerFactory {
           olderRecord,
           readerContext.getSchemaFromBufferRecord(newerRecord),
           readerContext.getSchemaFromBufferRecord(olderRecord),
-          false);
+          readerSchema,
+          false,
+          enablePartialMerging)
+          .getLeft();
       return Pair.of(newerRecord.isDelete(), newerRecord.getRecord());
     }
   }
@@ -184,12 +198,18 @@ public class BufferedRecordMergerFactory {
   private static class EventTimeBufferedRecordPartialUpdateMerger<T> extends EventTimeBufferedRecordMerger<T> {
     private final PartialUpdateStrategy<T> partialUpdateStrategy;
     private final HoodieReaderContext<T> readerContext;
+    private final Schema readerSchema;
+    private final boolean enablePartialMerging;
 
     public EventTimeBufferedRecordPartialUpdateMerger(HoodieReaderContext<T> readerContext,
                                                       PartialUpdateMode partialUpdateMode,
-                                                      TypedProperties props) {
+                                                      TypedProperties props,
+                                                      Schema readerSchema,
+                                                      boolean enablePartialMerging) {
       this.partialUpdateStrategy = new PartialUpdateStrategy<>(readerContext, partialUpdateMode, props);
       this.readerContext = readerContext;
+      this.readerSchema = readerSchema;
+      this.enablePartialMerging = enablePartialMerging;
     }
 
     @Override
@@ -202,7 +222,10 @@ public class BufferedRecordMergerFactory {
             existingRecord,
             readerContext.getSchemaFromBufferRecord(newRecord),
             readerContext.getSchemaFromBufferRecord(existingRecord),
-            false);
+            readerSchema,
+            false,
+            enablePartialMerging)
+            .getLeft();
         return Option.of(newRecord);
       } else {
         // Use existing record as the base record since existing record has higher ordering value.
@@ -211,7 +234,10 @@ public class BufferedRecordMergerFactory {
             newRecord,
             readerContext.getSchemaFromBufferRecord(existingRecord),
             readerContext.getSchemaFromBufferRecord(newRecord),
-            true);
+            readerSchema,
+            true,
+            enablePartialMerging)
+            .getLeft();
         return Option.of(existingRecord);
       }
     }
@@ -232,7 +258,10 @@ public class BufferedRecordMergerFactory {
             newerRecord,
             readerContext.getSchemaFromBufferRecord(olderRecord),
             readerContext.getSchemaFromBufferRecord(newerRecord),
-            true);
+            readerSchema,
+            true,
+            enablePartialMerging)
+            .getLeft();
         return Pair.of(olderRecord.isDelete(), olderRecord.getRecord());
       }
 
@@ -241,7 +270,10 @@ public class BufferedRecordMergerFactory {
           olderRecord,
           readerContext.getSchemaFromBufferRecord(newerRecord),
           readerContext.getSchemaFromBufferRecord(olderRecord),
-          false);
+          readerSchema,
+          false,
+          enablePartialMerging)
+          .getLeft();
       return Pair.of(newerRecord.isDelete(), newerRecord.getRecord());
     }
   }
