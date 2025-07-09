@@ -394,7 +394,8 @@ class HoodieSparkSqlWriterInternal {
             // Create a HoodieWriteClient & issue the delete.
             val tableMetaClient = HoodieTableMetaClient.builder
               .setConf(sparkContext.hadoopConfiguration).setBasePath(basePath.toString).build()
-            val schemaStr = new TableSchemaResolver(tableMetaClient).getTableAvroSchema.toString
+            // Issue the delete.
+            val schemaStr = new TableSchemaResolver(tableMetaClient).getTableAvroSchema(false).toString
             val client = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc,
               schemaStr, path, tblName,
               mapAsJavaMap(parameters - HoodieWriteConfig.AUTO_COMMIT_ENABLE.key)))

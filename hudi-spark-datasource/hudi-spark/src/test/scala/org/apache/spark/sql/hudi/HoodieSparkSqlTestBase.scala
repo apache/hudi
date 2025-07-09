@@ -56,6 +56,10 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     dir
   }
 
+  protected def getTableStoragePath(tableName: String): String = {
+    new File(sparkWareHouse, tableName).getCanonicalPath
+  }
+
   // NOTE: We need to set "spark.testing" property to make sure Spark can appropriately
   //       recognize environment as testing
   System.setProperty("spark.testing", "true")
