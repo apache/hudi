@@ -73,6 +73,8 @@ class TestKeyBasedFileGroupRecordBuffer {
   private final IndexedRecord testRecord3 = createTestRecord("3", 1, 1L);
   private final IndexedRecord testRecord3Update = createTestRecord("3", 1, 2L);
   private final IndexedRecord testRecord3DeleteByFieldValue = createTestRecord("3", 3, 1L);
+  private final IndexedRecord testRecord4 = createTestRecord("4", 2, 1L);
+  private final IndexedRecord testRecord4Update = createTestRecord("4", 1, 2L);
 
   @Test
   void readWithEventTimeOrdering() throws IOException {
@@ -167,11 +169,12 @@ class TestKeyBasedFileGroupRecordBuffer {
     KeyBasedFileGroupRecordBuffer<IndexedRecord> fileGroupRecordBuffer = buildSortedKeyBasedFileGroupRecordBuffer(readerContext, tableConfig, readStats, new HoodieAvroRecordMerger(),
         RecordMergeMode.CUSTOM, Option.empty(), Option.empty());
 
-    fileGroupRecordBuffer.setBaseFileIterator(ClosableIterator.wrap(Arrays.asList(testRecord1, testRecord2, testRecord3).iterator()));
+    fileGroupRecordBuffer.setBaseFileIterator(ClosableIterator.wrap(Arrays.asList(testRecord1, testRecord2, testRecord3, testRecord4).iterator()));
 
     HoodieDataBlock dataBlock = mock(HoodieDataBlock.class);
     when(dataBlock.getSchema()).thenReturn(SCHEMA);
-    when(dataBlock.getEngineRecordIterator(readerContext)).thenReturn(ClosableIterator.wrap(Arrays.asList(testRecord2Update, testRecord2Delete).iterator()));
+    when(dataBlock.getEngineRecordIterator(readerContext))
+        .thenReturn(ClosableIterator.wrap(Arrays.asList(testRecord2Update, testRecord1UpdateWithSameTime, testRecord1UpdateWithSameTime, testRecord2Delete, testRecord4Update).iterator()));
 
     HoodieDeleteBlock deleteBlock = mock(HoodieDeleteBlock.class);
     when(deleteBlock.getRecordsToDelete()).thenReturn(new DeleteRecord[]{DeleteRecord.create("3", "")});
@@ -193,11 +196,12 @@ class TestKeyBasedFileGroupRecordBuffer {
     KeyBasedFileGroupRecordBuffer<IndexedRecord> fileGroupRecordBuffer = buildSortedKeyBasedFileGroupRecordBuffer(readerContext, tableConfig, readStats, new CustomMerger(),
         RecordMergeMode.CUSTOM, Option.empty(), Option.empty());
 
-    fileGroupRecordBuffer.setBaseFileIterator(ClosableIterator.wrap(Arrays.asList(testRecord1, testRecord2, testRecord3).iterator()));
+    fileGroupRecordBuffer.setBaseFileIterator(ClosableIterator.wrap(Arrays.asList(testRecord1, testRecord2, testRecord3, testRecord4).iterator()));
 
     HoodieDataBlock dataBlock = mock(HoodieDataBlock.class);
     when(dataBlock.getSchema()).thenReturn(SCHEMA);
-    when(dataBlock.getEngineRecordIterator(readerContext)).thenReturn(ClosableIterator.wrap(Arrays.asList(testRecord2Update, testRecord2Delete).iterator()));
+    when(dataBlock.getEngineRecordIterator(readerContext))
+        .thenReturn(ClosableIterator.wrap(Arrays.asList(testRecord2Update, testRecord1UpdateWithSameTime, testRecord1UpdateWithSameTime, testRecord2Delete, testRecord4Update).iterator()));
 
     HoodieDeleteBlock deleteBlock = mock(HoodieDeleteBlock.class);
     when(deleteBlock.getRecordsToDelete()).thenReturn(new DeleteRecord[]{DeleteRecord.create("3", "")});
@@ -251,11 +255,11 @@ class TestKeyBasedFileGroupRecordBuffer {
    */
   public static class CustomPayload extends BaseAvroPayload
       implements HoodieRecordPayload<CustomPayload> {
-    private final GenericRecord currentRecord;
+    private final GenericRecord payloadRecord;
 
     public CustomPayload(GenericRecord record, Comparable orderingVal) {
       super(record, orderingVal);
-      this.currentRecord = record;
+      this.payloadRecord = record;
     }
 
     @Override
@@ -265,16 +269,20 @@ class TestKeyBasedFileGroupRecordBuffer {
 
     @Override
     public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema) throws IOException {
-      int result = (int) currentValue.get(1) + (int) currentRecord.get(1);
+      if (currentValue.get(2).equals(payloadRecord.get(2))) {
+        // If the timestamps are the same, we do not update
+        return Option.of(currentValue);
+      }
+      int result = (int) currentValue.get(1) + (int) payloadRecord.get(1);
       if (result > 2) {
         return Option.empty();
       }
-      return Option.of(createTestRecord(currentValue.get(0).toString(), result, (long) currentRecord.get(2)));
+      return Option.of(createTestRecord(currentValue.get(0).toString(), result, (long) payloadRecord.get(2)));
     }
 
     @Override
     public Option<IndexedRecord> getInsertValue(Schema schema) throws IOException {
-      return Option.of(currentRecord);
+      return Option.of(payloadRecord);
     }
 
     @Override
@@ -287,8 +295,13 @@ class TestKeyBasedFileGroupRecordBuffer {
 
     @Override
     public Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
+      GenericRecord olderData = (GenericRecord) older.getData();
       GenericRecord newerData = (GenericRecord) newer.getData();
-      int result = (int) ((GenericRecord) older.getData()).get(1) + (int) newerData.get(1);
+      if (olderData.get(2).equals(newerData.get(2))) {
+        // If the timestamps are the same, we do not update
+        return Option.of(Pair.of(older, oldSchema));
+      }
+      int result = (int) olderData.get(1) + (int) newerData.get(1);
       if (result > 2) {
         return Option.empty();
       }
