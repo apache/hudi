@@ -60,22 +60,112 @@ import static org.mockito.Mockito.when;
 
 class TestKeyBasedFileGroupRecordBuffer {
   private static final Schema SCHEMA = Schema.createRecord("test_record", null, "namespace", false,
-      Arrays.asList(new Schema.Field("record_key", Schema.create(Schema.Type.STRING)), new Schema.Field("counter", Schema.create(Schema.Type.INT))));
-  private final IndexedRecord testRecord1 = createTestRecord("1", 1);
-  private final IndexedRecord testRecord2 = createTestRecord("2", 1);
-  private final IndexedRecord testRecord2Update = createTestRecord("2", 1);
-  private final IndexedRecord testRecord2Delete = createTestRecord("2", 2);
-  private final IndexedRecord testRecord3 = createTestRecord("3", 1);
+      Arrays.asList(
+          new Schema.Field("record_key", Schema.create(Schema.Type.STRING)),
+          new Schema.Field("counter", Schema.create(Schema.Type.INT)),
+          new Schema.Field("ts", Schema.create(Schema.Type.LONG))));
+  private final IndexedRecord testRecord1 = createTestRecord("1", 1, 1L);
+  private final IndexedRecord testRecord1UpdateWithSameTime = createTestRecord("1", 2, 1L);
+  private final IndexedRecord testRecord2 = createTestRecord("2", 1, 1L);
+  private final IndexedRecord testRecord2Update = createTestRecord("2", 1, 2L);
+  private final IndexedRecord testRecord2EarlierUpdate = createTestRecord("2", 1, 0L);
+  private final IndexedRecord testRecord2Delete = createTestRecord("2", 2, 3L);
+  private final IndexedRecord testRecord3 = createTestRecord("3", 1, 1L);
+  private final IndexedRecord testRecord3Update = createTestRecord("3", 1, 2L);
+  private final IndexedRecord testRecord3DeleteByFieldValue = createTestRecord("3", 3, 1L);
 
   @Test
-  void readBaseFileAndLogFileWithCustomPayload() throws IOException {
+  void readWithEventTimeOrdering() throws IOException {
     HoodieReadStats readStats = new HoodieReadStats();
     HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
     when(tableConfig.getPayloadClass()).thenReturn(CustomPayload.class.getName());
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[]{"record_key"}));
     StorageConfiguration<?> storageConfiguration = mock(StorageConfiguration.class);
     HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(storageConfiguration, tableConfig, Option.empty(), Option.empty());
-    KeyBasedFileGroupRecordBuffer<IndexedRecord> fileGroupRecordBuffer = buildSortedKeyBasedFileGroupRecordBuffer(readerContext, tableConfig, readStats, new HoodieAvroRecordMerger());
+    KeyBasedFileGroupRecordBuffer<IndexedRecord> fileGroupRecordBuffer = buildSortedKeyBasedFileGroupRecordBuffer(readerContext, tableConfig, readStats, null,
+        RecordMergeMode.EVENT_TIME_ORDERING, Option.of("ts"), Option.of(Pair.of("counter", "3")));
+
+    fileGroupRecordBuffer.setBaseFileIterator(ClosableIterator.wrap(Arrays.asList(testRecord1, testRecord2, testRecord3).iterator()));
+
+    HoodieDataBlock dataBlock = mock(HoodieDataBlock.class);
+    when(dataBlock.getSchema()).thenReturn(SCHEMA);
+    when(dataBlock.getEngineRecordIterator(readerContext)).thenReturn(ClosableIterator.wrap(Arrays.asList(testRecord1UpdateWithSameTime, testRecord2Update, testRecord2EarlierUpdate,
+        testRecord3Update, testRecord3DeleteByFieldValue).iterator()));
+
+    fileGroupRecordBuffer.processDataBlock(dataBlock, Option.empty());
+
+    List<IndexedRecord> actualRecords = getActualRecords(fileGroupRecordBuffer);
+    // delete for record3 is ignored due to event time ordering
+    assertEquals(Arrays.asList(testRecord1UpdateWithSameTime, testRecord2Update, testRecord3Update), actualRecords);
+  }
+
+  @Test
+  void readWithEventTimeOrderingAndDeleteBlock() throws IOException {
+    HoodieReadStats readStats = new HoodieReadStats();
+    HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
+    when(tableConfig.getPayloadClass()).thenReturn(CustomPayload.class.getName());
+    when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[]{"record_key"}));
+    StorageConfiguration<?> storageConfiguration = mock(StorageConfiguration.class);
+    HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(storageConfiguration, tableConfig, Option.empty(), Option.empty());
+    KeyBasedFileGroupRecordBuffer<IndexedRecord> fileGroupRecordBuffer = buildSortedKeyBasedFileGroupRecordBuffer(readerContext, tableConfig, readStats, null,
+        RecordMergeMode.EVENT_TIME_ORDERING, Option.of("ts"), Option.of(Pair.of("counter", "3")));
+
+    fileGroupRecordBuffer.setBaseFileIterator(ClosableIterator.wrap(Arrays.asList(testRecord1, testRecord2, testRecord3).iterator()));
+
+    HoodieDataBlock dataBlock = mock(HoodieDataBlock.class);
+    when(dataBlock.getSchema()).thenReturn(SCHEMA);
+    when(dataBlock.getEngineRecordIterator(readerContext)).thenReturn(ClosableIterator.wrap(Arrays.asList(testRecord1UpdateWithSameTime, testRecord2Update, testRecord3).iterator()));
+
+    HoodieDataBlock dataBlock2 = mock(HoodieDataBlock.class);
+    when(dataBlock2.getSchema()).thenReturn(SCHEMA);
+    when(dataBlock2.getEngineRecordIterator(readerContext)).thenReturn(ClosableIterator.wrap(Arrays.asList(testRecord2EarlierUpdate, testRecord3Update).iterator()));
+
+    HoodieDeleteBlock deleteBlock = mock(HoodieDeleteBlock.class);
+    when(deleteBlock.getRecordsToDelete()).thenReturn(new DeleteRecord[]{DeleteRecord.create("3", ""), DeleteRecord.create("2", "", -1L),
+        DeleteRecord.create("1", "", 2L)});
+    // process data block, then delete block, then another data block
+    fileGroupRecordBuffer.processDataBlock(dataBlock, Option.empty());
+    fileGroupRecordBuffer.processDeleteBlock(deleteBlock);
+    fileGroupRecordBuffer.processDataBlock(dataBlock2, Option.empty());
+
+    List<IndexedRecord> actualRecords = getActualRecords(fileGroupRecordBuffer);
+    assertEquals(Arrays.asList(testRecord2Update, testRecord3Update), actualRecords);
+  }
+
+  @Test
+  void readWithCommitTimeOrdering() throws IOException {
+    HoodieReadStats readStats = new HoodieReadStats();
+    HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
+    when(tableConfig.getPayloadClass()).thenReturn(CustomPayload.class.getName());
+    when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[]{"record_key"}));
+    StorageConfiguration<?> storageConfiguration = mock(StorageConfiguration.class);
+    HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(storageConfiguration, tableConfig, Option.empty(), Option.empty());
+    KeyBasedFileGroupRecordBuffer<IndexedRecord> fileGroupRecordBuffer = buildSortedKeyBasedFileGroupRecordBuffer(readerContext, tableConfig, readStats, null,
+        RecordMergeMode.COMMIT_TIME_ORDERING, Option.empty(), Option.of(Pair.of("counter", "3")));
+
+    fileGroupRecordBuffer.setBaseFileIterator(ClosableIterator.wrap(Arrays.asList(testRecord1, testRecord2, testRecord3).iterator()));
+
+    HoodieDataBlock dataBlock = mock(HoodieDataBlock.class);
+    when(dataBlock.getSchema()).thenReturn(SCHEMA);
+    when(dataBlock.getEngineRecordIterator(readerContext)).thenReturn(ClosableIterator.wrap(Arrays.asList(testRecord1UpdateWithSameTime, testRecord2Update, testRecord2EarlierUpdate,
+        testRecord3Update, testRecord3DeleteByFieldValue).iterator()));
+
+    fileGroupRecordBuffer.processDataBlock(dataBlock, Option.empty());
+
+    List<IndexedRecord> actualRecords = getActualRecords(fileGroupRecordBuffer);
+    assertEquals(Arrays.asList(testRecord1UpdateWithSameTime, testRecord2EarlierUpdate), actualRecords);
+  }
+
+  @Test
+  void readWithCustomPayload() throws IOException {
+    HoodieReadStats readStats = new HoodieReadStats();
+    HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
+    when(tableConfig.getPayloadClass()).thenReturn(CustomPayload.class.getName());
+    when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[]{"record_key"}));
+    StorageConfiguration<?> storageConfiguration = mock(StorageConfiguration.class);
+    HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(storageConfiguration, tableConfig, Option.empty(), Option.empty());
+    KeyBasedFileGroupRecordBuffer<IndexedRecord> fileGroupRecordBuffer = buildSortedKeyBasedFileGroupRecordBuffer(readerContext, tableConfig, readStats, new HoodieAvroRecordMerger(),
+        RecordMergeMode.CUSTOM, Option.empty(), Option.empty());
 
     fileGroupRecordBuffer.setBaseFileIterator(ClosableIterator.wrap(Arrays.asList(testRecord1, testRecord2, testRecord3).iterator()));
 
@@ -93,14 +183,15 @@ class TestKeyBasedFileGroupRecordBuffer {
   }
 
   @Test
-  void readBaseFileAndLogFileWithCustomMerger() throws IOException {
+  void readWithCustomMerger() throws IOException {
     HoodieReadStats readStats = new HoodieReadStats();
     HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
     when(tableConfig.getPayloadClass()).thenReturn(CustomPayload.class.getName());
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[]{"record_key"}));
     StorageConfiguration<?> storageConfiguration = mock(StorageConfiguration.class);
     HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(storageConfiguration, tableConfig, Option.empty(), Option.empty());
-    KeyBasedFileGroupRecordBuffer<IndexedRecord> fileGroupRecordBuffer = buildSortedKeyBasedFileGroupRecordBuffer(readerContext, tableConfig, readStats, new CustomMerger());
+    KeyBasedFileGroupRecordBuffer<IndexedRecord> fileGroupRecordBuffer = buildSortedKeyBasedFileGroupRecordBuffer(readerContext, tableConfig, readStats, new CustomMerger(),
+        RecordMergeMode.CUSTOM, Option.empty(), Option.empty());
 
     fileGroupRecordBuffer.setBaseFileIterator(ClosableIterator.wrap(Arrays.asList(testRecord1, testRecord2, testRecord3).iterator()));
 
@@ -117,30 +208,33 @@ class TestKeyBasedFileGroupRecordBuffer {
     assertEquals(Collections.singletonList(testRecord1), actualRecords);
   }
 
-  private static GenericRecord createTestRecord(String recordKey, int counter) {
+  private static GenericRecord createTestRecord(String recordKey, int counter, long ts) {
     GenericRecord record = new GenericData.Record(SCHEMA);
     record.put("record_key", recordKey);
     record.put("counter", counter);
+    record.put("ts", ts);
     return record;
   }
 
   private static KeyBasedFileGroupRecordBuffer<IndexedRecord> buildSortedKeyBasedFileGroupRecordBuffer(HoodieReaderContext<IndexedRecord> readerContext,
                                                                                                        HoodieTableConfig tableConfig,
                                                                                                        HoodieReadStats readStats,
-                                                                                                       HoodieRecordMerger recordMerger) {
+                                                                                                       HoodieRecordMerger recordMerger,
+                                                                                                       RecordMergeMode recordMergeMode,
+                                                                                                       Option<String> orderingFieldName,
+                                                                                                       Option<Pair<String, String>> deleteMarkerKeyValue) {
 
-    readerContext.setRecordMerger(Option.of(recordMerger));
+    readerContext.setRecordMerger(Option.ofNullable(recordMerger));
     FileGroupReaderSchemaHandler<IndexedRecord> fileGroupReaderSchemaHandler = mock(FileGroupReaderSchemaHandler.class);
     when(fileGroupReaderSchemaHandler.getRequiredSchema()).thenReturn(SCHEMA);
     when(fileGroupReaderSchemaHandler.getInternalSchema()).thenReturn(InternalSchema.getEmptyInternalSchema());
-    when(fileGroupReaderSchemaHandler.getCustomDeleteMarkerKeyValue()).thenReturn(Option.empty());
+    when(fileGroupReaderSchemaHandler.getCustomDeleteMarkerKeyValue()).thenReturn(deleteMarkerKeyValue);
     when(fileGroupReaderSchemaHandler.getHoodieOperationPos()).thenReturn(-1);
     readerContext.setSchemaHandler(fileGroupReaderSchemaHandler);
     HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class, RETURNS_DEEP_STUBS);
     when(mockMetaClient.getTableConfig()).thenReturn(tableConfig);
-    RecordMergeMode recordMergeMode = RecordMergeMode.CUSTOM;
     TypedProperties props = new TypedProperties();
-    return new KeyBasedFileGroupRecordBuffer<>(readerContext, mockMetaClient, recordMergeMode, props, readStats, Option.empty(), false);
+    return new KeyBasedFileGroupRecordBuffer<>(readerContext, mockMetaClient, recordMergeMode, props, readStats, orderingFieldName, false);
   }
 
   private static List<IndexedRecord> getActualRecords(FileGroupRecordBuffer<IndexedRecord> fileGroupRecordBuffer) throws IOException {
@@ -175,7 +269,7 @@ class TestKeyBasedFileGroupRecordBuffer {
       if (result > 2) {
         return Option.empty();
       }
-      return Option.of(createTestRecord(currentValue.get(0).toString(), result));
+      return Option.of(createTestRecord(currentValue.get(0).toString(), result, (long) currentRecord.get(2)));
     }
 
     @Override
@@ -193,12 +287,13 @@ class TestKeyBasedFileGroupRecordBuffer {
 
     @Override
     public Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
-      int result = (int) ((GenericRecord) older.getData()).get(1) + (int) ((GenericRecord) newer.getData()).get(1);
+      GenericRecord newerData = (GenericRecord) newer.getData();
+      int result = (int) ((GenericRecord) older.getData()).get(1) + (int) newerData.get(1);
       if (result > 2) {
         return Option.empty();
       }
       HoodieKey hoodieKey = older.getKey();
-      return Option.of(Pair.of(new HoodieAvroIndexedRecord(createTestRecord(hoodieKey.getRecordKey(), result)), SCHEMA));
+      return Option.of(Pair.of(new HoodieAvroIndexedRecord(createTestRecord(hoodieKey.getRecordKey(), result, (long) newerData.get(2))), SCHEMA));
     }
 
     @Override
