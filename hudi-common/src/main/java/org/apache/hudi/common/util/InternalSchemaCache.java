@@ -79,18 +79,15 @@ public class InternalSchemaCache {
 
   /**
    * Search internalSchema based on versionID.
-   * first step: try to get internalSchema from hoodie commit files, we no need to add lock.
-   * if we cannot get internalSchema by first step, then we try to get internalSchema from cache.
+   *
+   * <p>The internalSchema is fetched from cache or history schema file directly, and should not
+   * be fetched from commit meta file since the overhead of scanning timeline is higher.
    *
    * @param versionID  schema version_id need to search
    * @param metaClient current hoodie metaClient
    * @return internalSchema
    */
   public static InternalSchema searchSchemaAndCache(long versionID, HoodieTableMetaClient metaClient) {
-    Option<InternalSchema> candidateSchema = getSchemaByReadingCommitFile(versionID, metaClient);
-    if (candidateSchema.isPresent()) {
-      return candidateSchema.get();
-    }
     String tablePath = metaClient.getBasePath().toString();
     // use segment lock to reduce competition.
     synchronized (LOCK_LIST[tablePath.hashCode() & (LOCK_LIST.length - 1)]) {
@@ -117,21 +114,6 @@ public class InternalSchemaCache {
       result = SerDeHelper.parseSchemas(historySchemaStr);
     }
     return result;
-  }
-
-  private static Option<InternalSchema> getSchemaByReadingCommitFile(long versionID, HoodieTableMetaClient metaClient) {
-    try {
-      HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
-      List<HoodieInstant> instants = timeline.getInstantsAsStream().filter(f -> f.requestedTime().equals(String.valueOf(versionID))).collect(Collectors.toList());
-      if (instants.isEmpty()) {
-        return Option.empty();
-      }
-      HoodieCommitMetadata metadata = timeline.readCommitMetadata(instants.get(0));
-      String latestInternalSchemaStr = metadata.getMetadata(SerDeHelper.LATEST_SCHEMA);
-      return SerDeHelper.fromJson(latestInternalSchemaStr);
-    } catch (Exception e) {
-      throw new HoodieException("Failed to read schema from commit metadata", e);
-    }
   }
 
   /**
