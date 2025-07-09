@@ -67,7 +67,7 @@ class ExpressionPayload(@transient record: GenericRecord,
   extends DefaultHoodieRecordPayload(record, orderingVal) with Logging {
 
   def this(recordOpt: HOption[GenericRecord]) {
-    this(recordOpt.orElse(null), HoodieRecord.DEFAULT_ORDERING_VALUE)
+    this(recordOpt.orElse(null), Comparables.getDefault)
   }
 
   override def combineAndGetUpdateValue(currentValue: IndexedRecord,

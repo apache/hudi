@@ -19,6 +19,7 @@
 
 package org.apache.hudi.common.testutils;
 
+import org.apache.hudi.Comparables;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.model.HoodieAvroPayload;
@@ -1232,11 +1233,15 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
       this.riderValue = riderValue;
     }
 
+    public static RecordIdentifier clone(RecordIdentifier toClone, String orderingVal) {
+      return new RecordIdentifier(toClone.recordKey, toClone.partitionPath, orderingVal, toClone.riderValue);
+    }
+
     public static RecordIdentifier fromTripTestPayload(RawTripTestPayload payload) {
       try {
         String recordKey = payload.getRowKey();
         String partitionPath = payload.getPartitionPath();
-        String orderingVal = payload.getOrderingValue().toString();
+        String orderingVal = new Comparables(payload.getOrderingValue()).toString();
         String riderValue = payload.getJsonDataAsMap().getOrDefault("rider", "").toString();
         return new RecordIdentifier(recordKey, partitionPath, orderingVal, riderValue);
       } catch (IOException ex) {

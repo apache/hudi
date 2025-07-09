@@ -19,6 +19,7 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.Comparables;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.HoodieReaderContext;
@@ -69,7 +70,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 import static org.apache.hudi.common.model.WriteOperationType.INSERT;
 import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
@@ -183,8 +183,8 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
         .optionalLong("ts")
         .endRecord();
     GenericRowData rowData = GenericRowData.of(StringData.fromString("f1"), StringData.fromString("f2"), 1000L);
-    assertEquals(1000L, readerContext.getOrderingValue(rowData, schema, Option.of(Arrays.asList("ts"))));
-    assertEquals(DEFAULT_ORDERING_VALUE, readerContext.getOrderingValue(rowData, schema, Option.of(Arrays.asList("non_existent_col"))));
+    assertEquals(new Comparables(1000L), readerContext.getOrderingValue(rowData, schema, Option.of(Arrays.asList("ts"))));
+    assertEquals(Comparables.getDefault(), readerContext.getOrderingValue(rowData, schema, Option.of(Arrays.asList("non_existent_col"))));
   }
 
   @Test

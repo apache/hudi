@@ -59,7 +59,6 @@ import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_
 import static org.apache.hudi.common.config.HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE;
 import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE;
 import static org.apache.hudi.common.config.HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH;
-import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 import static org.apache.hudi.common.model.HoodieRecord.HOODIE_IS_DELETED_FIELD;
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.INSTANT_TIME;
@@ -390,7 +389,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   static Comparable getOrderingValue(HoodieReaderContext readerContext,
                                      DeleteRecord deleteRecord) {
     return isCommitTimeOrderingValue(deleteRecord.getOrderingValue())
-        ? DEFAULT_ORDERING_VALUE
+        ? Comparables.getDefault()
         : readerContext.convertValueToEngineType(deleteRecord.getOrderingValue());
   }
 }

@@ -64,7 +64,6 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
-import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
 
 /**
@@ -396,13 +395,14 @@ public abstract class HoodieReaderContext<T> {
                                      Schema schema,
                                      Option<List<String>> orderingFieldNames) {
     if (orderingFieldNames.isEmpty()) {
-      return DEFAULT_ORDERING_VALUE;
+      return Comparables.getDefault();
     }
 
     return new Comparables(
         orderingFieldNames.get().stream().map(field -> {
           Object value = getValue(record, schema, field);
-          return value != null ? convertValueToEngineType((Comparable) value) : DEFAULT_ORDERING_VALUE;
+          // API getDefaultOrderingValue is only used inside Comparables constructor
+          return value != null ? convertValueToEngineType((Comparable) value) : Comparables.getDefaultOrderingValue();
         }).collect(Collectors.toList()));
   }
 
@@ -477,19 +477,10 @@ public abstract class HoodieReaderContext<T> {
   }
 
   /**
-   * Converts the comparable list in Comparables
-   * <p>
-   * This can be overridden by the reader context implementation on a specific engine to handle
-   * engine-specific field type system.  For example, Spark uses {@code UTF8String} to represent
-   * {@link String} field values, so we need to convert the values to {@code UTF8String} type
-   * in Spark for proper value comparison.
-   *
-   * @param value {@link Comparable} value to be converted.
-   *
-   * @return the converted value in a type representation in a specific engine.
+   * Converts the comparable values in Comparables to the specific engine type
    */
-  public Comparable convertValueToEngineType(Comparables value) {
-    return value;
+  public final Comparable convertValueToEngineType(Comparables comparables) {
+    return comparables.apply(this::convertValueToEngineType);
   }
 
   /**

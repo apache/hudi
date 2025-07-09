@@ -76,7 +76,6 @@ import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
-import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 
 /**
  * Implementation of {@link HoodieReaderContext} to read {@link RowData}s from base files or
@@ -202,12 +201,13 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
       Schema schema,
       Option<List<String>> orderingFieldNames) {
     if (orderingFieldNames.isEmpty()) {
-      return DEFAULT_ORDERING_VALUE;
+      return Comparables.getDefault();
     }
     return new Comparables(
         orderingFieldNames.get().stream().map(field -> {
           if (schema.getField(field) == null) {
-            return DEFAULT_ORDERING_VALUE;
+            // API getDefaultOrderingValue is only used inside Comparables constructor
+            return Comparables.getDefaultOrderingValue();
           }
           RowDataAvroQueryContexts.FieldQueryContext context = RowDataAvroQueryContexts.fromAvroSchema(schema, utcTimezone).getFieldQueryContext(field);
           Comparable finalOrderingVal = (Comparable) context.getValAsJava(record, false);
@@ -332,10 +332,6 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
 
   @Override
   public Comparable convertValueToEngineType(Comparable value) {
-    if (value instanceof Comparables) {
-      return ((Comparables) value).apply(this::convertValueToEngineType);
-    } else {
-      return (Comparable) RowDataUtils.convertValueToFlinkType(value);
-    }
+    return (Comparable) RowDataUtils.convertValueToFlinkType(value);
   }
 }

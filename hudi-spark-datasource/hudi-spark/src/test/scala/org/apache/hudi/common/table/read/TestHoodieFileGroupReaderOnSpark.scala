@@ -26,7 +26,6 @@ import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload.{DELETE_KEY, DELETE_MARKER}
-import org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.read.TestHoodieFileGroupReaderOnSpark.getFileCount
 import org.apache.hudi.common.testutils.{HoodieTestUtils, RawTripTestPayload}
@@ -143,7 +142,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     testGetOrderingValue(
       sparkReaderContext, row, avroSchema, "col3", new Comparables(UTF8String.fromString("blue")))
     testGetOrderingValue(
-      sparkReaderContext, row, avroSchema, "non_existent_col", new Comparables(DEFAULT_ORDERING_VALUE))
+      sparkReaderContext, row, avroSchema, "non_existent_col", Comparables.getDefault)
   }
 
   val expectedEventTimeBased: Seq[(Int, String, String, String, Double, String)] = Seq(

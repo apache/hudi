@@ -101,12 +101,13 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
   protected Comparable<?> doGetOrderingValue(Schema recordSchema, Properties props) {
     Option<String[]> orderingFields = ConfigUtils.getOrderingFields(props);
     if (orderingFields.isEmpty()) {
-      return DEFAULT_ORDERING_VALUE;
+      return Comparables.getDefault();
     } else {
       return new Comparables(Arrays.stream(orderingFields.get())
           .map(field -> {
             if (recordSchema.getField(field) == null) {
-              return DEFAULT_ORDERING_VALUE;
+              // API getDefaultOrderingValue is only used inside Comparables constructor
+              return Comparables.getDefaultOrderingValue();
             }
             return (Comparable<?>) getColumnValueAsJava(recordSchema, field, props, false);
           }).collect(Collectors.toList())

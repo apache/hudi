@@ -212,6 +212,12 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     List<HoodieTestDataGenerator.RecordIdentifier> expectedUnMergedRecords = new ArrayList<>();
     objectMapper.reader().forType(HoodieTestDataGenerator.RecordIdentifier.class).<HoodieTestDataGenerator.RecordIdentifier>readValues(basePath.resolve("unmerged_records.json").toFile())
         .forEachRemaining(expectedUnMergedRecords::add);
+    expectedRecords = expectedRecords.stream()
+        .map(recordIdentifier -> HoodieTestDataGenerator.RecordIdentifier.clone(recordIdentifier, new Comparables(recordIdentifier.getOrderingVal()).toString()))
+        .collect(Collectors.toList());
+    expectedUnMergedRecords = expectedUnMergedRecords.stream()
+        .map(recordIdentifier -> HoodieTestDataGenerator.RecordIdentifier.clone(recordIdentifier, new Comparables(recordIdentifier.getOrderingVal()).toString()))
+        .collect(Collectors.toList());
     validateOutputFromFileGroupReaderWithExistingRecords(getStorageConf(), basePath.toString(), true, 1, RecordMergeMode.EVENT_TIME_ORDERING,
         expectedRecords, expectedUnMergedRecords);
   }
@@ -508,7 +514,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
         .map(record -> new HoodieTestDataGenerator.RecordIdentifier(
             readerContext.getValue(record, schema, KEY_FIELD_NAME).toString(),
             readerContext.getValue(record, schema, PARTITION_FIELD_NAME).toString(),
-            readerContext.getValue(record, schema, PRECOMBINE_FIELD_NAME).toString(),
+            new Comparables((Comparable) readerContext.getValue(record, schema, PRECOMBINE_FIELD_NAME)).toString(),
             readerContext.getValue(record, schema, RIDER_FIELD_NAME).toString()))
         .collect(Collectors.toList());
   }

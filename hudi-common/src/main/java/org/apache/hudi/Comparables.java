@@ -31,6 +31,7 @@ import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 
 public class Comparables implements Comparable, Serializable {
   protected static final long serialVersionUID = 1L;
+  private static final Comparables DEFAULT_VALUE = new Comparables(DEFAULT_ORDERING_VALUE);
 
   private final List<Comparable> comparables;
 
@@ -42,6 +43,10 @@ public class Comparables implements Comparable, Serializable {
     this.comparables = Collections.singletonList(comparable);
   }
 
+  public static Comparables getDefault() {
+    return DEFAULT_VALUE;
+  }
+
   public static boolean isDefault(Comparable orderingVal) {
     if (orderingVal instanceof Comparables) {
       return ((Comparables) orderingVal).comparables.size() == 1
@@ -49,6 +54,10 @@ public class Comparables implements Comparable, Serializable {
     } else {
       return orderingVal.equals(DEFAULT_ORDERING_VALUE);
     }
+  }
+
+  public static Comparable getDefaultOrderingValue() {
+    return DEFAULT_ORDERING_VALUE;
   }
 
   @Override
@@ -98,5 +107,10 @@ public class Comparables implements Comparable, Serializable {
   @Override
   public int hashCode() {
     return Objects.hashCode(comparables);
+  }
+
+  @Override
+  public String toString() {
+    return comparables.toString();
   }
 }

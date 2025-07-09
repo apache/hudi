@@ -40,7 +40,6 @@ import java.util.Arrays;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.avro.HoodieAvroUtils.getNullableValAsString;
-import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 import static org.apache.hudi.common.util.BinaryUtil.generateChecksum;
 
 /**
@@ -169,13 +168,13 @@ public class SpillableMapUtils {
    */
   private static Comparable getPreCombineVal(GenericRecord rec, Option<String[]> preCombineFields) {
     if (preCombineFields.isEmpty()) {
-      return DEFAULT_ORDERING_VALUE;
+      return Comparables.getDefault();
     }
     // keep consistent with writer side, using Java type for ordering value, see `DefaultHoodieRecordPayload`.
     return new Comparables(
         Arrays.stream(preCombineFields.get()).map(field -> {
           Object orderingValue = HoodieAvroUtils.getNestedFieldVal(rec, field, true, false);
-          return orderingValue == null ? DEFAULT_ORDERING_VALUE : (Comparable) orderingValue;
+          return orderingValue == null ? Comparables.getDefaultOrderingValue() : (Comparable) orderingValue;
         }).collect(Collectors.toList())
     );
   }

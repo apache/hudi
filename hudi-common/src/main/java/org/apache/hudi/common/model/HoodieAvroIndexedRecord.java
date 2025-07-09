@@ -215,7 +215,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   public Comparable<?> doGetOrderingValue(Schema recordSchema, Properties props) {
     Option<String[]> orderingFieldsOpt = ConfigUtils.getOrderingFields(props);
     if (orderingFieldsOpt.isEmpty()) {
-      return DEFAULT_ORDERING_VALUE;
+      return Comparables.getDefault();
     }
     boolean consistentLogicalTimestampEnabled = Boolean.parseBoolean(props.getProperty(
         KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),

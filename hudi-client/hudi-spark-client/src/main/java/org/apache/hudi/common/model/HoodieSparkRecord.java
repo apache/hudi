@@ -354,10 +354,11 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
           NestedFieldPath nestedFieldPath = cachedNestedFieldPath.get();
           return (Comparable<?>) HoodieUnsafeRowUtils.getNestedInternalRowValue(data, nestedFieldPath);
         }
-        return DEFAULT_ORDERING_VALUE;
+        // API getDefaultOrderingValue is only used inside Comparables constructor
+        return Comparables.getDefaultOrderingValue();
       }).collect(Collectors.toList()));
     }
-    return DEFAULT_ORDERING_VALUE;
+    return Comparables.getDefault();
   }
 
   /**

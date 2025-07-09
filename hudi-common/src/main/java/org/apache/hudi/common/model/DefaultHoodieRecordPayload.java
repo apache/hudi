@@ -40,8 +40,6 @@ import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
-
 /**
  * Default payload.
  * {@link HoodieRecordPayload} impl that honors ordering field in both preCombine and combineAndGetUpdateValue.
@@ -62,7 +60,7 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
   }
 
   public DefaultHoodieRecordPayload(Option<GenericRecord> record) {
-    this(record.isPresent() ? record.get() : null, DEFAULT_ORDERING_VALUE); // natural order
+    this(record.isPresent() ? record.get() : null, Comparables.getDefault()); // natural order
   }
 
   @Override
@@ -198,7 +196,7 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
      * and need to be dealt with separately.
      */
     Option<String[]> orderingFields = ConfigUtils.getOrderingFields(properties);
-    if (orderingFields == null) {
+    if (orderingFields.isEmpty()) {
       return true;
     }
     boolean consistentLogicalTimestampEnabled = Boolean.parseBoolean(properties.getProperty(

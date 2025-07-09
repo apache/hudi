@@ -105,7 +105,7 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
   public Comparable<?> doGetOrderingValue(Schema recordSchema, Properties props) {
     Option<String[]> orderingFields = ConfigUtils.getOrderingFields(props);
     if (orderingFields.isEmpty()) {
-      return DEFAULT_ORDERING_VALUE;
+      return Comparables.getDefault();
     } else {
       return new Comparables(
           Arrays.stream(orderingFields.get())
