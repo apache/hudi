@@ -33,18 +33,25 @@ import java.util.Map;
 
 import static org.apache.hudi.common.model.HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_CUSTOM_MARKER;
+import static org.apache.hudi.common.util.ConfigUtils.toMap;
 
+/**
+ * This class implements the detailed partial update logic for different partial update modes,
+ * which is wrapped into partial update mergers
+ * {@link BufferedRecordMergerFactory.CommitTimeBufferedRecordPartialUpdateMerger} and
+ * {@link BufferedRecordMergerFactory.EventTimeBufferedRecordPartialUpdateMerger}.
+ */
 public class PartialUpdateStrategy<T> {
   private final HoodieReaderContext<T> readerContext;
   private final PartialUpdateMode partialUpdateMode;
-  private Map<String, String> partialUpdateProperties;
+  private final Map<String, String> mergeProperties;
 
   public PartialUpdateStrategy(HoodieReaderContext<T> readerContext,
                                PartialUpdateMode partialUpdateMode,
                                TypedProperties props) {
     this.readerContext = readerContext;
     this.partialUpdateMode = partialUpdateMode;
-    this.partialUpdateProperties = parsePartialUpdateProperties(props);
+    this.mergeProperties = parseMergeProperties(props);
   }
 
   /**
@@ -52,11 +59,11 @@ public class PartialUpdateStrategy<T> {
    * Note that {@param newRecord} refers to the record with higher commit time if COMMIT_TIME_ORDERING mode is used,
    * or higher event time if EVENT_TIME_ORDERING mode us used.
    */
-  BufferedRecord<T> reconcileFieldsWithOldRecord(BufferedRecord<T> newRecord,
-                                                 BufferedRecord<T> oldRecord,
-                                                 Schema newSchema,
-                                                 Schema oldSchema,
-                                                 boolean keepOldMetadataColumns) {
+  BufferedRecord<T> partialMerge(BufferedRecord<T> newRecord,
+                                 BufferedRecord<T> oldRecord,
+                                 Schema newSchema,
+                                 Schema oldSchema,
+                                 boolean keepOldMetadataColumns) {
     // Note that: When either newRecord or oldRecord is a delete record,
     //            skip partial update since delete records do not have meaningful columns.
     if (partialUpdateMode == PartialUpdateMode.NONE
@@ -128,7 +135,7 @@ public class PartialUpdateStrategy<T> {
     List<Schema.Field> fields = newSchema.getFields();
     Map<Integer, Object> updateValues = new HashMap<>();
     T engineRecord;
-    String partialUpdateCustomMarker = partialUpdateProperties.get(PARTIAL_UPDATE_CUSTOM_MARKER);
+    String partialUpdateCustomMarker = mergeProperties.get(PARTIAL_UPDATE_CUSTOM_MARKER);
     for (Schema.Field field : fields) {
       String fieldName = field.name();
       Object newValue = readerContext.getValue(newRecord.getRecord(), newSchema, fieldName);
@@ -167,30 +174,12 @@ public class PartialUpdateStrategy<T> {
     return false;
   }
 
-  static Map<String, String> parsePartialUpdateProperties(TypedProperties props) {
+  static Map<String, String> parseMergeProperties(TypedProperties props) {
     Map<String, String> properties = new HashMap<>();
-    String raw = props.getProperty(HoodieTableConfig.PARTIAL_UPDATE_PROPERTIES.key());
+    String raw = props.getProperty(HoodieTableConfig.MERGE_PROPERTIES.key());
     if (StringUtils.isNullOrEmpty(raw)) {
       return properties;
     }
-    String[] entries = raw.split(",");
-    for (String entry : entries) {
-      String trimmed = entry.trim();
-      if (!trimmed.isEmpty()) {
-        String[] kv = trimmed.split("=", 2);
-        if (kv.length == 2) {
-          String key = kv[0].trim();
-          String value = kv[1].trim();
-          if (!key.isEmpty()) {
-            if (StringUtils.isNullOrEmpty(value)) {
-              throw new IllegalArgumentException(
-                  String.format("Property '%s' is not properly set", key));
-            }
-            properties.put(key, value);
-          }
-        }
-      }
-    }
-    return properties;
+    return toMap(raw, ",");
   }
 }

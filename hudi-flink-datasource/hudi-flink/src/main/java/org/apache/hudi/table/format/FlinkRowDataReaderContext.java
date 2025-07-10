@@ -209,7 +209,7 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
         genericRowData.setField(pos, getValue(baseRecord.getRecord(), schema, field.name()));
       }
     }
-    return toBinaryRow(schema, genericRowData);
+    return genericRowData;
   }
 
   @Override
