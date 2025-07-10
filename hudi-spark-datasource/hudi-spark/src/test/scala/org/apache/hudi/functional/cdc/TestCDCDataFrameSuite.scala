@@ -647,7 +647,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
       "hoodie.datasource.write.keygenerator.class" -> "org.apache.hudi.keygen.NonpartitionedKeyGenerator",
       "hoodie.datasource.write.partitionpath.field" -> "",
       "hoodie.datasource.write.payload.class" -> "org.apache.hudi.common.model.AWSDmsAvroPayload",
-      DataSourceWriteOptions.RECORD_MERGE_MODE.key() -> RecordMergeMode.COMMIT_TIME_ORDERING.name(),
+      DataSourceWriteOptions.RECORD_MERGE_MODE.key() -> RecordMergeMode.CUSTOM.name(),
       "hoodie.table.cdc.enabled" -> "true",
       "hoodie.table.cdc.supplemental.logging.mode" -> "data_before_after"
     )
