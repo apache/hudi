@@ -77,7 +77,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       Option<Predicate> filterOpt) {
     super(storageConfiguration, tableConfig, instantRangeOpt, filterOpt);
     this.payloadClass = tableConfig.getPayloadClass();
-    this.typeHandler = new AvroReaderContextTypeHandler();
+    this.typeHandler = new AvroReaderContextTypeConverter();
   }
 
   @Override

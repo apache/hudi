@@ -38,7 +38,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
                                payloadClazz: String): Unit = {
     val opts: Map[String, String] = Map(
       HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key() -> payloadClazz,
-      HoodieTableConfig.PARTIAL_UPDATE_PROPERTIES.key() ->
+      HoodieTableConfig.MERGE_PROPERTIES.key() ->
         "hoodie.payload.delete.field=xp,hoodie.payload.delete.marker=d")
     val columns = Seq("ts", "key", "rider", "driver", "fare", "Op")
 
