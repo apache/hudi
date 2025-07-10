@@ -331,7 +331,7 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
   }
 
   @Override
-  public Comparable convertValueToEngineType(Comparable value) {
+  public Comparable convertComparableToEngineType(Comparable value) {
     return (Comparable) RowDataUtils.convertValueToFlinkType(value);
   }
 }

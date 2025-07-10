@@ -121,7 +121,15 @@ public class Comparables implements Comparable, Serializable {
       return false;
     }
     for (int i = 0; i < comparables.size(); i++) {
-      if (!comparables.get(i).equals(that.comparables.get(i))) {
+      Comparable objComparable = comparables.get(i);
+      Comparable otherObjComparable = that.comparables.get(i);
+      if (objComparable == null && otherObjComparable == null) {
+        // if both are null continue
+        continue;
+      } else if (objComparable == null || otherObjComparable == null) {
+        // One comparable is null while other is not null
+        return false;
+      } else if (!objComparable.equals(otherObjComparable)) {
         return false;
       }
     }

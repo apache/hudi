@@ -479,8 +479,10 @@ public abstract class HoodieReaderContext<T> {
   /**
    * Converts the comparable values in Comparables to the specific engine type
    */
-  public final Comparable convertValueToEngineType(Comparables comparables) {
-    return comparables.apply(this::convertValueToEngineType);
+  public final Comparable convertValueToEngineType(Comparable value) {
+    return value instanceof Comparables
+        ? ((Comparables) value).apply(this::convertValueToEngineType)
+        : convertComparableToEngineType(value);
   }
 
   /**
@@ -495,7 +497,7 @@ public abstract class HoodieReaderContext<T> {
    *
    * @return the converted value in a type representation in a specific engine.
    */
-  public Comparable convertValueToEngineType(Comparable value) {
+  public Comparable convertComparableToEngineType(Comparable value) {
     return value;
   }
 
