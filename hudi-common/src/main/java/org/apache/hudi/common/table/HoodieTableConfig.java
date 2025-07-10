@@ -849,13 +849,13 @@ public class HoodieTableConfig extends HoodieConfig {
         inferredRecordMergeMode = modeBasedOnPayload != null ? modeBasedOnPayload : modeBasedOnStrategyId;
       }
     }
-    if (recordMergeMode != null) {
-      if (tableVersion.lesserThan(HoodieTableVersion.NINE)) {
-        checkArgument(inferredRecordMergeMode == recordMergeMode,
-            String.format("Configured record merge mode (%s) is inconsistent with payload class (%s) "
-                    + "or record merge strategy ID (%s) configured. Please revisit the configs.",
-                recordMergeMode, payloadClassName, recordMergeStrategyId));
-      }
+    // Only do this check when table version >= 9 since for other table versions,
+    // the payload class based merge mode can be different from CUSTOM due to RFC-97.
+    if (recordMergeMode != null && tableVersion.greaterThanOrEquals(HoodieTableVersion.NINE)) {
+      checkArgument(inferredRecordMergeMode == recordMergeMode,
+          String.format("Configured record merge mode (%s) is inconsistent with payload class (%s) "
+                  + "or record merge strategy ID (%s) configured. Please revisit the configs.",
+              recordMergeMode, payloadClassName, recordMergeStrategyId));
     }
 
     // Check ordering field name based on record merge mode
