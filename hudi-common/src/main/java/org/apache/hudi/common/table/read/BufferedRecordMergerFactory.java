@@ -421,7 +421,7 @@ public class BufferedRecordMergerFactory {
     // Checks the ordering value does not equal to 0
     // because we use 0 as the default value which means natural order
     boolean chooseExisting = !Comparables.isDefault(deleteOrderingVal)
-        && ReflectionUtils.isSameClass(existingOrderingVal, deleteOrderingVal)
+        && Comparables.isSameClass(existingOrderingVal, deleteOrderingVal)
         && existingOrderingVal.compareTo(deleteOrderingVal) > 0;
     if (chooseExisting) {
       // The DELETE message is obsolete if the old message has greater orderingVal.

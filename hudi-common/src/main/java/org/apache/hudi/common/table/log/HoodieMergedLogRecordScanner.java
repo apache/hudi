@@ -281,7 +281,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
       // Checks the ordering value does not equal to 0
       // because we use 0 as the default value which means natural order
       boolean choosePrev = !Comparables.isDefault(deleteOrderingVal)
-          && ReflectionUtils.isSameClass(curOrderingVal, deleteOrderingVal)
+          && Comparables.isSameClass(curOrderingVal, deleteOrderingVal)
           && curOrderingVal.compareTo(deleteOrderingVal) > 0;
       if (choosePrev) {
         // The DELETE message is obsolete if the old message has greater orderingVal.

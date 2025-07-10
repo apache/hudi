@@ -278,7 +278,7 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
 
       // pick the payload with greater ordering value as insert record
       return oldOrderingVal != null
-          && ReflectionUtils.isSameClass(oldOrderingVal, orderingVal)
+          && Comparables.isSameClass(oldOrderingVal, orderingVal)
           && oldOrderingVal.compareTo(orderingVal) > 0;
     }
     return false;

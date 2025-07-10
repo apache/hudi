@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 
@@ -54,6 +55,29 @@ public class Comparables implements Comparable, Serializable {
     } else {
       return orderingVal.equals(DEFAULT_ORDERING_VALUE);
     }
+  }
+
+  /**
+   * Returns whether the given two comparable values come from the same runtime class.
+   */
+  public static boolean isSameClass(Comparable<?> v, Comparable<?> o) {
+    if (v.getClass() != o.getClass()) {
+      // If class is not same return false
+      return false;
+    } else if (v instanceof Comparables) {
+      if (((Comparables) v).comparables.size() != ((Comparables) o).comparables.size()) {
+        // if comparables size is not same return false
+        return false;
+      } else {
+        // compare class of comparable list of both arguments
+        return IntStream.range(0, ((Comparables) v).comparables.size())
+            .mapToObj(i -> ((Comparables) v).comparables.get(i).getClass() == ((Comparables) o).comparables.get(i).getClass())
+            .reduce(Boolean::logicalAnd)
+            .orElse(true);
+      }
+    }
+    // return true if class is same and input objects are not instance of Comparables class
+    return true;
   }
 
   public static Comparable getDefaultOrderingValue() {

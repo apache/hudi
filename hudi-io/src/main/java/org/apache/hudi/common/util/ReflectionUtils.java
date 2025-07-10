@@ -180,13 +180,6 @@ public class ReflectionUtils {
   }
 
   /**
-   * Returns whether the given two comparable values come from the same runtime class.
-   */
-  public static boolean isSameClass(Comparable<?> v, Comparable<?> o) {
-    return v.getClass() == o.getClass();
-  }
-
-  /**
    * Invoke a static method of a class.
    * @param clazz
    * @param methodName
