@@ -27,8 +27,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.AssertionsKt.assertNull;
 
-class TestReaderContextTypeHandler {
-  private final ReaderContextTypeHandler typeHandler = new ReaderContextTypeHandler();
+class TestReaderContextTypeConverter {
+  private final ReaderContextTypeConverter typeHandler = new ReaderContextTypeConverter();
 
   @Test
   void testCastToBoolean_withBooleanTrue() {

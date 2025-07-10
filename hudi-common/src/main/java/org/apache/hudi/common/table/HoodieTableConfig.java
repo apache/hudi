@@ -57,7 +57,6 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
-import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -320,19 +319,18 @@ public class HoodieTableConfig extends HoodieConfig {
       .withDocumentation("When set to true, the table can support reading and writing multiple base file formats.");
 
   public static final ConfigProperty<PartialUpdateMode> PARTIAL_UPDATE_MODE = ConfigProperty
-      .key("hoodie.write.partial.update.mode")
+      .key("hoodie.table.partial.update.mode")
       .defaultValue(PartialUpdateMode.NONE)
       .sinceVersion("1.1.0")
       .withDocumentation("This property when set, will define how two versions of the record will be "
           + "merged together where the later contains only partial set of values and not entire record.");
 
-  public static final ConfigProperty<String> PARTIAL_UPDATE_PROPERTIES = ConfigProperty
-      .key("hoodie.write.partial.update.properties")
+  public static final ConfigProperty<String> MERGE_PROPERTIES = ConfigProperty
+      .key("hoodie.table.merge.properties")
       .noDefaultValue()
       .sinceVersion("1.1.0")
       .withDocumentation("The value of this property is in the format of 'K1=V1,K2=V2,...,Ki=Vi,...'."
-          + "Each (Ki, Vi) pair represents a property used by partial update scenarios "
-          + "leveraging 'hoodie.write.partial.update.mode'.");
+          + "Each (Ki, Vi) pair represents a property used during merge scenarios.");
 
   public static final ConfigProperty<String> URL_ENCODE_PARTITIONING = KeyGeneratorOptions.URL_ENCODE_PARTITIONING;
   public static final ConfigProperty<String> HIVE_STYLE_PARTITIONING_ENABLE = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE;
@@ -906,25 +904,14 @@ public class HoodieTableConfig extends HoodieConfig {
     if (isNullOrEmpty(payloadClassName)) {
       return null;
     }
-    // Special handling for table version 9.
-    // Due to HUDI RFC-97, more payload classes are mapped to merge mode in table version 9.
-    // Currently the table version 9 is not added yet, so we use >= 8 temporarily.
-    // TODO: We need to change comparison to == 9, instead of >= 8 when tablee version 9 has been enabled.
-    if (tableVersion.versionCode() >= HoodieTableVersion.EIGHT.versionCode()) {
-      if (PartialUpdateAvroPayload.class.getName().equals(payloadClassName)
-          || PostgresDebeziumAvroPayload.class.getName().equals(payloadClassName)) {
-        return EVENT_TIME_ORDERING;
-      } else if (OverwriteNonDefaultsWithLatestAvroPayload.class.getName().equals(payloadClassName)) {
-        // TODO: Support AWSDmsAvroPayload after write path is fixed; otherwise, some tests would fail.
-        return COMMIT_TIME_ORDERING;
-      }
-    }
-
-    // For general case.
     if (DefaultHoodieRecordPayload.class.getName().equals(payloadClassName)
-        || EventTimeAvroPayload.class.getName().equals(payloadClassName)) {
+        || EventTimeAvroPayload.class.getName().equals(payloadClassName)
+        || PartialUpdateAvroPayload.class.getName().equals(payloadClassName)
+        || PostgresDebeziumAvroPayload.class.getName().equals(payloadClassName)) {
       return EVENT_TIME_ORDERING;
-    } else if (payloadClassName.equals(OverwriteWithLatestAvroPayload.class.getName())) {
+    } else if (OverwriteNonDefaultsWithLatestAvroPayload.class.getName().equals(payloadClassName)
+        || OverwriteWithLatestAvroPayload.class.getName().equals(payloadClassName)
+        || AWSDmsAvroPayload.class.getName().equals(payloadClassName)) {
       return COMMIT_TIME_ORDERING;
     } else {
       return CUSTOM;
@@ -1117,18 +1104,9 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public PartialUpdateMode getPartialUpdateMode() {
     if (getTableVersion().greaterThanOrEquals(HoodieTableVersion.NINE)) {
-      String payloadClass = getPayloadClass();
-      if (StringUtils.isNullOrEmpty(payloadClass)) {
-        return PartialUpdateMode.valueOf(getStringOrDefault(PARTIAL_UPDATE_MODE));
-      } else if (payloadClass.equals(OverwriteNonDefaultsWithLatestAvroPayload.class.getName())
-          || payloadClass.equals(PartialUpdateAvroPayload.class.getName())) {
-        return PartialUpdateMode.IGNORE_DEFAULTS;
-      } else if (payloadClass.equals(PostgresDebeziumAvroPayload.class.getName())) {
-        return PartialUpdateMode.IGNORE_MARKERS;
-      } else {
-        return PartialUpdateMode.valueOf(getStringOrDefault(PARTIAL_UPDATE_MODE));
-      }
+      return PartialUpdateMode.valueOf(getStringOrDefault(PARTIAL_UPDATE_MODE));
     } else {
+      // For table version <= 8, partial update is not supported.
       return PartialUpdateMode.NONE;
     }
   }

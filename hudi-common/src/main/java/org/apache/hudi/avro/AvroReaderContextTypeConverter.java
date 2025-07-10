@@ -19,12 +19,12 @@
 
 package org.apache.hudi.avro;
 
-import org.apache.hudi.common.engine.ReaderContextTypeHandler;
+import org.apache.hudi.common.engine.ReaderContextTypeConverter;
 import org.apache.hudi.common.util.StringUtils;
 
 import java.nio.ByteBuffer;
 
-public class AvroReaderContextTypeHandler extends ReaderContextTypeHandler {
+public class AvroReaderContextTypeConverter extends ReaderContextTypeConverter {
   @Override
   public String castToString(Object value) {
     if (value == null) {

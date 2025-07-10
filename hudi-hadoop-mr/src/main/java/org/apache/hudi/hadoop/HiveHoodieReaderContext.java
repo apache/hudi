@@ -104,7 +104,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     this.partitionColSet = new HashSet<>(this.partitionCols);
     this.objectInspectorCache = objectInspectorCache;
     this.columnTypeMap = objectInspectorCache.getColumnTypeMap();
-    this.typeHandler = new HiveReaderContextTypeHandler();
+    this.typeHandler = new HiveReaderContextTypeConverter();
   }
 
   private void setSchemas(JobConf jobConf, Schema dataSchema, Schema requiredSchema) {

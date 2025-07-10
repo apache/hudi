@@ -22,7 +22,7 @@ package org.apache.hudi.common.engine;
 /**
  * Helper class that handle cell level operation.
  */
-public class ReaderContextTypeHandler {
+public class ReaderContextTypeConverter {
   /**
    * Cast to Java boolean value.
    * If the object is not compatible with boolean type, throws.

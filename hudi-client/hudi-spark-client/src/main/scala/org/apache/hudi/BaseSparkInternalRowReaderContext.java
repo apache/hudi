@@ -126,7 +126,7 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
         values[pos] = getValue(baseRecord.getRecord(), schema, field.name());
       }
     }
-    return toBinaryRow(schema, new GenericInternalRow(values));
+    return new GenericInternalRow(values);
   }
 
   @Override

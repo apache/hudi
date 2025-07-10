@@ -28,8 +28,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class TestHiveReaderContextTypeHandler {
-  private final HiveReaderContextTypeHandler handler = new HiveReaderContextTypeHandler();
+class TestHiveReaderContextTypeConverter {
+  private final HiveReaderContextTypeConverter handler = new HiveReaderContextTypeConverter();
 
   @Test
   void testCastToBooleanWithValidBooleanWritableTrue() {
