@@ -53,7 +53,6 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
-import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -906,7 +905,7 @@ public class HoodieTableConfig extends HoodieConfig {
     if (DefaultHoodieRecordPayload.class.getName().equals(payloadClassName)
         || EventTimeAvroPayload.class.getName().equals(payloadClassName)) {
       return EVENT_TIME_ORDERING;
-    } else if (payloadClassName.equals(OverwriteWithLatestAvroPayload.class.getName())) {
+    } else if (OverwriteWithLatestAvroPayload.class.getName().equals(payloadClassName)) {
       return COMMIT_TIME_ORDERING;
     } else {
       return CUSTOM;
