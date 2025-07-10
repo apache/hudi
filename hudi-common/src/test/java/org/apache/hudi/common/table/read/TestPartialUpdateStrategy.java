@@ -36,8 +36,8 @@ class TestPartialUpdateStrategy {
   @Test
   void testParseValidProperties() {
     TypedProperties props = new TypedProperties();
-    props.setProperty(HoodieTableConfig.PARTIAL_UPDATE_PROPERTIES.key(), "a=1,b=2,c=3");
-    Map<String, String> result = PartialUpdateStrategy.parsePartialUpdateProperties(props);
+    props.setProperty(HoodieTableConfig.MERGE_PROPERTIES.key(), "a=1,b=2,c=3");
+    Map<String, String> result = PartialUpdateStrategy.parseMergeProperties(props);
 
     assertEquals(3, result.size());
     assertEquals("1", result.get("a"));
@@ -48,8 +48,8 @@ class TestPartialUpdateStrategy {
   @Test
   void testHandlesWhitespace() {
     TypedProperties props = new TypedProperties();
-    props.setProperty(HoodieTableConfig.PARTIAL_UPDATE_PROPERTIES.key(), " a = 1 , b=  2 ,c=3 ");
-    Map<String, String> result = PartialUpdateStrategy.parsePartialUpdateProperties(props);
+    props.setProperty(HoodieTableConfig.MERGE_PROPERTIES.key(), " a = 1 , b=  2 ,c=3 ");
+    Map<String, String> result = PartialUpdateStrategy.parseMergeProperties(props);
 
     assertEquals(3, result.size());
     assertEquals("1", result.get("a"));
@@ -60,8 +60,8 @@ class TestPartialUpdateStrategy {
   @Test
   void testIgnoresEmptyEntriesAndMissingEquals() {
     TypedProperties props = new TypedProperties();
-    props.setProperty(HoodieTableConfig.PARTIAL_UPDATE_PROPERTIES.key(), ",a=1,,b,c=3");
-    Map<String, String> result = PartialUpdateStrategy.parsePartialUpdateProperties(props);
+    props.setProperty(HoodieTableConfig.MERGE_PROPERTIES.key(), ",a=1,,b,c=3");
+    Map<String, String> result = PartialUpdateStrategy.parseMergeProperties(props);
 
     assertEquals(2, result.size());
     assertEquals("1", result.get("a"));
@@ -72,24 +72,24 @@ class TestPartialUpdateStrategy {
   @Test
   void testEmptyValueIsAccepted() {
     TypedProperties props = new TypedProperties();
-    props.setProperty(HoodieTableConfig.PARTIAL_UPDATE_PROPERTIES.key(), "a=,b=2");
+    props.setProperty(HoodieTableConfig.MERGE_PROPERTIES.key(), "a=,b=2");
     assertThrows(
         IllegalArgumentException.class,
-        () -> PartialUpdateStrategy.parsePartialUpdateProperties(props));
+        () -> PartialUpdateStrategy.parseMergeProperties(props));
   }
 
   @Test
   void testEmptyInputReturnsEmptyMap() {
     TypedProperties props = new TypedProperties();
-    props.setProperty(HoodieTableConfig.PARTIAL_UPDATE_PROPERTIES.key(), "");
-    Map<String, String> result = PartialUpdateStrategy.parsePartialUpdateProperties(props);
+    props.setProperty(HoodieTableConfig.MERGE_PROPERTIES.key(), "");
+    Map<String, String> result = PartialUpdateStrategy.parseMergeProperties(props);
     assertTrue(result.isEmpty());
   }
 
   @Test
   void testMissingKeyReturnsEmptyMap() {
     TypedProperties props = new TypedProperties(); // no property set
-    Map<String, String> result = PartialUpdateStrategy.parsePartialUpdateProperties(props);
+    Map<String, String> result = PartialUpdateStrategy.parseMergeProperties(props);
     assertTrue(result.isEmpty());
   }
 
