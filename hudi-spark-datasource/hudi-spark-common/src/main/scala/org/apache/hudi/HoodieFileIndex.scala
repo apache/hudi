@@ -189,7 +189,7 @@ case class HoodieFileIndex(spark: SparkSession,
           val files = logPathInfoStream.collect(Collectors.toList[StoragePathInfo]).asScala
           baseFileStatusOpt.foreach(f => files.append(f))
           val allCandidateFiles = files.map(fileInfo => new FileStatus(fileInfo.getLength, fileInfo.isDirectory, 0, fileInfo.getBlockSize,
-              fileInfo.getModificationTime, new Path(fileInfo.getPath.toUri)))
+              fileInfo.getModificationTime, new Path(fileInfo.getPath.toUri))).toSeq
           sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(
             InternalRow.fromSeq(partitionOpt.get.values), allCandidateFiles)
         }
