@@ -20,7 +20,7 @@
 
 <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Comfortaa|Ubuntu|Roboto|Source+Code+Pro">
 <link rel="stylesheet" href="https://at-ui.github.io/feather-font/css/iconfont.css"><link rel="stylesheet" href="/cn/assets/css/styles.4ef2730f.css">
-<script src="/cn/assets/js/runtime~main.c34b8001.js" defer="defer"></script>
+<script src="/cn/assets/js/runtime~main.4885da99.js" defer="defer"></script>
 <script src="/cn/assets/js/main.9355b342.js" defer="defer"></script>
 </head>
 <body class="navigation-with-keyboard">
@@ -44,7 +44,7 @@ latency and supports near real-time data availability. However, query performanc
 are provided across both, independent of the table type.</p>
 <h2 class="anchor anchorWithStickyNavbar_LWe7" id="copy-on-write-table">Copy On Write Table<a href="#copy-on-write-table" class="hash-link" aria-label="Direct link to heading" title="Direct link to heading">​</a></h2>
 <p>Following illustrates how this works conceptually, when data is written into copy-on-write table and two queries running on top of it.</p>
-<figure><img class="docimage" src="/cn/assets/images/COW_new-34af9e190486467e1b0bfbc5dc410ee2.png" alt="hudi_cow.png"></figure>
+<figure><img class="docimage" src="/cn/assets/images/COW_fix-d6c00a53ce23650b896801bbf398fb3d.png" alt="hudi_cow.png"></figure>
 <p>As data gets written, updates to existing file groups produce a new slice for that file group stamped associated with the commit&#x27;s requested instant time,
 while inserts allocate a new file group and write its first slice for that file group. These file slices and their commit completed instant times are color coded above.
 SQL queries running against such a table (eg: <code>select count(*)</code> counting the total records in that partition), first checks the timeline for the completed writes
