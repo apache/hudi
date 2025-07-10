@@ -26,6 +26,7 @@ import org.apache.hudi.sink.event.Correspondent;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.operators.coordination.CoordinationResponse;
 
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -51,6 +52,16 @@ public class MockCorrespondentWithTimeout extends Correspondent {
       return response.getInstant();
     } catch (Exception e) {
       throw new HoodieException("Error requesting the instant time from the coordinator", e);
+    }
+  }
+
+  @Override
+  public Set<Long> requestPendingCheckpoints() {
+    try {
+      PendingCheckpointsResponse response = CoordinationResponseSerDe.unwrap(this.coordinator.handleCoordinationRequest(PendingCheckpointsRequest.getInstance()).get());
+      return response.getCkpIds();
+    } catch (Exception e) {
+      throw new HoodieException("Error requesting the pending checkpoint ids from the coordinator", e);
     }
   }
 }

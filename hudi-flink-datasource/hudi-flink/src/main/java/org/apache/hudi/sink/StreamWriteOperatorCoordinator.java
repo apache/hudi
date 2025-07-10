@@ -360,6 +360,10 @@ public class StreamWriteOperatorCoordinator
   @Override
   public CompletableFuture<CoordinationResponse> handleCoordinationRequest(CoordinationRequest request) {
     CompletableFuture<CoordinationResponse> response = new CompletableFuture<>();
+    if (request instanceof Correspondent.PendingCheckpointsRequest) {
+      response.complete(CoordinationResponseSerDe.wrap(Correspondent.PendingCheckpointsResponse.getInstance(this.eventBuffers.getPendingCheckpoints())));
+      return response;
+    }
     instantRequestExecutor.execute(() -> {
       Correspondent.InstantTimeRequest instantTimeRequest = (Correspondent.InstantTimeRequest) request;
       long checkpointId = instantTimeRequest.getCheckpointId();

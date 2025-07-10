@@ -23,6 +23,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.event.CommitAckEvent;
 import org.apache.hudi.sink.event.Correspondent;
@@ -45,6 +46,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.StreamSupport;
 
 /**
@@ -121,6 +123,11 @@ public abstract class AbstractStreamWriteFunction<I>
   protected long checkpointId = -1;
 
   /**
+   * Whether the instant time generation is blocking.
+   */
+  private boolean isBlockingInstantTimeGeneration;
+
+  /**
    * Constructs a StreamWriteFunctionBase.
    *
    * @param config The config options
@@ -135,6 +142,7 @@ public abstract class AbstractStreamWriteFunction<I>
     this.metaClient = StreamerUtil.createMetaClient(this.config);
     this.writeClient = FlinkWriteClients.createWriteClient(this.config, getRuntimeContext());
     this.writeStatuses = new ArrayList<>();
+    this.isBlockingInstantTimeGeneration = OptionsResolver.isBlockingInstantGeneration(config);
     this.writeMetadataState = context.getOperatorStateStore().getListState(
         new ListStateDescriptor<>(
             "write-metadata-state",
@@ -150,7 +158,7 @@ public abstract class AbstractStreamWriteFunction<I>
     if (context.isRestored()) {
       initCheckpointId(attemptId, context.getRestoredCheckpointId().orElse(-1L));
     }
-    sendBootstrapEvent(context.isRestored());
+    sendBootstrapEvent(attemptId, context.isRestored());
   }
 
   @Override
@@ -207,38 +215,49 @@ public abstract class AbstractStreamWriteFunction<I>
     this.checkpointId = restoredCheckpointId;
   }
 
-  private void sendBootstrapEvent(boolean isRestored) throws Exception {
-    if (!isRestored || !sendPendingCommitEvents()) {
+  private void sendBootstrapEvent(int attemptId, boolean isRestored) throws Exception {
+    if (attemptId <= 0) {
+      if (isRestored) {
+        HoodieTimeline pendingTimeline = this.metaClient.getActiveTimeline().filterPendingExcludingCompaction();
+        // if the task is initially started, resend the pending event.
+        for (WriteMetadataEvent event : this.writeMetadataState.get()) {
+          // Must filter out the completed instants in case it is a partial failover,
+          // the write status should not be accumulated in such case.
+          if (pendingTimeline.containsInstant(event.getInstantTime())) {
+            // Reset taskID for event
+            event.setTaskID(taskID);
+            // The checkpoint succeed but the meta does not commit,
+            // re-commit the inflight instant
+            this.eventGateway.sendEventToCoordinator(event);
+            LOG.info("Send uncommitted write metadata event to coordinator, task[{}].", taskID);
+          }
+        }
+      }
+    } else {
+      // otherwise sends an empty bootstrap event instead.
       this.eventGateway.sendEventToCoordinator(WriteMetadataEvent.emptyBootstrap(taskID, checkpointId));
       LOG.info("Send bootstrap write metadata event to coordinator, task[{}].", taskID);
     }
-  }
-
-  private boolean sendPendingCommitEvents() throws Exception {
-    boolean eventSent = false;
-    HoodieTimeline pendingTimeline = this.metaClient.getActiveTimeline().filterPendingExcludingCompaction();
-    // if the task is initially started, resend the pending event.
-    for (WriteMetadataEvent event : this.writeMetadataState.get()) {
-      // Must filter out the completed instants in case it is a partial failover,
-      // the write status should not be accumulated in such case.
-      if (pendingTimeline.containsInstant(event.getInstantTime())) {
-        // Reset taskID for event
-        event.setTaskID(taskID);
-        // The checkpoint succeed but the meta does not commit,
-        // re-commit the inflight instant
-        this.eventGateway.sendEventToCoordinator(event);
-        LOG.info("Send uncommitted write metadata event to coordinator, task[{}].", taskID);
-        eventSent = true;
-      }
-    }
-    return eventSent;
   }
 
   /**
    * Reload the write metadata state as the current checkpoint.
    */
   private void reloadWriteMetaState() throws Exception {
-    this.writeMetadataState.clear();
+    if (isBlockingInstantTimeGeneration) {
+      this.writeMetadataState.clear();
+    } else {
+      // send an RPC request to fetch the current pending checkpoints
+      Set<Long> pendingCheckpoints = this.correspondent.requestPendingCheckpoints();
+      List<WriteMetadataEvent> pendingEvents = new ArrayList<>();
+      this.writeMetadataState.get().forEach(event -> {
+        if (pendingCheckpoints.contains(event.getCheckpointId())) {
+          pendingEvents.add(event);
+        }
+      });
+      this.writeMetadataState.clear();
+      this.writeMetadataState.addAll(pendingEvents);
+    }
     WriteMetadataEvent event = WriteMetadataEvent.builder()
         .taskID(taskID)
         .checkpointId(checkpointId)
