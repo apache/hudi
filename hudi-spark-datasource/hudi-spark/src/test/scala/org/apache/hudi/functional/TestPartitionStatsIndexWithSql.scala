@@ -242,9 +242,11 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
         assertResult(tableName)(metaClient.getTableConfig.getTableName)
         assertTrue(metaClient.getTableConfig.getMetadataPartitions.contains(PARTITION_STATS.getPartitionPath))
         val fileIndex = HoodieFileIndex(spark, metaClient, None, Map("path" -> metaClient.getBasePath.toString))
-        val partitionFiles = fileIndex.listFiles(Seq.empty, Seq.empty)
+        // list files and group by partition
+        val partitionFiles = fileIndex.listFiles(Seq.empty, Seq.empty).map(dir => (dir.values, dir.files))
+          .flatMap(p => p._2.map(f => (p._1, f))).groupBy(f => f._1)
         // Make sure there are partition(s) with a single file and multiple files
-        assertTrue(partitionFiles.exists(p => p.files.size == 1) && partitionFiles.exists(p => p.files.size > 1))
+        assertTrue(partitionFiles.exists(p => p._2.size == 1) && partitionFiles.exists(p => p._2.size > 1))
 
         // Test pruning
         spark.sql("set hoodie.metadata.enable=true")
