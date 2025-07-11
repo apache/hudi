@@ -32,6 +32,7 @@ import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.util.collection.ClosableSortingIterator;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import java.util.Iterator;
@@ -83,8 +84,8 @@ public abstract class HoodieEngineContext {
 
   public abstract <I, O> List<O> map(List<I> data, SerializableFunction<I, O> func, int parallelism);
 
-  public abstract <I, K, V> List<V> mapToPairAndReduceByKey(
-      List<I> data, SerializablePairFunction<I, K, V> mapToPairFunc, SerializableBiFunction<V, V, V> reduceFunc, int parallelism);
+  public abstract <I, K, V> List<V> mapToPairAndReduceByKey(List<I> data, SerializablePairFunction<I, K, V> mapToPairFunc,
+                                                            SerializableBiFunction<V, V, V> reduceFunc, int parallelism);
 
   public abstract <I, K, V> Stream<ImmutablePair<K, V>> mapPartitionsToPairAndReduceByKey(
       Stream<I> data, SerializablePairFlatMapFunction<Iterator<I>, K, V> flatMapToPairFunc,
@@ -129,4 +130,27 @@ public abstract class HoodieEngineContext {
   public abstract <I, O> O aggregate(HoodieData<I> data, O zeroValue, Functions.Function2<O, I, O> seqOp, Functions.Function2<O, O, O> combOp);
 
   public abstract <T> ReaderContextFactory<T> getReaderContextFactory(HoodieTableMetaClient metaClient);
+
+  /**
+   * Groups values by key and applies a function to each group of values.
+   * [1 iterator maps to 1 key] It only guarantees that items returned by the same iterator shares to the same key.
+   * [exact once across iterators] The item returned by the same iterator will not be returned by other iterators.
+   * [1 key maps to >= 1 iterators] Items belong to the same shard can be load-balanced across multiple iterators. It's up to API implementations to decide
+   *                                load balancing pattern and how many iterators to split into.
+   * [iterator return sorted values] Values returned via iterator is sorted.
+   *
+   * @param data The input pair<ShardIndex, Item> to process.
+   * @param func Function to apply to each group of items with the same shard
+   * @param shardIndices Set of all possible shard indices that may appear in the data. This is used for efficient partitioning and load balancing.
+   * @param preservesPartitioning whether to preserve partitioning in the resulting collection.
+   * @param <S> Type of the shard index (must be Comparable)
+   * @param <V> Type of the value in the input data (must be Comparable)
+   * @param <R> Type of the result
+   * @return Result of applying the function to each group
+   */
+  public <S extends Comparable<S>, V extends Comparable<V>, R> HoodieData<R> processValuesOfTheSameShards(
+      HoodiePairData<S, V> data, SerializableFunction<Iterator<V>, Iterator<R>> func, List<S> shardIndices, boolean preservesPartitioning) {
+    // Group values by key and apply the function to each group
+    return data.groupByKey().values().flatMap(it -> func.apply(new ClosableSortingIterator<>(it.iterator())));
+  }
 }
