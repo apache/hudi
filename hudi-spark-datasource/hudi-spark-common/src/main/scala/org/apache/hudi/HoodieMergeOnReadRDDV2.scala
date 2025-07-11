@@ -18,9 +18,10 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.HoodieBaseRelation.{BaseFileReader, projectReader}
+import org.apache.hudi.HoodieBaseRelation.{projectReader, BaseFileReader}
 import org.apache.hudi.HoodieMergeOnReadRDDV2.CONFIG_INSTANTIATION_LOCK
 import org.apache.hudi.MergeOnReadSnapshotRelation.isProjectionCompatible
+import org.apache.hudi.avro.HoodieAvroReaderContext
 import org.apache.hudi.common.config.{HoodieReaderConfig, TypedProperties}
 import org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE
 import org.apache.hudi.common.fs.FSUtils
@@ -28,16 +29,15 @@ import org.apache.hudi.common.model.{HoodieBaseFile, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.read.HoodieFileGroupReader
 import org.apache.hudi.common.util.{Option => HOption}
+import org.apache.hudi.common.util.collection.ClosableIterator
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
+
 import org.apache.avro.Schema
 import org.apache.avro.generic.IndexedRecord
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.mapred.JobConf
-import org.apache.hudi.avro.HoodieAvroReaderContext
-import org.apache.hudi.common.util.collection.{ClosableIterator, CloseableMappingIterator}
-import org.apache.hudi.data.CloseableIteratorListener
 import org.apache.spark.{Partition, SerializableWritable, SparkContext, TaskContext}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
@@ -47,6 +47,7 @@ import org.apache.spark.sql.sources.Filter
 
 import java.io.Closeable
 import java.util.function.Predicate
+
 import scala.collection.JavaConverters._
 import scala.jdk.CollectionConverters.mapAsJavaMapConverter
 
