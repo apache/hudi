@@ -167,9 +167,8 @@ public class BufferedRecordMergerFactory {
     public Option<BufferedRecord<T>> deltaMerge(BufferedRecord<T> newRecord, BufferedRecord<T> existingRecord) {
       if (existingRecord == null || shouldKeepNewerRecord(existingRecord, newRecord)) {
         return Option.of(newRecord);
-      } else {
-        return Option.of(existingRecord);
       }
+      return Option.empty();
     }
 
     @Override

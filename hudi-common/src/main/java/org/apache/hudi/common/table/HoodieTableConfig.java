@@ -829,7 +829,7 @@ public class HoodieTableConfig extends HoodieConfig {
           : (isNullOrEmpty(orderingFieldName) ? COMMIT_TIME_ORDERING : EVENT_TIME_ORDERING);
     } else {
       // Infer the merge mode from either the payload class or record merge strategy ID
-      RecordMergeMode modeBasedOnPayload = inferRecordMergeModeFromPayloadClass(payloadClassName, tableVersion);
+      RecordMergeMode modeBasedOnPayload = inferRecordMergeModeFromPayloadClass(payloadClassName);
       RecordMergeMode modeBasedOnStrategyId = inferRecordMergeModeFromMergeStrategyId(recordMergeStrategyId);
       checkArgument(modeBasedOnPayload != null || modeBasedOnStrategyId != null,
           String.format("Cannot infer record merge mode from payload class (%s) or record merge "
@@ -849,9 +849,7 @@ public class HoodieTableConfig extends HoodieConfig {
         inferredRecordMergeMode = modeBasedOnPayload != null ? modeBasedOnPayload : modeBasedOnStrategyId;
       }
     }
-    // Only do this check when table version >= 9 since for other table versions,
-    // the payload class based merge mode can be different from CUSTOM due to RFC-97.
-    if (recordMergeMode != null && tableVersion.greaterThanOrEquals(HoodieTableVersion.NINE)) {
+    if (recordMergeMode != null) {
       checkArgument(inferredRecordMergeMode == recordMergeMode,
           String.format("Configured record merge mode (%s) is inconsistent with payload class (%s) "
                   + "or record merge strategy ID (%s) configured. Please revisit the configs.",
@@ -898,10 +896,11 @@ public class HoodieTableConfig extends HoodieConfig {
     return Triple.of(inferredRecordMergeMode, inferredPayloadClassName, inferredRecordMergeStrategyId);
   }
 
-  public static RecordMergeMode inferRecordMergeModeFromPayloadClass(String payloadClassName, HoodieTableVersion tableVersion) {
+  public static RecordMergeMode inferRecordMergeModeFromPayloadClass(String payloadClassName) {
     if (isNullOrEmpty(payloadClassName)) {
       return null;
     }
+
     if (DefaultHoodieRecordPayload.class.getName().equals(payloadClassName)
         || EventTimeAvroPayload.class.getName().equals(payloadClassName)) {
       return EVENT_TIME_ORDERING;
