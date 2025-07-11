@@ -18,8 +18,9 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.HoodieBaseRelation.{projectReader, BaseFileReader}
+import org.apache.hudi.HoodieBaseRelation.{BaseFileReader, projectReader}
 import org.apache.hudi.HoodieMergeOnReadRDDV2.CONFIG_INSTANTIATION_LOCK
+import org.apache.hudi.LogFileIterator.getPartitionPath
 import org.apache.hudi.MergeOnReadSnapshotRelation.isProjectionCompatible
 import org.apache.hudi.avro.HoodieAvroReaderContext
 import org.apache.hudi.common.config.{HoodieReaderConfig, TypedProperties}
@@ -31,7 +32,6 @@ import org.apache.hudi.common.table.read.HoodieFileGroupReader
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.common.util.collection.ClosableIterator
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
-import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 
 import org.apache.avro.Schema
@@ -127,11 +127,7 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
         val baseFileOption = HOption.ofNullable(
           partition.split.dataFile.map(file => new HoodieBaseFile(file.filePath.toPath.toString)).orNull)
         val logFiles = partition.split.logFiles.asJava
-        val fullPartitionPath: StoragePath = if (baseFileOption.isPresent) {
-          baseFileOption.get.getStoragePath.getParent
-        } else {
-          logFiles.get(0).getPath.getParent
-        }
+        val fullPartitionPath = getPartitionPath(partition.split)
         val partitionPath = FSUtils.getRelativePartitionPath(metaClient.getBasePath, fullPartitionPath)
 
         if (metaClient.isMetadataTable) {
