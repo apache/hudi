@@ -18,6 +18,8 @@
 
 package org.apache.spark.sql.hudi.execution
 
+import org.apache.hudi.SparkAdapterSupport
+import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 import org.apache.hudi.common.util.BinaryUtil
 import org.apache.hudi.config.HoodieClusteringConfig
 import org.apache.hudi.config.HoodieClusteringConfig.LayoutOptimizationStrategy
@@ -42,7 +44,7 @@ class RangeSample[K: ClassTag, V](
                                    zEncodeNum: Int,
                                    rdd: RDD[_ <: Product2[K, V]],
                                    private var ascend: Boolean = true,
-                                   val samplePointsPerPartitionHint: Int = 20) extends Serializable {
+                                   val samplePointsPerPartitionHint: Int = 20) extends Serializable with SparkAdapterSupport {
 
   // We allow zEncodeNum = 0, which happens when sorting an empty RDD under the default settings.
   require(zEncodeNum >= 0, s"Number of zEncodeNum cannot be negative but found $zEncodeNum.")
@@ -537,7 +539,7 @@ object RangeSampleSort {
           mutablePair.update(unsafeRow, zValues)
         }
       }.sortBy(x => ByteArraySorting(x._2), numPartitions = fileNum).map(_._1)
-      spark.internalCreateDataFrame(indexRdd, schema)
+      sparkAdapter.internalCreateDataFrame(spark, indexRdd, schema)
     }
   }
 }
