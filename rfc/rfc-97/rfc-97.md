@@ -80,7 +80,7 @@ These inconsistencies lead to bugs, surprises during upgrades, and poor UX for n
 
 ## Partial Update Mode
 
-The new table property `hoodie.write.partial.update.mode=<value>` now controls how missing columns are interpreted in a record. This enables flexible logic without writing a custom payload or merger.
+The new table property `hoodie.table.partial.update.mode=<value>` now controls how missing columns are interpreted in a record. This enables flexible logic without writing a custom payload or merger.
 
 | Mode              | Description                                                     |
 | ----------------- | --------------------------------------------------------------- |
@@ -113,9 +113,36 @@ This behavior is now decoupled from merge mode, and supports all ingestion sourc
 | `PartialUpdateAvroPayload`                  | `EVENT_TIME_ORDERING` + `KEEP_VALUES`      | Upgrade process automatically sets the partial update mode in table property. Add support for "Partial update mode" feature in general.                                                                                                                                                            | Upgrade Readers before writers. (Writer changes will only kick in for table version 9)                                                                 | Common in streaming UPSERT. Used in streaming CDC pipelines.                                                     |
 | `AWSDmsAvroPayload`                         | `COMMIT_TIME_ORDERING`                     | Upgrade process sets custom delete marker properties (hoodie.payload.delete.field = 'Op'  and hoodie.payload.delete.marker = 'D'  ) in table property                                                                                                                                              | Upgrade Readers before writers. (Writer changes will only kick in for table version 9) | Fixes delete handling in MoR read paths; used in AWS DMS-based ingestion.                                        |
 | `MySqlDebeziumAvroPayload`                  | `EVENT_TIME_ORDERING`                      | Add support for multi-ordering values feature in general. Upgrade automatically sets the merge mode in table property.                                                                                                                                                                             | For existing tables: update `hoodie.table.precombine.field` config for multiple ordering fields. | Important in banking/transactional ingestion.                                                                    |
-| `PostgresDebeziumAvroPayload`               | `EVENT_TIME_ORDERING` + `IGNORE_MARKERS`   | a.  Upgrade automatically sets `hoodie.write.partial.update.mode` to `IGNORE_MARKERS`  table property and b. Upgrade automatically sets `hoodie.write.partial.update.custom.marker`  as `__debezium_unavailable_value` c. Rollback any pending commits and trigger full compaction during upgrade. | No action                                                                              | CDC systems like Debezium mark unavailable fields. Full compaction is needed to migrate.                         |
+| `PostgresDebeziumAvroPayload`               | `EVENT_TIME_ORDERING` + `IGNORE_MARKERS`   | a.  Upgrade automatically sets `hoodie.table.partial.update.mode` to `IGNORE_MARKERS`  table property and b. Upgrade automatically sets `hoodie.table.partial.update.custom.marker`  as `__debezium_unavailable_value` c. Rollback any pending commits and trigger full compaction during upgrade. | No action                                                                              | CDC systems like Debezium mark unavailable fields. Full compaction is needed to migrate.                         |
 | `ExpressionPayload`                         | N/A                                        | Leave unchanged                                                                                                                                                                                                                                                                                    | No action                                                                              | Used in `Merge into (...) where` logic in SQL. Will eventually be rewritten into a merger.                       |
 | `HoodieMetadataPayload`                     | N/A                                        | An explicit merger class is provided during the upgrade                                                                                                                                                                                                                                            | No action                                                                              | Not impacted. Handles metadata table compactions. Merges handled explicitly for performance and correctness.     |
+
+---
+
+# Required Changes Highlighted
+
+## Reader Side
+* Create an enum class named `PartialUpdateMode` for partial update modes defined above as follows.
+  ```java
+  public enum PartialUpdateMode {
+    NONE, KEEP_VALUES, FILL_DEFAULTS, IGNORE_DEFAULTS, IGNORE_MARKERS
+  }
+  ```
+  The mode `NONE` represents no partial update should be attempted, which is introduced for lower table versions. 
+* Introduce a new table configuration `hoodie.table.partial.update.mode` for partial update mode, whose default value is `NONE`.
+* Introduce a new table configuration `hoodie.table.merge.properties` to collect a list of configurations that could be  
+  used during merging for above mentioned payloads. E.g., for `PostgresDebeziumAvroPayload`, \
+  `hoodie.table.merge.properties="hoodie.table.partial.update.custom.marker=__debezium_unavailable_value"`.
+* `BufferedRecordMergerFactory` generates two more partial-update related mergers, **CommitTimeBufferedRecordPartialUpdateMerger**,
+  **EventTimeBufferedRecordPartialUpdateMerger**, which are used for partial update modes for `COMMIT_TIME_ORDERING` and `EVENT_TIME_ORDERING` merge modes.
+* Class `PartialUpdateStrategy` implements the detailed logics for all partial update modes, which is wrapped into above
+  mergers. We can employ a branching to trigger a specific partial logic based on the input partial update mode due to
+  simplicity of the implementation.
+
+## Writer Side
+
+
+## Upgrade/Downgrade Support
 
 ---
 
