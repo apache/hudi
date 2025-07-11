@@ -1101,6 +1101,10 @@ public class HoodieTableConfig extends HoodieConfig {
     }
   }
 
+  public String getMergeProperties() {
+    return getStringOrDefault(MERGE_PROPERTIES);
+  }
+
   /**
    * @returns the index definition path.
    */
