@@ -104,6 +104,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     this.partitionColSet = new HashSet<>(this.partitionCols);
     this.objectInspectorCache = objectInspectorCache;
     this.columnTypeMap = objectInspectorCache.getColumnTypeMap();
+    this.typeConverter = new HiveReaderContextTypeConverter();
   }
 
   private void setSchemas(JobConf jobConf, Schema dataSchema, Schema requiredSchema) {
@@ -216,16 +217,6 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   }
 
   @Override
-  public boolean castToBoolean(Object value) {
-    if (value instanceof BooleanWritable) {
-      return ((BooleanWritable) value).get();
-    } else {
-      throw new IllegalArgumentException(
-          "Expected BooleanWritable but got " + value.getClass());
-    }
-  }
-
-  @Override
   public HoodieRecord<ArrayWritable> constructHoodieRecord(BufferedRecord<ArrayWritable> bufferedRecord) {
     HoodieKey key = new HoodieKey(bufferedRecord.getRecordKey(), partitionPath);
     if (bufferedRecord.isDelete()) {
@@ -236,6 +227,17 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     Schema schema = getSchemaFromBufferRecord(bufferedRecord);
     ArrayWritable writable = bufferedRecord.getRecord();
     return new HoodieHiveRecord(key, writable, schema, objectInspectorCache);
+  }
+
+  @Override
+  public ArrayWritable constructEngineRecord(Schema schema,
+                                             Map<Integer, Object> updateValues,
+                                             BufferedRecord<ArrayWritable> baseRecord) {
+    Writable[] engineRecord = baseRecord.getRecord().get();
+    for (Map.Entry<Integer, Object> value : updateValues.entrySet()) {
+      engineRecord[value.getKey()] = (Writable) value.getValue();
+    }
+    return baseRecord.getRecord();
   }
 
   @Override
@@ -344,5 +346,4 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     }
     throw new IllegalStateException("getProgress() should not be called before a record reader has been initialized");
   }
-
 }
