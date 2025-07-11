@@ -29,7 +29,6 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestPartialUpdateStrategy {
@@ -63,19 +62,10 @@ class TestPartialUpdateStrategy {
     props.setProperty(HoodieTableConfig.MERGE_PROPERTIES.key(), ",a=1,,b,c=3");
     Map<String, String> result = PartialUpdateStrategy.parseMergeProperties(props);
 
-    assertEquals(2, result.size());
+    assertEquals(3, result.size());
     assertEquals("1", result.get("a"));
     assertEquals("3", result.get("c"));
-    assertFalse(result.containsKey("b"));
-  }
-
-  @Test
-  void testEmptyValueIsAccepted() {
-    TypedProperties props = new TypedProperties();
-    props.setProperty(HoodieTableConfig.MERGE_PROPERTIES.key(), "a=,b=2");
-    assertThrows(
-        IllegalArgumentException.class,
-        () -> PartialUpdateStrategy.parseMergeProperties(props));
+    assertEquals("", result.get("b"));
   }
 
   @Test

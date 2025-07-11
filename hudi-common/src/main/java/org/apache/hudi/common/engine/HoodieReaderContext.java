@@ -94,7 +94,7 @@ public abstract class HoodieReaderContext<T> {
   protected String partitionPath;
   protected Option<InstantRange> instantRangeOpt = Option.empty();
   private RecordMergeMode mergeMode;
-  protected ReaderContextTypeConverter typeHandler;
+  protected ReaderContextTypeConverter typeConverter;
 
   // for encoding and decoding schemas to the spillable map
   private final LocalAvroSchemaCache localAvroSchemaCache = LocalAvroSchemaCache.getInstance();
@@ -110,7 +110,7 @@ public abstract class HoodieReaderContext<T> {
     this.baseFileFormat = tableConfig.getBaseFileFormat();
     this.instantRangeOpt = instantRangeOpt;
     this.keyFilterOpt = keyFilterOpt;
-    this.typeHandler = new ReaderContextTypeConverter();
+    this.typeConverter = new ReaderContextTypeConverter();
   }
 
   // Getter and Setter for schemaHandler
@@ -205,8 +205,8 @@ public abstract class HoodieReaderContext<T> {
     return new DefaultSerializer<>();
   }
 
-  public ReaderContextTypeConverter getTypeHandler() {
-    return typeHandler;
+  public ReaderContextTypeConverter getTypeConverter() {
+    return typeConverter;
   }
 
   /**
@@ -286,7 +286,7 @@ public abstract class HoodieReaderContext<T> {
   public void initRecordMerger(TypedProperties properties) {
     RecordMergeMode recordMergeMode = tableConfig.getRecordMergeMode();
     String mergeStrategyId = tableConfig.getRecordMergeStrategyId();
-    if (!tableConfig.getTableVersion().greaterThan(HoodieTableVersion.EIGHT)) {
+    if (!tableConfig.getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
       Triple<RecordMergeMode, String, String> triple = HoodieTableConfig.inferCorrectMergingBehavior(
           recordMergeMode, tableConfig.getPayloadClass(),
           mergeStrategyId, null, tableConfig.getTableVersion());

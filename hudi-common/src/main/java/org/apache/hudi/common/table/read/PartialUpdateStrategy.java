@@ -140,7 +140,7 @@ public class PartialUpdateStrategy<T> {
       String fieldName = field.name();
       Object newValue = readerContext.getValue(newRecord.getRecord(), newSchema, fieldName);
       if ((isStringTyped(field) || isBytesTyped(field))
-          && (partialUpdateCustomMarker.equals(readerContext.getTypeHandler().castToString(newValue)))) {
+          && (partialUpdateCustomMarker.equals(readerContext.getTypeConverter().castToString(newValue)))) {
         updateValues.put(field.pos(), readerContext.getValue(oldRecord.getRecord(), oldSchema, fieldName));
       }
     }

@@ -165,7 +165,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
 
     Object columnValue = readerContext.getValue(
         record, readerSchema, HOODIE_IS_DELETED_FIELD);
-    return columnValue != null && readerContext.getTypeHandler().castToBoolean(columnValue);
+    return columnValue != null && readerContext.getTypeConverter().castToBoolean(columnValue);
   }
 
   /**
