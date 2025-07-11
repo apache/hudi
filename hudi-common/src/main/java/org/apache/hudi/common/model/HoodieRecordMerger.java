@@ -152,6 +152,7 @@ public interface HoodieRecordMerger extends Serializable {
    * If false, whenever we have log files, we will need to read all columns
    * If true, mor merging can be done without all columns. The columns required can be configured
    * by overriding getMandatoryFieldsForMerging
+   * EventTime based merging and CommitTime based merging are projection compatible
    */
   default boolean isProjectionCompatible() {
     return false;
