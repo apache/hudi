@@ -23,7 +23,7 @@ import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieSpa
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.{HoodieMetadataConfig, RecordMergeMode}
 import org.apache.hudi.common.model.WriteOperationType
-import org.apache.hudi.common.table.{HoodieTableMetaClient, HoodieTableVersion}
+import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieCompactionConfig, HoodieWriteConfig}
@@ -35,7 +35,7 @@ import org.apache.hudi.storage.StoragePath
 
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertTrue}
 
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -714,6 +714,22 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
     String.format("%03d", new Integer(instantTime.incrementAndGet()))
   }
 
+  private def validateFieldType(basePath: String, fieldName: String, expectedType: String): Unit = {
+    val metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(basePath)
+      .setConf(HoodieTestUtils.getDefaultStorageConf)
+      .build()
+    val schemaResolver = new TableSchemaResolver(metaClient)
+    val tableSchema = schemaResolver.getTableAvroSchema(false)
+    val field = tableSchema.getField(fieldName)
+    assertNotNull(field, s"$fieldName field should exist in table schema")
+    val fieldType = field.schema()
+    assertTrue(
+      fieldType.toString.contains(expectedType),
+      s"$fieldName field should be of type $expectedType, but got: ${fieldType.toString}"
+    )
+  }
+
   private def createTempTableAndInsert(tableName: String, basePath: String) = {
     spark.sql(
       s"""
@@ -748,7 +764,6 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
          | """.stripMargin
     )
   }
-
 
   /**
    * Test secondary index with nullable columns covering comprehensive scenarios for both COW and MOR:
@@ -1077,5 +1092,96 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
       .collect()
       .map(_.getString(0))
       .filter(_.contains(SECONDARY_INDEX_RECORD_KEY_SEPARATOR))
+  }
+
+  test("Test Secondary Index with Schema Evolution - Column Type Change Should Fail") {
+    import spark.implicits._
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val basePath = s"${tmp.getCanonicalPath}/$tableName"
+
+      // Helper function to validate schema evolution exception
+      def validateSchemaEvolutionException(exception: Exception, columnName: String, indexName: String): Unit = {
+        assertTrue(
+          exception.getMessage.contains("Failed upsert schema compatibility check") ||
+          exception.getMessage.contains(s"Column '$columnName' has secondary index '$indexName'") ||
+          (exception.getCause != null &&
+            exception.getCause.getMessage.contains(s"Column '$columnName' has secondary index '$indexName' and cannot evolve")),
+          s"Got unexpected exception message: ${exception.getMessage}"
+        )
+      }
+
+      // Create table with initial schema where quantity1 and quantity2 are int
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  quantity1 int,
+           |  quantity2 int,
+           |  ts long
+           |) using hudi
+           | options (
+           |  primaryKey ='id',
+           |  type = 'cow',
+           |  preCombineField = 'ts',
+           |  hoodie.metadata.enable = 'true',
+           |  hoodie.metadata.record.index.enable = 'true'
+           | )
+           | location '$basePath'
+   """.stripMargin)
+
+      // Insert initial data with integer quantities
+      spark.sql(s"insert into $tableName values(1, 'a1', 10, 100, 1000)")
+      spark.sql(s"insert into $tableName values(2, 'a2', 20, 200, 1001)")
+
+      // Create secondary indexes on both quantity columns
+      spark.sql(s"create index idx_quantity1 on $tableName (quantity1)")
+      spark.sql(s"create index idx_quantity2 on $tableName (quantity2)")
+      spark.sql(s"set hoodie.schema.on.read.enable = true")
+
+      // Verify indexes exist
+      checkAnswer(s"show indexes from default.$tableName")(
+        Seq("column_stats", "column_stats", ""),
+        Seq("record_index", "record_index", ""),
+        Seq("secondary_index_idx_quantity1", "secondary_index", "quantity1"),
+        Seq("secondary_index_idx_quantity2", "secondary_index", "quantity2")
+      )
+
+      // Validate that both quantity fields are initially int type
+      validateFieldType(basePath, "quantity1", "int")
+      validateFieldType(basePath, "quantity2", "int")
+
+      // Try SQL ALTER on quantity2 - should fail because of secondary index
+      val caughtAlterException = intercept[Exception] {
+        spark.sql(s"ALTER TABLE $tableName ALTER COLUMN quantity2 TYPE double")
+      }
+      validateSchemaEvolutionException(caughtAlterException, "quantity2", "secondary_index_idx_quantity2")
+
+      // Try data source write evolution on quantity1 - should fail because of secondary index
+      val caughtDSWriteException = intercept[Exception] {
+        val evolvedData = Seq(
+          (3, "a3", 30.5, 300, 1002L) // Note: quantity1 is now double (30.5) instead of int
+        ).toDF("id", "name", "quantity1", "quantity2", "ts")
+
+        evolvedData.write
+          .format("hudi")
+          .option("hoodie.table.name", tableName)
+          .option("hoodie.datasource.write.table.type", "COPY_ON_WRITE")
+          .option("hoodie.datasource.write.recordkey.field", "id")
+          .option("hoodie.datasource.write.precombine.field", "ts")
+          .option("hoodie.datasource.write.operation", "upsert")
+          .option("hoodie.schema.on.read.enable", "true")
+          .mode("append")
+          .save(basePath)
+      }
+      validateSchemaEvolutionException(caughtDSWriteException, "quantity1", "secondary_index_idx_quantity1")
+
+      // Verify that the original data is still intact
+      checkAnswer(s"SELECT id, name, quantity1, quantity2, ts FROM $tableName ORDER BY id")(
+        Seq(1, "a1", 10, 100, 1000),
+        Seq(2, "a2", 20, 200, 1001)
+      )
+    }
   }
 }
