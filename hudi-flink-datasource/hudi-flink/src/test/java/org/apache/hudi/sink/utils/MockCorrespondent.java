@@ -22,6 +22,8 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.event.Correspondent;
 
+import java.util.Set;
+
 /**
  * A mock {@link Correspondent} that always return the latest instant.
  */
@@ -38,6 +40,16 @@ public class MockCorrespondent extends Correspondent {
       return response.getInstant();
     } catch (Exception e) {
       throw new HoodieException("Error requesting the instant time from the coordinator", e);
+    }
+  }
+
+  @Override
+  public Set<Long> requestPendingCheckpoints() {
+    try {
+      PendingCheckpointsResponse response = CoordinationResponseSerDe.unwrap(this.coordinator.handleCoordinationRequest(PendingCheckpointsRequest.getInstance()).get());
+      return response.getCkpIds();
+    } catch (Exception e) {
+      throw new HoodieException("Error requesting the pending checkpoint ids from the coordinator", e);
     }
   }
 }

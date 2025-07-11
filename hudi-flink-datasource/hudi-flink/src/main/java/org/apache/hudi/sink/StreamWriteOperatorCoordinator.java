@@ -176,6 +176,11 @@ public class StreamWriteOperatorCoordinator
   private NonThrownExecutor instantRequestExecutor;
 
   /**
+   * A single-thread executor to handle the state query request.
+   */
+  private NonThrownExecutor stateQueryExecutor;
+
+  /**
    * A single-thread executor to handle asynchronous hive sync.
    */
   private NonThrownExecutor hiveSyncExecutor;
@@ -239,6 +244,10 @@ public class StreamWriteOperatorCoordinator
           .waitForTasksFinish(true).build();
       this.instantRequestExecutor = NonThrownExecutor.builder(LOG)
           .threadFactory(getThreadFactory("instant-request"))
+          .exceptionHook((errMsg, t) -> this.context.failJob(new HoodieException(errMsg, t)))
+          .build();
+      this.stateQueryExecutor = NonThrownExecutor.builder(LOG)
+          .threadFactory(getThreadFactory("state-query"))
           .exceptionHook((errMsg, t) -> this.context.failJob(new HoodieException(errMsg, t)))
           .build();
       // start the executor if required
@@ -360,6 +369,11 @@ public class StreamWriteOperatorCoordinator
   @Override
   public CompletableFuture<CoordinationResponse> handleCoordinationRequest(CoordinationRequest request) {
     CompletableFuture<CoordinationResponse> response = new CompletableFuture<>();
+    if (request instanceof Correspondent.PendingCheckpointsRequest) {
+      stateQueryExecutor.execute(() -> response.complete(CoordinationResponseSerDe.wrap(Correspondent.PendingCheckpointsResponse.getInstance(this.eventBuffers.getPendingCheckpoints()))),
+          "request pending checkpoint ids");
+      return response;
+    }
     instantRequestExecutor.execute(() -> {
       Correspondent.InstantTimeRequest instantTimeRequest = (Correspondent.InstantTimeRequest) request;
       long checkpointId = instantTimeRequest.getCheckpointId();

@@ -26,6 +26,7 @@ import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -131,5 +132,9 @@ public class EventBuffers implements Serializable {
 
   public String getPendingInstants() {
     return this.eventBuffers.values().stream().map(Pair::getKey).collect(Collectors.joining(","));
+  }
+
+  public Set<Long> getPendingCheckpoints() {
+    return this.eventBuffers.keySet();
   }
 }

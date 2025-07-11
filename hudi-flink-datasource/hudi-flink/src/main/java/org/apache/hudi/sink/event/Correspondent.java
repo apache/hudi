@@ -28,6 +28,8 @@ import org.apache.flink.runtime.operators.coordination.CoordinationRequest;
 import org.apache.flink.runtime.operators.coordination.CoordinationResponse;
 import org.apache.flink.util.SerializedValue;
 
+import java.util.Set;
+
 /**
  * Correspondent between a write task with the coordinator.
  */
@@ -72,6 +74,19 @@ public class Correspondent {
   }
 
   /**
+   * Sends a request to the coordinator to fetch the pending checkpoint ids.
+   */
+  public Set<Long> requestPendingCheckpoints() {
+    try {
+      PendingCheckpointsResponse response = CoordinationResponseSerDe.unwrap(this.gateway.sendRequestToCoordinator(this.operatorID,
+          new SerializedValue<>(PendingCheckpointsRequest.getInstance())).get());
+      return response.getCkpIds();
+    } catch (Exception e) {
+      throw new HoodieException("Error requesting the pending checkpoint ids from the coordinator", e);
+    }
+  }
+
+  /**
    * A request for instant time with a given checkpoint id.
    */
   public static class InstantTimeRequest implements CoordinationRequest {
@@ -106,6 +121,38 @@ public class Correspondent {
 
     public String getInstant() {
       return instant;
+    }
+  }
+
+  /**
+   * A request for pending checkpoint ids.
+   */
+  public static class PendingCheckpointsRequest implements CoordinationRequest {
+
+    private PendingCheckpointsRequest() {
+    }
+
+    public static PendingCheckpointsRequest getInstance() {
+      return new PendingCheckpointsRequest();
+    }
+  }
+
+  /**
+   * A response with pending checkpoint ids.
+   */
+  public static class PendingCheckpointsResponse implements CoordinationResponse {
+    private final Set<Long> ckpIds;
+
+    private PendingCheckpointsResponse(Set<Long> ckpIds) {
+      this.ckpIds = ckpIds;
+    }
+
+    public static PendingCheckpointsResponse getInstance(Set<Long> ckpIds) {
+      return new PendingCheckpointsResponse(ckpIds);
+    }
+
+    public Set<Long> getCkpIds() {
+      return ckpIds;
     }
   }
 }
