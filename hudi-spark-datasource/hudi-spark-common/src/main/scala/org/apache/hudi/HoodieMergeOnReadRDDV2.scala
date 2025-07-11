@@ -21,7 +21,6 @@ package org.apache.hudi
 import org.apache.hudi.HoodieBaseRelation.{projectReader, BaseFileReader}
 import org.apache.hudi.HoodieMergeOnReadRDDV2.CONFIG_INSTANTIATION_LOCK
 import org.apache.hudi.LogFileIterator.getPartitionPath
-import org.apache.hudi.MergeOnReadSnapshotRelation.isProjectionCompatible
 import org.apache.hudi.avro.HoodieAvroReaderContext
 import org.apache.hudi.common.config.{HoodieReaderConfig, TypedProperties}
 import org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE
@@ -147,7 +146,7 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
             .withRequestedSchema(requestedSchema)
             .withInternalSchema(HOption.ofNullable(tableSchema.internalSchema.orNull))
             .build()
-          convertAvroToRow(fileGroupReader.getClosableIterator, requestedSchema)
+          convertAvroToRowIterator(fileGroupReader.getClosableIterator, requestedSchema)
         } else {
           val readerContext = new SparkFileFormatInternalRowReaderContext(fileGroupParquetFileReader.value, optionalFilters,
             Seq.empty, storageConf, metaClient.getTableConfig)
@@ -163,7 +162,7 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
             .withRequestedSchema(new Schema.Parser().parse(requiredSchema.avroSchemaStr))
             .withInternalSchema(HOption.ofNullable(tableSchema.internalSchema.orNull))
             .build()
-          fileGroupReader.getClosableIterator.asInstanceOf[Iterator[InternalRow]]
+          convertCloseableIterator(fileGroupReader.getClosableIterator)
         }
     }
 
@@ -189,21 +188,6 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
     }
   }
 
-  private def pickBaseFileReader(): BaseFileReader = {
-    // NOTE: This is an optimization making sure that even for MOR tables we fetch absolute minimum
-    //       of the stored data possible, while still properly executing corresponding relation's semantic
-    //       and meet the query's requirements.
-    //
-    //       Here we assume that iff queried table does use one of the standard (and whitelisted)
-    //       Record Payload classes then we can avoid reading and parsing the records w/ _full_ schema,
-    //       and instead only rely on projected one, nevertheless being able to perform merging correctly
-    if (isProjectionCompatible(tableState)) {
-      fileReaders.requiredSchemaReader
-    } else {
-      fileReaders.fullSchemaReader
-    }
-  }
-
   override protected def getPartitions: Array[Partition] =
     fileSplits.zipWithIndex.map(file => HoodieMergeOnReadPartition(file._2, file._1)).toArray
 
@@ -215,13 +199,23 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
     }
   }
 
-  private def convertAvroToRow(closeableFileGroupRecordIterator: ClosableIterator[IndexedRecord],
-                               requestedSchema: Schema): Iterator[InternalRow] = {
+  private def convertAvroToRowIterator(closeableFileGroupRecordIterator: ClosableIterator[IndexedRecord],
+                                       requestedSchema: Schema): Iterator[InternalRow] = {
     val converter = sparkAdapter.createAvroDeserializer(requestedSchema, requiredSchema.structTypeSchema)
     new Iterator[InternalRow] with Closeable {
       override def hasNext: Boolean = closeableFileGroupRecordIterator.hasNext
 
       override def next(): InternalRow = converter.deserialize(closeableFileGroupRecordIterator.next()).get.asInstanceOf[InternalRow]
+
+      override def close(): Unit = closeableFileGroupRecordIterator.close()
+    }
+  }
+
+  private def convertCloseableIterator(closeableFileGroupRecordIterator: ClosableIterator[InternalRow]): Iterator[InternalRow] = {
+    new Iterator[InternalRow] with Closeable {
+      override def hasNext: Boolean = closeableFileGroupRecordIterator.hasNext
+
+      override def next(): InternalRow = closeableFileGroupRecordIterator.next()
 
       override def close(): Unit = closeableFileGroupRecordIterator.close()
     }
