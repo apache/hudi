@@ -19,6 +19,7 @@
 package org.apache.hudi.client.functional;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -59,7 +60,7 @@ public class TestSavepointRestoreCopyOnWrite extends HoodieClientTestBase {
       String prevInstant = HoodieTimeline.INIT_INSTANT_TS;
       final int numRecords = 10;
       for (int i = 1; i <= 4; i++) {
-        String newCommitTime = client.createNewInstantTime();
+        String newCommitTime = WriteClientTestUtils.createNewInstantTime();
         // Write 4 inserts with the 2nd commit been rolled back
         insertBatch(hoodieWriteConfig, client, newCommitTime, prevInstant, numRecords, SparkRDDWriteClient::insert,
             false, true, numRecords, numRecords * i, 1, Option.empty(), INSTANT_GENERATOR);
@@ -94,7 +95,7 @@ public class TestSavepointRestoreCopyOnWrite extends HoodieClientTestBase {
       String prevInstant = HoodieTimeline.INIT_INSTANT_TS;
       final int numRecords = 10;
       for (int i = 1; i <= 3; i++) {
-        String newCommitTime = client.createNewInstantTime();
+        String newCommitTime = WriteClientTestUtils.createNewInstantTime();
         // Write 4 inserts with the 2nd commit been rolled back
         insertBatch(hoodieWriteConfig, client, newCommitTime, prevInstant, numRecords, SparkRDDWriteClient::insert,
             false, true, numRecords, numRecords * i, 1, Option.empty(), INSTANT_GENERATOR);
@@ -107,7 +108,7 @@ public class TestSavepointRestoreCopyOnWrite extends HoodieClientTestBase {
       }
       assertRowNumberEqualsTo(30);
       // write another pending instant
-      insertBatchWithoutCommit(client.createNewInstantTime(), numRecords);
+      insertBatchWithoutCommit(numRecords);
       // restore
       client.restoreToSavepoint(Objects.requireNonNull(savepointCommit, "restore commit should not be null"));
       assertRowNumberEqualsTo(20);
@@ -137,7 +138,7 @@ public class TestSavepointRestoreCopyOnWrite extends HoodieClientTestBase {
       String prevInstant = HoodieTimeline.INIT_INSTANT_TS;
       final int numRecords = 10;
       for (int i = 1; i <= 2; i++) {
-        String newCommitTime = client.createNewInstantTime();
+        String newCommitTime = WriteClientTestUtils.createNewInstantTime();
         // Write 4 inserts with the 2nd commit been rolled back
         insertBatch(hoodieWriteConfig, client, newCommitTime, prevInstant, numRecords, SparkRDDWriteClient::insert,
             false, true, numRecords, numRecords * i, 1, Option.empty(), INSTANT_GENERATOR);
@@ -150,7 +151,7 @@ public class TestSavepointRestoreCopyOnWrite extends HoodieClientTestBase {
       }
       assertRowNumberEqualsTo(20);
       // write another pending instant
-      insertBatchWithoutCommit(client.createNewInstantTime(), numRecords);
+      insertBatchWithoutCommit(numRecords);
       // rollback the pending instant
       if (commitRollback) {
         client.rollbackFailedWrites(metaClient);
@@ -158,12 +159,12 @@ public class TestSavepointRestoreCopyOnWrite extends HoodieClientTestBase {
         HoodieInstant pendingInstant = metaClient.getActiveTimeline().filterPendingExcludingCompaction()
             .lastInstant().orElseThrow(() -> new HoodieException("Pending instant does not exist"));
         HoodieSparkTable.create(client.getConfig(), context)
-            .scheduleRollback(context, client.createNewInstantTime(), pendingInstant, false, true, false);
+            .scheduleRollback(context, WriteClientTestUtils.createNewInstantTime(), pendingInstant, false, true, false);
       }
       Option<String> rollbackInstant = metaClient.reloadActiveTimeline().getRollbackTimeline().lastInstant().map(HoodieInstant::requestedTime);
       assertTrue(rollbackInstant.isPresent(), "The latest instant should be a rollback");
       // write another batch
-      insertBatch(hoodieWriteConfig, client, client.createNewInstantTime(),
+      insertBatch(hoodieWriteConfig, client, WriteClientTestUtils.createNewInstantTime(),
           rollbackInstant.get(), numRecords, SparkRDDWriteClient::insert,
           false, true, numRecords, numRecords * 3, 1, Option.empty(), INSTANT_GENERATOR);
       // restore

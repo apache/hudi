@@ -24,7 +24,6 @@ import org.apache.hudi.avro.model.HoodieIndexPartitionInfo;
 import org.apache.hudi.avro.model.HoodieIndexPlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.SparkRDDWriteClient;
-import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -493,8 +492,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     HoodieWriteConfig writeConfig = writeConfigBuilder.withMetadataConfig(metadataConfig).build();
     // do one upsert with synchronous metadata update
     try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(context(), writeConfig)) {
-      String instant = writeClient.createNewInstantTime();
-      WriteClientTestUtils.startCommitWithTime(writeClient, instant);
+      String instant = writeClient.startCommit();
       List<HoodieRecord> records = DATA_GENERATOR.generateInserts(instant, 100);
       List<WriteStatus> statusList = writeClient.upsert(jsc().parallelize(records, 1), instant).collect();
       writeClient.commit(instant, jsc().parallelize(statusList));
@@ -546,8 +544,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     HoodieWriteConfig writeConfig = writeConfigBuilder.withMetadataConfig(metadataConfigBuilder.build()).build();
     // do one upsert with synchronous metadata update
     try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(context(), writeConfig)) {
-      String instant = writeClient.createNewInstantTime();
-      WriteClientTestUtils.startCommitWithTime(writeClient, instant);
+      String instant = writeClient.startCommit();
       List<HoodieRecord> records = DATA_GENERATOR.generateInserts(instant, 100);
       List<WriteStatus> statusList = writeClient.upsert(jsc().parallelize(records, 1), instant).collect();
       writeClient.commit(instant, jsc().parallelize(statusList));
@@ -600,8 +597,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     HoodieWriteConfig writeConfig = writeConfigBuilder.withMetadataConfig(metadataConfigBuilder.build()).build();
     // do one upsert with synchronous metadata update
     try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(context(), writeConfig)) {
-      String instant = writeClient.createNewInstantTime();
-      WriteClientTestUtils.startCommitWithTime(writeClient, instant);
+      String instant = writeClient.startCommit();
       List<HoodieRecord> records = DATA_GENERATOR.generateInserts(instant, 100);
       List<WriteStatus> statusList = writeClient.upsert(jsc().parallelize(records, 1), instant).collect();
       writeClient.commit(instant, jsc().parallelize(statusList));

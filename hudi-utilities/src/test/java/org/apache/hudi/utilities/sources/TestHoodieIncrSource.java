@@ -168,11 +168,11 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
 
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig)) {
       // WriteResult is a Pair<HoodieInstant, Records>
-      WriteResult insert1 = writeRecords(writeClient, tableType, INSERT, null, writeClient.createNewInstantTime(), 98);
-      WriteResult insert2 = writeRecords(writeClient, tableType, INSERT, null, writeClient.createNewInstantTime(), 106);
-      WriteResult insert3 = writeRecords(writeClient, tableType, INSERT, null, writeClient.createNewInstantTime(), 114);
-      WriteResult insert4 = writeRecords(writeClient, tableType, INSERT, null, writeClient.createNewInstantTime(), 122);
-      WriteResult insert5 = writeRecords(writeClient, tableType, INSERT, null, writeClient.createNewInstantTime(), 130);
+      WriteResult insert1 = writeRecords(writeClient, tableType, INSERT, null, 98);
+      WriteResult insert2 = writeRecords(writeClient, tableType, INSERT, null, 106);
+      WriteResult insert3 = writeRecords(writeClient, tableType, INSERT, null, 114);
+      WriteResult insert4 = writeRecords(writeClient, tableType, INSERT, null, 122);
+      WriteResult insert5 = writeRecords(writeClient, tableType, INSERT, null, 130);
 
       // read everything upto latest
       readAndAssertWithLatestTableVersion(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT, Option.empty(), 570,
@@ -244,7 +244,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
           IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST, HoodieTableVersion.SIX,
           Option.of(instant5CheckpointV1), 0, instant5CheckpointV1);
 
-      WriteResult insert6 = writeRecords(writeClient, tableType, INSERT, null, writeClient.createNewInstantTime(), 168);
+      WriteResult insert6 = writeRecords(writeClient, tableType, INSERT, null, 168);
 
       // insert new batch and ensure the checkpoint moves
       readAndAssertWithLatestTableVersion(IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST, Option.of(insert5.getInstant()), 168,
@@ -300,7 +300,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
       List<WriteResult> inserts = new ArrayList<>();
 
       for (int i = 0; i < 6; i++) {
-        inserts.add(writeRecords(writeClient, tableType, INSERT, null, writeClient.createNewInstantTime()));
+        inserts.add(writeRecords(writeClient, tableType, INSERT, null));
       }
 
       // Emulates a scenario where an inflight commit is before a completed commit
@@ -409,7 +409,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
       for (int i = 0; i < 6; i++) {
         WriteOperationType opType = i < 4 ? BULK_INSERT : UPSERT;
         List<HoodieRecord> recordsForUpdate = i < 4 ? null : dataBatches.get(3).getRecords();
-        dataBatches.add(writeRecords(writeClient, tableType, opType, recordsForUpdate, writeClient.createNewInstantTime()));
+        dataBatches.add(writeRecords(writeClient, tableType, opType, recordsForUpdate));
         if (tableType == COPY_ON_WRITE) {
           if (i == 2) {
             writeClient.scheduleClustering(Option.empty());
@@ -423,7 +423,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
           }
         }
       }
-      dataBatches.add(writeRecords(writeClient, tableType, BULK_INSERT, null, writeClient.createNewInstantTime()));
+      dataBatches.add(writeRecords(writeClient, tableType, BULK_INSERT, null));
 
       String latestCommitTimestamp = dataBatches.get(dataBatches.size() - 1).getInstantTime();
       // Pending clustering exists
@@ -503,8 +503,8 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
     TypedProperties extraProps = new TypedProperties();
     extraProps.setProperty(HoodieIncrSourceConfig.HOODIE_INCREMENTAL_SPARK_DATASOURCE_OPTIONS.key(), "hoodie.metadata.enable=true,hoodie.enable.data.skipping=true");
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig)) {
-      WriteResult inserts = writeRecords(writeClient, tableType, INSERT, null, writeClient.createNewInstantTime());
-      WriteResult inserts2 = writeRecords(writeClient, tableType, INSERT, null, writeClient.createNewInstantTime());
+      WriteResult inserts = writeRecords(writeClient, tableType, INSERT, null);
+      WriteResult inserts2 = writeRecords(writeClient, tableType, INSERT, null);
       readAndAssertWithLatestTableVersion(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
           Option.empty(),
           100,
@@ -532,7 +532,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
     List<WriteResult> inserts = new ArrayList<>();
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig)) {
       for (int i = 0; i < 3; i++) {
-        inserts.add(writeRecordsForPartition(writeClient, tableType, BULK_INSERT, writeClient.createNewInstantTime(), DEFAULT_PARTITION_PATHS[i]));
+        inserts.add(writeRecordsForPartition(writeClient, tableType, BULK_INSERT, WriteClientTestUtils.createNewInstantTime(), DEFAULT_PARTITION_PATHS[i]));
       }
 
       /*
@@ -751,18 +751,16 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
   private WriteResult writeRecords(SparkRDDWriteClient writeClient,
                                    HoodieTableType tableType,
                                    WriteOperationType writeOperationType,
-                                   List<HoodieRecord> insertRecords,
-                                   String commit) throws IOException {
-    return writeRecords(writeClient, tableType, writeOperationType, insertRecords, commit, 100);
+                                   List<HoodieRecord> insertRecords) throws IOException {
+    return writeRecords(writeClient, tableType, writeOperationType, insertRecords, 100);
   }
 
   private WriteResult writeRecords(SparkRDDWriteClient writeClient,
                                    HoodieTableType tableType,
                                    WriteOperationType writeOperationType,
                                    List<HoodieRecord> insertRecords,
-                                   String commit,
                                    int numRecords) throws IOException {
-    WriteClientTestUtils.startCommitWithTime(writeClient, commit);
+    String commit = writeClient.startCommit();
     // Only supports INSERT, UPSERT, and BULK_INSERT
     List<HoodieRecord> records = writeOperationType == WriteOperationType.UPSERT
         ? dataGen.generateUpdates(commit, insertRecords) : dataGen.generateInserts(commit, numRecords);

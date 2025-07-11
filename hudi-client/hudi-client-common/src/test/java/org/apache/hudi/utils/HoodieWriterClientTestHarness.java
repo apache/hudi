@@ -672,12 +672,12 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     }
 
     dataGen = new HoodieTestDataGenerator(new String[] {partitionPath});
-    String commitTime1 = client.createNewInstantTime();
+    String commitTime1 = WriteClientTestUtils.createNewInstantTime();
     List<HoodieRecord> records1 = dataGen.generateInserts(commitTime1, 200);
     List<WriteStatus> statuses1 = writeAndVerifyBatch(client, records1, commitTime1, populateMetaFields, true);
     Set<HoodieFileGroupId> fileIds1 = getFileGroupIdsFromWriteStatus(statuses1);
 
-    String commitTime2 = client.createNewInstantTime();
+    String commitTime2 = WriteClientTestUtils.createNewInstantTime();
     List<HoodieRecord> records2 = dataGen.generateInserts(commitTime2, 200);
     List<WriteStatus> statuses2 = writeAndVerifyBatch(client, records2, commitTime2, populateMetaFields, true);
     client.close();
@@ -1022,9 +1022,8 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
 
   private void generateInsertsAndCommit(HoodieWriteConfig config, Function transformInputFn, Function transformOutputFn) {
     try (BaseHoodieWriteClient client = getHoodieWriteClient(config)) {
-      String commitTime = client.createNewInstantTime();
+      String commitTime = client.startCommit();
       List<HoodieRecord> records = dataGen.generateInserts(commitTime, 200);
-      WriteClientTestUtils.startCommitWithTime(client, commitTime);
       List<WriteStatus> statusList = (List<WriteStatus>) transformOutputFn.apply(client.insert(transformInputFn.apply(records), commitTime));
       assertNoWriteErrors(statusList);
       client.commit(commitTime, transformInputFn.apply(statusList));
