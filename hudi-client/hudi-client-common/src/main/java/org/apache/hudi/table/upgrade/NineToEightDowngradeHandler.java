@@ -24,16 +24,28 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.model.AWSDmsAvroPayload;
+import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
+import org.apache.hudi.common.model.PartialUpdateAvroPayload;
+import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.MERGE_PROPERTIES;
+import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
+import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_MODE;
+import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_STRATEGY_ID;
 import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.rollbackFailedWritesAndCompact;
 
 public class NineToEightDowngradeHandler implements DowngradeHandler {
@@ -57,9 +69,24 @@ public class NineToEightDowngradeHandler implements DowngradeHandler {
       UpgradeDowngradeUtils.updateMetadataTableVersion(context, HoodieTableVersion.EIGHT, metaClient);
     }
 
-    Map<ConfigProperty, String> propertiesToAdd = new HashMap<>();
     List<ConfigProperty> propertiesToRemove = new ArrayList<>();
     propertiesToRemove.add(MERGE_PROPERTIES);
+    propertiesToRemove.add(PARTIAL_UPDATE_MODE);
+
+    Map<ConfigProperty, String> propertiesToAdd = new HashMap<>();
+    HoodieTableMetaClient metaClient = table.getMetaClient();
+    HoodieTableConfig tableConfig = metaClient.getTableConfig();
+    String payloadClass = tableConfig.getPayloadClass();
+    Set<String> payloadClassesToHandle = new HashSet<>(Arrays.asList(
+        OverwriteNonDefaultsWithLatestAvroPayload.class.getName(),
+        PartialUpdateAvroPayload.class.getName(),
+        AWSDmsAvroPayload.class.getName(),
+        PostgresDebeziumAvroPayload.class.getName()
+    ));
+    if (payloadClassesToHandle.contains(payloadClass)) {
+      propertiesToAdd.put(RECORD_MERGE_STRATEGY_ID, PAYLOAD_BASED_MERGE_STRATEGY_UUID);
+    }
+
     return Pair.of(propertiesToAdd, propertiesToRemove);
   }
 }

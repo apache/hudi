@@ -21,10 +21,11 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.DataSourceWriteOptions.{OPERATION, PRECOMBINE_FIELD, RECORDKEY_FIELD, TABLE_TYPE}
-import org.apache.hudi.common.model.{AWSDmsAvroPayload, EventTimeAvroPayload, HoodieTableType, OverwriteNonDefaultsWithLatestAvroPayload, OverwriteWithLatestAvroPayload, PartialUpdateAvroPayload}
+import org.apache.hudi.common.model.{AWSDmsAvroPayload, EventTimeAvroPayload, OverwriteNonDefaultsWithLatestAvroPayload, OverwriteWithLatestAvroPayload, PartialUpdateAvroPayload}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion}
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
+
 import org.apache.spark.sql.SaveMode
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
@@ -235,11 +236,13 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
           (9, "4", "rider-DD", "driver-DD", 34.15, "i"),
           (12, "5", "rider-EE", "driver-EE", 17.85, "i"))
       }
-    } else Seq(
-          (11, "2", "rider-Y", "driver-Y", 27.70, "u"),
-          (12, "3", "rider-CC", "driver-CC", 33.90, "i"),
-          (9, "4", "rider-DD", "driver-DD", 34.15, "i"),
-          (12, "5", "rider-EE", "driver-EE", 17.85, "i"))
+    } else {
+      Seq(
+      (11, "2", "rider-Y", "driver-Y", 27.70, "u"),
+      (12, "3", "rider-CC", "driver-CC", 33.90, "i"),
+      (9, "4", "rider-DD", "driver-DD", 34.15, "i"),
+      (12, "5", "rider-EE", "driver-EE", 17.85, "i"))
+    }
     val expectedDf = spark.createDataFrame(
       spark.sparkContext.parallelize(expectedData)).toDF(columns: _*).sort("key")
     assertTrue(
@@ -275,7 +278,7 @@ object TestPayloadDeprecationFlow {
       Arguments.of("MERGE_ON_READ", classOf[OverwriteNonDefaultsWithLatestAvroPayload].getName),
       Arguments.of("MERGE_ON_READ", classOf[PartialUpdateAvroPayload].getName),
       Arguments.of("MERGE_ON_READ", classOf[EventTimeAvroPayload].getName),
-      Arguments.of("MERGE_ON_READ", classOf[AWSDmsAvroPayload].getName),
+      Arguments.of("MERGE_ON_READ", classOf[AWSDmsAvroPayload].getName)
     )
   }
 }

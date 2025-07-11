@@ -21,44 +21,111 @@ package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.AWSDmsAvroPayload;
+import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
+import org.apache.hudi.common.model.PartialUpdateAvroPayload;
+import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_PROPERTIES;
+import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
+import static org.apache.hudi.common.table.HoodieTableConfig.MERGE_PROPERTIES;
+import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_MODE;
+import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_STRATEGY_ID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-public class TestNineToEightDowngradeHandler {
-  @Test
-  void testDowngrade() {
-    NineToEightDowngradeHandler handler = new NineToEightDowngradeHandler();
+class TestNineToEightDowngradeHandler {
+  private final NineToEightDowngradeHandler handler = new NineToEightDowngradeHandler();
+  private final HoodieWriteConfig config = mock(HoodieWriteConfig.class);
+  private final HoodieEngineContext context = mock(HoodieEngineContext.class);
+  private final HoodieTable table = mock(HoodieTable.class);
+  private HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+  private HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
+  private SupportsUpgradeDowngrade upgradeDowngradeHelper = mock(SupportsUpgradeDowngrade.class);
 
-    HoodieTable table = mock(HoodieTable.class);
-    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
-    HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
-    SupportsUpgradeDowngrade upgradeDowngradeHelper = mock(SupportsUpgradeDowngrade.class);
+  @BeforeEach
+  public void setUp() {
     when(upgradeDowngradeHelper.getTable(any(), any())).thenReturn(table);
     when(table.getMetaClient()).thenReturn(metaClient);
     when(metaClient.getTableConfig()).thenReturn(tableConfig);
+  }
 
-    HoodieWriteConfig config = mock(HoodieWriteConfig.class);
-    HoodieEngineContext context = mock(HoodieEngineContext.class);
+  @Test
+  void testDowngradeForAWSDmsAvroPayload() {
+    when(tableConfig.getPayloadClass()).thenReturn(AWSDmsAvroPayload.class.getName());
     Pair<Map<ConfigProperty, String>, List<ConfigProperty>> propertiesToChange =
         handler.downgrade(config, context, "anyInstant", upgradeDowngradeHelper);
+    assertEquals(2, propertiesToChange.getRight().size());
+    assertEquals(MERGE_PROPERTIES, propertiesToChange.getRight().get(0));
+    assertEquals(PARTIAL_UPDATE_MODE, propertiesToChange.getRight().get(1));
+    assertEquals(1, propertiesToChange.getLeft().size());
+    assertEquals(
+        PAYLOAD_BASED_MERGE_STRATEGY_UUID,
+        propertiesToChange.getLeft().get(RECORD_MERGE_STRATEGY_ID));
+  }
 
-    assertTrue(propertiesToChange.getLeft().isEmpty());
-    assertEquals(1, propertiesToChange.getRight().size());
-    assertEquals(PARTIAL_UPDATE_PROPERTIES, propertiesToChange.getRight().get(0));
+  @Test
+  void testDowngradeForOverwriteNonDefaultsWithLatestAvroPayload() {
+    when(tableConfig.getPayloadClass()).thenReturn(OverwriteNonDefaultsWithLatestAvroPayload.class.getName());
+    Pair<Map<ConfigProperty, String>, List<ConfigProperty>> propertiesToChange =
+        handler.downgrade(config, context, "anyInstant", upgradeDowngradeHelper);
+    assertEquals(2, propertiesToChange.getRight().size());
+    assertEquals(MERGE_PROPERTIES, propertiesToChange.getRight().get(0));
+    assertEquals(PARTIAL_UPDATE_MODE, propertiesToChange.getRight().get(1));
+    assertEquals(1, propertiesToChange.getLeft().size());
+    assertEquals(
+        PAYLOAD_BASED_MERGE_STRATEGY_UUID,
+        propertiesToChange.getLeft().get(RECORD_MERGE_STRATEGY_ID));
+  }
+
+  @Test
+  void testDowngradeForPartialUpdateAvroPayload() {
+    when(tableConfig.getPayloadClass()).thenReturn(PartialUpdateAvroPayload.class.getName());
+    Pair<Map<ConfigProperty, String>, List<ConfigProperty>> propertiesToChange =
+        handler.downgrade(config, context, "anyInstant", upgradeDowngradeHelper);
+    assertEquals(2, propertiesToChange.getRight().size());
+    assertEquals(MERGE_PROPERTIES, propertiesToChange.getRight().get(0));
+    assertEquals(PARTIAL_UPDATE_MODE, propertiesToChange.getRight().get(1));
+    assertEquals(1, propertiesToChange.getLeft().size());
+    assertEquals(
+        PAYLOAD_BASED_MERGE_STRATEGY_UUID,
+        propertiesToChange.getLeft().get(RECORD_MERGE_STRATEGY_ID));
+  }
+
+  @Test
+  void testDowngradeForPostgresDebeziumAvroPayload() {
+    when(tableConfig.getPayloadClass()).thenReturn(PostgresDebeziumAvroPayload.class.getName());
+    Pair<Map<ConfigProperty, String>, List<ConfigProperty>> propertiesToChange =
+        handler.downgrade(config, context, "anyInstant", upgradeDowngradeHelper);
+    assertEquals(2, propertiesToChange.getRight().size());
+    assertEquals(MERGE_PROPERTIES, propertiesToChange.getRight().get(0));
+    assertEquals(PARTIAL_UPDATE_MODE, propertiesToChange.getRight().get(1));
+    assertEquals(1, propertiesToChange.getLeft().size());
+    assertEquals(
+        PAYLOAD_BASED_MERGE_STRATEGY_UUID,
+        propertiesToChange.getLeft().get(RECORD_MERGE_STRATEGY_ID));
+  }
+
+  @Test
+  void testDowngradeForOtherPayloadClass() {
+    when(tableConfig.getPayloadClass()).thenReturn("NonExistentPayloadClass");
+    Pair<Map<ConfigProperty, String>, List<ConfigProperty>> propertiesToChange =
+        handler.downgrade(config, context, "anyInstant", upgradeDowngradeHelper);
+    assertEquals(2, propertiesToChange.getRight().size());
+    assertEquals(MERGE_PROPERTIES, propertiesToChange.getRight().get(0));
+    assertEquals(PARTIAL_UPDATE_MODE, propertiesToChange.getRight().get(1));
+    assertEquals(0, propertiesToChange.getLeft().size());
   }
 }

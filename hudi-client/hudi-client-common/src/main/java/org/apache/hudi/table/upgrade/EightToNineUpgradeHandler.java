@@ -23,9 +23,12 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.model.AWSDmsAvroPayload;
+import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
+import org.apache.hudi.common.model.PartialUpdateAvroPayload;
 import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
@@ -35,10 +38,14 @@ import java.util.Map;
 
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
+import static org.apache.hudi.common.model.HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID;
+import static org.apache.hudi.common.model.HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.table.HoodieTableConfig.DEBEZIUM_UNAVAILABLE_VALUE;
 import static org.apache.hudi.common.table.HoodieTableConfig.MERGE_PROPERTIES;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_CUSTOM_MARKER;
 import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.rollbackFailedWritesAndCompact;
+import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_MODE;
+import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_STRATEGY_ID;
 
 public class EightToNineUpgradeHandler implements UpgradeHandler {
   @Override
@@ -66,21 +73,36 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
       return tablePropsToAdd;
     }
 
-    String partialUpdateProperties = tableConfig.getMergeProperties();
+    String mergeProperties = tableConfig.getMergeProperties();
     if (!StringUtils.isNullOrEmpty(payloadClass)) {
+      // Add merge Mode.
+      if (payloadClass.equals(OverwriteNonDefaultsWithLatestAvroPayload.class.getName())
+          || payloadClass.equals(AWSDmsAvroPayload.class.getName())) {
+        tablePropsToAdd.put(RECORD_MERGE_STRATEGY_ID, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID);
+      } else if (payloadClass.equals(PartialUpdateAvroPayload.class.getName())
+          || payloadClass.equals(PostgresDebeziumAvroPayload.class.getName())) {
+        tablePropsToAdd.put(RECORD_MERGE_STRATEGY_ID, EVENT_TIME_BASED_MERGE_STRATEGY_UUID);
+      }
+      // Add partial Merge Mode.
+      if (payloadClass.equals(OverwriteNonDefaultsWithLatestAvroPayload.class.getName())
+          || payloadClass.equals(PartialUpdateAvroPayload.class.getName())) {
+        tablePropsToAdd.put(PARTIAL_UPDATE_MODE, PartialUpdateMode.IGNORE_DEFAULTS.name());
+      } else if (payloadClass.equals(PostgresDebeziumAvroPayload.class.getName())) {
+        tablePropsToAdd.put(PARTIAL_UPDATE_MODE, PartialUpdateMode.IGNORE_MARKERS.name());
+      }
+      // Add merge Property.
       if (payloadClass.equals(AWSDmsAvroPayload.class.getName())) {
         String propertiesToAdd = DELETE_KEY + "=Op," + DELETE_MARKER + "=D";
-        partialUpdateProperties = StringUtils.isNullOrEmpty(partialUpdateProperties)
-            ? propertiesToAdd : partialUpdateProperties + "," + partialUpdateProperties;
+        mergeProperties = StringUtils.isNullOrEmpty(mergeProperties)
+            ? propertiesToAdd : mergeProperties + "," + mergeProperties;
       } else if (payloadClass.equals(PostgresDebeziumAvroPayload.class.getName())) {
         String propertiesToAdd =
             PARTIAL_UPDATE_CUSTOM_MARKER + "=" + DEBEZIUM_UNAVAILABLE_VALUE;
-        partialUpdateProperties = StringUtils.isNullOrEmpty(partialUpdateProperties)
-            ? propertiesToAdd : partialUpdateProperties + "," + partialUpdateProperties;
+        mergeProperties = StringUtils.isNullOrEmpty(mergeProperties)
+            ? propertiesToAdd : mergeProperties + "," + mergeProperties;
       }
     }
-
-    tablePropsToAdd.put(MERGE_PROPERTIES, partialUpdateProperties);
+    tablePropsToAdd.put(MERGE_PROPERTIES, mergeProperties);
     return tablePropsToAdd;
   }
 }
