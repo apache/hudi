@@ -49,4 +49,10 @@ public class TestHoodieFileGroupReaderOnJava extends HoodieFileGroupReaderOnJava
   public void assertRecordsEqual(Schema schema, IndexedRecord expected, IndexedRecord actual) {
     assertEquals(expected, actual);
   }
+
+  @Override
+  public void assertRecordMatchesSchema(Schema schema, IndexedRecord record) {
+    // TODO: maybe need to validate the record fields
+    assertEquals(schema, record.getSchema());
+  }
 }

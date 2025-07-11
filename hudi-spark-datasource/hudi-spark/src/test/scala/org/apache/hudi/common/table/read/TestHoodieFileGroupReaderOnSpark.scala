@@ -19,39 +19,40 @@
 
 package org.apache.hudi.common.table.read
 
-import org.apache.hudi.{DataSourceWriteOptions, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
+import org.apache.avro.generic.GenericRecord
+import org.apache.avro.{Schema, SchemaBuilder}
+import org.apache.hadoop.conf.Configuration
 import org.apache.hudi.DataSourceWriteOptions.{OPERATION, PRECOMBINE_FIELD, RECORDKEY_FIELD, TABLE_TYPE}
 import org.apache.hudi.common.config.{HoodieReaderConfig, RecordMergeMode, TypedProperties}
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload.{DELETE_KEY, DELETE_MARKER}
 import org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
 import org.apache.hudi.common.table.read.TestHoodieFileGroupReaderOnSpark.getFileCount
-import org.apache.hudi.common.testutils.{HoodieTestUtils, RawTripTestPayload}
-import org.apache.hudi.common.util.{Option => HOption}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.common.testutils.HoodieTestUtils
+import org.apache.hudi.common.util.{CollectionUtils, Option => HOption}
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.storage.{StorageConfiguration, StoragePath}
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
-
-import org.apache.avro.{Schema, SchemaBuilder}
-import org.apache.hadoop.conf.Configuration
-import org.apache.spark.{HoodieSparkKryoRegistrar, SparkConf}
-import org.apache.spark.sql.{Dataset, Row, SaveMode, SparkSession}
+import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.util.{ArrayData, MapData}
 import org.apache.spark.sql.execution.datasources.parquet.SparkParquetReader
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.internal.SQLConf.LEGACY_RESPECT_NULLABILITY_IN_TEXT_DATASET_CONVERSION
+import org.apache.spark.sql.types.{ArrayType, DataType, MapType, StructType}
+import org.apache.spark.sql.{Dataset, HoodieInternalRowUtils, Row, SaveMode, SparkSession}
 import org.apache.spark.unsafe.types.UTF8String
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.apache.spark.{HoodieSparkKryoRegistrar, SparkConf}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 import org.mockito.Mockito
 import org.mockito.Mockito.when
 
 import java.util
-
 import scala.collection.JavaConverters._
 
 /**
@@ -77,6 +78,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     sparkConf.set("spark.kryo.registrator", "org.apache.spark.HoodieSparkKryoRegistrar")
     sparkConf.set("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension")
     sparkConf.set("spark.sql.parquet.enableVectorizedReader", "false")
+    sparkConf.set(LEGACY_RESPECT_NULLABILITY_IN_TEXT_DATASET_CONVERSION.key, "true")
     HoodieSparkKryoRegistrar.register(sparkConf)
     spark = SparkSession.builder.config(sparkConf).getOrCreate
   }
@@ -101,10 +103,20 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     new SparkFileFormatInternalRowReaderContext(reader, Seq.empty, Seq.empty, getStorageConf, metaClient.getTableConfig)
   }
 
-  override def commitToTable(recordList: util.List[HoodieRecord[_]], operation: String, options: util.Map[String, String]): Unit = {
-    val recs = RawTripTestPayload.recordsToStrings(recordList)
-    val inputDF: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(recs.asScala.toList, 2))
-
+  override def commitToTable(recordList: util.List[HoodieRecord[_]],
+                             operation: String,
+                             options: util.Map[String, String],
+                             schemaStr: String): Unit = {
+    val schema = new Schema.Parser().parse(schemaStr)
+    //val recs = RawTripTestPayload.recordsToStrings(recordList)
+    val inputDF: Dataset[Row] = AvroConversionUtils.createDataFrame(spark.sparkContext.parallelize(recordList.asScala.map(_.toIndexedRecord(schema, CollectionUtils.emptyProps)).filter(r => r.isPresent).map(r => r.get.getData.asInstanceOf[GenericRecord]), 2), schemaStr, spark);
+//    val recs = recordList.asScala.map(_.toIndexedRecord(schema, CollectionUtils.emptyProps)).filter(r => r.isPresent).map(r => r.get).map(r => HoodieAvroUtils.avroToJsonString(r.getData.asInstanceOf[GenericRecord], false))
+//    val inputDF: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(recs, 2))
+//    val stringEncoder: Encoder[String] = Encoders.STRING
+//    val inputDF: Dataset[Row] = spark.read
+//      .schema(HoodieInternalRowUtils.getCachedSchema(AvroSchemaUtils.appendFieldsToSchema(new Schema.Parser().parse(schemaStr), Seq(new Schema.Field("partition", Schema.create(Schema.Type.STRING), null, null)).toList.asJava)))
+//      .option(LEGACY_RESPECT_NULLABILITY_IN_TEXT_DATASET_CONVERSION.key, "true")
+//      .json(spark.createDataset(spark.sparkContext.parallelize(recs.asScala.toList, 2))(stringEncoder))
     inputDF.write.format("hudi")
       .options(options)
       .option("hoodie.compact.inline", "false") // else fails due to compaction & deltacommit instant times being same
@@ -341,6 +353,41 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
       new Schema.Field("outer2", Schema.create(Schema.Type.STRING), null, null)
     ))
     schema
+  }
+
+  override def assertRecordMatchesSchema(schema: Schema, record: InternalRow): Unit = {
+    val structType = HoodieInternalRowUtils.getCachedSchema(schema)
+    assertRecordMatchesSchema(structType, record)
+  }
+
+  private def assertRecordMatchesSchema(structType: StructType, record: InternalRow): Unit = {
+    val values = record.toSeq(structType)
+    structType.zip(values).foreach { r =>
+      r._1.dataType match {
+        case struct: StructType => assertRecordMatchesSchema(struct, r._2.asInstanceOf[InternalRow])
+        case array: ArrayType => assertArrayMatchesSchema(array.elementType, r._2.asInstanceOf[ArrayData])
+        case map: MapType => asserMapMatchesSchema(map, r._2.asInstanceOf[MapData])
+        case _ =>
+      }
+    }
+  }
+
+  private def assertArrayMatchesSchema(schema: DataType, array: ArrayData): Unit = {
+    val arrayValues = array.toSeq[Any](schema)
+    schema match {
+      case structType: StructType =>
+        arrayValues.foreach(v => assertRecordMatchesSchema(structType, v.asInstanceOf[InternalRow]))
+      case arrayType: ArrayType =>
+        arrayValues.foreach(v => assertArrayMatchesSchema(arrayType.elementType, v.asInstanceOf[ArrayData]))
+      case mapType: MapType =>
+        arrayValues.foreach(v => asserMapMatchesSchema(mapType, v.asInstanceOf[MapData]))
+      case _ =>
+    }
+  }
+
+  private def asserMapMatchesSchema(schema: MapType, map: MapData): Unit = {
+    assertArrayMatchesSchema(schema.keyType, map.keyArray())
+    assertArrayMatchesSchema(schema.valueType, map.valueArray())
   }
 }
 

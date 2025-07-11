@@ -101,7 +101,7 @@ public class ObjectInspectorCache {
 
   public ArrayWritableObjectInspector getObjectInspector(Schema schema) {
     return objectInspectorCache.computeIfAbsent(schema, s -> {
-      List<String> columnNameList = s.getFields().stream().map(Schema.Field::name).collect(Collectors.toList());
+      List<String> columnNameList = s.getFields().stream().map(Schema.Field::name).map(String::toLowerCase).collect(Collectors.toList());
       List<TypeInfo> columnTypeList = columnNameList.stream().map(columnTypeMap::get).collect(Collectors.toList());
       StructTypeInfo rowTypeInfo = (StructTypeInfo) TypeInfoFactory.getStructTypeInfo(columnNameList, columnTypeList);
       return new ArrayWritableObjectInspector(rowTypeInfo);
@@ -110,7 +110,7 @@ public class ObjectInspectorCache {
 
   public GenericRecord serialize(ArrayWritable record, Schema schema) {
     return serializerCache.computeIfAbsent(schema, s -> {
-      List<String> columnNameList = s.getFields().stream().map(Schema.Field::name).collect(Collectors.toList());
+      List<String> columnNameList = s.getFields().stream().map(Schema.Field::name).map(String::toLowerCase).collect(Collectors.toList());
       List<TypeInfo> columnTypeList = columnNameList.stream().map(columnTypeMap::get).collect(Collectors.toList());
       StructTypeInfo rowTypeInfo = (StructTypeInfo) TypeInfoFactory.getStructTypeInfo(columnNameList, columnTypeList);
       return new HiveAvroSerializer(new ArrayWritableObjectInspector(rowTypeInfo), columnNameList, columnTypeList);

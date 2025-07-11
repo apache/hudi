@@ -53,6 +53,8 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
+import org.apache.flink.table.data.conversion.DataStructureConverter;
+import org.apache.flink.table.data.conversion.DataStructureConverters;
 import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -89,7 +91,6 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
   public void setup() {
     conf = new Configuration();
     conf.set(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
-    conf.set(FlinkOptions.SOURCE_AVRO_SCHEMA, RECORD_SCHEMA.toString());
     conf.set(FlinkOptions.PATH, getBasePath());
     conf.set(FlinkOptions.TABLE_NAME, "TestHoodieTable");
     // use hive style partition as a workaround for HUDI-9396
@@ -142,12 +143,16 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
   }
 
   @Override
-  public void commitToTable(List<HoodieRecord> recordList, String operation, Map<String, String> writeConfigs) {
+  public void commitToTable(List<HoodieRecord> recordList, String operation, Map<String, String> writeConfigs, String schemaStr) {
     writeConfigs.forEach((key, value) -> conf.setString(key, value));
     conf.set(FlinkOptions.OPERATION, operation);
+    conf.set(FlinkOptions.SOURCE_AVRO_SCHEMA, schemaStr);
+    Schema localSchema = new Schema.Parser().parse(schemaStr);
+    AvroToRowDataConverters.AvroToRowDataConverter avroConverter =
+        RowDataAvroQueryContexts.fromAvroSchema(localSchema).getAvroToRowDataConverter();
     List<RowData> rowDataList = recordList.stream().map(record -> {
       try {
-        return (RowData) AVRO_CONVERTER.convert(record.toIndexedRecord(RECORD_SCHEMA, CollectionUtils.emptyProps()).get().getData());
+        return (RowData) avroConverter.convert(record.toIndexedRecord(localSchema, CollectionUtils.emptyProps()).get().getData());
       } catch (IOException e) {
         throw new RuntimeException(e);
       }
@@ -166,6 +171,11 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
         Collections.singletonList(actual),
         Collections.singletonList(expected),
         RowDataAvroQueryContexts.fromAvroSchema(schema).getRowType());
+  }
+
+  @Override
+  public void assertRecordMatchesSchema(Schema schema, RowData record) {
+    System.out.println("hi");
   }
 
   @Test
@@ -250,7 +260,7 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
     try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEEF)) {
       // One commit; reading one file group containing a log file only
       List<HoodieRecord> initialRecords = dataGen.generateInserts("001", 100);
-      commitToTable(initialRecords, UPSERT.value(), writeConfigs);
+      commitToTable(initialRecords, UPSERT.value(), writeConfigs, TRIP_EXAMPLE_SCHEMA);
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), false, 1, recordMergeMode,
           initialRecords, initialRecords);
@@ -258,7 +268,7 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
       // Two commits; reading one file group containing two log files
       List<HoodieRecord> updates = dataGen.generateUniqueUpdates("002", 50);
       List<HoodieRecord> allRecords = mergeRecordLists(updates, initialRecords);
-      commitToTable(updates, UPSERT.value(), writeConfigs);
+      commitToTable(updates, UPSERT.value(), writeConfigs, TRIP_EXAMPLE_SCHEMA);
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), false, 2, recordMergeMode,
           allRecords, CollectionUtils.combine(initialRecords, updates));
@@ -275,7 +285,7 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
     try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEEF)) {
       // One commit; reading one file group containing a log file only
       List<HoodieRecord> initialRecords = dataGen.generateInserts("001", 100);
-      commitToTable(initialRecords, firstCommitOperation.value(), writeConfigs);
+      commitToTable(initialRecords, firstCommitOperation.value(), writeConfigs, TRIP_EXAMPLE_SCHEMA);
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), isFirstCommitInsert,
           isFirstCommitInsert ? 0 : 1, recordMergeMode, initialRecords, initialRecords);
@@ -286,7 +296,7 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
 
       // the base/log file of the first commit is filtered out by the instant range.
       List<HoodieRecord> updates = dataGen.generateUniqueUpdates("002", 50);
-      commitToTable(updates, UPSERT.value(), writeConfigs);
+      commitToTable(updates, UPSERT.value(), writeConfigs, TRIP_EXAMPLE_SCHEMA);
       validateOutputFromFileGroupReader(getStorageConf(), getBasePath(),
           isFirstCommitInsert, isFirstCommitInsert ? 1 : 2, recordMergeMode, updates, updates);
       // reset instant range
@@ -295,7 +305,11 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
   }
 
   private static Schema getRecordAvroSchema() {
-    Schema recordSchema = new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA);
+    return getRecordAvroSchema(TRIP_EXAMPLE_SCHEMA);
+  }
+
+  private static Schema getRecordAvroSchema(String schemaStr) {
+    Schema recordSchema = new Schema.Parser().parse(schemaStr);
     return AvroSchemaConverter.convertToSchema(RowDataAvroQueryContexts.fromAvroSchema(recordSchema).getRowType().getLogicalType());
   }
 }

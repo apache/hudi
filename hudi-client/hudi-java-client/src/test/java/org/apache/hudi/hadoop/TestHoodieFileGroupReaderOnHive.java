@@ -19,6 +19,7 @@
 
 package org.apache.hudi.hadoop;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -47,6 +48,7 @@ import org.junit.jupiter.api.BeforeAll;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -105,23 +107,96 @@ public class TestHoodieFileGroupReaderOnHive extends HoodieFileGroupReaderOnJava
     ArrayWritableTestUtil.assertArrayWritableEqual(schema, expected, actual, false);
   }
 
+  @Override
+  public void assertRecordMatchesSchema(Schema schema, ArrayWritable record) {
+    ArrayWritableTestUtil.assertArrayWritableMatchesSchema(schema, record);
+  }
+
   private void setupJobconf(JobConf jobConf, Schema schema) {
     List<Schema.Field> fields = schema.getFields();
     setHiveColumnNameProps(fields, jobConf, USE_FAKE_PARTITION);
     List<TypeInfo> types = TypeInfoUtils.getTypeInfosFromTypeString(HoodieTestDataGenerator.TRIP_HIVE_COLUMN_TYPES);
     Map<String, String> typeMappings = HoodieTestDataGenerator.AVRO_SCHEMA.getFields().stream().collect(Collectors.toMap(Schema.Field::name, field -> types.get(field.pos()).getTypeName()));
-    String columnTypes = fields.stream().map(field -> typeMappings.getOrDefault(field.name(), "string")).collect(Collectors.joining(","));
+    for (Schema.Field field : fields) {
+      if (field.name().startsWith("customField")) {
+        switch (field.schema().getType()) {
+          case INT:
+            typeMappings.put(field.name().toLowerCase(Locale.ROOT), "int");
+            break;
+          case LONG:
+            typeMappings.put(field.name().toLowerCase(Locale.ROOT), "bigint");
+            break;
+          case FLOAT:
+            typeMappings.put(field.name().toLowerCase(Locale.ROOT), "float");
+            break;
+          case DOUBLE:
+            typeMappings.put(field.name().toLowerCase(Locale.ROOT), "double");
+            break;
+          case STRING:
+            typeMappings.put(field.name().toLowerCase(Locale.ROOT), "string");
+            break;
+          case BYTES:
+            typeMappings.put(field.name().toLowerCase(Locale.ROOT), "binary");
+            break;
+          default:
+            throw new UnsupportedOperationException("Unsupported type: " + field.schema().getType());
+        }
+      } else if (field.name().equals("fare")) {
+        typeMappings.put("fare", createStructString(field.schema()));
+      }
+    }
+    String columnTypes = fields.stream().map(field -> typeMappings.getOrDefault(field.name().toLowerCase(Locale.ROOT), "string")).collect(Collectors.joining(","));
     jobConf.set("columns.types", columnTypes + ",string");
   }
 
+  private String createStructString(Schema schema) {
+    StringBuilder sb = new StringBuilder();
+    sb.append("struct<");
+    boolean first = true;
+    for (Schema.Field field : AvroSchemaUtils.resolveNullableSchema(schema).getFields()) {
+      if (first) {
+        first = false;
+      } else {
+        sb.append(",");
+      }
+      sb.append(field.name().toLowerCase(Locale.ROOT));
+      sb.append(":");
+      switch (AvroSchemaUtils.resolveNullableSchema(field.schema()).getType()) {
+        case INT:
+          sb.append("int");
+          break;
+        case LONG:
+          sb.append("bigint");
+          break;
+        case FLOAT:
+          sb.append("float");
+          break;
+        case DOUBLE:
+          sb.append("double");
+          break;
+        case STRING:
+          sb.append("string");
+          break;
+        case BYTES:
+          sb.append("binary");
+          break;
+        default:
+          throw new UnsupportedOperationException("Unsupported type: " + field.schema().getType());
+      }
+    }
+    sb.append(">");
+    return sb.toString();
+  }
+
   private void setHiveColumnNameProps(List<Schema.Field> fields, JobConf jobConf, boolean isPartitioned) {
-    String names = fields.stream().map(Schema.Field::name).collect(Collectors.joining(","));
+    String names = fields.stream().map(Schema.Field::name).map(s -> s.toLowerCase(Locale.ROOT)).collect(Collectors.joining(","));
     String positions = fields.stream().map(f -> String.valueOf(f.pos())).collect(Collectors.joining(","));
     jobConf.set(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, names);
     jobConf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, positions);
 
-    String hiveOrderedColumnNames = fields.stream().filter(field -> !field.name().equalsIgnoreCase(PARTITION_COLUMN))
-        .map(Schema.Field::name).collect(Collectors.joining(","));
+    String hiveOrderedColumnNames = fields.stream().map(Schema.Field::name)
+        .filter(name -> !name.equalsIgnoreCase(PARTITION_COLUMN))
+        .map(s -> s.toLowerCase(Locale.ROOT)).collect(Collectors.joining(","));
     if (isPartitioned) {
       hiveOrderedColumnNames += "," + PARTITION_COLUMN;
       jobConf.set(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, PARTITION_COLUMN);
