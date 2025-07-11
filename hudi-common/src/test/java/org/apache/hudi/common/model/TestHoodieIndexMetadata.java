@@ -19,14 +19,18 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.metadata.HoodieIndexVersion;
+import org.apache.hudi.metadata.MetadataPartitionType;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
 
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
 /**
@@ -35,10 +39,17 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 public class TestHoodieIndexMetadata {
   @Test
   void testSerDeWithIgnoredFields() throws Exception {
-    HoodieIndexDefinition def = new HoodieIndexDefinition("index_a", "type_c", "func_d",
-        Arrays.asList("a", "b", "c"), Collections.emptyMap());
+    String indexName = MetadataPartitionType.EXPRESSION_INDEX.getPartitionPath() + "idx";
+    HoodieIndexDefinition def = HoodieIndexDefinition.newBuilder()
+        .withIndexName(indexName)
+        .withIndexType("column_stats")
+        .withIndexFunction("identity")
+        .withVersion(HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.current(), indexName))
+        .withSourceFields(Arrays.asList("a", "b", "c"))
+        .withIndexOptions(Collections.emptyMap())
+        .build();
     assertThat(def.getSourceFieldsKey(), is("a.b.c"));
-    HoodieIndexMetadata indexMetadata = new HoodieIndexMetadata(Collections.singletonMap("index_a", def));
+    HoodieIndexMetadata indexMetadata = new HoodieIndexMetadata(Collections.singletonMap(indexName, def));
     String serialized = indexMetadata.toJson();
     assertFalse(serialized.contains("sourceFieldsKey"), "The field 'sourceFieldsKey' should be ignored in serialization");
     HoodieIndexMetadata deserialized = HoodieIndexMetadata.fromJson(serialized);

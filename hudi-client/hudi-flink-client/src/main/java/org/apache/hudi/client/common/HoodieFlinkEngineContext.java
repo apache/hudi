@@ -210,6 +210,12 @@ public class HoodieFlinkEngineContext extends HoodieEngineContext {
   }
 
   @Override
+  public <S extends Comparable<S>, V extends Comparable<V>, R> HoodieData<R> processValuesOfTheSameShards(HoodiePairData<S, V> data, SerializableFunction<Iterator<V>, Iterator<R>> func,
+                                                                                                          List<S> shardIndices, boolean preservesPartitioning) {
+    return null;
+  }
+
+  @Override
   public ReaderContextFactory<?> getReaderContextFactory(HoodieTableMetaClient metaClient) {
     // metadata table reads are only supported by the AvroReaderContext.
     if (metaClient.isMetadataTable()) {
