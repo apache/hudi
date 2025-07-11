@@ -77,6 +77,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       Option<Predicate> filterOpt) {
     super(storageConfiguration, tableConfig, instantRangeOpt, filterOpt);
     this.payloadClass = tableConfig.getPayloadClass();
+    this.typeConverter = new AvroReaderContextTypeConverter();
   }
 
   @Override
@@ -162,6 +163,32 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
     }
     HoodieKey hoodieKey = new HoodieKey(bufferedRecord.getRecordKey(), partitionPath);
     return new HoodieAvroIndexedRecord(hoodieKey, bufferedRecord.getRecord());
+  }
+
+  @Override
+  public IndexedRecord constructEngineRecord(Schema schema,
+                                             Map<Integer, Object> updateValues,
+                                             BufferedRecord<IndexedRecord> baseRecord) {
+    IndexedRecord engineRecord = baseRecord.getRecord();
+    for (Map.Entry<Integer, Object> value : updateValues.entrySet()) {
+      engineRecord.put(value.getKey(), value.getValue());
+    }
+    return engineRecord;
+  }
+
+  @Override
+  public IndexedRecord constructEngineRecord(Schema schema, List<Object> values) {
+    List<Schema.Field> fields = schema.getFields();
+    if (fields.size() != values.size()) {
+      throw new IllegalArgumentException(
+          "Value count (" + values.size() + ") does not match field count (" + fields.size() + ")");
+    }
+
+    GenericData.Record record = new GenericData.Record(schema);
+    for (int i = 0; i < fields.size(); i++) {
+      record.put(i, values.get(i));
+    }
+    return record;
   }
 
   @Override

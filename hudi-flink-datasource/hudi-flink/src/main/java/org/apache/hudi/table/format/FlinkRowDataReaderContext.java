@@ -58,6 +58,7 @@ import org.apache.hudi.util.RecordKeyToRowDataConverter;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.binary.BinaryRowData;
 import org.apache.flink.table.data.utils.JoinedRowData;
@@ -193,6 +194,37 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
     RowData rowData = bufferedRecord.getRecord();
     HoodieOperation operation = HoodieOperation.fromValue(rowData.getRowKind().toByteValue());
     return new HoodieFlinkRecord(hoodieKey, operation, bufferedRecord.getOrderingValue(), rowData);
+  }
+
+  @Override
+  public RowData constructEngineRecord(Schema schema,
+                                       Map<Integer, Object> updateValues,
+                                       BufferedRecord<RowData> baseRecord) {
+    GenericRowData genericRowData = new GenericRowData(schema.getFields().size());
+    for (Schema.Field field : schema.getFields()) {
+      int pos = field.pos();
+      if (updateValues.containsKey(pos)) {
+        genericRowData.setField(pos, updateValues.get(pos));
+      } else {
+        genericRowData.setField(pos, getValue(baseRecord.getRecord(), schema, field.name()));
+      }
+    }
+    return genericRowData;
+  }
+
+  @Override
+  public RowData constructEngineRecord(Schema schema, List<Object> values) {
+    List<Schema.Field> fields = schema.getFields();
+    if (fields.size() != values.size()) {
+      throw new IllegalArgumentException(
+          "Value count (" + values.size() + ") does not match field count (" + fields.size() + ")");
+    }
+
+    GenericRowData genericRowData = new GenericRowData(values.size());
+    for (int index = 0; index < fields.size(); index++) {
+      genericRowData.setField(index, values.get(index));
+    }
+    return toBinaryRow(schema, genericRowData);
   }
 
   @Override
