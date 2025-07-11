@@ -2490,6 +2490,63 @@ public class HoodieTableMetadataUtil {
     });
   }
 
+  /**
+   * Given table schema and fields to index, checks if each field's data type are supported for secondary index.
+   * Secondary index has stricter requirements than expression index.
+   *
+   * @param sourceFields fields to index
+   * @param tableSchema  table schema
+   * @return true if each field's data type are supported for secondary index, false otherwise
+   */
+  public static boolean validateDataTypeForSecondaryIndex(List<String> sourceFields, Schema tableSchema) {
+    return sourceFields.stream().allMatch(fieldToIndex -> {
+      Schema schema = getNestedFieldSchemaFromWriteSchema(tableSchema, fieldToIndex);
+      return isSecondaryIndexSupportedType(schema);
+    });
+  }
+
+  /**
+   * Check if the given schema type is supported for secondary index.
+   * Supported types are: String (including CHAR), Integer types (Int, BigInt, Long, Short), and timestamp
+   */
+  private static boolean isSecondaryIndexSupportedType(Schema schema) {
+    // Handle union types (nullable fields)
+    if (schema.getType() == Schema.Type.UNION) {
+      // For union types, check if any of the types is supported
+      return schema.getTypes().stream()
+          .anyMatch(s -> s.getType() != Schema.Type.NULL && isSecondaryIndexSupportedType(s));
+    }
+
+    // Check basic types
+    switch (schema.getType()) {
+      case STRING:
+        // STRING type can have UUID logical type which we don't support
+        if (schema.getLogicalType() != null) {
+          return false; // UUID and other string-based logical types are not supported
+        }
+        return true; // Regular STRING (includes CHAR)
+      case INT:
+        // INT type can represent regular integers or dates/times with logical types
+        if (schema.getLogicalType() != null) {
+          // Support date and time-millis logical types
+          return schema.getLogicalType() == LogicalTypes.date() 
+              || schema.getLogicalType() == LogicalTypes.timeMillis();
+        }
+        return true; // Regular INT
+      case LONG:
+        // LONG type can represent regular longs or timestamps with logical types
+        if (schema.getLogicalType() != null) {
+          // Support timestamp logical types
+          return schema.getLogicalType() == LogicalTypes.timestampMillis()
+              || schema.getLogicalType() == LogicalTypes.timestampMicros()
+              || schema.getLogicalType() == LogicalTypes.timeMicros();
+        }
+        return true; // Regular LONG
+      default:
+        return false;
+    }
+  }
+
   public static StoragePath filePath(StoragePath basePath, String partition, String filename) {
     if (partition.isEmpty()) {
       return new StoragePath(basePath, filename);
