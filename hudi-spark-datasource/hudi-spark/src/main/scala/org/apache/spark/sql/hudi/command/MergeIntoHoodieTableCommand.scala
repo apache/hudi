@@ -263,15 +263,16 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
   /**
    * Please check description for [[primaryKeyAttributeToConditionExpression]]
    */
-  private lazy val preCombineAttributeAssociatedExpression: Option[(Attribute, Expression)] =
-    hoodieCatalogTable.preCombineKey.map { preCombineField =>
+  private lazy val preCombineAttributeAssociatedExpressions: Option[Seq[(Attribute, Expression)]] =
+    hoodieCatalogTable.preCombineKey.map { preCombineFields =>
+      val preCombineFieldsArr = preCombineFields.split(",")
       resolveFieldAssociationsBetweenSourceAndTarget(
         sparkSession.sessionState.conf.resolver,
         mergeInto.targetTable,
         mergeInto.sourceTable,
-        Seq(preCombineField),
+        preCombineFieldsArr,
         "precombine field",
-        updatingActions.flatMap(_.assignments)).head
+        updatingActions.flatMap(_.assignments))
     }
 
   override def run(sparkSession: SparkSession, inputPlan: SparkPlan): Seq[Row] = {
@@ -368,7 +369,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
 
     val inputPlanAttributes = inputPlan.output
 
-    val requiredAttributesMap = recordKeyAttributeToConditionExpression ++ preCombineAttributeAssociatedExpression
+    val requiredAttributesMap = recordKeyAttributeToConditionExpression ++ preCombineAttributeAssociatedExpressions.getOrElse(Seq())
 
     val (existingAttributesMap, missingAttributesMap) = requiredAttributesMap.partition {
       case (keyAttr, _) => inputPlanAttributes.exists(attr => resolver(keyAttr.name, attr.name))
@@ -778,7 +779,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
         tableConfig.getRecordMergeMode,
         tableConfig.getPayloadClass,
         tableConfig.getRecordMergeStrategyId,
-        tableConfig.getPreCombineField,
+        tableConfig.getPreCombineFields.orElse(null),
         tableConfig.getTableVersion)
       inferredMergeConfigs.getLeft.name()
     } else {
@@ -851,11 +852,12 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
     if (isEventTimeOrdering(props)) {
       insertActions.foreach(action =>
         hoodieCatalogTable.preCombineKey.map(
-          field => {
+          fields => {
+            val fieldsArr = fields.split(",")
             validateTargetTableAttrExistsInAssignments(
               sparkSession.sessionState.conf.resolver,
               mergeInto.targetTable,
-              Seq(field),
+              fieldsArr.toSeq,
               "precombine field",
               action.assignments)
           }))
@@ -921,16 +923,17 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
       }
       if (isEventTimeOrdering(props)) {
         hoodieCatalogTable.preCombineKey.map {
-          preCombineField => {
+          preCombineFields => {
+            val preCombineFieldsArr = preCombineFields.split(",")
             try {
-              val association = resolveFieldAssociationsBetweenSourceAndTarget(
+              val associations = resolveFieldAssociationsBetweenSourceAndTarget(
                 sparkSession.sessionState.conf.resolver,
                 mergeInto.targetTable,
                 mergeInto.sourceTable,
-                Seq(preCombineField),
+                preCombineFieldsArr,
                 "precombine field",
-                assignments).head
-              validateDataTypes(association._1, association._2, "Precombine field")
+                assignments)
+              associations.foreach(association => validateDataTypes(association._1, association._2, "Precombine field"))
             } catch {
               // Only catch AnalysisException from resolveFieldAssociationsBetweenSourceAndTarget
               case _: MergeIntoFieldResolutionException =>

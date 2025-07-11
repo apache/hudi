@@ -251,7 +251,7 @@ trait HoodieIncrementalRelationV1Trait extends HoodieBaseRelation {
     // NOTE: This columns are required for Incremental flow to be able to handle the rows properly, even in
     //       cases when no columns are requested to be fetched (for ex, when using {@code count()} API)
     Seq(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.COMMIT_TIME_METADATA_FIELD) ++
-      preCombineFieldOpt.map(Seq(_)).getOrElse(Seq())
+      preCombineFieldsOpt.orElse(List())
   }
 
   protected def validate(): Unit = {

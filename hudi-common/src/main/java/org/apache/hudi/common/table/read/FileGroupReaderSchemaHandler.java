@@ -221,7 +221,7 @@ public class FileGroupReaderSchemaHandler<T> {
         cfg.getRecordMergeMode(),
         cfg.getPayloadClass(),
         cfg.getRecordMergeStrategyId(),
-        cfg.getPreCombineField(),
+        cfg.getPreCombineFields().orElse(null),
         cfg.getTableVersion());
 
     if (mergingConfigs.getLeft() == RecordMergeMode.CUSTOM) {
@@ -246,10 +246,8 @@ public class FileGroupReaderSchemaHandler<T> {
     }
     // Add precombine field for event time ordering merge mode.
     if (mergingConfigs.getLeft() == RecordMergeMode.EVENT_TIME_ORDERING) {
-      String preCombine = cfg.getPreCombineField();
-      if (!StringUtils.isNullOrEmpty(preCombine)) {
-        requiredFields.add(preCombine);
-      }
+      Option<List<String>> preCombineFieldsOpt = cfg.getPreCombineFieldList();
+      preCombineFieldsOpt.ifPresent(requiredFields::addAll);
     }
     // Add `HOODIE_IS_DELETED_FIELD` field if exists.
     if (hasBuiltInDelete) {

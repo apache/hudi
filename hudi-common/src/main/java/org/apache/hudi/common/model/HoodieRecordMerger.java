@@ -26,7 +26,6 @@ import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.Schema;
@@ -172,10 +171,8 @@ public interface HoodieRecordMerger extends Serializable {
       }
     }
 
-    String preCombine = cfg.getPreCombineField();
-    if (!StringUtils.isNullOrEmpty(preCombine)) {
-      requiredFields.add(preCombine);
-    }
+    Option<List<String>> preCombineFieldsOpt = cfg.getPreCombineFieldList();
+    preCombineFieldsOpt.ifPresent(preCombineFields -> requiredFields.addAll(preCombineFields));
     return requiredFields.toArray(new String[0]);
   }
 

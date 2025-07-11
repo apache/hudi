@@ -77,7 +77,7 @@ public class ConfigUtils {
   /**
    * Get ordering field.
    */
-  public static String getOrderingField(Properties properties) {
+  public static Option<String[]> getOrderingFields(Properties properties) {
     String orderField = null;
     if (properties.containsKey("hoodie.datasource.write.precombine.field")) {
       orderField = properties.getProperty("hoodie.datasource.write.precombine.field");
@@ -86,7 +86,7 @@ public class ConfigUtils {
     } else if (properties.containsKey(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY)) {
       orderField = properties.getProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY);
     }
-    return orderField;
+    return Option.ofNullable(orderField).map(f -> f.split(","));
   }
 
   /**

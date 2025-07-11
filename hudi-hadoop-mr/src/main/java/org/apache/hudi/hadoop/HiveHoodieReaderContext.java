@@ -304,7 +304,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   }
 
   @Override
-  public Comparable convertValueToEngineType(Comparable value) {
+  public Comparable convertComparableToEngineType(Comparable value) {
     if (value instanceof WritableComparable) {
       return value;
     }

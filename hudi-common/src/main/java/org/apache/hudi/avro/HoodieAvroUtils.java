@@ -1499,7 +1499,7 @@ public class HoodieAvroUtils {
   public static HoodieRecord createHoodieRecordFromAvro(
       IndexedRecord data,
       String payloadClass,
-      String preCombineField,
+      Option<String[]> preCombineFields,
       Option<Pair<String, String>> simpleKeyGenFieldsOpt,
       Boolean withOperation,
       Option<String> partitionNameOp,
@@ -1507,13 +1507,13 @@ public class HoodieAvroUtils {
       Option<Schema> schemaWithoutMetaFields) {
     if (populateMetaFields) {
       return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) data,
-          payloadClass, preCombineField, withOperation);
+          payloadClass, preCombineFields, withOperation);
     } else if (simpleKeyGenFieldsOpt.isPresent()) {
       return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) data,
-          payloadClass, preCombineField, simpleKeyGenFieldsOpt.get(), withOperation, partitionNameOp, schemaWithoutMetaFields);
+          payloadClass, preCombineFields, simpleKeyGenFieldsOpt.get(), withOperation, partitionNameOp, schemaWithoutMetaFields);
     } else {
       return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) data,
-          payloadClass, preCombineField, withOperation, partitionNameOp, schemaWithoutMetaFields);
+          payloadClass, preCombineFields, withOperation, partitionNameOp, schemaWithoutMetaFields);
     }
   }
 
