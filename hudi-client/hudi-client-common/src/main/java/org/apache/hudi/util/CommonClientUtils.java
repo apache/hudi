@@ -69,15 +69,11 @@ public class CommonClientUtils {
   }
 
   public static boolean isValidTableVersionWriteVersionPair(HoodieTableVersion tableVersion, HoodieTableVersion writeVersion) {
-    if (tableVersion.equals(writeVersion)) {
+    if (tableVersion.equals(writeVersion) || tableVersion.lesserThan(writeVersion)) {
       return true;
     }
     if (tableVersion.greaterThan(HoodieTableVersion.SIX) && tableVersion.lesserThan(HoodieTableVersion.NINE) && writeVersion.equals(HoodieTableVersion.SIX)) {
       LOG.warn("Table version is greater than 6 and lower than 9, while writer version is 6. Allowing it for upgrade.");
-      return true;
-    }
-    if (tableVersion.equals(HoodieTableVersion.EIGHT) && writeVersion.equals(HoodieTableVersion.NINE)) {
-      LOG.warn("Table version is 8, while writer version is 9. Allowing it for upgrade.");
       return true;
     }
     return false;
