@@ -288,7 +288,7 @@ public abstract class HoodieReaderContext<T> {
   public void initRecordMerger(TypedProperties properties) {
     RecordMergeMode recordMergeMode = tableConfig.getRecordMergeMode();
     String mergeStrategyId = tableConfig.getRecordMergeStrategyId();
-    if (!tableConfig.getTableVersion().greaterThan(HoodieTableVersion.EIGHT)) {
+    if (!tableConfig.getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
       Triple<RecordMergeMode, String, String> triple = HoodieTableConfig.inferCorrectMergingBehavior(
           recordMergeMode, tableConfig.getPayloadClass(),
           mergeStrategyId, null, tableConfig.getTableVersion());
