@@ -238,11 +238,15 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
    * Cleanups Spark contexts ({@link JavaSparkContext} and {@link SQLContext}).
    */
   protected void cleanupSparkContexts() {
+    if (sparkSession != null) {
+      sparkSession.stop();
+      sparkSession = null;
+    }
+
     if (sqlContext != null) {
       LOG.info("Clearing sql context cache of spark-session used in previous test-case");
       sqlContext.clearCache();
       sqlContext = null;
-      sparkSession = null;
     }
 
     if (jsc != null) {
