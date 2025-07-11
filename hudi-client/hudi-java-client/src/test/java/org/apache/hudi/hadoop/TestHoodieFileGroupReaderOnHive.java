@@ -19,7 +19,6 @@
 
 package org.apache.hudi.hadoop;
 
-import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -39,8 +38,9 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
 import org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat;
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
+import org.apache.hadoop.hive.serde2.SerDeException;
+import org.apache.hadoop.hive.serde2.avro.HiveTypeUtils;
 import org.apache.hadoop.hive.serde2.typeinfo.TypeInfo;
-import org.apache.hadoop.hive.serde2.typeinfo.TypeInfoUtils;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.mapred.JobConf;
 import org.junit.jupiter.api.AfterAll;
@@ -49,7 +49,6 @@ import org.junit.jupiter.api.BeforeAll;
 import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.hadoop.HoodieFileGroupReaderBasedRecordReader.getStoredPartitionFieldNames;
@@ -112,80 +111,37 @@ public class TestHoodieFileGroupReaderOnHive extends HoodieFileGroupReaderOnJava
     ArrayWritableTestUtil.assertArrayWritableMatchesSchema(schema, record);
   }
 
+  @Override
+  public HoodieTestDataGenerator.SchemaEvolutionConfigs getSchemaEvolutionConfigs() {
+    HoodieTestDataGenerator.SchemaEvolutionConfigs configs = new HoodieTestDataGenerator.SchemaEvolutionConfigs();
+    configs.nestedSupport = false;
+    configs.arraySupport = false;
+    configs.mapSupport = false;
+    configs.addNewFieldSupport = false;
+    configs.intToLongSupport = false;
+    configs.intToFloatSupport = false;
+    configs.intToDoubleSupport = false;
+    configs.intToStringSupport = false;
+    configs.longToFloatSupport = false;
+    configs.longToDoubleSupport = false;
+    configs.longToStringSupport = false;
+    configs.floatToDoubleSupport = false;
+    configs.floatToStringSupport = false;
+    configs.doubleToStringSupport = false;
+    configs.stringToBytesSupport = false;
+    configs.bytesToStringSupport = false;
+    return configs;
+  }
+
   private void setupJobconf(JobConf jobConf, Schema schema) {
     List<Schema.Field> fields = schema.getFields();
     setHiveColumnNameProps(fields, jobConf, USE_FAKE_PARTITION);
-    List<TypeInfo> types = TypeInfoUtils.getTypeInfosFromTypeString(HoodieTestDataGenerator.TRIP_HIVE_COLUMN_TYPES);
-    Map<String, String> typeMappings = HoodieTestDataGenerator.AVRO_SCHEMA.getFields().stream().collect(Collectors.toMap(Schema.Field::name, field -> types.get(field.pos()).getTypeName()));
-    for (Schema.Field field : fields) {
-      if (field.name().startsWith("customField")) {
-        switch (field.schema().getType()) {
-          case INT:
-            typeMappings.put(field.name().toLowerCase(Locale.ROOT), "int");
-            break;
-          case LONG:
-            typeMappings.put(field.name().toLowerCase(Locale.ROOT), "bigint");
-            break;
-          case FLOAT:
-            typeMappings.put(field.name().toLowerCase(Locale.ROOT), "float");
-            break;
-          case DOUBLE:
-            typeMappings.put(field.name().toLowerCase(Locale.ROOT), "double");
-            break;
-          case STRING:
-            typeMappings.put(field.name().toLowerCase(Locale.ROOT), "string");
-            break;
-          case BYTES:
-            typeMappings.put(field.name().toLowerCase(Locale.ROOT), "binary");
-            break;
-          default:
-            throw new UnsupportedOperationException("Unsupported type: " + field.schema().getType());
-        }
-      } else if (field.name().equals("fare")) {
-        typeMappings.put("fare", createStructString(field.schema()));
-      }
+    try {
+      String columnTypes = HiveTypeUtils.generateColumnTypes(schema).stream().map(TypeInfo::getTypeName).collect(Collectors.joining(","));
+      jobConf.set("columns.types", columnTypes + ",string");
+    } catch (SerDeException e) {
+      throw new RuntimeException(e);
     }
-    String columnTypes = fields.stream().map(field -> typeMappings.getOrDefault(field.name().toLowerCase(Locale.ROOT), "string")).collect(Collectors.joining(","));
-    jobConf.set("columns.types", columnTypes + ",string");
-  }
-
-  private String createStructString(Schema schema) {
-    StringBuilder sb = new StringBuilder();
-    sb.append("struct<");
-    boolean first = true;
-    for (Schema.Field field : AvroSchemaUtils.resolveNullableSchema(schema).getFields()) {
-      if (first) {
-        first = false;
-      } else {
-        sb.append(",");
-      }
-      sb.append(field.name().toLowerCase(Locale.ROOT));
-      sb.append(":");
-      switch (AvroSchemaUtils.resolveNullableSchema(field.schema()).getType()) {
-        case INT:
-          sb.append("int");
-          break;
-        case LONG:
-          sb.append("bigint");
-          break;
-        case FLOAT:
-          sb.append("float");
-          break;
-        case DOUBLE:
-          sb.append("double");
-          break;
-        case STRING:
-          sb.append("string");
-          break;
-        case BYTES:
-          sb.append("binary");
-          break;
-        default:
-          throw new UnsupportedOperationException("Unsupported type: " + field.schema().getType());
-      }
-    }
-    sb.append(">");
-    return sb.toString();
   }
 
   private void setHiveColumnNameProps(List<Schema.Field> fields, JobConf jobConf, boolean isPartitioned) {

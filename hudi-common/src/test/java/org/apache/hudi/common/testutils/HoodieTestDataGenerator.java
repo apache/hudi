@@ -19,6 +19,7 @@
 
 package org.apache.hudi.common.testutils;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.model.HoodieAvroPayload;
@@ -184,17 +185,6 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   public static final Schema AVRO_TRIP_ENCODED_DECIMAL_SCHEMA = new Schema.Parser().parse(TRIP_ENCODED_DECIMAL_SCHEMA);
   public static final Schema AVRO_TRIP_SCHEMA = new Schema.Parser().parse(TRIP_SCHEMA);
   public static final Schema FLATTENED_AVRO_SCHEMA = new Schema.Parser().parse(TRIP_FLATTENED_SCHEMA);
-  public static final List<Schema.Type> BEFORE_EVOLUTION = Arrays.asList(Schema.Type.INT, Schema.Type.INT, Schema.Type.INT, Schema.Type.INT, Schema.Type.INT,
-      Schema.Type.LONG, Schema.Type.LONG, Schema.Type.LONG, Schema.Type.LONG, Schema.Type.FLOAT, Schema.Type.FLOAT, Schema.Type.FLOAT, Schema.Type.DOUBLE, Schema.Type.DOUBLE,
-      Schema.Type.STRING, Schema.Type.STRING, Schema.Type.BYTES, Schema.Type.BYTES);
-
-//  public static final List<Schema.Type> AFTER_EVOLUTION = Arrays.asList(Schema.Type.INT, Schema.Type.LONG, Schema.Type.FLOAT, Schema.Type.DOUBLE, Schema.Type.DOUBLE /*Schema.Type.STRING*/,
-//      Schema.Type.LONG, Schema.Type.FLOAT, Schema.Type.DOUBLE, Schema.Type.DOUBLE /*Schema.Type.STRING*/, Schema.Type.FLOAT, Schema.Type.DOUBLE, Schema.Type.DOUBLE /*Schema.Type.STRING*/, Schema.Type.DOUBLE, Schema.Type.DOUBLE /*Schema.Type.STRING*/,
-//      Schema.Type.STRING, Schema.Type.STRING /*Schema.Type.BYTES*/, Schema.Type.BYTES, Schema.Type.BYTES /*Schema.Type.STRING*/);
-
-  public static final List<Schema.Type> AFTER_EVOLUTION = Arrays.asList(Schema.Type.INT, Schema.Type.LONG, Schema.Type.FLOAT, Schema.Type.DOUBLE, Schema.Type.STRING,
-      Schema.Type.LONG, Schema.Type.FLOAT, Schema.Type.DOUBLE, Schema.Type.STRING, Schema.Type.FLOAT, Schema.Type.DOUBLE, Schema.Type.STRING, Schema.Type.DOUBLE, Schema.Type.STRING,
-      Schema.Type.STRING, Schema.Type.BYTES, Schema.Type.BYTES, Schema.Type.STRING);
 
   private final Random rand;
 
@@ -1301,60 +1291,204 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     }
   }
 
-  public void extendSchemaBeforeEvolution(Schema baseSchema) {
-    this.extendedSchema = Option.of(generateExtendedSchema(baseSchema, BEFORE_EVOLUTION));
+  public static class SchemaEvolutionConfigs {
+    public Schema schema = AVRO_SCHEMA;
+    public boolean nestedSupport = true;
+    public boolean mapSupport = true;
+    public boolean arraySupport = true;
+    public boolean addNewFieldSupport = true;
+
+    // Int
+    public boolean intToLongSupport = true;
+    public boolean intToFloatSupport = true;
+    public boolean intToDoubleSupport = true;
+    public boolean intToStringSupport = true;
+
+    // Long
+    public boolean longToFloatSupport = true;
+    public boolean longToDoubleSupport = true;
+    public boolean longToStringSupport = true;
+
+    // Float
+    public boolean floatToDoubleSupport = true;
+    public boolean floatToStringSupport = true;
+
+    // Double
+    public boolean doubleToStringSupport = true;
+
+    // String
+    public boolean stringToBytesSupport = true;
+
+    // Bytes
+    public boolean bytesToStringSupport = true;
+  }
+
+  public void extendSchemaBeforeEvolution(SchemaEvolutionConfigs configs) {
+    List<Schema.Type> baseFields = new ArrayList<>();
+    baseFields.add(Schema.Type.INT);
+    if (configs.intToLongSupport) {
+      baseFields.add(Schema.Type.INT);
+    }
+    if (configs.intToFloatSupport) {
+      baseFields.add(Schema.Type.INT);
+    }
+    if (configs.intToDoubleSupport) {
+      baseFields.add(Schema.Type.INT);
+    }
+    if (configs.intToStringSupport) {
+      baseFields.add(Schema.Type.INT);
+    }
+
+    baseFields.add(Schema.Type.LONG);
+    if (configs.longToFloatSupport) {
+      baseFields.add(Schema.Type.LONG);
+    }
+    if (configs.longToDoubleSupport) {
+      baseFields.add(Schema.Type.LONG);
+    }
+    if (configs.longToStringSupport) {
+      baseFields.add(Schema.Type.LONG);
+    }
+
+    baseFields.add(Schema.Type.FLOAT);
+    if (configs.floatToDoubleSupport) {
+      baseFields.add(Schema.Type.FLOAT);
+    }
+    if (configs.floatToStringSupport) {
+      baseFields.add(Schema.Type.FLOAT);
+    }
+
+    baseFields.add(Schema.Type.DOUBLE);
+    if (configs.doubleToStringSupport) {
+      baseFields.add(Schema.Type.DOUBLE);
+    }
+
+    baseFields.add(Schema.Type.STRING);
+    if (configs.stringToBytesSupport) {
+      baseFields.add(Schema.Type.STRING);
+    }
+
+    baseFields.add(Schema.Type.BYTES);
+    if (configs.bytesToStringSupport) {
+      baseFields.add(Schema.Type.BYTES);
+    }
+    this.extendedSchema = Option.of(generateExtendedSchema(configs, baseFields));
   }
 
   public Schema getExtendedSchema() {
     return extendedSchema.orElseThrow(IllegalArgumentException::new);
   }
 
-  public void extendSchemaAfterEvolution(Schema baseSchema) {
-    this.extendedSchema = Option.of(generateExtendedSchema(baseSchema, AFTER_EVOLUTION));
+  public void extendSchemaAfterEvolution(SchemaEvolutionConfigs configs) {
+    List<Schema.Type> baseFields = new ArrayList<>();
+    baseFields.add(Schema.Type.INT);
+    if (configs.intToLongSupport) {
+      baseFields.add(Schema.Type.LONG);
+    }
+    if (configs.intToFloatSupport) {
+      baseFields.add(Schema.Type.FLOAT);
+    }
+    if (configs.intToDoubleSupport) {
+      baseFields.add(Schema.Type.DOUBLE);
+    }
+    if (configs.intToStringSupport) {
+      baseFields.add(Schema.Type.STRING);
+    }
+
+    baseFields.add(Schema.Type.LONG);
+    if (configs.longToFloatSupport) {
+      baseFields.add(Schema.Type.FLOAT);
+    }
+    if (configs.longToDoubleSupport) {
+      baseFields.add(Schema.Type.DOUBLE);
+    }
+    if (configs.longToStringSupport) {
+      baseFields.add(Schema.Type.STRING);
+    }
+
+    baseFields.add(Schema.Type.FLOAT);
+    if (configs.floatToDoubleSupport) {
+      baseFields.add(Schema.Type.DOUBLE);
+    }
+    if (configs.floatToStringSupport) {
+      baseFields.add(Schema.Type.STRING);
+    }
+
+    baseFields.add(Schema.Type.DOUBLE);
+    if (configs.doubleToStringSupport) {
+      baseFields.add(Schema.Type.STRING);
+    }
+
+    baseFields.add(Schema.Type.STRING);
+    if (configs.stringToBytesSupport) {
+      baseFields.add(Schema.Type.BYTES);
+    }
+
+    baseFields.add(Schema.Type.BYTES);
+    if (configs.bytesToStringSupport) {
+      baseFields.add(Schema.Type.STRING);
+    }
+
+    if (configs.addNewFieldSupport) {
+      baseFields.add(Schema.Type.BOOLEAN);
+    }
+
+    this.extendedSchema = Option.of(generateExtendedSchema(configs, baseFields));
   }
 
-  private static Schema generateExtendedSchema(Schema baseSchema, List<Schema.Type> baseFields) {
-    return generateExtendedSchema(baseSchema, baseFields, "customField", true);
+  private static Schema generateExtendedSchema(SchemaEvolutionConfigs configs, List<Schema.Type> baseFields) {
+    return generateExtendedSchema(configs.schema, configs, baseFields, "customField", true);
   }
 
-  private static Schema generateExtendedSchema(Schema baseSchema, List<Schema.Type> baseFields, String fieldPrefix, boolean toplevel) {
+  private static Schema generateExtendedSchema(Schema baseSchema, SchemaEvolutionConfigs configs, List<Schema.Type> baseFields, String fieldPrefix, boolean toplevel) {
     List<Schema.Field> fields =  baseSchema.getFields();
     List<Schema.Field> finalFields = new ArrayList<>(fields.size() + baseFields.size());
     boolean addedFields = false;
     for (Schema.Field field : fields) {
-      if (field.name().equals("fare") && field.schema().getType() == Schema.Type.RECORD) {
-        finalFields.add(new Schema.Field(field.name(), generateExtendedSchema(field.schema(), baseFields, "customFare", false), field.doc(), field.defaultVal()));
+      if (configs.nestedSupport && field.name().equals("fare") && field.schema().getType() == Schema.Type.RECORD) {
+        finalFields.add(new Schema.Field(field.name(), generateExtendedSchema(field.schema(), configs, baseFields, "customFare", false), field.doc(), field.defaultVal()));
       } else {
         if (field.name().equals("_hoodie_is_deleted")) {
           addedFields = true;
-          addFields(finalFields, baseFields, fieldPrefix, baseSchema.getNamespace(), toplevel);
+          addFields(configs, finalFields, baseFields, fieldPrefix, baseSchema.getNamespace(), toplevel);
         }
         finalFields.add(new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal()));
       }
     }
     if (!addedFields) {
-      addFields(finalFields, baseFields, fieldPrefix, baseSchema.getNamespace(), toplevel);
+      addFields(configs, finalFields, baseFields, fieldPrefix, baseSchema.getNamespace(), toplevel);
     }
     Schema finalSchema = Schema.createRecord(baseSchema.getName(), baseSchema.getDoc(),
         baseSchema.getNamespace(), baseSchema.isError());
     finalSchema.setFields(finalFields);
     return finalSchema;
   }
-  private static void addFields(List<Schema.Field> finalFields, List<Schema.Type> baseFields, String fieldPrefix, String namespace, boolean toplevel) {
+
+  private static void addFields(SchemaEvolutionConfigs configs, List<Schema.Field> finalFields, List<Schema.Type> baseFields, String fieldPrefix, String namespace, boolean toplevel) {
     if (toplevel) {
-      List<Schema.Field> mapFields = new ArrayList<>(baseFields.size());
-      addFieldsHelper(mapFields, baseFields, fieldPrefix + "Map");
-      finalFields.add(new Schema.Field(fieldPrefix + "Map", Schema.createMap(Schema.createRecord("customMapRecord", "", namespace, false, mapFields)), "", null));
-      List<Schema.Field> arrayFields = new ArrayList<>(baseFields.size());
-      addFieldsHelper(arrayFields, baseFields, fieldPrefix + "Array");
-      finalFields.add(new Schema.Field(fieldPrefix + "Array", Schema.createArray(Schema.createRecord("customArrayRecord", "", namespace, false, arrayFields)), "", null));
+      if (configs.mapSupport) {
+        List<Schema.Field> mapFields = new ArrayList<>(baseFields.size());
+        addFieldsHelper(mapFields, baseFields, fieldPrefix + "Map");
+        finalFields.add(new Schema.Field(fieldPrefix + "Map", Schema.createMap(Schema.createRecord("customMapRecord", "", namespace, false, mapFields)), "", null));
+      }
+
+      if (configs.arraySupport) {
+        List<Schema.Field> arrayFields = new ArrayList<>(baseFields.size());
+        addFieldsHelper(arrayFields, baseFields, fieldPrefix + "Array");
+        finalFields.add(new Schema.Field(fieldPrefix + "Array", Schema.createArray(Schema.createRecord("customArrayRecord", "", namespace, false, arrayFields)), "", null));
+      }
     }
     addFieldsHelper(finalFields, baseFields, fieldPrefix);
   }
 
   private static void addFieldsHelper(List<Schema.Field> finalFields, List<Schema.Type> baseFields, String fieldPrefix) {
     for (int i = 0; i < baseFields.size(); i++) {
-      finalFields.add(new Schema.Field(fieldPrefix + i, Schema.create(baseFields.get(i)), "", null));
+      if (baseFields.get(i) == Schema.Type.BOOLEAN) {
+        // boolean fields are added fields
+        finalFields.add(new Schema.Field(fieldPrefix + i, AvroSchemaUtils.createNullableSchema(Schema.Type.BOOLEAN), "", null));
+      } else {
+        finalFields.add(new Schema.Field(fieldPrefix + i, Schema.create(baseFields.get(i)), "", null));
+      }
     }
   }
 
@@ -1380,6 +1514,15 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
           case BYTES:
             rec.put(field.name(), ByteBuffer.wrap(getUTF8Bytes(genPseudoRandomUUID(rand).toString())));
             break;
+          case UNION:
+            if (!AvroSchemaUtils.resolveNullableSchema(field.schema()).getType().equals(Schema.Type.BOOLEAN)) {
+              throw new IllegalStateException("Union should only be boolean");
+            }
+            rec.put(field.name(), rand.nextBoolean());
+            break;
+          case BOOLEAN:
+            rec.put(field.name(), rand.nextBoolean());
+            break;
           case MAP:
             rec.put(field.name(), genMap(field.schema(), field.name()));
             break;
@@ -1392,19 +1535,6 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
       }
     }
   }
-
-//  /**
-//   * Populate rec with values for FARE_NESTED_SCHEMA
-//   */
-//  private void genMap() {
-//    GenericRecord fareRecord = new GenericData.Record(extendedSchema.orElse(AVRO_SCHEMA).getField("fare").schema());
-//    fareRecord.put("amount", rand.nextDouble() * 100);
-//    fareRecord.put("currency", "USD");
-//    if (extendedSchema.isPresent()) {
-//      generateCustomValues(fareRecord, "customFare");
-//    }
-//    rec.put("fare", fareRecord);
-//  }
 
   private GenericArray<GenericRecord> genArray(Schema arraySchema, String customPrefix) {
     GenericArray<GenericRecord> customArray = new GenericData.Array<>(1, arraySchema);

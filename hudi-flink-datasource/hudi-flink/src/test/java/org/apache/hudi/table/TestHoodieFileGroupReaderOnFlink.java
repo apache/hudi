@@ -53,8 +53,6 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
-import org.apache.flink.table.data.conversion.DataStructureConverter;
-import org.apache.flink.table.data.conversion.DataStructureConverters;
 import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -83,9 +81,6 @@ import static org.mockito.Mockito.when;
 public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderBase<RowData> {
   private Configuration conf;
   private Option<InstantRange> instantRangeOpt = Option.empty();
-  private static final Schema RECORD_SCHEMA = getRecordAvroSchema();
-  private static final AvroToRowDataConverters.AvroToRowDataConverter AVRO_CONVERTER =
-      RowDataAvroQueryContexts.fromAvroSchema(RECORD_SCHEMA).getAvroToRowDataConverter();
 
   @BeforeEach
   public void setup() {
@@ -143,11 +138,11 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
   }
 
   @Override
-  public void commitToTable(List<HoodieRecord> recordList, String operation, Map<String, String> writeConfigs, String schemaStr) {
+  public void commitToTable(List<HoodieRecord> recordList, String operation, boolean firstCommit, Map<String, String> writeConfigs, String schemaStr) {
     writeConfigs.forEach((key, value) -> conf.setString(key, value));
     conf.set(FlinkOptions.OPERATION, operation);
-    conf.set(FlinkOptions.SOURCE_AVRO_SCHEMA, schemaStr);
-    Schema localSchema = new Schema.Parser().parse(schemaStr);
+    Schema localSchema = getRecordAvroSchema(schemaStr);
+    conf.set(FlinkOptions.SOURCE_AVRO_SCHEMA, localSchema.toString());
     AvroToRowDataConverters.AvroToRowDataConverter avroConverter =
         RowDataAvroQueryContexts.fromAvroSchema(localSchema).getAvroToRowDataConverter();
     List<RowData> rowDataList = recordList.stream().map(record -> {
@@ -175,7 +170,29 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
 
   @Override
   public void assertRecordMatchesSchema(Schema schema, RowData record) {
-    System.out.println("hi");
+    // TODO: Add support for RowData
+  }
+
+  @Override
+  public HoodieTestDataGenerator.SchemaEvolutionConfigs getSchemaEvolutionConfigs() {
+    HoodieTestDataGenerator.SchemaEvolutionConfigs configs = new HoodieTestDataGenerator.SchemaEvolutionConfigs();
+    configs.nestedSupport = false;
+    configs.arraySupport = false;
+    configs.mapSupport = false;
+    configs.addNewFieldSupport = false;
+    configs.intToLongSupport = false;
+    configs.intToFloatSupport = false;
+    configs.intToDoubleSupport = false;
+    configs.intToStringSupport = false;
+    configs.longToFloatSupport = false;
+    configs.longToDoubleSupport = false;
+    configs.longToStringSupport = false;
+    configs.floatToDoubleSupport = false;
+    configs.floatToStringSupport = false;
+    configs.doubleToStringSupport = false;
+    configs.stringToBytesSupport = false;
+    configs.bytesToStringSupport = false;
+    return configs;
   }
 
   @Test
@@ -260,7 +277,7 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
     try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEEF)) {
       // One commit; reading one file group containing a log file only
       List<HoodieRecord> initialRecords = dataGen.generateInserts("001", 100);
-      commitToTable(initialRecords, UPSERT.value(), writeConfigs, TRIP_EXAMPLE_SCHEMA);
+      commitToTable(initialRecords, UPSERT.value(), true, writeConfigs, TRIP_EXAMPLE_SCHEMA);
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), false, 1, recordMergeMode,
           initialRecords, initialRecords);
@@ -268,7 +285,7 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
       // Two commits; reading one file group containing two log files
       List<HoodieRecord> updates = dataGen.generateUniqueUpdates("002", 50);
       List<HoodieRecord> allRecords = mergeRecordLists(updates, initialRecords);
-      commitToTable(updates, UPSERT.value(), writeConfigs, TRIP_EXAMPLE_SCHEMA);
+      commitToTable(updates, UPSERT.value(), false, writeConfigs, TRIP_EXAMPLE_SCHEMA);
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), false, 2, recordMergeMode,
           allRecords, CollectionUtils.combine(initialRecords, updates));
@@ -285,7 +302,7 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
     try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEEF)) {
       // One commit; reading one file group containing a log file only
       List<HoodieRecord> initialRecords = dataGen.generateInserts("001", 100);
-      commitToTable(initialRecords, firstCommitOperation.value(), writeConfigs, TRIP_EXAMPLE_SCHEMA);
+      commitToTable(initialRecords, firstCommitOperation.value(), true, writeConfigs, TRIP_EXAMPLE_SCHEMA);
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), isFirstCommitInsert,
           isFirstCommitInsert ? 0 : 1, recordMergeMode, initialRecords, initialRecords);
@@ -296,16 +313,12 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
 
       // the base/log file of the first commit is filtered out by the instant range.
       List<HoodieRecord> updates = dataGen.generateUniqueUpdates("002", 50);
-      commitToTable(updates, UPSERT.value(), writeConfigs, TRIP_EXAMPLE_SCHEMA);
+      commitToTable(updates, UPSERT.value(), false, writeConfigs, TRIP_EXAMPLE_SCHEMA);
       validateOutputFromFileGroupReader(getStorageConf(), getBasePath(),
           isFirstCommitInsert, isFirstCommitInsert ? 1 : 2, recordMergeMode, updates, updates);
       // reset instant range
       instantRangeOpt = Option.empty();
     }
-  }
-
-  private static Schema getRecordAvroSchema() {
-    return getRecordAvroSchema(TRIP_EXAMPLE_SCHEMA);
   }
 
   private static Schema getRecordAvroSchema(String schemaStr) {

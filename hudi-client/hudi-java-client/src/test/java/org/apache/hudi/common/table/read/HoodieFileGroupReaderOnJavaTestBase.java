@@ -59,7 +59,7 @@ public abstract class HoodieFileGroupReaderOnJavaTestBase<T> extends TestHoodieF
   }
 
   @Override
-  public void commitToTable(List<HoodieRecord> recordList, String operation, Map<String, String> writeConfigs, String schemaStr) {
+  public void commitToTable(List<HoodieRecord> recordList, String operation, boolean firstCommit, Map<String, String> writeConfigs, String schemaStr) {
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
         .withEngineType(EngineType.JAVA)
         .withEmbeddedTimelineServerEnabled(false)
@@ -74,8 +74,7 @@ public abstract class HoodieFileGroupReaderOnJavaTestBase<T> extends TestHoodieF
     StoragePath basePath = new StoragePath(getBasePath());
     try (HoodieStorage storage = new HoodieHadoopStorage(basePath, getStorageConf())) {
       boolean basepathExists = storage.exists(basePath);
-      boolean operationIsInsert = operation.equalsIgnoreCase("insert");
-      if (!basepathExists || operationIsInsert) {
+      if (!basepathExists || firstCommit) {
         if (basepathExists) {
           storage.deleteDirectory(basePath);
         }

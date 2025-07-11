@@ -55,8 +55,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.storage.StorageConfiguration;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -95,7 +93,6 @@ import static org.apache.hudi.common.table.HoodieTableConfig.PARTITION_FIELDS;
 import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_STRATEGY_ID;
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getLogFileListFromFileSlice;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -108,7 +105,6 @@ import static org.junit.jupiter.params.provider.Arguments.arguments;
  * Tests {@link HoodieFileGroupReader} with different engines
  */
 public abstract class TestHoodieFileGroupReaderBase<T> {
-  private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
   private static final String KEY_FIELD_NAME = "_row_key";
   private static final String PRECOMBINE_FIELD_NAME = "timestamp";
   private static final String PARTITION_FIELD_NAME = "partition_path";
@@ -126,18 +122,22 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
 
   public abstract void commitToTable(List<HoodieRecord> recordList,
                                      String operation,
+                                     boolean firstCommit,
                                      Map<String, String> writeConfigs,
                                      String schemaStr);
 
   public void commitToTable(List<HoodieRecord> recordList,
                             String operation,
+                            boolean firstCommit,
                             Map<String, String> writeConfigs) {
-    commitToTable(recordList, operation, writeConfigs, TRIP_EXAMPLE_SCHEMA);
+    commitToTable(recordList, operation, firstCommit, writeConfigs, TRIP_EXAMPLE_SCHEMA);
   }
 
   public abstract void assertRecordsEqual(Schema schema, T expected, T actual);
 
   public abstract void assertRecordMatchesSchema(Schema schema, T record);
+
+  public abstract HoodieTestDataGenerator.SchemaEvolutionConfigs getSchemaEvolutionConfigs();
 
   private static Stream<Arguments> testArguments() {
     return Stream.of(
@@ -159,7 +159,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEEF)) {
       // One commit; reading one file group containing a base file only
       List<HoodieRecord> initialRecords = dataGen.generateInserts("001", 100);
-      commitToTable(initialRecords, INSERT.value(), writeConfigs);
+      commitToTable(initialRecords, INSERT.value(), true, writeConfigs);
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), true, 0, recordMergeMode,
           initialRecords, initialRecords);
@@ -168,7 +168,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       List<HoodieRecord> updates = dataGen.generateUniqueUpdates("002", 50);
       List<HoodieRecord> allRecords = mergeRecordLists(updates, initialRecords);
       List<HoodieRecord> unmergedRecords = CollectionUtils.combine(initialRecords, updates);
-      commitToTable(updates, UPSERT.value(), writeConfigs);
+      commitToTable(updates, UPSERT.value(), false, writeConfigs);
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), true, 1, recordMergeMode,
           allRecords, unmergedRecords);
@@ -176,7 +176,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       // Three commits; reading one file group containing a base file and two log files
       List<HoodieRecord> updates2 = dataGen.generateUniqueUpdates("003", 100);
       List<HoodieRecord> finalRecords = mergeRecordLists(updates2, allRecords);
-      commitToTable(updates2, UPSERT.value(), writeConfigs);
+      commitToTable(updates2, UPSERT.value(), false, writeConfigs);
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), true, 2, recordMergeMode,
           finalRecords, CollectionUtils.combine(unmergedRecords, updates2));
@@ -201,7 +201,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEEF)) {
       // One commit; reading one file group containing a log file only
       List<HoodieRecord> initialRecords = dataGen.generateInserts("001", 100);
-      commitToTable(initialRecords, INSERT.value(), writeConfigs);
+      commitToTable(initialRecords, INSERT.value(), true, writeConfigs);
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), false, 1, recordMergeMode,
           initialRecords, initialRecords);
@@ -209,7 +209,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       // Two commits; reading one file group containing two log files
       List<HoodieRecord> updates = dataGen.generateUniqueUpdates("002", 50);
       List<HoodieRecord> allRecords = mergeRecordLists(updates, initialRecords);
-      commitToTable(updates, UPSERT.value(), writeConfigs);
+      commitToTable(updates, INSERT.value(), false, writeConfigs);
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), false, 2, recordMergeMode,
           allRecords, CollectionUtils.combine(initialRecords, updates));
@@ -232,19 +232,19 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
         getCommonConfigs(RecordMergeMode.EVENT_TIME_ORDERING, true));
 
     try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(TRIP_EXAMPLE_SCHEMA, 0xDEEF)) {
-      dataGen.extendSchemaBeforeEvolution(AVRO_SCHEMA);
+      dataGen.extendSchemaBeforeEvolution(getSchemaEvolutionConfigs());
       List<HoodieRecord> firstRecords = dataGen.generateInsertsForPartition("001", 5, "any_partition");
       List<Pair<String, IndexedRecord>> firstIndexedRecords = hoodieRecordsToIndexedRecords(firstRecords, dataGen.getExtendedSchema());
-      commitToTable(firstRecords, INSERT.value(), writeConfigs, dataGen.getExtendedSchema().toString());
+      commitToTable(firstRecords, INSERT.value(), true, writeConfigs, dataGen.getExtendedSchema().toString());
       validateOutputFromFileGroupReaderWithNativeRecords(
           getStorageConf(), getBasePath(),
           true, 0, RecordMergeMode.EVENT_TIME_ORDERING,
           firstIndexedRecords, firstIndexedRecords);
-      dataGen.extendSchemaAfterEvolution(AVRO_SCHEMA);
+      dataGen.extendSchemaAfterEvolution(getSchemaEvolutionConfigs());
       List<HoodieRecord> secondRecords = dataGen.generateInsertsForPartition(
           "002", 5, "new_partition");
       List<Pair<String, IndexedRecord>> secondIndexedRecords = hoodieRecordsToIndexedRecords(secondRecords, dataGen.getExtendedSchema());
-      commitToTable(secondRecords, UPSERT.value(), writeConfigs, dataGen.getExtendedSchema().toString());
+      commitToTable(secondRecords, INSERT.value(), false, writeConfigs, dataGen.getExtendedSchema().toString());
       List<Pair<String, IndexedRecord>> mergedRecords = CollectionUtils.combine(firstIndexedRecords, secondIndexedRecords);
       validateOutputFromFileGroupReaderWithNativeRecords(
           getStorageConf(), getBasePath(),
@@ -262,10 +262,10 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
 
     try (HoodieTestDataGenerator baseFileDataGen =
              new HoodieTestDataGenerator(TRIP_EXAMPLE_SCHEMA, 0xDEEF)) {
-      baseFileDataGen.extendSchemaBeforeEvolution(AVRO_SCHEMA);
+      baseFileDataGen.extendSchemaBeforeEvolution(getSchemaEvolutionConfigs());
       List<HoodieRecord> firstRecords = baseFileDataGen.generateInsertsAsPerSchema("001", 100, TRIP_EXAMPLE_SCHEMA);
       List<Pair<String, IndexedRecord>> firstIndexedRecords = hoodieRecordsToIndexedRecords(firstRecords, baseFileDataGen.getExtendedSchema());
-      commitToTable(firstRecords, INSERT.value(), writeConfigs, baseFileDataGen.getExtendedSchema().toString());
+      commitToTable(firstRecords, INSERT.value(), true, writeConfigs, baseFileDataGen.getExtendedSchema().toString());
       validateOutputFromFileGroupReaderWithNativeRecords(
           getStorageConf(), getBasePath(),
           true, 0, RecordMergeMode.EVENT_TIME_ORDERING,
@@ -273,7 +273,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
 
       List<HoodieRecord> secondRecords = baseFileDataGen.generateUniqueUpdates("002", 50);
       List<Pair<String, IndexedRecord>> secondIndexedRecords = hoodieRecordsToIndexedRecords(secondRecords, baseFileDataGen.getExtendedSchema());
-      commitToTable(secondRecords, UPSERT.value(), writeConfigs, baseFileDataGen.getExtendedSchema().toString());
+      commitToTable(secondRecords, UPSERT.value(), false, writeConfigs, baseFileDataGen.getExtendedSchema().toString());
       List<Pair<String, IndexedRecord>> mergedRecords = mergeIndexedRecordLists(secondIndexedRecords, firstIndexedRecords);
       List<Pair<String, IndexedRecord>> unmergedRecords = CollectionUtils.combine(firstIndexedRecords, secondIndexedRecords);
       validateOutputFromFileGroupReaderWithNativeRecords(
@@ -281,11 +281,11 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
           true, 1, RecordMergeMode.EVENT_TIME_ORDERING,
           mergedRecords, unmergedRecords);
 
-      baseFileDataGen.extendSchemaAfterEvolution(AVRO_SCHEMA);
+      baseFileDataGen.extendSchemaAfterEvolution(getSchemaEvolutionConfigs());
       List<HoodieRecord> thirdRecords = baseFileDataGen.generateUniqueUpdates(
           "003", 50, TRIP_EXAMPLE_SCHEMA);
       List<Pair<String, IndexedRecord>> thirdIndexedRecords = hoodieRecordsToIndexedRecords(thirdRecords, baseFileDataGen.getExtendedSchema());
-      commitToTable(thirdRecords, UPSERT.value(), writeConfigs, baseFileDataGen.getExtendedSchema().toString());
+      commitToTable(thirdRecords, UPSERT.value(), false, writeConfigs, baseFileDataGen.getExtendedSchema().toString());
       mergedRecords = mergeIndexedRecordLists(thirdIndexedRecords, mergedRecords);
       unmergedRecords = CollectionUtils.combine(unmergedRecords, thirdIndexedRecords);
       validateOutputFromFileGroupReaderWithNativeRecords(
@@ -304,19 +304,19 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
 
     try (HoodieTestDataGenerator baseFileDataGen =
              new HoodieTestDataGenerator(TRIP_EXAMPLE_SCHEMA, 0xDEEF)) {
-      baseFileDataGen.extendSchemaBeforeEvolution(AVRO_SCHEMA);
+      baseFileDataGen.extendSchemaBeforeEvolution(getSchemaEvolutionConfigs());
       List<HoodieRecord> firstRecords = baseFileDataGen.generateInsertsAsPerSchema("001", 100, TRIP_EXAMPLE_SCHEMA);
       List<Pair<String, IndexedRecord>> firstIndexedRecords = hoodieRecordsToIndexedRecords(firstRecords, baseFileDataGen.getExtendedSchema());
-      commitToTable(firstRecords, INSERT.value(), writeConfigs, baseFileDataGen.getExtendedSchema().toString());
+      commitToTable(firstRecords, INSERT.value(), true, writeConfigs, baseFileDataGen.getExtendedSchema().toString());
       validateOutputFromFileGroupReaderWithNativeRecords(
           getStorageConf(), getBasePath(),
           true, 0, RecordMergeMode.EVENT_TIME_ORDERING,
           firstIndexedRecords, firstIndexedRecords);
 
-      baseFileDataGen.extendSchemaAfterEvolution(AVRO_SCHEMA);
+      baseFileDataGen.extendSchemaAfterEvolution(getSchemaEvolutionConfigs());
       List<HoodieRecord> secondRecords = baseFileDataGen.generateUniqueUpdates("002", 100);
       List<Pair<String, IndexedRecord>> secondIndexedRecords = hoodieRecordsToIndexedRecords(secondRecords, baseFileDataGen.getExtendedSchema());
-      commitToTable(secondRecords, UPSERT.value(), writeConfigs, baseFileDataGen.getExtendedSchema().toString());
+      commitToTable(secondRecords, UPSERT.value(), false, writeConfigs, baseFileDataGen.getExtendedSchema().toString());
       List<Pair<String, IndexedRecord>> mergedRecords = mergeIndexedRecordLists(secondIndexedRecords, firstIndexedRecords);
       List<Pair<String, IndexedRecord>> unmergedRecords = CollectionUtils.combine(firstIndexedRecords, secondIndexedRecords);
       validateOutputFromFileGroupReaderWithNativeRecords(
@@ -327,7 +327,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       List<HoodieRecord> thirdRecords = baseFileDataGen.generateUniqueUpdates(
           "003", 100, TRIP_EXAMPLE_SCHEMA);
       List<Pair<String, IndexedRecord>> thirdIndexedRecords = hoodieRecordsToIndexedRecords(thirdRecords, baseFileDataGen.getExtendedSchema());
-      commitToTable(thirdRecords, UPSERT.value(), writeConfigs, baseFileDataGen.getExtendedSchema().toString());
+      commitToTable(thirdRecords, UPSERT.value(), false, writeConfigs, baseFileDataGen.getExtendedSchema().toString());
       mergedRecords = mergeIndexedRecordLists(thirdIndexedRecords, mergedRecords);
       unmergedRecords = CollectionUtils.combine(unmergedRecords, thirdIndexedRecords);
       validateOutputFromFileGroupReaderWithNativeRecords(
@@ -360,7 +360,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
   public void testSpillableMapUsage(ExternalSpillableMap.DiskMapType diskMapType) throws Exception {
     Map<String, String> writeConfigs = new HashMap<>(getCommonConfigs(RecordMergeMode.COMMIT_TIME_ORDERING, true));
     try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEEF)) {
-      commitToTable(dataGen.generateInserts("001", 100), INSERT.value(), writeConfigs);
+      commitToTable(dataGen.generateInserts("001", 100), INSERT.value(), true, writeConfigs);
       String baseMapPath = Files.createTempDirectory(null).toString();
       HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(getStorageConf(), getBasePath());
       Schema avroSchema = new TableSchemaResolver(metaClient).getTableAvroSchema();
@@ -448,30 +448,12 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     actualRecordList.forEach(r -> assertRecordMatchesSchema(avroSchema, r));
     Set<GenericRecord> actualRecordSet = actualRecordList.stream().map(r ->  readerContext.convertToAvroRecord(r, avroSchema))
         .map(r -> HoodieAvroUtils.removeFields(r, metaCols))
-        //.map(HoodieAvroUtils::safeAvroToJsonString)
         .collect(Collectors.toSet());
     Set<GenericRecord> expectedRecordSet = expectedRecords.stream()
         .map(r -> (GenericRecord) r.getRight())
         .map(r -> HoodieAvroUtils.rewriteRecordWithNewSchema(r, avroSchemaWithoutMeta))
-        //.map(HoodieAvroUtils::safeAvroToJsonString)
         .collect(Collectors.toSet());
     compareRecordSets(expectedRecordSet, actualRecordSet);
-    //assertEquals(expectedRecordSet, actualRecordSet);
-    //compareJsonStringSets(expectedRecordSet, actualRecordSet);
-
-//    // validate unmerged records
-//    actualRecordList = readRecordsFromFileGroup(storageConf, tablePath, metaClient, fileSlices, avroSchema, recordMergeMode, true, false);
-//    assertEquals(expectedUnmergedRecords.size(), actualRecordList.size());
-//    actualRecordList.forEach(r -> assertRecordMatchesSchema(avroSchema, r));
-//    actualRecordSet = actualRecordList.stream().map(r ->  readerContext.convertToAvroRecord(r, avroSchema))
-//        .map(r -> HoodieAvroUtils.removeFields(r, metaCols))
-//        .map(HoodieAvroUtils::safeAvroToJsonString)
-//        .collect(Collectors.toSet());
-//    expectedRecordSet = expectedUnmergedRecords.stream()
-//        .map(r -> (GenericRecord) r.getRight())
-//        .map(HoodieAvroUtils::safeAvroToJsonString)
-//        .collect(Collectors.toSet());
-//    assertEquals(expectedRecordSet, actualRecordSet);
   }
 
   private void compareRecordSets(Set<GenericRecord> expectedRecordSet, Set<GenericRecord> actualRecordSet) {
@@ -487,32 +469,6 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       GenericRecord expectedRecord = expectedMap.get(key);
       GenericRecord actualRecord = actualMap.get(key);
       assertEquals(expectedRecord, actualRecord);
-    }
-  }
-
-  private void compareJsonStringSets(Set<String> expectedSet, Set<String> actualSet) {
-    Map<String, JsonNode> expectedMap = new HashMap<>(expectedSet.size());
-    for (String s : expectedSet) {
-      try {
-        JsonNode jsonNode = OBJECT_MAPPER.readTree(s);
-        expectedMap.put(jsonNode.get("_row_key").asText(), jsonNode);
-      } catch (JsonProcessingException e) {
-        throw new RuntimeException(e);
-      }
-    }
-    Map<String, JsonNode> actualMap = new HashMap<>(actualSet.size());
-    for (String s : actualSet) {
-      try {
-        JsonNode jsonNode = OBJECT_MAPPER.readTree(s);
-        actualMap.put(jsonNode.get("_row_key").asText(), jsonNode);
-      } catch (JsonProcessingException e) {
-        throw new RuntimeException(e);
-      }
-    }
-    for (String key : actualMap.keySet()) {
-      JsonNode expectedNode = expectedMap.get(key);
-      JsonNode actualNode = actualMap.get(key);
-      assertEquals(expectedNode, actualNode);
     }
   }
 
