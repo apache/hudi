@@ -217,8 +217,12 @@ public class SerDeHelper {
           return Types.DateType.get();
         case TIME:
           return Types.TimeType.get();
+        case TIME_MILLIS:
+          return Types.TimeMillisType.get();
         case TIMESTAMP:
           return Types.TimestampType.get();
+        case TIMESTAMP_MILLIS:
+          return Types.TimestampMillisType.get();
         case STRING:
           return Types.StringType.get();
         case UUID:
