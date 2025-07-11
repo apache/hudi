@@ -25,19 +25,20 @@ import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SerializationUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.util.Lazy;
 
+import org.apache.avro.generic.GenericDatumReader;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.io.BinaryDecoder;
 import org.apache.avro.io.BinaryEncoder;
-import org.apache.avro.io.DatumReader;
 import org.apache.avro.io.DatumWriter;
 import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.EncoderFactory;
-import org.apache.avro.specific.SpecificDatumReader;
 import org.apache.avro.specific.SpecificDatumWriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -70,6 +71,12 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
       Lazy.lazily(HoodieDeleteRecordList::newBuilder);
   private static final Lazy<HoodieDeleteRecord.Builder> HOODIE_DELETE_RECORD_BUILDER_STUB =
       Lazy.lazily(HoodieDeleteRecord::newBuilder);
+
+  private static final ThreadLocal<GenericDatumReader<IndexedRecord>> DELETE_RECORD_DESERIALIZER =
+      ThreadLocal.withInitial(() -> new GenericDatumReader<>(HoodieDeleteRecordList.getClassSchema()));
+  static final int ORD_RECORD_KEY = 0;
+  static final int ORD_PARTITION_PATH = 1;
+  static final int ORD_ORDERING_VAL = 2;
 
   // Records to delete, sorted based on the record position if writing record position to the log block header
   private DeleteRecord[] recordsToDelete;
@@ -163,15 +170,17 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
     } else if (version == 2) {
       return SerializationUtils.deserialize(data);
     } else {
-      DatumReader<HoodieDeleteRecordList> reader = new SpecificDatumReader<>(HoodieDeleteRecordList.class);
+      GenericDatumReader<IndexedRecord> reader = DELETE_RECORD_DESERIALIZER.get();
       BinaryDecoder decoder = DecoderFactory.get().binaryDecoder(data, 0, data.length, null);
-      List<HoodieDeleteRecord> deleteRecordList = reader.read(null, decoder)
-          .getDeleteRecordList();
-      return deleteRecordList.stream()
+      Object deleteRecordList = reader.read(null, decoder).get(0);
+      ValidationUtils.checkArgument(
+          deleteRecordList instanceof List,
+          "The delete block has unexpected delete record encoding.");
+      return ((List<IndexedRecord>) deleteRecordList).stream()
           .map(record -> DeleteRecord.create(
-              record.getRecordKey(),
-              record.getPartitionPath(),
-              unwrapAvroValueWrapper(record.getOrderingVal())))
+              (String) record.get(ORD_RECORD_KEY),
+              (String) record.get(ORD_PARTITION_PATH),
+              unwrapAvroValueWrapper(record.get(ORD_ORDERING_VAL))))
           .toArray(DeleteRecord[]::new);
     }
   }
