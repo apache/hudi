@@ -49,7 +49,6 @@ import java.io.Closeable
 import java.util.function.Predicate
 
 import scala.collection.JavaConverters._
-import scala.jdk.CollectionConverters.mapAsJavaMapConverter
 
 case class HoodieMergeOnReadPartition(index: Int, split: HoodieMergeOnReadFileSplit) extends Partition
 
