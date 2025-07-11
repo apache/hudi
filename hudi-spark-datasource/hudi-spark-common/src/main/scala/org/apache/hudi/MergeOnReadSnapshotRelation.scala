@@ -115,12 +115,16 @@ abstract class BaseMergeOnReadSnapshotRelation(sqlContext: SQLContext,
     new HoodieMergeOnReadRDDV2(
       sqlContext.sparkContext,
       config = jobConf,
+      sqlConf = sqlContext.sparkSession.sessionState.conf,
       fileReaders = readers,
       tableSchema = tableSchema,
       requiredSchema = requiredSchema,
       tableState = tableState,
       mergeType = mergeType,
-      fileSplits = fileSplits)
+      fileSplits = fileSplits,
+      optionalFilters = optionalFilters,
+      metaClient = metaClient,
+      options = optParams)
   }
 
   protected override def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): List[HoodieMergeOnReadFileSplit] = {
