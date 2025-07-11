@@ -131,21 +131,20 @@ public class BufferedRecordMergerFactory {
     @Override
     public Option<BufferedRecord<T>> deltaMerge(BufferedRecord<T> newRecord,
                                                 BufferedRecord<T> existingRecord) {
-      newRecord = partialUpdateStrategy.partialMerge(
-          newRecord,
-          existingRecord,
-          readerContext.getSchemaFromBufferRecord(newRecord),
-          readerContext.getSchemaFromBufferRecord(existingRecord),
-          false);
+      if (existingRecord != null) {
+        newRecord = partialUpdateStrategy.partialMerge(
+            newRecord,
+            existingRecord,
+            readerContext.getSchemaFromBufferRecord(newRecord),
+            readerContext.getSchemaFromBufferRecord(existingRecord),
+            false);
+      }
       return Option.of(newRecord);
     }
 
     @Override
-    public Pair<Boolean, T> finalMerge(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) {
-      if (newerRecord == null) {
-        return Pair.of(olderRecord.isDelete(), olderRecord.getRecord());
-      }
-
+    public Pair<Boolean, T> finalMerge(BufferedRecord<T> olderRecord,
+                                       BufferedRecord<T> newerRecord) {
       newerRecord = partialUpdateStrategy.partialMerge(
           newerRecord,
           olderRecord,
@@ -165,9 +164,8 @@ public class BufferedRecordMergerFactory {
     public Option<BufferedRecord<T>> deltaMerge(BufferedRecord<T> newRecord, BufferedRecord<T> existingRecord) {
       if (existingRecord == null || shouldKeepNewerRecord(existingRecord, newRecord)) {
         return Option.of(newRecord);
-      } else {
-        return Option.of(existingRecord);
       }
+      return Option.empty();
     }
 
     @Override
@@ -207,7 +205,9 @@ public class BufferedRecordMergerFactory {
 
     @Override
     public Option<BufferedRecord<T>> deltaMerge(BufferedRecord<T> newRecord, BufferedRecord<T> existingRecord) {
-      if (existingRecord == null || shouldKeepNewerRecord(existingRecord, newRecord)) {
+      if (existingRecord == null) {
+        return Option.of(newRecord);
+      } else if (shouldKeepNewerRecord(existingRecord, newRecord)) {
         newRecord = partialUpdateStrategy.partialMerge(
             newRecord,
             existingRecord,
