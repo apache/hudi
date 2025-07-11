@@ -48,6 +48,7 @@ import javax.annotation.concurrent.NotThreadSafe;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -82,7 +83,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
   // A timer for calculating elapsed time in millis
   public final HoodieTimer timer = HoodieTimer.create();
   // Map of compacted/merged records
-  private final ExternalSpillableMap<String, HoodieRecord> records;
+  private final Map<String, HoodieRecord> records;
   // Set of already scanned prefixes allowing us to avoid scanning same prefixes again
   private final Set<String> scannedPrefixes;
   // count of merged records in log
@@ -111,8 +112,10 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
     try {
       this.maxMemorySizeInBytes = maxMemorySizeInBytes;
       // Store merged records for all versions for this log file, set the in-memory footprint to maxInMemoryMapSize
-      this.records = new ExternalSpillableMap<>(maxMemorySizeInBytes, spillableMapBasePath, new DefaultSizeEstimator(),
-          new HoodieRecordSizeEstimator(readerSchema), diskMapType, new DefaultSerializer<>(), isBitCaskDiskMapCompressionEnabled, getClass().getSimpleName());
+      this.records = logFilePaths.isEmpty() ?
+          new ExternalSpillableMap<>(maxMemorySizeInBytes, spillableMapBasePath, new DefaultSizeEstimator(),
+              new HoodieRecordSizeEstimator(readerSchema), diskMapType, new DefaultSerializer<>(), isBitCaskDiskMapCompressionEnabled, getClass().getSimpleName()) :
+          Collections.emptyMap();
       this.scannedPrefixes = new HashSet<>();
       this.allowInflightInstants = allowInflightInstants;
     } catch (IOException e) {
