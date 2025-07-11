@@ -27,6 +27,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.SerializationUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -201,6 +202,11 @@ public class StreamWriteOperatorCoordinator
   private Option<CommitGuard> commitGuardOpt;
 
   /**
+   * The flag to indicate whether the coordinator is restored from previous checkpoint
+   */
+  private transient boolean isRestored;
+
+  /**
    * Constructs a StreamingSinkOperatorCoordinator.
    *
    * @param conf    The config options
@@ -217,42 +223,10 @@ public class StreamWriteOperatorCoordinator
 
   @Override
   public void start() throws Exception {
-    // setup classloader for APIs that use reflection without taking ClassLoader param
-    // reference: https://stackoverflow.com/questions/1771679/difference-between-threads-context-class-loader-and-normal-classloader
-    Thread.currentThread().setContextClassLoader(getClass().getClassLoader());
-    this.tableState = TableState.create(conf);
-    initCommitGuard(this.conf);
-    // initialize event buffer
-    this.eventBuffers = EventBuffers.getInstance(this.commitGuardOpt);
-    this.gateways = new SubtaskGateway[this.parallelism];
-    try {
-      // init table, create if not exists.
-      this.metaClient = initTableIfNotExists(this.conf);
-      // the write client must create after the table creation
-      this.writeClient = FlinkWriteClients.createWriteClient(conf);
-      this.writeClient.tryUpgrade(instant, this.metaClient);
-      initMetadataTable(this.writeClient);
-      // start the executor
-      this.executor = NonThrownExecutor.builder(LOG)
-          .threadFactory(getThreadFactory("meta-event-handle"))
-          .exceptionHook((errMsg, t) -> this.context.failJob(new HoodieException(errMsg, t)))
-          .waitForTasksFinish(true).build();
-      this.instantRequestExecutor = NonThrownExecutor.builder(LOG)
-          .threadFactory(getThreadFactory("instant-request"))
-          .exceptionHook((errMsg, t) -> this.context.failJob(new HoodieException(errMsg, t)))
-          .build();
-      // start the executor if required
-      if (tableState.syncHive) {
-        initHiveSync();
-      }
-      // start client id heartbeats for optimistic concurrency control
-      if (OptionsResolver.isMultiWriter(conf)) {
-        initClientIds(conf);
-      }
-    } catch (Throwable throwable) {
-      LOG.error("Failed to start operator coordinator.", throwable);
-      context.failJob(throwable);
+    if (isRestored) {
+      return;
     }
+    open();
   }
 
   @Override
@@ -283,7 +257,7 @@ public class StreamWriteOperatorCoordinator
     executor.execute(
         () -> {
           try {
-            result.complete(new byte[0]);
+            result.complete(SerializationUtils.serialize(this.eventBuffers));
           } catch (Throwable throwable) {
             // when a checkpoint fails, throws directly.
             result.completeExceptionally(
@@ -315,8 +289,15 @@ public class StreamWriteOperatorCoordinator
   }
 
   @Override
-  public void resetToCheckpoint(long checkpointID, byte[] checkpointData) {
-    // no operation
+  public void resetToCheckpoint(long checkpointID, @Nullable byte[] checkpointData) {
+    open();
+    if (checkpointData != null) {
+      final EventBuffers recoveredBuffers = SerializationUtils.deserialize(checkpointData);
+      final HoodieTimeline completedTimeline = this.metaClient.getActiveTimeline().filterCompletedInstants();
+      recoveredBuffers.getEventBufferStream()
+          .forEach(entry -> recommitInstant(completedTimeline, entry.getKey(), entry.getValue().getLeft(), entry.getValue().getRight()));
+    }
+    this.isRestored = true;
   }
 
   @Override
@@ -339,6 +320,54 @@ public class StreamWriteOperatorCoordinator
             }
           }, "handle write metadata event for instant %s", this.instant
       );
+    }
+  }
+
+  /**
+   * Initialization for the write coordinator, including initializing the executors, initialize table if not existing,
+   * upgrading the table if necessary etc.
+   *
+   * <p>This method could be called from two places:
+   * 1. The job is started without state, then it will be called from `start()`.
+   * 2. The job is restarted by restoring from previous snapshot state, then it will be called from `resetToCheckpoint()`.
+   */
+  private void open() {
+    // setup classloader for APIs that use reflection without taking ClassLoader param
+    // reference: https://stackoverflow.com/questions/1771679/difference-between-threads-context-class-loader-and-normal-classloader
+    Thread.currentThread().setContextClassLoader(getClass().getClassLoader());
+    this.tableState = TableState.create(conf);
+    initCommitGuard(this.conf);
+    // initialize event buffer
+    this.eventBuffers = EventBuffers.getInstance(this.commitGuardOpt);
+    this.gateways = new SubtaskGateway[this.parallelism];
+    try {
+      // init table, create if not exists.
+      this.metaClient = initTableIfNotExists(this.conf);
+      // the write client must create after the table creation
+      this.writeClient = FlinkWriteClients.createWriteClient(conf);
+      this.writeClient.tryUpgrade(instant, this.metaClient);
+      initMetadataTable(this.writeClient);
+      // start the executor
+      this.executor = NonThrownExecutor.builder(LOG)
+          .threadFactory(getThreadFactory("meta-event-handle"))
+          .exceptionHook((errMsg, t) -> this.context.failJob(new HoodieException(errMsg, t)))
+          .waitForTasksFinish(true).build();
+
+      this.instantRequestExecutor = NonThrownExecutor.builder(LOG)
+          .threadFactory(getThreadFactory("instant-request"))
+          .exceptionHook((errMsg, t) -> this.context.failJob(new HoodieException(errMsg, t)))
+          .build();
+      // start the executor if required
+      if (tableState.syncHive) {
+        initHiveSync();
+      }
+      // start client id heartbeats for optimistic concurrency control
+      if (OptionsResolver.isMultiWriter(conf)) {
+        initClientIds(conf);
+      }
+    } catch (Throwable throwable) {
+      LOG.error("Failed to start operator coordinator.", throwable);
+      context.failJob(throwable);
     }
   }
 
@@ -470,6 +499,14 @@ public class StreamWriteOperatorCoordinator
    */
   private void recommitInstant(long checkpointId, String instant, WriteMetadataEvent[] bootstrapBuffer) {
     HoodieTimeline completedTimeline = this.metaClient.getActiveTimeline().filterCompletedInstants();
+    recommitInstant(completedTimeline, checkpointId, instant, bootstrapBuffer);
+  }
+
+  /**
+   * Recommits the last inflight instant if the write metadata checkpoint successfully
+   * but was not committed due to some rare cases.
+   */
+  private void recommitInstant(HoodieTimeline completedTimeline, long checkpointId, String instant, WriteMetadataEvent[] bootstrapBuffer) {
     if (!completedTimeline.containsInstant(instant)) {
       LOG.info("Recommit instant {}", instant);
       // Recommit should start heartbeat for lazy failed writes clean policy to avoid aborting for heartbeat expired;
