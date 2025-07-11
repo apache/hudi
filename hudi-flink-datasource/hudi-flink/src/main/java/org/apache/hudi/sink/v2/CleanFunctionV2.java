@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink.v2;
 
+import org.apache.hudi.adapter.ProcessFunctionAdapter;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
@@ -44,7 +45,7 @@ import org.slf4j.LoggerFactory;
  * <p>Note: The difference with {@code CleanFunction} is {@code CleanFunctionV2} extends {@code ProcessFunction},
  * while {@code CleanFunction} is a {@code SinkFunction}.
  */
-public class CleanFunctionV2<T> extends ProcessFunction<T, RowData>
+public class CleanFunctionV2<T> extends ProcessFunctionAdapter<T, RowData>
     implements CheckpointedFunction, CheckpointListener {
   private static final Logger LOG = LoggerFactory.getLogger(CleanFunctionV2.class);
 
@@ -65,7 +66,7 @@ public class CleanFunctionV2<T> extends ProcessFunction<T, RowData>
     super.open(parameters);
     this.writeClient = FlinkWriteClients.createWriteClient(conf, getRuntimeContext());
     this.executor = NonThrownExecutor.builder(LOG).waitForTasksFinish(true).build();
-    if (conf.getBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED)) {
+    if (conf.get(FlinkOptions.CLEAN_ASYNC_ENABLED)) {
       executor.execute(() -> {
         this.isCleaning = true;
         try {
@@ -79,7 +80,7 @@ public class CleanFunctionV2<T> extends ProcessFunction<T, RowData>
 
   @Override
   public void notifyCheckpointComplete(long l) throws Exception {
-    if (conf.getBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED) && isCleaning) {
+    if (conf.get(FlinkOptions.CLEAN_ASYNC_ENABLED) && isCleaning) {
       executor.execute(() -> {
         try {
           this.writeClient.waitForCleaningFinish();
@@ -93,7 +94,7 @@ public class CleanFunctionV2<T> extends ProcessFunction<T, RowData>
 
   @Override
   public void snapshotState(FunctionSnapshotContext context) throws Exception {
-    if (conf.getBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED) && !isCleaning) {
+    if (conf.get(FlinkOptions.CLEAN_ASYNC_ENABLED) && !isCleaning) {
       try {
         this.writeClient.startAsyncCleaning();
         this.isCleaning = true;

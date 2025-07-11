@@ -44,10 +44,10 @@ public class TestHiveSyncContext {
     String hiveSyncPartitionField = "hiveSyncPartitionField";
     String partitionPathField = "partitionPathField";
 
-    configuration1.setString(FlinkOptions.HIVE_SYNC_PARTITION_FIELDS, hiveSyncPartitionField);
-    configuration1.setString(FlinkOptions.PARTITION_PATH_FIELD, partitionPathField);
+    configuration1.set(FlinkOptions.HIVE_SYNC_PARTITION_FIELDS, hiveSyncPartitionField);
+    configuration1.set(FlinkOptions.PARTITION_PATH_FIELD, partitionPathField);
 
-    configuration2.setString(FlinkOptions.PARTITION_PATH_FIELD, partitionPathField);
+    configuration2.set(FlinkOptions.PARTITION_PATH_FIELD, partitionPathField);
 
     Properties props1 = HiveSyncContext.buildSyncConfig(configuration1);
     Properties props2 = HiveSyncContext.buildSyncConfig(configuration2);
@@ -62,7 +62,7 @@ public class TestHiveSyncContext {
   @Test
   void testOptionWithoutShortcutKey() {
     Configuration configuration3 = new Configuration();
-    configuration3.setBoolean(HiveSyncConfig.HIVE_CREATE_MANAGED_TABLE.key(), true);
+    configuration3.setString(HiveSyncConfig.HIVE_CREATE_MANAGED_TABLE.key(), "true");
     Properties props3 = HiveSyncContext.buildSyncConfig(configuration3);
     assertTrue(Boolean.parseBoolean(props3.getProperty(HiveSyncConfig.HIVE_CREATE_MANAGED_TABLE.key(), "false")));
   }

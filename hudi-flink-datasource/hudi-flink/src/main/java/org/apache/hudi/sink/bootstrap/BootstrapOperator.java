@@ -41,6 +41,7 @@ import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.util.FlinkTables;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.utils.RuntimeContextUtils;
 
 import org.apache.avro.Schema;
 import org.apache.flink.annotation.VisibleForTesting;
@@ -52,9 +53,12 @@ import org.apache.flink.runtime.state.KeyGroupRangeAssignment;
 import org.apache.flink.runtime.state.StateInitializationContext;
 import org.apache.flink.runtime.state.StateSnapshotContext;
 import org.apache.flink.runtime.taskexecutor.GlobalAggregateManager;
+import org.apache.flink.streaming.api.graph.StreamConfig;
 import org.apache.flink.streaming.api.operators.AbstractStreamOperator;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
+import org.apache.flink.streaming.api.operators.Output;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
+import org.apache.flink.streaming.runtime.tasks.StreamTask;
 import org.apache.flink.table.data.RowData;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -105,6 +109,15 @@ public class BootstrapOperator
     this.pattern = Pattern.compile(conf.get(FlinkOptions.INDEX_PARTITION_REGEX));
   }
 
+  /**
+   * The modifier of this method is updated to `protected` sink Flink 2.0, here we overwrite the method
+   * with `public` modifier to make it compatible considering usage in hudi-flink module.
+   */
+  @Override
+  public void setup(StreamTask<?, ?> containingTask, StreamConfig config, Output<StreamRecord<HoodieFlinkInternalRow>> output) {
+    super.setup(containingTask, config, output);
+  }
+
   @Override
   public void snapshotState(StateSnapshotContext context) throws Exception {
     lastInstantTime = StreamerUtil.getLastCompletedInstant(StreamerUtil.createMetaClient(this.conf));
@@ -129,7 +142,7 @@ public class BootstrapOperator
     }
 
     this.hadoopConf = HadoopConfigurations.getHadoopConf(this.conf);
-    this.writeConfig = FlinkWriteClients.getHoodieClientConfig(this.conf, false, true);
+    this.writeConfig = FlinkWriteClients.getHoodieClientConfig(this.conf, false, false);
     this.hoodieTable = FlinkTables.createTable(writeConfig, hadoopConf, getRuntimeContext());
     this.aggregateManager = getRuntimeContext().getGlobalAggregateManager();
     this.metaClient = StreamerUtil.metaClientForReader(conf, hadoopConf);
@@ -143,7 +156,7 @@ public class BootstrapOperator
    */
   protected void preLoadIndexRecords() throws Exception {
     StoragePath basePath = hoodieTable.getMetaClient().getBasePath();
-    int taskID = getRuntimeContext().getIndexOfThisSubtask();
+    int taskID = RuntimeContextUtils.getIndexOfThisSubtask(getRuntimeContext());
     LOG.info("Start loading records in table {} into the index state, taskId = {}", basePath, taskID);
     for (String partitionPath : FSUtils.getAllPartitionPaths(new HoodieFlinkEngineContext(hadoopConf), hoodieTable.getMetaClient(), metadataConfig(conf))) {
       if (pattern.matcher(partitionPath).matches()) {
@@ -151,10 +164,10 @@ public class BootstrapOperator
       }
     }
 
-    LOG.info("Finish sending index records, taskId = {}.", getRuntimeContext().getIndexOfThisSubtask());
+    LOG.info("Finish sending index records, taskId = {}.", taskID);
 
     // wait for the other bootstrap tasks finish bootstrapping.
-    waitForBootstrapReady(getRuntimeContext().getIndexOfThisSubtask());
+    waitForBootstrapReady(taskID);
     hoodieTable = null;
   }
 
@@ -162,11 +175,11 @@ public class BootstrapOperator
    * Wait for other bootstrap tasks to finish the index bootstrap.
    */
   private void waitForBootstrapReady(int taskID) {
-    int taskNum = getRuntimeContext().getNumberOfParallelSubtasks();
+    int taskNum = RuntimeContextUtils.getNumberOfParallelSubtasks(getRuntimeContext());
     int readyTaskNum = 1;
     while (taskNum != readyTaskNum) {
       try {
-        readyTaskNum = aggregateManager.updateGlobalAggregate(BootstrapAggFunction.NAME + conf.getString(FlinkOptions.TABLE_NAME), taskID, new BootstrapAggFunction());
+        readyTaskNum = aggregateManager.updateGlobalAggregate(BootstrapAggFunction.NAME + conf.get(FlinkOptions.TABLE_NAME), taskID, new BootstrapAggFunction());
         LOG.info("Waiting for other bootstrap tasks to complete, taskId = {}.", taskID);
 
         TimeUnit.SECONDS.sleep(5);
@@ -189,9 +202,9 @@ public class BootstrapOperator
   protected void loadRecords(String partitionPath) throws Exception {
     long start = System.currentTimeMillis();
 
-    final int parallelism = getRuntimeContext().getNumberOfParallelSubtasks();
-    final int maxParallelism = getRuntimeContext().getMaxNumberOfParallelSubtasks();
-    final int taskID = getRuntimeContext().getIndexOfThisSubtask();
+    final int parallelism = RuntimeContextUtils.getNumberOfParallelSubtasks(getRuntimeContext());
+    final int maxParallelism = RuntimeContextUtils.getMaxNumberOfParallelSubtasks(getRuntimeContext());
+    final int taskID = RuntimeContextUtils.getIndexOfThisSubtask(getRuntimeContext());
 
     HoodieTimeline commitsTimeline = this.hoodieTable.getMetaClient().getCommitsTimeline();
     if (!StringUtils.isNullOrEmpty(lastInstantTime)) {

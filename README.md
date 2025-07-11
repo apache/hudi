@@ -160,24 +160,24 @@ Starting from versions 0.11, Hudi no longer requires `spark-avro` to be specifie
 
 ### Build with different Flink versions
 
-The default Flink version supported is 1.20. The default Flink 1.20.x version, corresponding to `flink1.20` profile is 1.20.1.
+The default Flink version supported is 2.0. The default Flink 2.0.x version, corresponding to `flink2.0` profile is 2.0.0.
+Java 8 is longer supported since Flink 2.0, so please make sure to use Java 11+ to compile Hudi Flink 2.0.
 Flink is Scala-free since 1.15.x, there is no need to specify the Scala version for Flink 1.15.x and above versions.
 Refer to the table below for building with different Flink and Scala versions.
 
 | Maven build options | Expected Flink bundle jar name | Notes                            |
 |:--------------------|:-------------------------------|:---------------------------------|
-| (empty)             | hudi-flink1.20-bundle          | For Flink 1.20 (default options) |
-| `-Dflink1.20`       | hudi-flink1.20-bundle          | For Flink 1.20 (same as default) |
+| (empty)             | hudi-flink2.0-bundle           | For Flink 2.0 (default options)  |
+| `-Dflink2.0`        | hudi-flink2.0-bundle           | For Flink 2.0 (same as default)  |
+| `-Dflink1.20`       | hudi-flink1.20-bundle          | For Flink 1.20                   |
 | `-Dflink1.19`       | hudi-flink1.19-bundle          | For Flink 1.19                   |
 | `-Dflink1.18`       | hudi-flink1.18-bundle          | For Flink 1.18                   |
 | `-Dflink1.17`       | hudi-flink1.17-bundle          | For Flink 1.17                   |
-| `-Dflink1.16`       | hudi-flink1.16-bundle          | For Flink 1.16                   |
-| `-Dflink1.15`       | hudi-flink1.15-bundle          | For Flink 1.15                   |
 
 For example,
 ```
-# Build against Flink 1.15.x
-mvn clean package -DskipTests -Dflink1.15
+# Build against Flink 1.17.x
+mvn clean package -DskipTests -Dflink1.17
 ```
 
 ## Running Tests

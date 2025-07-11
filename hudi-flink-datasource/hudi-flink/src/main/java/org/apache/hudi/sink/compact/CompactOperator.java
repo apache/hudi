@@ -38,6 +38,7 @@ import org.apache.hudi.table.action.compact.HoodieFlinkMergeOnReadTableCompactor
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.util.CompactionUtil;
 import org.apache.hudi.util.FlinkWriteClients;
+import org.apache.hudi.utils.RuntimeContextUtils;
 
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
@@ -46,6 +47,7 @@ import org.apache.flink.streaming.api.graph.StreamConfig;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.streaming.api.operators.Output;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
+import org.apache.flink.streaming.runtime.tasks.ProcessingTimeService;
 import org.apache.flink.streaming.runtime.tasks.StreamTask;
 import org.apache.flink.table.runtime.operators.TableStreamOperator;
 import org.apache.flink.table.runtime.util.StreamRecordCollector;
@@ -125,14 +127,27 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
     this.asyncCompaction = OptionsResolver.needsAsyncCompaction(conf);
   }
 
+  /**
+   * The modifier of this method is updated to `protected` sink Flink 2.0, here we overwrite the method
+   * with `public` modifier to make it compatible considering usage in hudi-flink module.
+   */
   @Override
   public void setup(StreamTask<?, ?> containingTask, StreamConfig config, Output<StreamRecord<CompactionCommitEvent>> output) {
     super.setup(containingTask, config, new MaskingOutputAdapter<>(output));
   }
 
+  /**
+   * The modifier of this method is updated to `protected` sink Flink 2.0, here we overwrite the method
+   * with `public` modifier to make it compatible considering usage in hudi-flink module.
+   */
+  @Override
+  public void setProcessingTimeService(ProcessingTimeService processingTimeService) {
+    super.setProcessingTimeService(processingTimeService);
+  }
+
   @Override
   public void open() throws Exception {
-    this.taskID = getRuntimeContext().getIndexOfThisSubtask();
+    this.taskID = RuntimeContextUtils.getIndexOfThisSubtask(getRuntimeContext());
     this.writeClient = FlinkWriteClients.createWriteClient(conf, getRuntimeContext());
     this.flinkTable = this.writeClient.getHoodieTable();
     if (this.asyncCompaction) {

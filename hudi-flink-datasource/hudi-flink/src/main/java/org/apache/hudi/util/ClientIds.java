@@ -172,7 +172,7 @@ public class ClientIds implements AutoCloseable, Serializable {
 
   @VisibleForTesting
   public String nextId(Configuration conf) {
-    String basePath = conf.getString(FlinkOptions.PATH);
+    String basePath = conf.get(FlinkOptions.PATH);
     String nextId = nextId(conf, basePath);
     // update the heartbeat immediately in case there are client preemption conflict for the same id.
     updateHeartbeat(getHeartbeatFilePath(basePath, nextId));
@@ -251,9 +251,9 @@ public class ClientIds implements AutoCloseable, Serializable {
     }
 
     public Builder conf(Configuration conf) {
-      this.basePath = conf.getString(FlinkOptions.PATH);
+      this.basePath = conf.get(FlinkOptions.PATH);
       this.fs = HadoopFSUtils.getFs(this.basePath, HadoopConfigurations.getHadoopConf(conf));
-      this.clientId = conf.getString(FlinkOptions.WRITE_CLIENT_ID);
+      this.clientId = conf.get(FlinkOptions.WRITE_CLIENT_ID);
       return this;
     }
 
