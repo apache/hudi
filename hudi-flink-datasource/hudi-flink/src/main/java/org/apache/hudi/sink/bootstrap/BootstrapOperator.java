@@ -133,7 +133,7 @@ public class BootstrapOperator
     this.hoodieTable = FlinkTables.createTable(writeConfig, hadoopConf, getRuntimeContext());
     this.aggregateManager = getRuntimeContext().getGlobalAggregateManager();
     this.metaClient = StreamerUtil.metaClientForReader(conf, hadoopConf);
-    this.internalSchemaManager = InternalSchemaManager.get(conf, metaClient);
+    this.internalSchemaManager = InternalSchemaManager.get(hoodieTable.getStorageConf(), metaClient);
 
     preLoadIndexRecords();
   }
