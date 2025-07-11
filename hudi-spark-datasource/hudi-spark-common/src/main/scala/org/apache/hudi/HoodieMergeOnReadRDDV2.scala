@@ -125,7 +125,9 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
         val storageConf = new HadoopStorageConfiguration(hadoopConf)
 
         val baseFileOption = HOption.ofNullable(
-          partition.split.dataFile.map(file => new HoodieBaseFile(file.filePath.toPath.toString)).orNull)
+          partition.split.dataFile
+            .map(file => new HoodieBaseFile(sparkAdapter.getSparkPartitionedFileUtils.getStringPathFromPartitionedFile(file)))
+            .orNull)
         val logFiles = partition.split.logFiles.asJava
         val fullPartitionPath = getPartitionPath(partition.split)
         val partitionPath = FSUtils.getRelativePartitionPath(metaClient.getBasePath, fullPartitionPath)
