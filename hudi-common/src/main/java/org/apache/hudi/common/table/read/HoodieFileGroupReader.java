@@ -58,6 +58,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath;
 import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
@@ -114,24 +115,25 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       Option<InternalSchema> internalSchemaOpt, HoodieTableMetaClient hoodieTableMetaClient,
       TypedProperties props,
       long start, long length, boolean shouldUseRecordPosition) {
-    this(readerContext, storage, tablePath, latestCommitTime, fileSlice, dataSchema,
+    this(readerContext, storage, tablePath, latestCommitTime, dataSchema,
         requestedSchema, internalSchemaOpt, hoodieTableMetaClient, props, start, length,
-        shouldUseRecordPosition, false, false, false, Option.empty(), false);
+        shouldUseRecordPosition, false, false, false, fileSlice.getBaseFile(), fileSlice.getLogFiles(), fileSlice.getPartitionPath());
   }
 
   private HoodieFileGroupReader(HoodieReaderContext<T> readerContext, HoodieStorage storage, String tablePath,
-                                String latestCommitTime, FileSlice fileSlice, Schema dataSchema, Schema requestedSchema,
+                                String latestCommitTime, Schema dataSchema, Schema requestedSchema,
                                 Option<InternalSchema> internalSchemaOpt, HoodieTableMetaClient hoodieTableMetaClient, TypedProperties props,
                                 long start, long length, boolean shouldUseRecordPosition, boolean allowInflightInstants, boolean emitDelete, boolean sortOutput,
+                                Option<HoodieBaseFile> baseFileOption, Stream<HoodieLogFile> logFiles, String partitionPath,
                                 Option<BaseFileUpdateCallback> updateCallback, boolean enableOptimizedLogBlockScan) {
     this.readerContext = readerContext;
     this.fileGroupUpdateCallback = updateCallback;
     this.metaClient = hoodieTableMetaClient;
     this.storage = storage;
     this.enableOptimizedLogBlockScan = enableOptimizedLogBlockScan;
-    this.hoodieBaseFileOption = fileSlice.getBaseFile();
+    this.hoodieBaseFileOption = baseFileOption;
     readerContext.setHasBootstrapBaseFile(hoodieBaseFileOption.isPresent() && hoodieBaseFileOption.get().getBootstrapBaseFile().isPresent());
-    this.logFiles = fileSlice.getLogFiles()
+    this.logFiles = logFiles
         .sorted(HoodieLogFile.getLogFileComparator())
         .filter(logFile -> !logFile.getFileName().endsWith(HoodieCDCUtils.CDC_LOGFILE_SUFFIX))
         .collect(Collectors.toList());
@@ -143,7 +145,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     this.start = start;
     this.length = length;
     HoodieTableConfig tableConfig = hoodieTableMetaClient.getTableConfig();
-    this.partitionPath = fileSlice.getPartitionPath();
+    this.partitionPath = partitionPath;
     this.partitionPathFields = tableConfig.getPartitionFields();
     this.partialUpdateMode = tableConfig.getPartialUpdateMode();
     readerContext.initRecordMerger(props);
@@ -459,12 +461,14 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     private HoodieStorage storage;
     private String tablePath;
     private String latestCommitTime;
-    private FileSlice fileSlice;
     private Schema dataSchema;
     private Schema requestedSchema;
     private Option<InternalSchema> internalSchemaOpt = Option.empty();
     private HoodieTableMetaClient hoodieTableMetaClient;
     private TypedProperties props;
+    private Option<HoodieBaseFile> baseFileOption;
+    private Stream<HoodieLogFile> logFiles;
+    private String partitionPath;
     private long start = 0;
     private long length = Long.MAX_VALUE;
     private boolean shouldUseRecordPosition = false;
@@ -485,7 +489,24 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     }
 
     public Builder<T> withFileSlice(FileSlice fileSlice) {
-      this.fileSlice = fileSlice;
+      this.baseFileOption = fileSlice.getBaseFile();
+      this.logFiles = fileSlice.getLogFiles();
+      this.partitionPath = fileSlice.getPartitionPath();
+      return this;
+    }
+
+    public Builder<T> withBaseFileOption(Option<HoodieBaseFile> baseFileOption) {
+      this.baseFileOption = baseFileOption;
+      return this;
+    }
+
+    public Builder<T> withLogFiles(Stream<HoodieLogFile> logFiles) {
+      this.logFiles = logFiles;
+      return this;
+    }
+
+    public Builder<T> withPartitionPath(String partitionPath) {
+      this.partitionPath = partitionPath;
       return this;
     }
 
@@ -570,15 +591,18 @@ public final class HoodieFileGroupReader<T> implements Closeable {
 
       ValidationUtils.checkArgument(storage != null, "Storage is required");
       ValidationUtils.checkArgument(latestCommitTime != null, "Latest commit time is required");
-      ValidationUtils.checkArgument(fileSlice != null, "File slice is required");
       ValidationUtils.checkArgument(dataSchema != null, "Data schema is required");
       ValidationUtils.checkArgument(requestedSchema != null, "Requested schema is required");
       ValidationUtils.checkArgument(props != null, "Props is required");
-
+      ValidationUtils.checkArgument(baseFileOption != null, "Base file option is required");
+      ValidationUtils.checkArgument(logFiles != null, "Log files stream is required");
+      ValidationUtils.checkArgument(partitionPath != null, "Partition path is required");
 
       return new HoodieFileGroupReader<>(
-          readerContext, storage, tablePath, latestCommitTime, fileSlice, dataSchema, requestedSchema, internalSchemaOpt, hoodieTableMetaClient, props,
-          start, length, shouldUseRecordPosition, allowInflightInstants, emitDelete, sortOutput, fileGroupUpdateCallback, enableOptimizedLogBlockScan);
+          readerContext, storage, tablePath, latestCommitTime,
+          dataSchema, requestedSchema, internalSchemaOpt, hoodieTableMetaClient,
+          props, start, length, shouldUseRecordPosition, allowInflightInstants, emitDelete, sortOutput,
+          baseFileOption, logFiles, partitionPath, fileGroupUpdateCallback, enableOptimizedLogBlockScan);
     }
   }
 }
