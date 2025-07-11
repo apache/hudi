@@ -21,6 +21,7 @@ package org.apache.hudi.common.model;
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.storage.StoragePath;
 
 import java.io.Serializable;
@@ -64,6 +65,7 @@ public class CompactionOperation implements Serializable {
 
   public CompactionOperation(Option<HoodieBaseFile> dataFile, String partitionPath, List<HoodieLogFile> logFiles,
       Map<String, Double> metrics) {
+    ValidationUtils.checkArgument(!logFiles.isEmpty(), "log files should not be empty.");
     if (dataFile.isPresent()) {
       this.baseInstantTime = dataFile.get().getCommitTime();
       this.dataFileName = Option.of(dataFile.get().getFileName());
@@ -71,7 +73,6 @@ public class CompactionOperation implements Serializable {
       this.dataFileCommitTime = Option.of(dataFile.get().getCommitTime());
       this.bootstrapFilePath = dataFile.get().getBootstrapBaseFile().map(BaseFile::getPath);
     } else {
-      assert logFiles.size() > 0;
       this.dataFileName = Option.empty();
       this.baseInstantTime = logFiles.get(0).getDeltaCommitTime();
       this.id = new HoodieFileGroupId(partitionPath, logFiles.get(0).getFileId());
