@@ -27,7 +27,6 @@ import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -60,13 +59,13 @@ public abstract class HoodieFileGroupReaderOnJavaTestBase<T> extends TestHoodieF
   }
 
   @Override
-  public void commitToTable(List<HoodieRecord> recordList, String operation, Map<String, String> writeConfigs) {
+  public void commitToTable(List<HoodieRecord> recordList, String operation, boolean firstCommit, Map<String, String> writeConfigs, String schemaStr) {
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
         .withEngineType(EngineType.JAVA)
         .withEmbeddedTimelineServerEnabled(false)
         .withProps(writeConfigs)
         .withPath(getBasePath())
-        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+        .withSchema(schemaStr)
         .build();
 
     HoodieJavaClientTestHarness.TestJavaTaskContextSupplier taskContextSupplier = new HoodieJavaClientTestHarness.TestJavaTaskContextSupplier();
@@ -75,8 +74,7 @@ public abstract class HoodieFileGroupReaderOnJavaTestBase<T> extends TestHoodieF
     StoragePath basePath = new StoragePath(getBasePath());
     try (HoodieStorage storage = new HoodieHadoopStorage(basePath, getStorageConf())) {
       boolean basepathExists = storage.exists(basePath);
-      boolean operationIsInsert = operation.equalsIgnoreCase("insert");
-      if (!basepathExists || operationIsInsert) {
+      if (!basepathExists || firstCommit) {
         if (basepathExists) {
           storage.deleteDirectory(basePath);
         }
@@ -108,6 +106,8 @@ public abstract class HoodieFileGroupReaderOnJavaTestBase<T> extends TestHoodieF
       recordList.forEach(hoodieRecord -> recordsCopy.add(new HoodieAvroRecord<>(hoodieRecord.getKey(), (HoodieRecordPayload) hoodieRecord.getData())));
       if (operation.toLowerCase().equals("insert")) {
         writeClient.commit(instantTime, writeClient.insert(recordsCopy, instantTime), Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap());
+      } else if (operation.toLowerCase().equals("bulkInsert")) {
+        writeClient.commit(instantTime, writeClient.bulkInsert(recordsCopy, instantTime), Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap());
       } else {
         writeClient.commit(instantTime, writeClient.upsert(recordsCopy, instantTime), Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap());
       }
