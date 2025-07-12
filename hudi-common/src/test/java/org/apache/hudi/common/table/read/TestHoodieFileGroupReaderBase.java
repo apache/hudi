@@ -226,6 +226,9 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     }).filter(Option::isPresent).map(Option::get).map(r -> Pair.of(r.getRecordKey(), r.getData())).collect(Collectors.toList());
   }
 
+  /**
+   * Write a base file with schema A, then write another base file with schema B.
+   */
   @Test
   public void testSchemaEvolutionWhenBaseFilesWithDifferentSchema() throws Exception {
     Map<String, String> writeConfigs = new HashMap<>(
@@ -233,6 +236,8 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
 
     try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(TRIP_EXAMPLE_SCHEMA, 0xDEEF)) {
       dataGen.extendSchemaBeforeEvolution(getSchemaEvolutionConfigs());
+
+      // Write a base file with schema A
       List<HoodieRecord> firstRecords = dataGen.generateInsertsForPartition("001", 5, "any_partition");
       List<Pair<String, IndexedRecord>> firstIndexedRecords = hoodieRecordsToIndexedRecords(firstRecords, dataGen.getExtendedSchema());
       commitToTable(firstRecords, INSERT.value(), true, writeConfigs, dataGen.getExtendedSchema().toString());
@@ -240,9 +245,12 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
           getStorageConf(), getBasePath(),
           true, 0, RecordMergeMode.EVENT_TIME_ORDERING,
           firstIndexedRecords, firstIndexedRecords);
+
+      // Evolve schema
       dataGen.extendSchemaAfterEvolution(getSchemaEvolutionConfigs());
-      List<HoodieRecord> secondRecords = dataGen.generateInsertsForPartition(
-          "002", 5, "new_partition");
+
+      // Write another base file with schema B
+      List<HoodieRecord> secondRecords = dataGen.generateInsertsForPartition("002", 5, "new_partition");
       List<Pair<String, IndexedRecord>> secondIndexedRecords = hoodieRecordsToIndexedRecords(secondRecords, dataGen.getExtendedSchema());
       commitToTable(secondRecords, INSERT.value(), false, writeConfigs, dataGen.getExtendedSchema().toString());
       List<Pair<String, IndexedRecord>> mergedRecords = CollectionUtils.combine(firstIndexedRecords, secondIndexedRecords);
@@ -255,6 +263,58 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     }
   }
 
+  /**
+   * Write a base file with schema A, then write a log file with schema A, then write another base file with schema B.
+   */
+  @Test
+  public void testSchemaEvolutionWhenBaseFileAndLogFilesWithDifferentSchema() throws Exception {
+    Map<String, String> writeConfigs = new HashMap<>(
+        getCommonConfigs(RecordMergeMode.EVENT_TIME_ORDERING, true));
+
+    try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(TRIP_EXAMPLE_SCHEMA, 0xDEEF)) {
+      dataGen.extendSchemaBeforeEvolution(getSchemaEvolutionConfigs());
+
+      // Write a base file with schema A
+      List<HoodieRecord> firstRecords = dataGen.generateInsertsForPartition("001", 10, "any_partition");
+      List<Pair<String, IndexedRecord>> firstIndexedRecords = hoodieRecordsToIndexedRecords(firstRecords, dataGen.getExtendedSchema());
+      commitToTable(firstRecords, INSERT.value(), true, writeConfigs, dataGen.getExtendedSchema().toString());
+      validateOutputFromFileGroupReaderWithNativeRecords(
+          getStorageConf(), getBasePath(),
+          true, 0, RecordMergeMode.EVENT_TIME_ORDERING,
+          firstIndexedRecords, firstIndexedRecords);
+
+      // Write a log file with schema A
+      List<HoodieRecord> secondRecords = dataGen.generateUniqueUpdates("002", 5);
+      List<Pair<String, IndexedRecord>> secondIndexedRecords = hoodieRecordsToIndexedRecords(secondRecords, dataGen.getExtendedSchema());
+      commitToTable(secondRecords, UPSERT.value(), false, writeConfigs, dataGen.getExtendedSchema().toString());
+      List<Pair<String, IndexedRecord>> mergedRecords = mergeIndexedRecordLists(secondIndexedRecords, firstIndexedRecords);
+      List<Pair<String, IndexedRecord>> unmergedRecords = CollectionUtils.combine(firstIndexedRecords, secondIndexedRecords);
+      validateOutputFromFileGroupReaderWithNativeRecords(
+          getStorageConf(), getBasePath(),
+          true, 1, RecordMergeMode.EVENT_TIME_ORDERING,
+          mergedRecords, unmergedRecords);
+
+      // Evolve schema
+      dataGen.extendSchemaAfterEvolution(getSchemaEvolutionConfigs());
+
+      // Write another base file with schema B
+      List<HoodieRecord> thirdRecords = dataGen.generateInsertsForPartition("003", 5, "new_partition");
+      List<Pair<String, IndexedRecord>> thirdIndexedRecords = hoodieRecordsToIndexedRecords(thirdRecords, dataGen.getExtendedSchema());
+      commitToTable(thirdRecords, INSERT.value(), false, writeConfigs, dataGen.getExtendedSchema().toString());
+      mergedRecords = CollectionUtils.combine(mergedRecords, thirdIndexedRecords);
+      unmergedRecords = CollectionUtils.combine(unmergedRecords, thirdIndexedRecords);
+      validateOutputFromFileGroupReaderWithNativeRecords(
+          getStorageConf(), getBasePath(),
+          true, -1, RecordMergeMode.EVENT_TIME_ORDERING,
+          mergedRecords, unmergedRecords);
+    } catch (IOException e) {
+      throw new RuntimeException("Failed to insert data ", e);
+    }
+  }
+
+  /**
+   * Write a base file with schema A, then write a log file with schema A, then write another log file with schema B.
+   */
   @Test
   public void testSchemaEvolutionWhenLogFilesWithDifferentSchema() throws Exception {
     Map<String, String> writeConfigs = new HashMap<>(
@@ -263,7 +323,9 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     try (HoodieTestDataGenerator baseFileDataGen =
              new HoodieTestDataGenerator(TRIP_EXAMPLE_SCHEMA, 0xDEEF)) {
       baseFileDataGen.extendSchemaBeforeEvolution(getSchemaEvolutionConfigs());
-      List<HoodieRecord> firstRecords = baseFileDataGen.generateInsertsAsPerSchema("001", 100, TRIP_EXAMPLE_SCHEMA);
+
+      // Write base file with schema A
+      List<HoodieRecord> firstRecords = baseFileDataGen.generateInserts("001", 100);
       List<Pair<String, IndexedRecord>> firstIndexedRecords = hoodieRecordsToIndexedRecords(firstRecords, baseFileDataGen.getExtendedSchema());
       commitToTable(firstRecords, INSERT.value(), true, writeConfigs, baseFileDataGen.getExtendedSchema().toString());
       validateOutputFromFileGroupReaderWithNativeRecords(
@@ -271,6 +333,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
           true, 0, RecordMergeMode.EVENT_TIME_ORDERING,
           firstIndexedRecords, firstIndexedRecords);
 
+      // Write log file with schema A
       List<HoodieRecord> secondRecords = baseFileDataGen.generateUniqueUpdates("002", 50);
       List<Pair<String, IndexedRecord>> secondIndexedRecords = hoodieRecordsToIndexedRecords(secondRecords, baseFileDataGen.getExtendedSchema());
       commitToTable(secondRecords, UPSERT.value(), false, writeConfigs, baseFileDataGen.getExtendedSchema().toString());
@@ -281,9 +344,11 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
           true, 1, RecordMergeMode.EVENT_TIME_ORDERING,
           mergedRecords, unmergedRecords);
 
+      // Evolve schema
       baseFileDataGen.extendSchemaAfterEvolution(getSchemaEvolutionConfigs());
-      List<HoodieRecord> thirdRecords = baseFileDataGen.generateUniqueUpdates(
-          "003", 50, TRIP_EXAMPLE_SCHEMA);
+
+      // Write log file with schema B
+      List<HoodieRecord> thirdRecords = baseFileDataGen.generateUniqueUpdates("003", 50);
       List<Pair<String, IndexedRecord>> thirdIndexedRecords = hoodieRecordsToIndexedRecords(thirdRecords, baseFileDataGen.getExtendedSchema());
       commitToTable(thirdRecords, UPSERT.value(), false, writeConfigs, baseFileDataGen.getExtendedSchema().toString());
       mergedRecords = mergeIndexedRecordLists(thirdIndexedRecords, mergedRecords);
@@ -297,6 +362,9 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     }
   }
 
+  /**
+   * Write a base file with schema A, then write a log file with schema B, then write another log file with schema B.
+   */
   @Test
   public void testSchemaEvolutionWhenBaseFilesWithDifferentSchemaFromLogFiles() throws Exception {
     Map<String, String> writeConfigs = new HashMap<>(
@@ -305,7 +373,9 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     try (HoodieTestDataGenerator baseFileDataGen =
              new HoodieTestDataGenerator(TRIP_EXAMPLE_SCHEMA, 0xDEEF)) {
       baseFileDataGen.extendSchemaBeforeEvolution(getSchemaEvolutionConfigs());
-      List<HoodieRecord> firstRecords = baseFileDataGen.generateInsertsAsPerSchema("001", 100, TRIP_EXAMPLE_SCHEMA);
+
+      // Write base file with schema A
+      List<HoodieRecord> firstRecords = baseFileDataGen.generateInserts("001", 100);
       List<Pair<String, IndexedRecord>> firstIndexedRecords = hoodieRecordsToIndexedRecords(firstRecords, baseFileDataGen.getExtendedSchema());
       commitToTable(firstRecords, INSERT.value(), true, writeConfigs, baseFileDataGen.getExtendedSchema().toString());
       validateOutputFromFileGroupReaderWithNativeRecords(
@@ -313,8 +383,11 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
           true, 0, RecordMergeMode.EVENT_TIME_ORDERING,
           firstIndexedRecords, firstIndexedRecords);
 
+      //Evolve schema
       baseFileDataGen.extendSchemaAfterEvolution(getSchemaEvolutionConfigs());
-      List<HoodieRecord> secondRecords = baseFileDataGen.generateUniqueUpdates("002", 100);
+
+      // Write log file with schema B
+      List<HoodieRecord> secondRecords = baseFileDataGen.generateUniqueUpdates("002", 50);
       List<Pair<String, IndexedRecord>> secondIndexedRecords = hoodieRecordsToIndexedRecords(secondRecords, baseFileDataGen.getExtendedSchema());
       commitToTable(secondRecords, UPSERT.value(), false, writeConfigs, baseFileDataGen.getExtendedSchema().toString());
       List<Pair<String, IndexedRecord>> mergedRecords = mergeIndexedRecordLists(secondIndexedRecords, firstIndexedRecords);
@@ -324,8 +397,8 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
           true, 1, RecordMergeMode.EVENT_TIME_ORDERING,
           mergedRecords, unmergedRecords);
 
-      List<HoodieRecord> thirdRecords = baseFileDataGen.generateUniqueUpdates(
-          "003", 100, TRIP_EXAMPLE_SCHEMA);
+      // Write another log file with schema B
+      List<HoodieRecord> thirdRecords = baseFileDataGen.generateUniqueUpdates("003", 50);
       List<Pair<String, IndexedRecord>> thirdIndexedRecords = hoodieRecordsToIndexedRecords(thirdRecords, baseFileDataGen.getExtendedSchema());
       commitToTable(thirdRecords, UPSERT.value(), false, writeConfigs, baseFileDataGen.getExtendedSchema().toString());
       mergedRecords = mergeIndexedRecordLists(thirdIndexedRecords, mergedRecords);
@@ -551,7 +624,9 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
         baseFile.setBootstrapBaseFile(new BaseFile(newBootstrapPath));
       }
       List<String> logFilePathList = getLogFileListFromFileSlice(fileSlice);
-      assertEquals(expectedLogFileNum, logFilePathList.size());
+      if (expectedLogFileNum >= 0) {
+        assertEquals(expectedLogFileNum, logFilePathList.size());
+      }
       assertEquals(containsBaseFile, fileSlice.getBaseFile().isPresent());
     });
     return fileSlices;
