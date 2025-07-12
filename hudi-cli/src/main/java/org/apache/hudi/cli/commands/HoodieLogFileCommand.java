@@ -42,6 +42,7 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock.FooterMetadataType;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -235,7 +236,7 @@ public class HoodieLogFileCommand {
           Option.empty());
       StoragePath firstLogFile = new StoragePath(logFilePaths.get(0));
       HoodieFileGroupId fileGroupId = new HoodieFileGroupId(FSUtils.getRelativePartitionPath(HoodieCLI.getTableMetaClient().getBasePath(), firstLogFile), FSUtils.getFileIdFromLogPath(firstLogFile));
-      FileSlice fileSlice = new FileSlice(fileGroupId, "000", null, logFilePaths.stream()
+      FileSlice fileSlice = new FileSlice(fileGroupId, HoodieTimeline.INIT_INSTANT_TS, null, logFilePaths.stream()
           .map(l -> new HoodieLogFile(new StoragePath(l))).collect(Collectors.toList()));
       try (HoodieFileGroupReader<IndexedRecord> fileGroupReader = HoodieFileGroupReader.<IndexedRecord>newBuilder()
           .withReaderContext(readerContext)
@@ -245,16 +246,16 @@ public class HoodieLogFileCommand {
           .withRequestedSchema(readerSchema)
           .withLatestCommitTime("99999999999999")
           .withProps(buildFileGroupReaderProperties())
-          .withStart(0)
-          .withLength(Long.MAX_VALUE)
           .withShouldUseRecordPosition(false)
           .build()) {
 
-        fileGroupReader.getClosableIterator().forEachRemaining(record -> {
-          if (allRecords.size() < limit) {
-            allRecords.add(record);
-          }
-        });
+        try (ClosableIterator<IndexedRecord> recordIterator = fileGroupReader.getClosableIterator()) {
+          recordIterator.forEachRemaining(record -> {
+            if (allRecords.size() < limit) {
+              allRecords.add(record);
+            }
+          });
+        }
       }
     } else {
 
