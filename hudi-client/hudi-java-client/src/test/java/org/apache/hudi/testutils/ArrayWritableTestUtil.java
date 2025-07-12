@@ -191,4 +191,103 @@ public class ArrayWritableTestUtil {
         assertEquals(expected, actual);
     }
   }
+
+  public static void assertArrayWritableMatchesSchema(Schema schema, Writable writable) {
+    switch (schema.getType()) {
+      case RECORD: {
+        assertInstanceOf(ArrayWritable.class, writable);
+        assertEquals(schema.getFields().size(), ((ArrayWritable) writable).get().length);
+        for (Schema.Field field : schema.getFields()) {
+          assertArrayWritableMatchesSchema(field.schema(), ((ArrayWritable) writable).get()[field.pos()]);
+        }
+        break;
+      }
+      case ARRAY: {
+        assertInstanceOf(ArrayWritable.class, writable);
+        for (int i = 0; i < ((ArrayWritable) writable).get().length; i++) {
+          assertArrayWritableMatchesSchema(schema.getElementType(), ((ArrayWritable) writable).get()[i]);
+        }
+        break;
+      }
+      case MAP: {
+        assertInstanceOf(ArrayWritable.class, writable);
+        for (int i = 0; i < ((ArrayWritable) writable).get().length; i++) {
+          Writable expectedKV = ((ArrayWritable) writable).get()[i];
+          assertInstanceOf(ArrayWritable.class, expectedKV);
+          assertEquals(2, ((ArrayWritable) expectedKV).get().length);
+          assertNotNull(((ArrayWritable) expectedKV).get()[0]);
+          assertArrayWritableMatchesSchema(schema.getValueType(), ((ArrayWritable) expectedKV).get()[1]);
+        }
+        break;
+      }
+      case UNION:
+        if (schema.getTypes().size() == 2
+            && schema.getTypes().get(0).getType() == Schema.Type.NULL) {
+          assertArrayWritableMatchesSchema(schema.getTypes().get(1), writable);
+        } else if (schema.getTypes().size() == 2
+            && schema.getTypes().get(1).getType() == Schema.Type.NULL) {
+          assertArrayWritableMatchesSchema(schema.getTypes().get(0), writable);
+        } else if (schema.getTypes().size() == 1) {
+          assertArrayWritableMatchesSchema(schema.getTypes().get(0), writable);
+        } else {
+          throw new IllegalStateException("Union has more than 2 types or one type is not null: " + schema);
+        }
+        break;
+
+      default:
+        assertWritablePrimaryTypeMatchesSchema(schema, writable);
+    }
+  }
+
+  private static void assertWritablePrimaryTypeMatchesSchema(Schema schema, Writable writable) {
+    switch (schema.getType()) {
+      case NULL:
+        assertInstanceOf(NullWritable.class, writable);
+        break;
+
+      case BOOLEAN:
+        assertInstanceOf(BooleanWritable.class, writable);
+        break;
+
+      case INT:
+        if (schema.getLogicalType() instanceof LogicalTypes.Date) {
+          assertInstanceOf(DateWritable.class, writable);
+        } else {
+          assertInstanceOf(IntWritable.class, writable);
+        }
+        break;
+
+      case LONG:
+        assertInstanceOf(LongWritable.class, writable);
+        break;
+
+      case FLOAT:
+        assertInstanceOf(FloatWritable.class, writable);
+        break;
+
+      case DOUBLE:
+        assertInstanceOf(DoubleWritable.class, writable);
+        break;
+
+      case BYTES:
+      case ENUM:
+        assertInstanceOf(BytesWritable.class, writable);
+        break;
+
+      case STRING:
+        assertInstanceOf(Text.class, writable);
+        break;
+
+      case FIXED:
+        if (schema.getLogicalType() instanceof LogicalTypes.Decimal) {
+          assertInstanceOf(HiveDecimalWritable.class, writable);
+        } else {
+          throw new IllegalStateException("Unexpected schema type: " + schema);
+        }
+        break;
+
+      default:
+        throw new IllegalStateException("Unexpected schema type: " + schema);
+    }
+  }
 }
