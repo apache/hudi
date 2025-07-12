@@ -886,7 +886,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
         val basePath = s"${tmp.getCanonicalPath}/$tableName"
 
         spark.sql("set hoodie.fileIndex.dataSkippingFailureMode=strict")
-
+        setCompactionConfigs(tableType)
         spark.sql(
           s"""
            CREATE TABLE $tableName (
@@ -985,7 +985,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName + s"_partition_pruning_with_unpartitioned_$tableType"
         val basePath = s"${tmp.getCanonicalPath}/$tableName"
-
+        setCompactionConfigs(tableType)
         spark.sql("set hoodie.fileIndex.dataSkippingFailureMode=strict")
 
         spark.sql(
@@ -1079,7 +1079,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName + s"_partition_pruning_with_partition_stats_$tableType"
         val basePath = s"${tmp.getCanonicalPath}/$tableName"
-
+        setCompactionConfigs(tableType)
         spark.sql("set hoodie.fileIndex.dataSkippingFailureMode=strict")
 
         spark.sql(
@@ -1175,7 +1175,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
         val isTableMOR = tableType.equals("mor")
         val tableName = generateTableName + s"_partition_pruning_after_update_$tableType"
         val basePath = s"${tmp.getCanonicalPath}/$tableName"
-
+        spark.sql("set hoodie.compact.inline=false") // initially disable compaction to avoid merging log files
         spark.sql("set hoodie.fileIndex.dataSkippingFailureMode=strict")
 
         spark.sql(
@@ -1289,10 +1289,6 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
           Seq(riderCalifornia, "RIDER-A", "RIDER-C"),
           Seq(riderTexas, "RIDER-E", "RIDER-H")
         )
-
-        if (isTableMOR) {
-          spark.sql("set hoodie.compact.inline=false")
-        }
         spark.sql(s"drop index idx_rider on $tableName")
       }
     }
@@ -1304,7 +1300,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
         val isTableMOR = tableType.equals("mor")
         val tableName = generateTableName + s"_partition_pruning_after_delete_$tableType"
         val basePath = s"${tmp.getCanonicalPath}/$tableName"
-
+        spark.sql("set hoodie.compact.inline=false") // initially disable compaction to avoid merging log files
         spark.sql("set hoodie.fileIndex.dataSkippingFailureMode=strict")
 
         spark.sql(
@@ -1420,9 +1416,6 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
           Seq(riderTexas, "RIDER-F", "RIDER-F")
         )
 
-        if (isTableMOR) {
-          spark.sql("set hoodie.compact.inline=false")
-        }
         spark.sql(s"drop index idx_rider on $tableName")
       }
     }
@@ -1436,7 +1429,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName + s"_stats_pruning_date_expr_$tableType"
         val basePath = s"${tmp.getCanonicalPath}/$tableName"
-
+        setCompactionConfigs(tableType)
         spark.sql("set hoodie.fileIndex.dataSkippingFailureMode=strict")
 
         spark.sql(
@@ -1586,7 +1579,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName + s"_stats_pruning_string_expr_$tableType"
         val basePath = s"${tmp.getCanonicalPath}/$tableName"
-
+        setCompactionConfigs(tableType)
         spark.sql(
           s"""
            CREATE TABLE $tableName (
@@ -1711,7 +1704,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName + s"_bloom_pruning_$tableType"
         val basePath = s"${tmp.getCanonicalPath}/$tableName"
-
+        setCompactionConfigs(tableType)
         spark.sql(
           s"""
            CREATE TABLE $tableName (
@@ -1765,7 +1758,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
           .filterCompletedInstants().lastInstant().get().requestedTime
         assertTrue(metaClient.getTableConfig.getMetadataPartitions.contains(s"expr_index_idx_bloom_$tableName"))
         assertTrue(metaClient.getIndexMetadata.isPresent)
-        assertEquals(2, metaClient.getIndexMetadata.get.getIndexDefinitions.size())
+        assertEquals(1, metaClient.getIndexMetadata.get.getIndexDefinitions.size())
         val indexDefinition: HoodieIndexDefinition = metaClient.getIndexMetadata.get.getIndexDefinitions.get(s"expr_index_idx_bloom_$tableName")
         // validate index options
         assertEquals("0.01", indexDefinition.getIndexOptions.get(HoodieExpressionIndex.FALSE_POSITIVE_RATE))
