@@ -25,6 +25,7 @@ import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -545,6 +546,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
         .withLatestCommitTime(latestCommitTimestamp)
         .withRequestedSchema(schema)
         .withDataSchema(schema)
+        .withProps(new TypedProperties())
         .build();
 
     try (ClosableIterator<HoodieRecord<IndexedRecord>> iter = fileGroupReader.getClosableHoodieRecordIterator()) {
