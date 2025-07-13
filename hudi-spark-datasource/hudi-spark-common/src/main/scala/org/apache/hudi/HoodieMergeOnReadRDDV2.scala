@@ -110,7 +110,7 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
 
   private val hadoopConfBroadcast = sc.broadcast(new SerializableWritable(config))
   private val fileGroupParquetFileReader: Broadcast[SparkParquetReader] = {
-    if (metaClient.isMetadataTable) {
+    if (!metaClient.isMetadataTable) {
       val updatedOptions: Map[String, String] = options + (FileFormat.OPTION_RETURNING_BATCH -> "false") // disable vectorized reading for MOR
       sc.broadcast(sparkAdapter.createParquetFileReader(vectorized = false, sqlConf, updatedOptions, config))
     } else {
