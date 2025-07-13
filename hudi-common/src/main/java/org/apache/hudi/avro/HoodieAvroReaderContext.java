@@ -75,7 +75,16 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       HoodieTableConfig tableConfig,
       Option<InstantRange> instantRangeOpt,
       Option<Predicate> filterOpt) {
-    super(storageConfiguration, tableConfig, instantRangeOpt, filterOpt);
+    this(storageConfiguration, tableConfig, instantRangeOpt, filterOpt, true);
+  }
+
+  public HoodieAvroReaderContext(
+      StorageConfiguration<?> storageConfiguration,
+      HoodieTableConfig tableConfig,
+      Option<InstantRange> instantRangeOpt,
+      Option<Predicate> filterOpt,
+      boolean forceFullScan) {
+    super(storageConfiguration, tableConfig, instantRangeOpt, filterOpt, forceFullScan);
     this.payloadClass = tableConfig.getPayloadClass();
   }
 

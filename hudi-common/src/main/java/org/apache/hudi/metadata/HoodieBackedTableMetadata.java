@@ -238,11 +238,13 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     InstantRange instantRange = InstantRange.builder()
         .rangeType(InstantRange.RangeType.EXACT_MATCH)
         .explicitInstants(validInstantTimestamps).build();
+    boolean forceFullScan = isFullScanAllowedForPartition(partitionName);
     HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(
         storageConf,
         metadataMetaClient.getTableConfig(),
         Option.of(instantRange),
-        Option.of(transformKeyPrefixesToPredicate(sortedKeyPrefixes)));
+        Option.of(transformKeyPrefixesToPredicate(sortedKeyPrefixes)),
+        forceFullScan);
     HoodieFileGroupReader<IndexedRecord> fileGroupReader = HoodieFileGroupReader.<IndexedRecord>newBuilder()
         .withReaderContext(readerContext)
         .withHoodieTableMetaClient(metadataMetaClient)
@@ -251,8 +253,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         .withDataSchema(schema)
         .withRequestedSchema(schema)
         .withProps(buildFileGroupReaderProperties(metadataConfig))
-        .withStart(0)
-        .withLength(Long.MAX_VALUE)
         .withShouldUseRecordPosition(false)
         .build();
     ClosableIterator<IndexedRecord> it = fileGroupReader.getClosableIterator();
@@ -343,11 +343,13 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     InstantRange instantRange = InstantRange.builder()
         .rangeType(InstantRange.RangeType.EXACT_MATCH)
         .explicitInstants(validInstantTimestamps).build();
+    boolean forceFullScan = isFullScanAllowedForPartition(partitionName);
     HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(
         storageConf,
         metadataMetaClient.getTableConfig(),
         Option.of(instantRange),
-        Option.of(transformKeysToPredicate(sortedKeys)));
+        Option.of(transformKeysToPredicate(sortedKeys)),
+        forceFullScan);
     try (HoodieFileGroupReader<IndexedRecord> fileGroupReader = HoodieFileGroupReader.<IndexedRecord>newBuilder()
         .withReaderContext(readerContext)
         .withHoodieTableMetaClient(metadataMetaClient)

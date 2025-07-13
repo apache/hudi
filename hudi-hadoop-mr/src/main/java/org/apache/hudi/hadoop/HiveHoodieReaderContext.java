@@ -98,7 +98,16 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
                                     ObjectInspectorCache objectInspectorCache,
                                     StorageConfiguration<?> storageConfiguration,
                                     HoodieTableConfig tableConfig) {
-    super(storageConfiguration, tableConfig, Option.empty(), Option.empty());
+    this(readerCreator, partitionCols, objectInspectorCache, storageConfiguration, tableConfig, true);
+  }
+
+  protected HiveHoodieReaderContext(HoodieFileGroupReaderBasedRecordReader.HiveReaderCreator readerCreator,
+                                    List<String> partitionCols,
+                                    ObjectInspectorCache objectInspectorCache,
+                                    StorageConfiguration<?> storageConfiguration,
+                                    HoodieTableConfig tableConfig,
+                                    boolean forceFullScan) {
+    super(storageConfiguration, tableConfig, Option.empty(), Option.empty(), forceFullScan);
     this.readerCreator = readerCreator;
     this.partitionCols = partitionCols;
     this.partitionColSet = new HashSet<>(this.partitionCols);
