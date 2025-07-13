@@ -45,6 +45,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieClusteringConfig;
@@ -496,6 +497,42 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       return true;
     }
     return false;
+  }
+
+  public boolean cancelAndNukeClusteringWithEmptyReplaceCommit(String clusteringInstant) {
+    HoodieTable<?, I, ?, T> table = createTable(config, context.getHadoopConf().get());
+    HoodieTimeline pendingClusteringTimeline = table.getActiveTimeline().filterPendingReplaceTimeline();
+    if (pendingClusteringTimeline.filter(instant -> instant.getTimestamp().equals(clusteringInstant)).countInstants() == 0) {
+      throw new HoodieClusteringException("No matching pending clustering instants found for " + clusteringInstant);
+    }
+    HoodieInstant requestedInstant = HoodieTimeline.getReplaceCommitRequestedInstant(clusteringInstant);
+    if (!ClusteringUtils.isClusteringInstant(table.getActiveTimeline(), requestedInstant)) {
+      throw new HoodieClusteringException("Cannot cancel non clustering instant " + clusteringInstant);
+    }
+    HoodieInstant inflightInstant = HoodieTimeline.getReplaceCommitInflightInstant(clusteringInstant);
+    if (pendingClusteringTimeline.containsInstant(inflightInstant)) {
+      table.rollbackInflightClustering(inflightInstant, commitToRollback -> getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false));
+      table.getMetaClient().reloadActiveTimeline();
+    }
+    clusteringTimer = metrics.getClusteringCtx();
+    LOG.info("Moving clustering at {} for table {} to completion with empty replace commit", clusteringInstant, table.getConfig().getBasePath());
+    // create inflight instant for clustering
+    HoodieInstant instant = HoodieTimeline.getReplaceCommitRequestedInstant(clusteringInstant);
+    // Move requested replace commit instant to inflight
+    table.getActiveTimeline().transitionReplaceRequestedToInflight(instant, Option.empty());
+    table.getMetaClient().reloadActiveTimeline();
+
+    // create HoodieWriteMetadata with empty replace commit metadata like empty writeStatuses, empty replaced filedIds.
+    HoodieWriteMetadata<T> writeMetadata = new HoodieWriteMetadata<>();
+    writeMetadata.setWriteStatuses((T) context.emptyHoodieData());
+    writeMetadata.setWriteStats(Collections.emptyList());
+    HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(writeMetadata.getWriteStats().get(), writeMetadata.getPartitionToReplaceFileIds(),
+        Option.empty(), WriteOperationType.CLUSTER, config.getSchema(), HoodieTimeline.REPLACE_COMMIT_ACTION);
+    writeMetadata.setCommitMetadata(Option.of(commitMetadata));
+
+    HoodieWriteMetadata<O> clusteringMetadata = convertToOutputMetadata(writeMetadata);
+    completeClustering((HoodieReplaceCommitMetadata) clusteringMetadata.getCommitMetadata().get(), table, clusteringInstant, Option.ofNullable(context.emptyHoodieData()));
+    return true;
   }
 
   protected abstract HoodieWriteMetadata<O> convertToOutputMetadata(HoodieWriteMetadata<T> writeMetadata);

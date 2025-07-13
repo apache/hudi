@@ -1706,6 +1706,67 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     assertEquals(rollbackInstant.getTimestamp(), newRollbackInstant.getTimestamp());
   }
 
+  @Test
+  public void testCancellationOfPendingClusteringInstant() throws Exception {
+    boolean populateMetaFields = true;
+    // setup clustering config.
+    HoodieClusteringConfig clusteringConfig = HoodieClusteringConfig.newBuilder().withClusteringMaxNumGroups(10)
+        .withClusteringTargetPartitions(0).withInlineClusteringNumCommits(1).withInlineClustering(true)
+        .fromProperties(getDisabledRowWriterProperties()).build();
+
+    // start clustering, but don't commit
+    List<HoodieRecord> allRecords = testInsertAndClustering(clusteringConfig, populateMetaFields, false);
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build();
+    List<Pair<HoodieInstant, HoodieClusteringPlan>> pendingClusteringPlans =
+        ClusteringUtils.getAllPendingClusteringPlans(metaClient).collect(Collectors.toList());
+    assertEquals(1, pendingClusteringPlans.size());
+    HoodieInstant pendingClusteringInstant = pendingClusteringPlans.get(0).getLeft();
+    // lets also validate that that there are data files written matching the clustering instant of interest
+    try {
+      assertTrue(Arrays.stream(fs.listStatus(new Path(basePath + "/" + DEFAULT_SECOND_PARTITION_PATH)))
+          .anyMatch(fileStatus -> fileStatus.getPath().getName().contains(pendingClusteringInstant.getTimestamp())));
+    } catch (IOException e) {
+      throw new HoodieException("Failed to validate uncommitted clustering data");
+    }
+
+    // complete another commit after pending clustering which will fail mid-way bcoz of overlap.
+    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(EAGER);
+    addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
+    HoodieWriteConfig config = cfgBuilder.build();
+    SparkRDDWriteClient client = getHoodieWriteClient(config);
+    dataGen = new HoodieTestDataGenerator();
+    String commitTime = HoodieActiveTimeline.createNewInstantTime();
+    allRecords.addAll(dataGen.generateInserts(commitTime, 100));
+    assertThrows(HoodieUpsertException.class, () -> writeAndVerifyBatch(client, allRecords, commitTime, populateMetaFields));
+
+    // cancel and nuke pending clustering instant.
+    client.cancelAndNukeClusteringWithEmptyReplaceCommit(pendingClusteringInstant.getTimestamp());
+    metaClient.reloadActiveTimeline();
+    // verify there are no pending clustering instants
+    assertEquals(0, ClusteringUtils.getAllPendingClusteringPlans(metaClient).count());
+    // validate a the completed replace commit is empty
+    validateEmptyCompletedReplaceCommit(pendingClusteringInstant.getTimestamp(), metaClient);
+    // validate that no new data files are committed w/ the clustering instant. This is to ensure cancelAndNukeClusteringWithEmptyReplaceCommit properly cleaned up all corres data files.
+    assertFalse(HoodieClientTestUtils.getLatestBaseFiles(basePath, fs,
+        String.format("%s/%s/*", basePath, DEFAULT_FIRST_PARTITION_PATH),
+        String.format("%s/%s/*", basePath, DEFAULT_SECOND_PARTITION_PATH),
+        String.format("%s/%s/*", basePath, DEFAULT_THIRD_PARTITION_PATH))
+        .stream().anyMatch(baseFile -> baseFile.getCommitTime().equals(pendingClusteringInstant.getTimestamp())));
+
+    // re-attempt a new upsert which should succeed.
+    String commitTime2 = HoodieActiveTimeline.createNewInstantTime();
+    allRecords.addAll(dataGen.generateInserts(commitTime, 100));
+    writeAndVerifyBatch(client, allRecords, commitTime2, populateMetaFields);
+  }
+
+  void validateEmptyCompletedReplaceCommit(String clusteringInstant, HoodieTableMetaClient metaClient) throws IOException {
+    HoodieInstant instant = metaClient.reloadActiveTimeline().filterCompletedInstants().getCompletedReplaceTimeline().lastInstant().get();
+    assertEquals(instant.getTimestamp(), clusteringInstant);
+    HoodieReplaceCommitMetadata replaceCommitMetadata = metaClient.getActiveTimeline().deserializeInstantContent(instant, HoodieReplaceCommitMetadata.class);
+    assertTrue(replaceCommitMetadata.getPartitionToWriteStats().isEmpty());
+    assertTrue(replaceCommitMetadata.getPartitionToReplaceFileIds().isEmpty());
+  }
+
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testInflightClusteringRollbackWhenUpdatesAllowed(boolean rollbackPendingClustering) throws Exception {

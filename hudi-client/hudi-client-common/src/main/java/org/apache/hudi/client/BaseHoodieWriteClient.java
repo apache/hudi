@@ -1285,6 +1285,17 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   }
 
   /**
+   * Cancel and nuke pending clustering with empty replace commit.
+   * @param clusteringInstant pending clustering instant time of interest.
+   * @return true if cancellation and nuking succeeded. false otherwise.
+   */
+  public boolean cancelAndNukeClusteringWithEmptyReplaceCommit(String clusteringInstant) {
+    HoodieTable table = createTable(config, context.getHadoopConf().get());
+    preWrite(clusteringInstant, WriteOperationType.CLUSTER, table.getMetaClient());
+    return tableServiceClient.cancelAndNukeClusteringWithEmptyReplaceCommit(clusteringInstant);
+  }
+
+  /**
    * Schedule table services such as clustering, compaction & cleaning.
    *
    * @param extraMetadata Metadata to pass onto the scheduled service instant
