@@ -880,8 +880,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
     }
   }
 
-  @Test
-  def testPrunePartitions(): Unit = {
+  test("testPrunePartitions") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName + s"_prune_partitions_$tableType"
@@ -985,8 +984,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
   /**
    * Test expression index partition pruning with unpartitioned table.
    */
-  @Test
-  def testExpressionIndexPartitionStatsWithUnpartitionedTable(): Unit = {
+  test("Test expression index partition pruning with unpartitioned table") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName + s"_partition_pruning_with_unpartitioned_$tableType"
@@ -1083,8 +1081,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
   /**
    * Test expression index partition pruning with partition stats.
    */
-  @Test
-  def testPartitionPruningWithPartitionStats(): Unit = {
+  test("Test expression index partition pruning with partition stats") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName + s"_partition_pruning_with_partition_stats_$tableType"
@@ -1182,8 +1179,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
   /**
    * Test expression index pruning after update with partition stats.
    */
-  @Test
-  def testPartitionPruningAfterUpdateWithPartitionStats(): Unit = {
+  test("Test expression index pruning after update with partition stats") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         val isTableMOR = tableType.equals("mor")
@@ -1315,8 +1311,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
   /**
    * Test expression index pruning after update with partition stats.
    */
-  @Test
-  def testPartitionPruningAfterDeleteWithPartitionStats(): Unit = {
+  test("Test expression index pruning after delete with partition stats") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         val isTableMOR = tableType.equals("mor")
