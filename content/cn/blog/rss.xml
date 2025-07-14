@@ -23,6 +23,7 @@
             <category>data lakehouse</category>
             <category>Lakehouse</category>
             <category>use-case</category>
+            <category>datumagic</category>
         </item>
         <item>
             <title><![CDATA[How Stifel built a modern data platform using AWS Glue and an event-driven domain architecture]]></title>

@@ -25,6 +25,7 @@
         <category label="data lakehouse" term="data lakehouse"/>
         <category label="Lakehouse" term="Lakehouse"/>
         <category label="use-case" term="use-case"/>
+        <category label="datumagic" term="datumagic"/>
     </entry>
     <entry>
         <title type="html"><![CDATA[How Stifel built a modern data platform using AWS Glue and an event-driven domain architecture]]></title>
