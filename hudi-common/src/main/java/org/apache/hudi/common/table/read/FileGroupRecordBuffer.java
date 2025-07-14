@@ -324,7 +324,6 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
 
     // Inserts
     nextRecord = readerContext.seal(baseRecord);
-    readStats.incrementNumInserts();
     return true;
   }
 

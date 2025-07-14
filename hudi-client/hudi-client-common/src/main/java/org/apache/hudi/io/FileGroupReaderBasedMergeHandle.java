@@ -199,6 +199,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
             writeToFile(record.getKey(), record, writeSchemaWithMetaFields,
                 config.getPayloadConfig().getProps(), preserveMetadata);
             writeStatus.markSuccess(record, recordMetadata);
+            recordsWritten++;
           } catch (Exception e) {
             LOG.error("Error writing record {}", record, e);
             writeStatus.markFailure(record, e, recordMetadata);
@@ -211,7 +212,6 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
         this.insertRecordsWritten = readStats.getNumInserts();
         this.updatedRecordsWritten = readStats.getNumUpdates();
         this.recordsDeleted = readStats.getNumDeletes();
-        this.recordsWritten = readStats.getNumInserts() + readStats.getNumUpdates();
       }
     } catch (IOException e) {
       throw new HoodieUpsertException("Failed to compact file slice: " + fileSlice, e);
