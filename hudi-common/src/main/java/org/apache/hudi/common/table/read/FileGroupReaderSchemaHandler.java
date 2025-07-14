@@ -137,6 +137,10 @@ public class FileGroupReaderSchemaHandler<T> {
     return this.internalSchemaOpt;
   }
 
+  public Set<String> getPruneExcludeFields() {
+    return Collections.emptySet();
+  }
+
   public Option<UnaryOperator<T>> getOutputConverter() {
     if (!requestedSchema.equals(requiredSchema)) {
       return Option.of(readerContext.projectRecord(requiredSchema, requestedSchema));

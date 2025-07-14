@@ -81,7 +81,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
   }
 
   @Override
-  public ClosableIterator<IndexedRecord> getFileRecordIterator(
+  protected ClosableIterator<IndexedRecord> doGetFileRecordIterator(
       StoragePath filePath,
       long start,
       long length,
@@ -194,6 +194,11 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
   @Override
   public CustomSerializer<BufferedRecord<IndexedRecord>> getRecordSerializer() {
     return new BufferedRecordSerializer<>(new AvroRecordSerializer(this::decodeAvroSchema));
+  }
+
+  @Override
+  public Schema getDataFileSchema(StoragePath filePath) throws IOException {
+    return null;
   }
 
   @Override

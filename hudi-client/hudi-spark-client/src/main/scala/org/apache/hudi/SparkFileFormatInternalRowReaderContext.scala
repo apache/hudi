@@ -32,10 +32,15 @@ import org.apache.hudi.common.util.collection.{CachingIterator, ClosableIterator
 import org.apache.hudi.io.storage.{HoodieSparkFileReaderFactory, HoodieSparkParquetReader}
 import org.apache.hudi.storage.{HoodieStorage, StorageConfiguration, StoragePath}
 import org.apache.hudi.util.CloseableInternalRowIterator
-
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericRecord, IndexedRecord}
 import org.apache.hadoop.conf.Configuration
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
+import org.apache.parquet.HadoopReadOptions
+import org.apache.parquet.avro.AvroSchemaConverter
+import org.apache.parquet.format.converter.ParquetMetadataConverter
+import org.apache.parquet.hadoop.ParquetFileReader
+import org.apache.parquet.hadoop.util.HadoopInputFile
 import org.apache.spark.sql.HoodieInternalRowUtils
 import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSerializer}
 import org.apache.spark.sql.catalyst.InternalRow
@@ -77,7 +82,7 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
     HoodieSparkUtils.gteqSpark3_5
   }
 
-  override def getFileRecordIterator(filePath: StoragePath,
+  override protected def doGetFileRecordIterator(filePath: StoragePath,
                                      start: Long,
                                      length: Long,
                                      dataSchema: Schema,
@@ -264,6 +269,22 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
           dataFileIterator.close()
         }
       }.asInstanceOf[ClosableIterator[InternalRow]]
+    }
+  }
+
+  override def getDataFileSchema(filePath: StoragePath): Schema = {
+    val configuration = storageConfiguration.asInstanceOf[StorageConfiguration[Configuration]].unwrap()
+    val path = HadoopFSUtils.convertToHadoopPath(filePath)
+    val readOptions = HadoopReadOptions.builder(configuration, path)
+      .withMetadataFilter(ParquetMetadataConverter.SKIP_ROW_GROUPS).build
+    // Use try-with-resources to ensure fd is closed.
+    val inputFile = HadoopInputFile.fromPath(path, configuration)
+    try {
+      val fileReader = ParquetFileReader.open(inputFile, readOptions)
+      try {
+        val footer = fileReader.getFooter
+        new AvroSchemaConverter(configuration).convert(footer.getFileMetaData.getSchema)
+      } finally if (fileReader != null) fileReader.close()
     }
   }
 }

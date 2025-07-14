@@ -376,6 +376,64 @@ public class AvroSchemaUtils {
     return newSchema;
   }
 
+  public static Schema pruneDataSchemaResolveNullable(Schema dataSchema, Schema requiredSchema, Set<String> excludeFields) {
+    Schema prunedDataSchema = pruneDataSchema(resolveNullableSchema(dataSchema), resolveNullableSchema(requiredSchema), excludeFields);
+    if (dataSchema.isNullable() && !prunedDataSchema.isNullable()) {
+      return createNullableSchema(prunedDataSchema);
+    }
+    return prunedDataSchema;
+  }
+
+  private static Schema pruneDataSchema(Schema dataSchema, Schema requiredSchema, Set<String> excludeFields) {
+    switch (requiredSchema.getType()) {
+      case RECORD:
+        if (dataSchema.getType() != Schema.Type.RECORD) {
+          throw new IllegalArgumentException("Data schema is not a record");
+        }
+        List<Schema.Field> newFields = new ArrayList<>();
+        for (Schema.Field requiredSchemaField : requiredSchema.getFields()) {
+          Schema.Field dataSchemaField = dataSchema.getField(requiredSchemaField.name());
+          if (dataSchemaField != null) {
+            Schema.Field newField = new Schema.Field(
+                dataSchemaField.name(),
+                pruneDataSchemaResolveNullable(dataSchemaField.schema(), requiredSchemaField.schema(), excludeFields),
+                dataSchemaField.doc(),
+                dataSchemaField.defaultVal()
+            );
+            newFields.add(newField);
+          } else if (excludeFields.contains(requiredSchemaField.name())) {
+            newFields.add(new Schema.Field(
+                requiredSchemaField.name(),
+                requiredSchemaField.schema(),
+                requiredSchemaField.doc(),
+                requiredSchemaField.defaultVal()
+            ));
+          }
+        }
+        Schema newRecord = Schema.createRecord(dataSchema.getName(), dataSchema.getDoc(), dataSchema.getNamespace(), false);
+        newRecord.setFields(newFields);
+        return newRecord;
+
+      case ARRAY:
+        if (dataSchema.getType() != Schema.Type.ARRAY) {
+          throw new IllegalArgumentException("Data schema is not an array");
+        }
+        return Schema.createArray(pruneDataSchemaResolveNullable(dataSchema.getElementType(), requiredSchema.getElementType(), excludeFields));
+
+      case MAP:
+        if (dataSchema.getType() != Schema.Type.MAP) {
+          throw new IllegalArgumentException("Data schema is not a map");
+        }
+        return Schema.createMap(pruneDataSchemaResolveNullable(dataSchema.getValueType(), requiredSchema.getValueType(), excludeFields));
+
+      case UNION:
+        throw new IllegalArgumentException("Data schema is a union");
+
+      default:
+        return dataSchema;
+    }
+  }
+
   /**
    * Passed in {@code Union} schema and will try to resolve the field with the {@code fieldSchemaFullName}
    * w/in the union returning its corresponding schema

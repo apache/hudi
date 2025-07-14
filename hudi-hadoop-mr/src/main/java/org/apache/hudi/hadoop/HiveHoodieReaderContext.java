@@ -126,13 +126,18 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   }
 
   @Override
-  public ClosableIterator<ArrayWritable> getFileRecordIterator(StoragePath filePath, long start, long length, Schema dataSchema,
+  public Schema getDataFileSchema(StoragePath filePath) throws IOException {
+    return null;
+  }
+
+  @Override
+  protected ClosableIterator<ArrayWritable> doGetFileRecordIterator(StoragePath filePath, long start, long length, Schema dataSchema,
                                                                Schema requiredSchema, HoodieStorage storage) throws IOException {
     return getFileRecordIterator(filePath, null, start, length, dataSchema, requiredSchema, storage);
   }
 
   @Override
-  public ClosableIterator<ArrayWritable> getFileRecordIterator(
+  protected ClosableIterator<ArrayWritable> doGetFileRecordIterator(
       StoragePathInfo storagePathInfo, long start, long length, Schema dataSchema, Schema requiredSchema, HoodieStorage storage) throws IOException {
     return getFileRecordIterator(storagePathInfo.getPath(), storagePathInfo.getLocations(), start, length, dataSchema, requiredSchema, storage);
   }

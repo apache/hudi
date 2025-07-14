@@ -19,6 +19,7 @@
 
 package org.apache.hudi.common.engine;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -37,6 +38,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SizeEstimator;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableFilterIterator;
+import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.expression.Predicate;
@@ -57,11 +59,13 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.BiFunction;
 import java.util.function.UnaryOperator;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
+import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
 
@@ -209,6 +213,8 @@ public abstract class HoodieReaderContext<T> {
     return typeConverter;
   }
 
+  public abstract Schema getDataFileSchema(StoragePath filePath) throws IOException;
+
   /**
    * Gets the record iterator based on the type of engine-specific record representation from the
    * file.
@@ -221,7 +227,25 @@ public abstract class HoodieReaderContext<T> {
    * @param storage        {@link HoodieStorage} for reading records.
    * @return {@link ClosableIterator<T>} that can return all records through iteration.
    */
-  public abstract ClosableIterator<T> getFileRecordIterator(
+  public final ClosableIterator<T> getFileRecordIterator(
+      StoragePath filePath, long start, long length, Schema dataSchema, Schema requiredSchema,
+      HoodieStorage storage) throws IOException {
+    if (baseFileFormat != PARQUET) {
+      return doGetFileRecordIterator(filePath, start, length, dataSchema, requiredSchema, storage);
+    }
+    Schema dataFileSchema = getDataFileSchema(filePath);
+    if (Objects.equals(dataSchema, dataFileSchema)) {
+      return doGetFileRecordIterator(filePath, start, length, dataSchema, requiredSchema, storage);
+    }
+    Schema actualRequriredSchema = AvroSchemaUtils.pruneDataSchemaResolveNullable(dataFileSchema, requiredSchema, getSchemaHandler().getPruneExcludeFields());
+    if (Objects.equals(actualRequriredSchema, requiredSchema)) {
+      return doGetFileRecordIterator(filePath, start, length, dataFileSchema, requiredSchema, storage);
+    }
+    UnaryOperator<T> projection = projectRecord(actualRequriredSchema, requiredSchema);
+    return new CloseableMappingIterator<>(doGetFileRecordIterator(filePath, start, length, dataFileSchema, actualRequriredSchema, storage), projection);
+  }
+
+  protected abstract ClosableIterator<T> doGetFileRecordIterator(
       StoragePath filePath, long start, long length, Schema dataSchema, Schema requiredSchema,
       HoodieStorage storage) throws IOException;
 
@@ -237,7 +261,26 @@ public abstract class HoodieReaderContext<T> {
    * @param storage         {@link HoodieStorage} for reading records.
    * @return {@link ClosableIterator<T>} that can return all records through iteration.
    */
-  public ClosableIterator<T> getFileRecordIterator(
+
+  public final ClosableIterator<T> getFileRecordIterator(
+      StoragePathInfo storagePathInfo, long start, long length, Schema dataSchema, Schema requiredSchema,
+      HoodieStorage storage) throws IOException {
+    if (baseFileFormat != PARQUET) {
+      return doGetFileRecordIterator(storagePathInfo, start, length, dataSchema, requiredSchema, storage);
+    }
+    Schema dataFileSchema = getDataFileSchema(storagePathInfo.getPath());
+    if (Objects.equals(dataSchema, dataFileSchema)) {
+      return doGetFileRecordIterator(storagePathInfo, start, length, dataSchema, requiredSchema, storage);
+    }
+    Schema actualRequriredSchema = AvroSchemaUtils.pruneDataSchemaResolveNullable(dataFileSchema, requiredSchema, getSchemaHandler().getPruneExcludeFields());
+    if (Objects.equals(actualRequriredSchema, requiredSchema)) {
+      return doGetFileRecordIterator(storagePathInfo, start, length, dataFileSchema, requiredSchema, storage);
+    }
+    UnaryOperator<T> projection = projectRecord(actualRequriredSchema, requiredSchema);
+    return new CloseableMappingIterator<>(doGetFileRecordIterator(storagePathInfo, start, length, dataFileSchema, actualRequriredSchema, storage), projection);
+  }
+
+  protected ClosableIterator<T> doGetFileRecordIterator(
       StoragePathInfo storagePathInfo, long start, long length, Schema dataSchema, Schema requiredSchema,
       HoodieStorage storage) throws IOException {
     return getFileRecordIterator(storagePathInfo.getPath(), start, length, dataSchema, requiredSchema, storage);

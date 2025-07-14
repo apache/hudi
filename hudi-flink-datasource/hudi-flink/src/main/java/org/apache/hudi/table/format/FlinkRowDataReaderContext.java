@@ -109,7 +109,7 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
   }
 
   @Override
-  public ClosableIterator<RowData> getFileRecordIterator(
+  protected ClosableIterator<RowData> doGetFileRecordIterator(
       StoragePath filePath,
       long start,
       long length,
@@ -149,6 +149,11 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
         .toArray();
     recordKeyRowConverter = new RecordKeyToRowDataConverter(
         pkFieldsPos, (RowType) RowDataAvroQueryContexts.fromAvroSchema(requiredSchema).getRowType().getLogicalType());
+  }
+
+  @Override
+  public Schema getDataFileSchema(StoragePath filePath) throws IOException {
+    return null;
   }
 
   @Override
