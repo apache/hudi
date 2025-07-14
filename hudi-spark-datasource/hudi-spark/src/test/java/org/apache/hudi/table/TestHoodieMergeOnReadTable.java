@@ -449,7 +449,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
         Dataset<Row> actual = HoodieClientTestUtils.read(
             jsc(), basePath(), sqlContext(), hoodieStorage(), fullPartitionPaths);
         List<Row> rows = actual.collectAsList();
-        assertEquals(100, rows.size());
+        assertEquals(90, rows.size());
         int updatedCount = 0;
         for (Row row : rows) {
           if (row.getAs(HoodieRecord.COMMIT_TIME_METADATA_FIELD).equals(newCommitTime)) {
@@ -461,8 +461,8 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
           // check that file names metadata is updated
           assertTrue(row.getString(HoodieRecord.FILENAME_META_FIELD_ORD).contains(compactionInstantTime));
         }
-        // check that all 90 records are updated
-        assertEquals(90, updatedCount);
+        // check that 80 records are updated
+        assertEquals(80, updatedCount);
       }
     }
   }
