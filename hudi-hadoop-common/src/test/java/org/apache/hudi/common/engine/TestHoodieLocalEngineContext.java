@@ -49,7 +49,7 @@ public class TestHoodieLocalEngineContext {
   }
 
   @Test
-  void testProcessValuesOfTheSameShardsWithSortedValues() {
+  void testProcessKeyGroups() {
     // Create test data with unsorted values for the same key
     List<Pair<String, Integer>> unsortedPairs = Arrays.asList(
         ImmutablePair.of("key2", 5),
@@ -78,7 +78,7 @@ public class TestHoodieLocalEngineContext {
     };
     
     List<String> shardIndices = Arrays.asList("key1", "key2", "key3");
-    HoodieData<String> result = context.processValuesOfTheSameShards(pairData, func, shardIndices, false);
+    HoodieData<String> result = context.processKeyGroups(pairData, func, shardIndices, false);
     
     List<String> resultList = result.collectAsList();
     
@@ -98,7 +98,7 @@ public class TestHoodieLocalEngineContext {
   }
 
   @Test
-  void testProcessValuesOfTheSameShardsWithStrings() {
+  void testProcessKeyGroupsWithStrings() {
     // Create test data with unsorted string values for the same key
     List<Pair<String, String>> unsortedPairs = Arrays.asList(
         ImmutablePair.of("key1", "zebra"),
@@ -126,7 +126,7 @@ public class TestHoodieLocalEngineContext {
     };
     
     List<String> shardIndices = Arrays.asList("key1", "key2");
-    HoodieData<String> result = context.processValuesOfTheSameShards(pairData, func, shardIndices, false);
+    HoodieData<String> result = context.processKeyGroups(pairData, func, shardIndices, false);
     
     List<String> resultList = result.collectAsList();
     
@@ -144,7 +144,7 @@ public class TestHoodieLocalEngineContext {
   }
 
   @Test
-  void testProcessValuesOfTheSameShardsWithSingleValue() {
+  void testProcessKeyGroupsWithSingleValue() {
     // Create test data with single values per key
     List<Pair<String, Integer>> singleValuePairs = Arrays.asList(
         ImmutablePair.of("key1", 42),
@@ -161,7 +161,7 @@ public class TestHoodieLocalEngineContext {
     };
     
     List<String> shardIndices = Arrays.asList("key1", "key2");
-    HoodieData<Integer> result = context.processValuesOfTheSameShards(pairData, func, shardIndices, false);
+    HoodieData<Integer> result = context.processKeyGroups(pairData, func, shardIndices, false);
     
     List<Integer> resultList = result.collectAsList();
     

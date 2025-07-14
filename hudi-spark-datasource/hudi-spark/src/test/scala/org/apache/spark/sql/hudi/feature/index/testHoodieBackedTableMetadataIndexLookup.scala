@@ -356,7 +356,7 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
     // Test with existing secondary keys
     val existingKeys = HoodieListData.eager(List("b1", "b2", "$").asJava)
     val result = hoodieBackedTableMetadata.getSecondaryIndexRecords(existingKeys, secondaryIndexName)
-    val resultMap = HoodieDataUtils.collectAsMapWithOverwriteStrategy(result)
+    val resultMap = HoodieDataUtils.dedupeAndCollectAsMap(result)
 
     assert(resultMap.size == 3, s"Should return 3 results for existing secondary keys in table version ${getTableVersion}")
 
@@ -369,7 +369,7 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
     // Test with non-existing secondary keys
     val nonExistingKeys = HoodieListData.eager(List("non_exist_1", "non_exist_2").asJava)
     val nonExistingResult = hoodieBackedTableMetadata.getSecondaryIndexRecords(nonExistingKeys, secondaryIndexName)
-    val nonExistingMap = HoodieDataUtils.collectAsMapWithOverwriteStrategy(nonExistingResult)
+    val nonExistingMap = HoodieDataUtils.dedupeAndCollectAsMap(nonExistingResult)
     assert(nonExistingMap.isEmpty, s"Should return empty result for non-existing secondary keys in table version ${getTableVersion}")
   }
 }

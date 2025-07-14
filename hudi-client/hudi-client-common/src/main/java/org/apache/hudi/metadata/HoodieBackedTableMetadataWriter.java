@@ -1261,18 +1261,18 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     }
 
     // For each partition, determine the key format once and create the appropriate mapping function
-    Map<String, SerializableBiFunction<String, Integer, Integer>> partitionMappingFunctions = new HashMap<>();
+    Map<String, SerializableBiFunction<String, Integer, Integer>> indexToMappingFunctions = new HashMap<>();
     partitionToLatestFileSlices.keySet().forEach(mdtPartition -> {
       HoodieIndexVersion indexVersion = existingIndexVersionOrDefault(mdtPartition, dataMetaClient);
       // For streaming writes, we can determine the key format based on partition type
       // Secondary index partitions will always have composite keys, others will have simple keys
-      partitionMappingFunctions.put(mdtPartition, MetadataPartitionType.fromPartitionPath(mdtPartition).getFileGroupMappingFunction(indexVersion));
+      indexToMappingFunctions.put(mdtPartition, MetadataPartitionType.fromPartitionPath(mdtPartition).getFileGroupMappingFunction(indexVersion));
     });
 
     HoodieData<HoodieRecord> taggedRecords = untaggedRecords.map(mdtRecord -> {
       String mdtPartition = mdtRecord.getPartitionPath();
       List<FileSlice> latestFileSlices = partitionToLatestFileSlices.get(mdtPartition);
-      SerializableBiFunction<String, Integer, Integer> mappingFunction = partitionMappingFunctions.get(mdtPartition);
+      SerializableBiFunction<String, Integer, Integer> mappingFunction = indexToMappingFunctions.get(mdtPartition);
       FileSlice slice = latestFileSlices.get(mappingFunction.apply(mdtRecord.getRecordKey(), latestFileSlices.size()));
       mdtRecord.unseal();
       mdtRecord.setCurrentLocation(new HoodieRecordLocation(slice.getBaseInstantTime(), slice.getFileId()));

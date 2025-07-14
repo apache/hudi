@@ -18,11 +18,9 @@
 
 package org.apache.hudi.common.util;
 
-import org.apache.hudi.common.data.HoodieListPairData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.util.collection.Pair;
 
-import java.util.Collections;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -30,46 +28,27 @@ import java.util.stream.Collectors;
  * Utility class for HoodieData operations.
  */
 public class HoodieDataUtils {
-
   /**
-   * Creates a {@link HoodieListPairData} from a {@link Map} with eager execution semantic.
-   * Each key-value pair in the map becomes a single pair in the resulting data structure.
+   * Collects results of the pair data into a {@link Map<K, V>}
    *
-   * @param data the input map
-   * @param <K>  type of the key
-   * @param <V>  type of the value
-   * @return a new {@link HoodieListPairData} instance
-   */
-  public static <K, V> HoodieListPairData<K, V> eagerMapKV(Map<K, V> data) {
-    return HoodieListPairData.eager(
-        data.entrySet()
-            .stream()
-            .collect(Collectors.toMap(
-                Map.Entry::getKey,
-                entry -> Collections.singletonList(entry.getValue())
-            ))
-    );
-  }
-
-  /**
-   * Collects results of the underlying collection into a {@link Map<K, V>}
-   * If there are multiple pairs sharing the same key, the resulting map uses the incoming value (overwrites existing).
+   * If there are multiple pairs sharing the same key, the resulting map will have the last processed value
+   * i.e. incoming value overwrites existing.
    *
    * This is a terminal operation
    *
-   * @param pairData the HoodiePairData to convert
+   * @param pairData the HoodiePairData to collect
    * @param <K> type of the key
    * @param <V> type of the value
-   * @return a Map containing the key-value pairs with overwrite strategy for duplicates
+   * @return a Map containing the de-duplicated key-value pairs
    */
-  public static <K, V> Map<K, V> collectAsMapWithOverwriteStrategy(HoodiePairData<K, V> pairData) {
+  public static <K, V> Map<K, V> dedupeAndCollectAsMap(HoodiePairData<K, V> pairData) {
     // If there are multiple entries sharing the same key, use the incoming one
     return pairData.collectAsList()
-        .stream()
-        .collect(Collectors.toMap(
-            Pair::getKey,
-            Pair::getValue,
-            (existing, incoming) -> incoming
-        ));
+            .stream()
+            .collect(Collectors.toMap(
+                    Pair::getKey,
+                    Pair::getValue,
+                    (existing, incoming) -> incoming
+            ));
   }
 } 

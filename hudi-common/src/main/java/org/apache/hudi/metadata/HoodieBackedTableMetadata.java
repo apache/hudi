@@ -180,7 +180,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     List<HoodieRecord<HoodieMetadataPayload>> records = getRecordsByKeys(
         HoodieListData.eager(Collections.singletonList(key)), partitionName, Option.empty())
         .values().collectAsList();
-    ValidationUtils.checkArgument(records.size() <= 1, "Found more than 1 records for record key " + key);
+    ValidationUtils.checkArgument(records.size() <= 1, "Found more than 1 record for record key " + key);
     return records.isEmpty() ? Option.empty() : Option.ofNullable(records.get(0));
   }
 
@@ -309,9 +309,9 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
           return lookupKeyRecordPairsItr(partitionName, keysList, fileSlice, !isSecondaryIndex);
         };
 
-    List<Integer> shardIndices = IntStream.range(0, numFileSlices).boxed().collect(Collectors.toList());
+    List<Integer> keySpace = IntStream.range(0, numFileSlices).boxed().collect(Collectors.toList());
     HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> result =
-        getEngineContext().processValuesOfTheSameShards(persistedInitialPairData, processFunction, shardIndices, true)
+        getEngineContext().processKeyGroups(persistedInitialPairData, processFunction, keySpace, true)
             .mapToPair(p -> Pair.of(p.getLeft(), p.getRight()));
 
     return result.filter((String k, HoodieRecord<HoodieMetadataPayload> v) -> !v.getData().isDeleted());
@@ -353,9 +353,9 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
           FileSlice fileSlice = fileSlices.get(mappingFunction.apply(unescapeSpecialChars(keysList.get(0)), numFileSlices));
           return lookupRecordsItr(partitionName, keysList, fileSlice, !isSecondaryIndex);
         };
-    List<Integer> shardIndices = IntStream.range(0, numFileSlices).boxed().collect(Collectors.toList());
+    List<Integer> keySpace = IntStream.range(0, numFileSlices).boxed().collect(Collectors.toList());
     HoodieData<HoodieRecord<HoodieMetadataPayload>> result =
-        getEngineContext().processValuesOfTheSameShards(persistedInitialPairData, processFunction, shardIndices, true);
+        getEngineContext().processKeyGroups(persistedInitialPairData, processFunction, keySpace, true);
     
     return result.filter((HoodieRecord<HoodieMetadataPayload> v) -> !v.getData().isDeleted());
   }
@@ -469,7 +469,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         dataMetaClient.getTableConfig().getMetadataPartitions().contains(partitionName),
         "Secondary index is not initialized in MDT for: " + partitionName);
     // Fetch secondary-index records
-    Map<String, Set<String>> secondaryKeyRecords = HoodieDataUtils.collectAsMapWithOverwriteStrategy(
+    Map<String, Set<String>> secondaryKeyRecords = HoodieDataUtils.dedupeAndCollectAsMap(
         getSecondaryIndexRecords(HoodieListData.eager(secondaryKeys.collectAsList()), partitionName));
     // Now collect the record-keys and fetch the RLI records
     List<String> recordKeys = new ArrayList<>();
@@ -547,12 +547,12 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
                                                                                            List<String> sortedKeys,
                                                                                            FileSlice fileSlice,
                                                                                            Boolean isFullKey) {
-    Map<String, HoodieRecord<HoodieMetadataPayload>> map = new HashMap<>();
+    Map<String, List<HoodieRecord<HoodieMetadataPayload>>> map = new HashMap<>();
     try (ClosableIterator<Pair<String, HoodieRecord<HoodieMetadataPayload>>> iterator =
              lookupKeyRecordPairsItr(partitionName, sortedKeys, fileSlice, isFullKey)) {
-      iterator.forEachRemaining(entry -> map.put(entry.getKey(), entry.getValue()));
+      iterator.forEachRemaining(entry -> map.put(entry.getKey(), Collections.singletonList(entry.getValue())));
     }
-    return HoodieDataUtils.eagerMapKV(map);
+    return HoodieListPairData.eager(map);
   }
 
   private HoodieData<HoodieRecord<HoodieMetadataPayload>> lookupRecords(String partitionName,
@@ -832,20 +832,28 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     }
 
     Map<String, Set<String>> res = getRecordsByKeyPrefixes(keys, partitionName, false, Option.of(SecondaryIndexKeyUtils::escapeSpecialChars))
-        .map(record -> {
-          if (!record.getData().isDeleted()) {
-            return SecondaryIndexKeyUtils.getSecondaryKeyRecordKeyPair(record.getRecordKey());
-          }
-          return null;
-        })
-        .filter(Objects::nonNull)
-        .collectAsList()
-        .stream()
-        .collect(HashMap::new,
-            (map, pair) -> map.computeIfAbsent(pair.getKey(), k -> new HashSet<>()).add(pair.getValue()),
-            (map1, map2) -> map2.forEach((k, v) -> map1.computeIfAbsent(k, key -> new HashSet<>()).addAll(v)));
+            .map(record -> {
+              if (!record.getData().isDeleted()) {
+                return SecondaryIndexKeyUtils.getSecondaryKeyRecordKeyPair(record.getRecordKey());
+              }
+              return null;
+            })
+            .filter(Objects::nonNull)
+            .collectAsList()
+            .stream()
+            .collect(HashMap::new,
+                    (map, pair) -> map.computeIfAbsent(pair.getKey(), k -> new HashSet<>()).add(pair.getValue()),
+                    (map1, map2) -> map2.forEach((k, v) -> map1.computeIfAbsent(k, key -> new HashSet<>()).addAll(v)));
 
-    return HoodieDataUtils.eagerMapKV(res);
+
+    return HoodieListPairData.eager(
+            res.entrySet()
+                    .stream()
+                    .collect(Collectors.toMap(
+                            Map.Entry::getKey,
+                            entry -> Collections.singletonList(entry.getValue())
+                    ))
+    );
   }
 
   private HoodiePairData<String, Set<String>> getSecondaryIndexRecordsV2(HoodieData<String> secondaryKeys, String partitionName) {

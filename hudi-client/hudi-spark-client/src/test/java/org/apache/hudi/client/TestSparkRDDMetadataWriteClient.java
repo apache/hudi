@@ -218,7 +218,7 @@ public class TestSparkRDDMetadataWriteClient extends HoodieClientTestBase {
       List<String> sortedKeysForFilesPartition = new ArrayList<>(expectedRecordsMap.keySet());
       Collections.sort(sortedKeysForFilesPartition);
 
-      Map<String, HoodieRecord<HoodieMetadataPayload>> logRecords = HoodieDataUtils.collectAsMapWithOverwriteStrategy(
+      Map<String, HoodieRecord<HoodieMetadataPayload>> logRecords = HoodieDataUtils.dedupeAndCollectAsMap(
           readLogRecords(readers.getRight(), HoodieListData.eager(sortedKeysForFilesPartition)));
 
       Map<String, HoodieRecord<HoodieMetadataPayload>> actualMdtRecordMap =

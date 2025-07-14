@@ -133,6 +133,7 @@ public abstract class HoodieEngineContext {
 
   /**
    * Groups values by key and applies a function to each group of values.
+   *
    * [1 iterator maps to 1 key] It only guarantees that items returned by the same iterator shares to the same key.
    * [exact once across iterators] The item returned by the same iterator will not be returned by other iterators.
    * [1 key maps to >= 1 iterators] Items belong to the same shard can be load-balanced across multiple iterators. It's up to API implementations to decide
@@ -140,17 +141,21 @@ public abstract class HoodieEngineContext {
    * [iterator return sorted values] Values returned via iterator is sorted.
    *
    * @param data The input pair<ShardIndex, Item> to process.
-   * @param func Function to apply to each group of items with the same shard
-   * @param shardIndices Set of all possible shard indices that may appear in the data. This is used for efficient partitioning and load balancing.
+   * @param processFunc Function to apply to each group of items with the same shard
+   * @param keySpace Set of all possible keys that may appear in the data. This is used for efficient partitioning and load balancing.
    * @param preservesPartitioning whether to preserve partitioning in the resulting collection.
-   * @param <S> Type of the shard index (must be Comparable)
-   * @param <V> Type of the value in the input data (must be Comparable)
+   * @param <K> Type of the key (must be Comparable)
+   * @param <V> Type of the value (must be Comparable)
    * @param <R> Type of the result
    * @return Result of applying the function to each group
    */
-  public <S extends Comparable<S>, V extends Comparable<V>, R> HoodieData<R> processValuesOfTheSameShards(
-      HoodiePairData<S, V> data, SerializableFunction<Iterator<V>, Iterator<R>> func, List<S> shardIndices, boolean preservesPartitioning) {
+  public <K extends Comparable<K>, V extends Comparable<V>, R> HoodieData<R> processKeyGroups(HoodiePairData<K, V> data,
+                                                                                              SerializableFunction<Iterator<V>, Iterator<R>> processFunc,
+                                                                                              List<K> keySpace,
+                                                                                              boolean preservesPartitioning) {
     // Group values by key and apply the function to each group
-    return data.groupByKey().values().flatMap(it -> func.apply(new ClosableSortingIterator<>(it.iterator())));
+    return data.groupByKey()
+            .values()
+            .flatMap(it -> processFunc.apply(new ClosableSortingIterator<>(it.iterator())));
   }
 }

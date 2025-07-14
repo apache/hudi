@@ -30,7 +30,6 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.common.util.HoodieDataUtils;
 
 import org.apache.avro.Schema;
 
@@ -119,11 +118,11 @@ public class HoodieMetadataLogRecordReader implements Closeable {
     synchronized (this) {
       logRecordScanner.scanByFullKeys(sortedKeyList);
       Map<String, HoodieRecord> allRecords = logRecordScanner.getRecords();
-      Map<String, HoodieRecord<HoodieMetadataPayload>> res = sortedKeyList.stream()
+      Map<String, List<HoodieRecord<HoodieMetadataPayload>>> res = sortedKeyList.stream()
           .map(key -> (HoodieRecord<HoodieMetadataPayload>) allRecords.get(key))
           .filter(Objects::nonNull)
-          .collect(Collectors.toMap(HoodieRecord::getRecordKey, r -> r));
-      return HoodieDataUtils.eagerMapKV(res);
+          .collect(Collectors.toMap(HoodieRecord::getRecordKey, r -> Collections.singletonList(r)));
+      return HoodieListPairData.eager(res);
     }
   }
 

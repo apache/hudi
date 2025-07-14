@@ -210,9 +210,11 @@ public class HoodieFlinkEngineContext extends HoodieEngineContext {
   }
 
   @Override
-  public <S extends Comparable<S>, V extends Comparable<V>, R> HoodieData<R> processValuesOfTheSameShards(HoodiePairData<S, V> data, SerializableFunction<Iterator<V>, Iterator<R>> func,
-                                                                                                          List<S> shardIndices, boolean preservesPartitioning) {
-    return null;
+  public <K extends Comparable<K>, V extends Comparable<V>, R> HoodieData<R> processKeyGroups(HoodiePairData<K, V> data,
+                                                                                              SerializableFunction<Iterator<V>, Iterator<R>> processFunc,
+                                                                                              List<K> keySpace,
+                                                                                              boolean preservesPartitioning) {
+    throw new UnsupportedOperationException("processKeyGroups() is not supported in FlinkEngineContext");
   }
 
   @Override
