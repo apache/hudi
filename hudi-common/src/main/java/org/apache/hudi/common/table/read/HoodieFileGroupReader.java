@@ -192,18 +192,20 @@ public final class HoodieFileGroupReader<T> implements Closeable {
                                                    boolean sortOutput) {
     if (hasNoLogFiles) {
       return null;
-    } else if (isSkipMerge) {
+    }
+    UpdateProcessor<T> updateProcessor = UpdateProcessor.create(readStats, readerContext, emitDelete, fileGroupUpdateCallback);
+    if (isSkipMerge) {
       return new UnmergedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, readStats, emitDelete);
+          readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, readStats);
     } else if (sortOutput) {
       return new SortedKeyBasedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, readStats, orderingFieldName, emitDelete, fileGroupUpdateCallback);
+          readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, readStats, orderingFieldName, updateProcessor);
     } else if (shouldUseRecordPosition && baseFileOption.isPresent()) {
       return new PositionBasedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, baseFileOption.get().getCommitTime(), props, readStats, orderingFieldName, emitDelete, fileGroupUpdateCallback);
+          readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, baseFileOption.get().getCommitTime(), props, readStats, orderingFieldName, updateProcessor);
     } else {
       return new KeyBasedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, readStats, orderingFieldName, emitDelete, fileGroupUpdateCallback);
+          readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, readStats, orderingFieldName, updateProcessor);
     }
   }
 
@@ -338,15 +340,11 @@ public final class HoodieFileGroupReader<T> implements Closeable {
    * @return The next record after calling {@link #hasNext}.
    */
   T next() {
-    if (recordBuffer == null) {
-      T nextVal = baseFileIterator.next();
-      if (outputConverter.isPresent()) {
-        return outputConverter.get().apply(nextVal);
-      }
-      return nextVal;
+    T nextVal = recordBuffer == null ? baseFileIterator.next() : recordBuffer.next();
+    if (outputConverter.isPresent()) {
+      return outputConverter.get().apply(nextVal);
     }
-    // Record buffer already applies the output converter
-    return recordBuffer.next();
+    return nextVal;
   }
 
   private void scanLogFiles() {

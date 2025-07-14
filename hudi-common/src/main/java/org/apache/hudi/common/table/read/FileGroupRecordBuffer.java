@@ -53,7 +53,6 @@ import java.util.Iterator;
 import java.util.Locale;
 import java.util.Map;
 import java.util.function.Function;
-import java.util.function.UnaryOperator;
 
 import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED;
 import static org.apache.hudi.common.config.HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE;
@@ -65,7 +64,6 @@ import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERG
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.INSTANT_TIME;
 
 public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T> {
-  private final Option<UnaryOperator<T>> outputConverter;
   protected final HoodieReaderContext<T> readerContext;
   protected final Schema readerSchema;
   protected final Option<String> orderingFieldName;
@@ -78,9 +76,8 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   protected final HoodieReadStats readStats;
   protected final boolean shouldCheckCustomDeleteMarker;
   protected final boolean shouldCheckBuiltInDeleteMarker;
-  protected final boolean emitDelete;
-  private final BaseFileUpdateCallback baseFileUpdateCallback;
   protected ClosableIterator<T> baseFileIterator;
+  protected UpdateProcessor<T> updateProcessor;
   protected Iterator<BufferedRecord<T>> logRecordIterator;
   protected T nextRecord;
   protected boolean enablePartialMerging = false;
@@ -96,11 +93,9 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
                                   TypedProperties props,
                                   HoodieReadStats readStats,
                                   Option<String> orderingFieldName,
-                                  boolean emitDelete,
-                                  Option<BaseFileUpdateCallback> updateCallback) {
+                                  UpdateProcessor<T> updateProcessor) {
     this.readerContext = readerContext;
-    this.outputConverter = readerContext.getSchemaHandler().getOutputConverter();
-    this.baseFileUpdateCallback = updateCallback.orElse(null);
+    this.updateProcessor = updateProcessor;
     this.readerSchema = AvroSchemaCache.intern(readerContext.getSchemaHandler().getRequiredSchema());
     this.recordMergeMode = recordMergeMode;
     this.partialUpdateMode = partialUpdateMode;
@@ -128,7 +123,6 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
     boolean isBitCaskDiskMapCompressionEnabled = props.getBoolean(DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(),
         DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue());
     this.readStats = readStats;
-    this.emitDelete = emitDelete;
     try {
       // Store merged records for all versions for this log file, set the in-memory footprint to maxInMemoryMapSize
       this.records = new ExternalSpillableMap<>(maxMemorySizeInBytes, spillableMapBasePath, new DefaultSizeEstimator<>(),
@@ -324,57 +318,14 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
     if (logRecordInfo != null) {
       BufferedRecord<T> baseRecordInfo = BufferedRecord.forRecordWithContext(baseRecord, readerSchema, readerContext, orderingFieldName, false);
       Pair<Boolean, T> isDeleteAndRecord = merge(baseRecordInfo, logRecordInfo);
-      if (!isDeleteAndRecord.getLeft()) {
-        // Updates
-        nextRecord = readerContext.seal(applyOutputSchemaConversion(isDeleteAndRecord.getRight()));
-        if (baseFileUpdateCallback != null && isDeleteAndRecord.getRight() != baseRecord) {
-          // If the record is not the same as the base record, we can emit an update
-          handleBaseFileUpdate(logRecordInfo.getRecordKey(), baseRecord, nextRecord);
-        }
-        readStats.incrementNumUpdates();
-        return true;
-      } else {
-        // emit Deletes
-        handleBaseFileDelete(logRecordInfo.getRecordKey(), baseRecord);
-        readStats.incrementNumDeletes();
-        if (emitDelete) {
-          nextRecord = applyOutputSchemaConversion(readerContext.getDeleteRow(isDeleteAndRecord.getRight(), baseRecordInfo.getRecordKey()));
-          return nextRecord != null;
-        } else {
-          return false;
-        }
-      }
+      nextRecord = updateProcessor.processUpdate(logRecordInfo.getRecordKey(), baseRecord, isDeleteAndRecord.getRight(), isDeleteAndRecord.getLeft());
+      return nextRecord != null;
     }
 
     // Inserts
-    nextRecord = readerContext.seal(applyOutputSchemaConversion(baseRecord));
+    nextRecord = readerContext.seal(baseRecord);
     readStats.incrementNumInserts();
     return true;
-  }
-
-  /**
-   * Applies the final output schema conversion to the buffered record if required. This ensures the records match the requested schema.
-   * @param bufferedRecord the buffered record to convert
-   * @return a new buffered record with the converted record and the proper schema ID set
-   */
-  protected BufferedRecord<T> applyOutputSchemaConversion(BufferedRecord<T> bufferedRecord) {
-    if (bufferedRecord.getRecord() != null && outputConverter.isPresent()) {
-      return new BufferedRecord<>(bufferedRecord.getRecordKey(), bufferedRecord.getOrderingValue(),
-          outputConverter.get().apply(bufferedRecord.getRecord()), readerContext.getSchemaHandler().getRequestedSchemaEncoding(), bufferedRecord.isDelete());
-    }
-    return bufferedRecord;
-  }
-
-  /**
-   * Applies the final output schema conversion to the record if required. This ensures the records match the requested schema.
-   * @param record the record to convert
-   * @return a converted record with the updated schema
-   */
-  protected T applyOutputSchemaConversion(T record) {
-    if (record != null && outputConverter.isPresent()) {
-      return outputConverter.get().apply(record);
-    }
-    return record;
   }
 
   protected void initializeLogRecordIterator() {
@@ -388,43 +339,12 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
 
     while (logRecordIterator.hasNext()) {
       BufferedRecord<T> nextRecordInfo = logRecordIterator.next();
-      if (!nextRecordInfo.isDelete()) {
-        BufferedRecord<T> convertedBufferedRecord = applyOutputSchemaConversion(nextRecordInfo);
-        nextRecord = convertedBufferedRecord.getRecord();
-        handleBaseFileInsert(nextRecordInfo.getRecordKey(), nextRecord);
-        readStats.incrementNumInserts();
+      nextRecord = updateProcessor.processUpdate(nextRecordInfo.getRecordKey(), null, nextRecordInfo.getRecord(), nextRecordInfo.isDelete());
+      if (nextRecord != null) {
         return true;
-      } else if (emitDelete) {
-        nextRecord = applyOutputSchemaConversion(readerContext.getDeleteRow(nextRecordInfo.getRecord(), nextRecordInfo.getRecordKey()));
-        readStats.incrementNumDeletes();
-        if (nextRecord != null) {
-          return true;
-        }
-      } else {
-        readStats.incrementNumDeletes();
       }
     }
     return false;
-  }
-
-  protected void handleBaseFileInsert(String recordKey, T record) {
-    if (baseFileUpdateCallback != null) {
-      baseFileUpdateCallback.onInsert(recordKey, readerContext.convertToAvroRecord(record, readerContext.getSchemaHandler().getRequestedSchema()));
-    }
-  }
-
-  protected void handleBaseFileUpdate(String recordKey, T oldRecord, T newRecord) {
-    if (baseFileUpdateCallback != null) {
-      Schema requestedSchema = readerContext.getSchemaHandler().getRequestedSchema();
-      baseFileUpdateCallback.onUpdate(recordKey, readerContext.convertToAvroRecord(oldRecord, requestedSchema),
-          readerContext.convertToAvroRecord(newRecord, requestedSchema));
-    }
-  }
-
-  protected void handleBaseFileDelete(String recordKey, T record) {
-    if (baseFileUpdateCallback != null) {
-      baseFileUpdateCallback.onDelete(recordKey, readerContext.convertToAvroRecord(record, readerContext.getSchemaHandler().getRequestedSchema()));
-    }
   }
 
   protected Pair<Function<T, T>, Schema> getSchemaTransformerWithEvolvedSchema(HoodieDataBlock dataBlock) {

@@ -51,9 +51,8 @@ public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
       RecordMergeMode recordMergeMode,
       PartialUpdateMode partialUpdateMode,
       TypedProperties props,
-      HoodieReadStats readStats,
-      boolean emitDelete) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, readStats, Option.empty(), emitDelete, Option.empty());
+      HoodieReadStats readStats) {
+    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, readStats, Option.empty(), null);
     this.currentInstantLogBlocks = new ArrayDeque<>();
   }
 
@@ -63,7 +62,7 @@ public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
 
     // Output from base file first.
     if (baseFileIterator.hasNext()) {
-      nextRecord = readerContext.seal(applyOutputSchemaConversion(baseFileIterator.next()));
+      nextRecord = readerContext.seal(baseFileIterator.next());
       return true;
     }
 
@@ -81,7 +80,7 @@ public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
     if (recordIterator == null || !recordIterator.hasNext()) {
       return false;
     }
-    nextRecord = readerContext.seal(applyOutputSchemaConversion(recordIterator.next()));
+    nextRecord = readerContext.seal(recordIterator.next());
     readStats.incrementNumInserts();
     return true;
   }

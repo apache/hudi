@@ -50,9 +50,8 @@ public class SortedKeyBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupRec
                                              TypedProperties props,
                                              HoodieReadStats readStats,
                                              Option<String> orderingFieldName,
-                                             boolean emitDelete,
-                                             Option<BaseFileUpdateCallback> updateCallback) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, readStats, orderingFieldName, emitDelete, updateCallback);
+                                             UpdateProcessor<T> updateProcessor) {
+    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, readStats, orderingFieldName, updateProcessor);
   }
 
   @Override
@@ -71,14 +70,11 @@ public class SortedKeyBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupRec
       }
       // Handle the case where the next record is only present in the log records
       BufferedRecord<T> nextLogRecord = records.remove(nextLogRecordKey);
-      if (!nextLogRecord.isDelete() || emitDelete) {
+      nextRecord = updateProcessor.processUpdate(recordKey, null, nextLogRecord.getRecord(), nextLogRecord.isDelete());
+      if (nextRecord != null) {
         // If the next log record does not result in a deletion, or we are emitting deletes, we can return it
         // and queue the base record, which is already read from the iterator, for the next iteration
-        BufferedRecord<T> transformedLogRecord = applyOutputSchemaConversion(nextLogRecord);
-        nextRecord = readerContext.seal(transformedLogRecord.getRecord());
-        handleBaseFileInsert(transformedLogRecord.getRecordKey(), transformedLogRecord.getRecord());
         queuedBaseFileRecord = Option.of(baseRecord);
-        readStats.incrementNumInserts();
         return true;
       }
       // Iterate until the next log record key is greater than or equal to the base record key
