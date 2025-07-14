@@ -53,9 +53,9 @@ import java.io.Serializable;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static java.util.stream.Collectors.toList;
 
@@ -132,7 +132,7 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
     List<HoodieCompactionOperation> operations = engineContext.flatMap(partitionPaths, partitionPath -> fileSystemView
         .getLatestFileSlicesStateless(partitionPath)
         .filter(slice -> filterFileSlice(slice, lastCompletedInstantTime, fgIdsInPendingCompactionAndClustering, instantRange))
-        .flatMap(s -> {
+        .map(s -> {
           List<HoodieLogFile> logFiles = s.getLogFiles()
               // ==============================================================
               // IMPORTANT
@@ -150,7 +150,7 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
               .sorted(HoodieLogFile.getLogFileComparator()).collect(toList());
           if (logFiles.isEmpty()) {
             // compaction is not needed if there is no log file.
-            return Stream.empty();
+            return null;
           }
           totalLogFiles.add(logFiles.size());
           totalFileSlices.add(1L);
@@ -158,8 +158,9 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
           // for Map operations and collecting them finally in Avro generated classes for storing
           // into meta files.
           Option<HoodieBaseFile> dataFile = s.getBaseFile();
-          return Stream.of(new CompactionOperation(dataFile, partitionPath, logFiles, writeConfig.getCompactionStrategy().captureMetrics(writeConfig, s)));
-        }), partitionPaths.size()).stream()
+          return new CompactionOperation(dataFile, partitionPath, logFiles,
+              writeConfig.getCompactionStrategy().captureMetrics(writeConfig, s));
+        }).filter(Objects::nonNull), partitionPaths.size()).stream()
         .map(CompactionUtils::buildHoodieCompactionOperation).collect(toList());
 
     LOG.info("Total of {} compaction operations are retrieved for table {}", operations.size(), hoodieTable.getConfig().getBasePath());
