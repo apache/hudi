@@ -66,7 +66,7 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
                                               requiredFilters: Seq[Filter],
                                               storageConfiguration: StorageConfiguration[_],
                                               tableConfig: HoodieTableConfig)
-  extends BaseSparkInternalRowReaderContext(storageConfiguration, tableConfig) {
+  extends BaseSparkInternalRowReaderContext(storageConfiguration, tableConfig, true) {
   lazy val sparkAdapter: SparkAdapter = SparkAdapterSupport.sparkAdapter
   private lazy val bootstrapSafeFilters: Seq[Filter] = filters.filter(filterIsSafeForBootstrap) ++ requiredFilters
   private val deserializerMap: mutable.Map[Schema, HoodieAvroDeserializer] = mutable.Map()

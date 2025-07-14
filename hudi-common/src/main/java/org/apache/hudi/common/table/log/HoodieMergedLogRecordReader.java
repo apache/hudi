@@ -69,10 +69,7 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
                                       FileGroupRecordBuffer<T> recordBuffer, boolean allowInflightInstants) {
     super(readerContext, metaClient, storage, logFilePaths, reverseReader, bufferSize, instantRange, withOperationField,
         forceFullScan, partitionName, keyFieldOverride, enableOptimizedLogBlocksScan, recordBuffer, allowInflightInstants);
-
-    if (forceFullScan) {
-      performScan();
-    }
+    performScan();
   }
 
   /**

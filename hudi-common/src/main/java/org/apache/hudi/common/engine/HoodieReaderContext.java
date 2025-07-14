@@ -94,6 +94,7 @@ public abstract class HoodieReaderContext<T> {
   protected String partitionPath;
   protected Option<InstantRange> instantRangeOpt = Option.empty();
   private RecordMergeMode mergeMode;
+  private boolean forceFullScan = true;
 
   // for encoding and decoding schemas to the spillable map
   private final LocalAvroSchemaCache localAvroSchemaCache = LocalAvroSchemaCache.getInstance();
@@ -101,7 +102,8 @@ public abstract class HoodieReaderContext<T> {
   protected HoodieReaderContext(StorageConfiguration<?> storageConfiguration,
                                 HoodieTableConfig tableConfig,
                                 Option<InstantRange> instantRangeOpt,
-                                Option<Predicate> keyFilterOpt) {
+                                Option<Predicate> keyFilterOpt,
+                                boolean forceFullScan) {
     this.tableConfig = tableConfig;
     this.storageConfiguration = storageConfiguration;
     this.recordKeyExtractor = tableConfig.populateMetaFields() ? metadataKeyExtractor() : virtualKeyExtractor(tableConfig.getRecordKeyFields()
@@ -109,6 +111,7 @@ public abstract class HoodieReaderContext<T> {
     this.baseFileFormat = tableConfig.getBaseFileFormat();
     this.instantRangeOpt = instantRangeOpt;
     this.keyFilterOpt = keyFilterOpt;
+    this.forceFullScan = forceFullScan;
   }
 
   // Getter and Setter for schemaHandler
@@ -201,6 +204,10 @@ public abstract class HoodieReaderContext<T> {
 
   public CustomSerializer<BufferedRecord<T>> getRecordSerializer() {
     return new DefaultSerializer<>();
+  }
+
+  public boolean getForceFullScan() {
+    return forceFullScan;
   }
 
   /**
