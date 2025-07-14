@@ -112,8 +112,7 @@ class TestSortedKeyBasedFileGroupRecordBuffer {
     assertEquals(1, readStats.getNumDeletes());
   }
 
-  private SortedKeyBasedFileGroupRecordBuffer<TestRecord> buildSortedKeyBasedFileGroupRecordBuffer(HoodieReaderContext<TestRecord> mockReaderContext,
-                                                                                                   HoodieReadStats readStats) {
+  private SortedKeyBasedFileGroupRecordBuffer<TestRecord> buildSortedKeyBasedFileGroupRecordBuffer(HoodieReaderContext<TestRecord> mockReaderContext, HoodieReadStats readStats) {
     when(mockReaderContext.getSchemaHandler().getRequiredSchema()).thenReturn(HoodieTestDataGenerator.AVRO_SCHEMA);
     when(mockReaderContext.getSchemaHandler().getInternalSchema()).thenReturn(InternalSchema.getEmptyInternalSchema());
     when(mockReaderContext.getDeleteRow(any(), any())).thenAnswer(invocation -> {

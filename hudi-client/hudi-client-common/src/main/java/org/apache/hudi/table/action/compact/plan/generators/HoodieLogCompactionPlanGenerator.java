@@ -54,6 +54,7 @@ public class HoodieLogCompactionPlanGenerator<T extends HoodieRecordPayload, I, 
     super(table, engineContext, writeConfig, executor);
     this.compactionStrategy = HoodieCompactionStrategy.newBuilder()
         .setStrategyParams(getStrategyParams())
+        .setCompactorClassName("org.apache.hudi.table.action.compact.LogCompactionExecutionHelper") // added for compatibility between releases
         .build();
   }
 

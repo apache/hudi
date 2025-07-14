@@ -314,7 +314,7 @@ class TestFileGroupRecordBuffer {
             props,
             readStats,
             Option.empty(),
-        updateProcessor
+            updateProcessor
     );
     when(readerContext.getValue(any(), any(), any())).thenReturn("i");
     assertFalse(keyBasedBuffer.isCustomDeleteRecord(record));
