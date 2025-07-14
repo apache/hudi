@@ -18,6 +18,8 @@
 
 package org.apache.hudi
 
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.mapred.JobConf
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.MergeOnReadSnapshotRelation.{createPartitionedFile, isProjectionCompatible}
 import org.apache.hudi.common.model.{FileSlice, HoodieLogFile, OverwriteWithLatestAvroPayload}
@@ -111,10 +113,11 @@ abstract class BaseMergeOnReadSnapshotRelation(sqlContext: SQLContext,
     val requiredFilters = Seq.empty
     val optionalFilters = filters
     val readers = createBaseFileReaders(tableSchema, requiredSchema, requestedColumns, requiredFilters, optionalFilters)
+    val confWithSchema = embedInternalSchema(new Configuration(conf), internalSchemaOpt)
 
     new HoodieMergeOnReadRDDV2(
       sqlContext.sparkContext,
-      config = jobConf,
+      config = new JobConf(confWithSchema),
       sqlConf = sqlContext.sparkSession.sessionState.conf,
       fileReaders = readers,
       tableSchema = tableSchema,
