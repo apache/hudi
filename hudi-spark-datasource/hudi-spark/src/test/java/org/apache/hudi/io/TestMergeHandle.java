@@ -97,7 +97,7 @@ public class TestMergeHandle extends BaseTestHandle {
     List<HoodieRecord> newRecords = dataGenerator.generateUniqueUpdates(instantTime, numUpdates);
     int numDeletes = generateDeleteRecords(newRecords, dataGenerator, instantTime);
     assertTrue(numDeletes > 0);
-    HoodieDefaultMergeHandle mergeHandle = new HoodieDefaultMergeHandle(config, instantTime, table, newRecords.iterator(), partitionPath, fileId, new LocalTaskContextSupplier(),
+    HoodieWriteMergeHandle mergeHandle = new HoodieWriteMergeHandle(config, instantTime, table, newRecords.iterator(), partitionPath, fileId, new LocalTaskContextSupplier(),
         new HoodieBaseFile(fileGroup.getAllBaseFiles().findFirst().get()), Option.empty());
     HoodieMergeHelper.newInstance().runMerge(table, mergeHandle);
     WriteStatus writeStatus = mergeHandle.writeStatus;

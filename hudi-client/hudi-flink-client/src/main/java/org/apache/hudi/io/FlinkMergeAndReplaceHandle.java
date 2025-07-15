@@ -41,7 +41,7 @@ import java.util.Iterator;
 import java.util.List;
 
 /**
- * A {@link HoodieDefaultMergeHandle} that supports MERGE write incrementally(small data buffers).
+ * A {@link HoodieWriteMergeHandle} that supports MERGE write incrementally(small data buffers).
  *
  * <P>This handle is needed from the second mini-batch write for COW data bucket
  * when the data bucket is written using multiple mini-batches.
@@ -51,7 +51,7 @@ import java.util.List;
  * behaves like the new data buffer are appended to the old file.
  */
 public class FlinkMergeAndReplaceHandle<T, I, K, O>
-    extends HoodieDefaultMergeHandle<T, I, K, O>
+    extends HoodieWriteMergeHandle<T, I, K, O>
     implements MiniBatchHandle {
 
   private static final Logger LOG = LoggerFactory.getLogger(FlinkMergeAndReplaceHandle.class);

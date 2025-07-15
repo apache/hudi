@@ -61,7 +61,7 @@ public class TestHoodieMergeHandleFactory {
     Properties properties = new Properties();
     properties.setProperty(MERGE_ALLOW_DUPLICATE_ON_INSERTS_ENABLE.key(), "false");
     Pair mergeHandleClasses = HoodieMergeHandleFactory.getMergeHandleClassesWrite(WriteOperationType.UPSERT, getWriterConfig(properties), mockHoodieTable);
-    validateMergeClasses(mergeHandleClasses, HoodieDefaultMergeHandle.class.getName());
+    validateMergeClasses(mergeHandleClasses, HoodieWriteMergeHandle.class.getName());
 
     // sorted case
     when(mockHoodieTable.requireSortedRecords()).thenReturn(true);
@@ -80,10 +80,10 @@ public class TestHoodieMergeHandleFactory {
     validateMergeClasses(mergeHandleClasses, HoodieConcatHandle.class.getName());
 
     mergeHandleClasses = HoodieMergeHandleFactory.getMergeHandleClassesWrite(WriteOperationType.UPSERT, getWriterConfig(propsWithDups), mockHoodieTable);
-    validateMergeClasses(mergeHandleClasses, HoodieDefaultMergeHandle.class.getName());
+    validateMergeClasses(mergeHandleClasses, HoodieWriteMergeHandle.class.getName());
 
     mergeHandleClasses = HoodieMergeHandleFactory.getMergeHandleClassesWrite(WriteOperationType.INSERT, getWriterConfig(properties), mockHoodieTable);
-    validateMergeClasses(mergeHandleClasses, HoodieDefaultMergeHandle.class.getName());
+    validateMergeClasses(mergeHandleClasses, HoodieWriteMergeHandle.class.getName());
 
     // non-sorted: CDC enabled
     when(mockHoodieTableConfig.isCDCEnabled()).thenReturn(true);
@@ -102,7 +102,7 @@ public class TestHoodieMergeHandleFactory {
     properties.setProperty(HoodieWriteConfig.CONCAT_HANDLE_CLASS_NAME.key(), CUSTOM_MERGE_HANDLE);
     propsWithDups.setProperty(HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.key(), CUSTOM_MERGE_HANDLE);
     mergeHandleClasses = HoodieMergeHandleFactory.getMergeHandleClassesWrite(WriteOperationType.UPSERT, getWriterConfig(properties), mockHoodieTable);
-    validateMergeClasses(mergeHandleClasses, CUSTOM_MERGE_HANDLE, HoodieDefaultMergeHandle.class.getName());
+    validateMergeClasses(mergeHandleClasses, CUSTOM_MERGE_HANDLE, HoodieWriteMergeHandle.class.getName());
 
     when(mockHoodieTable.requireSortedRecords()).thenReturn(true);
     mergeHandleClasses = HoodieMergeHandleFactory.getMergeHandleClassesWrite(WriteOperationType.UPSERT, getWriterConfig(properties), mockHoodieTable);
@@ -122,7 +122,7 @@ public class TestHoodieMergeHandleFactory {
     // default case
     Properties properties = new Properties();
     Pair mergeHandleClasses = HoodieMergeHandleFactory.getMergeHandleClassesCompaction(getWriterConfig(properties), mockHoodieTable);
-    validateMergeClasses(mergeHandleClasses, HoodieDefaultMergeHandle.class.getName());
+    validateMergeClasses(mergeHandleClasses, HoodieWriteMergeHandle.class.getName());
 
     // sorted case
     when(mockHoodieTable.requireSortedRecords()).thenReturn(true);
@@ -133,7 +133,7 @@ public class TestHoodieMergeHandleFactory {
     when(mockHoodieTable.requireSortedRecords()).thenReturn(false);
     properties.setProperty(HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.key(), CUSTOM_MERGE_HANDLE);
     mergeHandleClasses = HoodieMergeHandleFactory.getMergeHandleClassesCompaction(getWriterConfig(properties), mockHoodieTable);
-    validateMergeClasses(mergeHandleClasses, CUSTOM_MERGE_HANDLE, HoodieDefaultMergeHandle.class.getName());
+    validateMergeClasses(mergeHandleClasses, CUSTOM_MERGE_HANDLE, HoodieWriteMergeHandle.class.getName());
 
     when(mockHoodieTable.requireSortedRecords()).thenReturn(true);
     mergeHandleClasses = HoodieMergeHandleFactory.getMergeHandleClassesCompaction(getWriterConfig(properties), mockHoodieTable);

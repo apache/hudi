@@ -46,7 +46,7 @@ import java.util.Queue;
  * keys in newRecordKeys (sorted in-memory).
  */
 @NotThreadSafe
-public class HoodieSortedMergeHandle<T, I, K, O> extends HoodieDefaultMergeHandle<T, I, K, O> {
+public class HoodieSortedMergeHandle<T, I, K, O> extends HoodieWriteMergeHandle<T, I, K, O> {
 
   private final Queue<String> newRecordKeysSorted = new PriorityQueue<>();
 

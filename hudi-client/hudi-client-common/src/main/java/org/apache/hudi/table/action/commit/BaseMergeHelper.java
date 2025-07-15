@@ -20,7 +20,7 @@ package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.queue.HoodieConsumer;
-import org.apache.hudi.io.HoodieDefaultMergeHandle;
+import org.apache.hudi.io.HoodieWriteMergeHandle;
 import org.apache.hudi.table.HoodieTable;
 
 import java.io.IOException;
@@ -36,16 +36,16 @@ public abstract class BaseMergeHelper {
    * @param mergeHandle Merge Handle
    * @throws IOException in case of error
    */
-  public abstract void runMerge(HoodieTable<?, ?, ?, ?> table, HoodieDefaultMergeHandle<?, ?, ?, ?> mergeHandle) throws IOException;
+  public abstract void runMerge(HoodieTable<?, ?, ?, ?> table, HoodieWriteMergeHandle<?, ?, ?, ?> mergeHandle) throws IOException;
 
   /**
    * Consumer that dequeues records from queue and sends to Merge Handle.
    */
   protected static class UpdateHandler implements HoodieConsumer<HoodieRecord, Void> {
 
-    private final HoodieDefaultMergeHandle mergeHandle;
+    private final HoodieWriteMergeHandle mergeHandle;
 
-    protected UpdateHandler(HoodieDefaultMergeHandle mergeHandle) {
+    protected UpdateHandler(HoodieWriteMergeHandle mergeHandle) {
       this.mergeHandle = mergeHandle;
     }
 

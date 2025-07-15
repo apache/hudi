@@ -94,9 +94,9 @@ import java.util.Set;
  */
 @SuppressWarnings("Duplicates")
 @NotThreadSafe
-public class HoodieDefaultMergeHandle<T, I, K, O> extends HoodieMergeHandle<T, I, K, O> {
+public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandle<T, I, K, O> {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieDefaultMergeHandle.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieWriteMergeHandle.class);
 
   protected Map<String, HoodieRecord<T>> keyToNewRecords;
   protected Set<String> writtenRecordKeys;
@@ -107,16 +107,16 @@ public class HoodieDefaultMergeHandle<T, I, K, O> extends HoodieMergeHandle<T, I
   protected long updatedRecordsWritten = 0;
   protected long insertRecordsWritten = 0;
 
-  public HoodieDefaultMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                                  Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
-                                  TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
+  public HoodieWriteMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
+                                Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
+                                TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
     this(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier,
         getLatestBaseFile(hoodieTable, partitionPath, fileId), keyGeneratorOpt);
   }
 
-  public HoodieDefaultMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                                  Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
-                                  TaskContextSupplier taskContextSupplier, HoodieBaseFile baseFile, Option<BaseKeyGenerator> keyGeneratorOpt) {
+  public HoodieWriteMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
+                                Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
+                                TaskContextSupplier taskContextSupplier, HoodieBaseFile baseFile, Option<BaseKeyGenerator> keyGeneratorOpt) {
     super(config, instantTime, hoodieTable, partitionPath, fileId, taskContextSupplier, baseFile, keyGeneratorOpt, false);
     populateIncomingRecordsMap(recordItr);
     initMarkerFileAndFileWriter(fileId, partitionPath);
@@ -125,10 +125,10 @@ public class HoodieDefaultMergeHandle<T, I, K, O> extends HoodieMergeHandle<T, I
   /**
    * Called by compactor code path.
    */
-  public HoodieDefaultMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                                  Map<String, HoodieRecord<T>> keyToNewRecords, String partitionPath, String fileId,
-                                  HoodieBaseFile dataFileToBeMerged, TaskContextSupplier taskContextSupplier,
-                                  Option<BaseKeyGenerator> keyGeneratorOpt) {
+  public HoodieWriteMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
+                                Map<String, HoodieRecord<T>> keyToNewRecords, String partitionPath, String fileId,
+                                HoodieBaseFile dataFileToBeMerged, TaskContextSupplier taskContextSupplier,
+                                Option<BaseKeyGenerator> keyGeneratorOpt) {
     super(config, instantTime, hoodieTable, partitionPath, fileId, taskContextSupplier, dataFileToBeMerged, keyGeneratorOpt,
         // preserveMetadata is disabled by default for MDT but enabled otherwise
         !HoodieTableMetadata.isMetadataTable(config.getBasePath()));
@@ -146,8 +146,8 @@ public class HoodieDefaultMergeHandle<T, I, K, O> extends HoodieMergeHandle<T, I
    * @param hoodieTable         {@link HoodieTable} instance
    * @param taskContextSupplier Task context supplier
    */
-  public HoodieDefaultMergeHandle(HoodieWriteConfig config, String instantTime, String partitionPath,
-                           String fileId, HoodieTable<T, I, K, O> hoodieTable, TaskContextSupplier taskContextSupplier) {
+  public HoodieWriteMergeHandle(HoodieWriteConfig config, String instantTime, String partitionPath,
+                                String fileId, HoodieTable<T, I, K, O> hoodieTable, TaskContextSupplier taskContextSupplier) {
     super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier, true);
   }
 

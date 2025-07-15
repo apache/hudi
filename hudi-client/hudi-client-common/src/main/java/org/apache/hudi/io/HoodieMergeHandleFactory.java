@@ -123,7 +123,7 @@ public class HoodieMergeHandleFactory {
 
     boolean isFallbackEnabled = config.isMergeHandleFallbackEnabled();
 
-    String mergeHandleClass = config.getStringOrDefault(FILE_GROUP_READER_MERGE_HANDLE_CLASS_NAME);
+    String mergeHandleClass = config.getFileGroupReaderMergeHandleClassName();
     String logContext = String.format("for fileId %s and partitionPath %s at commit %s", operation.getFileId(), operation.getPartitionPath(), instantTime);
     LOG.info("Create HoodieMergeHandle implementation {} {}", mergeHandleClass, logContext);
 
@@ -167,7 +167,7 @@ public class HoodieMergeHandleFactory {
   static Pair<String, String> getMergeHandleClassesWrite(WriteOperationType operationType, HoodieWriteConfig writeConfig, HoodieTable table) {
     String mergeHandleClass;
     String fallbackMergeHandleClass = null;
-    // Overwrite to a different implementation for {@link HoodieDefaultMergeHandle} if sorting or CDC is enabled.
+    // Overwrite to a different implementation for {@link HoodieWriteMergeHandle} if sorting or CDC is enabled.
     if (table.requireSortedRecords()) {
       if (table.getMetaClient().getTableConfig().isCDCEnabled()) {
         mergeHandleClass = HoodieSortedMergeHandleWithChangeLog.class.getName();
@@ -195,9 +195,7 @@ public class HoodieMergeHandleFactory {
   static Pair<String, String> getMergeHandleClassesCompaction(HoodieWriteConfig writeConfig, HoodieTable table) {
     String mergeHandleClass;
     String fallbackMergeHandleClass = null;
-
-    String defaultMergeHandleClass = HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.defaultValue();
-    // Overwrite to sorted implementation for {@link HoodieDefaultMergeHandle} if sorting is required.
+    // Overwrite to sorted implementation for {@link HoodieWriteMergeHandle} if sorting is required.
     if (table.requireSortedRecords()) {
       mergeHandleClass = HoodieSortedMergeHandle.class.getName();
     } else if (table.getMetaClient().getTableConfig().isCDCEnabled() && writeConfig.isYieldingPureLogForMor()) {

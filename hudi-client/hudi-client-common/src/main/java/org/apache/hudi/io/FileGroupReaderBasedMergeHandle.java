@@ -66,7 +66,7 @@ import static org.apache.hudi.common.model.HoodieFileFormat.HFILE;
  * the records, and writes the records to a new base file.
  */
 @NotThreadSafe
-public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieDefaultMergeHandle<T, I, K, O> {
+public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMergeHandle<T, I, K, O> {
   private static final Logger LOG = LoggerFactory.getLogger(FileGroupReaderBasedMergeHandle.class);
 
   private final HoodieReaderContext<T> readerContext;

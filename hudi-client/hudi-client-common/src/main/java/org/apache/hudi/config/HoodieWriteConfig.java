@@ -73,7 +73,7 @@ import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.io.FileGroupReaderBasedMergeHandle;
 import org.apache.hudi.io.HoodieConcatHandle;
-import org.apache.hudi.io.HoodieDefaultMergeHandle;
+import org.apache.hudi.io.HoodieWriteMergeHandle;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
@@ -846,10 +846,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> MERGE_HANDLE_CLASS_NAME = ConfigProperty
       .key("hoodie.write.merge.handle.class")
-      .defaultValue(HoodieDefaultMergeHandle.class.getName())
+      .defaultValue(HoodieWriteMergeHandle.class.getName())
       .markAdvanced()
       .sinceVersion("1.1.0")
-      .withDocumentation("The merge handle class that extends class {@link HoodieMergeHandle} to merge the records "
+      .withDocumentation("The merge handle class that implements interface{@link HoodieMergeHandle} to merge the records "
           + "from a base file with an iterator of incoming records or a map of updates and deletes from log files at a file group level.");
 
   public static final ConfigProperty<String> CONCAT_HANDLE_CLASS_NAME = ConfigProperty
