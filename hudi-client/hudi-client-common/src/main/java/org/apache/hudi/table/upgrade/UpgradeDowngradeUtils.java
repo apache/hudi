@@ -125,7 +125,9 @@ public class UpgradeDowngradeUtils {
     });
   }
 
-  static void updateMetadataTableVersion(HoodieEngineContext context, HoodieTableVersion toVersion, HoodieTableMetaClient dataMetaClient) throws HoodieIOException {
+  static void updateMetadataTableVersion(HoodieEngineContext context,
+                                         HoodieTableVersion toVersion,
+                                         HoodieTableMetaClient dataMetaClient) throws HoodieIOException {
     try {
       StoragePath metadataBasePath = new StoragePath(dataMetaClient.getBasePath(), HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH);
       if (dataMetaClient.getStorage().exists(metadataBasePath)) {
