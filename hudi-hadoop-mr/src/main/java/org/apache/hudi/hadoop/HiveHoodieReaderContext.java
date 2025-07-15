@@ -130,13 +130,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   @Override
   public Schema getDataFileSchema(StoragePath filePath, HoodieStorage storage) throws IOException {
     return HoodieIOFactory.getIOFactory(storage)
-            .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
-            .getFileReader(tableConfig, filePath, HoodieFileFormat.PARQUET, Option.empty()).getSchema();
-  }
-
-  @Override
-  public boolean fullProjectionSupport() {
-    return true;
+        .getFileFormatUtils(filePath).readAvroSchema(storage, filePath);
   }
 
   @Override

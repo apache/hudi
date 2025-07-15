@@ -272,7 +272,7 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
     }
   }
 
-  override def getDataFileSchema(filePath: StoragePath, storageConfiguration: HoodieStorage): Schema = {
+  override def getDataFileSchema(filePath: StoragePath, storage: HoodieStorage): Schema = {
     val configuration = storageConfiguration.asInstanceOf[StorageConfiguration[Configuration]].unwrap()
     val path = HadoopFSUtils.convertToHadoopPath(filePath)
     val readOptions = HadoopReadOptions.builder(configuration, path)
@@ -287,11 +287,6 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
       } finally if (fileReader != null) fileReader.close()
     }
   }
-
-  /**
-   * returns true if projection includes support for nested and type promotions
-   */
-  override def fullProjectionSupport(): Boolean = true
 }
 
 object SparkFileFormatInternalRowReaderContext {

@@ -215,11 +215,6 @@ public abstract class HoodieReaderContext<T> {
 
   public abstract Schema getDataFileSchema(StoragePath filePath, HoodieStorage storage) throws IOException;
 
-  /**
-   * returns true if projection includes support for nested and type promotions
-   */
-  public abstract boolean fullProjectionSupport();
-
   public final ClosableIterator<T> getFileRecordIterator(StoragePath filePath, long start, long length, Schema requiredSchema, HoodieStorage storage) throws IOException {
     return getFileRecordIterator(filePath, start, length, getDataFileSchema(filePath, storage), requiredSchema, storage);
   }
@@ -271,7 +266,7 @@ public abstract class HoodieReaderContext<T> {
    */
   private ClosableIterator<T> getFileRecordIterator(Either<StoragePath, StoragePathInfo> filePathEither, long start, long length,
                                                     Schema dataSchema, Schema requiredSchema, HoodieStorage storage) throws IOException {
-    if (HoodieTableMetadata.isMetadataTable(tablePath) || !fullProjectionSupport()) {
+    if (HoodieTableMetadata.isMetadataTable(tablePath)) {
       return getFileRecordIteratorInternal(filePathEither, start, length, dataSchema, requiredSchema, storage);
     }
     Schema actualRequriredSchema = AvroSchemaUtils.pruneDataSchemaResolveNullable(dataSchema, requiredSchema, getSchemaHandler().getPruneExcludeFields());

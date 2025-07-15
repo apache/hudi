@@ -155,13 +155,7 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
   @Override
   public Schema getDataFileSchema(StoragePath filePath, HoodieStorage storage) throws IOException {
     return HoodieIOFactory.getIOFactory(storage)
-            .getReaderFactory(HoodieRecord.HoodieRecordType.FLINK)
-            .getFileReader(tableConfig, filePath, HoodieFileFormat.PARQUET, Option.empty()).getSchema();
-  }
-
-  @Override
-  public boolean fullProjectionSupport() {
-    return true;
+        .getFileFormatUtils(filePath).readAvroSchema(storage, filePath);
   }
 
   @Override

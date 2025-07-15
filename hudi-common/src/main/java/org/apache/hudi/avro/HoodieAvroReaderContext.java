@@ -204,11 +204,6 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
   }
 
   @Override
-  public boolean fullProjectionSupport() {
-    return true;
-  }
-
-  @Override
   public ClosableIterator<IndexedRecord> mergeBootstrapReaders(ClosableIterator<IndexedRecord> skeletonFileIterator,
                                                                Schema skeletonRequiredSchema,
                                                                ClosableIterator<IndexedRecord> dataFileIterator,
