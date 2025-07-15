@@ -52,6 +52,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
@@ -144,12 +145,16 @@ class TestKeyBasedFileGroupRecordBuffer {
 
     fileGroupRecordBuffer.setBaseFileIterator(ClosableIterator.wrap(Arrays.asList(testRecord1, testRecord2, testRecord3).iterator()));
 
-    HoodieDataBlock dataBlock = mock(HoodieDataBlock.class);
-    when(dataBlock.getSchema()).thenReturn(SCHEMA);
-    when(dataBlock.getEngineRecordIterator(readerContext)).thenReturn(ClosableIterator.wrap(Arrays.asList(testRecord1UpdateWithSameTime, testRecord2Update, testRecord2EarlierUpdate,
-        testRecord3Update, testRecord3DeleteByFieldValue).iterator()));
+    HoodieDataBlock dataBlock1 = mock(HoodieDataBlock.class);
+    when(dataBlock1.getSchema()).thenReturn(SCHEMA);
+    when(dataBlock1.getEngineRecordIterator(readerContext)).thenReturn(ClosableIterator.wrap(Arrays.asList(testRecord1UpdateWithSameTime, testRecord2Update, testRecord2EarlierUpdate).iterator()));
 
-    fileGroupRecordBuffer.processDataBlock(dataBlock, Option.empty());
+    HoodieDataBlock dataBlock2 = mock(HoodieDataBlock.class);
+    when(dataBlock2.getSchema()).thenReturn(SCHEMA);
+    when(dataBlock2.getEngineRecordIterator(readerContext)).thenReturn(ClosableIterator.wrap(Arrays.asList(testRecord2EarlierUpdate, testRecord3Update, testRecord3DeleteByFieldValue).iterator()));
+
+    fileGroupRecordBuffer.processDataBlock(dataBlock1, Option.empty());
+    fileGroupRecordBuffer.processDataBlock(dataBlock2, Option.empty());
 
     List<IndexedRecord> actualRecords = getActualRecords(fileGroupRecordBuffer);
     assertEquals(Arrays.asList(testRecord1UpdateWithSameTime, testRecord2EarlierUpdate), actualRecords);
@@ -168,14 +173,20 @@ class TestKeyBasedFileGroupRecordBuffer {
 
     fileGroupRecordBuffer.setBaseFileIterator(ClosableIterator.wrap(Arrays.asList(testRecord1, testRecord2, testRecord3, testRecord4).iterator()));
 
-    HoodieDataBlock dataBlock = mock(HoodieDataBlock.class);
-    when(dataBlock.getSchema()).thenReturn(SCHEMA);
-    when(dataBlock.getEngineRecordIterator(readerContext))
-        .thenReturn(ClosableIterator.wrap(Arrays.asList(testRecord2Update, testRecord1UpdateWithSameTime, testRecord1UpdateWithSameTime, testRecord2Delete, testRecord4Update).iterator()));
+    HoodieDataBlock dataBlock1 = mock(HoodieDataBlock.class);
+    when(dataBlock1.getSchema()).thenReturn(SCHEMA);
+    when(dataBlock1.getEngineRecordIterator(readerContext))
+        .thenReturn(ClosableIterator.wrap(Arrays.asList(testRecord2Update, testRecord1UpdateWithSameTime).iterator()));
+
+    HoodieDataBlock dataBlock2 = mock(HoodieDataBlock.class);
+    when(dataBlock2.getSchema()).thenReturn(SCHEMA);
+    when(dataBlock2.getEngineRecordIterator(readerContext))
+        .thenReturn(ClosableIterator.wrap(Arrays.asList(testRecord1UpdateWithSameTime, testRecord2Delete, testRecord4Update).iterator()));
 
     HoodieDeleteBlock deleteBlock = mock(HoodieDeleteBlock.class);
     when(deleteBlock.getRecordsToDelete()).thenReturn(new DeleteRecord[]{DeleteRecord.create("3", "")});
-    fileGroupRecordBuffer.processDataBlock(dataBlock, Option.empty());
+    fileGroupRecordBuffer.processDataBlock(dataBlock1, Option.empty());
+    fileGroupRecordBuffer.processDataBlock(dataBlock2, Option.empty());
     fileGroupRecordBuffer.processDeleteBlock(deleteBlock);
 
     List<IndexedRecord> actualRecords = getActualRecords(fileGroupRecordBuffer);
@@ -289,6 +300,7 @@ class TestKeyBasedFileGroupRecordBuffer {
   }
 
   public static class CustomMerger implements HoodieRecordMerger {
+    private final String strategy = UUID.randomUUID().toString();
 
     @Override
     public Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
@@ -313,7 +325,7 @@ class TestKeyBasedFileGroupRecordBuffer {
 
     @Override
     public String getMergingStrategy() {
-      return "";
+      return strategy;
     }
   }
 }
