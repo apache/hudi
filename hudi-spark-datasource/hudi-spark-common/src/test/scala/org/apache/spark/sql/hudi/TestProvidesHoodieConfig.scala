@@ -119,7 +119,6 @@ class TestProvidesHoodieConfig {
     when(mockRuntimeConf.getOption(any())).thenReturn(Option.empty)
     when(mockSparkSession.conf).thenReturn(mockRuntimeConf)
     when(mockSessionState.conf).thenReturn(mockSQLConf)
-    when(mockSQLContext.conf).thenReturn(mockSQLConf)
     when(mockSQLConf.getConf(StaticSQLConf.CATALOG_IMPLEMENTATION)).thenReturn("nothive")
     when(mockSQLConf.getAllConfs).thenReturn(Map.empty[String, String])
 
