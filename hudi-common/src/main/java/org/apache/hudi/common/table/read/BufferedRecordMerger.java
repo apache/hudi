@@ -20,7 +20,6 @@ package org.apache.hudi.common.table.read;
 
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 
 import java.io.IOException;
 
@@ -63,5 +62,5 @@ public interface BufferedRecordMerger<T> {
    *
    * @return The merged record.
    */
-  Pair<Boolean, T> finalMerge(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) throws IOException;
+  FinalMergeResult finalMerge(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) throws IOException;
 }

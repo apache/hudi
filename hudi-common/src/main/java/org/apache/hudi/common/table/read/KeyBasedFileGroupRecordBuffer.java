@@ -121,7 +121,12 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
     return records.containsKey(recordKey);
   }
 
-  protected boolean hasNextBaseRecord(T baseRecord) throws IOException {
+  /**
+   * The return value of this function contains two boolean values:
+   * the first boolean indicates if there is a next record, and
+   * the second boolean indicates if the returned record is a delete record.
+   */
+  public Pair<Boolean, FinalMergeResult<T>> hasNextBaseRecord(T baseRecord) throws IOException {
     String recordKey = readerContext.getRecordKey(baseRecord, readerSchema);
     BufferedRecord<T> logRecordInfo = records.remove(recordKey);
     return hasNextBaseRecord(baseRecord, logRecordInfo);
@@ -133,7 +138,7 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
 
     // Handle merging.
     while (baseFileIterator.hasNext()) {
-      if (hasNextBaseRecord(baseFileIterator.next())) {
+      if (hasNextBaseRecord(baseFileIterator.next()).getLeft()) {
         return true;
       }
     }

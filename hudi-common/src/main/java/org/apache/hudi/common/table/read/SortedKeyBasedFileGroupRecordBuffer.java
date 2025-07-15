@@ -25,6 +25,7 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.Pair;
 
 import java.io.IOException;
 import java.util.Comparator;
@@ -58,7 +59,7 @@ public class SortedKeyBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupRec
   }
 
   @Override
-  protected boolean hasNextBaseRecord(T baseRecord) throws IOException {
+  public Pair<Boolean, FinalMergeResult<T>> hasNextBaseRecord(T baseRecord) throws IOException {
     String recordKey = readerContext.getRecordKey(baseRecord, readerSchema);
     int comparison = 0;
     while (!getLogRecordKeysSorted().isEmpty() && (comparison = getLogRecordKeysSorted().peek().compareTo(recordKey)) <= 0) {
@@ -74,7 +75,10 @@ public class SortedKeyBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupRec
         nextRecord = nextLogRecord.getRecord();
         queuedBaseFileRecord = Option.of(baseRecord);
         readStats.incrementNumInserts();
-        return true;
+        return Pair.of(true, new FinalMergeResult<>(
+            nextLogRecord.isDelete(),
+            nextLogRecord.getRecord(),
+            readerContext.getSchemaFromBufferRecord(nextLogRecord)));
       }
       // Iterate until the next log record key is greater than or equal to the base record key
     }
@@ -90,7 +94,7 @@ public class SortedKeyBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupRec
     if (queuedBaseFileRecord.isPresent()) {
       T nextRecord = queuedBaseFileRecord.get();
       queuedBaseFileRecord = Option.empty();
-      if (hasNextBaseRecord(nextRecord)) {
+      if (hasNextBaseRecord(nextRecord).getLeft()) {
         return true;
       }
     }

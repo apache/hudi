@@ -306,35 +306,36 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
    * @return a value pair, left is boolean value `isDelete`, and right is engine row.
    * @throws IOException
    */
-  protected Pair<Boolean, T> merge(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) throws IOException {
+  protected FinalMergeResult<T> merge(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) throws IOException {
     return bufferedRecordMerger.finalMerge(olderRecord, newerRecord);
   }
 
-  protected boolean hasNextBaseRecord(T baseRecord, BufferedRecord<T> logRecordInfo) throws IOException {
+  protected Pair<Boolean, FinalMergeResult<T>> hasNextBaseRecord(T baseRecord, BufferedRecord<T> logRecordInfo) throws IOException {
     if (logRecordInfo != null) {
-      BufferedRecord<T> baseRecordInfo = BufferedRecord.forRecordWithContext(baseRecord, readerSchema, readerContext, orderingFieldName, false);
-      Pair<Boolean, T> isDeleteAndRecord = merge(baseRecordInfo, logRecordInfo);
-      if (!isDeleteAndRecord.getLeft()) {
+      BufferedRecord<T> baseRecordInfo = BufferedRecord.forRecordWithContext(
+          baseRecord, readerSchema, readerContext, orderingFieldName, false);
+      FinalMergeResult<T> mergeResult = merge(baseRecordInfo, logRecordInfo);
+      if (!mergeResult.isDelete()) {
         // Updates
-        nextRecord = readerContext.seal(isDeleteAndRecord.getRight());
+        nextRecord = readerContext.seal(mergeResult.getMergedRecord());
         readStats.incrementNumUpdates();
-        return true;
+        return Pair.of(true, mergeResult);
       } else if (emitDelete) {
         // emit Deletes
-        nextRecord = readerContext.getDeleteRow(isDeleteAndRecord.getRight(), baseRecordInfo.getRecordKey());
+        nextRecord = readerContext.getDeleteRow(mergeResult.getMergedRecord(), baseRecordInfo.getRecordKey());
         readStats.incrementNumDeletes();
-        return nextRecord != null;
+        return Pair.of(nextRecord != null, mergeResult);
       } else {
         // not emit Deletes
         readStats.incrementNumDeletes();
-        return false;
+        return Pair.of(false, mergeResult);
       }
     }
 
     // Inserts
     nextRecord = readerContext.seal(baseRecord);
     readStats.incrementNumInserts();
-    return true;
+    return Pair.of(true, null);
   }
 
   protected void initializeLogRecordIterator() {

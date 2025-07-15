@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io;
 
+import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -50,23 +51,24 @@ public class HoodieMergeHandleFactory {
       String partitionPath,
       String fileId,
       TaskContextSupplier taskContextSupplier,
-      Option<BaseKeyGenerator> keyGeneratorOpt) {
+      Option<BaseKeyGenerator> keyGeneratorOpt,
+      HoodieReaderContext<T> readerContext) {
     LOG.info("Create update handle for fileId {} and partition path {} at commit {}", fileId, partitionPath, instantTime);
     if (table.requireSortedRecords()) {
       if (table.getMetaClient().getTableConfig().isCDCEnabled()) {
         return new HoodieSortedMergeHandleWithChangeLog<>(writeConfig, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier,
-            keyGeneratorOpt);
+            keyGeneratorOpt, readerContext);
       } else {
         return new HoodieSortedMergeHandle<>(writeConfig, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier,
-            keyGeneratorOpt);
+            keyGeneratorOpt, readerContext);
       }
     } else if (!WriteOperationType.isChangingRecords(operationType) && writeConfig.allowDuplicateInserts()) {
-      return new HoodieConcatHandle<>(writeConfig, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
+      return new HoodieConcatHandle<>(writeConfig, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt, readerContext);
     } else {
       if (table.getMetaClient().getTableConfig().isCDCEnabled()) {
-        return new HoodieMergeHandleWithChangeLog<>(writeConfig, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
+        return new HoodieMergeHandleWithChangeLog<>(writeConfig, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt, readerContext);
       } else {
-        return new HoodieMergeHandle<>(writeConfig, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
+        return new HoodieMergeHandle<>(writeConfig, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt, readerContext);
       }
     }
   }

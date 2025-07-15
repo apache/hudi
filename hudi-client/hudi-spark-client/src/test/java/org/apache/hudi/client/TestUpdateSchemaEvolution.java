@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
@@ -130,10 +131,12 @@ public class TestUpdateSchemaEvolution extends HoodieSparkClientTestHarness impl
 
   private void assertSchemaEvolutionOnUpdateResult(WriteStatus insertResult, HoodieSparkTable updateTable,
                                                    List<HoodieRecord> updateRecords, String assertMsg, boolean isAssertThrow, Class expectedExceptionType) {
+
     jsc.parallelize(Arrays.asList(1)).map(x -> {
       Executable executable = () -> {
+        HoodieReaderContext readerContext = context.getReaderContextFactory(metaClient).getContext();
         HoodieMergeHandle mergeHandle = new HoodieMergeHandle(updateTable.getConfig(), "101", updateTable,
-            updateRecords.iterator(), updateRecords.get(0).getPartitionPath(), insertResult.getFileId(), supplier, Option.empty());
+            updateRecords.iterator(), updateRecords.get(0).getPartitionPath(), insertResult.getFileId(), supplier, Option.empty(), readerContext);
         List<GenericRecord> oldRecords = HoodieIOFactory.getIOFactory(updateTable.getStorage())
             .getFileFormatUtils(updateTable.getBaseFileFormat())
             .readAvroRecords(updateTable.getStorage(),
