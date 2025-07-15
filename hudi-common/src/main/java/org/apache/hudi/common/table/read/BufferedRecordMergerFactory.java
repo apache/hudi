@@ -41,6 +41,8 @@ import org.apache.avro.generic.IndexedRecord;
 import java.io.IOException;
 import java.util.Objects;
 
+import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
+
 /**
  * Factory to create a {@link BufferedRecordMerger}.
  */
@@ -115,9 +117,8 @@ public class BufferedRecordMergerFactory {
     public Pair<Boolean, T> finalMerge(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) {
       if (shouldKeepNewerRecord(olderRecord, newerRecord)) {
         return Pair.of(newerRecord.isDelete(), newerRecord.getRecord());
-      } else {
-        return Pair.of(olderRecord.isDelete(), olderRecord.getRecord());
       }
+      return Pair.of(olderRecord.isDelete(), olderRecord.getRecord());
     }
   }
 
@@ -224,7 +225,7 @@ public class BufferedRecordMergerFactory {
 
       if (!combinedRecordAndSchemaOpt.isPresent()) {
         // An empty Option indicates that the output represents a delete.
-        return Option.of(new BufferedRecord<>(newRecord.getRecordKey(), newRecord.getOrderingValue(), null, null, true));
+        return Option.of(new BufferedRecord<>(newRecord.getRecordKey(), DEFAULT_ORDERING_VALUE, null, null, true));
       }
 
       Pair<HoodieRecord, Schema> combinedRecordAndSchema = combinedRecordAndSchemaOpt.get();
@@ -283,12 +284,11 @@ public class BufferedRecordMergerFactory {
         if (combinedRecordData != existingRecord.getRecord()) {
           Pair<HoodieRecord, Schema> combinedRecordAndSchema = combinedRecordAndSchemaOpt.get();
           return Option.of(BufferedRecord.forRecordWithContext(combinedRecordData, combinedRecordAndSchema.getRight(), readerContext, orderingFieldName, false));
-        } else {
-          return Option.empty();
         }
+        return Option.empty();
       }
       // An empty Option indicates that the output represents a delete.
-      return Option.of(new BufferedRecord<>(newRecord.getRecordKey(), newRecord.getOrderingValue(), null, null, true));
+      return Option.of(new BufferedRecord<>(newRecord.getRecordKey(), DEFAULT_ORDERING_VALUE, null, null, true));
     }
 
     @Override
