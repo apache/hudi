@@ -32,6 +32,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieFileGroupReaderOnJava extends HoodieFileGroupReaderOnJavaTestBase<IndexedRecord> {
   private static final StorageConfiguration<?> STORAGE_CONFIGURATION = new HadoopStorageConfiguration(false);
@@ -54,7 +55,7 @@ public class TestHoodieFileGroupReaderOnJava extends HoodieFileGroupReaderOnJava
 
   @Override
   public void assertRecordMatchesSchema(Schema schema, IndexedRecord record) {
-    ConvertingGenericData.INSTANCE.validate(schema, record);
+    assertTrue(ConvertingGenericData.INSTANCE.validate(schema, record));
   }
 
   @Override
