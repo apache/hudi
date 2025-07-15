@@ -21,6 +21,8 @@ package org.apache.hudi.sink.utils;
 import org.apache.hudi.client.model.HoodieFlinkInternalRow;
 import org.apache.hudi.client.model.HoodieFlinkInternalRowTypeInfo;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
@@ -206,12 +208,32 @@ public class Pipelines {
       throw new HoodieNotSupportedException("Bucket index supports only upsert operation. Please, use upsert operation or switch to another index type.");
     }
 
+    Option<Partitioner> insertPartitioner = getInsertPartitioner(conf);
+    DataStream<RowData> finalDataStream;
+    if (insertPartitioner.isPresent()) {
+      RowDataKeyGen rowDataKeyGen = RowDataKeyGen.instance(conf, rowType);
+      finalDataStream = dataStream.partitionCustom(insertPartitioner.get(), rowDataKeyGen::getHoodieKey);
+    } else {
+      finalDataStream = dataStream;
+    }
+
     WriteOperatorFactory<RowData> operatorFactory = AppendWriteOperator.getFactory(conf, rowType);
 
-    return dataStream
+    return finalDataStream
         .transform(opName("hoodie_append_write", conf), TypeInformation.of(RowData.class), operatorFactory)
         .uid(opUID("hoodie_stream_write", conf))
         .setParallelism(conf.get(FlinkOptions.WRITE_TASKS));
+  }
+
+  public static Option<Partitioner> getInsertPartitioner(Configuration conf) {
+    String insertPartitionerClass = conf.getString(FlinkOptions.INSERT_PARTITIONER_CLASS_NAME);
+    try {
+      return StringUtils.isNullOrEmpty(insertPartitionerClass)
+          ? Option.empty() :
+          Option.of((Partitioner) ReflectionUtils.loadClass(insertPartitionerClass, conf));
+    } catch (Throwable e) {
+      throw new HoodieException("Could not create UserDefinedBulkInsertPartitioner class " + insertPartitionerClass, e);
+    }
   }
 
   /**
