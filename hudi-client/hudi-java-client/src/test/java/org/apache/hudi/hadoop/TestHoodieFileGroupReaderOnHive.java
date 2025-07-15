@@ -114,7 +114,7 @@ public class TestHoodieFileGroupReaderOnHive extends HoodieFileGroupReaderOnJava
   @Override
   public HoodieTestDataGenerator.SchemaEvolutionConfigs getSchemaEvolutionConfigs() {
     HoodieTestDataGenerator.SchemaEvolutionConfigs configs = new HoodieTestDataGenerator.SchemaEvolutionConfigs();
-    configs.bytesToStringSupport = false;
+    //configs.bytesToStringSupport = false;
     return configs;
   }
 

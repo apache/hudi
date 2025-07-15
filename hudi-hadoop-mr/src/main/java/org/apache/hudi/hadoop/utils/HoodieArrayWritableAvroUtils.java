@@ -21,6 +21,7 @@ package org.apache.hudi.hadoop.utils;
 
 import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.exception.SchemaCompatibilityException;
@@ -269,7 +270,7 @@ public class HoodieArrayWritableAvroUtils {
           return writable;
         }
         if (oldSchema.getType() == Schema.Type.BYTES) {
-          return new Text(String.valueOf(writable));
+          return new Text(StringUtils.fromUTF8Bytes(((BytesWritable) writable).getBytes()));
         }
         if (oldSchema.getLogicalType() == LogicalTypes.date()) {
           return new Text(toJavaDate(((IntWritable) writable).get()).toString());
