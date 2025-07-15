@@ -28,14 +28,18 @@ import org.apache.hudi.common.table.log.KeySpec;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.Iterator;
 
+/**
+ * This buffer populates given input records into the record buffer, and
+ * then functions as KeyBasedFileGroupRecordBuffer.
+ */
 public class InputBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupRecordBuffer<T> {
-  private final ClosableIterator<T> inputRecordIterator;
+  private final Iterator<T> inputRecordIterator;
 
   public InputBasedFileGroupRecordBuffer(HoodieReaderContext readerContext,
                                          HoodieTableMetaClient hoodieTableMetaClient,
@@ -44,7 +48,7 @@ public class InputBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupRecordB
                                          HoodieReadStats readStats,
                                          Option<String> orderingFieldName,
                                          boolean emitDelete,
-                                         ClosableIterator<T> inputRecordIterator) {
+                                         Iterator<T> inputRecordIterator) {
     super(readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, orderingFieldName, emitDelete);
     this.inputRecordIterator = inputRecordIterator;
 

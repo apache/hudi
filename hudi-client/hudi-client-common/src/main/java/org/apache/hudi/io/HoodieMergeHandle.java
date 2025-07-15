@@ -19,7 +19,9 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -32,11 +34,20 @@ import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.serialization.DefaultSerializer;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.FinalMergeResult;
+import org.apache.hudi.common.table.read.HoodieReadStats;
+import org.apache.hudi.common.table.read.InputBasedFileGroupRecordBuffer;
+import org.apache.hudi.common.table.read.KeyBasedFileGroupRecordBuffer;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
+import org.apache.hudi.common.util.collection.MappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCorruptedDataException;
@@ -116,19 +127,29 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
 
   protected Option<String[]> partitionFields = Option.empty();
   protected Object[] partitionValues = new Object[0];
+  protected KeyBasedFileGroupRecordBuffer<T> recordBuffer;
+  protected HoodieReaderContext<T> readerContext;
+  protected Option<String> orderingFieldName;
 
   public HoodieMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                            Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
-                           TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
+                           TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt,
+                           HoodieReaderContext<T> readerContext) {
     this(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier,
-        getLatestBaseFile(hoodieTable, partitionPath, fileId), keyGeneratorOpt);
+        getLatestBaseFile(hoodieTable, partitionPath, fileId), keyGeneratorOpt, readerContext, false);
   }
 
   public HoodieMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                            Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
-                           TaskContextSupplier taskContextSupplier, HoodieBaseFile baseFile, Option<BaseKeyGenerator> keyGeneratorOpt) {
+                           TaskContextSupplier taskContextSupplier, HoodieBaseFile baseFile,
+                           Option<BaseKeyGenerator> keyGeneratorOpt,
+                           HoodieReaderContext<T> readerContex, boolean useFileGroupRecordBuffer) {
     super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier, false);
-    init(recordItr);
+    if (useFileGroupRecordBuffer) {
+      init(recordItr, readerContex);
+    } else {
+      init(recordItr);
+    }
     init(fileId, partitionPath, baseFile);
     validateAndSetAndKeyGenProps(keyGeneratorOpt, config.populateMetaFields());
   }
@@ -276,9 +297,36 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     if (keyToNewRecords instanceof ExternalSpillableMap) {
       ExternalSpillableMap<String, HoodieRecord<T>> spillableMap = (ExternalSpillableMap<String, HoodieRecord<T>>) keyToNewRecords;
       LOG.info("Number of entries in MemoryBasedMap => {}, Total size in bytes of MemoryBasedMap => {}, "
-          + "Number of entries in BitCaskDiskMap => {}, Size of file spilled to disk => {}",
+              + "Number of entries in BitCaskDiskMap => {}, Size of file spilled to disk => {}",
           spillableMap.getInMemoryMapNumEntries(), spillableMap.getCurrentInMemoryMapSize(), spillableMap.getDiskBasedMapNumEntries(), spillableMap.getSizeOfFileOnDiskInBytes());
     }
+    recordBuffer = null;
+    readerContext = null;
+    orderingFieldName = Option.empty();
+  }
+
+  /**
+   * Load the new incoming records into HoodieFileGroupReader.
+   */
+  protected void init(Iterator<HoodieRecord<T>> newRecordsItr,
+                      HoodieReaderContext<T> readerContext) {
+    keyToNewRecords = Collections.EMPTY_MAP;
+    HoodieTableMetaClient metaClient = getHoodieTableMetaClient();
+    orderingFieldName =
+        readerContext.getMergeMode() == RecordMergeMode.COMMIT_TIME_ORDERING
+        ? Option.empty()
+        : Option.ofNullable(ConfigUtils.getOrderingField(config.getProps()))
+        .or(() -> {
+          String preCombineField = metaClient.getTableConfig().getPreCombineField();
+          if (StringUtils.isNullOrEmpty(preCombineField)) {
+            return Option.empty();
+          }
+          return Option.of(preCombineField);
+        });
+    recordBuffer = new InputBasedFileGroupRecordBuffer<>(
+        readerContext, metaClient, recordMergeMode, config.getProps(),
+        new HoodieReadStats(), orderingFieldName, true,
+        new MappingIterator<>(newRecordsItr, HoodieRecord::getData));
   }
 
   public boolean isEmptyNewRecords() {
@@ -406,7 +454,9 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     boolean copyOldRecord = true;
     String key = oldRecord.getRecordKey(oldSchema, keyGeneratorOpt);
     TypedProperties props = config.getPayloadConfig().getProps();
-    if (keyToNewRecords.containsKey(key)) {
+    if (recordBuffer != null && recordBuffer.containsLogRecord(key)) {
+      copyOldRecord = writeThroughBuffer(key, oldRecord, props);
+    } else if (keyToNewRecords.containsKey(key)) {
       // If we have duplicate records that we are updating, then the hoodie record will be deflated after
       // writing the first record. So make a copy of the record to be merged
       HoodieRecord<T> newRecord = keyToNewRecords.get(key).newInstance();
@@ -418,7 +468,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
           // If it is an IGNORE_RECORD, just copy the old record, and do not update the new record.
           copyOldRecord = true;
         } else if (writeUpdateRecord(newRecord, oldRecord, combinedRecord, combineRecordSchema)) {
-          /*
+          /*s
            * ONLY WHEN 1) we have an update for this key AND 2) We are able to successfully
            * write the combined new value
            *
@@ -444,6 +494,53 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
         throw new HoodieUpsertException(errMsg, e);
       }
       recordsWritten++;
+    }
+  }
+
+  protected boolean writeThroughBuffer(String key,
+                                       HoodieRecord<T> oldHoodieRecord,
+                                       TypedProperties props) {
+    // Copy since no new records have the same key.
+    if (!recordBuffer.containsLogRecord(key)) {
+      return true;
+    }
+
+    try {
+      boolean copyOldRecord = false;
+      BufferedRecord<T> newBufferedRecord = recordBuffer.getLogRecords().get(key);
+      // MERGE is triggered here!
+      Pair<Boolean, FinalMergeResult<T>> hasNextResult =
+          recordBuffer.hasNextBaseRecord(oldHoodieRecord.getData());
+      // Has merged record.
+      boolean hasNext = hasNextResult.getLeft();
+      if (hasNext) {
+        T mergedEngineRecord = recordBuffer.next();
+        Schema mergedRecordSchema = hasNextResult.getRight().getSchema();
+        BufferedRecord<T> mergedBufferedRecord = BufferedRecord.forRecordWithContext(
+            mergedEngineRecord,
+            mergedRecordSchema,
+            readerContext, orderingFieldName,
+            hasNextResult.getRight().isDelete());
+        HoodieRecord<T> mergedHoodieRecord = readerContext.constructHoodieRecord(mergedBufferedRecord);
+        HoodieRecord<T> newHoodieRecord = readerContext.constructHoodieRecord(newBufferedRecord);
+        if (mergedHoodieRecord.shouldIgnore(mergedRecordSchema, props)) {
+          // If it is an IGNORE_RECORD, just copy the old record, and do not update the new record.
+          copyOldRecord = true;
+        } else if (writeUpdateRecord(newHoodieRecord, oldHoodieRecord, Option.of(mergedHoodieRecord), mergedRecordSchema)) {
+          /*
+           * ONLY WHEN 1) we have an update for this key AND 2) We are able to successfully
+           * write the combined new value
+           *
+           * We no longer need to copy the old record over.
+           */
+          copyOldRecord = false;
+        }
+        writtenRecordKeys.add(key);
+      }
+      return copyOldRecord;
+    } catch (Exception e) {
+      throw new HoodieUpsertException("Failed to combine/merge new record with old value in storage, for new record {"
+          + key + "}, old value {" + oldHoodieRecord + "}", e);
     }
   }
 

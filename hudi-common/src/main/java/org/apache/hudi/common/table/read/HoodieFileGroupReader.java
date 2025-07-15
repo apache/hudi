@@ -53,6 +53,7 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
@@ -94,6 +95,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   // the allowInflightInstants flag would need to be set to true. This would ensure the HoodieMergedLogRecordReader
   // considers the log records which are inflight.
   private final boolean allowInflightInstants;
+  private final Option<Iterator<T>> inputRecordOpt;
 
   /**
    * Constructs an instance of the HoodieFileGroupReader.
@@ -112,7 +114,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   }
 
   private HoodieFileGroupReader(HoodieReaderContext<T> readerContext, HoodieStorage storage, String tablePath,
-                                String latestCommitTime, HoodieBaseFile baseFile, ClosableIterator<T> logRecords,
+                                String latestCommitTime, HoodieBaseFile baseFile, Iterator<T> inputRecords,
                                 Schema dataSchema, Schema requestedSchema, Option<InternalSchema> internalSchemaOpt,
                                 HoodieTableMetaClient hoodieTableMetaClient, TypedProperties props,
                                 long start, long length, boolean shouldUseRecordPosition, boolean allowInflightInstants,
@@ -156,8 +158,9 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     this.readStats = new HoodieReadStats();
     this.recordBuffer = getRecordBuffer(readerContext, hoodieTableMetaClient,
         readerContext.getMergeMode(), props, hoodieBaseFileOption, true,
-        isSkipMerge, shouldUseRecordPosition, readStats, emitDelete, sortOutput, Option.of(logRecords));
+        isSkipMerge, shouldUseRecordPosition, readStats, emitDelete, sortOutput, Option.of(inputRecords));
     this.allowInflightInstants = allowInflightInstants;
+    this.inputRecordOpt = Option.of(inputRecords);
   }
 
   private HoodieFileGroupReader(HoodieReaderContext<T> readerContext, HoodieStorage storage, String tablePath,
@@ -205,6 +208,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
         readerContext.getMergeMode(), props, hoodieBaseFileOption, this.logFiles.isEmpty(),
         isSkipMerge, shouldUseRecordPosition, readStats, emitDelete, sortOutput, Option.empty());
     this.allowInflightInstants = allowInflightInstants;
+    this.inputRecordOpt = Option.empty();
   }
 
   /**
@@ -221,7 +225,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
                                                    HoodieReadStats readStats,
                                                    boolean emitDelete,
                                                    boolean sortOutput,
-                                                   Option<ClosableIterator<T>> inputRecordOpt) {
+                                                   Option<Iterator<T>> inputRecordOpt) {
     if (hasNoLogFiles) {
       if (inputRecordOpt.isPresent()) {
         return new InputBasedFileGroupRecordBuffer<>(
@@ -485,6 +489,8 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     private String tablePath;
     private String latestCommitTime;
     private FileSlice fileSlice;
+    private HoodieBaseFile baseFile = null;
+    private Option<Iterator<T>> inputRecordsOpt = Option.empty();
     private Schema dataSchema;
     private Schema requestedSchema;
     private Option<InternalSchema> internalSchemaOpt = Option.empty();
@@ -509,6 +515,16 @@ public final class HoodieFileGroupReader<T> implements Closeable {
 
     public Builder<T> withFileSlice(FileSlice fileSlice) {
       this.fileSlice = fileSlice;
+      return this;
+    }
+
+    public Builder<T> withBaseFile(HoodieBaseFile baseFile) {
+      this.baseFile = baseFile;
+      return this;
+    }
+
+    public Builder<T> withInputRecords(Iterator<T> inputRecords) {
+      this.inputRecordsOpt = Option.ofNullable(inputRecords);
       return this;
     }
 
@@ -588,7 +604,12 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       ValidationUtils.checkArgument(requestedSchema != null, "Requested schema is required");
       ValidationUtils.checkArgument(props != null, "Props is required");
 
-
+      if (inputRecordsOpt.isPresent()) {
+        return new HoodieFileGroupReader<>(
+            readerContext, storage, tablePath, latestCommitTime, baseFile, inputRecordsOpt.get(),
+            dataSchema, requestedSchema, internalSchemaOpt, hoodieTableMetaClient,
+            props, start, length, shouldUseRecordPosition, allowInflightInstants, emitDelete, sortOutput);
+      }
       return new HoodieFileGroupReader<>(
           readerContext, storage, tablePath, latestCommitTime, fileSlice,
           dataSchema, requestedSchema, internalSchemaOpt, hoodieTableMetaClient,

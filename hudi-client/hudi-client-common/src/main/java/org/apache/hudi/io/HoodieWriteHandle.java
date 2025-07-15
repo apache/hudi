@@ -21,6 +21,7 @@ package org.apache.hudi.io;
 import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
@@ -74,6 +75,7 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
   protected final Schema writeSchema;
   protected final Schema writeSchemaWithMetaFields;
   protected final HoodieRecordMerger recordMerger;
+  protected final RecordMergeMode recordMergeMode;
 
   protected HoodieTimer timer;
   protected WriteStatus writeStatus;
@@ -114,6 +116,7 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     this.schemaOnReadEnabled = !isNullOrEmpty(hoodieTable.getConfig().getInternalSchema());
     this.preserveMetadata = preserveMetadata;
     this.recordMerger = config.getRecordMerger();
+    this.recordMergeMode = config.getRecordMergeMode();
     this.writeStatus = (WriteStatus) ReflectionUtils.loadClass(config.getWriteStatusClassName(),
         hoodieTable.shouldTrackSuccessRecords(), config.getWriteStatusFailureFraction(), hoodieTable.isMetadataTable());
     boolean isMetadataStreamingWritesEnabled = config.isMetadataStreamingWritesEnabled(hoodieTable.getMetaClient().getTableConfig().getTableVersion());

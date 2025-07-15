@@ -225,7 +225,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
   }
 
   @Override
-  protected boolean hasNextBaseRecord(T baseRecord) throws IOException {
+  public Pair<Boolean, FinalMergeResult<T>> hasNextBaseRecord(T baseRecord) throws IOException {
     if (!readerContext.getShouldMergeUseRecordPosition()) {
       return doHasNextFallbackBaseRecord(baseRecord);
     }
@@ -234,13 +234,14 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
         ROW_INDEX_TEMPORARY_COLUMN_NAME, nextRecordPosition);
     BufferedRecord<T> logRecordInfo = records.remove(nextRecordPosition++);
 
-    final Pair<Boolean, T> isDeleteAndRecord;
+    final FinalMergeResult<T> isDeleteAndRecord;
     T resultRecord = null;
     if (logRecordInfo != null) {
-      BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(baseRecord, readerSchema, readerContext, orderingFieldName, false);
+      BufferedRecord<T> bufferedRecord =
+          BufferedRecord.forRecordWithContext(baseRecord, readerSchema, readerContext, orderingFieldName, false);
       isDeleteAndRecord = merge(bufferedRecord, logRecordInfo);
-      if (!isDeleteAndRecord.getLeft()) {
-        resultRecord = isDeleteAndRecord.getRight();
+      if (!isDeleteAndRecord.isDelete()) {
+        resultRecord = isDeleteAndRecord.getMergedRecord();
         readStats.incrementNumUpdates();
       } else {
         readStats.incrementNumDeletes();
@@ -252,12 +253,12 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
 
     if (resultRecord != null) {
       nextRecord = readerContext.seal(resultRecord);
-      return true;
+      return Pair.of(true, new FinalMergeResult<>(false, baseRecord, readerSchema));
     }
-    return false;
+    return Pair.of(false, null);
   }
 
-  private boolean doHasNextFallbackBaseRecord(T baseRecord) throws IOException {
+  private Pair<Boolean, FinalMergeResult<T>> doHasNextFallbackBaseRecord(T baseRecord) throws IOException {
     if (needToDoHybridStrategy) {
       //see if there is a delete block with record positions
       nextRecordPosition = readerContext.extractRecordPosition(baseRecord, readerSchema,
@@ -267,7 +268,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
         //we have a delete that was not to be able to be converted. Since it is the newest version, the record is deleted
         //remove a key based record if it exists
         records.remove(readerContext.getRecordKey(baseRecord, readerSchema));
-        return false;
+        return Pair.of(false, null);
       }
     }
     return super.hasNextBaseRecord(baseRecord);

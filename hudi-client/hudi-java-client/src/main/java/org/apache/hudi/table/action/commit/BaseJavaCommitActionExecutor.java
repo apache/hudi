@@ -20,7 +20,10 @@ package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieListData;
+import org.apache.hudi.common.engine.AvroReaderContextFactory;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -47,6 +50,7 @@ import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.WorkloadStat;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
+import org.apache.avro.generic.IndexedRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -261,8 +265,16 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
             + "columns are disabled. Please choose the right key generator if you wish to disable meta fields.", e);
       }
     }
+
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+        .setBasePath(config.getBasePath())
+        .setConf(storageConf)
+        .build();
+    ReaderContextFactory<IndexedRecord> readerContextFactory = new AvroReaderContextFactory(metaClient);
+    @SuppressWarnings("unchecked")
+    HoodieReaderContext<T> readerContext = (HoodieReaderContext<T>) readerContextFactory.getContext();
     return HoodieMergeHandleFactory.create(operationType, config, instantTime, table, recordItr, partitionPath, fileId,
-        taskContextSupplier, keyGeneratorOpt);
+        taskContextSupplier, keyGeneratorOpt, readerContext);
   }
 
   @Override

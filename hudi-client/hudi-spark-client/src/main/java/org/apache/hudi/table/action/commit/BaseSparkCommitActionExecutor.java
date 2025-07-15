@@ -26,6 +26,8 @@ import org.apache.hudi.client.utils.SparkValidatorUtils;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -390,8 +392,13 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
   }
 
   protected HoodieMergeHandle getUpdateHandle(String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr) {
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+        .setBasePath(config.getBasePath()).setConf(storageConf).build();
+    @SuppressWarnings("unchecked")
+    ReaderContextFactory<T> readerContextFactory = context.getReaderContextFactory(metaClient);
+    HoodieReaderContext<T> readerContext = readerContextFactory.getContext();
     return HoodieMergeHandleFactory.create(operationType, config, instantTime, table, recordItr, partitionPath, fileId,
-        taskContextSupplier, keyGeneratorOpt);
+        taskContextSupplier, keyGeneratorOpt, readerContext);
   }
 
   @Override

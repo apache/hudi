@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io;
 
+import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -40,16 +41,18 @@ import java.util.Properties;
 public class HoodieSortedMergeHandleWithChangeLog<T, I, K, O> extends HoodieMergeHandleWithChangeLog<T, I, K, O> {
   public HoodieSortedMergeHandleWithChangeLog(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                               Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
-                                              TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
-    super(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
+                                              TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt,
+                                              HoodieReaderContext<T> readerContext) {
+    super(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt, readerContext);
   }
 
   /**
    * Called by compactor code path.
    */
   public HoodieSortedMergeHandleWithChangeLog(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                           Map<String, HoodieRecord<T>> keyToNewRecords, String partitionPath, String fileId,
-                           HoodieBaseFile dataFileToBeMerged, TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
+                                              Map<String, HoodieRecord<T>> keyToNewRecords, String partitionPath, String fileId,
+                                              HoodieBaseFile dataFileToBeMerged, TaskContextSupplier taskContextSupplier,
+                                              Option<BaseKeyGenerator> keyGeneratorOpt) {
     super(config, instantTime, hoodieTable, keyToNewRecords, partitionPath, fileId, dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt);
   }
 
