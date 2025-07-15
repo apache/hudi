@@ -64,8 +64,9 @@ import static org.apache.spark.sql.HoodieInternalRowUtils.getCachedSchema;
 public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderContext<InternalRow> {
 
   protected BaseSparkInternalRowReaderContext(StorageConfiguration<?> storageConfig,
-                                              HoodieTableConfig tableConfig) {
-    super(storageConfig, tableConfig, Option.empty(), Option.empty());
+                                              HoodieTableConfig tableConfig,
+                                              boolean reuseBuffer) {
+    super(storageConfig, tableConfig, Option.empty(), Option.empty(), reuseBuffer);
   }
 
   @Override

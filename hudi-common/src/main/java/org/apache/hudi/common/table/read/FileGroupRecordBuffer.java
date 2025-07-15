@@ -228,6 +228,12 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
     records.close();
   }
 
+  public void clearVisitedFlag() {
+    for(BufferedRecord<T> record : records.values()) {
+      record.unsetMerged();
+    }
+  }
+
   /**
    * Merge two log data records if needed.
    *
@@ -352,6 +358,11 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
 
     while (logRecordIterator.hasNext()) {
       BufferedRecord<T> nextRecordInfo = logRecordIterator.next();
+      // When reuseBuffer is true, all log records are kept into the buffer.
+      // We should skip records that have been merged with base records.
+      if (readerContext.getReuseBuffer() && nextRecordInfo.isMerged()) {
+        continue;
+      }
       if (!nextRecordInfo.isDelete()) {
         nextRecord = nextRecordInfo.getRecord();
         readStats.incrementNumInserts();

@@ -99,7 +99,7 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
       List<ExpressionPredicates.Predicate> predicates,
       HoodieTableConfig tableConfig,
       Option<InstantRange> instantRangeOpt) {
-    super(storageConfiguration, tableConfig, instantRangeOpt, Option.empty());
+    super(storageConfiguration, tableConfig, instantRangeOpt, Option.empty(), false);
     this.tableConfig = tableConfig;
     this.internalSchemaManager = internalSchemaManager;
     this.predicates = predicates;

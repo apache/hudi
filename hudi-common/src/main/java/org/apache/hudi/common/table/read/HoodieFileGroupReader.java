@@ -116,7 +116,8 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   private HoodieFileGroupReader(HoodieReaderContext<T> readerContext, HoodieStorage storage, String tablePath,
                                 String latestCommitTime, FileSlice fileSlice, Schema dataSchema, Schema requestedSchema,
                                 Option<InternalSchema> internalSchemaOpt, HoodieTableMetaClient hoodieTableMetaClient, TypedProperties props,
-                                long start, long length, boolean shouldUseRecordPosition, boolean allowInflightInstants, boolean emitDelete, boolean sortOutput) {
+                                long start, long length, boolean shouldUseRecordPosition, boolean allowInflightInstants,
+                                boolean emitDelete, boolean sortOutput) {
     this.readerContext = readerContext;
     this.metaClient = hoodieTableMetaClient;
     this.storage = storage;
@@ -195,6 +196,14 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   }
 
   /**
+   * Expose readerContext such that it could be updated.
+   * This is needed when this FG reader is reused.
+   */
+  public HoodieReaderContext<T> getReaderContext() {
+    return readerContext;
+  }
+
+  /**
    * Initialize internal iterators on the base and log files.
    */
   private void initRecordIterators() throws IOException {
@@ -205,6 +214,11 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       this.baseFileIterator = iter;
       scanLogFiles();
       recordBuffer.setBaseFileIterator(baseFileIterator);
+      // Note: Before merging base records and log records, the `visited` flag
+      // should be cleared if `reuseBuffer` is true.
+      if (readerContext.getReuseBuffer()) {
+        recordBuffer.clearVisitedFlag();
+      }
     }
   }
 
@@ -315,13 +329,6 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   }
 
   /**
-   * @return statistics of reading a file group.
-   */
-  public HoodieReadStats getStats() {
-    return readStats;
-  }
-
-  /**
    * @return The next record after calling {@link #hasNext}.
    */
   T next() {
@@ -330,6 +337,13 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       return outputConverter.get().apply(nextVal);
     }
     return nextVal;
+  }
+
+  /**
+   * @return statistics of reading a file group.
+   */
+  public HoodieReadStats getStats() {
+    return readStats;
   }
 
   private void scanLogFiles() {
@@ -377,7 +391,8 @@ public final class HoodieFileGroupReader<T> implements Closeable {
    */
   public ClosableIterator<HoodieRecord<T>> getClosableHoodieRecordIterator() throws IOException {
     return new CloseableMappingIterator<>(getClosableIterator(), nextRecord -> {
-      BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(nextRecord, readerContext.getSchemaHandler().getRequestedSchema(), readerContext, orderingFieldName, false);
+      BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(
+          nextRecord, readerContext.getSchemaHandler().getRequestedSchema(), readerContext, orderingFieldName, false);
       return readerContext.constructHoodieRecord(bufferedRecord);
     });
   }

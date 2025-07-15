@@ -81,7 +81,6 @@ public abstract class HoodieReaderContext<T> {
   private final BiFunction<T, Schema, String> recordKeyExtractor;
   protected final HoodieFileFormat baseFileFormat;
   // For general predicate pushdown.
-  protected final Option<Predicate> keyFilterOpt;
   protected final HoodieTableConfig tableConfig;
   private FileGroupReaderSchemaHandler<T> schemaHandler = null;
   private String tablePath = null;
@@ -95,6 +94,12 @@ public abstract class HoodieReaderContext<T> {
   protected Option<InstantRange> instantRangeOpt = Option.empty();
   private RecordMergeMode mergeMode;
   protected ReaderContextTypeConverter typeConverter;
+  // When set to true, records in the underlying record buffer are not removed during the merging. In this way,
+  // when the FG reader is reused, Hudi does not read and merge these records from log files again.
+  private boolean reuseBuffer = false;
+  // Make it non-final since if reuseBuffer is true, the predicate could be different
+  // for different runs.
+  protected Option<Predicate> keyFilterOpt;
 
   // for encoding and decoding schemas to the spillable map
   private final LocalAvroSchemaCache localAvroSchemaCache = LocalAvroSchemaCache.getInstance();
@@ -102,7 +107,8 @@ public abstract class HoodieReaderContext<T> {
   protected HoodieReaderContext(StorageConfiguration<?> storageConfiguration,
                                 HoodieTableConfig tableConfig,
                                 Option<InstantRange> instantRangeOpt,
-                                Option<Predicate> keyFilterOpt) {
+                                Option<Predicate> keyFilterOpt,
+                                boolean reuseBuffer) {
     this.tableConfig = tableConfig;
     this.storageConfiguration = storageConfiguration;
     this.recordKeyExtractor = tableConfig.populateMetaFields() ? metadataKeyExtractor() : virtualKeyExtractor(tableConfig.getRecordKeyFields()
@@ -111,6 +117,7 @@ public abstract class HoodieReaderContext<T> {
     this.instantRangeOpt = instantRangeOpt;
     this.keyFilterOpt = keyFilterOpt;
     this.typeConverter = new ReaderContextTypeConverter();
+    this.reuseBuffer = reuseBuffer;
   }
 
   // Getter and Setter for schemaHandler
@@ -207,6 +214,14 @@ public abstract class HoodieReaderContext<T> {
 
   public ReaderContextTypeConverter getTypeConverter() {
     return typeConverter;
+  }
+
+  public boolean getReuseBuffer() {
+    return reuseBuffer;
+  }
+
+  public void setKeyFilterOpt(Option<Predicate> keyFilterOpt) {
+    this.keyFilterOpt = keyFilterOpt;
   }
 
   /**
