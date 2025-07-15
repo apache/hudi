@@ -114,6 +114,10 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
     return HoodieJavaRDD.of(javaSparkContext.emptyRDD());
   }
 
+  public boolean supportsFileGroupReader() {
+    return true;
+  }
+
   @Override
   public <K, V> HoodiePairData<K, V> emptyHoodiePairData() {
     return HoodieJavaPairRDD.of(JavaPairRDD.fromJavaRDD(javaSparkContext.emptyRDD()));
