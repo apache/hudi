@@ -22,30 +22,29 @@ import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 
+/**
+ * An iterator wrapper that deduplicate the outputs. The nested inner iterator must outputs sorted items.
+ * @param <T> Item type.
+ */
 public class ClosableSortedDedupingIterator<T> implements Iterator<T>, AutoCloseable {
   private final Iterator<T> inner;
-  private final boolean closable;
-  private T nextUnique = null;
-  private boolean hasNextCached = false;
-  private T lastReturned = null;
-  private boolean hasReturnedAny = false;
+  private T nextUnique;
+  private T lastReturned;
 
   public ClosableSortedDedupingIterator(Iterator<T> inner) {
     this.inner = inner;
-    this.closable = inner instanceof AutoCloseable;
   }
 
   @Override
   public boolean hasNext() {
-    if (hasNextCached) {
+    if (nextUnique != null) {
       return true;
     }
 
     while (inner.hasNext()) {
       T candidate = inner.next();
-      if (!hasReturnedAny || (!Objects.equals(candidate, lastReturned))) {
+      if (!Objects.equals(candidate, lastReturned)) {
         nextUnique = candidate;
-        hasNextCached = true;
         return true;
       }
     }
@@ -58,15 +57,14 @@ public class ClosableSortedDedupingIterator<T> implements Iterator<T>, AutoClose
     if (!hasNext()) {
       throw new NoSuchElementException();
     }
-    hasNextCached = false;
     lastReturned = nextUnique;
-    hasReturnedAny = true;
-    return nextUnique;
+    nextUnique = null;
+    return lastReturned;
   }
 
   @Override
   public void close() throws Exception {
-    if (closable) {
+    if (inner instanceof AutoCloseable) {
       ((AutoCloseable) inner).close();
     }
   }
