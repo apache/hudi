@@ -43,7 +43,6 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
         table, context, config, upgradeDowngradeHelper,
         HoodieTableType.MERGE_ON_READ.equals(table.getMetaClient().getTableType()),
         HoodieTableVersion.NINE);
-
     // If auto upgrade is disabled, set writer version to 8 and return
     if (!config.autoUpgrade()) {
       config.setValue(HoodieWriteConfig.WRITE_TABLE_VERSION, String.valueOf(HoodieTableVersion.EIGHT.versionCode()));
