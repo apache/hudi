@@ -148,10 +148,12 @@ public class TestPositionBasedFileGroupRecordBuffer extends SparkClientFunctiona
       writeConfigs.put(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key(), HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID);
     }
     HoodieReadStats readStats = new HoodieReadStats();
+
     buffer = new PositionBasedFileGroupRecordBuffer<>(
         ctx,
         metaClient,
         mergeMode,
+        metaClient.getTableConfig().getPartialUpdateMode(),
         baseFileInstantTime,
         props,
         readStats,

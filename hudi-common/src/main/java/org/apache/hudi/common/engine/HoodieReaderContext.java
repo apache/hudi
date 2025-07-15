@@ -94,6 +94,7 @@ public abstract class HoodieReaderContext<T> {
   protected String partitionPath;
   protected Option<InstantRange> instantRangeOpt = Option.empty();
   private RecordMergeMode mergeMode;
+  protected ReaderContextTypeHandler typeHandler;
 
   // for encoding and decoding schemas to the spillable map
   private final LocalAvroSchemaCache localAvroSchemaCache = LocalAvroSchemaCache.getInstance();
@@ -109,6 +110,7 @@ public abstract class HoodieReaderContext<T> {
     this.baseFileFormat = tableConfig.getBaseFileFormat();
     this.instantRangeOpt = instantRangeOpt;
     this.keyFilterOpt = keyFilterOpt;
+    this.typeHandler = new ReaderContextTypeHandler();
   }
 
   // Getter and Setter for schemaHandler
@@ -203,6 +205,10 @@ public abstract class HoodieReaderContext<T> {
     return new DefaultSerializer<>();
   }
 
+  public ReaderContextTypeHandler getTypeHandler() {
+    return typeHandler;
+  }
+
   /**
    * Gets the record iterator based on the type of engine-specific record representation from the
    * file.
@@ -280,7 +286,8 @@ public abstract class HoodieReaderContext<T> {
   public void initRecordMerger(TypedProperties properties) {
     RecordMergeMode recordMergeMode = tableConfig.getRecordMergeMode();
     String mergeStrategyId = tableConfig.getRecordMergeStrategyId();
-    if (!tableConfig.getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
+    if (tableConfig.getTableVersion().greaterThanOrEquals(HoodieTableVersion.NINE)
+        || tableConfig.getTableVersion().lesserThan(HoodieTableVersion.EIGHT)) {
       Triple<RecordMergeMode, String, String> triple = HoodieTableConfig.inferCorrectMergingBehavior(
           recordMergeMode, tableConfig.getPayloadClass(),
           mergeStrategyId, null, tableConfig.getTableVersion());
@@ -316,19 +323,6 @@ public abstract class HoodieReaderContext<T> {
    * @return The value for the target metadata field.
    */
   public abstract String getMetaFieldValue(T record, int pos);
-
-  /**
-   * Cast to Java boolean value.
-   * If the object is not compatible with boolean type, throws.
-   */
-  public boolean castToBoolean(Object value) {
-    if (value instanceof Boolean) {
-      return (boolean) value;
-    } else {
-      throw new IllegalArgumentException(
-          "Input value type " + value.getClass() + ", cannot be cast to boolean");
-    }
-  }
 
   /**
    * Get the {@link InstantRange} filter.
@@ -409,6 +403,18 @@ public abstract class HoodieReaderContext<T> {
    * @return A new instance of {@link HoodieRecord}.
    */
   public abstract HoodieRecord<T> constructHoodieRecord(BufferedRecord<T> bufferedRecord);
+
+  /**
+   * Constructs a new Engine based record based on a given schema, base record and update values.
+   *
+   * @param schema           The schema of the new record.
+   * @param updateValues     The map recording field index and its corresponding update value.
+   * @param baseRecord       The record based on which the engine record is built.
+   * @return A new instance of engine record type {@link T}.
+   */
+  public abstract T constructEngineRecord(Schema schema,
+                                          Map<Integer, Object> updateValues,
+                                          BufferedRecord<T> baseRecord);
 
   /**
    * Seals the engine-specific record to make sure the data referenced in memory do not change.
@@ -522,5 +528,17 @@ public abstract class HoodieReaderContext<T> {
   @Nullable
   protected Schema decodeAvroSchema(Object versionId) {
     return this.localAvroSchemaCache.getSchema((Integer) versionId).orElse(null);
+  }
+
+  /**
+   * Extract event time field.
+   */
+  public Option<Object> getEventTime(T record, Schema schema, Option<String> eventTimeFieldOpt) {
+    if (eventTimeFieldOpt == null || eventTimeFieldOpt.isEmpty()) {
+      return Option.empty();
+    }
+
+    Object rawValue = getValue(record, schema, eventTimeFieldOpt.get());
+    return Option.ofNullable(rawValue);
   }
 }
