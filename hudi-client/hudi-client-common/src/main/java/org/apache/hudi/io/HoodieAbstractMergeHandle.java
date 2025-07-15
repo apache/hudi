@@ -94,6 +94,7 @@ public abstract class HoodieAbstractMergeHandle<T, I, K, O> extends HoodieWriteH
     return IOType.MERGE;
   }
 
+  @Override
   public HoodieBaseFile baseFileForMerge() {
     return baseFileToMerge;
   }
