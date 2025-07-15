@@ -48,6 +48,7 @@ import org.apache.hudi.source.ExpressionPredicates;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.util.AvroToRowDataConverters;
 import org.apache.hudi.util.RowDataAvroQueryContexts;
 import org.apache.hudi.util.RowDataUtils;
@@ -152,8 +153,15 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
   }
 
   @Override
-  public Schema getDataFileSchema(StoragePath filePath) throws IOException {
-    return null;
+  public Schema getDataFileSchema(StoragePath filePath, HoodieStorage storage) throws IOException {
+    return HoodieIOFactory.getIOFactory(storage)
+            .getReaderFactory(HoodieRecord.HoodieRecordType.FLINK)
+            .getFileReader(tableConfig, filePath, HoodieFileFormat.PARQUET, Option.empty()).getSchema();
+  }
+
+  @Override
+  public boolean fullProjectionSupport() {
+    return true;
   }
 
   @Override

@@ -25,6 +25,7 @@ import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
@@ -197,8 +198,14 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
   }
 
   @Override
-  public Schema getDataFileSchema(StoragePath filePath) throws IOException {
-    return null;
+  public Schema getDataFileSchema(StoragePath filePath, HoodieStorage storage) throws IOException {
+    return HoodieIOFactory.getIOFactory(storage)
+        .getFileFormatUtils(filePath).readAvroSchema(storage, filePath);
+  }
+
+  @Override
+  public boolean fullProjectionSupport() {
+    return true;
   }
 
   @Override
@@ -212,44 +219,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
 
   @Override
   public UnaryOperator<IndexedRecord> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns) {
-    if (!renamedColumns.isEmpty()) {
-      throw new UnsupportedOperationException("Column renaming is not supported for the HoodieAvroReaderContext");
-    }
-    Map<String, Integer> fromFields = IntStream.range(0, from.getFields().size())
-        .boxed()
-        .collect(Collectors.toMap(
-            i -> from.getFields().get(i).name(), i -> i));
-    Map<String, Integer> toFields = IntStream.range(0, to.getFields().size())
-        .boxed()
-        .collect(Collectors.toMap(
-            i -> to.getFields().get(i).name(), i -> i));
-
-    // Check if source schema contains all fields from target schema.
-    List<Schema.Field> missingFields = to.getFields().stream()
-        .filter(f -> !fromFields.containsKey(f.name())).collect(Collectors.toList());
-    if (!missingFields.isEmpty()) {
-      throw new HoodieException("There are some fields missing in source schema: "
-          + missingFields);
-    }
-
-    // Build the mapping from source schema to target schema.
-    Map<Integer, Integer> fieldMap = toFields.entrySet().stream()
-        .filter(e -> fromFields.containsKey(e.getKey()))
-        .collect(Collectors.toMap(
-            e -> fromFields.get(e.getKey()), Map.Entry::getValue));
-
-    // Do the transformation.
-    return record -> {
-      IndexedRecord outputRecord = new GenericData.Record(to);
-      for (int i = 0; i < from.getFields().size(); i++) {
-        if (!fieldMap.containsKey(i)) {
-          continue;
-        }
-        int j = fieldMap.get(i);
-        outputRecord.put(j, record.get(i));
-      }
-      return outputRecord;
-    };
+    return record -> HoodieAvroUtils.rewriteRecordWithNewSchema(record, to, renamedColumns);
   }
 
   public static Object getFieldValueFromIndexedRecord(

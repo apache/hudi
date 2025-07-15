@@ -32,6 +32,7 @@ import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
+import org.apache.hudi.common.util.Either;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.LocalAvroSchemaCache;
 import org.apache.hudi.common.util.Option;
@@ -65,7 +66,6 @@ import java.util.function.UnaryOperator;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
-import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
 
@@ -213,7 +213,16 @@ public abstract class HoodieReaderContext<T> {
     return typeConverter;
   }
 
-  public abstract Schema getDataFileSchema(StoragePath filePath) throws IOException;
+  public abstract Schema getDataFileSchema(StoragePath filePath, HoodieStorage storage) throws IOException;
+
+  /**
+   * returns true if projection includes support for nested and type promotions
+   */
+  public abstract boolean fullProjectionSupport();
+
+  public final ClosableIterator<T> getFileRecordIterator(StoragePath filePath, long start, long length, Schema requiredSchema, HoodieStorage storage) throws IOException {
+    return getFileRecordIterator(filePath, start, length, getDataFileSchema(filePath, storage), requiredSchema, storage);
+  }
 
   /**
    * Gets the record iterator based on the type of engine-specific record representation from the
@@ -227,27 +236,13 @@ public abstract class HoodieReaderContext<T> {
    * @param storage        {@link HoodieStorage} for reading records.
    * @return {@link ClosableIterator<T>} that can return all records through iteration.
    */
-  public final ClosableIterator<T> getFileRecordIterator(
-      StoragePath filePath, long start, long length, Schema dataSchema, Schema requiredSchema,
-      HoodieStorage storage) throws IOException {
-    if (baseFileFormat != PARQUET) {
-      return doGetFileRecordIterator(filePath, start, length, dataSchema, requiredSchema, storage);
-    }
-    Schema dataFileSchema = getDataFileSchema(filePath);
-    if (Objects.equals(dataSchema, dataFileSchema)) {
-      return doGetFileRecordIterator(filePath, start, length, dataSchema, requiredSchema, storage);
-    }
-    Schema actualRequriredSchema = AvroSchemaUtils.pruneDataSchemaResolveNullable(dataFileSchema, requiredSchema, getSchemaHandler().getPruneExcludeFields());
-    if (Objects.equals(actualRequriredSchema, requiredSchema)) {
-      return doGetFileRecordIterator(filePath, start, length, dataFileSchema, requiredSchema, storage);
-    }
-    UnaryOperator<T> projection = projectRecord(actualRequriredSchema, requiredSchema);
-    return new CloseableMappingIterator<>(doGetFileRecordIterator(filePath, start, length, dataFileSchema, actualRequriredSchema, storage), projection);
+  public final ClosableIterator<T> getFileRecordIterator(StoragePath filePath, long start, long length, Schema dataSchema, Schema requiredSchema, HoodieStorage storage) throws IOException {
+    return getFileRecordIterator(Either.left(filePath), start, length, dataSchema, requiredSchema, storage);
   }
 
-  protected abstract ClosableIterator<T> doGetFileRecordIterator(
-      StoragePath filePath, long start, long length, Schema dataSchema, Schema requiredSchema,
-      HoodieStorage storage) throws IOException;
+  public final ClosableIterator<T> getFileRecordIterator(StoragePathInfo storagePathInfo, long start, long length, Schema requiredSchema, HoodieStorage storage) throws IOException {
+    return getFileRecordIterator(storagePathInfo, start, length, getDataFileSchema(storagePathInfo.getPath(), storage), requiredSchema, storage);
+  }
 
   /**
    * Gets the record iterator based on the type of engine-specific record representation from the
@@ -261,29 +256,41 @@ public abstract class HoodieReaderContext<T> {
    * @param storage         {@link HoodieStorage} for reading records.
    * @return {@link ClosableIterator<T>} that can return all records through iteration.
    */
-
   public final ClosableIterator<T> getFileRecordIterator(
-      StoragePathInfo storagePathInfo, long start, long length, Schema dataSchema, Schema requiredSchema,
-      HoodieStorage storage) throws IOException {
-    if (baseFileFormat != PARQUET) {
-      return doGetFileRecordIterator(storagePathInfo, start, length, dataSchema, requiredSchema, storage);
-    }
-    Schema dataFileSchema = getDataFileSchema(storagePathInfo.getPath());
-    if (Objects.equals(dataSchema, dataFileSchema)) {
-      return doGetFileRecordIterator(storagePathInfo, start, length, dataSchema, requiredSchema, storage);
-    }
-    Schema actualRequriredSchema = AvroSchemaUtils.pruneDataSchemaResolveNullable(dataFileSchema, requiredSchema, getSchemaHandler().getPruneExcludeFields());
-    if (Objects.equals(actualRequriredSchema, requiredSchema)) {
-      return doGetFileRecordIterator(storagePathInfo, start, length, dataFileSchema, requiredSchema, storage);
-    }
-    UnaryOperator<T> projection = projectRecord(actualRequriredSchema, requiredSchema);
-    return new CloseableMappingIterator<>(doGetFileRecordIterator(storagePathInfo, start, length, dataFileSchema, actualRequriredSchema, storage), projection);
+      StoragePathInfo storagePathInfo, long start, long length, Schema dataSchema, Schema requiredSchema, HoodieStorage storage) throws IOException {
+    return getFileRecordIterator(Either.right(storagePathInfo), start, length, dataSchema, requiredSchema, storage);
   }
 
-  protected ClosableIterator<T> doGetFileRecordIterator(
-      StoragePathInfo storagePathInfo, long start, long length, Schema dataSchema, Schema requiredSchema,
-      HoodieStorage storage) throws IOException {
+  protected abstract ClosableIterator<T> doGetFileRecordIterator(StoragePath filePath, long start, long length, Schema dataSchema, Schema requiredSchema, HoodieStorage storage) throws IOException;
+
+  protected ClosableIterator<T> doGetFileRecordIterator(StoragePathInfo storagePathInfo, long start, long length, Schema dataSchema, Schema requiredSchema, HoodieStorage storage) throws IOException {
     return getFileRecordIterator(storagePathInfo.getPath(), start, length, dataSchema, requiredSchema, storage);
+  }
+  /**
+   * Handle schema evolution
+   */
+  private ClosableIterator<T> getFileRecordIterator(Either<StoragePath, StoragePathInfo> filePathEither, long start, long length,
+                                                    Schema dataSchema, Schema requiredSchema, HoodieStorage storage) throws IOException {
+    if (HoodieTableMetadata.isMetadataTable(tablePath) || !fullProjectionSupport()) {
+      return getFileRecordIteratorInternal(filePathEither, start, length, dataSchema, requiredSchema, storage);
+    }
+    Schema actualRequriredSchema = AvroSchemaUtils.pruneDataSchemaResolveNullable(dataSchema, requiredSchema, getSchemaHandler().getPruneExcludeFields());
+    if (Objects.equals(actualRequriredSchema, requiredSchema)) {
+      return getFileRecordIteratorInternal(filePathEither, start, length, dataSchema, requiredSchema, storage);
+    }
+    UnaryOperator<T> projection = projectRecord(actualRequriredSchema, requiredSchema);
+    return new CloseableMappingIterator<>(getFileRecordIteratorInternal(filePathEither, start, length, dataSchema, actualRequriredSchema, storage), projection);
+  }
+
+  /**
+   * use the correct internal method
+   */
+  private ClosableIterator<T> getFileRecordIteratorInternal(Either<StoragePath, StoragePathInfo> filePathEither, long start, long length,
+                                        Schema dataSchema, Schema requiredSchema, HoodieStorage storage) throws IOException {
+    if (filePathEither.isLeft()) {
+      return doGetFileRecordIterator(filePathEither.asLeft(), start, length, dataSchema, requiredSchema, storage);
+    }
+    return doGetFileRecordIterator(filePathEither.asRight(), start, length, dataSchema, requiredSchema, storage);
   }
 
   /**

@@ -19,6 +19,8 @@
 
 package org.apache.hudi.testutils;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
+
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.hadoop.hive.serde2.io.DateWritable;
@@ -227,9 +229,15 @@ public class ArrayWritableTestUtil {
       case UNION:
         if (schema.getTypes().size() == 2
             && schema.getTypes().get(0).getType() == Schema.Type.NULL) {
+          if (writable == null || writable instanceof NullWritable) {
+            return;
+          }
           assertArrayWritableMatchesSchema(schema.getTypes().get(1), writable);
         } else if (schema.getTypes().size() == 2
             && schema.getTypes().get(1).getType() == Schema.Type.NULL) {
+          if (writable == null || writable instanceof NullWritable) {
+            return;
+          }
           assertArrayWritableMatchesSchema(schema.getTypes().get(0), writable);
         } else if (schema.getTypes().size() == 1) {
           assertArrayWritableMatchesSchema(schema.getTypes().get(0), writable);
