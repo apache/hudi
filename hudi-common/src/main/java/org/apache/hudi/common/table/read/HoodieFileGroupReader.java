@@ -31,6 +31,7 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.PartitionPathParser;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordReader;
 import org.apache.hudi.common.util.ConfigUtils;
@@ -76,6 +77,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   private final List<HoodieLogFile> logFiles;
   private final String partitionPath;
   private final Option<String[]> partitionPathFields;
+  private final PartialUpdateMode partialUpdateMode;
   private final Option<String> orderingFieldName;
   private final HoodieStorage storage;
   private final TypedProperties props;
@@ -126,6 +128,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     HoodieTableConfig tableConfig = hoodieTableMetaClient.getTableConfig();
     this.partitionPath = fileSlice.getPartitionPath();
     this.partitionPathFields = tableConfig.getPartitionFields();
+    this.partialUpdateMode = tableConfig.getPartialUpdateMode();
     readerContext.initRecordMerger(props);
     readerContext.setTablePath(tablePath);
     readerContext.setLatestCommitTime(latestCommitTime);
@@ -153,7 +156,8 @@ public final class HoodieFileGroupReader<T> implements Closeable {
         });
     this.readStats = new HoodieReadStats();
     this.recordBuffer = getRecordBuffer(readerContext, hoodieTableMetaClient,
-        readerContext.getMergeMode(), props, hoodieBaseFileOption, this.logFiles.isEmpty(),
+        readerContext.getMergeMode(), partialUpdateMode,
+        props, hoodieBaseFileOption, this.logFiles.isEmpty(),
         isSkipMerge, shouldUseRecordPosition, readStats, emitDelete, sortOutput);
     this.allowInflightInstants = allowInflightInstants;
   }
@@ -164,6 +168,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   private FileGroupRecordBuffer<T> getRecordBuffer(HoodieReaderContext<T> readerContext,
                                                    HoodieTableMetaClient hoodieTableMetaClient,
                                                    RecordMergeMode recordMergeMode,
+                                                   PartialUpdateMode partialUpdateMode,
                                                    TypedProperties props,
                                                    Option<HoodieBaseFile> baseFileOption,
                                                    boolean hasNoLogFiles,
@@ -176,16 +181,16 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       return null;
     } else if (isSkipMerge) {
       return new UnmergedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, emitDelete);
+          readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, readStats, emitDelete);
     } else if (sortOutput) {
       return new SortedKeyBasedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, orderingFieldName, emitDelete);
+          readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, readStats, orderingFieldName, emitDelete);
     } else if (shouldUseRecordPosition && baseFileOption.isPresent()) {
       return new PositionBasedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, recordMergeMode, baseFileOption.get().getCommitTime(), props, readStats, orderingFieldName, emitDelete);
+          readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, baseFileOption.get().getCommitTime(), props, readStats, orderingFieldName, emitDelete);
     } else {
       return new KeyBasedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, orderingFieldName, emitDelete);
+          readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, readStats, orderingFieldName, emitDelete);
     }
   }
 

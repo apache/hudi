@@ -75,6 +75,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordReader;
 import org.apache.hudi.common.table.read.BufferedRecord;
@@ -1031,7 +1032,7 @@ public class HoodieTableMetadataUtil {
       readerContext.initRecordMerger(properties);
       readerContext.setSchemaHandler(new FileGroupReaderSchemaHandler<>(readerContext, writerSchemaOpt.get(), writerSchemaOpt.get(), Option.empty(), tableConfig, properties));
       KeyBasedFileGroupRecordBuffer<T> recordBuffer = new KeyBasedFileGroupRecordBuffer<>(readerContext, datasetMetaClient,
-          readerContext.getMergeMode(), properties, new HoodieReadStats(), Option.ofNullable(tableConfig.getPreCombineField()), true);
+          readerContext.getMergeMode(), PartialUpdateMode.NONE, properties, new HoodieReadStats(), Option.ofNullable(tableConfig.getPreCombineField()), true);
 
       // CRITICAL: Ensure allowInflightInstants is set to true
       HoodieMergedLogRecordReader<T> mergedLogRecordReader = HoodieMergedLogRecordReader.<T>newBuilder()

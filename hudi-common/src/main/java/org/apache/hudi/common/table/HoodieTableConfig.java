@@ -117,6 +117,8 @@ public class HoodieTableConfig extends HoodieConfig {
   public static final String HOODIE_PROPERTIES_FILE_BACKUP = "hoodie.properties.backup";
   public static final String HOODIE_WRITE_TABLE_NAME_KEY = "hoodie.datasource.write.table.name";
   public static final String HOODIE_TABLE_NAME_KEY = "hoodie.table.name";
+  public static final String PARTIAL_UPDATE_CUSTOM_MARKER = "hoodie.write.partial.update.custom.marker";
+  public static final String DEBEZIUM_UNAVAILABLE_VALUE = "__debezium_unavailable_value";
 
   public static final ConfigProperty<String> DATABASE_NAME = ConfigProperty
       .key("hoodie.database.name")
@@ -311,6 +313,20 @@ public class HoodieTableConfig extends HoodieConfig {
       .defaultValue(false)
       .sinceVersion("1.0.0")
       .withDocumentation("When set to true, the table can support reading and writing multiple base file formats.");
+
+  public static final ConfigProperty<PartialUpdateMode> PARTIAL_UPDATE_MODE = ConfigProperty
+      .key("hoodie.table.partial.update.mode")
+      .defaultValue(PartialUpdateMode.NONE)
+      .sinceVersion("1.1.0")
+      .withDocumentation("This property when set, will define how two versions of the record will be "
+          + "merged together where the later contains only partial set of values and not entire record.");
+
+  public static final ConfigProperty<String> MERGE_PROPERTIES = ConfigProperty
+      .key("hoodie.table.merge.properties")
+      .noDefaultValue()
+      .sinceVersion("1.1.0")
+      .withDocumentation("The value of this property is in the format of 'K1=V1,K2=V2,...,Ki=Vi,...'."
+          + "Each (Ki, Vi) pair represents a property used during merge scenarios.");
 
   public static final ConfigProperty<String> URL_ENCODE_PARTITIONING = KeyGeneratorOptions.URL_ENCODE_PARTITIONING;
   public static final ConfigProperty<String> HIVE_STYLE_PARTITIONING_ENABLE = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE;
@@ -882,6 +898,7 @@ public class HoodieTableConfig extends HoodieConfig {
     if (isNullOrEmpty(payloadClassName)) {
       return null;
     }
+
     if (DefaultHoodieRecordPayload.class.getName().equals(payloadClassName)
         || EventTimeAvroPayload.class.getName().equals(payloadClassName)) {
       // DefaultHoodieRecordPayload and EventTimeAvroPayload match with EVENT_TIME_ORDERING.
@@ -1076,6 +1093,15 @@ public class HoodieTableConfig extends HoodieConfig {
     return new HashSet<>(
         StringUtils.split(getStringOrDefault(TABLE_METADATA_PARTITIONS, StringUtils.EMPTY_STRING),
             CONFIG_VALUES_DELIMITER));
+  }
+
+  public PartialUpdateMode getPartialUpdateMode() {
+    if (getTableVersion().greaterThanOrEquals(HoodieTableVersion.NINE)) {
+      return PartialUpdateMode.valueOf(getStringOrDefault(PARTIAL_UPDATE_MODE));
+    } else {
+      // For table version <= 8, partial update is not supported.
+      return PartialUpdateMode.NONE;
+    }
   }
 
   /**

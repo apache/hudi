@@ -36,9 +36,11 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.avro.Schema;
+import org.apache.hadoop.io.ArrayWritable;
 import org.apache.spark.sql.HoodieInternalRowUtils;
 import org.apache.spark.sql.HoodieUnsafeRowUtils;
 import org.apache.spark.sql.catalyst.InternalRow;
+import org.apache.spark.sql.catalyst.expressions.GenericInternalRow;
 import org.apache.spark.sql.catalyst.expressions.UnsafeProjection;
 import org.apache.spark.sql.catalyst.expressions.UnsafeRow;
 import org.apache.spark.sql.types.StructType;
@@ -108,6 +110,23 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
     Schema schema = getSchemaFromBufferRecord(bufferedRecord);
     InternalRow row = bufferedRecord.getRecord();
     return new HoodieSparkRecord(hoodieKey, row, HoodieInternalRowUtils.getCachedSchema(schema), false);
+  }
+
+  @Override
+  public InternalRow constructEngineRecord(Schema schema,
+                                           Map<Integer, Object> updateValues,
+                                           BufferedRecord<InternalRow> baseRecord) {
+    List<Schema.Field> fields = schema.getFields();
+    Object[] values = new Object[fields.size()];
+    for (Schema.Field field : fields) {
+      int pos = field.pos();
+      if (updateValues.containsKey(pos)) {
+        values[pos] = updateValues.get(pos);
+      } else {
+        values[pos] = getValue(baseRecord.getRecord(), schema, field.name());
+      }
+    }
+    return new GenericInternalRow(values);
   }
 
   @Override
