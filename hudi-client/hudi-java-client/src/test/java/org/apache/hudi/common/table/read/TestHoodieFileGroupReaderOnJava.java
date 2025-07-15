@@ -55,7 +55,7 @@ public class TestHoodieFileGroupReaderOnJava extends HoodieFileGroupReaderOnJava
 
   @Override
   public void assertRecordMatchesSchema(Schema schema, IndexedRecord record) {
-    assertTrue( ConvertingGenericData.INSTANCE.validate(schema, record));
+    assertTrue(ConvertingGenericData.INSTANCE.validate(schema, record));
   }
 
   @Override

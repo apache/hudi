@@ -75,7 +75,6 @@ public class HoodieArrayWritableAvroUtils {
     return rewriteRecordWithNewSchemaInternal(writable, oldSchema, newSchema, renameCols, fieldNames);
   }
 
-
   private static Writable rewriteRecordWithNewSchemaInternal(Writable writable, Schema oldSchema, Schema newSchema, Map<String, String> renameCols, Deque<String> fieldNames) {
     switch (newSchema.getType()) {
       case RECORD:
@@ -141,8 +140,8 @@ public class HoodieArrayWritableAvroUtils {
           fieldNames.pop();
         }
         return new ArrayWritable(Writable.class, values);
-//        arrayWritable.set(values);
-//        return arrayWritable;
+        //arrayWritable.set(values);
+        //return arrayWritable;
 
       case ENUM:
         if ((writable instanceof BytesWritable)) {
@@ -179,7 +178,7 @@ public class HoodieArrayWritableAvroUtils {
         return map;
 
       case UNION:
-          throw new IllegalArgumentException("should not be here?");
+        throw new IllegalArgumentException("should not be here?");
 
       default:
         return rewritePrimaryType(writable, oldSchema, newSchema);

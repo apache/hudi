@@ -223,10 +223,12 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     if (baseFileStoragePathInfo != null) {
       recordIterator = readerContext.getFileRecordIterator(
           baseFileStoragePathInfo, start, length,
+          readerContext.isMetadataTable() || readerContext.getSchemaHandler().internalSchemaOpt.isPresent() ? Option.of(readerContext.getSchemaHandler().getTableSchema()) : Option.empty(),
           readerContext.getSchemaHandler().getRequiredSchema(), storage);
     } else {
       recordIterator = readerContext.getFileRecordIterator(
           baseFile.getStoragePath(), start, length,
+          readerContext.isMetadataTable() || readerContext.getSchemaHandler().internalSchemaOpt.isPresent() ? Option.of(readerContext.getSchemaHandler().getTableSchema()) : Option.empty(),
           readerContext.getSchemaHandler().getRequiredSchema(), storage);
     }
     return readerContext.getInstantRange().isPresent()
@@ -288,23 +290,19 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     Schema requiredSchema = readerContext.getSchemaHandler().createSchemaFromFields(requiredFields);
     StoragePathInfo fileStoragePathInfo = file.getPathInfo();
     if (fileStoragePathInfo != null) {
-      if (isSkeleton) {
-        return Option.of(Pair.of(readerContext.getFileRecordIterator(fileStoragePathInfo, 0, file.getFileLen(),
-            readerContext.getSchemaHandler().createSchemaFromFields(allFields), requiredSchema, storage), requiredSchema));
-      } else {
-        return Option.of(Pair.of(readerContext.getFileRecordIterator(fileStoragePathInfo, 0, file.getFileLen(), requiredSchema, storage), requiredSchema));
-      }
+      return Option.of(Pair.of(readerContext.getFileRecordIterator(fileStoragePathInfo, 0, file.getFileLen(),
+          isSkeleton || readerContext.getSchemaHandler().internalSchemaOpt.isPresent()
+              ? Option.of(readerContext.getSchemaHandler().createSchemaFromFields(allFields))
+              : Option.empty(), requiredSchema, storage), requiredSchema));
     } else {
       // If the base file length passed in is invalid, i.e., -1,
       // the file group reader fetches the length from the file system
       long fileLength = file.getFileLen() >= 0
           ? file.getFileLen() : storage.getPathInfo(file.getStoragePath()).getLength();
-      if (isSkeleton) {
-        return Option.of(Pair.of(readerContext.getFileRecordIterator(file.getStoragePath(), 0, fileLength,
-            readerContext.getSchemaHandler().createSchemaFromFields(allFields), requiredSchema, storage), requiredSchema));
-      } else {
-        return Option.of(Pair.of(readerContext.getFileRecordIterator(file.getStoragePath(), 0, fileLength, requiredSchema, storage), requiredSchema));
-      }
+      return Option.of(Pair.of(readerContext.getFileRecordIterator(file.getStoragePath(), 0, fileLength,
+          isSkeleton || readerContext.getSchemaHandler().internalSchemaOpt.isPresent()
+              ? Option.of(readerContext.getSchemaHandler().createSchemaFromFields(allFields))
+              : Option.empty(), requiredSchema, storage), requiredSchema));
     }
   }
 

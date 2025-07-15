@@ -149,7 +149,7 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
 
     return readerContext.getFileRecordIterator(
         inlineLogFilePath, 0, blockContentLoc.getBlockSize(),
-        writerSchema,
+        Option.of(writerSchema),
         readerSchema,
         inlineStorage);
   }

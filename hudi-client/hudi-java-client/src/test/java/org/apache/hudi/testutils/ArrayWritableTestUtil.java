@@ -19,8 +19,6 @@
 
 package org.apache.hudi.testutils;
 
-import org.apache.hudi.avro.AvroSchemaUtils;
-
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.hadoop.hive.serde2.io.DateWritable;

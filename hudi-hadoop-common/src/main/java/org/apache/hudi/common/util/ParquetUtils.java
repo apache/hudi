@@ -260,7 +260,12 @@ public class ParquetUtils extends FileFormatUtils {
   @Override
   public Schema readAvroSchema(HoodieStorage storage, StoragePath filePath) {
     MessageType parquetSchema = readSchema(storage, filePath);
-    return new AvroSchemaConverter(storage.getConf().unwrapAs(Configuration.class)).convert(parquetSchema);
+    Configuration conf = storage.getConf().unwrapCopyAs(Configuration.class);
+    if (conf.get(AvroSchemaConverter.ADD_LIST_ELEMENT_RECORDS) == null) {
+      // Overriding default treatment of repeated groups in Parquet
+      conf.set(AvroSchemaConverter.ADD_LIST_ELEMENT_RECORDS, "false");
+    }
+    return new AvroSchemaConverter(conf).convert(parquetSchema);
   }
 
   @Override
