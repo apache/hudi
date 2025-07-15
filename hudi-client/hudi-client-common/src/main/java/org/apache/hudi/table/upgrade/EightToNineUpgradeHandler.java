@@ -20,6 +20,7 @@ package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import java.util.Collections;
@@ -30,6 +31,11 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
   @Override
   public Map<ConfigProperty, String> upgrade(HoodieWriteConfig config, HoodieEngineContext context,
                                              String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
+    // If auto upgrade is disabled, set writer version to 8 and return
+    if (!config.autoUpgrade()) {
+      config.setValue(HoodieWriteConfig.WRITE_TABLE_VERSION, String.valueOf(HoodieTableVersion.EIGHT.versionCode()));
+      return Collections.emptyMap();
+    }
     
     return Collections.emptyMap();
   }

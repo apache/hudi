@@ -75,7 +75,7 @@ class TestSevenToEightUpgrade extends RecordLevelIndexTestBase {
     metaClient = getLatestMetaClient(true)
 
     // assert table version is eight and the partition fields in table config has partition type
-    assertEquals(HoodieTableVersion.EIGHT, metaClient.getTableConfig.getTableVersion)
+    assertEquals(HoodieTableVersion.NINE, metaClient.getTableConfig.getTableVersion)
     assertEquals(partitionFields, HoodieTableConfig.getPartitionFieldPropForKeyGenerator(metaClient.getTableConfig).get())
     assertEquals(classOf[OverwriteWithLatestAvroPayload].getName, metaClient.getTableConfig.getPayloadClass)
 

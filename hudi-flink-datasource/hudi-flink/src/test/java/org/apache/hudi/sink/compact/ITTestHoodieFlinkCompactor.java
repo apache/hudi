@@ -195,7 +195,7 @@ public class ITTestHoodieFlinkCompactor {
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
-  public void testHoodieFlinkCompactorWithUpgradeAndDowngrade(boolean upgrade) throws Exception {
+  void testHoodieFlinkCompactorWithUpgradeAndDowngrade(boolean upgrade) throws Exception {
     // Create hoodie table and insert into data.
     EnvironmentSettings settings = EnvironmentSettings.newInstance().inBatchMode().build();
     TableEnvironment tableEnv = TableEnvironmentImpl.create(settings);
@@ -239,9 +239,9 @@ public class ITTestHoodieFlinkCompactor {
       if (upgrade) {
         metaClient.getTableConfig().setTableVersion(HoodieTableVersion.SIX);
         HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), metaClient.getTableConfig().getProps());
-        new UpgradeDowngrade(metaClient, writeClient.getConfig(), writeClient.getEngineContext(), FlinkUpgradeDowngradeHelper.getInstance()).run(HoodieTableVersion.EIGHT, "none");
+        new UpgradeDowngrade(metaClient, writeClient.getConfig(), writeClient.getEngineContext(), FlinkUpgradeDowngradeHelper.getInstance()).run(HoodieTableVersion.NINE, "none");
       } else {
-        metaClient.getTableConfig().setTableVersion(HoodieTableVersion.EIGHT);
+        metaClient.getTableConfig().setTableVersion(HoodieTableVersion.NINE);
         new UpgradeDowngrade(metaClient, writeClient.getConfig(), writeClient.getEngineContext(), FlinkUpgradeDowngradeHelper.getInstance()).run(HoodieTableVersion.SIX, "none");
         // set table version
         conf.setString("hoodie.write.table.version", "6");

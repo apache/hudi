@@ -69,7 +69,7 @@ public class TestCommonClientUtils {
   }
 
   @Test
-  public void testGenerateTokenOnError() {
+  void testGenerateTokenOnError() {
     // given: a task context supplies that throws errors.
     TaskContextSupplier taskContextSupplier = mock(TaskContextSupplier.class);
     when(taskContextSupplier.getPartitionIdSupplier()).thenThrow(new RuntimeException("generated under testing"));
@@ -80,7 +80,7 @@ public class TestCommonClientUtils {
 
   @ParameterizedTest(name = "Table version {0} with write version {1} should be valid: {2}")
   @MethodSource("provideValidTableVersionWriteVersionPairs")
-  public void testValidTableVersionWriteVersionPairs(
+  void testValidTableVersionWriteVersionPairs(
       HoodieTableVersion tableVersion, HoodieTableVersion writeVersion, boolean expectedResult) throws Exception {
     boolean result = isValidTableVersionWriteVersionPair(tableVersion, writeVersion);
     assertEquals(expectedResult, result);
@@ -98,6 +98,7 @@ public class TestCommonClientUtils {
             // Rule 3: special case - upgrade scenario (table > 6, table < 9, writer = 6)
             Arguments.of(HoodieTableVersion.SEVEN, HoodieTableVersion.SIX, true),
             Arguments.of(HoodieTableVersion.EIGHT, HoodieTableVersion.SIX, true),
+            Arguments.of(HoodieTableVersion.NINE, HoodieTableVersion.SIX, true),
 
             // Rule 4: otherwise disallowed - table > writer (except special case above)
             Arguments.of(HoodieTableVersion.NINE, HoodieTableVersion.SIX, false),
