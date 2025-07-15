@@ -21,6 +21,7 @@ package org.apache.hudi.avro;
 
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -35,7 +36,9 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -200,6 +203,36 @@ class TestHoodieAvroReaderContext {
     indexedRecord.put(6, "field2");
     indexedRecord.put(7, 3);
     assertEquals(recordKey, avroReaderContext.getRecordKey(indexedRecord, schemaWithMetaFields));
+  }
+
+  @Test
+  void testConstructEngineRecordWithNoUpdate() {
+    HoodieAvroReaderContext readerContext = getReaderContextWithMetaFields();
+    Schema schema = getSkeletonSchema();
+    IndexedRecord engineRecord = createSkeletonRecord("String1", "String2", 1);
+    BufferedRecord<IndexedRecord> baseRecord =
+        new BufferedRecord<>("key1", 1, engineRecord, 0, false);
+    Map<Integer, Object> updates = new HashMap<>();
+    IndexedRecord output = readerContext.constructEngineRecord(schema, updates, baseRecord);
+    assertEquals("String1", output.get(0));
+    assertEquals("String2", output.get(1));
+    assertEquals(1, output.get(2));
+  }
+
+  @Test
+  void testConstructEngineRecordWithUpdates() {
+    HoodieAvroReaderContext readerContext = getReaderContextWithMetaFields();
+    Schema schema = getSkeletonSchema();
+    IndexedRecord engineRecord = createSkeletonRecord("String1", "String2", 1);
+    BufferedRecord<IndexedRecord> baseRecord =
+        new BufferedRecord<>("key1", 1, engineRecord, 0, false);
+    Map<Integer, Object> updates = new HashMap<>();
+    updates.put(0, "String1_0");
+    updates.put(2, 2);
+    IndexedRecord output = readerContext.constructEngineRecord(schema, updates, baseRecord);
+    assertEquals("String1_0", output.get(0));
+    assertEquals("String2", output.get(1));
+    assertEquals(2, output.get(2));
   }
 
   private HoodieAvroReaderContext getReaderContextWithMetaFields() {

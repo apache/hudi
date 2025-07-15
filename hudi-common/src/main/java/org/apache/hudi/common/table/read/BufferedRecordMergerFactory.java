@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -45,6 +46,10 @@ import java.util.Objects;
  * Factory to create a {@link BufferedRecordMerger}.
  */
 public class BufferedRecordMergerFactory {
+
+  private BufferedRecordMergerFactory() {
+  }
+
   public static <T> BufferedRecordMerger<T> create(HoodieReaderContext<T> readerContext,
                                                    RecordMergeMode recordMergeMode,
                                                    boolean enablePartialMerging,
@@ -52,20 +57,34 @@ public class BufferedRecordMergerFactory {
                                                    Option<String> orderingFieldName,
                                                    Option<String> payloadClass,
                                                    Schema readerSchema,
-                                                   TypedProperties props) {
+                                                   TypedProperties props,
+                                                   PartialUpdateMode partialUpdateMode) {
+    /**
+     * This part implements KEEP_VALUES partial update mode, which merges two records that do not have all columns.
+     * Other Partial update modes, like IGNORE_DEFAULTS assume all columns exists in the record,
+     * but some columns contain specific values that should be replaced by that from older version of the record.
+     */
     if (enablePartialMerging) {
       BufferedRecordMerger<T> deleteRecordMerger = create(
-          readerContext, recordMergeMode, false, recordMerger, orderingFieldName, payloadClass, readerSchema, props);
+          readerContext, recordMergeMode, false, recordMerger, orderingFieldName, payloadClass, readerSchema, props, partialUpdateMode);
       return new PartialUpdateBufferedRecordMerger<>(readerContext, recordMerger, deleteRecordMerger, readerSchema, props);
     }
+
     switch (recordMergeMode) {
       case COMMIT_TIME_ORDERING:
-        return new CommitTimeBufferedRecordMerger<>();
+        if (partialUpdateMode == PartialUpdateMode.NONE) {
+          return new CommitTimeBufferedRecordMerger<>();
+        }
+        return new CommitTimeBufferedRecordPartialUpdateMerger<>(readerContext, partialUpdateMode, props);
       case EVENT_TIME_ORDERING:
-        return new EventTimeBufferedRecordMerger<>();
+        if (partialUpdateMode == PartialUpdateMode.NONE) {
+          return new EventTimeBufferedRecordMerger<>();
+        }
+        return new EventTimeBufferedRecordPartialUpdateMerger<>(readerContext, partialUpdateMode, props);
       default:
         if (payloadClass.isPresent()) {
-          return new CustomPayloadBufferedRecordMerger<>(readerContext, recordMerger, orderingFieldName, payloadClass.get(), readerSchema, props);
+          return new CustomPayloadBufferedRecordMerger<>(
+              readerContext, recordMerger, orderingFieldName, payloadClass.get(), readerSchema, props);
         } else {
           return new CustomBufferedRecordMerger<>(readerContext, recordMerger, readerSchema, props);
         }
@@ -89,6 +108,49 @@ public class BufferedRecordMergerFactory {
 
     @Override
     public Pair<Boolean, T> finalMerge(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) {
+      return Pair.of(newerRecord.isDelete(), newerRecord.getRecord());
+    }
+  }
+
+  /**
+   * An implementation of {@link BufferedRecordMerger} which merges {@link BufferedRecord}s
+   * based on {@code COMMIT_TIME_ORDERING} merge mode and partial update mode.
+   */
+  private static class CommitTimeBufferedRecordPartialUpdateMerger<T> extends CommitTimeBufferedRecordMerger<T> {
+    private final PartialUpdateStrategy<T> partialUpdateStrategy;
+    private final HoodieReaderContext<T> readerContext;
+
+    public CommitTimeBufferedRecordPartialUpdateMerger(HoodieReaderContext<T> readerContext,
+                                                       PartialUpdateMode partialUpdateMode,
+                                                       TypedProperties props) {
+      super();
+      this.partialUpdateStrategy = new PartialUpdateStrategy<>(readerContext, partialUpdateMode, props);
+      this.readerContext = readerContext;
+    }
+
+    @Override
+    public Option<BufferedRecord<T>> deltaMerge(BufferedRecord<T> newRecord,
+                                                BufferedRecord<T> existingRecord) {
+      if (existingRecord != null) {
+        newRecord = partialUpdateStrategy.partialMerge(
+            newRecord,
+            existingRecord,
+            readerContext.getSchemaFromBufferRecord(newRecord),
+            readerContext.getSchemaFromBufferRecord(existingRecord),
+            false);
+      }
+      return Option.of(newRecord);
+    }
+
+    @Override
+    public Pair<Boolean, T> finalMerge(BufferedRecord<T> olderRecord,
+                                       BufferedRecord<T> newerRecord) {
+      newerRecord = partialUpdateStrategy.partialMerge(
+          newerRecord,
+          olderRecord,
+          readerContext.getSchemaFromBufferRecord(newerRecord),
+          readerContext.getSchemaFromBufferRecord(olderRecord),
+          false);
       return Pair.of(newerRecord.isDelete(), newerRecord.getRecord());
     }
   }
@@ -122,6 +184,75 @@ public class BufferedRecordMergerFactory {
           && oldOrderingValue.compareTo(newOrderingValue) > 0) {
         return Pair.of(olderRecord.isDelete(), olderRecord.getRecord());
       }
+      return Pair.of(newerRecord.isDelete(), newerRecord.getRecord());
+    }
+  }
+
+  /**
+   * An implementation of {@link EventTimeBufferedRecordMerger} which merges {@link BufferedRecord}s
+   * based on {@code EVENT_TIME_ORDERING} merge mode and partial update mode.
+   */
+  private static class EventTimeBufferedRecordPartialUpdateMerger<T> extends EventTimeBufferedRecordMerger<T> {
+    private final PartialUpdateStrategy<T> partialUpdateStrategy;
+    private final HoodieReaderContext<T> readerContext;
+
+    public EventTimeBufferedRecordPartialUpdateMerger(HoodieReaderContext<T> readerContext,
+                                                      PartialUpdateMode partialUpdateMode,
+                                                      TypedProperties props) {
+      this.partialUpdateStrategy = new PartialUpdateStrategy<>(readerContext, partialUpdateMode, props);
+      this.readerContext = readerContext;
+    }
+
+    @Override
+    public Option<BufferedRecord<T>> deltaMerge(BufferedRecord<T> newRecord, BufferedRecord<T> existingRecord) {
+      if (existingRecord == null) {
+        return Option.of(newRecord);
+      } else if (shouldKeepNewerRecord(existingRecord, newRecord)) {
+        newRecord = partialUpdateStrategy.partialMerge(
+            newRecord,
+            existingRecord,
+            readerContext.getSchemaFromBufferRecord(newRecord),
+            readerContext.getSchemaFromBufferRecord(existingRecord),
+            false);
+        return Option.of(newRecord);
+      } else {
+        // Use existing record as the base record since existing record has higher ordering value.
+        existingRecord = partialUpdateStrategy.partialMerge(
+            existingRecord,
+            newRecord,
+            readerContext.getSchemaFromBufferRecord(existingRecord),
+            readerContext.getSchemaFromBufferRecord(newRecord),
+            true);
+        return Option.of(existingRecord);
+      }
+    }
+
+    @Override
+    public Pair<Boolean, T> finalMerge(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) {
+      if (newerRecord.isCommitTimeOrderingDelete()) {
+        return Pair.of(true, newerRecord.getRecord());
+      }
+
+      Comparable newOrderingValue = newerRecord.getOrderingValue();
+      Comparable oldOrderingValue = olderRecord.getOrderingValue();
+      if (!olderRecord.isCommitTimeOrderingDelete()
+          && oldOrderingValue.compareTo(newOrderingValue) > 0) {
+        // Use old record as the base record since old record has higher ordering value.
+        olderRecord = partialUpdateStrategy.partialMerge(
+            olderRecord,
+            newerRecord,
+            readerContext.getSchemaFromBufferRecord(olderRecord),
+            readerContext.getSchemaFromBufferRecord(newerRecord),
+            true);
+        return Pair.of(olderRecord.isDelete(), olderRecord.getRecord());
+      }
+
+      newerRecord = partialUpdateStrategy.partialMerge(
+          newerRecord,
+          olderRecord,
+          readerContext.getSchemaFromBufferRecord(newerRecord),
+          readerContext.getSchemaFromBufferRecord(olderRecord),
+          false);
       return Pair.of(newerRecord.isDelete(), newerRecord.getRecord());
     }
   }
