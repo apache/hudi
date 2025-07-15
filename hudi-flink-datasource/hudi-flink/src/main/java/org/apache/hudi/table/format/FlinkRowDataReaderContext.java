@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.format;
 
+import org.apache.hudi.Comparables;
 import org.apache.hudi.client.model.BootstrapRowData;
 import org.apache.hudi.client.model.CommitTimeFlinkRecordMerger;
 import org.apache.hudi.client.model.EventTimeFlinkRecordMerger;
@@ -75,7 +76,6 @@ import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
-import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 
 /**
  * Implementation of {@link HoodieReaderContext} to read {@link RowData}s from base files or
@@ -199,13 +199,21 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
   public Comparable getOrderingValue(
       RowData record,
       Schema schema,
-      Option<String> orderingFieldName) {
-    if (orderingFieldName.isEmpty() || schema.getField(orderingFieldName.get()) == null) {
-      return DEFAULT_ORDERING_VALUE;
+      Option<List<String>> orderingFieldNames) {
+    if (orderingFieldNames.isEmpty()) {
+      return Comparables.getDefault();
     }
-    RowDataAvroQueryContexts.FieldQueryContext context = RowDataAvroQueryContexts.fromAvroSchema(schema, utcTimezone).getFieldQueryContext(orderingFieldName.get());
-    Comparable finalOrderingVal = (Comparable) context.getValAsJava(record, false);
-    return finalOrderingVal;
+    return new Comparables(
+        orderingFieldNames.get().stream().map(field -> {
+          if (schema.getField(field) == null) {
+            // API getDefaultOrderingValue is only used inside Comparables constructor
+            return Comparables.getDefaultOrderingValue();
+          }
+          RowDataAvroQueryContexts.FieldQueryContext context = RowDataAvroQueryContexts.fromAvroSchema(schema, utcTimezone).getFieldQueryContext(field);
+          Comparable finalOrderingVal = (Comparable) context.getValAsJava(record, false);
+          return finalOrderingVal;
+        }).collect(Collectors.toList())
+    );
   }
 
   @Override
@@ -323,7 +331,7 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
   }
 
   @Override
-  public Comparable convertValueToEngineType(Comparable value) {
+  public Comparable convertComparableToEngineType(Comparable value) {
     return (Comparable) RowDataUtils.convertValueToFlinkType(value);
   }
 }

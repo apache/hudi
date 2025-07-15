@@ -115,10 +115,8 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat {
           List<String> fieldsToAdd = new ArrayList<>();
           if (!realtimeSplit.getDeltaLogPaths().isEmpty()) {
             HoodieRealtimeInputFormatUtils.addVirtualKeysProjection(jobConf, realtimeSplit.getVirtualKeyInfo());
-            String preCombineKey = tableConfig.getPreCombineField();
-            if (!StringUtils.isNullOrEmpty(preCombineKey)) {
-              fieldsToAdd.add(preCombineKey);
-            }
+            Option<List<String>> preCombineKeysOpt = tableConfig.getPreCombineFieldList();
+            preCombineKeysOpt.ifPresent(list -> list.stream().filter(StringUtils::nonEmpty).forEach(fieldsToAdd::add));
           }
 
           Option<String[]> partitions = tableConfig.getPartitionFields();

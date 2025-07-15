@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client.model;
 
+import org.apache.hudi.Comparables;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
@@ -45,11 +46,11 @@ import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.data.utils.JoinedRowData;
 
 import java.io.ByteArrayOutputStream;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
-
-import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
+import java.util.stream.Collectors;
 
 /**
  * Flink Engine-specific Implementations of `HoodieRecord`, which is expected to hold {@code RowData} as payload.
@@ -98,11 +99,19 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
 
   @Override
   protected Comparable<?> doGetOrderingValue(Schema recordSchema, Properties props) {
-    String orderingField = ConfigUtils.getOrderingField(props);
-    if (isNullOrEmpty(orderingField) || recordSchema.getField(orderingField) == null) {
-      return DEFAULT_ORDERING_VALUE;
+    Option<String[]> orderingFields = ConfigUtils.getOrderingFields(props);
+    if (orderingFields.isEmpty()) {
+      return Comparables.getDefault();
     } else {
-      return (Comparable<?>) getColumnValueAsJava(recordSchema, orderingField, props, false);
+      return new Comparables(Arrays.stream(orderingFields.get())
+          .map(field -> {
+            if (recordSchema.getField(field) == null) {
+              // API getDefaultOrderingValue is only used inside Comparables constructor
+              return Comparables.getDefaultOrderingValue();
+            }
+            return (Comparable<?>) getColumnValueAsJava(recordSchema, field, props, false);
+          }).collect(Collectors.toList())
+      );
     }
   }
 

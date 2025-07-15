@@ -796,7 +796,7 @@ public class HoodieTableConfig extends HoodieConfig {
   public static Triple<RecordMergeMode, String, String> inferCorrectMergingBehavior(RecordMergeMode recordMergeMode,
                                                                                     String payloadClassName,
                                                                                     String recordMergeStrategyId,
-                                                                                    String orderingFieldName,
+                                                                                    String orderingFieldNames,
                                                                                     HoodieTableVersion tableVersion) {
     RecordMergeMode inferredRecordMergeMode;
     String inferredPayloadClassName;
@@ -808,7 +808,7 @@ public class HoodieTableConfig extends HoodieConfig {
       // use the default merge mode determined by whether the ordering field name is set.
       inferredRecordMergeMode = recordMergeMode != null
           ? recordMergeMode
-          : (isNullOrEmpty(orderingFieldName) ? COMMIT_TIME_ORDERING : EVENT_TIME_ORDERING);
+          : (isNullOrEmpty(orderingFieldNames) ? COMMIT_TIME_ORDERING : EVENT_TIME_ORDERING);
     } else {
       // Infer the merge mode from either the payload class or record merge strategy ID
       RecordMergeMode modeBasedOnPayload = inferRecordMergeModeFromPayloadClass(payloadClassName);
@@ -840,12 +840,12 @@ public class HoodieTableConfig extends HoodieConfig {
 
     // Check ordering field name based on record merge mode
     if (inferredRecordMergeMode == COMMIT_TIME_ORDERING) {
-      if (nonEmpty(orderingFieldName)) {
+      if (nonEmpty(orderingFieldNames)) {
         LOG.warn("The precombine or ordering field ({}) is specified. COMMIT_TIME_ORDERING "
-            + "merge mode does not use precombine or ordering field anymore.", orderingFieldName);
+            + "merge mode does not use precombine or ordering field anymore.", orderingFieldNames);
       }
     } else if (inferredRecordMergeMode == EVENT_TIME_ORDERING) {
-      if (isNullOrEmpty(orderingFieldName)) {
+      if (isNullOrEmpty(orderingFieldNames)) {
         LOG.warn("The precombine or ordering field is not specified. EVENT_TIME_ORDERING "
             + "merge mode requires precombine or ordering field to be set for getting the "
             + "event time. Using commit time-based ordering now.");
@@ -907,8 +907,13 @@ public class HoodieTableConfig extends HoodieConfig {
     }
   }
 
-  public String getPreCombineField() {
-    return getString(PRECOMBINE_FIELD);
+  public Option<List<String>> getPreCombineFieldList() {
+    return Option.ofNullable(getString(PRECOMBINE_FIELD))
+        .map(preCombine -> Arrays.asList(preCombine.split(",")));
+  }
+
+  public Option<String> getPreCombineFields() {
+    return Option.ofNullable(getString(PRECOMBINE_FIELD));
   }
 
   public Option<String[]> getRecordKeyFields() {

@@ -21,7 +21,7 @@ import org.apache.hudi.{DataSourceWriteOptions, HoodieFileIndex}
 import org.apache.hudi.AutoRecordKeyGenerationUtils.shouldAutoGenerateRecordKeys
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.toProperties
-import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieCommonConfig, TypedProperties}
+import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieCommonConfig}
 import org.apache.hudi.common.model.WriteOperationType
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.HoodieTableConfig.DATABASE_NAME
@@ -64,7 +64,7 @@ trait ProvidesHoodieConfig extends Logging {
     // NOTE: Here we fallback to "" to make sure that null value is not overridden with
     // default value ("ts")
     // TODO(HUDI-3456) clean up
-    val preCombineField = Option(tableConfig.getPreCombineField).getOrElse("")
+    val preCombineFields = tableConfig.getPreCombineFields.orElse("")
     val hiveSyncConfig = buildHiveSyncConfig(sparkSession, hoodieCatalogTable, tableConfig)
 
     val defaultOpts = Map[String, String](
@@ -82,7 +82,7 @@ trait ProvidesHoodieConfig extends Logging {
       HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE.key -> hiveSyncConfig.getBoolean(HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE).toString
     )
 
-    val overridingOpts = buildOverridingOpts(hoodieCatalogTable, preCombineField)
+    val overridingOpts = buildOverridingOpts(hoodieCatalogTable, preCombineFields)
     combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf,
       defaultOpts = defaultOpts, overridingOpts = overridingOpts)
   }
@@ -90,7 +90,7 @@ trait ProvidesHoodieConfig extends Logging {
   def buildBucketRescaleHoodieConfig(hoodieCatalogTable: HoodieCatalogTable): Map[String, String] = {
     val sparkSession: SparkSession = hoodieCatalogTable.spark
     val tableConfig = hoodieCatalogTable.tableConfig
-    val preCombineField = Option(tableConfig.getPreCombineField).getOrElse("")
+    val preCombineFields = tableConfig.getPreCombineFields.orElse("")
     val hiveSyncConfig = buildHiveSyncConfig(sparkSession, hoodieCatalogTable, tableConfig)
 
     val defaultOpts = Map[String, String](
@@ -103,7 +103,7 @@ trait ProvidesHoodieConfig extends Logging {
       HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key -> "false"
     )
 
-    val overridingOpts = buildOverridingOpts(hoodieCatalogTable, preCombineField)
+    val overridingOpts = buildOverridingOpts(hoodieCatalogTable, preCombineFields)
     combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf,
       defaultOpts = defaultOpts, overridingOpts = overridingOpts)
   }
@@ -557,9 +557,9 @@ object ProvidesHoodieConfig {
     opts.filter { case (_, v) => v != null }
 
   private def buildOverridingOpts(hoodieCatalogTable: HoodieCatalogTable,
-                                  preCombineField: String): Map[String, String] = {
+                                  preCombineFields: String): Map[String, String] = {
     buildCommonOverridingOpts(hoodieCatalogTable) ++ Map(
-      PRECOMBINE_FIELD.key -> preCombineField
+      PRECOMBINE_FIELD.key -> preCombineFields
     )
   }
 

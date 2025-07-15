@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.table.log.block;
 
+import org.apache.hudi.Comparables;
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieDeleteRecord;
 import org.apache.hudi.avro.model.HoodieDeleteRecordList;
 import org.apache.hudi.common.fs.SizeAwareDataInputStream;
@@ -48,14 +50,12 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
-
-import static org.apache.hudi.avro.HoodieAvroUtils.unwrapAvroValueWrapper;
-import static org.apache.hudi.avro.HoodieAvroUtils.wrapValueIntoAvro;
 
 /**
  * Delete block contains a list of keys to be deleted from scanning the blocks so far.
@@ -142,11 +142,18 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
     HoodieDeleteRecordList.Builder recordListBuilder = HOODIE_DELETE_RECORD_LIST_BUILDER_STUB.get();
     HoodieDeleteRecord.Builder recordBuilder = HOODIE_DELETE_RECORD_BUILDER_STUB.get();
     List<HoodieDeleteRecord> deleteRecordList = Arrays.stream(getRecordsToDelete())
-        .map(record -> HoodieDeleteRecord.newBuilder(recordBuilder)
+        .map(record -> {
+          List<Comparable> orderingVals = record.getOrderingValue() instanceof Comparables
+              ? ((Comparables) record.getOrderingValue()).getComparables()
+              : Collections.singletonList(record.getOrderingValue());
+          return HoodieDeleteRecord.newBuilder(recordBuilder)
             .setRecordKey(record.getRecordKey())
             .setPartitionPath(record.getPartitionPath())
-            .setOrderingVal(wrapValueIntoAvro(record.getOrderingValue()))
-            .build())
+            .setOrderingVal(orderingVals.stream()
+              .map(HoodieAvroUtils::wrapValueIntoAvro)
+              .collect(Collectors.toList()))
+            .build();
+        })
         .collect(Collectors.toList());
     writer.write(HoodieDeleteRecordList.newBuilder(recordListBuilder)
         .setDeleteRecordList(deleteRecordList)
@@ -168,10 +175,15 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
       List<HoodieDeleteRecord> deleteRecordList = reader.read(null, decoder)
           .getDeleteRecordList();
       return deleteRecordList.stream()
-          .map(record -> DeleteRecord.create(
-              record.getRecordKey(),
-              record.getPartitionPath(),
-              unwrapAvroValueWrapper(record.getOrderingVal())))
+          .map(record -> {
+            List<Comparable> orderingVals = record.getOrderingVal().stream()
+                .map(HoodieAvroUtils::unwrapAvroValueWrapper)
+                .collect(Collectors.toList());
+            return DeleteRecord.create(
+                record.getRecordKey(),
+                record.getPartitionPath(),
+                new Comparables(orderingVals));
+          })
           .toArray(DeleteRecord[]::new);
     }
   }

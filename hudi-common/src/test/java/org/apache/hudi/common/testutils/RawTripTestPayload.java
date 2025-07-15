@@ -178,7 +178,7 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
       avroData.put("_hoodie_is_deleted", isDeleted);
       convertedRecords.add(
           createHoodieRecordFromAvro(avroData, DefaultHoodieRecordPayload.class.getName(),
-              "timestamp", Option.of(Pair.of("_row_key", "partition_path")),
+              Option.of(new String[] {"timestamp"}), Option.of(Pair.of("_row_key", "partition_path")),
               false, Option.empty(), false, Option.of(AVRO_SCHEMA)));
     }
     return convertedRecords;

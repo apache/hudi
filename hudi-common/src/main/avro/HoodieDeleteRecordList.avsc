@@ -54,17 +54,23 @@
               "doc": "Ordering value determining the order of merging on the same key",
               "type": [
                 "null",
-                "org.apache.hudi.avro.model.BooleanWrapper",
-                "org.apache.hudi.avro.model.IntWrapper",
-                "org.apache.hudi.avro.model.LongWrapper",
-                "org.apache.hudi.avro.model.FloatWrapper",
-                "org.apache.hudi.avro.model.DoubleWrapper",
-                "org.apache.hudi.avro.model.BytesWrapper",
-                "org.apache.hudi.avro.model.StringWrapper",
-                "org.apache.hudi.avro.model.DateWrapper",
-                "org.apache.hudi.avro.model.DecimalWrapper",
-                "org.apache.hudi.avro.model.TimeMicrosWrapper",
-                "org.apache.hudi.avro.model.TimestampMicrosWrapper"
+                {
+                  "type": "array",
+                  "items": [
+                    "null",
+                    "org.apache.hudi.avro.model.BooleanWrapper",
+                    "org.apache.hudi.avro.model.IntWrapper",
+                    "org.apache.hudi.avro.model.LongWrapper",
+                    "org.apache.hudi.avro.model.FloatWrapper",
+                    "org.apache.hudi.avro.model.DoubleWrapper",
+                    "org.apache.hudi.avro.model.BytesWrapper",
+                    "org.apache.hudi.avro.model.StringWrapper",
+                    "org.apache.hudi.avro.model.DateWrapper",
+                    "org.apache.hudi.avro.model.DecimalWrapper",
+                    "org.apache.hudi.avro.model.TimeMicrosWrapper",
+                    "org.apache.hudi.avro.model.TimestampMicrosWrapper"
+                  ]
+                }
               ],
               "default": null
             }

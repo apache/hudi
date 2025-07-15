@@ -19,14 +19,13 @@
 
 package org.apache.hudi.common.table.read
 
-import org.apache.hudi.{DataSourceWriteOptions, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
+import org.apache.hudi.{Comparables, DataSourceWriteOptions, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
 import org.apache.hudi.DataSourceWriteOptions.{OPERATION, PRECOMBINE_FIELD, RECORDKEY_FIELD, TABLE_TYPE}
 import org.apache.hudi.common.config.{HoodieReaderConfig, RecordMergeMode, TypedProperties}
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload.{DELETE_KEY, DELETE_MARKER}
-import org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.read.TestHoodieFileGroupReaderOnSpark.getFileCount
 import org.apache.hudi.common.testutils.{HoodieTestUtils, RawTripTestPayload}
@@ -51,6 +50,7 @@ import org.mockito.Mockito
 import org.mockito.Mockito.when
 
 import java.util
+import java.util.Collections
 
 import scala.collection.JavaConverters._
 
@@ -138,11 +138,11 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
         + "{\"name\": \"col2\", \"type\": \"long\" },"
         + "{ \"name\": \"col3\", \"type\": [\"null\", \"string\"], \"default\": null}]}")
     val row = InternalRow("item", 1000L, "blue")
-    testGetOrderingValue(sparkReaderContext, row, avroSchema, orderingFieldName, 1000L)
+    testGetOrderingValue(sparkReaderContext, row, avroSchema, orderingFieldName, new Comparables(1000L))
     testGetOrderingValue(
-      sparkReaderContext, row, avroSchema, "col3", UTF8String.fromString("blue"))
+      sparkReaderContext, row, avroSchema, "col3", new Comparables(UTF8String.fromString("blue")))
     testGetOrderingValue(
-      sparkReaderContext, row, avroSchema, "non_existent_col", DEFAULT_ORDERING_VALUE)
+      sparkReaderContext, row, avroSchema, "non_existent_col", Comparables.getDefault)
   }
 
   val expectedEventTimeBased: Seq[(Int, String, String, String, Double, String)] = Seq(
@@ -255,8 +255,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
                                    avroSchema: Schema,
                                    orderingColumn: String,
                                    expectedOrderingValue: Comparable[_]): Unit = {
-    assertEquals(expectedOrderingValue, sparkReaderContext.getOrderingValue(
-      row, avroSchema, HOption.of(orderingColumn)))
+    assertEquals(expectedOrderingValue, sparkReaderContext.getOrderingValue(row, avroSchema, HOption.of(Collections.singletonList(orderingColumn))))
   }
 
   @Test

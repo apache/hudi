@@ -19,6 +19,7 @@
 
 package org.apache.hudi.common.table.read;
 
+import org.apache.hudi.Comparables;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
@@ -34,7 +35,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.Schema;
@@ -50,12 +50,12 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
-import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 import static org.apache.hudi.common.table.read.FileGroupRecordBuffer.getOrderingValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -103,9 +103,9 @@ class TestFileGroupRecordBuffer {
     HoodieReaderContext readerContext = mock(HoodieReaderContext.class);
     DeleteRecord deleteRecord = mock(DeleteRecord.class);
     mockDeleteRecord(deleteRecord, null);
-    assertEquals(DEFAULT_ORDERING_VALUE, getOrderingValue(readerContext, deleteRecord));
-    mockDeleteRecord(deleteRecord, DEFAULT_ORDERING_VALUE);
-    assertEquals(DEFAULT_ORDERING_VALUE, getOrderingValue(readerContext, deleteRecord));
+    assertEquals(Comparables.getDefault(), getOrderingValue(readerContext, deleteRecord));
+    mockDeleteRecord(deleteRecord, Comparables.getDefaultOrderingValue());
+    assertEquals(Comparables.getDefault(), getOrderingValue(readerContext, deleteRecord));
     String orderingValue = "xyz";
     String convertedValue = "_xyz";
     mockDeleteRecord(deleteRecord, orderingValue);
@@ -181,7 +181,8 @@ class TestFileGroupRecordBuffer {
     HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
     when(tableConfig.getRecordMergeMode()).thenReturn(mergeMode);
     when(tableConfig.populateMetaFields()).thenReturn(true);
-    when(tableConfig.getPreCombineField()).thenReturn(setPrecombine ? preCombineField : StringUtils.EMPTY_STRING);
+    when(tableConfig.getPreCombineFieldList()).thenReturn(Option.ofNullable(setPrecombine ? Collections.singletonList(preCombineField) : null));
+    when(tableConfig.getPreCombineFields()).thenReturn(Option.ofNullable(setPrecombine ? preCombineField : null));
     when(tableConfig.getTableVersion()).thenReturn(tableVersion);
     if (tableConfig.getTableVersion() == HoodieTableVersion.SIX) {
       if (mergeMode == RecordMergeMode.EVENT_TIME_ORDERING) {
@@ -344,7 +345,7 @@ class TestFileGroupRecordBuffer {
     record.put("_hoodie_is_deleted", false);
     when(readerContext.getOrderingValue(any(), any(), any())).thenReturn(1);
     when(readerContext.convertValueToEngineType(any())).thenReturn(1);
-    BufferedRecord<GenericRecord> bufferedRecord = BufferedRecord.forRecordWithContext(record, schema, readerContext, Option.of("ts"), true);
+    BufferedRecord<GenericRecord> bufferedRecord = BufferedRecord.forRecordWithContext(record, schema, readerContext, Option.of(Collections.singletonList("ts")), true);
 
     keyBasedBuffer.processNextDataRecord(bufferedRecord, "12345");
     Map<Serializable, BufferedRecord<GenericRecord>> records = keyBasedBuffer.getLogRecords();
@@ -359,7 +360,7 @@ class TestFileGroupRecordBuffer {
     anotherRecord.put("ts", System.currentTimeMillis());
     anotherRecord.put("op", "i");
     anotherRecord.put("_hoodie_is_deleted", true);
-    bufferedRecord = BufferedRecord.forRecordWithContext(anotherRecord, schema, readerContext, Option.of("ts"), true);
+    bufferedRecord = BufferedRecord.forRecordWithContext(anotherRecord, schema, readerContext, Option.of(Collections.singletonList("ts")), true);
 
     keyBasedBuffer.processNextDataRecord(bufferedRecord, "54321");
     records = keyBasedBuffer.getLogRecords();

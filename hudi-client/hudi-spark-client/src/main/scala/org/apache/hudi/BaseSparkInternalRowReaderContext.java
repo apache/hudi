@@ -159,7 +159,7 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
   }
 
   @Override
-  public Comparable convertValueToEngineType(Comparable value) {
+  public Comparable convertComparableToEngineType(Comparable value) {
     if (value instanceof String) {
       // Spark reads String field values as UTF8String.
       // To foster value comparison, if the value is of String type, e.g., from

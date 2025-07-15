@@ -19,6 +19,7 @@
 
 package org.apache.hudi.common.table.log.block;
 
+import org.apache.hudi.Comparables;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
@@ -57,7 +58,7 @@ public class TestHoodieDeleteBlock {
   @Test
   public void testSerializeAndDeserializeV3DeleteBlock() throws IOException {
     DeleteRecord[] deleteRecords = IntStream.range(0, 100)
-        .mapToObj(i -> DeleteRecord.create(KEY_PREFIX + i, PARTITION_PATH, random.nextLong()))
+        .mapToObj(i -> DeleteRecord.create(KEY_PREFIX + i, PARTITION_PATH, new Comparables(random.nextLong())))
         .toArray(DeleteRecord[]::new);
     testDeleteBlockWithValidation(deleteRecords);
   }
@@ -100,7 +101,7 @@ public class TestHoodieDeleteBlock {
             {new String[] {"val1", "val2", "val3", null}},
             {new Timestamp[] {new Timestamp(1690766971000L), new Timestamp(1672536571000L)}},
             // {new LocalDate[] {LocalDate.of(2023, 1, 1), LocalDate.of(1980, 7, 1)}} // HUDI-8854
-            {new BigDecimal[] {new BigDecimal("12345678901234.2948"), new BigDecimal("23456789012345.4856")}}
+            {new BigDecimal[] {new BigDecimal("12345678901234.294800000000000"), new BigDecimal("23456789012345.485600000000000")}}
         };
     return Stream.of(data).map(Arguments::of);
   }
@@ -111,7 +112,7 @@ public class TestHoodieDeleteBlock {
     DeleteRecord[] deleteRecords = new DeleteRecord[orderingValues.length];
     for (int i = 0; i < orderingValues.length; i++) {
       deleteRecords[i] = DeleteRecord.create(
-          KEY_PREFIX + i, PARTITION_PATH, orderingValues[i]);
+          KEY_PREFIX + i, PARTITION_PATH, new Comparables(orderingValues[i]));
     }
     testDeleteBlockWithValidation(deleteRecords);
   }

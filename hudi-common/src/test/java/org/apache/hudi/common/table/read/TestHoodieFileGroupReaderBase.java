@@ -19,6 +19,7 @@
 
 package org.apache.hudi.common.table.read;
 
+import org.apache.hudi.Comparables;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -73,6 +74,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -210,6 +212,12 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     List<HoodieTestDataGenerator.RecordIdentifier> expectedUnMergedRecords = new ArrayList<>();
     objectMapper.reader().forType(HoodieTestDataGenerator.RecordIdentifier.class).<HoodieTestDataGenerator.RecordIdentifier>readValues(basePath.resolve("unmerged_records.json").toFile())
         .forEachRemaining(expectedUnMergedRecords::add);
+    expectedRecords = expectedRecords.stream()
+        .map(recordIdentifier -> HoodieTestDataGenerator.RecordIdentifier.clone(recordIdentifier, new Comparables(recordIdentifier.getOrderingVal()).toString()))
+        .collect(Collectors.toList());
+    expectedUnMergedRecords = expectedUnMergedRecords.stream()
+        .map(recordIdentifier -> HoodieTestDataGenerator.RecordIdentifier.clone(recordIdentifier, new Comparables(recordIdentifier.getOrderingVal()).toString()))
+        .collect(Collectors.toList());
     validateOutputFromFileGroupReaderWithExistingRecords(getStorageConf(), basePath.toString(), true, 1, RecordMergeMode.EVENT_TIME_ORDERING,
         expectedRecords, expectedUnMergedRecords);
   }
@@ -235,7 +243,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
           for (T record : records) {
             String recordKey = readerContext.getRecordKey(record, avroSchema);
             //test key based
-            BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(record, avroSchema, readerContext, Option.of("timestamp"), false);
+            BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(record, avroSchema, readerContext, Option.of(Arrays.asList("timestamp")), false);
             spillableMap.put(recordKey, bufferedRecord.toBinary(readerContext));
 
             //test position based
@@ -257,7 +265,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
             assertEquals(positionBased.getRecordKey(), recordKey);
             assertEquals(avroSchema, readerContext.getSchemaFromBufferRecord(keyBased));
             // generate field value is hardcoded as 0 for ordering field: timestamp, see HoodieTestDataGenerator#generateRandomValue
-            assertEquals(readerContext.convertValueToEngineType(0L), positionBased.getOrderingValue());
+            assertEquals(new Comparables(readerContext.convertValueToEngineType(0L)), positionBased.getOrderingValue());
           }
         }
       }
@@ -506,7 +514,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
         .map(record -> new HoodieTestDataGenerator.RecordIdentifier(
             readerContext.getValue(record, schema, KEY_FIELD_NAME).toString(),
             readerContext.getValue(record, schema, PARTITION_FIELD_NAME).toString(),
-            readerContext.getValue(record, schema, PRECOMBINE_FIELD_NAME).toString(),
+            new Comparables((Comparable) readerContext.getValue(record, schema, PRECOMBINE_FIELD_NAME)).toString(),
             readerContext.getValue(record, schema, RIDER_FIELD_NAME).toString()))
         .collect(Collectors.toList());
   }

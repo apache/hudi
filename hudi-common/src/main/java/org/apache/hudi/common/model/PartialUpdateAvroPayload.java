@@ -18,11 +18,10 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.Comparables;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import org.apache.avro.Schema;
@@ -33,8 +32,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
+import java.util.stream.Collectors;
 
 /**
  * Payload clazz that is used for partial update Hudi Table.
@@ -262,22 +263,21 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
    * @return true if the given record is newer
    */
   private static boolean isRecordNewer(Comparable orderingVal, IndexedRecord record, Properties prop) {
-    String orderingField = ConfigUtils.getOrderingField(prop);
-    if (!StringUtils.isNullOrEmpty(orderingField)) {
+    Option<String[]> orderingFields = ConfigUtils.getOrderingFields(prop);
+    if (orderingFields.isPresent()) {
       boolean consistentLogicalTimestampEnabled = Boolean.parseBoolean(prop.getProperty(
           KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
           KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()));
 
-      Comparable oldOrderingVal =
-          (Comparable) HoodieAvroUtils.getNestedFieldVal(
-              (GenericRecord) record,
-              orderingField,
-              true,
-              consistentLogicalTimestampEnabled);
+      Comparable oldOrderingVal = new Comparables(
+          Arrays.stream(orderingFields.get())
+              .map(field -> (Comparable) HoodieAvroUtils.getNestedFieldVal((GenericRecord) record, field, true, consistentLogicalTimestampEnabled))
+              .collect(Collectors.toList())
+      );
 
       // pick the payload with greater ordering value as insert record
       return oldOrderingVal != null
-          && ReflectionUtils.isSameClass(oldOrderingVal, orderingVal)
+          && Comparables.isSameClass(oldOrderingVal, orderingVal)
           && oldOrderingVal.compareTo(orderingVal) > 0;
     }
     return false;

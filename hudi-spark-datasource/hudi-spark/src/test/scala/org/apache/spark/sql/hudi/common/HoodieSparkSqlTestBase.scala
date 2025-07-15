@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.common
 
-import org.apache.hudi.{DefaultSparkRecordMerger, HoodieSparkUtils}
+import org.apache.hudi.{Comparables, DefaultSparkRecordMerger, HoodieSparkUtils}
 import org.apache.hudi.HoodieFileIndex.DataSkippingFailureMode
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig, HoodieStorageConfig}
 import org.apache.hudi.common.engine.HoodieLocalEngineContext
@@ -438,7 +438,7 @@ object HoodieSparkSqlTestBase {
       val logBlock = logReader.next()
       if (logBlock.isInstanceOf[HoodieDeleteBlock]) {
         val deleteLogBlock = logBlock.asInstanceOf[HoodieDeleteBlock]
-        assertTrue(deleteLogBlock.getRecordsToDelete.forall(i => i.getOrderingValue() == 0 || i.getOrderingValue() == null))
+        assertTrue(deleteLogBlock.getRecordsToDelete.forall(i => i.getOrderingValue().equals(Comparables.getDefault) || i.getOrderingValue() == null))
         deleteLogBlockFound = true
       }
     }

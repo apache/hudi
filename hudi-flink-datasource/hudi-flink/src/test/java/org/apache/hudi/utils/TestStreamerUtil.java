@@ -86,7 +86,7 @@ public class TestStreamerUtil {
     assertTrue(metaClient1.getTableConfig().getPartitionFields().isPresent(),
         "Missing partition columns in the hoodie.properties.");
     assertArrayEquals(metaClient1.getTableConfig().getPartitionFields().get(), new String[] {"p0", "p1"});
-    assertEquals(metaClient1.getTableConfig().getPreCombineField(), "ts");
+    assertEquals(metaClient1.getTableConfig().getPreCombineFields().get(), "ts");
     assertEquals(metaClient1.getTableConfig().getKeyGeneratorClassName(), SimpleAvroKeyGenerator.class.getName());
     assertEquals(HoodieTableVersion.EIGHT, metaClient1.getTableConfig().getTableVersion());
 

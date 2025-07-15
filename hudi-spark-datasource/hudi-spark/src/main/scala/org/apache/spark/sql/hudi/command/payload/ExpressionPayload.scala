@@ -18,6 +18,7 @@
 package org.apache.spark.sql.hudi.command.payload
 
 import org.apache.hudi.AvroConversionUtils.{convertAvroSchemaToStructType, convertStructTypeToAvroSchema}
+import org.apache.hudi.Comparables
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 import org.apache.hudi.avro.AvroSchemaUtils.{isNullable, resolveNullableSchema}
@@ -66,7 +67,7 @@ class ExpressionPayload(@transient record: GenericRecord,
   extends DefaultHoodieRecordPayload(record, orderingVal) with Logging {
 
   def this(recordOpt: HOption[GenericRecord]) {
-    this(recordOpt.orElse(null), HoodieRecord.DEFAULT_ORDERING_VALUE)
+    this(recordOpt.orElse(null), Comparables.getDefault)
   }
 
   override def combineAndGetUpdateValue(currentValue: IndexedRecord,
@@ -180,16 +181,18 @@ class ExpressionPayload(@transient record: GenericRecord,
       }
     } else {
       // For customized payload, create the payload class and merge.
-      val orderingField = ConfigUtils.getOrderingField(properties)
-      if (StringUtils.isNullOrEmpty(orderingField)) {
+      val orderingFieldsOpt = ConfigUtils.getOrderingFields(properties)
+      if (orderingFieldsOpt.isEmpty) {
         HOption.of(incomingRecord)
       } else {
         val consistentLogicalTimestampEnabled = properties.getProperty(
           KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key,
           KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue).toBoolean
-        val incomingRecordPayload = HoodieRecordUtils.loadPayload(originalPayload, incomingRecord,
-          HoodieAvroUtils.getNestedFieldVal(incomingRecord, orderingField, true, consistentLogicalTimestampEnabled)
-            .asInstanceOf[Comparable[_]]).asInstanceOf[HoodieRecordPayload[_ <: HoodieRecordPayload[_]]]
+        val orderingValue = new Comparables(orderingFieldsOpt.get().toStream
+          .map(field => HoodieAvroUtils.getNestedFieldVal(incomingRecord, field, true, consistentLogicalTimestampEnabled).asInstanceOf[Comparable[_]])
+          .toList.asJava)
+        val incomingRecordPayload = HoodieRecordUtils.loadPayload(originalPayload, incomingRecord, orderingValue)
+          .asInstanceOf[HoodieRecordPayload[_ <: HoodieRecordPayload[_]]]
         incomingRecordPayload.combineAndGetUpdateValue(existingRecord, schema, properties)
       }
     }
