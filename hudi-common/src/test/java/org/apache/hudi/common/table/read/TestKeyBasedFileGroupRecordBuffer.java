@@ -80,11 +80,10 @@ class TestKeyBasedFileGroupRecordBuffer {
   void readWithEventTimeOrdering() throws IOException {
     HoodieReadStats readStats = new HoodieReadStats();
     HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
-    when(tableConfig.getPayloadClass()).thenReturn(CustomPayload.class.getName());
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[]{"record_key"}));
     StorageConfiguration<?> storageConfiguration = mock(StorageConfiguration.class);
     HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(storageConfiguration, tableConfig, Option.empty(), Option.empty());
-    KeyBasedFileGroupRecordBuffer<IndexedRecord> fileGroupRecordBuffer = buildSortedKeyBasedFileGroupRecordBuffer(readerContext, tableConfig, readStats, null,
+    KeyBasedFileGroupRecordBuffer<IndexedRecord> fileGroupRecordBuffer = buildKeyBasedFileGroupRecordBuffer(readerContext, tableConfig, readStats, null,
         RecordMergeMode.EVENT_TIME_ORDERING, Option.of("ts"), Option.of(Pair.of("counter", "3")));
 
     fileGroupRecordBuffer.setBaseFileIterator(ClosableIterator.wrap(Arrays.asList(testRecord1, testRecord2, testRecord3).iterator()));
@@ -105,11 +104,10 @@ class TestKeyBasedFileGroupRecordBuffer {
   void readWithEventTimeOrderingAndDeleteBlock() throws IOException {
     HoodieReadStats readStats = new HoodieReadStats();
     HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
-    when(tableConfig.getPayloadClass()).thenReturn(CustomPayload.class.getName());
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[]{"record_key"}));
     StorageConfiguration<?> storageConfiguration = mock(StorageConfiguration.class);
     HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(storageConfiguration, tableConfig, Option.empty(), Option.empty());
-    KeyBasedFileGroupRecordBuffer<IndexedRecord> fileGroupRecordBuffer = buildSortedKeyBasedFileGroupRecordBuffer(readerContext, tableConfig, readStats, null,
+    KeyBasedFileGroupRecordBuffer<IndexedRecord> fileGroupRecordBuffer = buildKeyBasedFileGroupRecordBuffer(readerContext, tableConfig, readStats, null,
         RecordMergeMode.EVENT_TIME_ORDERING, Option.of("ts"), Option.of(Pair.of("counter", "3")));
 
     fileGroupRecordBuffer.setBaseFileIterator(ClosableIterator.wrap(Arrays.asList(testRecord1, testRecord2, testRecord3).iterator()));
@@ -138,11 +136,10 @@ class TestKeyBasedFileGroupRecordBuffer {
   void readWithCommitTimeOrdering() throws IOException {
     HoodieReadStats readStats = new HoodieReadStats();
     HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
-    when(tableConfig.getPayloadClass()).thenReturn(CustomPayload.class.getName());
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[]{"record_key"}));
     StorageConfiguration<?> storageConfiguration = mock(StorageConfiguration.class);
     HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(storageConfiguration, tableConfig, Option.empty(), Option.empty());
-    KeyBasedFileGroupRecordBuffer<IndexedRecord> fileGroupRecordBuffer = buildSortedKeyBasedFileGroupRecordBuffer(readerContext, tableConfig, readStats, null,
+    KeyBasedFileGroupRecordBuffer<IndexedRecord> fileGroupRecordBuffer = buildKeyBasedFileGroupRecordBuffer(readerContext, tableConfig, readStats, null,
         RecordMergeMode.COMMIT_TIME_ORDERING, Option.empty(), Option.of(Pair.of("counter", "3")));
 
     fileGroupRecordBuffer.setBaseFileIterator(ClosableIterator.wrap(Arrays.asList(testRecord1, testRecord2, testRecord3).iterator()));
@@ -166,7 +163,7 @@ class TestKeyBasedFileGroupRecordBuffer {
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[]{"record_key"}));
     StorageConfiguration<?> storageConfiguration = mock(StorageConfiguration.class);
     HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(storageConfiguration, tableConfig, Option.empty(), Option.empty());
-    KeyBasedFileGroupRecordBuffer<IndexedRecord> fileGroupRecordBuffer = buildSortedKeyBasedFileGroupRecordBuffer(readerContext, tableConfig, readStats, new HoodieAvroRecordMerger(),
+    KeyBasedFileGroupRecordBuffer<IndexedRecord> fileGroupRecordBuffer = buildKeyBasedFileGroupRecordBuffer(readerContext, tableConfig, readStats, new HoodieAvroRecordMerger(),
         RecordMergeMode.CUSTOM, Option.empty(), Option.empty());
 
     fileGroupRecordBuffer.setBaseFileIterator(ClosableIterator.wrap(Arrays.asList(testRecord1, testRecord2, testRecord3, testRecord4).iterator()));
@@ -193,7 +190,7 @@ class TestKeyBasedFileGroupRecordBuffer {
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[]{"record_key"}));
     StorageConfiguration<?> storageConfiguration = mock(StorageConfiguration.class);
     HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(storageConfiguration, tableConfig, Option.empty(), Option.empty());
-    KeyBasedFileGroupRecordBuffer<IndexedRecord> fileGroupRecordBuffer = buildSortedKeyBasedFileGroupRecordBuffer(readerContext, tableConfig, readStats, new CustomMerger(),
+    KeyBasedFileGroupRecordBuffer<IndexedRecord> fileGroupRecordBuffer = buildKeyBasedFileGroupRecordBuffer(readerContext, tableConfig, readStats, new CustomMerger(),
         RecordMergeMode.CUSTOM, Option.empty(), Option.empty());
 
     fileGroupRecordBuffer.setBaseFileIterator(ClosableIterator.wrap(Arrays.asList(testRecord1, testRecord2, testRecord3, testRecord4).iterator()));
@@ -220,13 +217,13 @@ class TestKeyBasedFileGroupRecordBuffer {
     return record;
   }
 
-  private static KeyBasedFileGroupRecordBuffer<IndexedRecord> buildSortedKeyBasedFileGroupRecordBuffer(HoodieReaderContext<IndexedRecord> readerContext,
-                                                                                                       HoodieTableConfig tableConfig,
-                                                                                                       HoodieReadStats readStats,
-                                                                                                       HoodieRecordMerger recordMerger,
-                                                                                                       RecordMergeMode recordMergeMode,
-                                                                                                       Option<String> orderingFieldName,
-                                                                                                       Option<Pair<String, String>> deleteMarkerKeyValue) {
+  private static KeyBasedFileGroupRecordBuffer<IndexedRecord> buildKeyBasedFileGroupRecordBuffer(HoodieReaderContext<IndexedRecord> readerContext,
+                                                                                                 HoodieTableConfig tableConfig,
+                                                                                                 HoodieReadStats readStats,
+                                                                                                 HoodieRecordMerger recordMerger,
+                                                                                                 RecordMergeMode recordMergeMode,
+                                                                                                 Option<String> orderingFieldName,
+                                                                                                 Option<Pair<String, String>> deleteMarkerKeyValue) {
 
     readerContext.setRecordMerger(Option.ofNullable(recordMerger));
     FileGroupReaderSchemaHandler<IndexedRecord> fileGroupReaderSchemaHandler = mock(FileGroupReaderSchemaHandler.class);
