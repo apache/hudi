@@ -42,6 +42,8 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock.FooterMetadataType;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
@@ -244,18 +246,16 @@ public class HoodieLogFileCommand {
           .withFileSlice(fileSlice)
           .withDataSchema(readerSchema)
           .withRequestedSchema(readerSchema)
-          .withLatestCommitTime("99999999999999")
+          .withLatestCommitTime(client.getActiveTimeline().getCommitAndReplaceTimeline().lastInstant().map(HoodieInstant::requestedTime).orElse(HoodieInstantTimeGenerator.getCurrentInstantTimeStr()))
           .withProps(buildFileGroupReaderProperties())
           .withShouldUseRecordPosition(false)
-          .build()) {
-
-        try (ClosableIterator<IndexedRecord> recordIterator = fileGroupReader.getClosableIterator()) {
-          recordIterator.forEachRemaining(record -> {
-            if (allRecords.size() < limit) {
-              allRecords.add(record);
-            }
-          });
-        }
+          .build();
+           ClosableIterator<IndexedRecord> recordIterator = fileGroupReader.getClosableIterator()) {
+        recordIterator.forEachRemaining(record -> {
+          if (allRecords.size() < limit) {
+            allRecords.add(record);
+          }
+        });
       }
     } else {
 
