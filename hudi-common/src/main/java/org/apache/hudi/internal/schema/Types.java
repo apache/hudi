@@ -21,6 +21,9 @@ package org.apache.hudi.internal.schema;
 import org.apache.hudi.internal.schema.Type.NestedType;
 import org.apache.hudi.internal.schema.Type.PrimitiveType;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.List;
@@ -33,6 +36,8 @@ import java.util.stream.Collectors;
  * Types supported in schema evolution.
  */
 public class Types {
+  private static final Logger LOG = LoggerFactory.getLogger(Types.class);
+  
   private Types() {
   }
 
@@ -285,11 +290,17 @@ public class Types {
       if (this == o) {
         return true;
       } else if (!(o instanceof FixedType)) {
+        LOG.warn("FixedType.equals: comparison failed - other object is not FixedType (class: {})", 
+            o != null ? o.getClass().getName() : "null");
         return false;
       }
 
       FixedType fixedType = (FixedType) o;
-      return size == fixedType.size;
+      boolean result = size == fixedType.size;
+      if (!result) {
+        LOG.warn("FixedType.equals: comparison failed - this.size={}, that.size={}", size, fixedType.size);
+      }
+      return result;
     }
 
     @Override
@@ -367,14 +378,23 @@ public class Types {
       if (this == o) {
         return true;
       } else if (!(o instanceof DecimalType)) {
+        LOG.warn("DecimalType.equals: comparison failed - other object is not DecimalType (class: {})",
+            o != null ? o.getClass().getName() : "null");
         return false;
       }
 
       DecimalType that = (DecimalType) o;
       if (scale != that.scale) {
+        LOG.warn("DecimalType.equals: comparison failed - scale mismatch. This: [precision={}, scale={}], That: [precision={}, scale={}]", 
+            precision, scale, that.precision, that.scale);
         return false;
       }
-      return precision == that.precision;
+      boolean result = precision == that.precision;
+      if (!result) {
+        LOG.warn("DecimalType.equals: comparison failed - precision mismatch. This: [precision={}, scale={}], That: [precision={}, scale={}]",
+            precision, scale, that.precision, that.scale);
+      }
+      return result;
     }
 
     @Override
@@ -475,20 +495,54 @@ public class Types {
       if (this == o) {
         return true;
       } else if (!(o instanceof Field)) {
+        LOG.warn("Field.equals: comparison failed - other object is not Field (class: {})",
+            o != null ? o.getClass().getName() : "null");
         return false;
       }
 
       Field that = (Field) o;
       if (isOptional != that.isOptional) {
+        LOG.warn("Field.equals: comparison failed - isOptional mismatch. "
+            + "This: [id={}, name='{}', isOptional={}, type={}, doc='{}'], "
+            + "That: [id={}, name='{}', isOptional={}, type={}, doc='{}']",
+            id, name, isOptional, type, doc,
+            that.id, that.name, that.isOptional, that.type, that.doc);
         return false;
       } else if (id != that.id) {
+        LOG.warn("Field.equals: comparison failed - id mismatch. "
+                + "This: [id={}, name='{}', isOptional={}, type={}, doc='{}'], "
+                + "That: [id={}, name='{}', isOptional={}, type={}, doc='{}']",
+            id, name, isOptional, type, doc,
+            that.id, that.name, that.isOptional, that.type, that.doc);
         return false;
       } else if (!name.equals(that.name)) {
+        LOG.warn("Field.equals: comparison failed - name mismatch. "
+                + "This: [id={}, name='{}', isOptional={}, type={}, doc='{}'], "
+                + "That: [id={}, name='{}', isOptional={}, type={}, doc='{}']",
+            id, name, isOptional, type, doc,
+            that.id, that.name, that.isOptional, that.type, that.doc);
         return false;
       } else if (!Objects.equals(doc, that.doc)) {
+        LOG.warn("Field.equals: comparison failed - doc mismatch. "
+                + "This: [id={}, name='{}', isOptional={}, type={}, doc='{}'], "
+                + "That: [id={}, name='{}', isOptional={}, type={}, doc='{}']",
+            id, name, isOptional, type, doc,
+            that.id, that.name, that.isOptional, that.type, that.doc);
         return false;
       }
-      return type.equals(that.type);
+      boolean typeEquals = type.equals(that.type);
+      if (!typeEquals) {
+        LOG.warn("Field.equals: comparison failed - type mismatch for field '{}'. "
+                + "This: [id={}, name='{}', isOptional={}, type={}, doc='{}'], "
+                + "That: [id={}, name='{}', isOptional={}, type={}, doc='{}']",
+            name,
+            id, name, isOptional, type, doc,
+            that.id, that.name, that.isOptional, that.type, that.doc);
+        // Log type details to help identify the exact mismatch
+        LOG.warn("Field.equals: Type comparison details for field '{}' - This.type: {} (class: {}), That.type: {} (class: {})",
+            name, type, type.getClass().getSimpleName(), that.type, that.type.getClass().getSimpleName());
+      }
+      return typeEquals;
     }
 
     @Override
@@ -587,11 +641,83 @@ public class Types {
       if (this == o) {
         return true;
       } else if (!(o instanceof RecordType)) {
+        LOG.warn("RecordType.equals: comparison failed - other object is not RecordType (class: {})",
+            o != null ? o.getClass().getName() : "null");
         return false;
       }
 
       RecordType that = (RecordType) o;
-      return Arrays.equals(fields, that.fields);
+      boolean result = Arrays.equals(fields, that.fields);
+      if (!result) {
+        LOG.warn("RecordType.equals: comparison failed start - fields not equal. "
+                + "This: [name='{}', fields.length={}], That: [name='{}', fields.length={}]",
+            name, fields != null ? fields.length : "null", 
+            that.name, that.fields != null ? that.fields.length : "null");
+        if (fields != null && that.fields != null) {
+          if (fields.length != that.fields.length) {
+            LOG.warn("RecordType.equals: different number of fields. This has {} fields, That has {} fields",
+                fields.length, that.fields.length);
+            // Log fields that exist in this but not in that (by name)
+            for (Field f : fields) {
+              boolean found = false;
+              for (Field thatF : that.fields) {
+                if (f.name.equals(thatF.name)) {
+                  found = true;
+                  break;
+                }
+              }
+              if (!found) {
+                LOG.warn("RecordType.equals: field '{}' exists in This but not in That", f.name);
+              }
+            }
+            // Log fields that exist in that but not in this (by name)
+            for (Field f : that.fields) {
+              boolean found = false;
+              for (Field thisF : fields) {
+                if (f.name.equals(thisF.name)) {
+                  found = true;
+                  break;
+                }
+              }
+              if (!found) {
+                LOG.warn("RecordType.equals: field '{}' exists in That but not in This", f.name);
+              }
+            }
+          } else {
+            // Same length, check each field at each position
+            for (int i = 0; i < fields.length; i++) {
+              if (!fields[i].equals(that.fields[i])) {
+                LOG.warn("RecordType.equals: field mismatch at index {}. This.field[{}]: {}, That.field[{}]: {}",
+                    i, i, fields[i], i, that.fields[i]);
+                // Also check if it's just an ordering issue
+                boolean foundInDifferentPosition = false;
+                for (int j = 0; j < that.fields.length; j++) {
+                  if (fields[i].equals(that.fields[j])) {
+                    LOG.warn("RecordType.equals: Note - This.field[{}] ('{}') matches That.field[{}] ('{}') - possible ordering issue",
+                        i, fields[i].name, j, that.fields[j].name);
+                    foundInDifferentPosition = true;
+                    break;
+                  }
+                }
+                if (!foundInDifferentPosition) {
+                  // Check if a field with same name exists but with different properties
+                  for (Field thatF : that.fields) {
+                    if (fields[i].name.equals(thatF.name)) {
+                      LOG.warn("RecordType.equals: Field '{}' exists in both but with different properties", fields[i].name);
+                      break;
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        LOG.warn("RecordType.equals: comparison failed end - fields not equal. "
+                + "This: [name='{}', fields.length={}], That: [name='{}', fields.length={}]",
+            name, fields != null ? fields.length : "null",
+            that.name, that.fields != null ? that.fields.length : "null");
+      }
+      return result;
     }
 
     @Override
@@ -676,10 +802,22 @@ public class Types {
       if (this == o) {
         return true;
       } else if (!(o instanceof ArrayType)) {
+        LOG.warn("ArrayType.equals: comparison failed - other object is not ArrayType (class: {})",
+            o != null ? o.getClass().getName() : "null");
         return false;
       }
       ArrayType listType = (ArrayType) o;
-      return elementField.equals(listType.elementField);
+      boolean result = elementField.equals(listType.elementField);
+      if (!result) {
+        LOG.warn("ArrayType.equals: comparison failed - elementField not equal. "
+                + "This.elementField: {}, That.elementField: {}",
+            elementField, listType.elementField);
+        // Additional context about element types
+        LOG.warn("ArrayType.equals: Element type details - This.elementType: {} (class: {}), That.elementType: {} (class: {})",
+            elementType(), elementType().getClass().getSimpleName(),
+            listType.elementType(), listType.elementType().getClass().getSimpleName());
+      }
+      return result;
     }
 
     @Override
@@ -777,14 +915,34 @@ public class Types {
       if (this == o) {
         return true;
       } else if (!(o instanceof MapType)) {
+        LOG.warn("MapType.equals: comparison failed - other object is not MapType (class: {})",
+            o != null ? o.getClass().getName() : "null");
         return false;
       }
 
       MapType mapType = (MapType) o;
-      if (!keyField.equals(mapType.keyField)) {
+      boolean keyEquals = keyField.equals(mapType.keyField);
+      if (!keyEquals) {
+        LOG.warn("MapType.equals: comparison failed - keyField not equal. "
+                + "This: [keyField={}, valueField={}], That: [keyField={}, valueField={}]",
+            keyField, valueField, mapType.keyField, mapType.valueField);
+        // Additional context about key types
+        LOG.warn("MapType.equals: Key type details - This.keyType: {} (class: {}), That.keyType: {} (class: {})",
+            keyType(), keyType().getClass().getSimpleName(),
+            mapType.keyType(), mapType.keyType().getClass().getSimpleName());
         return false;
       }
-      return valueField.equals(mapType.valueField);
+      boolean valueEquals = valueField.equals(mapType.valueField);
+      if (!valueEquals) {
+        LOG.warn("MapType.equals: comparison failed - valueField not equal. "
+                + "This: [keyField={}, valueField={}], That: [keyField={}, valueField={}]",
+            keyField, valueField, mapType.keyField, mapType.valueField);
+        // Additional context about value types
+        LOG.warn("MapType.equals: Value type details - This.valueType: {} (class: {}), That.valueType: {} (class: {})",
+            valueType(), valueType().getClass().getSimpleName(),
+            mapType.valueType(), mapType.valueType().getClass().getSimpleName());
+      }
+      return valueEquals;
     }
 
     @Override

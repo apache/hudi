@@ -270,10 +270,10 @@ public class InternalSchema implements Serializable {
 
   @Override
   public String toString() {
-    return String.format("table {\n%s\n}",
+    return String.format("table {\n%s\n}, Version : %s",
         StringUtils.join(record.fields().stream()
             .map(f -> " " + f)
-            .collect(Collectors.toList()).toArray(new String[0]), "\n"));
+            .collect(Collectors.toList()).toArray(new String[0]), "\n"), String.valueOf(versionId));
   }
 
   @Override

@@ -292,6 +292,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     TableSchemaResolver schemaUtil = new TableSchemaResolver(table.getMetaClient());
     String historySchemaStr = schemaUtil.getTableHistorySchemaStrFromCommitMetadata().orElse("");
     FileBasedInternalSchemaStorageManager schemasManager = new FileBasedInternalSchemaStorageManager(table.getMetaClient());
+    LOG.warn("Inside Method - saveInternalSchema");
     if (!historySchemaStr.isEmpty() || Boolean.parseBoolean(config.getString(HoodieCommonConfig.RECONCILE_SCHEMA.key()))) {
       InternalSchema internalSchema;
       Schema avroSchema = HoodieAvroUtils.createHoodieWriteSchema(config.getSchema(), config.allowOperationMetadataField());
@@ -303,6 +304,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
             SerDeHelper.parseSchemas(historySchemaStr));
       }
       InternalSchema evolvedSchema = AvroSchemaEvolutionUtils.reconcileSchema(avroSchema, internalSchema);
+      LOG.warn("Evolved Schema : " + evolvedSchema);
+      LOG.warn("Internal Schema : " + internalSchema);
+      LOG.warn("Equals Result - " + evolvedSchema.equals(internalSchema));
       if (evolvedSchema.equals(internalSchema)) {
         metadata.addMetadata(SerDeHelper.LATEST_SCHEMA, SerDeHelper.toJson(evolvedSchema));
         //TODO save history schema by metaTable

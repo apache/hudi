@@ -20,6 +20,9 @@ package org.apache.hudi.internal.schema;
 
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.Serializable;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
@@ -41,6 +44,7 @@ import java.util.UUID;
  * to do add support for localTime if avro version is updated
  */
 public interface Type extends Serializable {
+  Logger LOG = LoggerFactory.getLogger(Type.class);
 
   OffsetDateTime EPOCH = Instant.ofEpochSecond(0).atOffset(ZoneOffset.UTC);
   LocalDate EPOCH_DAY = EPOCH.toLocalDate();
@@ -152,7 +156,12 @@ public interface Type extends Serializable {
         return false;
       }
       PrimitiveType that = (PrimitiveType) o;
-      return typeId().equals(that.typeId());
+      boolean res = typeId().equals(that.typeId());
+      if (!res) {
+        LOG.warn("PrimitiveType.equals: comparison failed - this.typeId={}, that.typeId={}", 
+            typeId(), that.typeId());
+      }
+      return res;
     }
 
     @Override
