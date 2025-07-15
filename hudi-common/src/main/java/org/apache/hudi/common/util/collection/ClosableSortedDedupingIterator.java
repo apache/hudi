@@ -29,7 +29,7 @@ import java.util.Objects;
 public class ClosableSortedDedupingIterator<T> implements Iterator<T>, AutoCloseable {
   private final Iterator<T> inner;
   private T nextUnique;
-  private T lastReturned;
+  private boolean hasNext;
 
   public ClosableSortedDedupingIterator(Iterator<T> inner) {
     this.inner = inner;
@@ -37,14 +37,15 @@ public class ClosableSortedDedupingIterator<T> implements Iterator<T>, AutoClose
 
   @Override
   public boolean hasNext() {
-    if (nextUnique != null) {
+    if (hasNext) {
       return true;
     }
 
     while (inner.hasNext()) {
       T candidate = inner.next();
-      if (!Objects.equals(candidate, lastReturned)) {
+      if (!Objects.equals(candidate, nextUnique)) {
         nextUnique = candidate;
+        hasNext = true;
         return true;
       }
     }
@@ -57,9 +58,8 @@ public class ClosableSortedDedupingIterator<T> implements Iterator<T>, AutoClose
     if (!hasNext()) {
       throw new NoSuchElementException();
     }
-    lastReturned = nextUnique;
-    nextUnique = null;
-    return lastReturned;
+    hasNext = false;
+    return nextUnique;
   }
 
   @Override
