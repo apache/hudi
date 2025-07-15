@@ -43,7 +43,7 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.util.{ArrayData, MapData}
 import org.apache.spark.sql.execution.datasources.parquet.SparkParquetReader
 import org.apache.spark.sql.internal.SQLConf.LEGACY_RESPECT_NULLABILITY_IN_TEXT_DATASET_CONVERSION
-import org.apache.spark.sql.types.{ArrayType, DataType, MapType, StructType}
+import org.apache.spark.sql.types.{ArrayType, BinaryType, BooleanType, DataType, DoubleType, FloatType, IntegerType, LongType, MapType, StringType, StructType}
 import org.apache.spark.unsafe.types.UTF8String
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
@@ -128,9 +128,46 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
   override def assertRecordsEqual(schema: Schema, expected: InternalRow, actual: InternalRow): Unit = {
     assertEquals(expected.numFields, actual.numFields)
     val expectedStruct = sparkAdapter.getAvroSchemaConverters.toSqlType(schema)._1.asInstanceOf[StructType]
-    expected.toSeq(expectedStruct).zip(actual.toSeq(expectedStruct)).foreach( converted => {
-      assertEquals(converted._1, converted._2)
-    })
+
+    expected.toSeq(expectedStruct).zip(actual.toSeq(expectedStruct)).zipWithIndex.foreach {
+      case ((v1, v2), i) =>
+        val fieldType = expectedStruct(i).dataType
+
+        (v1, v2, fieldType) match {
+          case (a1: Array[Byte], a2: Array[Byte], _) =>
+            assert(java.util.Arrays.equals(a1, a2), s"Mismatch at field $i: expected ${a1.mkString(",")} but got ${a2.mkString(",")}")
+
+          case (m1: MapData, m2: MapData, MapType(keyType, valueType, _)) =>
+            val map1 = mapDataToScalaMap(m1, keyType, valueType)
+            val map2 = mapDataToScalaMap(m2, keyType, valueType)
+            assertEquals(map1, map2, s"Mismatch at field $i: maps not equal")
+
+          case _ =>
+            assertEquals(v1, v2, s"Mismatch at field $i")
+        }
+    }
+  }
+
+  def mapDataToScalaMap(mapData: MapData, keyType: DataType, valueType: DataType): Map[Any, Any] = {
+    val keys = mapData.keyArray()
+    val values = mapData.valueArray()
+    (0 until mapData.numElements()).map { i =>
+      val k = extractValue(keys, i, keyType)
+      val v = extractValue(values, i, valueType)
+      k -> v
+    }.toMap
+  }
+
+  def extractValue(array: ArrayData, index: Int, dt: DataType): Any = dt match {
+    case IntegerType => array.getInt(index)
+    case LongType    => array.getLong(index)
+    case StringType  => array.getUTF8String(index).toString
+    case DoubleType  => array.getDouble(index)
+    case FloatType   => array.getFloat(index)
+    case BooleanType => array.getBoolean(index)
+    case BinaryType  => array.getBinary(index)
+    // Extend this to support StructType, ArrayType, etc. if needed
+    case other       => throw new UnsupportedOperationException(s"Unsupported type: $other")
   }
 
   @Test

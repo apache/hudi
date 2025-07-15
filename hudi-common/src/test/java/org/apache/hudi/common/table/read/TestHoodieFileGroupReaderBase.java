@@ -258,8 +258,6 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
           getStorageConf(), getBasePath(),
           true, 0, RecordMergeMode.EVENT_TIME_ORDERING,
           mergedRecords, mergedRecords);
-    } catch (IOException e) {
-      throw new RuntimeException("Failed to insert data ", e);
     }
   }
 
@@ -267,7 +265,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
    * Write a base file with schema A, then write a log file with schema A, then write another base file with schema B.
    */
   @Test
-  public void testSchemaEvolutionWhenBaseFileAndLogFilesWithDifferentSchema() throws Exception {
+  public void testSchemaEvolutionWhenBaseFileHasDifferentSchemaThanLogFiles() throws Exception {
     Map<String, String> writeConfigs = new HashMap<>(
         getCommonConfigs(RecordMergeMode.EVENT_TIME_ORDERING, true));
 
@@ -307,8 +305,6 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
           getStorageConf(), getBasePath(),
           true, -1, RecordMergeMode.EVENT_TIME_ORDERING,
           mergedRecords, unmergedRecords);
-    } catch (IOException e) {
-      throw new RuntimeException("Failed to insert data ", e);
     }
   }
 
@@ -357,8 +353,6 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
           getStorageConf(), getBasePath(),
           true, 2, RecordMergeMode.EVENT_TIME_ORDERING,
           mergedRecords, unmergedRecords);
-    } catch (IOException e) {
-      throw new RuntimeException("Failed to insert data ", e);
     }
   }
 
@@ -407,8 +401,6 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
           getStorageConf(), getBasePath(),
           true, 2, RecordMergeMode.EVENT_TIME_ORDERING,
           mergedRecords, unmergedRecords);
-    } catch (IOException e) {
-      throw new RuntimeException("Failed to insert data ", e);
     }
   }
 
@@ -538,6 +530,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     for (GenericRecord actualRecord : actualRecordSet) {
       actualMap.put(actualRecord.get("_row_key").toString(), actualRecord);
     }
+    assertEquals(expectedMap.keySet(), actualMap.keySet());
     for (String key : actualMap.keySet()) {
       GenericRecord expectedRecord = expectedMap.get(key);
       GenericRecord actualRecord = actualMap.get(key);

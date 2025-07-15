@@ -19,6 +19,7 @@
 
 package org.apache.hudi.common.table.read;
 
+import org.apache.hudi.avro.ConvertingGenericData;
 import org.apache.hudi.avro.HoodieAvroReaderContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -53,8 +54,7 @@ public class TestHoodieFileGroupReaderOnJava extends HoodieFileGroupReaderOnJava
 
   @Override
   public void assertRecordMatchesSchema(Schema schema, IndexedRecord record) {
-    // TODO: maybe need to validate the record fields
-    assertEquals(schema, record.getSchema());
+    ConvertingGenericData.INSTANCE.validate(schema, record);
   }
 
   @Override
