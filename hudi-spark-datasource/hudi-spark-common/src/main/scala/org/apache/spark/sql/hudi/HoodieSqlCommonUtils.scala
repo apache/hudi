@@ -378,4 +378,17 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
       throw new HoodieException(s"Got an invalid instant ($queryInstant)")
     }
   }
+
+  /**
+   * Check if Polaris catalog is enabled in the Spark session.
+   * @param sparkSession The Spark session
+   * @return true if Polaris catalog is configured, false otherwise
+   */
+  def isUsingPolarisCatalog(sparkSession: SparkSession): Boolean = {
+    sparkSession.conf.getAll.exists { case (key, value) =>
+      key.startsWith("spark.sql.catalog.")  &&
+      value == "org.apache.polaris.spark.SparkCatalog"
+    }
+  }
+
 }
