@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.config;
 
+import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.Option;
@@ -504,6 +505,45 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .withDocumentation("Max size in MB below which metadata file (HFile) will be downloaded "
           + "and cached entirely for the HFileReader.");
 
+  // Configs that control the bloom filter that is written to the file footer
+  public static final ConfigProperty<String> BLOOM_FILTER_TYPE = ConfigProperty
+      .key(String.format("%s.%s", METADATA_PREFIX, "bloom.index.filter.type"))
+      .defaultValue(BloomFilterTypeCode.DYNAMIC_V0.name())
+      .withValidValues(BloomFilterTypeCode.SIMPLE.name(), BloomFilterTypeCode.DYNAMIC_V0.name())
+      .markAdvanced()
+      .withDocumentation(BloomFilterTypeCode.class);
+
+  public static final ConfigProperty<String> BLOOM_FILTER_NUM_ENTRIES_VALUE = ConfigProperty
+      .key(String.format("%s.%s", METADATA_PREFIX, "index.bloom.num_entries"))
+      .defaultValue("60000")
+      .markAdvanced()
+      .withDocumentation("Only applies if index type is BLOOM. "
+                             + "This is the number of entries to be stored in the bloom filter. "
+                             + "The rationale for the default: Assume the maxParquetFileSize is 128MB and averageRecordSize is 1kb and "
+                             + "hence we approx a total of 130K records in a file. The default (60000) is roughly half of this approximation. "
+                             + "Warning: Setting this very low, will generate a lot of false positives and index lookup "
+                             + "will have to scan a lot more files than it has to and setting this to a very high number will "
+                             + "increase the size every base file linearly (roughly 4KB for every 50000 entries). "
+                             + "This config is also used with DYNAMIC bloom filter which determines the initial size for the bloom.");
+
+  public static final ConfigProperty<String> BLOOM_FILTER_FPP_VALUE = ConfigProperty
+      .key(String.format("%s.%s", METADATA_PREFIX, "index.bloom.fpp"))
+      .defaultValue("0.000000001")
+      .markAdvanced()
+      .withDocumentation("Only applies if index type is BLOOM. "
+                             + "Error rate allowed given the number of entries. This is used to calculate how many bits should be "
+                             + "assigned for the bloom filter and the number of hash functions. This is usually set very low (default: 0.000000001), "
+                             + "we like to tradeoff disk space for lower false positives. "
+                             + "If the number of entries added to bloom filter exceeds the configured value (hoodie.index.bloom.num_entries), "
+                             + "then this fpp may not be honored.");
+
+  public static final ConfigProperty<String> BLOOM_FILTER_DYNAMIC_MAX_ENTRIES = ConfigProperty
+      .key(String.format("%s.%s", METADATA_PREFIX, "bloom.index.filter.dynamic.max.entries"))
+      .defaultValue("100000")
+      .markAdvanced()
+      .withDocumentation("The threshold for the maximum number of keys to record in a dynamic Bloom filter row. "
+                             + "Only applies if filter type is BloomFilterTypeCode.DYNAMIC_V0.");
+
   public long getMaxLogFileSize() {
     return getLong(MAX_LOG_FILE_SIZE_BYTES_PROP);
   }
@@ -662,6 +702,22 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public Map<String, String> getExpressionIndexOptions() {
     return getExpressionIndexOptions(getString(EXPRESSION_INDEX_OPTIONS));
+  }
+
+  public String getBloomFilterType() {
+    return getStringOrDefault(BLOOM_FILTER_TYPE);
+  }
+
+  public int getBloomFilterNumEntries() {
+    return getIntOrDefault(BLOOM_FILTER_NUM_ENTRIES_VALUE);
+  }
+
+  public double getBloomFilterFPP() {
+    return getDoubleOrDefault(BLOOM_FILTER_FPP_VALUE);
+  }
+
+  public int getDynamicBloomFilterMaxNumEntries() {
+    return getIntOrDefault(BLOOM_FILTER_DYNAMIC_MAX_ENTRIES);
   }
 
   private Map<String, String> getExpressionIndexOptions(String configValue) {
