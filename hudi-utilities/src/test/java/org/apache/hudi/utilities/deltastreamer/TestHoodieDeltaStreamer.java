@@ -710,7 +710,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   @ParameterizedTest
   @EnumSource(value = HoodieRecordType.class, names = {"AVRO"})
   public void testUpsertsMORContinuousModeShutdownGracefully(HoodieRecordType recordType) throws Exception {
-    testUpsertsContinuousMode(HoodieTableType.MERGE_ON_READ, "continuous_cow", true, recordType, "EIGHT");
+    testUpsertsContinuousMode(HoodieTableType.MERGE_ON_READ, "continuous_cow", true, recordType, "NINE");
   }
 
   @Timeout(600)

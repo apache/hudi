@@ -32,8 +32,8 @@ import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.validateTableConf
 class TestMergeModeEventTimeOrdering extends HoodieSparkSqlTestBase {
 
   // TODO(HUDI-8938): add "mor,6,true", "mor,6,false" after the fix
-  Seq("cow,8,true", "cow,8,false", "cow,6,true", "cow,6,false",
-    "mor,8,true", "mor,8,false").foreach { args =>
+  Seq("cow,9,true", "cow,9,false", "cow,6,true", "cow,6,false",
+    "mor,9,true", "mor,9,false").foreach { args =>
     val argList = args.split(',')
     val tableType = argList(0)
     val tableVersion = argList(1)
@@ -63,7 +63,7 @@ class TestMergeModeEventTimeOrdering extends HoodieSparkSqlTestBase {
       )
     } else {
       Map(
-        HoodieTableConfig.VERSION.key -> "8",
+        HoodieTableConfig.VERSION.key -> "9",
         HoodieTableConfig.PRECOMBINE_FIELD.key -> "ts",
         HoodieTableConfig.RECORD_MERGE_MODE.key -> EVENT_TIME_ORDERING.name(),
         HoodieTableConfig.PAYLOAD_CLASS_NAME.key -> classOf[DefaultHoodieRecordPayload].getName,
