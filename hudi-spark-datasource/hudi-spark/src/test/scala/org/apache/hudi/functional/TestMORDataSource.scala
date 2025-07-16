@@ -195,7 +195,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
           HoodieTableConfig.VERSION.key -> HoodieTableVersion.current().versionCode().toString)
       } else if (tableVersion == HoodieTableVersion.EIGHT) {
         Map(HoodieTableConfig.RECORD_MERGE_MODE.key -> expectedMergeMode,
-          HoodieTableConfig.VERSION.key -> HoodieTableVersion.EIGHT.versionCode().toString)
+          HoodieTableConfig.VERSION.key -> HoodieTableVersion.current().versionCode().toString)
       } else {
         Map(HoodieTableConfig.VERSION.key -> HoodieTableVersion.SIX.versionCode().toString)
       } ++
@@ -210,8 +210,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       Seq(HoodieTableConfig.PRECOMBINE_FIELD.key)
     }).asJava
     HoodieTestUtils.validateTableConfig(storage, basePath, expectedConfigs, nonExistentConfigs)
-    val commit1CompletionTime = if (
-      tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
+    val commit1CompletionTime = if (tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
       DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
     } else {
       DataSourceTestUtils.latestCommitRequestTime(storage, basePath)
@@ -233,7 +232,11 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .mode(SaveMode.Append)
       .save(basePath)
     HoodieTestUtils.validateTableConfig(storage, basePath, expectedConfigs, nonExistentConfigs)
+<<<<<<< HEAD
     val commit2CompletionTime = if (tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
+=======
+    val commit2CompletionTime = if (tableVersion.equals("CURRENT")) {
+>>>>>>> 22c6efa25e8 (Fix some test failures)
       DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
     } else {
       DataSourceTestUtils.latestCommitRequestTime(storage, basePath)
@@ -252,7 +255,11 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     // incremental view
     // validate incremental queries only for table version 8
     // 1.0 reader (table version 8) supports incremental query reads using completion time
+<<<<<<< HEAD
     if (tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
+=======
+    if (tableVersion.equals("CURRENT")) {
+>>>>>>> 22c6efa25e8 (Fix some test failures)
       // base file only
       val hudiIncDF1 = spark.read.format("org.apache.hudi")
         .options(readOpts)
@@ -326,7 +333,11 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .mode(SaveMode.Append)
       .save(basePath)
     HoodieTestUtils.validateTableConfig(storage, basePath, expectedConfigs, nonExistentConfigs)
+<<<<<<< HEAD
     val commit3CompletionTime = if (tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
+=======
+    val commit3CompletionTime = if (tableVersion.equals("CURRENT")) {
+>>>>>>> 22c6efa25e8 (Fix some test failures)
       DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
     } else {
       DataSourceTestUtils.latestCommitRequestTime(storage, basePath)
@@ -347,7 +358,11 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     // incremental query from commit2Time
     // validate incremental queries only for table version 8
     // 1.0 reader (table version 8) supports incremental query reads using completion time
+<<<<<<< HEAD
     if (tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
+=======
+    if (tableVersion.equals("CURRENT")) {
+>>>>>>> 22c6efa25e8 (Fix some test failures)
       val hudiIncDF4 = spark.read.format("org.apache.hudi")
         .options(readOpts)
         .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
@@ -427,7 +442,11 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .mode(SaveMode.Append)
       .save(basePath)
     HoodieTestUtils.validateTableConfig(storage, basePath, expectedConfigs, nonExistentConfigs)
+<<<<<<< HEAD
     val commit6CompletionTime = if (tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
+=======
+    val commit6CompletionTime = if (tableVersion.equals("CURRENT")) {
+>>>>>>> 22c6efa25e8 (Fix some test failures)
       DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
     } else {
       DataSourceTestUtils.latestCommitRequestTime(storage, basePath)
@@ -439,7 +458,11 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     assertEquals(102, hudiSnapshotDF6.count())
     // validate incremental queries only for table version 8
     // 1.0 reader (table version 8) supports incremental query reads using completion time
+<<<<<<< HEAD
     if (tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
+=======
+    if (tableVersion.equals("CURRENT")) {
+>>>>>>> 22c6efa25e8 (Fix some test failures)
       val hudiIncDF6 = spark.read.format("org.apache.hudi")
         .options(readOpts)
         .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)

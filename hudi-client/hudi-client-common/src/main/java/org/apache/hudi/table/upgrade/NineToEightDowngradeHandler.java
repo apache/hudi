@@ -22,7 +22,6 @@ package org.apache.hudi.table.upgrade;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.collection.Pair;
@@ -51,15 +50,11 @@ public class NineToEightDowngradeHandler implements DowngradeHandler {
         .setConf(context.getStorageConf().newInstance())
         .setBasePath(config.getBasePath())
         .build();
-    unsetInitialVersion(metaClient.getTableConfig());
     // Prepare parameters.
     if (metaClient.getTableConfig().isMetadataTableAvailable()) {
       UpgradeDowngradeUtils.updateMetadataTableVersion(context, HoodieTableVersion.EIGHT, metaClient);
     }
-    return Pair.of(Collections.emptyMap(), Collections.emptyList());
-  }
 
-  static void unsetInitialVersion(HoodieTableConfig tableConfig) {
-    tableConfig.getProps().remove(HoodieTableConfig.INITIAL_VERSION.key());
+    return Pair.of(Collections.emptyMap(), Collections.emptyList());
   }
 }
