@@ -145,7 +145,7 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
           |[hoodie.table.checksum,,]
           |[hoodie.table.create.schema,,]
           |[hoodie.table.format,native,null]
-          |[hoodie.table.initial.version,8,8]
+          |[hoodie.table.initial.version,9,9]
           |[hoodie.table.keygenerator.type,NON_PARTITION,null]
           |[hoodie.table.name,,]
           |[hoodie.table.precombine.field,ts,null]
