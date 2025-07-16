@@ -1,5 +1,6 @@
 package org.apache.hudi.io.storage;
 
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.io.ByteBufferBackedInputStream;
@@ -15,7 +16,7 @@ import java.io.IOException;
 public class HFileReaderFactory {
 
   private final HoodieStorage storage;
-  private final TypedProperties properties;
+  private final HoodieMetadataConfig metadataConfig;
   private final Option<StoragePath> path;
   private final Option<byte[]> content;
 
@@ -24,7 +25,7 @@ public class HFileReaderFactory {
                             Option<StoragePath> path,
                             Option<byte[]> content) {
     this.storage = storage;
-    this.properties = properties;
+    this.metadataConfig = HoodieMetadataConfig.newBuilder().withProperties(properties).build();
     this.path = path;
     this.content = content;
   }
@@ -46,8 +47,9 @@ public class HFileReaderFactory {
     }
   }
 
+  // Download/ prefetch the contents of the file if not already done so and file size is below a configured threshold.
   private boolean shouldUseContentCache(long fileSize) {
-    return content.isEmpty() && fileSize <= properties.getHfileCacheMinThreshold();
+    return content.isEmpty() && fileSize <= (long) metadataConfig.getFileCacheThresholdSizeMB() * 1024L * 1024L;
   }
 
   private SeekableDataInputStream createInputStream(Option<byte[]> contentToUse) throws IOException {
@@ -112,5 +114,9 @@ public class HFileReaderFactory {
       TypedProperties props = properties.isPresent() ? properties.get() : new TypedProperties();
       return new HFileReaderFactory(storage, props, path, bytesContent);
     }
+  }
+
+  public static Builder newBuilder() {
+    return new Builder();
   }
 }

@@ -20,6 +20,7 @@
 package org.apache.hudi.io.hadoop;
 
 import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
@@ -87,6 +88,7 @@ import static org.mockito.Mockito.when;
 
 public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
   protected static final int NUM_RECORDS_FIXTURE = 50;
+  protected static final TypedProperties DEFAULT_PROPS = new TypedProperties();
 
   protected static Stream<Arguments> populateMetaFieldsAndTestAvroWithMeta() {
     return Arrays.stream(new Boolean[][] {
@@ -100,12 +102,12 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
   @Override
   protected HoodieAvroFileReader createReader(
       HoodieStorage storage) throws Exception {
-    return new HoodieNativeAvroHFileReader(storage, getFilePath(), Option.empty());
+    return new HoodieNativeAvroHFileReader(storage, DEFAULT_PROPS, getFilePath(), Option.empty());
   }
 
   protected HoodieAvroHFileReaderImplBase createHFileReader(HoodieStorage storage,
                                                             byte[] content) throws IOException {
-    return new HoodieNativeAvroHFileReader(storage, content, Option.empty());
+    return new HoodieNativeAvroHFileReader(storage, DEFAULT_PROPS, content, Option.empty());
   }
 
   protected void verifyHFileReader(byte[] content,
