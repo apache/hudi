@@ -172,23 +172,24 @@ case class HoodieFileIndex(spark: SparkSession,
    * @return list of PartitionDirectory containing partition to base files mapping
    */
   override def listFiles(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[PartitionDirectory] = {
-    val prunedPartitionsAndFilteredFileSlices = filterFileSlices(dataFilters, partitionFilters).map {
-      case (partitionOpt, fileSlices) =>
+    val prunedPartitionsAndFilteredFileSlices = filterFileSlices(dataFilters, partitionFilters).flatMap(
+      { case (partitionOpt, fileSlices) =>
+        fileSlices.filter(!_.isEmpty).map(fs => (partitionOpt, fs))
+      }
+    ).map {
+      case (partitionOpt, fileSlice) =>
         if (shouldEmbedFileSlices) {
-          PartitionDirectoryConverter.convertFileSlicesToPartitionDirectory(
+          PartitionDirectoryConverter.convertFileSliceToPartitionDirectory(
             partitionOpt,
-            fileSlices,
+            fileSlice,
             options)
         } else {
-          val allCandidateFiles: Seq[FileStatus] = fileSlices.flatMap(fs => {
-            val baseFileStatusOpt = getBaseFileInfo(Option.apply(fs.getBaseFile.orElse(null)))
-            val logPathInfoStream = fs.getLogFiles.map[StoragePathInfo](JFunction.toJavaFunction[HoodieLogFile, StoragePathInfo](lf => lf.getPathInfo))
-            val files = logPathInfoStream.collect(Collectors.toList[StoragePathInfo]).asScala
-            baseFileStatusOpt.foreach(f => files.append(f))
-            files
-          })
-            .map(fileInfo => new FileStatus(fileInfo.getLength, fileInfo.isDirectory, 0, fileInfo.getBlockSize,
-              fileInfo.getModificationTime, new Path(fileInfo.getPath.toUri)))
+          val baseFileStatusOpt = getBaseFileInfo(Option.apply(fileSlice.getBaseFile.orElse(null)))
+          val logPathInfoStream = fileSlice.getLogFiles.map[StoragePathInfo](JFunction.toJavaFunction[HoodieLogFile, StoragePathInfo](lf => lf.getPathInfo))
+          val files = logPathInfoStream.collect(Collectors.toList[StoragePathInfo]).asScala
+          baseFileStatusOpt.foreach(f => files.append(f))
+          val allCandidateFiles = files.map(fileInfo => new FileStatus(fileInfo.getLength, fileInfo.isDirectory, 0, fileInfo.getBlockSize,
+              fileInfo.getModificationTime, new Path(fileInfo.getPath.toUri))).toSeq
           sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(
             InternalRow.fromSeq(partitionOpt.get.values), allCandidateFiles)
         }
