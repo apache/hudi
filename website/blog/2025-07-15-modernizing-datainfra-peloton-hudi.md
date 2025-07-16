@@ -3,7 +3,7 @@ title: "Modernizing Data Infrastructure at Peloton Using Apache Hudi"
 excerpt: "How Peloton's Data Platform team scaled their data infrastructure using Hudi"
 author: Amaresh Bingumalla, Thinh Kenny Vu, Gabriel Wang, Arun Vasudevan in collaboration with Dipankar Mazumdar
 category: blog
-image: /assets/images/blog/peloton-1200x600.jpg
+image: /assets/images/blog/2025-07-15-modernizing-datainfra-peloton-hudi/peloton-1200x600.jpg
 tags:
 - Apache Hudi
 - Peloton
@@ -36,7 +36,7 @@ These limitations made it difficult to meet SLA expectations, scale workloads ef
 
 ## The Legacy Architecture
 
-<img src="/assets/images/blog/pel_fig1.png" alt="challenge" width="1000" align="middle"/>
+<img src="/assets/images/blog/2025-07-15-modernizing-datainfra-peloton-hudi/pel_fig1.png" alt="challenge" width="1000" align="middle"/>
 
 Peloton's earlier architecture relied on daily snapshots from a monolithic **PostgreSQL** database. The analytics systems would consume these snapshots, often waiting hours for completion. This not only delayed reporting but also introduced downstream rigidity.
 
@@ -44,7 +44,7 @@ Because the same data platform supported both online and analytical workloads, a
 
 ## Reimagining the Data Platform with Apache Hudi
 
-<img src="/assets/images/blog/pel_fig2.png" alt="challenge" width="1000" align="middle"/>
+<img src="/assets/images/blog/2025-07-15-modernizing-datainfra-peloton-hudi/pel_fig2.png" alt="challenge" width="1000" align="middle"/>
 
 To address these challenges, the data platform team introduced Apache Hudi as the foundation of its modern data lake. The architecture was rebuilt to support Change Data Capture (CDC) ingestion from both PostgreSQL and DynamoDB using Debezium, with Kafka acting as the transport layer. A custom-built Hudi writer was developed to ingest CDC records into S3 using Apache Spark on EMR (version 6.12.0 with Hudi 0.13.1).
 
@@ -58,7 +58,7 @@ Key architectural enhancements included:
 
 Peloton's broader data platform tech stack supports this architecture with a range of tools for orchestration, analytics, and governance. This includes EMR for compute, Redshift for querying, DBT for data transformations, Looker for BI and visualization, Airflow for orchestration, and DataHub for metadata management. These components complement Apache Hudi in forming a modular and production-ready lakehouse stack.
 
-<img src="/assets/images/blog/pel_fig3.png" alt="challenge" width="1000" align="middle"/>
+<img src="/assets/images/blog/2025-07-15-modernizing-datainfra-peloton-hudi/pel_fig3.png" alt="challenge" width="1000" align="middle"/>
 
 ## Learnings from Running Hudi at Scale
 
@@ -68,7 +68,7 @@ With Hudi now integrated into Peloton's data lake, the team began to observe and
 
 Initially, Copy-on-Write (CoW) tables were chosen to simplify deployment and ensure compatibility with Redshift Spectrum. However, as ingestion frequency increased and update volumes spanned hundreds of partitions, performance became a bottleneck. Some high-frequency tables with updates across 256 partitions took nearly an hour to process per run. Additionally, retaining 30 days of commits for training recommender models significantly inflated storage requirements, reaching into the hundreds of gigabytes.
 
-<img src="/assets/images/blog/pel_fig4.png" alt="challenge" width="1000" align="middle"/>
+<img src="/assets/images/blog/2025-07-15-modernizing-datainfra-peloton-hudi/pel_fig4.png" alt="challenge" width="1000" align="middle"/>
 
 To resolve this, the team migrated to Hudi’s Merge-on-Read (MoR) tables and reduced commit retention to 7 days. With ingestion jobs now running every 10 minutes, latency dropped significantly, and storage and compute usage became more efficient.
 
@@ -105,7 +105,7 @@ After significant debugging, the issue was traced to AWS Glue limits. The team i
 
 PostgreSQL CDC ingestion posed unique challenges due to the database’s handling of large fields using TOAST (The Oversized-Attribute Storage Technique). When fields over 8KB were unchanged, Debezium emitted a placeholder value `__debezium_unavailable_value`, making it impossible to determine whether the value had changed.
 
-<img src="/assets/images/blog/pel_fig5.png" alt="challenge" width="1000" align="middle"/>
+<img src="/assets/images/blog/2025-07-15-modernizing-datainfra-peloton-hudi/pel_fig5.png" alt="challenge" width="1000" align="middle"/>
 
 To address this, Peloton:
 
@@ -128,7 +128,7 @@ Data quality was critical to ensure trust in the newly established data lake. Th
 
 Some Peloton services relied on DynamoDB for operational workloads (NoSQL). To ingest these datasets into the lake, the team used DynamoDB Streams and a Kafka Connector, allowing reuse of the existing Kafka-based Hudi ingestion path.
 
-<img src="/assets/images/blog/pel_fig6.png" alt="challenge" width="1000" align="middle"/>
+<img src="/assets/images/blog/2025-07-15-modernizing-datainfra-peloton-hudi/pel_fig6.png" alt="challenge" width="1000" align="middle"/>
 
 However, the NoSQL nature of DynamoDB introduced schema management challenges. Two strategies were evaluated:
 
@@ -139,7 +139,7 @@ The team opted for dynamic inference despite increased processing time, as it en
 
 ### Reducing Operational Costs
 
-<img src="/assets/images/blog/pel_fig7.png" alt="challenge" width="1000" align="middle"/>
+<img src="/assets/images/blog/2025-07-15-modernizing-datainfra-peloton-hudi/pel_fig7.png" alt="challenge" width="1000" align="middle"/>
 
 As the system matured, cost optimization became a priority. The team used [Ganglia](https://github.com/ganglia/) to analyze job profiles and identify areas for improvement:
 
