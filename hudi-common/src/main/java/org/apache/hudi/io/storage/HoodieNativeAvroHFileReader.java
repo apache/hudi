@@ -21,6 +21,7 @@ package org.apache.hudi.io.storage;
 
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -80,6 +81,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
       Arrays.asList(KEY_MIN_RECORD, KEY_MAX_RECORD, SCHEMA_KEY));
 
   private final HoodieStorage storage;
+  private final TypedProperties props;
   private final Option<StoragePath> path;
   private final Option<byte[]> bytesContent;
   // In-memory cache for meta info
@@ -88,16 +90,18 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
   private boolean isMetaInfoLoaded = false;
   private long numKeyValueEntries = -1L;
 
-  public HoodieNativeAvroHFileReader(HoodieStorage storage, StoragePath path, Option<Schema> schemaOption) {
+  public HoodieNativeAvroHFileReader(HoodieStorage storage, TypedProperties props, StoragePath path, Option<Schema> schemaOption) {
     this.storage = storage;
+    this.props = props;
     this.path = Option.of(path);
     this.bytesContent = Option.empty();
     this.metaInfoMap = new HashMap<>();
     this.schema = schemaOption.map(Lazy::eagerly).orElseGet(() -> Lazy.lazily(this::fetchSchema));
   }
 
-  public HoodieNativeAvroHFileReader(HoodieStorage storage, byte[] content, Option<Schema> schemaOption) {
+  public HoodieNativeAvroHFileReader(HoodieStorage storage, TypedProperties props, byte[] content, Option<Schema> schemaOption) {
     this.storage = storage;
+    this.props = props;
     this.path = Option.empty();
     this.bytesContent = Option.of(content);
     this.metaInfoMap = new HashMap<>();
