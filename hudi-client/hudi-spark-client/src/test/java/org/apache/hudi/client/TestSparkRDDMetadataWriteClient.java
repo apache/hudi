@@ -117,7 +117,7 @@ public class TestSparkRDDMetadataWriteClient extends HoodieClientTestBase {
 
     // create Write client to SparkRDDMetadataWriteClient and trigger writes.
     try (SparkRDDMetadataWriteClient client = new SparkRDDMetadataWriteClient(context, mdtWriteConfig)) {
-      commitTimeOfInterest = client.createNewInstantTime();
+      commitTimeOfInterest = WriteClientTestUtils.createNewInstantTime();
 
       // prepare FILES partition records.
       prepareFilesPartitionRecords(mdtPartitionsFileIdMapping.get(MetadataPartitionType.FILES.getPartitionPath()).get(0),
@@ -157,7 +157,7 @@ public class TestSparkRDDMetadataWriteClient extends HoodieClientTestBase {
   private void initDataTableWithACommit(HoodieWriteConfig hoodieWriteConfig) throws Exception {
     try (SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig)) {
       final int numRecords = 100;
-      String newCommitTime = client.createNewInstantTime();
+      String newCommitTime = WriteClientTestUtils.createNewInstantTime();
       insertBatch(hoodieWriteConfig, client, newCommitTime, HoodieTimeline.INIT_INSTANT_TS, numRecords, SparkRDDWriteClient::insert,
           false, true, numRecords, numRecords, 1, Option.empty(), INSTANT_GENERATOR);
     }

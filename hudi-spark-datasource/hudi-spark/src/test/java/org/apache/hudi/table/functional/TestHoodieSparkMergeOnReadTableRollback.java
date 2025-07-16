@@ -695,8 +695,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
       /*
        * Write 1 (only inserts)
        */
-      String newCommitTime = client.createNewInstantTime();
-      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
+      String newCommitTime = client.startCommit();
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
       JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
       JavaRDD<WriteStatus> writeStatusJavaRDD = client.upsert(writeRecords, newCommitTime);
@@ -704,13 +703,13 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
       assertNoWriteErrors(statuses);
       client.commit(newCommitTime, jsc().parallelize(statuses));
 
-      String commit2 = client.createNewInstantTime();
+      String commit2 = WriteClientTestUtils.createNewInstantTime();
       upsertRecords(client, commit2, records, dataGen);
 
       client.savepoint(commit2, "user1", "comment1");
 
-      upsertRecords(client, client.createNewInstantTime(), records, dataGen);
-      upsertRecords(client, client.createNewInstantTime(), records, dataGen);
+      upsertRecords(client, WriteClientTestUtils.createNewInstantTime(), records, dataGen);
+      upsertRecords(client, WriteClientTestUtils.createNewInstantTime(), records, dataGen);
 
       // Compaction commit
       String compactionInstantTime = (String) client.scheduleCompaction(Option.empty()).get();
@@ -718,8 +717,8 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
       client.commitCompaction(compactionInstantTime, compactionMetadata, Option.empty());
       assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(compactionInstantTime));
 
-      upsertRecords(client, client.createNewInstantTime(), records, dataGen);
-      upsertRecords(client, client.createNewInstantTime(), records, dataGen);
+      upsertRecords(client, WriteClientTestUtils.createNewInstantTime(), records, dataGen);
+      upsertRecords(client, WriteClientTestUtils.createNewInstantTime(), records, dataGen);
 
       // Compaction commit
       String compactionInstantTime1 = (String) client.scheduleCompaction(Option.empty()).get();
@@ -727,7 +726,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
       client.commitCompaction(compactionInstantTime1, compactionMetadata1, Option.empty());
       assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(compactionInstantTime1));
 
-      upsertRecords(client, client.createNewInstantTime(), records, dataGen);
+      upsertRecords(client, WriteClientTestUtils.createNewInstantTime(), records, dataGen);
 
       // trigger clean. creating a new client with aggressive cleaner configs so that clean will kick in immediately.
       cfgBuilder = getConfigBuilder(false)
@@ -741,7 +740,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
       }
 
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      upsertRecords(client, client.createNewInstantTime(), records, dataGen);
+      upsertRecords(client, WriteClientTestUtils.createNewInstantTime(), records, dataGen);
 
       // Rollback to 002
       client.restoreToInstant(commit2, cfg.isMetadataTableEnabled());
