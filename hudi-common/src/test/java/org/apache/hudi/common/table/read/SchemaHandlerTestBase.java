@@ -21,7 +21,6 @@ package org.apache.hudi.common.table.read;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.RecordMergeMode;
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
