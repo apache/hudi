@@ -31,6 +31,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.table.HoodieTable;
 
 import java.util.HashMap;
@@ -46,6 +47,8 @@ import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_CUST
 import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.rollbackFailedWritesAndCompact;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_STRATEGY_ID;
+import static org.apache.hudi.table.upgrade.SevenToEightUpgradeHandler.isMetadataTableBehindDataTable;
+import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.rollbackFailedWritesAndCompact;
 
 public class EightToNineUpgradeHandler implements UpgradeHandler {
   @Override
@@ -68,14 +71,30 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
 
     // If auto upgrade is disabled, set writer version to 8 and return
     if (!config.autoUpgrade()) {
-      config.setValue(HoodieWriteConfig.WRITE_TABLE_VERSION,
+      config.setValue(
+          HoodieWriteConfig.WRITE_TABLE_VERSION,
           String.valueOf(HoodieTableVersion.EIGHT.versionCode()));
       return tablePropsToAdd;
     }
 
+    // If metadata is enabled for the data table, and
+    // existing metadata table is behind the data table, then delete it
+    if (!table.isMetadataTable()
+        && config.isMetadataTableEnabled()
+        && isMetadataTableBehindDataTable(config, metaClient)) {
+      HoodieTableMetadataUtil.deleteMetadataTable(config.getBasePath(), context);
+    }
+
+    // Rollback and run compaction in one step
+    rollbackFailedWritesAndCompact(
+        table, context, config, upgradeDowngradeHelper,
+        HoodieTableType.MERGE_ON_READ.equals(table.getMetaClient().getTableType()),
+        HoodieTableVersion.EIGHT);
+
+    // Handle table configs.
     String mergeProperties = tableConfig.getMergeProperties();
     if (!StringUtils.isNullOrEmpty(payloadClass)) {
-      // Add merge Mode.
+      // Add MERGE Mode.
       if (payloadClass.equals(OverwriteNonDefaultsWithLatestAvroPayload.class.getName())
           || payloadClass.equals(AWSDmsAvroPayload.class.getName())) {
         tablePropsToAdd.put(RECORD_MERGE_STRATEGY_ID, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID);
@@ -83,14 +102,14 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
           || payloadClass.equals(PostgresDebeziumAvroPayload.class.getName())) {
         tablePropsToAdd.put(RECORD_MERGE_STRATEGY_ID, EVENT_TIME_BASED_MERGE_STRATEGY_UUID);
       }
-      // Add partial Merge Mode.
+      // Add PARTIAL UPDATE Mode.
       if (payloadClass.equals(OverwriteNonDefaultsWithLatestAvroPayload.class.getName())
           || payloadClass.equals(PartialUpdateAvroPayload.class.getName())) {
         tablePropsToAdd.put(PARTIAL_UPDATE_MODE, PartialUpdateMode.IGNORE_DEFAULTS.name());
       } else if (payloadClass.equals(PostgresDebeziumAvroPayload.class.getName())) {
         tablePropsToAdd.put(PARTIAL_UPDATE_MODE, PartialUpdateMode.IGNORE_MARKERS.name());
       }
-      // Add merge Property.
+      // Add MERGE Properties.
       if (payloadClass.equals(AWSDmsAvroPayload.class.getName())) {
         String propertiesToAdd = DELETE_KEY + "=Op," + DELETE_MARKER + "=D";
         mergeProperties = StringUtils.isNullOrEmpty(mergeProperties)

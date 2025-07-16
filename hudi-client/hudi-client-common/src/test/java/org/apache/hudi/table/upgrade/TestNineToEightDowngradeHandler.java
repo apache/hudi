@@ -43,8 +43,10 @@ import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_MODE
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_STRATEGY_ID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import org.mockito.MockedStatic;
 
 class TestNineToEightDowngradeHandler {
   private final NineToEightDowngradeHandler handler = new NineToEightDowngradeHandler();
@@ -64,68 +66,98 @@ class TestNineToEightDowngradeHandler {
 
   @Test
   void testDowngradeForAWSDmsAvroPayload() {
-    when(tableConfig.getPayloadClass()).thenReturn(AWSDmsAvroPayload.class.getName());
-    Pair<Map<ConfigProperty, String>, List<ConfigProperty>> propertiesToChange =
-        handler.downgrade(config, context, "anyInstant", upgradeDowngradeHelper);
-    assertEquals(2, propertiesToChange.getRight().size());
-    assertEquals(MERGE_PROPERTIES, propertiesToChange.getRight().get(0));
-    assertEquals(PARTIAL_UPDATE_MODE, propertiesToChange.getRight().get(1));
-    assertEquals(1, propertiesToChange.getLeft().size());
-    assertEquals(
-        PAYLOAD_BASED_MERGE_STRATEGY_UUID,
-        propertiesToChange.getLeft().get(RECORD_MERGE_STRATEGY_ID));
+    try (MockedStatic<UpgradeDowngradeUtils> utilities =
+             org.mockito.Mockito.mockStatic(UpgradeDowngradeUtils.class)) {
+      utilities.when(() -> UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(
+          any(), any(), any(), any(), anyBoolean(), any()))
+          .thenAnswer(invocation -> null);
+      when(tableConfig.getPayloadClass()).thenReturn(AWSDmsAvroPayload.class.getName());
+      Pair<Map<ConfigProperty, String>, List<ConfigProperty>> propertiesToChange =
+          handler.downgrade(config, context, "anyInstant", upgradeDowngradeHelper);
+      assertEquals(2, propertiesToChange.getRight().size());
+      assertEquals(MERGE_PROPERTIES, propertiesToChange.getRight().get(0));
+      assertEquals(PARTIAL_UPDATE_MODE, propertiesToChange.getRight().get(1));
+      assertEquals(1, propertiesToChange.getLeft().size());
+      assertEquals(
+          PAYLOAD_BASED_MERGE_STRATEGY_UUID,
+          propertiesToChange.getLeft().get(RECORD_MERGE_STRATEGY_ID));
+    }
   }
 
   @Test
   void testDowngradeForOverwriteNonDefaultsWithLatestAvroPayload() {
-    when(tableConfig.getPayloadClass()).thenReturn(OverwriteNonDefaultsWithLatestAvroPayload.class.getName());
-    Pair<Map<ConfigProperty, String>, List<ConfigProperty>> propertiesToChange =
-        handler.downgrade(config, context, "anyInstant", upgradeDowngradeHelper);
-    assertEquals(2, propertiesToChange.getRight().size());
-    assertEquals(MERGE_PROPERTIES, propertiesToChange.getRight().get(0));
-    assertEquals(PARTIAL_UPDATE_MODE, propertiesToChange.getRight().get(1));
-    assertEquals(1, propertiesToChange.getLeft().size());
-    assertEquals(
-        PAYLOAD_BASED_MERGE_STRATEGY_UUID,
-        propertiesToChange.getLeft().get(RECORD_MERGE_STRATEGY_ID));
+    try (MockedStatic<UpgradeDowngradeUtils> utilities =
+             org.mockito.Mockito.mockStatic(UpgradeDowngradeUtils.class)) {
+      utilities.when(() -> UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(
+          any(), any(), any(), any(), anyBoolean(), any()))
+          .thenAnswer(invocation -> null);
+      when(tableConfig.getPayloadClass()).thenReturn(OverwriteNonDefaultsWithLatestAvroPayload.class.getName());
+      Pair<Map<ConfigProperty, String>, List<ConfigProperty>> propertiesToChange =
+          handler.downgrade(config, context, "anyInstant", upgradeDowngradeHelper);
+      assertEquals(2, propertiesToChange.getRight().size());
+      assertEquals(MERGE_PROPERTIES, propertiesToChange.getRight().get(0));
+      assertEquals(PARTIAL_UPDATE_MODE, propertiesToChange.getRight().get(1));
+      assertEquals(1, propertiesToChange.getLeft().size());
+      assertEquals(
+          PAYLOAD_BASED_MERGE_STRATEGY_UUID,
+          propertiesToChange.getLeft().get(RECORD_MERGE_STRATEGY_ID));
+    }
   }
 
   @Test
   void testDowngradeForPartialUpdateAvroPayload() {
-    when(tableConfig.getPayloadClass()).thenReturn(PartialUpdateAvroPayload.class.getName());
-    Pair<Map<ConfigProperty, String>, List<ConfigProperty>> propertiesToChange =
-        handler.downgrade(config, context, "anyInstant", upgradeDowngradeHelper);
-    assertEquals(2, propertiesToChange.getRight().size());
-    assertEquals(MERGE_PROPERTIES, propertiesToChange.getRight().get(0));
-    assertEquals(PARTIAL_UPDATE_MODE, propertiesToChange.getRight().get(1));
-    assertEquals(1, propertiesToChange.getLeft().size());
-    assertEquals(
-        PAYLOAD_BASED_MERGE_STRATEGY_UUID,
-        propertiesToChange.getLeft().get(RECORD_MERGE_STRATEGY_ID));
+    try (MockedStatic<UpgradeDowngradeUtils> utilities =
+             org.mockito.Mockito.mockStatic(UpgradeDowngradeUtils.class)) {
+      utilities.when(() -> UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(
+          any(), any(), any(), any(), anyBoolean(), any()))
+          .thenAnswer(invocation -> null);
+      when(tableConfig.getPayloadClass()).thenReturn(PartialUpdateAvroPayload.class.getName());
+      Pair<Map<ConfigProperty, String>, List<ConfigProperty>> propertiesToChange =
+          handler.downgrade(config, context, "anyInstant", upgradeDowngradeHelper);
+      assertEquals(2, propertiesToChange.getRight().size());
+      assertEquals(MERGE_PROPERTIES, propertiesToChange.getRight().get(0));
+      assertEquals(PARTIAL_UPDATE_MODE, propertiesToChange.getRight().get(1));
+      assertEquals(1, propertiesToChange.getLeft().size());
+      assertEquals(
+          PAYLOAD_BASED_MERGE_STRATEGY_UUID,
+          propertiesToChange.getLeft().get(RECORD_MERGE_STRATEGY_ID));
+    }
   }
 
   @Test
   void testDowngradeForPostgresDebeziumAvroPayload() {
-    when(tableConfig.getPayloadClass()).thenReturn(PostgresDebeziumAvroPayload.class.getName());
-    Pair<Map<ConfigProperty, String>, List<ConfigProperty>> propertiesToChange =
-        handler.downgrade(config, context, "anyInstant", upgradeDowngradeHelper);
-    assertEquals(2, propertiesToChange.getRight().size());
-    assertEquals(MERGE_PROPERTIES, propertiesToChange.getRight().get(0));
-    assertEquals(PARTIAL_UPDATE_MODE, propertiesToChange.getRight().get(1));
-    assertEquals(1, propertiesToChange.getLeft().size());
-    assertEquals(
-        PAYLOAD_BASED_MERGE_STRATEGY_UUID,
-        propertiesToChange.getLeft().get(RECORD_MERGE_STRATEGY_ID));
+    try (MockedStatic<UpgradeDowngradeUtils> utilities =
+             org.mockito.Mockito.mockStatic(UpgradeDowngradeUtils.class)) {
+      utilities.when(() -> UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(
+          any(), any(), any(), any(), anyBoolean(), any()))
+          .thenAnswer(invocation -> null);
+      when(tableConfig.getPayloadClass()).thenReturn(PostgresDebeziumAvroPayload.class.getName());
+      Pair<Map<ConfigProperty, String>, List<ConfigProperty>> propertiesToChange =
+          handler.downgrade(config, context, "anyInstant", upgradeDowngradeHelper);
+      assertEquals(2, propertiesToChange.getRight().size());
+      assertEquals(MERGE_PROPERTIES, propertiesToChange.getRight().get(0));
+      assertEquals(PARTIAL_UPDATE_MODE, propertiesToChange.getRight().get(1));
+      assertEquals(1, propertiesToChange.getLeft().size());
+      assertEquals(
+          PAYLOAD_BASED_MERGE_STRATEGY_UUID,
+          propertiesToChange.getLeft().get(RECORD_MERGE_STRATEGY_ID));
+    }
   }
 
   @Test
   void testDowngradeForOtherPayloadClass() {
-    when(tableConfig.getPayloadClass()).thenReturn("NonExistentPayloadClass");
-    Pair<Map<ConfigProperty, String>, List<ConfigProperty>> propertiesToChange =
-        handler.downgrade(config, context, "anyInstant", upgradeDowngradeHelper);
-    assertEquals(2, propertiesToChange.getRight().size());
-    assertEquals(MERGE_PROPERTIES, propertiesToChange.getRight().get(0));
-    assertEquals(PARTIAL_UPDATE_MODE, propertiesToChange.getRight().get(1));
-    assertEquals(0, propertiesToChange.getLeft().size());
+    try (MockedStatic<UpgradeDowngradeUtils> utilities =
+             org.mockito.Mockito.mockStatic(UpgradeDowngradeUtils.class)) {
+      utilities.when(() -> UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(
+          any(), any(), any(), any(), anyBoolean(), any()))
+          .thenAnswer(invocation -> null);
+      when(tableConfig.getPayloadClass()).thenReturn("NonExistentPayloadClass");
+      Pair<Map<ConfigProperty, String>, List<ConfigProperty>> propertiesToChange =
+          handler.downgrade(config, context, "anyInstant", upgradeDowngradeHelper);
+      assertEquals(2, propertiesToChange.getRight().size());
+      assertEquals(MERGE_PROPERTIES, propertiesToChange.getRight().get(0));
+      assertEquals(PARTIAL_UPDATE_MODE, propertiesToChange.getRight().get(1));
+      assertEquals(0, propertiesToChange.getLeft().size());
+    }
   }
 }

@@ -883,7 +883,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("When using a custom Hoodie Merge Handle Implementation controlled by the config " + MERGE_HANDLE_CLASS_NAME.key()
           + " or when using a custom Hoodie Concat Handle Implementation controlled by the config " + CONCAT_HANDLE_CLASS_NAME.key()
               + ", enabling this config results in fallback to the default implementations if instantiation of the custom implementation fails");
-
+  
   /**
    * Config key with boolean value that indicates whether record being written during MERGE INTO Spark SQL
    * operation are already prepped.

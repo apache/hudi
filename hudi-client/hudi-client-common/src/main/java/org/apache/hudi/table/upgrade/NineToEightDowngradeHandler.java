@@ -32,6 +32,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.table.HoodieTable;
 
 import java.util.ArrayList;
@@ -46,6 +47,7 @@ import static org.apache.hudi.common.table.HoodieTableConfig.MERGE_PROPERTIES;
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_STRATEGY_ID;
+import static org.apache.hudi.table.upgrade.SevenToEightUpgradeHandler.isMetadataTableBehindDataTable;
 import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.rollbackFailedWritesAndCompact;
 
 public class NineToEightDowngradeHandler implements DowngradeHandler {
@@ -55,6 +57,16 @@ public class NineToEightDowngradeHandler implements DowngradeHandler {
                                                                            String instantTime,
                                                                            SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     final HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
+    HoodieTableMetaClient metaClient = table.getMetaClient();
+
+    // If metadata is enabled for the data table, and
+    // existing metadata table is behind the data table, then delete it
+    if (!table.isMetadataTable()
+        && config.isMetadataTableEnabled()
+        && isMetadataTableBehindDataTable(config, metaClient)) {
+      HoodieTableMetadataUtil.deleteMetadataTable(config.getBasePath(), context);
+    }
+
     // Rollback and run compaction in one step
     rollbackFailedWritesAndCompact(
         table, context, config, upgradeDowngradeHelper,
@@ -74,7 +86,6 @@ public class NineToEightDowngradeHandler implements DowngradeHandler {
     propertiesToRemove.add(PARTIAL_UPDATE_MODE);
 
     Map<ConfigProperty, String> propertiesToAdd = new HashMap<>();
-    HoodieTableMetaClient metaClient = table.getMetaClient();
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
     String payloadClass = tableConfig.getPayloadClass();
     Set<String> payloadClassesToHandle = new HashSet<>(Arrays.asList(

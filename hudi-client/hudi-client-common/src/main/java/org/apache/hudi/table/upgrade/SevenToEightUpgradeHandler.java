@@ -147,7 +147,7 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
     return tablePropsToAdd;
   }
 
-  private static boolean isMetadataTableBehindDataTable(HoodieWriteConfig config, HoodieTableMetaClient metaClient) {
+  static boolean isMetadataTableBehindDataTable(HoodieWriteConfig config, HoodieTableMetaClient metaClient) {
     // if metadata table does not exist, then it is not behind
     if (!metaClient.getTableConfig().isMetadataTableAvailable()) {
       return false;

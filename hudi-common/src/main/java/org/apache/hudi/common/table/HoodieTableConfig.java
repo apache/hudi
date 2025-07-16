@@ -844,11 +844,7 @@ public class HoodieTableConfig extends HoodieConfig {
                 payloadClassName, recordMergeStrategyId));
       }
       if (tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
-        if (tableVersion.greaterThanOrEquals(HoodieTableVersion.NINE)) {
-          inferredRecordMergeMode = modeBasedOnPayload != null ? modeBasedOnPayload : modeBasedOnStrategyId;
-        } else {
-          inferredRecordMergeMode = modeBasedOnStrategyId != null ? modeBasedOnStrategyId : modeBasedOnPayload;
-        }
+        inferredRecordMergeMode = modeBasedOnStrategyId != null ? modeBasedOnStrategyId : modeBasedOnPayload;
       } else {
         inferredRecordMergeMode = modeBasedOnPayload != null ? modeBasedOnPayload : modeBasedOnStrategyId;
       }
@@ -907,8 +903,10 @@ public class HoodieTableConfig extends HoodieConfig {
 
     if (DefaultHoodieRecordPayload.class.getName().equals(payloadClassName)
         || EventTimeAvroPayload.class.getName().equals(payloadClassName)) {
+      // DefaultHoodieRecordPayload and EventTimeAvroPayload match with EVENT_TIME_ORDERING.
       return EVENT_TIME_ORDERING;
-    } else if (OverwriteWithLatestAvroPayload.class.getName().equals(payloadClassName)) {
+    } else if (payloadClassName.equals(OverwriteWithLatestAvroPayload.class.getName())) {
+      // OverwriteWithLatestAvroPayload matches with COMMIT_TIME_ORDERING.
       return COMMIT_TIME_ORDERING;
     } else {
       return CUSTOM;
