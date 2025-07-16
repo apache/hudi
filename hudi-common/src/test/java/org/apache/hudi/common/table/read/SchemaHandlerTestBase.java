@@ -246,7 +246,7 @@ public abstract class SchemaHandlerTestBase {
   }
 
   private static void setupMORTable(RecordMergeMode mergeMode, boolean hasPrecombine, HoodieTableConfig hoodieTableConfig) {
-    when(hoodieTableConfig.populateMetaFields()).thenReturn(Boolean.TRUE);
+    when(hoodieTableConfig.populateMetaFields()).thenReturn(true);
     when(hoodieTableConfig.getRecordMergeMode()).thenReturn(mergeMode);
     if (hasPrecombine) {
       when(hoodieTableConfig.getPreCombineField()).thenReturn("timestamp");
@@ -270,7 +270,7 @@ public abstract class SchemaHandlerTestBase {
 
   static HoodieReaderContext<String> createReaderContext(HoodieTableConfig hoodieTableConfig, boolean supportsParquetRowIndex, boolean hasLogFiles,
                                                          boolean hasBootstrapBaseFile, boolean mergeUseRecordPosition, HoodieRecordMerger merger) {
-    HoodieReaderContext<String> readerContext = new MockReaderContext(hoodieTableConfig, supportsParquetRowIndex);
+    HoodieReaderContext<String> readerContext = new StubbedReaderContext(hoodieTableConfig, supportsParquetRowIndex);
     readerContext.setHasLogFiles(hasLogFiles);
     readerContext.setHasBootstrapBaseFile(hasBootstrapBaseFile);
     readerContext.setShouldMergeUseRecordPosition(mergeUseRecordPosition);
@@ -278,15 +278,9 @@ public abstract class SchemaHandlerTestBase {
     return readerContext;
   }
 
-  static FileGroupReaderSchemaHandler createSchemaHandler(HoodieReaderContext<String> readerContext, Schema dataSchema,
+  abstract FileGroupReaderSchemaHandler createSchemaHandler(HoodieReaderContext<String> readerContext, Schema dataSchema,
                                                           Schema requestedSchema, HoodieTableConfig hoodieTableConfig,
-                                                          boolean supportsParquetRowIndex) {
-    return supportsParquetRowIndex
-        ? new ParquetRowIndexBasedSchemaHandler(readerContext, dataSchema, requestedSchema,
-        Option.empty(), hoodieTableConfig, new TypedProperties())
-        : new FileGroupReaderSchemaHandler(readerContext, dataSchema, requestedSchema,
-        Option.empty(), hoodieTableConfig, new TypedProperties());
-  }
+                                                          boolean supportsParquetRowIndex);
 
   static Schema generateProjectionSchema(String... fields) {
     return HoodieAvroUtils.generateProjectionSchema(DATA_SCHEMA, Arrays.asList(fields));
@@ -305,10 +299,10 @@ public abstract class SchemaHandlerTestBase {
     return DATA_SCHEMA.getField(fieldName);
   }
 
-  static class MockReaderContext extends HoodieReaderContext<String> {
+  static class StubbedReaderContext extends HoodieReaderContext<String> {
     private final boolean supportsParquetRowIndex;
 
-    protected MockReaderContext(HoodieTableConfig hoodieTableConfig, boolean supportsParquetRowIndex) {
+    protected StubbedReaderContext(HoodieTableConfig hoodieTableConfig, boolean supportsParquetRowIndex) {
       super(null, hoodieTableConfig, Option.empty(), Option.empty());
       this.supportsParquetRowIndex = supportsParquetRowIndex;
     }

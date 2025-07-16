@@ -20,8 +20,10 @@
 package org.apache.hudi.common.table.read;
 
 import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.Schema;
@@ -47,7 +49,7 @@ public class TestParquetRowIndexBasedSchemaHandler extends SchemaHandlerTestBase
   @Test
   public void testCowBootstrapWithPositionMerge() {
     HoodieTableConfig hoodieTableConfig = mock(HoodieTableConfig.class);
-    when(hoodieTableConfig.populateMetaFields()).thenReturn(Boolean.TRUE);
+    when(hoodieTableConfig.populateMetaFields()).thenReturn(true);
     HoodieReaderContext<String> readerContext = createReaderContext(hoodieTableConfig, true, false, true, false, null);
     Schema requestedSchema = generateProjectionSchema("begin_lat", "tip_history", "_hoodie_record_key", "rider");
     FileGroupReaderSchemaHandler schemaHandler = createSchemaHandler(readerContext, DATA_SCHEMA, requestedSchema, hoodieTableConfig, true);
@@ -98,5 +100,12 @@ public class TestParquetRowIndexBasedSchemaHandler extends SchemaHandlerTestBase
                                boolean supportsParquetRowIndex,
                                boolean hasBuiltInDelete) throws IOException {
     super.testMorBootstrap(mergeMode, hasPrecombine, isProjectionCompatible, mergeUseRecordPosition, supportsParquetRowIndex, hasBuiltInDelete);
+  }
+
+  @Override
+  FileGroupReaderSchemaHandler createSchemaHandler(HoodieReaderContext<String> readerContext, Schema dataSchema, Schema requestedSchema, HoodieTableConfig hoodieTableConfig,
+                                                   boolean supportsParquetRowIndex) {
+    return new ParquetRowIndexBasedSchemaHandler(readerContext, dataSchema, requestedSchema,
+        Option.empty(), hoodieTableConfig, new TypedProperties());
   }
 }
