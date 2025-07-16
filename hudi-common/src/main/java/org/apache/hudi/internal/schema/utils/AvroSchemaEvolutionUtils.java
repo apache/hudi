@@ -18,13 +18,13 @@
 
 package org.apache.hudi.internal.schema.utils;
 
-import org.apache.avro.Schema;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.Type;
 import org.apache.hudi.internal.schema.action.TableChanges;
+
+import org.apache.avro.Schema;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Map;
@@ -145,7 +145,12 @@ public class AvroSchemaEvolutionUtils {
     typeChangeColumns.stream().filter(f -> !inComingInternalSchema.findType(f).isNestedType()).forEach(col -> {
       typeChange.updateColumnType(col, inComingInternalSchema.findType(col));
     });
-    return SchemaChangeUtils.applyTableChanges2Schema(internalSchemaAfterAddColumns, typeChange);
+    InternalSchema evolvedSchema = SchemaChangeUtils.applyTableChanges2Schema(internalSchemaAfterAddColumns, typeChange);
+    // If evolvedSchema is exactly the same as the oldSchema, except the version number, return the old schema
+    if (evolvedSchema.equalsIgnoringVersion(oldTableSchema)) {
+      return oldTableSchema;
+    }
+    return evolvedSchema;
   }
 
   /**
