@@ -36,14 +36,14 @@ import java.util.Random;
  *
  * Need to take care of the last bucket to avoid resource wast.
  */
-public class DefaultInsertPartitioner<T extends HoodieKey> implements Partitioner<T> {
+public class GroupedInsertPartitioner<T extends HoodieKey> implements Partitioner<T> {
 
   private final int groupLength;
   private final Random random;
   private int groupNumber = -1;
   private int remaining = -1;
 
-  public DefaultInsertPartitioner(Configuration conf) {
+  public GroupedInsertPartitioner(Configuration conf) {
     this.groupLength = conf.get(FlinkOptions.DEFAULT_PARALLELISM_PER_PARTITION); // default 30 ==> parallelism per partition
     this.random = new Random();
   }
@@ -81,10 +81,8 @@ public class DefaultInsertPartitioner<T extends HoodieKey> implements Partitione
    */
   private void setupIfNecessary(int numPartitions) {
     if (groupNumber == -1 || remaining == -1) {
-      groupNumber = numPartitions / groupLength;
+      groupNumber = Math.max(1, numPartitions / groupLength);
       remaining = numPartitions - groupNumber * groupLength;
-      ValidationUtils.checkArgument(groupNumber != 0,
-          String.format("write.insert.partitioner.parallelism.per.partition are greater than numPartitions %d.", numPartitions));
     }
   }
 }

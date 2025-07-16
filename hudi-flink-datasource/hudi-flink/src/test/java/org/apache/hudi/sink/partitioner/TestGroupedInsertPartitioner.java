@@ -20,19 +20,22 @@ package org.apache.hudi.sink.partitioner;
 
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.configuration.FlinkOptions;
+
 import org.apache.flink.configuration.Configuration;
 import org.junit.jupiter.api.Test;
+
 import java.util.HashMap;
+
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TestDefaultInsertPartitioner {
+public class TestGroupedInsertPartitioner {
 
   @Test
   void testPartitioner() {
     Configuration conf = new Configuration();
     int para = 30;
     conf.set(FlinkOptions.DEFAULT_PARALLELISM_PER_PARTITION, para);
-    DefaultInsertPartitioner partitioner = new DefaultInsertPartitioner(conf);
+    GroupedInsertPartitioner partitioner = new GroupedInsertPartitioner(conf);
     int numberFlinkPartitions = 2023;
     int numberDataPartition = 1030;
     int recordsPerPartition = 20;
