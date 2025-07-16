@@ -325,8 +325,10 @@ public class HoodieTableConfig extends HoodieConfig {
       .key("hoodie.table.merge.properties")
       .noDefaultValue()
       .sinceVersion("1.1.0")
-      .withDocumentation("The value of this property is in the format of 'K1=V1,K2=V2,...,Ki=Vi,...'."
-          + "Each (Ki, Vi) pair represents a property used during merge scenarios.");
+      .withDocumentation("The value of this property is in the format of 'K1=V1,K2=V2,...,Ki=Vi,...'. "
+          + "Each (Ki, Vi) pair represents a property used during merge scenarios. "
+          + "Some merge mode might need some writer properties that are required for readers to function as expected. "
+          + "Hudi stores those properties here so readers can set them while reading.");
 
   public static final ConfigProperty<String> URL_ENCODE_PARTITIONING = KeyGeneratorOptions.URL_ENCODE_PARTITIONING;
   public static final ConfigProperty<String> HIVE_STYLE_PARTITIONING_ENABLE = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE;
