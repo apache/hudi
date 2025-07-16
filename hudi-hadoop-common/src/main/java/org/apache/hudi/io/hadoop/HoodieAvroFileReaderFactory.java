@@ -47,7 +47,7 @@ public class HoodieAvroFileReaderFactory extends HoodieFileReaderFactory {
   protected HoodieFileReader newHFileFileReader(HoodieConfig hoodieConfig,
                                                 StoragePath path,
                                                 Option<Schema> schemaOption) throws IOException {
-    return new HoodieNativeAvroHFileReader(storage, path, schemaOption);
+    return new HoodieNativeAvroHFileReader(storage, hoodieConfig.getProps(), path, schemaOption);
   }
 
   @Override
@@ -56,7 +56,7 @@ public class HoodieAvroFileReaderFactory extends HoodieFileReaderFactory {
                                                 HoodieStorage storage,
                                                 byte[] content,
                                                 Option<Schema> schemaOption) throws IOException {
-    return new HoodieNativeAvroHFileReader(this.storage, content, schemaOption);
+    return new HoodieNativeAvroHFileReader(this.storage, hoodieConfig.getProps(), content, schemaOption);
   }
 
   @Override
