@@ -34,10 +34,6 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
-/**
- * Test upgrade and downgrade process (8 -> 9 -> 8)
- * TODO: after the default table version become 9, we should modify this test accordingly.
- */
 class TestEightToNineUpgrade extends RecordLevelIndexTestBase {
   @ParameterizedTest
   @MethodSource(Array("payloadConfigs"))

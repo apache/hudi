@@ -99,8 +99,7 @@ public class BufferedRecordMergerFactory {
    */
   private static class CommitTimeBufferedRecordMerger<T> implements BufferedRecordMerger<T> {
     @Override
-    public Option<BufferedRecord<T>> deltaMerge(BufferedRecord<T> newRecord,
-                                                BufferedRecord<T> existingRecord) {
+    public Option<BufferedRecord<T>> deltaMerge(BufferedRecord<T> newRecord, BufferedRecord<T> existingRecord) {
       return Option.of(newRecord);
     }
 
