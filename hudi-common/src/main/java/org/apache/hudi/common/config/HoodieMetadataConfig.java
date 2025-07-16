@@ -496,6 +496,12 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .withDocumentation("Default number of partitions to use when repartitioning is needed. "
           + "This provides a reasonable level of parallelism for metadata table operations.");
 
+  public static final ConfigProperty<Integer> METADATA_FILE_CACHE_THRESHOLD_SIZE_MB = ConfigProperty
+      .key(METADATA_PREFIX + ".file.cache.max.size.mb")
+      .defaultValue(0)
+      .sinceVersion("1.1")
+      .withDocumentation("Max size below which metadata file (HFile) will be downloaded and cached entirely for the HfileReader.");
+
   public long getMaxLogFileSize() {
     return getLong(MAX_LOG_FILE_SIZE_BYTES_PROP);
   }
@@ -727,6 +733,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public int getRepartitionDefaultPartitions() {
     return getInt(REPARTITION_DEFAULT_PARTITIONS);
+  }
+
+  public int getFileCacheThresholdSizeMB() {
+    return Math.max(getInt(HoodieMetadataConfig.METADATA_FILE_CACHE_THRESHOLD_SIZE_MB), 1);
   }
 
   /**
