@@ -42,6 +42,8 @@ import org.apache.avro.generic.IndexedRecord;
 import java.io.IOException;
 import java.util.Objects;
 
+import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
+
 /**
  * Factory to create a {@link BufferedRecordMerger}.
  */
@@ -175,16 +177,10 @@ public class BufferedRecordMergerFactory {
 
     @Override
     public Pair<Boolean, T> finalMerge(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) {
-      if (newerRecord.isCommitTimeOrderingDelete()) {
-        return Pair.of(true, newerRecord.getRecord());
+      if (shouldKeepNewerRecord(olderRecord, newerRecord)) {
+        return Pair.of(newerRecord.isDelete(), newerRecord.getRecord());
       }
-      Comparable newOrderingValue = newerRecord.getOrderingValue();
-      Comparable oldOrderingValue = olderRecord.getOrderingValue();
-      if (!olderRecord.isCommitTimeOrderingDelete()
-          && oldOrderingValue.compareTo(newOrderingValue) > 0) {
-        return Pair.of(olderRecord.isDelete(), olderRecord.getRecord());
-      }
-      return Pair.of(newerRecord.isDelete(), newerRecord.getRecord());
+      return Pair.of(olderRecord.isDelete(), olderRecord.getRecord());
     }
   }
 
@@ -359,7 +355,8 @@ public class BufferedRecordMergerFactory {
           props);
 
       if (!combinedRecordAndSchemaOpt.isPresent()) {
-        return Option.empty();
+        // An empty Option indicates that the output represents a delete.
+        return Option.of(new BufferedRecord<>(newRecord.getRecordKey(), DEFAULT_ORDERING_VALUE, null, null, true));
       }
 
       Pair<HoodieRecord, Schema> combinedRecordAndSchema = combinedRecordAndSchemaOpt.get();
@@ -419,8 +416,10 @@ public class BufferedRecordMergerFactory {
           Pair<HoodieRecord, Schema> combinedRecordAndSchema = combinedRecordAndSchemaOpt.get();
           return Option.of(BufferedRecord.forRecordWithContext(combinedRecordData, combinedRecordAndSchema.getRight(), readerContext, orderingFieldName, false));
         }
+        return Option.empty();
       }
-      return Option.empty();
+      // An empty Option indicates that the output represents a delete.
+      return Option.of(new BufferedRecord<>(newRecord.getRecordKey(), DEFAULT_ORDERING_VALUE, null, null, true));
     }
 
     @Override
@@ -560,8 +559,9 @@ public class BufferedRecordMergerFactory {
   }
 
   private static <T> boolean shouldKeepNewerRecord(BufferedRecord<T> oldRecord, BufferedRecord<T> newRecord) {
-    if (newRecord.isCommitTimeOrderingDelete()) {
-      // handle records coming from DELETE statements(the orderingVal is constant 0)
+    if (newRecord.isCommitTimeOrderingDelete() || oldRecord.isCommitTimeOrderingDelete()) {
+      // handle records coming from DELETE statements
+      // The orderingVal is constant 0 (int) and not guaranteed to match the type of the old or new record's ordering value.
       return true;
     }
     return newRecord.getOrderingValue().compareTo(oldRecord.getOrderingValue()) >= 0;
