@@ -67,8 +67,8 @@ public class TestHoodieClusteringJob extends HoodieOfflineJobTestBase {
 
     client = new SparkRDDWriteClient(context, config);
 
-    writeData(false, client.createNewInstantTime(), 100, true);
-    writeData(false, client.createNewInstantTime(), 100, true);
+    writeData(false, 100, true);
+    writeData(false, 100, true);
 
     // offline clustering execute without clean
     HoodieClusteringJob hoodieCluster =
@@ -77,8 +77,8 @@ public class TestHoodieClusteringJob extends HoodieOfflineJobTestBase {
     HoodieOfflineJobTestBase.TestHelpers.assertNClusteringCommits(1, tableBasePath);
     HoodieOfflineJobTestBase.TestHelpers.assertNCleanCommits(0, tableBasePath);
 
-    writeData(false, client.createNewInstantTime(), 100, true);
-    writeData(false, client.createNewInstantTime(), 100, true);
+    writeData(false, 100, true);
+    writeData(false, 100, true);
 
     // offline clustering execute with sync clean
     hoodieCluster =
@@ -103,8 +103,8 @@ public class TestHoodieClusteringJob extends HoodieOfflineJobTestBase {
         .initTable(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()), tableBasePath);
     client = new SparkRDDWriteClient(context, config);
 
-    writeData(false, client.createNewInstantTime(), 100, true);
-    writeData(false, client.createNewInstantTime(), 100, true);
+    writeData(false, 100, true);
+    writeData(false, 100, true);
 
     // offline clustering execute without clean
     HoodieClusteringJob hoodieCluster =

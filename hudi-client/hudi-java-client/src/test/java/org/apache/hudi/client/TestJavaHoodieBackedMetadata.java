@@ -1948,7 +1948,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     List<WriteStatus> writeStatuses;
 
     try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, getWriteConfig(true, true))) {
-      String[] commitTimestamps = {client.createNewInstantTime(), client.createNewInstantTime()};
+      String[] commitTimestamps = {WriteClientTestUtils.createNewInstantTime(), WriteClientTestUtils.createNewInstantTime()};
 
       records = dataGen.generateInserts(commitTimestamps[0], 5);
       WriteClientTestUtils.startCommitWithTime(client, commitTimestamps[0]);
@@ -1976,8 +1976,8 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     List<WriteStatus> writeStatuses;
 
     try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, getWriteConfig(true, true))) {
-      String[] commitTimestamps = {client.createNewInstantTime(), client.createNewInstantTime(), client.createNewInstantTime(),
-          client.createNewInstantTime()};
+      String[] commitTimestamps = {WriteClientTestUtils.createNewInstantTime(), WriteClientTestUtils.createNewInstantTime(), WriteClientTestUtils.createNewInstantTime(),
+          WriteClientTestUtils.createNewInstantTime()};
 
       for (int i = 0; i < commitTimestamps.length; ++i) {
         records = dataGen.generateInserts(commitTimestamps[i], 5);

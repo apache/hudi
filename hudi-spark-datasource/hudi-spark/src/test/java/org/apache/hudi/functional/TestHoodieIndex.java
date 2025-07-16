@@ -522,13 +522,13 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     HoodieTimeline timeline = TIMELINE_FACTORY.createDefaultTimeline(Collections.EMPTY_LIST.stream(), metaClient.getActiveTimeline());
     assertTrue(timeline.empty());
     assertFalse(HoodieIndexUtils.checkIfValidCommit(timeline, "001"));
-    assertFalse(HoodieIndexUtils.checkIfValidCommit(timeline, writeClient.createNewInstantTime()));
+    assertFalse(HoodieIndexUtils.checkIfValidCommit(timeline, WriteClientTestUtils.createNewInstantTime()));
     assertFalse(HoodieIndexUtils.checkIfValidCommit(timeline, HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP));
 
     // Valid when timeline contains the timestamp or the timestamp is before timeline start
     final HoodieInstant instant1 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "010");
-    String instantTimestamp = writeClient.createNewInstantTime();
-    final HoodieInstant instant2 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, writeClient.createNewInstantTime());
+    String instantTimestamp = WriteClientTestUtils.createNewInstantTime();
+    final HoodieInstant instant2 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, WriteClientTestUtils.createNewInstantTime());
     timeline = TIMELINE_FACTORY.createDefaultTimeline(Stream.of(instant1, instant2), metaClient.getActiveTimeline());
     assertFalse(timeline.empty());
     assertTrue(HoodieIndexUtils.checkIfValidCommit(timeline, instant1.requestedTime()));
@@ -536,13 +536,13 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     // no instant on timeline
     assertFalse(HoodieIndexUtils.checkIfValidCommit(timeline, instantTimestamp));
     // future timestamp
-    assertFalse(HoodieIndexUtils.checkIfValidCommit(timeline, writeClient.createNewInstantTime()));
+    assertFalse(HoodieIndexUtils.checkIfValidCommit(timeline, WriteClientTestUtils.createNewInstantTime()));
     // timestamp before timeline starts
     assertTrue(HoodieIndexUtils.checkIfValidCommit(timeline, "001"));
     assertTrue(HoodieIndexUtils.checkIfValidCommit(timeline, HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP));
 
     // Check for older timestamp which have sec granularity and an extension of DEFAULT_MILLIS_EXT may have been added via Timeline operations
-    instantTimestamp = writeClient.createNewInstantTime();
+    instantTimestamp = WriteClientTestUtils.createNewInstantTime();
     String instantTimestampSec = instantTimestamp.substring(0, instantTimestamp.length() - HoodieInstantTimeGenerator.DEFAULT_MILLIS_EXT.length());
     final HoodieInstant instant3 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, instantTimestampSec);
     timeline = TIMELINE_FACTORY.createDefaultTimeline(Stream.of(instant1, instant3), metaClient.getActiveTimeline());
@@ -551,7 +551,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     assertTrue(HoodieIndexUtils.checkIfValidCommit(timeline, instantTimestampSec));
 
     // With a sec format instant time lesser than first entry in the active timeline, checkifContainsOrBefore() should return true
-    instantTimestamp = writeClient.createNewInstantTime();
+    instantTimestamp = WriteClientTestUtils.createNewInstantTime();
     final HoodieInstant instant4 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, instantTimestamp);
     timeline = TIMELINE_FACTORY.createDefaultTimeline(Stream.of(instant4), metaClient.getActiveTimeline());
     instantTimestampSec = instantTimestamp.substring(0, instantTimestamp.length() - HoodieInstantTimeGenerator.DEFAULT_MILLIS_EXT.length());
@@ -561,7 +561,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
 
     // With a sec format instant time checkIfValid should return false assuming its > first entry in the active timeline
     Thread.sleep(1010); // sleep required so that new timestamp differs in the seconds rather than msec
-    instantTimestamp = writeClient.createNewInstantTime();
+    instantTimestamp = WriteClientTestUtils.createNewInstantTime();
     instantTimestampSec = instantTimestamp.substring(0, instantTimestamp.length() - HoodieInstantTimeGenerator.DEFAULT_MILLIS_EXT.length());
     assertFalse(timeline.empty());
     assertFalse(HoodieIndexUtils.checkIfValidCommit(timeline, instantTimestamp));
@@ -573,7 +573,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     String checkInstantTimestampSec = instantTimestamp.substring(0, instantTimestamp.length() - HoodieInstantTimeGenerator.DEFAULT_MILLIS_EXT.length());
     String checkInstantTimestamp = checkInstantTimestampSec + HoodieInstantTimeGenerator.DEFAULT_MILLIS_EXT;
     Thread.sleep(1010); // sleep required so that new timestamp differs in the seconds rather than msec
-    String newTimestamp = writeClient.createNewInstantTime();
+    String newTimestamp = WriteClientTestUtils.createNewInstantTime();
     String newTimestampSec = newTimestamp.substring(0, newTimestamp.length() - HoodieInstantTimeGenerator.DEFAULT_MILLIS_EXT.length());
     final HoodieInstant instant5 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, newTimestamp);
     timeline = TIMELINE_FACTORY.createDefaultTimeline(Stream.of(instant5), metaClient.getActiveTimeline());
@@ -595,10 +595,9 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     setUp(IndexType.INMEMORY, true, false);
 
     // Insert records
-    String newCommitTime = writeClient.createNewInstantTime();
+    String newCommitTime = writeClient.startCommit();
     List<HoodieRecord> records = getInserts();
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
-    WriteClientTestUtils.startCommitWithTime(writeClient, newCommitTime);
     JavaRDD<WriteStatus> writeStatues = writeClient.upsert(writeRecords, newCommitTime);
     assertNoWriteErrors(writeStatues.collect());
     writeClient.commit(newCommitTime, writeStatues);
@@ -630,8 +629,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     // Delete some of the keys
     final int numDeletes = records.size() / 2;
     List<HoodieKey> keysToDelete = records.stream().limit(numDeletes).map(r -> new HoodieKey(r.getRecordKey(), r.getPartitionPath())).collect(Collectors.toList());
-    String deleteCommitTime = writeClient.createNewInstantTime();
-    WriteClientTestUtils.startCommitWithTime(writeClient, deleteCommitTime);
+    String deleteCommitTime = writeClient.startCommit();
     writeStatues = writeClient.delete(jsc.parallelize(keysToDelete, 1), deleteCommitTime);
     assertNoWriteErrors(writeStatues.collect());
     writeClient.commit(deleteCommitTime, writeStatues);

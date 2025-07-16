@@ -456,24 +456,6 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
     assertEquals(updates.size() - numRecordsInPartition, updateStatus.get(0).get(0).getTotalErrorRecords());
   }
 
-  public void testBulkInsertRecords(String bulkInsertMode) throws Exception {
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
-        .withPath(basePath).withSchema(TRIP_EXAMPLE_SCHEMA)
-        .withBulkInsertParallelism(2).withBulkInsertSortMode(bulkInsertMode).build();
-    String instantTime = makeNewCommitTime();
-    HoodieJavaWriteClient writeClient = getHoodieWriteClient(config);
-    WriteClientTestUtils.startCommitWithTime(writeClient, instantTime);
-    metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieJavaCopyOnWriteTable table = (HoodieJavaCopyOnWriteTable) HoodieJavaTable.create(config, context, metaClient);
-
-    // Insert new records
-    final List<HoodieRecord> inputRecords = generateTestRecordsForBulkInsert();
-    JavaBulkInsertCommitActionExecutor bulkInsertExecutor = new JavaBulkInsertCommitActionExecutor(
-        context, config, table, instantTime, inputRecords, Option.empty());
-    List<WriteStatus> returnedStatuses = (List<WriteStatus>)bulkInsertExecutor.execute().getWriteStatuses();
-    verifyStatusResult(returnedStatuses, generateExpectedPartitionNumRecords(inputRecords));
-  }
-
   @Test
   public void testDeleteRecords() throws Exception {
     // Prepare the AvroParquetIO

@@ -57,7 +57,7 @@ class TestTTLProcedure extends HoodieSparkProcedureTestBase with SparkDatasetMix
         val partitionPath1 = partitionPaths(1)
         writeRecordsForPartition(client, dataGen, partitionPath1, instant1)
 
-        val currentInstant = client.createNewInstantTime()
+        val currentInstant = WriteClientTestUtils.createNewInstantTime()
         val partitionPath2 = partitionPaths(2)
         writeRecordsForPartition(client, dataGen, partitionPath2, currentInstant)
         spark.sql(

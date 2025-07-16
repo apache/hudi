@@ -328,7 +328,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
       Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieRecord>, String> writeFn = (writeClient, recordRDD, instantTime) ->
           writeClient.bulkInsert(recordRDD, instantTime, Option.empty());
-      String newCommitTime = client.createNewInstantTime();
+      String newCommitTime = WriteClientTestUtils.createNewInstantTime();
       JavaRDD<WriteStatus> result = insertFirstBatch(config, client, newCommitTime,
           "000", numRecords, writeFn, false, false, numRecords, INSTANT_GENERATOR);
       assertTrue(testTable.commitExists(newCommitTime));
@@ -367,7 +367,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         .withPreCommitValidatorConfig(createPreCommitValidatorConfig(500))
         .build();
 
-    String instant1 = getHoodieWriteClient(config).createNewInstantTime();
+    String instant1 = WriteClientTestUtils.createNewInstantTime();
     try {
       insertWithConfig(config, numRecords, instant1);
       fail("Expected validation to fail because we only insert 200 rows. Validation is configured to expect 500 rows");
@@ -387,7 +387,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         .withCleanConfig(createCleanConfig(HoodieFailedWritesCleaningPolicy.NEVER, true))
         .withPreCommitValidatorConfig(createPreCommitValidatorConfig(numRecords))
         .build();
-    String instant2 = getHoodieWriteClient(config).createNewInstantTime();
+    String instant2 = WriteClientTestUtils.createNewInstantTime();
     // expect pre-commit validators to succeed. Note that validator is expected to exclude inflight instant1
     insertWithConfig(config, numRecords, instant2);
     assertTrue(testTable.inflightCommitExists(instant1));
@@ -1036,7 +1036,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     // trigger another partial commit, followed by valid commit. rollback of partial commit should succeed.
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder();
     SparkRDDWriteClient client = getHoodieWriteClient(cfgBuilder.build());
-    String commitTime1 = client.createNewInstantTime();
+    String commitTime1 = WriteClientTestUtils.createNewInstantTime();
     insertBatchRecords(client, commitTime1, 200, 1, 2, SparkRDDWriteClient::upsert, true).getLeft();
 
     HoodieTableMetaClient metaClient = createMetaClient();
@@ -1097,7 +1097,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     HoodieWriteConfig config = cfgBuilder.build();
     SparkRDDWriteClient client = getHoodieWriteClient(config);
     dataGen = new HoodieTestDataGenerator();
-    String commitTime = client.createNewInstantTime();
+    String commitTime = WriteClientTestUtils.createNewInstantTime();
     allRecords.addAll(dataGen.generateInserts(commitTime, 200));
     assertThrows(HoodieUpsertException.class, () -> writeAndVerifyBatch(client, allRecords, commitTime, populateMetaFields));
     // verify pending clustering can be rolled back (even though there is a completed commit greater than pending clustering)
@@ -1156,7 +1156,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     cfgBuilder.withProperties(getPropertiesForKeyGen(true));
     HoodieWriteConfig config = cfgBuilder.build();
     SparkRDDWriteClient client = getHoodieWriteClient(config);
-    String commitTime = client.createNewInstantTime();
+    String commitTime = WriteClientTestUtils.createNewInstantTime();
     allRecords.addAll(dataGen.generateUpdates(commitTime, 200));
     writeAndVerifyBatch(client, allRecords, commitTime, true);
 
@@ -1600,7 +1600,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
     // Create a base commit on a file.
     int numRecords = 200;
-    String firstCommit = client.createNewInstantTime();
+    String firstCommit = WriteClientTestUtils.createNewInstantTime();
     String partitionStr = HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[] {partitionStr});
     writeBatch(client, firstCommit, "000", Option.of(Arrays.asList("000")), "000",
@@ -1608,7 +1608,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         1, INSTANT_GENERATOR);
 
     // Do an upsert operation without autocommit.
-    String inflightCommit = client.createNewInstantTime();
+    String inflightCommit = WriteClientTestUtils.createNewInstantTime();
     writeBatch(client, inflightCommit, firstCommit, Option.of(Arrays.asList("000")), "000",
         100, dataGenerator::generateUniqueUpdates, SparkRDDWriteClient::upsert, false, 0, 200,
         2, true, INSTANT_GENERATOR, true);
@@ -1655,7 +1655,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
     // Create a base commit on a file.
     int numRecords = 200;
-    String firstCommit = client.createNewInstantTime();
+    String firstCommit = WriteClientTestUtils.createNewInstantTime();
     String partitionStr = HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[] {partitionStr});
     writeBatch(client, firstCommit, "000", Option.of(Arrays.asList("000")), "000",
@@ -1663,7 +1663,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         1, INSTANT_GENERATOR);
 
     // Create and temporarily block a lower timestamp for ingestion.
-    String inflightCommit = client.createNewInstantTime();
+    String inflightCommit = WriteClientTestUtils.createNewInstantTime();
     JavaRDD<WriteStatus> ingestionResult = writeBatch(client, inflightCommit, firstCommit, Option.of(Arrays.asList("000")), "000",
         100, dataGenerator::generateUniqueUpdates, SparkRDDWriteClient::upsert, false, 0, 200,
         2, true, INSTANT_GENERATOR, true);

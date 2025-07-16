@@ -19,7 +19,6 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
-import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
@@ -31,7 +30,6 @@ import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
-import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieSparkCopyOnWriteTable;
@@ -77,11 +75,9 @@ public class TestMergeHandle extends BaseTestHandle {
     // one round per partition
     String partitionPath = HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[0];
     // init some args
-    String instantTime = InProcessTimeGenerator.createNewInstantTime();
-
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[] {partitionPath});
     SparkRDDWriteClient client = getHoodieWriteClient(config);
-    WriteClientTestUtils.startCommitWithTime(writeClient, instantTime);
+    String instantTime = client.startCommit();
     List<HoodieRecord> records1 = dataGenerator.generateInserts(instantTime, 100);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records1, 1);
     JavaRDD<WriteStatus> statuses = client.upsert(writeRecords, instantTime);

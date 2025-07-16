@@ -580,8 +580,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       instant = INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, commitActionType, instant0);
       activeTimeline.saveAsComplete(instant, Option.empty());
 
-      String instant1 = WriteClientTestUtils.createNewInstantTime();
-      WriteClientTestUtils.startCommitWithTime(client, instant1);
+      String instant1 = client.startCommit();
 
       List<HoodieRecord> records = dataGen.generateInserts(instant1, 200);
       JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
@@ -602,8 +601,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       }
       assertEquals(200, inserts);
 
-      String instant2 = WriteClientTestUtils.createNewInstantTime();
-      WriteClientTestUtils.startCommitWithTime(client, instant2);
+      String instant2 = client.startCommit();
       records = dataGen.generateUpdates(instant2, records);
       writeRecords = jsc().parallelize(records, 1);
       rawStatuses = client.upsert(writeRecords, instant2).collect();
